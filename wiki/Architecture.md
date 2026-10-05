@@ -44,7 +44,7 @@ Les modules s'associent en paires complémentaires pour certaines fonctions :
 
 | Composant | Choix | Notes |
 |-----------|-------|-------|
-| OS | Debian 12 (bookworm) ARM64/AMD64 | Pas d'OpenWrt, pas de LuCI |
+| OS | Debian 12 (bookworm) ARM64/AMD64 | Debian pur, pas de couche tierce |
 | Kernel | 6.6 LTS mainline | Device trees upstream Marvell |
 | Init | systemd | Units par module |
 | Firewall | nftables | DEFAULT DROP, pas d'iptables |

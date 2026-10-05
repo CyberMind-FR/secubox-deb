@@ -21,7 +21,6 @@
 |--------|----------|-------------|
 | 🏠 **SecuBox Hub** | Dashboard | 中央仪表板和控制中心 |
 | 🛡️ **Security Operations Center** | Dashboard | 安全运营中心，包含世界时钟、威胁地图、工单 |
-| 📋 **Migration Roadmap** | Dashboard | OpenWRT到Debian迁移跟踪 |
 | 📈 **System Metrics** | Dashboard | 实时系统指标仪表板 |
 | ⚙️ **Admin Panel** | Dashboard | 系统管理面板 |
 | 🔥 **Web Application Firewall** | Security | 具有300+条OWASP安全规则的WAF |
@@ -372,13 +371,6 @@ AdGuard Home DNS拦截
 
 ![Security Operations Center](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/soc.png)
 
-#### 📋 Migration Roadmap
-
-OpenWRT到Debian迁移跟踪
-
-**功能:** 进度跟踪, 模块状态, 分类视图
-
-![Migration Roadmap](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/roadmap.png)
 
 #### 📈 System Metrics
 

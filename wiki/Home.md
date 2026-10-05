@@ -13,15 +13,15 @@ CyberMind · Notre-Dame-du-Cruet, Savoie | [FR](Home-FR) | [DE](Home-DE) | [中�
 
 ---
 
-SecuBox-Deb est une plateforme de sécurité réseau complète portée d'OpenWrt vers Debian. La base est **bookworm (12)**, et les images **Trixie (13)** sont désormais publiées pour la VM et le Raspberry Pi. Le projet vise la certification ANSSI CSPN à horizon 2027. Toute la stack est libre, auditable, et conçue pour fonctionner sur du matériel que vous possédez déjà — c'est le principe BYOH (Bring Your Own Hardware).
+SecuBox-Deb est une plateforme de sécurité réseau complète, installable en trois profils (`lite`, `isp`, `full`) selon la mémoire de la machine. La base est **bookworm (12)**, et les images **Trixie (13)** sont désormais publiées pour la VM et le Raspberry Pi. Le projet vise la certification ANSSI CSPN à horizon 2027. Toute la stack est libre, auditable, et conçue pour fonctionner sur du matériel que vous possédez déjà — c'est le principe BYOH (Bring Your Own Hardware).
 
 L'architecture repose sur six modules canoniques organisés en chemin hamiltonien : `AUTH → WALL → BOOT → MIND → ROOT → MESH`. Chaque module expose une API REST FastAPI, le tout orchestré par un profile-generator hiérarchique YAML. La cryptographie s'appuie sur le framework GK·HAM-HASH ZKP à trois niveaux.
 
 ---
 
-## 🔴 Démarrage rapide — Alpha 4
+## 🔴 Démarrage rapide — Alpha 8
 
-> Tester, installer ou booter la release **`v3.0.0-alpha.4`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
+> Tester, installer ou booter la release **`v3.0.0-alpha.8`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
 
 ### 🖥️ A. En VM — le plus rapide (une commande)
 
@@ -29,7 +29,7 @@ VirtualBox amd64, image **téléchargée** depuis les releases GitHub, VM créé
 
 ```bash
 bash image/create-vbox-vm.sh --download
-# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.4
+# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.8
 ```
 
 La VM redirige les ports invité 22/80/443 vers l'hôte. Accès :
@@ -112,10 +112,10 @@ SecuBox-Deb est un projet libre sans campagne de financement participatif, sans 
 
 | Élément | Valeur |
 |---------|--------|
-| Release courante | **v3.0.0-alpha.4** |
+| Release courante | **v3.0.0-alpha.8** |
 | Base Debian | bookworm (12) · **trixie (13) pour VM et Raspberry Pi** |
 | Kernel | 6.6 LTS (bookworm) · 6.12 (trixie) |
-| Paquets | 181 |
+| Paquets | environ 190 |
 | Endpoints API | 2000+ |
 | Profils d'image | `isp` (passerelle) · `full` (suite complète) |
 | Moteur DPI | nDPI 6.x statique, construit en CI pour amd64 **et** arm64 |

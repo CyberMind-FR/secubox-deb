@@ -7,7 +7,7 @@
 
 # Roadmap
 
-État courant du projet et wishlist de développement. Cette roadmap est **non datée** — le projet progresse au rythme des moyens disponibles.
+État courant du projet et suite prévue. Cette roadmap est **non datée** — le projet progresse au rythme des moyens disponibles.
 
 ---
 
@@ -17,72 +17,57 @@
 
 | Élément | Valeur |
 |---------|--------|
-| Version release | v2.2.4-pre1 |
-| Base Debian | bookworm (12) |
-| Kernel | 6.6 LTS |
-| Paquets | 125 |
-| Endpoints API | 2000+ |
+| Version release | v3.0.0-alpha.8 (pré-release) |
+| Base Debian | bookworm (12) ; images Trixie (13) pour VM et Raspberry Pi |
+| Paquets | environ 190 |
+| Profils | `lite`, `isp`, `full` |
 
-### Modules complets
+### Ce qui est livré et en service
 
-Les modules suivants sont fonctionnels et testés :
+| Domaine | Modules et développements |
+|---------|---------------------------|
+| 🛡️ Pare-feu et WAF | nftables en `DEFAULT DROP`, `sbxwaf` (WAF en Go) devant tout le trafic web, HAProxy TLS 1.3 en frontal, bannissement natif nftables, empreintes d'outils et campagnes de scanners |
+| 🧹 DNS | Unbound ; **ad-guard** (publicités et traceurs, par appareil, TV et streamers) ; **webfilter** (catégories adulte, jeux d'argent, phishing/malware, profils et appareils, observation par défaut) ; `dns-lan` (noms du réseau local) ; DNS Guard |
+| 🔐 Accès | WireGuard avec enrôlement par QR, authentification avec 2FA administrateur, NAC |
+| 🕵️ Détection | DPI (nDPI 6.x), sentinelle, apprentissage C2, anti-rootkit, CrowdSec en mode souverain |
+| 🧅 Réseau privé | Tor (passerelle transparente `.onion`), maillage `wg-mesh`, annuaire Gondwana à trois nœuds, fédération P2P |
+| 🧰 Toolbox | Niveaux d'interception par appareil (off, passif, actif, réel) avec le moteur Go `sbxmitm` |
+| ☁️ Services souverains | Nextcloud, messagerie (Maildir, Sieve, ClamAV), Gitea, Jellyfin, PeerTube, Podcaster, radio, BBS, billets, publication de sites (metablogizer), Zigbee, Meshtastic, YouTube SAS — chacun dans son conteneur LXC |
+| 🖥️ Interface | Tableau de bord unique, Hall (bureau web), panneaux d'administration par module |
+| ⚙️ Exploitation | Profils avec niveaux de mémoire, `sleeper` et réveil à la demande, zram, plafond collectif de mémoire, watchdog avec auto-réparation des conteneurs, anneaux de publication (release rings) |
 
-| Stack | Modules |
-|-------|---------|
-| 🟠 AUTH | auth, portal, users, nac |
-| 🟡 WALL | waf, authwatch, threats, ipblock, sbxwaf |
-| 🔴 BOOT | cloner, vault, vm |
-| 🟢 ROOT | core, hub, system, console |
-| 🔵 MESH | wireguard, haproxy, netmodes, qos |
+### Matériel
 
-### Ports livrés
-
-| Carte | SoC | Statut | Profile |
-|-------|-----|--------|---------|
-| MOCHAbin | Armada 7040 | ✅ Tested & Supported | Full |
-| ESPRESSObin v7 | Armada 3720 | ✅ Tested & Supported | Lite |
-| ESPRESSObin Ultra | Armada 3720 | ✅ Tested & Supported | Lite+ |
-| VirtualBox x64 | — | ✅ Tested & Supported | Full |
-| QEMU ARM64 | — | ✅ Tested & Supported | Full |
-| ClearFog Base/Pro | Armada 388 | 🔵 Community Ported | Lite |
+| Carte | SoC | Statut | Profil conseillé |
+|-------|-----|--------|------------------|
+| MOCHAbin | Armada 7040 | ✅ Testé et supporté | `full` |
+| ESPRESSObin v7 / Ultra | Armada 3720 | ✅ Testé et supporté | `lite` (isp possible) |
+| Raspberry Pi 4 / 400 | BCM2711 | ✅ Testé et supporté | `isp` |
+| PC x86_64, VirtualBox, QEMU | — | ✅ Testé et supporté | `isp` ou `full` |
+| ClearFog Base/Pro | Armada 388 | 🔵 Porté par la communauté | `lite` |
 
 ### Infrastructure
 
 | Service | Statut |
 |---------|--------|
-| APT repo `apt.secubox.in` | ✅ Opérationnel |
-| CI/CD GitHub Actions | ✅ Cross-compilation ARM64 |
-| Wiki multilingue | ✅ EN/FR/DE/ZH |
-| Images bootables | ✅ ARM64 + AMD64 |
+| Dépôt APT `apt.secubox.in` | ✅ Opérationnel |
+| CI/CD GitHub Actions | ✅ Paquets, images, Live USB, ISO d'installation |
+| Wiki multilingue | ✅ EN/FR/DE/ZH (pages principales) |
 
 ---
 
-## Wishlist — Modules
+## En cours et à venir
 
-Développements envisagés, sans engagement de date.
+| Sujet | Contenu |
+|-------|---------|
+| Webfilter, suite | Apprentissage et mise en quarantaine (« parking »), association avec le DPI |
+| DPI | Étiquetage des destinations vues par IP seule |
+| Toolbox | Export des compteurs vers ad-guard |
+| Portage Trixie | Image CI puis ensemble des paquets |
+| Certification CSPN | Documentation article par article, politique cryptographique, audit externe |
+| Secrets matériels (TPM) | Étudié, mis de côté : gain limité tant que la clé d'hôte reste sur le même disque |
 
-### Priorité haute
-
-| Module | Description | Complexité |
-|--------|-------------|------------|
-| **secubox-soc** | SIEM/SOC interface, alerting consolidé | Moyenne |
-| **secubox-backup** | Sauvegarde chiffrée, restore automatisé | Moyenne |
-| **secubox-vpn-client** | Client VPN multi-protocole (WG/OpenVPN/IPsec) | Faible |
-
-### Priorité moyenne
-
-| Module | Description | Complexité |
-|--------|-------------|------------|
-| **secubox-honeypot** | Honeypots légers intégrés | Moyenne |
-| **secubox-compliance** | Rapports conformité (RGPD, ISO 27001) | Haute |
-| **secubox-meshnet** | MirrorNet P2P production | Haute |
-
-### Priorité basse
-
-| Module | Description | Complexité |
-|--------|-------------|------------|
-| **secubox-monitoring** | Dashboard Grafana/Prometheus intégré | Moyenne |
-| **secubox-mail** | Relais mail sécurisé | Haute |
+Idées étudiées puis suspendues, sans calendrier : enregistreur de replay TV local (suspendu : contenus sous DRM hors périmètre).
 
 ---
 
@@ -114,17 +99,6 @@ Voir **[[Sponsor-a-Port]]** pour financer un portage.
 
 ---
 
-## Wishlist — Documentation
-
-| Page | Statut | Notes |
-|------|--------|-------|
-| Guide développeur | ✅ Complet | `docs/PORTING-GUIDE.md` |
-| API Reference | ✅ Complet | 2000+ endpoints documentés |
-| Traductions | 🔄 En cours | DE partiel, ZH partiel |
-| Tutoriels vidéo | ⬜ Wishlist | Pas de priorité actuelle |
-
----
-
 ## Contribuer
 
 Les contributions sont bienvenues sur tous les éléments de la wishlist.
@@ -144,4 +118,4 @@ Les contributions sont bienvenues sur tous les éléments de la wishlist.
 
 ---
 
-*Dernière mise à jour : 2026-05*
+*Dernière mise à jour : 2026-10*

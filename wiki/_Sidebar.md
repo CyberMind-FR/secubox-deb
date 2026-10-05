@@ -5,7 +5,7 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-**[SecuBox](Home)** | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH) | **v3.0.0-alpha.4**
+**[SecuBox](Home)** | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH) | **v3.0.0-alpha.8**
 
 ---
 
@@ -16,6 +16,8 @@
 * [[Trixie]]
 * [[Hardware-Matrix]]
 * [[Roadmap]]
+* [[Profils]]
+* [[DNS-Filtrage]]
 
 ### Soutenir
 
@@ -65,7 +67,6 @@
 ### 🔵 MESH — Référence
 
 * [[API-Reference]] | [FR](API-Reference-FR) | [DE](API-Reference-DE) | [中文](API-Reference-ZH)
-* [[UI-COMPARISON]]
 
 ### 🟠 WALL — Matériel
 

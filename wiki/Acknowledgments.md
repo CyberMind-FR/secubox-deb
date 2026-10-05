@@ -112,8 +112,8 @@ Mainteneur principal :
 la SecuBox.
 
 * **Pré-2025** — Évaluations terrain, sponsoring matériel et financement de
-  l'infrastructure de POC qui a permis la maturation de SecuBox-OpenWrt puis
-  la migration SecuBox-Deb.
+  l'infrastructure de POC qui a permis la maturation de SecuBox puis
+  de SecuBox-Deb.
 * **2026-05** — Contributions techniques : validation hardware Pi 4B + DSI,
   Pi Zero W + HyperPixel ; co-design des dashboards remote-ui converged
   (round/square) sur la base `secubox_common` ; radar concentric painter

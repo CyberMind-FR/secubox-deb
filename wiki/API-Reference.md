@@ -167,7 +167,6 @@ Intrusion detection and prevention.
 | `/unban` | POST | Yes | Unban IP address |
 | `/nftables` | GET | Yes | nftables statistics |
 | `/console/status` | GET | Yes | Console connection status |
-| `/migrate` | POST | Yes | Migrate from OpenWrt |
 
 #### Ban IP Example
 ```bash
@@ -330,7 +329,6 @@ VPN tunnel management.
 | `/peer/{name}/qr` | GET | Yes | Peer QR code |
 | `/genkey` | POST | Yes | Generate keypair |
 | `/genpsk` | POST | Yes | Generate PSK |
-| `/migrate` | POST | Yes | Migrate from OpenWrt |
 
 #### Add Peer Example
 ```bash
@@ -465,7 +463,6 @@ Virtual host management.
 | `/certificate/issue` | POST | Yes | Issue Let's Encrypt cert |
 | `/reload` | POST | Yes | Reload nginx |
 | `/test` | POST | Yes | Test configuration |
-| `/migrate` | POST | Yes | Migrate from OpenWrt |
 | `/logs/{domain}` | GET | Yes | Virtual host logs |
 
 ### CDN Cache API (`/api/v1/cdn/`)
@@ -865,17 +862,6 @@ APT repository management.
 | `/remove_package` | POST | Yes | Remove package |
 | `/sign` | POST | Yes | Sign repository |
 | `/sync` | POST | Yes | Sync to remote |
-
-### Roadmap API (`/api/v1/roadmap/`)
-
-Migration tracking.
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/status` | GET | No | Roadmap status |
-| `/phases` | GET | No | Migration phases |
-| `/modules` | GET | No | Module status |
-| `/progress` | GET | No | Overall progress |
 
 ---
 
