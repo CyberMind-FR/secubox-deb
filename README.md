@@ -22,6 +22,7 @@
 
 <p align="center">
   <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-profiles">Profiles</a> ·
   <a href="#-quick-demo">Quick Demo</a> ·
   <a href="#-quick-deploy">Quick Deploy</a> ·
   <a href="https://github.com/CyberMind-FR/secubox-deb/wiki">Docs</a> ·
@@ -32,17 +33,19 @@
 ---
 
 SecuBox turns a small ARM board — or any x86 PC — into a complete, self-hosted
-security appliance running on Debian bookworm, with **Debian 13 (Trixie)
-images now published** for VM and Raspberry Pi
-([#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294)): firewall, VPN, intrusion
-detection, WAF, and a suite of sovereign services, all behind one web dashboard.
+security appliance: firewall, VPN, intrusion detection, WAF, DNS filtering and a
+suite of sovereign services, all behind one web dashboard. It runs on Debian 12
+(bookworm); **Debian 13 (Trixie) images are also published** for VM and
+Raspberry Pi ([#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294)).
 
 ## Why SecuBox
 
 - **Your hardware, your rules.** Everything runs on the box you own. No cloud
   account, no telemetry, no third-party cookie ever leaves the appliance.
-- **Whole stack, one install.** 181 packages covering security, networking,
-  applications and operations — instead of a weekend of glue work.
+- **Whole stack, one install.** Around 190 packages covering security,
+  networking, applications and operations — instead of a weekend of glue work.
+- **Sized to the machine.** Three profiles, from a 2 GB board to a full home
+  server, each installing only what that machine can carry.
 - **Runs on what you already have.** Raspberry Pi, ESPRESSObin, MOCHAbin,
   a repurposed laptop, or a VM on your desktop.
 - **Auditable by design.** Source-disclosed licence, modular `ctl` grammar,
@@ -52,11 +55,13 @@ detection, WAF, and a suite of sovereign services, all behind one web dashboard.
 
 | | |
 |---|---|
-| 🛡️ **Firewall & WAF** | nftables + `sbxwaf` — pattern detected → kernel drop, no third-party service in the path |
+| 🛡️ **Firewall & WAF** | nftables with a default-drop policy, and `sbxwaf` in front of every web service — pattern detected → kernel drop, no third-party service in the path |
 | 🔐 **VPN** | WireGuard with QR-code enrolment for phones |
+| 🧹 **Ad blocking** | `ad-guard` removes ads and trackers at the DNS level for TVs, streamers and other devices, per device |
+| 👨‍👩‍👧 **Web filtering** | `webfilter` classifies DNS queries (adult, gambling, phishing/malware) and can block them per device and per profile. It starts in observe-only mode: nothing is blocked until you choose |
 | 🚨 **Intrusion detection** | HTTP, SSH, SMTP and IMAP watched together — `sbxwaf` + `sbx-authwatch` feed one ban set |
 | 📊 **Web dashboard** | One interface for the whole box, from any browser |
-| ☁️ **Sovereign services** | Nextcloud, mail, Gitea, Jellyfin, PeerTube, radio, forum… |
+| ☁️ **Sovereign services** | Nextcloud, mail, Gitea, Jellyfin, PeerTube, radio, blog publishing… each in its own LXC container |
 | 🔄 **Automatic updates** | Security patches applied on their own |
 | 🎭 **Decoy & watermark** | Unrouted hosts and bait paths get a plausible, inert page — watermarked, so a fake credential replayed later is recognised as ours. Learning only: no bans follow |
 | 🧬 **Actor intelligence** | Scanners correlated across addresses and countries; a walking subdomain dictionary is regrouped into one campaign instead of dozens of fragments |
@@ -84,6 +89,20 @@ Prefer QEMU on an ARM host? Use
 [`create-qemu-arm64-vm.sh`](https://github.com/CyberMind-FR/secubox-deb/releases/latest)
 from the release assets.
 
+## 🧩 Profiles
+
+A **profile** decides which modules are installed; a **tier** decides what the
+machine can carry. Pick the profile that matches your hardware and your needs.
+
+| | **lite** | **isp** | **full** |
+|---|---|---|---|
+| For | Small boards, 1–2 GB RAM | A complete gateway, 4 GB and up | A home server, 8 GB and up |
+| Includes | Hub, portal, WireGuard, network modes, NAC, hardening, ad-guard, webfilter | lite + DNS, firewall, WAF, HAProxy, QoS, DPI, certificates, Tor, mesh, supervision, site hosting | isp + Nextcloud, Gitea, Jellyfin, PeerTube, mail, radio, Zigbee, publishing… |
+| Typical machine | ESPRESSObin | Raspberry Pi 400, MOCHAbin, x86 PC | MOCHAbin, x86 PC |
+
+Side-by-side table, glossary and a popularisation prompt:
+[docs/PROFILS-COMPARATIF.md](docs/PROFILS-COMPARATIF.md).
+
 ## 📘 Official AMD64 Installation
 
 Install and reproduce the GK2 development box on an AMD64 PC, VirtualBox,
@@ -93,64 +112,62 @@ KVM or QEMU: [Official AMD64 GK2 Clone installation guide](docs/INSTALL-AMD64-GK
 
 **Boot it from a USB stick on any x86_64 PC — nothing is written to the disk.**
 
+Download the live image from the
+[latest release](https://github.com/CyberMind-FR/secubox-deb/releases/latest),
+then write it to a USB stick:
+
 ```bash
-# The bootable live image ships with the Alpha 4 release (Debian 12 base —
-# the Trixie images are the VM and Raspberry Pi ones, see Quick Deploy below)
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v3.0.0-alpha.4/secubox-live-amd64-bookworm.img.gz
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress   # /dev/sdX = your USB device
 ```
 
 Boot from the stick, then reach the dashboard at `https://<device-ip>/`.
 Full walkthrough and troubleshooting: [Live USB](https://github.com/CyberMind-FR/secubox-deb/wiki/Live-USB).
 
-> On the stable line (`v2.41.0`) the published image is the **installer**
-> (`secubox-installer-amd64-bookworm.iso.gz`), which writes to disk rather than
-> running live.
-
 ## 🚀 Quick Deploy
 
-**For 24/7 operation on dedicated hardware.**
+**For 24/7 operation on dedicated hardware.** Image names follow
+`secubox-<profile>-<board>-<suite>` — check the release assets for what a given
+release actually ships.
 
-| Target | Best for | Published image | Suite |
+| Target | Best for | Image | Suite |
 |---|---|---|---|
-| VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` | **Debian 13** |
-| Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` | **Debian 13** |
+| VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` | Debian 13 |
+| Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` | Debian 13 |
 | Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-bookworm.img.gz` (live) | Debian 12 |
 | Any x86_64 PC | Permanent install | `secubox-installer-amd64-bookworm.iso.gz` | Debian 12 |
 | MOCHAbin | Enterprise | `secubox-mochabin-live-usb.img.gz` | Debian 12 |
+| ESPRESSObin v7 / Ultra | Small gateway | `lite` and `isp` images (7 GB, microSD) | Debian 12 |
 
-Each board ships in two profiles: `isp` (a lean gateway) and `full` (the
-complete service suite). The profile is no longer cosmetic — it genuinely
-selects which modules are installed.
-
-> ESPRESSObin images are not in the current release assets — build them from
-> source ([Building](https://github.com/CyberMind-FR/secubox-deb/wiki/Building)).
+The profile genuinely selects which modules are installed. An ESPRESSObin
+image is written to a microSD card; `secubox-install-emmc` then copies the
+running system to the eMMC and refuses clearly if it does not fit (4 GB eMMC:
+lite yes, isp maybe not).
 
 Flashing, U-Boot and first-boot steps:
 [Installation](https://github.com/CyberMind-FR/secubox-deb/wiki/Installation) ·
 [ARM / U-Boot](https://github.com/CyberMind-FR/secubox-deb/wiki/ARM-Installation) ·
 [Supported hardware](https://github.com/CyberMind-FR/secubox-deb/wiki/Hardware)
 
-### 🧪 Testing Alpha 4
+### 🧪 Current release: `v3.0.0-alpha.8`
 
-`v3.0.0-alpha.4` is the current release — 181 packages, disk images and Live
-USB builds for every supported board, now including **Debian 13 (Trixie)**
-images for VM and Raspberry Pi. It remains a **pre-release line**: run it on a
-test box, not on the link your household depends on.
+This is a **pre-release line**: run it on a test box, not on the link your
+household depends on. What it brings, on top of the earlier alphas:
 
-What the Trixie images carry, verified on a booted machine rather than only in
-the build log:
-
-- **Profiles that actually filter.** `isp` and `full` used to produce byte-identical
-  images; they now differ by the modules they install.
+- **Ad blocking and web filtering in the small profiles.** `ad-guard` and
+  `webfilter` are now part of `lite` and `isp`. Web filtering starts in
+  observe-only mode and blocks nothing until you configure it.
+- **Site hosting in `isp`.** Blog publishing (`metablogizer`, `publish`) joins
+  the gateway profile.
+- **Profiles that actually filter.** `lite`, `isp` and `full` differ by the
+  modules they install, not only by name.
 - **zram swap and a collective memory ceiling.** SecuBox modules run under a
   `secubox.slice` capped as a percentage of physical RAM, so a module storm
   costs you a module — not the machine.
 - **Module lifecycle derived at first boot**, with the sleeper putting idle
   modules to sleep.
-- **The nDPI 6.x engine**, now built by CI for **both** amd64 and arm64.
+- **The nDPI 6.x engine**, built by CI for both amd64 and arm64.
 
-Guided path: [**Démarrage rapide Alpha4**](https://github.com/CyberMind-FR/secubox-deb/wiki) —
+Guided path: [Démarrage rapide Alpha](https://github.com/CyberMind-FR/secubox-deb/wiki) —
 VM in one command, or real arm64 hardware — first section of the wiki home.
 
 ### Verifying downloads
@@ -169,7 +186,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 |---|---|
 | [Wiki home](https://github.com/CyberMind-FR/secubox-deb/wiki) | Portal — every guide starts here |
 | [Configuration](https://github.com/CyberMind-FR/secubox-deb/wiki/Configuration) | First-boot settings, network modes |
-| [Modules](https://github.com/CyberMind-FR/secubox-deb/wiki/MODULES-EN) | The 128 modules, one by one |
+| [Modules](https://github.com/CyberMind-FR/secubox-deb/wiki/MODULES-EN) | Every module, one by one |
 | [API reference](https://github.com/CyberMind-FR/secubox-deb/wiki/API-Reference) | 2000+ endpoints |
 | [Architecture](https://github.com/CyberMind-FR/secubox-deb/wiki/Modules-Architecture) | The 6-layer model |
 | [Troubleshooting](https://github.com/CyberMind-FR/secubox-deb/wiki/Troubleshooting) | When it does not boot |
