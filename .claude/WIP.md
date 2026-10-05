@@ -60,3 +60,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - Ce fichier ne porte que le chantier en cours et le Next Up. Une fois fait, l'item part dans
   `HISTORY.md` (entrée datée) ; `HISTORY.md` du mois précédent part dans `archive/HISTORY/`.
 - Découpe des archives : `archive/decoupe.py` ; preuve : `archive/reassembler.py`.
+
+## CI Sync 2026-10-05
+- Packages: 168
+- Endpoints: 2705
+- Migration: 71%
+- Commits: 6124
