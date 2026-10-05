@@ -1,3 +1,9 @@
+secubox-meta (0.1.16-1~bookworm1) bookworm; urgency=medium
+
+  * Retire secubox-threat-analyst (module supprime) (ref #1997).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 11:30:00 +0200
+
 secubox-meta (0.1.15-1~bookworm1) bookworm; urgency=low
 
   * Retrait de hexo, ollama, gotosocial, redroid, simplex, newsbin, voip et frigate (docker/podman, #1743) ; secubox-clamav ajouté en Suggests du service courrier (oublié du lot #1912, relevé par gen-meta).
