@@ -64,3 +64,11 @@ def test_postinst_des_anciens_retire_unite_et_conf_sans_rien_demarrer():
         post = (PAQ / f"secubox-{s}/debian/postinst").read_text()
         assert "systemctl restart" not in post and "systemctl enable" not in post, s
         assert f"secubox-{s}.service" in post and "daemon-reload" in post, s
+
+
+def test_mac_guard_retire_ses_conffiles_nginx_obsoletes():
+    """dpkg ne supprime pas un conffile devenu obsolète : sans rm_conffile, l'ancienne conf reste et
+    nginx refuse la configuration (location en double avec nac-legacy.conf), constaté sur gk3."""
+    m = (PAQ / "secubox-mac-guard/debian/secubox-mac-guard.maintscript").read_text()
+    assert "rm_conffile /etc/nginx/secubox.d/mac-guard.conf 1.2.3~" in m
+    assert "rm_conffile /etc/nginx/secubox-routes.d/mac-guard.conf 1.2.3~" in m
