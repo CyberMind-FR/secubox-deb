@@ -27,3 +27,48 @@ override_dh_auto_install:
 	# install-lxc.sh must be executable (cp -r doesn't always preserve +x from git)
 	[ -f debian/secubox-mqtt/usr/share/secubox/lib/mqtt/install-lxc.sh ] && \
 	    chmod 755 debian/secubox-mqtt/usr/share/secubox/lib/mqtt/install-lxc.sh
+	# Composant absorbé : zigbee (#2050)
+	# Host control plane (FastAPI)
+	install -d debian/secubox-mqtt/usr/lib/secubox/zigbee
+	cp -r composants/zigbee/api debian/secubox-mqtt/usr/lib/secubox/zigbee/
+	# CTL
+	install -d debian/secubox-mqtt/usr/sbin
+	install -m 755 composants/zigbee/sbin/zigbeectl debian/secubox-mqtt/usr/sbin/zigbeectl
+	# v2.6.0 backup / restore helpers + hourly timer
+	install -m 755 composants/zigbee/sbin/zigbee-backup   debian/secubox-mqtt/usr/sbin/zigbee-backup
+	install -m 755 composants/zigbee/sbin/zigbee-restore  debian/secubox-mqtt/usr/sbin/zigbee-restore
+	install -d debian/secubox-mqtt/lib/systemd/system
+	install -m 644 composants/zigbee/systemd/secubox-zigbee-backup.service debian/secubox-mqtt/lib/systemd/system/secubox-zigbee-backup.service
+	install -m 644 composants/zigbee/systemd/secubox-zigbee-backup.timer   debian/secubox-mqtt/lib/systemd/system/secubox-zigbee-backup.timer
+	# v2.6.0 sudoers grant: lets secubox-zigbee FastAPI trigger the
+	# backup / restore scripts (run as root, need access to LXC files).
+	install -d debian/secubox-mqtt/etc/sudoers.d
+	install -m 440 composants/zigbee/sudoers.d/secubox-zigbee debian/secubox-mqtt/etc/sudoers.d/secubox-zigbee
+	# Web UI
+	install -d debian/secubox-mqtt/usr/share/secubox/www
+	[ -d composants/zigbee/www ] && cp -r composants/zigbee/www/. debian/secubox-mqtt/usr/share/secubox/www/ || true
+	# Menu entry
+	install -d debian/secubox-mqtt/usr/share/secubox/menu.d
+	[ -d composants/zigbee/menu.d ] && cp -r composants/zigbee/menu.d/. debian/secubox-mqtt/usr/share/secubox/menu.d/ || true
+	# composants/zigbee/nginx canonical-hub snippet (SecuBox composants/zigbee/config module + API). Installed to
+	# both secubox.d/ and secubox-routes.d/ (per v2.11.1 lesson).
+	install -d debian/secubox-mqtt/etc/nginx/secubox.d
+	[ -f composants/zigbee/nginx/zigbee.conf ] && cp composants/zigbee/nginx/zigbee.conf debian/secubox-mqtt/etc/nginx/secubox.d/ && (install -d debian/secubox-mqtt/etc/nginx/secubox-routes.d && cp composants/zigbee/nginx/zigbee.conf debian/secubox-mqtt/etc/nginx/secubox-routes.d/) || true
+	# Public Zigbee Manager vhost (zigbee.gk2.secubox.in). Operator enables
+	# with ln -s ../sites-available/zigbee.conf /etc/nginx/sites-enabled/
+	install -d debian/secubox-mqtt/etc/nginx/sites-available
+	[ -f composants/zigbee/nginx/zigbee-vhost.conf ] && install -m 644 composants/zigbee/nginx/zigbee-vhost.conf debian/secubox-mqtt/etc/nginx/sites-available/zigbee.conf || true
+	# Config example
+	install -d debian/secubox-mqtt/etc/secubox
+	[ -f composants/zigbee/conf/zigbee.toml.example ] && cp composants/zigbee/conf/zigbee.toml.example debian/secubox-mqtt/etc/secubox/zigbee.toml.example || true
+	# LXC bootstrap
+	install -d debian/secubox-mqtt/usr/share/secubox/lib/zigbee
+	[ -d composants/zigbee/lib/zigbee ] && cp -r composants/zigbee/lib/zigbee/. debian/secubox-mqtt/usr/share/secubox/lib/zigbee/ || true
+	# install-lxc.sh must be executable (cp -r doesn't always preserve +x from git)
+	[ -f debian/secubox-mqtt/usr/share/secubox/lib/zigbee/install-lxc.sh ] && \
+	    chmod 755 debian/secubox-mqtt/usr/share/secubox/lib/zigbee/install-lxc.sh
+	install -D -m 755 composants/zigbee/debian/postinst debian/secubox-mqtt/usr/lib/secubox/mqtt/maintscripts/zigbee.postinst
+	install -D -m 755 composants/zigbee/debian/prerm debian/secubox-mqtt/usr/lib/secubox/mqtt/maintscripts/zigbee.prerm
+	install -D -m 755 composants/zigbee/debian/postrm debian/secubox-mqtt/usr/lib/secubox/mqtt/maintscripts/zigbee.postrm
+	install -D -m 644 composants/zigbee/debian/secubox-zigbee.service debian/secubox-mqtt/usr/lib/systemd/system/secubox-zigbee.service
+

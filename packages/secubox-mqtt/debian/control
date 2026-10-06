@@ -9,14 +9,19 @@ Homepage: https://cybermind.fr/secubox
 Package: secubox-mqtt
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.4.0),
-         lxc,
-         lxc-templates,
-         debootstrap,
-         python3-uvicorn,
-         python3-fastapi,
-         python3-toml,
-         openssl
+ secubox-core (>= 1.4.0),
+ lxc,
+ lxc-templates,
+ debootstrap,
+ python3-uvicorn,
+ python3-fastapi,
+ python3-toml,
+ openssl,
+ udev,
+ mosquitto-clients
+Recommends: secubox-iot-hub
+Replaces: secubox-zigbee (<< 2.7.6~)
+Breaks: secubox-zigbee (<< 2.7.6~)
 Description: SecuBox MQTT — Mosquitto broker (WALL layer)
  Hosts a hardened Mosquitto 2.x broker in a Debian bookworm LXC at
  10.100.0.110 on br-lxc.

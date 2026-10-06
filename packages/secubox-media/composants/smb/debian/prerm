@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove)
+        systemctl stop ksmbd 2>/dev/null || true
+        nft delete table inet secubox_smb 2>/dev/null || true
+        ;;
+esac
+exit 0

@@ -9,3 +9,24 @@ override_dh_auto_install:
 	cp -r www/ai-gateway/. debian/secubox-ai-gateway/usr/share/secubox/www/ai-gateway/
 	install -d debian/secubox-ai-gateway/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ai-gateway/usr/share/secubox/menu.d/ || true
+	# Composant absorbé : localrecall (#2050)
+	install -d debian/secubox-ai-gateway/usr/lib/secubox/localrecall
+	cp -r composants/localrecall/api debian/secubox-ai-gateway/usr/lib/secubox/localrecall/
+	install -d debian/secubox-ai-gateway/usr/share/secubox/www/localrecall
+	cp -r composants/localrecall/www/localrecall/. debian/secubox-ai-gateway/usr/share/secubox/www/localrecall/
+	install -d debian/secubox-ai-gateway/usr/share/secubox/menu.d
+	[ -d composants/localrecall/menu.d ] && cp -r composants/localrecall/menu.d/. debian/secubox-ai-gateway/usr/share/secubox/menu.d/ || true
+	install -D -m 755 composants/localrecall/debian/postinst debian/secubox-ai-gateway/usr/lib/secubox/ai-gateway/maintscripts/localrecall.postinst
+	install -D -m 755 composants/localrecall/debian/prerm debian/secubox-ai-gateway/usr/lib/secubox/ai-gateway/maintscripts/localrecall.prerm
+	install -D -m 644 composants/localrecall/debian/secubox-localrecall.service debian/secubox-ai-gateway/usr/lib/systemd/system/secubox-localrecall.service
+	# Composant absorbé : mcp-server (#2050)
+	install -d debian/secubox-ai-gateway/usr/lib/secubox/mcp-server
+	cp -r composants/mcp-server/api debian/secubox-ai-gateway/usr/lib/secubox/mcp-server/
+	install -d debian/secubox-ai-gateway/usr/share/secubox/www/mcp-server
+	cp -r composants/mcp-server/www/mcp-server/. debian/secubox-ai-gateway/usr/share/secubox/www/mcp-server/
+	install -d debian/secubox-ai-gateway/usr/share/secubox/menu.d
+	[ -d composants/mcp-server/menu.d ] && cp -r composants/mcp-server/menu.d/. debian/secubox-ai-gateway/usr/share/secubox/menu.d/ || true
+	install -D -m 755 composants/mcp-server/debian/postinst debian/secubox-ai-gateway/usr/lib/secubox/ai-gateway/maintscripts/mcp-server.postinst
+	install -D -m 755 composants/mcp-server/debian/prerm debian/secubox-ai-gateway/usr/lib/secubox/ai-gateway/maintscripts/mcp-server.prerm
+	install -D -m 644 composants/mcp-server/debian/secubox-mcp-server.service debian/secubox-ai-gateway/usr/lib/systemd/system/secubox-mcp-server.service
+

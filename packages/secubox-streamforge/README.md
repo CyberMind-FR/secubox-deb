@@ -1,47 +1,5 @@
-<!--
-  SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
--->
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+# secubox-streamforge (transitoire)
 
-# ⚡ StreamForge
-
-Streamlit app development
-
-**Category:** Apps
-
-## Screenshot
-
-![StreamForge](../../docs/screenshots/vm/streamforge.png)
-
-## Features
-
-- Templates
-- Code editor
-- Preview
-- Deploy
-
-## Installation
-
-```bash
-# Add SecuBox repository
-curl -fsSL https://apt.secubox.in/install.sh | sudo bash
-
-# Install package
-sudo apt install secubox-streamforge
-```
-
-## Configuration
-
-Configuration file: `/etc/secubox/streamforge.toml`
-
-## API Endpoints
-
-- `GET /api/v1/streamforge/status` - Module status
-- `GET /api/v1/streamforge/health` - Health check
-
-## License
-
-LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
-See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+Paquet vide : streamforge est un composant de `secubox-streamlit` depuis 1.5.0 (#2050).
+Il sera retiré une fois publié un cycle complet.

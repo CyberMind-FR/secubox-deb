@@ -63,6 +63,15 @@ hors-arbre:
   - secubox-sbxui  # transitoire → secubox-webos (#2050)
   - secubox-metacatalog  # transitoire → secubox-appstore (#2050)
   - secubox-dns-lan  # transitoire → secubox-dns (#2050)
+  - secubox-traffic  # transitoire → secubox-qos (#2050)
+  - secubox-streamforge  # transitoire → secubox-streamlit (#2050)
+  - secubox-smb  # transitoire → secubox-media (#2050)
+  - secubox-zigbee  # transitoire → secubox-mqtt (#2050)
+  - secubox-cloner  # transitoire → secubox-backup (#2050)
+  - secubox-glances  # transitoire → secubox-metrics (#2050)
+  - secubox-reporter  # transitoire → secubox-metrics (#2050)
+  - secubox-localrecall  # transitoire → secubox-ai-gateway (#2050)
+  - secubox-mcp-server  # transitoire → secubox-ai-gateway (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -311,7 +320,6 @@ requiert:
   - secubox-nac
 recommande:
   - secubox-qos
-  - secubox-traffic
   - secubox-netdiag
 suggere:
   - secubox-nettweak
@@ -438,8 +446,6 @@ description: "Métriques temps réel, tableaux et rapports."
 requiert:
   - secubox-metrics
 recommande:
-  - secubox-glances
-  - secubox-reporter
 suggere:
   - secubox-grafana
 
@@ -498,7 +504,6 @@ requiert:
 recommande:
   - secubox-droplet
 suggere:
-  - secubox-smb
 
 meta: secubox-service-photos
 niveau: service
@@ -580,7 +585,6 @@ description: "Courtier MQTT, coordinateur Zigbee, garde IoT, NVR."
 requiert:
   - secubox-mqtt
 recommande:
-  - secubox-zigbee
 suggere:
   - secubox-picobrew
 
@@ -591,18 +595,14 @@ description: "Passerelle souveraine, inférence locale, mémoire, MCP."
 requiert:
   - secubox-ai-gateway
 recommande:
-  - secubox-localrecall
 suggere:
-  - secubox-mcp-server
   - secubox-streamlit
-  - secubox-streamforge
 
 meta: secubox-service-provision
 niveau: service
 label: Provision
 description: "Clonage, amorçage réseau, déploiement, anneaux de release, VM."
 recommande:
-  - secubox-cloner
   - secubox-netboot
 suggere:
   - secubox-release

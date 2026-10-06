@@ -8,7 +8,9 @@ PAQ = Path(__file__).resolve().parents[2] / "packages"
 # (absorbant, absorbé) — les fusions déjà faites par scripts/absorber-paquet.py (S1, S2 et N1 ont leurs propres tests)
 FUSIONS = [("matrix", "jabber"), ("dns-guard", "network-anomaly"), ("dns", "dns-provider"), ("threats", "ai-insights"),
            ("health", "health-doctor"), ("health", "watchdog"), ("webos", "sbxui"), ("appstore", "metacatalog"),
-           ("dns", "dns-lan")]
+           ("dns", "dns-lan"), ("qos", "traffic"), ("streamlit", "streamforge"), ("media", "smb"), ("mqtt", "zigbee"),
+           ("backup", "cloner"), ("metrics", "glances"), ("metrics", "reporter"), ("ai-gateway", "localrecall"),
+           ("ai-gateway", "mcp-server")]
 
 
 def _c(p):

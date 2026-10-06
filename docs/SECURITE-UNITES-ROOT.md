@@ -8,7 +8,7 @@
 # Registre des unités systemd exécutées en root
 
 Vague 0 du plan de simplification (`docs/dossiers/simplification-modules-beta.md`, issue #2050). La règle du projet est
-« un utilisateur dédié et un profil AppArmor par service ». Le 2026-10-06, **22 paquets** livrent une unité en
+« un utilisateur dédié et un profil AppArmor par service ». Le 2026-10-06, **21 paquets** livrent une unité en
 `User=root` (au moins 24 unités) ; aucune n'est confinée par `NoNewPrivileges` sauf deux. **Cette liste ne doit jamais s'allonger** :
 `scripts/tests/test_unites_root_2050.py` échoue si un nouveau paquet y entre. Pour en retirer un, on le supprime à la fois
 de ce registre et de la liste du test.
@@ -21,7 +21,7 @@ vaut une prise de contrôle. Cible : utilisateur `secubox-<module>`, `AmbientCap
 
 | Paquet | Pourquoi root aujourd'hui (à vérifier) | Cible | Priorité |
 |---|---|---|---|
-| `qos`, `traffic` | `tc` (qdisc root), nft | `CAP_NET_ADMIN` seule ; **un seul propriétaire du qdisc root** (conflit connu entre les deux) | haute |
+| `qos` (+ `traffic`, composant depuis #2050) | `tc` (qdisc root), nft | `CAP_NET_ADMIN` seule ; **un seul propriétaire du qdisc root** (conflit connu entre les deux) | haute |
 | `nettweak` | sysctl | `CAP_SYS_ADMIN` ciblée ou assistant `nettweakctl` | haute |
 | `netdiag` | ping, traceroute, nmap (sockets bruts) | `CAP_NET_RAW`, utilisateur dédié | haute |
 | `exposure` | édite `/etc/tor/torrc` et `/etc/nftables.conf` par regex, snippets nginx | assistant root étroit ; **fin des éditions par regex** (drop-ins uniquement) | haute |
@@ -30,7 +30,7 @@ vaut une prise de contrôle. Cible : utilisateur `secubox-<module>`, `AmbientCap
 | `admin`, `ksm` | mises à jour, redémarrage, sysfs KSM | assistants dédiés ; `ksm` : capacité sur `/sys/kernel/mm/ksm` | moyenne |
 | `certs` | ACME, écriture des certificats | utilisateur dédié + accès en écriture ciblé | moyenne |
 | `mail` | pilote le LXC du courrier | assistant LXC (modèle `voicestudioctl`) | moyenne |
-| `vm`, `netboot`, `cloner` | virtualisation, TFTP/dnsmasq, imagerie disque | privilégiés par nature : confiner (AppArmor, `ReadWritePaths`, `NoNewPrivileges` hors LXC) | moyenne |
+| `vm`, `netboot`, `backup` (+ `cloner`, composant depuis #2050) | virtualisation, TFTP/dnsmasq, imagerie disque | privilégiés par nature : confiner (AppArmor, `ReadWritePaths`, `NoNewPrivileges` hors LXC) | moyenne |
 | `interceptor` | rôle flou (voir le dossier : candidat à l'archivage) | auditer puis archiver ou durcir | basse |
 
 ## Tâches ponctuelles ou démons d'infrastructure en root (9) — justifiés, à confiner
@@ -44,7 +44,7 @@ vaut une prise de contrôle. Cible : utilisateur `secubox-<module>`, `AmbientCap
 | `profiles` | `secubox-sleeper` | arrête et démarre des unités ; déjà `NoNewPrivileges=true` |
 | `threatmesh` | `secubox-threatfeed` | `oneshot`, écrit la liste de blocage nft |
 | `toolbox` | `secubox-blacklist-attrib`, `-sync`, `secubox-escalate` | `oneshot`, nft |
-| `zigbee` | `secubox-zigbee-backup` | `oneshot`, sauvegarde du LXC |
+| `mqtt` | `secubox-zigbee-backup` (composant zigbee, #2050) | `oneshot`, sauvegarde du LXC |
 
 ## Autres écarts à la règle relevés en passant
 

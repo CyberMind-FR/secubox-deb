@@ -1,3 +1,10 @@
+secubox-streamlit (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-streamforge (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/streamforge/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-streamlit (1.4.7-1~bookworm1) bookworm; urgency=medium
 
   * Cache rafraîchi À LA DEMANDE, plus en boucle (#1835). La boucle relançait

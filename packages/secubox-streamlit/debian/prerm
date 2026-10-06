@@ -13,3 +13,8 @@ systemctl disable --now secubox-streamlit-idle.timer || true
 systemctl stop    secubox-streamlit.service 2>/dev/null || true
 systemctl disable secubox-streamlit.service 2>/dev/null || true
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/streamlit/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "streamlit : prerm de $(basename "$_s") en échec" >&2; }
+done
+exit 0

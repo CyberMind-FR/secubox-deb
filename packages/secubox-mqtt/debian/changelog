@@ -1,3 +1,10 @@
+secubox-mqtt (2.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-zigbee (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/zigbee/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-mqtt (2.4.6-1~bookworm1) bookworm; urgency=medium
 
   * Le ctl sort en erreur quand le script d'installation échoue : il annonçait « Done » et rendait 0 (gk3 : peertube arrêté à l'étape 7/8 passait pour installé) (#1729, #1713).

@@ -1,3 +1,17 @@
+secubox-metrics (1.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-reporter (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/reporter/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
+secubox-metrics (1.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-glances (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/glances/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-metrics (1.12.14-1~bookworm1) bookworm; urgency=medium
 
   * Le rapport WAF quotidien echouait depuis la migration Trixie (« No module named 'fpdf' ») : Debian 13 n'a pas python3-fpdf2,

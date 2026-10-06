@@ -89,6 +89,8 @@ PAQUET_DE = {
     "coffre": "secubox-vault", "mon-coffre": "secubox-vault",
     # La carte « Voix » (dire, dicter) est servie par secubox-voice ; « secubox-voix » n'existe pas.
     "voix": "secubox-voice",
+    # zigbee est un composant de secubox-mqtt depuis #2050 (secubox-zigbee est transitoire).
+    "zigbee": "secubox-mqtt",
 }
 
 # Cartes dont le paquet ne peut PAS être requis par sbxos : il n'existe qu'en amd64, et un requiert

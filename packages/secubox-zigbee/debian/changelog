@@ -1,3 +1,9 @@
+secubox-zigbee (2.7.6-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : zigbee est un composant de secubox-mqtt >= 2.5.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-zigbee (2.7.5-1~bookworm1) bookworm; urgency=medium
 
   * /devices : un relevé partagé (#1835). Chaque lecture lançait trois

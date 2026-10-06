@@ -34,3 +34,15 @@ override_dh_auto_install:
 	install -m 0644 debian/secubox-media-drain.service debian/secubox-media/usr/lib/systemd/system/
 	install -m 0644 debian/secubox-media-drain.timer debian/secubox-media/usr/lib/systemd/system/
 	install -m 0644 debian/secubox-media-automount.service debian/secubox-media/usr/lib/systemd/system/
+	# Composant absorbé : smb (#2050)
+	install -d debian/secubox-media/etc/ksmbd
+	install -m 0644 composants/smb/etc/ksmbd.conf debian/secubox-media/etc/ksmbd/ksmbd.conf
+	install -d debian/secubox-media/etc/nftables.d
+	install -m 0644 composants/smb/nft/zz-secubox-smb.nft debian/secubox-media/etc/nftables.d/zz-secubox-smb.nft
+	install -d debian/secubox-media/etc/avahi/services
+	install -m 0644 composants/smb/avahi/secubox-smb.service debian/secubox-media/etc/avahi/services/secubox-smb.service
+	install -d debian/secubox-media/usr/sbin
+	install -m 0755 composants/smb/sbin/smbctl debian/secubox-media/usr/sbin/smbctl
+	install -D -m 755 composants/smb/debian/postinst debian/secubox-media/usr/lib/secubox/media/maintscripts/smb.postinst
+	install -D -m 755 composants/smb/debian/prerm debian/secubox-media/usr/lib/secubox/media/maintscripts/smb.prerm
+
