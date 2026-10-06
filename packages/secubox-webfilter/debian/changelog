@@ -1,3 +1,11 @@
+secubox-webfilter (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-webfilter-apply echouait chaque jour a 04:00 sur gk2 et gk3 (PermissionError sur /var/lib/secubox-webfilter-ctl) :
+    le controleur faisait un chmod 0700 sur un dossier deja en 0700, et son profil AppArmor n'accordait pas `w` sur le dossier
+    lui-meme. Plus de chmod si le mode est deja bon, et le profil accorde `rw` sur le dossier.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 16:40:00 +0200
+
 secubox-webfilter (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Essai réel sur gk2 (#1962) : une catégorie en block sans aucune liste brute est REFUSÉE par le contrôleur (« lancer une synchronisation »), au lieu d'être

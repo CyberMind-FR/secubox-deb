@@ -357,7 +357,7 @@ def test_estimation_ignore_les_sources_hors_catalogue(banc2):
 def test_health_annonce_la_version_du_paquet():
     d = TestClient(main.app).get("/health").json()
     ligne = (Path(__file__).resolve().parent.parent / "debian" / "changelog").read_text().splitlines()[0]
-    assert d["version"] == ligne.split("(")[1].split("-")[0] == "0.2.1"
+    assert d["version"] == ligne.split("(")[1].split("-")[0] == "0.2.2"
 
 
 def test_json_tres_imbrique_dans_config_donne_503_sans_plantage(banc2):

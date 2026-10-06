@@ -124,3 +124,32 @@ def test_une_categorie_observe_sans_liste_n_empeche_rien(banc):
     ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
     r = lancer(banc, Faux())
     assert r["statut"] == "applique"                                     # seule une catégorie en BLOCK exige une liste
+
+
+# ── constaté sur gk2 et gk3 (04:00) : chmod refusé par AppArmor sur un dossier déjà en 0700 ─────────────────────────
+
+def test_un_dossier_racine_deja_en_0700_n_est_pas_rechmode(banc, monkeypatch):
+    """Le profil AppArmor n'accorde pas `w` sur le dossier lui-même (seulement sur son contenu) : un chmod, même sans effet,
+    y est refusé (EACCES) et faisait échouer l'unité à chaque passage. Déjà en 0700, il n'y a rien à faire."""
+    ecrire_config(banc, config())
+    os.chmod(banc / "racine", 0o700)
+
+    def refuse(chemin, mode):
+        raise PermissionError(13, "Permission denied", str(chemin))
+    monkeypatch.setattr(ctl.os, "chmod", refuse)
+    r = lancer(banc, Faux())
+    assert r["statut"] != "erreur"
+
+
+def test_un_dossier_racine_trop_ouvert_est_toujours_resserre(banc):
+    ecrire_config(banc, config())
+    os.chmod(banc / "racine", 0o755)
+    lancer(banc, Faux())
+    assert (banc / "racine").stat().st_mode & 0o777 == 0o700
+
+
+def test_le_profil_apparmor_autorise_le_dossier_racine_lui_meme():
+    from pathlib import Path
+    profil = (Path(__file__).resolve().parents[1] / "apparmor" / "secubox-webfilter").read_text()
+    bloc = profil[profil.index("/usr/sbin/secubox-webfilter-ctl {"):]
+    assert "/var/lib/secubox-webfilter-ctl/ rw," in bloc

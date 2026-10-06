@@ -130,7 +130,7 @@
   /var/lib/secubox/webfilter/resultat.json rw,
   /var/lib/secubox/webfilter/carte.json rw,
   /var/lib/secubox/webfilter/.wf-* rw,
-  /var/lib/secubox-webfilter-ctl/ r,
+  /var/lib/secubox-webfilter-ctl/ rw,
   /var/lib/secubox-webfilter-ctl/** rwk,
   /var/log/secubox/audit.log w,
 
