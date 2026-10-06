@@ -85,7 +85,9 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   build-packages:
     needs: discover
-    if: needs.discover.outputs.packages_changed != '[]' || github.event.inputs.force_rebuild == 'true'
+    # build-packages se declenche DEJA par son propre push : l'appeler aussi ici doublait la matrice de ~170 jobs a chaque
+    # push et saturait les runners (#1991). Ici : seulement sur demande explicite.
+    if: github.event.inputs.force_rebuild == 'true'
     uses: ./.github/workflows/build-packages.yml
     secrets: inherit
 

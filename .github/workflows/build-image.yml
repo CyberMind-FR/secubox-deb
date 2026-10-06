@@ -64,9 +64,8 @@ on:
         required: false
         type: boolean
         default: false
-  push:
-    tags:
-      - 'v*'
+  # Pas de `push: tags` : release.yml appelle déjà ce workflow ; son propre déclencheur sur l'étiquette le
+  # lançait EN DOUBLE et monopolisait les runners (#1991). Reste appelable (workflow_call) et manuel.
 
 env:
   # SUITE PARAMÉTRABLE (#1294). Elle était figée à bookworm ; le portage Trixie
