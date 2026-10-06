@@ -45,6 +45,69 @@ override_dh_auto_install:
 	install -d debian/secubox-ytsas/usr/lib/systemd/system
 	install -m 644 systemd/secubox-ytsas-conserve.service debian/secubox-ytsas/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-ytsas-conserve.timer debian/secubox-ytsas/usr/lib/systemd/system/
+	# Composant absorbé : torrent (#2050)
+	# WebTorrent LXC composants/torrent/app source. Ships package-lock.json (needed by
+	# `npm ci` at provision time inside the LXC) but NOT node_modules
+	# (gitignored dev artifact; install-lxc.sh runs npm ci in the LXC).
+	# API du module (#1032). Son absence etait l un des deux echecs de
+	# chargement de l agregateur : « torrent: main.py not found ». Elle porte
+	# aussi la recherche d index, qui rend de vraies adresses magnet.
+	install -d debian/secubox-ytsas/usr/lib/secubox/torrent/api
+	cp -r composants/torrent/api/*.py debian/secubox-ytsas/usr/lib/secubox/torrent/api/
+	install -d debian/secubox-ytsas/usr/lib/secubox/torrent/app
+	cp -r composants/torrent/lxc/app/. debian/secubox-ytsas/usr/lib/secubox/torrent/app/
+	rm -rf debian/secubox-ytsas/usr/lib/secubox/torrent/app/node_modules
+	# LXC bootstrap script + in-LXC composants/torrent/systemd unit (installed side by side so
+	# install-lxc.sh's $(dirname "$0") resolves the unit file on the board).
+	install -m 755 composants/torrent/lxc/install-lxc.sh debian/secubox-ytsas/usr/lib/secubox/torrent/install-lxc.sh
+	# La page de l'APPLICATION (le lecteur), a cote de l'installateur : ce
+	# dernier la copie dans le conteneur via `$$(dirname "$$0")/www`. Elle est
+	# DISTINCTE du panneau d'administration (composants/torrent/www/torrent/), qu'on servait par
+	# erreur sur l'adresse publique (#1042).
+	install -d debian/secubox-ytsas/usr/lib/secubox/torrent/www
+	install -m 0644 composants/torrent/lxc/www/index.html \
+		debian/secubox-ytsas/usr/lib/secubox/torrent/www/index.html
+	install -m 644 composants/torrent/lxc/secubox-torrent.service debian/secubox-ytsas/usr/lib/secubox/torrent/secubox-torrent.service
+	# Webui (browser player)
+	install -d debian/secubox-ytsas/usr/share/secubox/www/torrent
+	cp -r composants/torrent/www/torrent/. debian/secubox-ytsas/usr/share/secubox/www/torrent/
+	# Menu definition
+	install -d debian/secubox-ytsas/usr/share/secubox/menu.d
+	install -m 644 composants/torrent/menu.d/612-torrent.json debian/secubox-ytsas/usr/share/secubox/menu.d/
+	# Config
+	install -d debian/secubox-ytsas/etc/secubox
+	install -m 644 composants/torrent/conf/torrent.toml debian/secubox-ytsas/etc/secubox/torrent.toml
+	# Public vhost: full standalone server{} block (own server_name), so it
+	# MUST land in sites-available/ (+ postinst symlink into sites-enabled),
+	# NOT etc/nginx/secubox.d/ — that dir is location-only snippets merged
+	# into the shared hub server block (see nginx/torrent.conf header and
+	# packages/secubox-peertube/debian/rules for the verified pattern).
+	install -d debian/secubox-ytsas/etc/nginx/sites-available
+	install -m 644 composants/torrent/nginx/torrent.conf debian/secubox-ytsas/etc/nginx/sites-available/torrent.conf
+	# Admin vhost route (secubox-routes.d): torrent is LXC-native, so the
+	# aggregator has no in-process module to serve /api/v1/torrent/ — without
+	# this snippet the admin panel 404s (only the companion vhost had it).
+	install -d debian/secubox-ytsas/etc/nginx/secubox-routes.d
+	install -m 644 composants/torrent/nginx/torrent-routes.conf debian/secubox-ytsas/etc/nginx/secubox-routes.d/
+	# nft egress scope: ship straight to /etc/nftables.d/ with a zz- prefix
+	# so it sorts after any table-creator base file (repo convention; see
+	# secubox-p2p/secubox-toolbox/secubox-threatmesh debian/rules+postinst).
+	# NOTE: /etc/secubox/nft.d/ is not an include path anywhere on the board
+	# (/etc/nftables.conf only does `include "/etc/nftables.d/*.nft"`) — the
+	# original task brief's path would ship a rule that never loads.
+	install -d debian/secubox-ytsas/etc/nftables.d
+	install -m 644 composants/torrent/nft/torrent-egress.nft debian/secubox-ytsas/etc/nftables.d/zz-torrent-egress.nft
+	# Host-side "conserve to PeerTube" queue processor + timer. The torrent app
+	# (in the LXC) drops upload requests on the shared /data volume; this host
+	# job holds the PeerTube creds (via peertubectl) and does the upload.
+	install -d debian/secubox-ytsas/usr/sbin
+	install -m 755 composants/torrent/sbin/secubox-torrent-conserve debian/secubox-ytsas/usr/sbin/secubox-torrent-conserve
+	install -d debian/secubox-ytsas/usr/lib/systemd/system
+	install -m 644 composants/torrent/systemd/secubox-torrent-conserve.service debian/secubox-ytsas/usr/lib/systemd/system/
+	install -m 644 composants/torrent/systemd/secubox-torrent-conserve.timer debian/secubox-ytsas/usr/lib/systemd/system/
+	install -D -m 755 composants/torrent/debian/postinst debian/secubox-ytsas/usr/lib/secubox/ytsas/maintscripts/torrent.postinst
+	install -D -m 755 composants/torrent/debian/prerm debian/secubox-ytsas/usr/lib/secubox/ytsas/maintscripts/torrent.prerm
+	install -D -m 755 composants/torrent/debian/postrm debian/secubox-ytsas/usr/lib/secubox/ytsas/maintscripts/torrent.postrm
 
 override_dh_installsystemd:
 	# Suppress auto enable/start of the in-LXC unit shipped under usr/lib/secubox;
@@ -52,3 +115,5 @@ override_dh_installsystemd:
 	# runs INSIDE the LXC, not on the host.)
 	dh_installsystemd --no-enable --no-start secubox-ytsas-conserve.timer
 	dh_installsystemd --no-enable --no-start secubox-ytsas-conserve.service
+	dh_installsystemd --no-enable --no-start secubox-torrent-conserve.timer
+	dh_installsystemd --no-enable --no-start secubox-torrent-conserve.service

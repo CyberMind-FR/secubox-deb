@@ -1,3 +1,10 @@
+secubox-ytsas (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-torrent (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/torrent/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-ytsas (0.2.15-1~bookworm1) bookworm; urgency=medium
 
   * L'installation garantit unzip avant Deno (« either unzip or 7z is required » : Deno absent, YouTube dégradé, constaté à la reprise de l'installation sur gk3) (ref #2034).

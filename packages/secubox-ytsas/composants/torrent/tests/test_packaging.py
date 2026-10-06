@@ -15,6 +15,10 @@ location-snippet secubox.d/ dir).
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# #2050 : composant de secubox-ytsas ; control/rules/changelog sont ceux de l absorbeur,
+# les scripts de maintenance restent dans le composant, la transition garde l ancien changelog.
+PKG = ROOT.parent.parent
+TRANSITOIRE = PKG.parent / "secubox-torrent"
 
 
 def _read(p):
@@ -22,7 +26,7 @@ def _read(p):
 
 
 def test_control_is_v2_no_transmission():
-    c = _read("debian/control")
+    c = (PKG / "debian/control").read_text()
     assert "python3-uvicorn" not in c          # old FastAPI gone
     assert "transmission" not in c.lower()
     assert "lxc" in c.lower()
@@ -32,7 +36,7 @@ def test_changelog_is_at_least_2_0_0():
     """Périmé depuis d085371a9 (#1032) : la v2 était la RÉÉCRITURE LXC, pas un
     numéro figé. On garde l'intention — plus jamais la 1.x Transmission."""
     import re
-    m = re.match(r"secubox-torrent \((\d+)\.", _read("debian/changelog"))
+    m = re.match(r"secubox-torrent \((\d+)\.", (TRANSITOIRE / "debian/changelog").read_text())
     assert m and int(m.group(1)) >= 2
 
 
@@ -54,7 +58,7 @@ def test_no_old_host_systemd_unit():
 
 
 def test_vhost_installed_to_sites_available_not_secubox_d():
-    rules = _read("debian/rules")
+    rules = (PKG / "debian/rules").read_text()
     assert "sites-available" in rules
     # Guard against reintroducing the location-snippet dir for this full vhost.
     assert "secubox-torrent/etc/nginx/secubox.d/torrent.conf" not in rules
