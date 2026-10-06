@@ -5,3 +5,40 @@
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-health-prober --no-stop-on-upgrade secubox-health-prober.service
 	dh_installsystemd --name=secubox-module-prober --no-stop-on-upgrade secubox-module-prober.service
+
+override_dh_auto_install:
+	# Composant absorbé : health-doctor (#2050)
+	install -d debian/secubox-health/usr/lib/secubox/health-doctor/api
+	cp composants/health-doctor/api/__init__.py composants/health-doctor/api/checks.py composants/health-doctor/api/runner.py composants/health-doctor/api/main.py composants/health-doctor/api/waf_selftest.py \
+	    debian/secubox-health/usr/lib/secubox/health-doctor/api/
+	# healthctl CLI (8th verb)
+	install -D -m 0755 composants/health-doctor/sbin/healthctl \
+	    debian/secubox-health/usr/sbin/healthctl
+	# composants/health-doctor/systemd
+	install -D -m 0644 composants/health-doctor/systemd/secubox-health-doctor.service \
+	    debian/secubox-health/lib/systemd/system/secubox-health-doctor.service
+	install -D -m 0644 composants/health-doctor/systemd/secubox-health-doctor-runner.service \
+	    debian/secubox-health/lib/systemd/system/secubox-health-doctor-runner.service
+	install -D -m 0644 composants/health-doctor/systemd/secubox-health-doctor-runner.timer \
+	    debian/secubox-health/lib/systemd/system/secubox-health-doctor-runner.timer
+	install -D -m 755 composants/health-doctor/debian/postinst debian/secubox-health/usr/lib/secubox/health/maintscripts/health-doctor.postinst
+	install -D -m 755 composants/health-doctor/debian/prerm debian/secubox-health/usr/lib/secubox/health/maintscripts/health-doctor.prerm
+	# Composant absorbé : watchdog (#2050)
+	install -d debian/secubox-health/usr/lib/secubox/watchdog
+	cp -r composants/watchdog/api debian/secubox-health/usr/lib/secubox/watchdog/
+	install -d debian/secubox-health/usr/share/secubox/www/watchdog
+	cp -r composants/watchdog/www/watchdog/. debian/secubox-health/usr/share/secubox/www/watchdog/
+	install -d debian/secubox-health/usr/share/secubox/menu.d
+	[ -d composants/watchdog/menu.d ] && cp -r composants/watchdog/menu.d/. debian/secubox-health/usr/share/secubox/menu.d/ || true
+	# Install composants/watchdog/nginx composants/watchdog/config
+	install -d $(CURDIR)/debian/secubox-health/etc/nginx/secubox.d
+	install -m 644 composants/watchdog/nginx/watchdog.conf $(CURDIR)/debian/secubox-health/etc/nginx/secubox.d/watchdog.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-health/etc/nginx/secubox-routes.d
+	install -m 644 composants/watchdog/nginx/watchdog.conf $(CURDIR)/debian/secubox-health/etc/nginx/secubox-routes.d/watchdog.conf
+	install -D -m 644 composants/watchdog/debian/secubox-watchdog.service debian/secubox-health/usr/lib/systemd/system/secubox-watchdog.service
+	install -D -m 755 composants/watchdog/debian/postinst debian/secubox-health/usr/lib/secubox/health/maintscripts/watchdog.postinst
+	install -D -m 755 composants/watchdog/debian/prerm debian/secubox-health/usr/lib/secubox/health/maintscripts/watchdog.prerm
+

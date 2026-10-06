@@ -36,10 +36,12 @@ Depends: ${misc:Depends},
  secubox-security-posture (>= 1.0),
  secubox-ad-guard (>= 1.6.2),
  secubox-webfilter (>= 0.2.1),
- secubox-watchdog (>= 1.0),
- secubox-health-doctor (>= 1.0)
+ secubox-health,
 Recommends: wireguard-tools
-Suggests: secubox-qos, secubox-auth, secubox-watchdog, secubox-backup
+Suggests: secubox-qos,
+ secubox-auth,
+ secubox-health,
+ secubox-backup
 Description: SecuBox Lite — protections pour machine de 2 Go
  Profil de PROTECTION uniquement : pare-feu nftables, WAF (sbxwaf),
  DPI, interception MITM (sbxmitm), filtrage DNS (ad-guard, webfilter),

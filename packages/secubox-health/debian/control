@@ -10,8 +10,17 @@ Rules-Requires-Root: no
 Package: secubox-health
 Architecture: all
 Depends: ${misc:Depends},
-         python3 (>= 3.11),
-         python3-aiohttp
+ python3 (>= 3.11),
+ python3-aiohttp,
+ secubox-core (>= 1.4.0),
+ python3-uvicorn,
+ python3-fastapi,
+ lxc,
+ systemd
+Replaces: secubox-health-doctor (<< 1.2.1~),
+ secubox-watchdog (<< 1.2.5~)
+Breaks: secubox-health-doctor (<< 1.2.1~),
+ secubox-watchdog (<< 1.2.5~)
 Description: SecuBox health probers (vhost + module health monitoring)
  Reconstitue en paquet source les sondes de santé de la board, jusque-là
  déployées à la main sur gk2 (aucune source dépôt) :

@@ -12,3 +12,15 @@ override_dh_auto_install:
 	install -m 644 nginx/matrix.conf $(CURDIR)/debian/secubox-matrix/etc/nginx/secubox.d/
 	install -d $(CURDIR)/debian/secubox-matrix/usr/share/secubox/menu.d
 	install -m 644 menu.d/619-matrix.json $(CURDIR)/debian/secubox-matrix/usr/share/secubox/menu.d/
+	# Composant absorbé : jabber (#2050)
+	install -d $(CURDIR)/debian/secubox-matrix/usr/lib/secubox/jabber/api
+	install -m 644 composants/jabber/api/main.py $(CURDIR)/debian/secubox-matrix/usr/lib/secubox/jabber/api/
+	touch $(CURDIR)/debian/secubox-matrix/usr/lib/secubox/jabber/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-matrix/usr/share/secubox/www/jabber
+	install -m 644 composants/jabber/www/jabber/index.html $(CURDIR)/debian/secubox-matrix/usr/share/secubox/www/jabber/
+	install -d $(CURDIR)/debian/secubox-matrix/etc/nginx/secubox.d
+	install -m 644 composants/jabber/nginx/jabber.conf $(CURDIR)/debian/secubox-matrix/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-matrix/usr/share/secubox/menu.d
+	install -m 644 composants/jabber/menu.d/818-jabber.json $(CURDIR)/debian/secubox-matrix/usr/share/secubox/menu.d/
+	install -D -m 755 composants/jabber/debian/postinst debian/secubox-matrix/usr/lib/secubox/matrix/maintscripts/jabber.postinst
+

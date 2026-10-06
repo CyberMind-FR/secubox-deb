@@ -16,7 +16,7 @@ Depends: ${misc:Depends},
 Recommends: secubox-core (>= 1.1.0),
             python3-pip
 Suggests: secubox-hub,
-          secubox-watchdog,
+          secubox-health,
           secubox-soc-gateway
 Description: SecuBox Console TUI — Terminal Dashboard
  Terminal-based dashboard for SecuBox appliances using Python Textual.

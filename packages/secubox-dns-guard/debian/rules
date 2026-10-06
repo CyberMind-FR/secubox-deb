@@ -9,3 +9,14 @@ override_dh_auto_install:
 	cp -r www/dns-guard/. debian/secubox-dns-guard/usr/share/secubox/www/dns-guard/
 	install -d debian/secubox-dns-guard/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-dns-guard/usr/share/secubox/menu.d/ || true
+	# Composant absorbé : network-anomaly (#2050)
+	install -d debian/secubox-dns-guard/usr/lib/secubox/network-anomaly
+	cp -r composants/network-anomaly/api debian/secubox-dns-guard/usr/lib/secubox/network-anomaly/
+	install -d debian/secubox-dns-guard/usr/share/secubox/www/network-anomaly
+	cp -r composants/network-anomaly/www/network-anomaly/. debian/secubox-dns-guard/usr/share/secubox/www/network-anomaly/
+	install -d debian/secubox-dns-guard/usr/share/secubox/menu.d
+	[ -d composants/network-anomaly/menu.d ] && cp -r composants/network-anomaly/menu.d/. debian/secubox-dns-guard/usr/share/secubox/menu.d/ || true
+	install -D -m 644 composants/network-anomaly/debian/secubox-network-anomaly.service debian/secubox-dns-guard/usr/lib/systemd/system/secubox-network-anomaly.service
+	install -D -m 755 composants/network-anomaly/debian/postinst debian/secubox-dns-guard/usr/lib/secubox/dns-guard/maintscripts/network-anomaly.postinst
+	install -D -m 755 composants/network-anomaly/debian/prerm debian/secubox-dns-guard/usr/lib/secubox/dns-guard/maintscripts/network-anomaly.prerm
+

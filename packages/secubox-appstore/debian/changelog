@@ -1,3 +1,10 @@
+secubox-appstore (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-metacatalog (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/metacatalog/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-appstore (0.4.23-1~bookworm1) bookworm; urgency=low
 
   * Frigate retiré du groupe Caméras (#1743).

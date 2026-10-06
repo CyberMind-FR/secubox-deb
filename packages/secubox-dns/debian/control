@@ -7,7 +7,16 @@ Standards-Version: 4.6.2
 
 Package: secubox-dns
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
+Depends: ${misc:Depends},
+ secubox-core (>= 1.4.0),
+ python3-httpx | python3-pip,
+ python3 (>= 3.11)
+Replaces: secubox-dns-provider (<< 1.2.3~),
+ secubox-dns-lan (<< 0.1.2~)
+Breaks: secubox-dns-provider (<< 1.2.3~),
+ secubox-dns-lan (<< 0.1.2~)
+Recommends: systemd,
+ unbound
 Description: SecuBox DNS — authoritative BIND zone manager
  BIND zone management dashboard for SecuBox: create, edit, and serve
  authoritative DNS records you own.

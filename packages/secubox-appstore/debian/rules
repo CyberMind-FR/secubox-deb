@@ -43,3 +43,24 @@ override_dh_auto_install:
 
 	# Runtime dir
 	install -d $(CURDIR)/debian/secubox-appstore/run/secubox
+	# Composant absorbé : metacatalog (#2050)
+	install -d debian/secubox-appstore/usr/lib/secubox/metacatalog/
+	cp -r composants/metacatalog/api debian/secubox-appstore/usr/lib/secubox/metacatalog/
+	install -d debian/secubox-appstore/usr/share/secubox/www
+	[ -d composants/metacatalog/www ] && cp -r composants/metacatalog/www/. debian/secubox-appstore/usr/share/secubox/www/ || true
+	install -d debian/secubox-appstore/usr/share/secubox/menu.d
+	[ -d composants/metacatalog/menu.d ] && cp -r composants/metacatalog/menu.d/. debian/secubox-appstore/usr/share/secubox/menu.d/ || true
+	# Modular composants/metacatalog/nginx composants/metacatalog/config
+	install -d debian/secubox-appstore/etc/nginx/secubox.d
+	[ -f composants/metacatalog/nginx/metacatalog.conf ] && cp composants/metacatalog/nginx/metacatalog.conf debian/secubox-appstore/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-appstore/etc/nginx/secubox-routes.d
+	[ -f composants/metacatalog/nginx/metacatalog.conf ] && cp composants/metacatalog/nginx/metacatalog.conf debian/secubox-appstore/etc/nginx/secubox-routes.d/ || true
+	# Cache directory
+	install -d debian/secubox-appstore/var/cache/secubox/metacatalog
+	install -D -m 644 composants/metacatalog/debian/secubox-metacatalog.service debian/secubox-appstore/usr/lib/systemd/system/secubox-metacatalog.service
+	install -D -m 755 composants/metacatalog/debian/postinst debian/secubox-appstore/usr/lib/secubox/appstore/maintscripts/metacatalog.postinst
+	install -D -m 755 composants/metacatalog/debian/prerm debian/secubox-appstore/usr/lib/secubox/appstore/maintscripts/metacatalog.prerm
+

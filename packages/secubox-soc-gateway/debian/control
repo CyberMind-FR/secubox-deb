@@ -17,7 +17,7 @@ Depends: ${misc:Depends},
          python3-websockets,
          uvicorn
 Suggests: secubox-soc-agent,
-          secubox-watchdog
+          secubox-health
 Description: SecuBox SOC Gateway — Central Fleet Monitoring Hub
  Central SOC aggregation gateway that receives metrics from edge nodes,
  provides unified alert streams, correlates threats across the fleet,

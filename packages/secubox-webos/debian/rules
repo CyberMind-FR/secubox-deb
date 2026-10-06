@@ -45,3 +45,10 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/medaillons
 	install -m 0644 www/hall/medaillons/*.webp $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/medaillons/
 	install -m 0644 www/hall/fonts/*.woff2 $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/fonts/
+	# Composant absorbé : sbxui (#2050)
+	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/shared/sbxui
+	install -m 0644 composants/sbxui/www/aide.js      $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/shared/sbxui/aide.js
+	install -m 0644 composants/sbxui/www/slicebar.js  $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/shared/sbxui/slicebar.js
+	install -m 0644 composants/sbxui/www/slicebar.css $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/shared/sbxui/slicebar.css
+	install -m 0644 composants/sbxui/www/spicy.css    $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/shared/sbxui/spicy.css
+

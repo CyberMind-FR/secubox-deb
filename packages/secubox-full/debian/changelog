@@ -1,3 +1,21 @@
+secubox-full (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-appstore au lieu de secubox-metacatalog (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-full (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-dns-guard au lieu de secubox-network-anomaly (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-full (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-matrix au lieu de secubox-jabber (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-full (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Ne depend plus de secubox-mac-guard ni device-intel (transitoires) : nac porte le role (#2050, S1).

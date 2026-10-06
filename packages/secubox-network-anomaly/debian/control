@@ -1,26 +1,15 @@
 Source: secubox-network-anomaly
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-network-anomaly
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Recommends: dnsmasq
-Description: SecuBox Network Anomaly — DNS-log anomaly detection
- Reads /var/log/dnsmasq.log and flags lookups that deviate from
- baseline patterns (volume, novelty, NXDOMAIN bursts, suspicious
- TLDs).
- .
- Distinct from sibling packages in the threats cluster:
-  - secubox-threats — umbrella dashboard (Suricata + WAF
-    alerts).
-  - secubox-threat-analyst — AI agent that writes detection scenarios.
-  - secubox-cve-triage — CVE vulnerability triage.
-  - secubox-cyberfeed — threat-intel feed aggregator.
-  - secubox-ipblock — nftables-driven IP blocklist enforcement.
- .
- For DNS-layer blocking (rather than detection only), see
- secubox-dns-guard or secubox-vortex-dns.
+Depends: ${misc:Depends}, secubox-dns-guard (>= 1.2.0)
+Description: transitional package, replaced by secubox-dns-guard
+ network-anomaly is now a component of secubox-dns-guard. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

@@ -9,13 +9,15 @@ Homepage: https://secubox.in
 Package: secubox-webos
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.5.39~),
-         python3,
-         python3-fastapi | python3-pip,
-         python3-httpx,
-         python3-python-multipart | python3-multipart | python3-pip,
-         python3-uvicorn | python3-pip,
-         python3-pydantic | python3-pip
+ secubox-core (>= 1.5.39~),
+ python3,
+ python3-fastapi | python3-pip,
+ python3-httpx,
+ python3-python-multipart | python3-multipart | python3-pip,
+ python3-uvicorn | python3-pip,
+ python3-pydantic | python3-pip
+Replaces: secubox-sbxui (<< 0.1.3~)
+Breaks: secubox-sbxui (<< 0.1.3~)
 Description: SecuBox WebOS — normalized service registry (Hall P1)
  Aggregator-independent registry service exposing a normalized view of
  SecuBox services (catalogue + health + reach), served on its own socket.

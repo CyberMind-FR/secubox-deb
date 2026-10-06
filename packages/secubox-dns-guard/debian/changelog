@@ -1,3 +1,10 @@
+secubox-dns-guard (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-network-anomaly (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/network-anomaly/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-dns-guard (1.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Panneau : les métriques ne sont plus à zéro (ref #1978). /status porte enfin les champs que le panneau lit (queries_24h, blocked_24h,
