@@ -139,7 +139,10 @@ def appliquer(etat, racine_ctl, dropin, catalogue_chemin, systeme=None, verrou=N
     s = systeme or Systeme()
     etat, racine_ctl, dropin = Path(etat), Path(racine_ctl), Path(dropin)
     racine_ctl.mkdir(parents=True, exist_ok=True)
-    os.chmod(racine_ctl, 0o700)
+    # Pas de chmod quand le mode est déjà bon : le profil AppArmor n'accorde pas `w` sur le dossier lui-même, et un chmod
+    # sans effet y était refusé (EACCES), ce qui faisait échouer l'unité à chaque passage (gk2 et gk3, 04:00).
+    if racine_ctl.stat().st_mode & 0o777 != 0o700:
+        os.chmod(racine_ctl, 0o700)
     fd = os.open(verrou or racine_ctl / "verrou", os.O_CREAT | os.O_RDWR, 0o600)
     try:
         try:
