@@ -205,7 +205,14 @@ PY
 
       # Symlink only on first install — never overwrite an existing one
       # (which may point at an HAProxy-aware variant like secubox-local).
-      if [ ! -e /etc/nginx/sites-enabled/secubox ]; then
+      # JAMAIS derriere HAProxy (#2050) : un lien absent y est voulu par l'operateur ;
+      # la vhost standard ecoute sur 80/443, HAProxy les tient, et nginx ne peut plus
+      # recharger aucune configuration (bind() failed) — constate sur gk3.
+      _haproxy_devant=0
+      if command -v haproxy >/dev/null 2>&1 || [ -f /etc/haproxy/haproxy.cfg ]; then
+        _haproxy_devant=1
+      fi
+      if [ ! -e /etc/nginx/sites-enabled/secubox ] && [ "$_haproxy_devant" = 0 ]; then
         ln -s /etc/nginx/sites-available/secubox \
               /etc/nginx/sites-enabled/secubox
       fi
