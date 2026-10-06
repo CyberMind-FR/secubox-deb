@@ -6,5 +6,6 @@
   "api": "/api/v1/repo/",
   "category": "root",
   "order": 150,
-  "description": "APT repository manager (apt.secubox.in control plane)"
+  "description": "APT repository manager (apt.secubox.in control plane)",
+  "theme": "socle"
 }

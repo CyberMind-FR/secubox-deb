@@ -5,5 +5,6 @@
   "path": "/eye-remote/",
   "order": 50,
   "category": "boot",
-  "description": "Manage Eye Remote display devices"
+  "description": "Manage Eye Remote display devices",
+  "theme": "supervision"
 }

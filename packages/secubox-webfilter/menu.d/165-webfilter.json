@@ -6,5 +6,6 @@
   "api": "/api/v1/webfilter/",
   "category": "wall",
   "order": 165,
-  "description": "Contenu adulte, jeux d'argent, phishing : observation par catégorie (mode observe)"
+  "description": "Contenu adulte, jeux d'argent, phishing : observation par catégorie (mode observe)",
+  "theme": "reseau"
 }

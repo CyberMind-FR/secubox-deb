@@ -5,5 +5,6 @@
   "category": "mind",
   "order": 613,
   "description": "YouTube/web-media SAS (ytsas.gk2.secubox.in)",
-  "id": "ytsas"
+  "id": "ytsas",
+  "theme": "media"
 }

@@ -5,5 +5,6 @@
   "icon": "🌐",
   "path": "/dns/",
   "order": 32,
-  "description": "DNS Master - BIND Zone Management"
+  "description": "DNS Master - BIND Zone Management",
+  "theme": "reseau"
 }

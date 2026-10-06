@@ -5,5 +5,6 @@
   "icon": "📈",
   "path": "/glances/",
   "order": 904,
-  "description": "System monitoring via Glances"
+  "description": "System monitoring via Glances",
+  "theme": "supervision"
 }

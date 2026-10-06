@@ -5,5 +5,6 @@
   "icon": "🛡️",
   "path": "/ad-guard/",
   "order": 160,
-  "description": "Ad/Tracker Detection & Device Statistics"
+  "description": "Ad/Tracker Detection & Device Statistics",
+  "theme": "bouclier"
 }

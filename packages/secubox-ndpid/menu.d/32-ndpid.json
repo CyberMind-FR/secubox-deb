@@ -5,5 +5,6 @@
   "icon": "🔬",
   "path": "/ndpid/",
   "order": 32,
-  "description": "Deep Packet Inspection & JA3 Fingerprinting"
+  "description": "Deep Packet Inspection & JA3 Fingerprinting",
+  "theme": "bouclier"
 }

@@ -5,5 +5,6 @@
   "path": "/traffic/",
   "category": "mesh",
   "order": 36,
-  "description": "TC/CAKE QoS traffic shaping per interface"
+  "description": "TC/CAKE QoS traffic shaping per interface",
+  "theme": "reseau"
 }

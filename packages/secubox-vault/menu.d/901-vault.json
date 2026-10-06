@@ -6,5 +6,6 @@
   "category": "root",
   "order": 901,
   "description": "Coffre : secrets scellés, clé maîtresse en mémoire",
-  "same_origin": true
+  "same_origin": true,
+  "theme": "socle"
 }

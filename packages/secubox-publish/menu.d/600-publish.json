@@ -5,5 +5,6 @@
   "icon": "📡",
   "path": "/publish/",
   "order": 600,
-  "description": "SecuBox Publishing Platform"
+  "description": "SecuBox Publishing Platform",
+  "theme": "publication"
 }

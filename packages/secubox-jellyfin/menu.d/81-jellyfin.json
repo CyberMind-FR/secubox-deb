@@ -6,5 +6,6 @@
   "name": "Jellyfin",
   "path": "/jellyfin/",
   "category": "mind",
-  "description": "LXC-native Jellyfin media server with partner library auto-wire"
+  "description": "LXC-native Jellyfin media server with partner library auto-wire",
+  "theme": "media"
 }

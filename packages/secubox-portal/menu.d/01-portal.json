@@ -5,5 +5,6 @@
   "icon": "🔐",
   "path": "/portal/",
   "order": 1,
-  "description": "Authentication Portal"
+  "description": "Authentication Portal",
+  "theme": "hall"
 }

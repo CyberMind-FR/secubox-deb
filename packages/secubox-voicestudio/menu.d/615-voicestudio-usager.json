@@ -7,5 +7,6 @@
   "category": "mind",
   "order": 615,
   "description": "Dire un texte, dicter : la voix de la box",
-  "same_origin": true
+  "same_origin": true,
+  "theme": "assistant"
 }

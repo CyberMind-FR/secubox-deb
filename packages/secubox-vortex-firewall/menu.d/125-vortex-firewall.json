@@ -5,5 +5,6 @@
   "icon": "🔥",
   "path": "/vortex-firewall/",
   "order": 125,
-  "description": "nftables threat enforcement with IP blocklists"
+  "description": "nftables threat enforcement with IP blocklists",
+  "theme": "bouclier"
 }

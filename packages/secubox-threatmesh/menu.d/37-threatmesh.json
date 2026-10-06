@@ -5,5 +5,6 @@
   "path": "/threatmesh/",
   "category": "wall",
   "order": 706,
-  "description": "Sovereign threat-intel (feeds + mesh, no CAPI)"
+  "description": "Sovereign threat-intel (feeds + mesh, no CAPI)",
+  "theme": "bouclier"
 }

@@ -6,5 +6,6 @@
   "path": "/jitsi/",
   "category": "mesh",
   "order": 620,
-  "description": "Video conferencing and meetings"
+  "description": "Video conferencing and meetings",
+  "theme": "correspondance"
 }

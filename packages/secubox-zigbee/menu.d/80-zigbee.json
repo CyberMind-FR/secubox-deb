@@ -6,5 +6,6 @@
   "name": "Zigbee",
   "path": "/zigbee/",
   "category": "mesh",
-  "description": ""
+  "description": "",
+  "theme": "maison"
 }

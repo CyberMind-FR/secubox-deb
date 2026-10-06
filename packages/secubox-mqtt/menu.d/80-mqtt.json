@@ -6,5 +6,6 @@
   "name": "MQTT",
   "path": "/mqtt/",
   "category": "mesh",
-  "description": "Mosquitto MQTT broker (zigbee2mqtt + Home Assistant)"
+  "description": "Mosquitto MQTT broker (zigbee2mqtt + Home Assistant)",
+  "theme": "maison"
 }

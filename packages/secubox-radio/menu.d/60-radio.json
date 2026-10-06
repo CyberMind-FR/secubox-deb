@@ -5,5 +5,6 @@
   "icon": "📻",
   "path": "/radio/",
   "order": 60,
-  "description": "Radio et television collaboratives, programmation partagee"
+  "description": "Radio et television collaboratives, programmation partagee",
+  "theme": "media"
 }

@@ -5,5 +5,6 @@
   "icon": "🚫",
   "path": "/ipblock/",
   "order": 702,
-  "description": "IP blocklist management with multiple sources"
+  "description": "IP blocklist management with multiple sources",
+  "theme": "bouclier"
 }

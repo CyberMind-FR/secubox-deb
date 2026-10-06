@@ -6,5 +6,6 @@
   "api": "/api/v1/hardening/",
   "category": "root",
   "order": 105,
-  "description": "Kernel and system hardening (sysctl, AppArmor, kernel modules)"
+  "description": "Kernel and system hardening (sysctl, AppArmor, kernel modules)",
+  "theme": "socle"
 }

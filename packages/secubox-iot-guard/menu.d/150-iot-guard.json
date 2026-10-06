@@ -5,5 +5,6 @@
   "icon": "📡",
   "path": "/iot-guard/",
   "order": 150,
-  "description": "IoT Device Security"
+  "description": "IoT Device Security",
+  "theme": "maison"
 }

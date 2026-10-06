@@ -6,5 +6,6 @@
   "name": "Médias externes",
   "path": "/media/",
   "category": "root",
-  "description": "Détection, navigation et transfert entre supports USB"
+  "description": "Détection, navigation et transfert entre supports USB",
+  "theme": "media"
 }

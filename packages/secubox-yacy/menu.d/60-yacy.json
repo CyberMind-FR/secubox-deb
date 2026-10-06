@@ -6,5 +6,6 @@
   "name": "YaCy",
   "path": "/yacy/",
   "category": "mesh",
-  "description": ""
+  "description": "",
+  "theme": "veille"
 }

@@ -6,5 +6,6 @@
   "path": "/netboot/",
   "category": "boot",
   "order": 40,
-  "description": "Provisioning réseau + overlay U-Boot (#737)"
+  "description": "Provisioning réseau + overlay U-Boot (#737)",
+  "theme": "provision"
 }

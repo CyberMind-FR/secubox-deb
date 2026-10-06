@@ -5,5 +5,6 @@
   "path": "/toolbox/",
   "category": "wall",
   "order": 26,
-  "description": "Cabine numérique Gondwana — captive AP + MITM analyzer (consent R2)"
+  "description": "Cabine numérique Gondwana — captive AP + MITM analyzer (consent R2)",
+  "theme": "bouclier"
 }

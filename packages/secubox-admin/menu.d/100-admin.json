@@ -5,5 +5,6 @@
   "icon": "⚙️",
   "path": "/admin/",
   "order": 100,
-  "description": "System administration and management"
+  "description": "System administration and management",
+  "theme": "socle"
 }

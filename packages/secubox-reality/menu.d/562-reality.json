@@ -5,5 +5,6 @@
   "icon": "🕶️",
   "path": "/reality/",
   "order": 562,
-  "description": "VLESS+Reality+Vision egress-point manager (Xray-core)"
+  "description": "VLESS+Reality+Vision egress-point manager (Xray-core)",
+  "theme": "reseau"
 }

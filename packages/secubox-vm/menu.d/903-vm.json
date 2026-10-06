@@ -5,5 +5,6 @@
   "path": "/vm/",
   "category": "root",
   "order": 903,
-  "description": "Virtual machines and containers"
+  "description": "Virtual machines and containers",
+  "theme": "provision"
 }

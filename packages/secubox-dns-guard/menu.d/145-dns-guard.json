@@ -5,5 +5,6 @@
   "icon": "🌐",
   "path": "/dns-guard/",
   "order": 145,
-  "description": "DNS Anomaly Detection"
+  "description": "DNS Anomaly Detection",
+  "theme": "reseau"
 }

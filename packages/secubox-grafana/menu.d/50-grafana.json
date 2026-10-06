@@ -6,5 +6,6 @@
   "name": "Grafana",
   "path": "/grafana/",
   "category": "mind",
-  "description": ""
+  "description": "",
+  "theme": "supervision"
 }

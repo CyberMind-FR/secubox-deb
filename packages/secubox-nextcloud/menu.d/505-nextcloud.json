@@ -6,5 +6,6 @@
   "icon": "☁️",
   "path": "/nextcloud/",
   "order": 505,
-  "description": "Nextcloud File Sync"
+  "description": "Nextcloud File Sync",
+  "theme": "nuage"
 }

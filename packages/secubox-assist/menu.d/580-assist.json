@@ -4,5 +4,6 @@
   "icon": "🆘",
   "path": "/assist/",
   "category": "mesh",
-  "order": 580
+  "order": 580,
+  "theme": "socle"
 }
