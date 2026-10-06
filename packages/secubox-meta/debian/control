@@ -466,7 +466,6 @@ Package: secubox-service-messagerie
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-matrix
-Suggests: secubox-jabber
 Description: SecuBox — service « Messageries »
  Matrix, XMPP : des messageries qu'on héberge.
  .

@@ -27,4 +27,8 @@ case "$1" in
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/matrix/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "matrix : postinst de $(basename "$_s") en échec" >&2; }
+done
 #DEBHELPER#

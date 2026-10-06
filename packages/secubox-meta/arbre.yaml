@@ -54,6 +54,7 @@ hors-arbre:
   - secubox-iot-guard         # transitoire → secubox-nac (#2050 S1)
   - secubox-groupd            # transitoire → secubox-aggregator (#2050 N1)
   - secubox-defaults          # transitoire → secubox-core (#2050 N1)
+  - secubox-jabber  # transitoire → secubox-matrix (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -468,7 +469,6 @@ description: "Matrix, XMPP : des messageries qu'on héberge."
 recommande:
   - secubox-matrix
 suggere:
-  - secubox-jabber
 
 meta: secubox-service-fediverse
 niveau: service
