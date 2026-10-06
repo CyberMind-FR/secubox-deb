@@ -1,3 +1,9 @@
+secubox-netmodes (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * Le serrage du MSS passe par nftables (table dédiée secubox_netmodes_mss, recréée à chaque appel) au lieu d'`iptables -A FORWARD` : iptables est interdit par les règles du projet et chaque appel ajoutait une règle de plus (ref #2050).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 07 Oct 2026 08:30:00 +0200
+
 secubox-netmodes (1.2.4-1~bookworm1) bookworm; urgency=medium
 
   * Ne livre plus /usr/share/secubox/www/shared en lien (pendant vers
