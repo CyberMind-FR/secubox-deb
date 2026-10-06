@@ -138,20 +138,6 @@ jobs:
             build-essential dpkg-dev debhelper devscripts fakeroot \
             dh-python python3-all python3-setuptools
 
-      - name: Setup Node.js (for soc-web)
-        if: matrix.package == 'secubox-soc-web'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Build React app (for soc-web)
-        if: matrix.package == 'secubox-soc-web'
-        run: |
-          cd packages/secubox-soc-web
-          npm ci --ignore-scripts || npm install --ignore-scripts
-          npm run build
-          ls -la dist/
-
       - name: Setup Go (for daemon)
         if: matrix.package == 'secubox-daemon'
         uses: actions/setup-go@v5

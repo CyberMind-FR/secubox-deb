@@ -408,7 +408,6 @@ Package: secubox-service-soc
 Architecture: all
 Depends: ${misc:Depends},
          secubox-soc
-Recommends: secubox-soc-web
 Suggests: secubox-soc-agent
 Description: SecuBox — service « Centre opérationnel »
  Agrégation des alertes et son tableau web.
