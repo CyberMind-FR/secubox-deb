@@ -771,6 +771,7 @@ def appliquer(run=_run) -> dict:
     de lui-même, et garderait l'ancien réglage."""
     c = charger()
     res = {"lxc": appliquer_lxc(c)}
+    res["cgroup_vif"] = appliquer_cgroup_vif(c)      # limites poussées au conteneur en marche (#2045)
     adresses = ecrire_dropin(SOCKET_PUB, "adresses.conf", contenu_socket(c))
     mode = ecrire_dropin(SERVICE_PUB, "mode.conf", contenu_service(c))
     res["mandataire"] = adresses or mode
@@ -821,6 +822,30 @@ def lire_meminfo() -> dict:
     except (OSError, ValueError, IndexError):
         pass
     return out
+
+
+def appliquer_cgroup_vif(c: dict) -> list[str]:
+    """Écrit les limites du TOML (mémoire, swap, poids CPU) dans le cgroup du conteneur EN MARCHE, sans le recréer.
+
+    `lxc.cgroup2.*` du fichier de config ne vaut qu'au démarrage du conteneur, et `restart` ne relance que le service du
+    moteur : une limite modifiée n'était donc jamais prise en compte (#2045). Idempotent : ne réécrit que ce qui diffère.
+    Conteneur arrêté (pas de cgroup) : liste vide, sans erreur. Retourne les noms des fichiers réécrits."""
+    sec = c.get("lxc", {})
+    d = CGROUP_LXC / f"lxc.payload.{sec.get('nom', 'voicestudio')}"
+    voulu = {"memory.max": str(sec.get("memoire", "4G")),
+             "memory.swap.max": str(sec.get("swap", "1G")),
+             "cpu.weight": str(int(sec.get("cpu_poids", 50)))}
+    ecrits = []
+    for fichier, valeur in voulu.items():
+        f = d / fichier
+        try:
+            if f.read_text().strip() == valeur:
+                continue
+            f.write_text(valeur)
+            ecrits.append(fichier)
+        except OSError:
+            continue
+    return ecrits
 
 
 def memoire_cgroup_mo(nom: str) -> int:
