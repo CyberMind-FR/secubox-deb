@@ -1,3 +1,15 @@
+secubox-publish (2.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : publish est un composant de secubox-metablogizer >= 1.10.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
+secubox-publish (2.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-metablogizer au lieu de secubox-droplet (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-publish (2.1.7-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-streamlit au lieu de secubox-streamforge (transitoire, #2050).

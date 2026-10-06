@@ -1,3 +1,9 @@
+secubox-media (1.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * La gestion systemd de l'unite freeboxtv n'est plus declaree deux fois (dh la detecte deja dans l'arbre).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 23:30:00 +0200
+
 secubox-media (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-freeboxtv (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

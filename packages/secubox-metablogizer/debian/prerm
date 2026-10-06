@@ -15,4 +15,14 @@ case "$1" in
     # Don't remove nginx config on upgrade — postinst reinstalls it.
     ;;
 esac
+
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/metablogizer/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "metablogizer : prerm de $(basename "$_s") en échec" >&2; }
+done
+
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/metablogizer/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "metablogizer : prerm de $(basename "$_s") en échec" >&2; }
+done
 exit 0

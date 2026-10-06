@@ -1,3 +1,10 @@
+secubox-meta (0.1.28-1~bookworm1) bookworm; urgency=medium
+
+  * Service Mail : smtp-relay retire des recommandations (absorbe par mail, #2050).
+  * Publication : droplet et publish retires (absorbes par metablogizer).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 23:30:00 +0200
+
 secubox-meta (0.1.27-1~bookworm1) bookworm; urgency=medium
 
   * Visio : turn retire (absorbe par jitsi) ; Provision : release retire des Suggests (absorbe par repo) ; #2050.

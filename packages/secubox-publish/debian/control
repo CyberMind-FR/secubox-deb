@@ -1,23 +1,15 @@
 Source: secubox-publish
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-publish
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.39~), python3-httpx | python3-pip
-Recommends: secubox-streamlit,
- secubox-droplet,
- secubox-metablogizer
-Description: SecuBox Publishing Platform
- Unified Layer 2 dashboard for all publishing modules.
- .
- Aggregates and orchestrates:
-  - Streamlit (data apps)
-  - StreamForge (app templates)
-  - Droplet (file publishing)
-  - MetaBlogizer (static sites)
- .
- Provides quick-publish actions and unified overview.
+Depends: ${misc:Depends}, secubox-metablogizer (>= 1.10.0)
+Description: transitional package, replaced by secubox-metablogizer
+ publish is now a component of secubox-metablogizer. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

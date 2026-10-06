@@ -154,11 +154,10 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-profil-socle,
          secubox-backup,
-         secubox-droplet,
          secubox-eye-remote,
          secubox-mediaflow,
-         secubox-netboot,
-         secubox-publish
+         secubox-metablogizer (>= 1.10.0),
+         secubox-netboot
 Description: SecuBox — profil « provision » : Provisionnement, sauvegarde et deploiement
  Ce qui sert a fabriquer, sauvegarder et deployer une boite.
  .

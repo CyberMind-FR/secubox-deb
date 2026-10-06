@@ -57,8 +57,7 @@ Depends: ${misc:Depends},
  secubox-security-posture (>= 1.0),
  secubox-ad-guard (>= 1.6.2),
  secubox-webfilter (>= 0.2.1),
- secubox-metablogizer (>= 1.0),
- secubox-publish (>= 1.0)
+ secubox-metablogizer (>= 1.10.0)
 Recommends: secubox-cdn, wireguard-tools
 Description: SecuBox ISP — couche protégée avec hébergement simple
  Hérite de secubox-lite (protections : WAF, DPI, MITM, filtrage DNS) et ajoute le

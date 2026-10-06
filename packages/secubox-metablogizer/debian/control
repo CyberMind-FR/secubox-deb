@@ -7,7 +7,16 @@ Standards-Version: 4.6.2
 
 Package: secubox-metablogizer
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.40~), python3, nginx, python3-jsonschema
+Depends: ${misc:Depends},
+ secubox-core (>= 1.5.40~),
+ python3,
+ nginx,
+ python3-jsonschema,
+ python3-uvicorn | python3-pip,
+ python3-aiofiles,
+ rsync,
+ unzip,
+ python3-httpx | python3-pip
 # chromium powers the Mosaic tab thumbnail capture (metablog-shots.timer,
 # #956 — see api/shots.py / common/secubox_core/shotter.py). Recommends, not
 # Depends: without it, captures fail gracefully (a site just keeps its emoji
@@ -15,6 +24,11 @@ Depends: ${misc:Depends}, secubox-core (>= 1.5.40~), python3, nginx, python3-jso
 # deliberately NOT declared here either, same rationale already documented
 # in secubox-core (>= 1.5.13~)/debian/control (apt's 10.4 breaks uvicorn; the working
 # 16.0 comes from pip).
-Recommends: chromium
+Recommends: chromium,
+ secubox-streamlit
+Replaces: secubox-droplet (<< 1.4.8~),
+ secubox-publish (<< 2.1.9~)
+Breaks: secubox-droplet (<< 1.4.8~),
+ secubox-publish (<< 2.1.9~)
 Description: SecuBox MetaBlogizer - Static Site Publisher
  Static site publishing and management for SecuBox.

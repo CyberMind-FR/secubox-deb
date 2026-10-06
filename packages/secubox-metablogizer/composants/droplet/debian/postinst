@@ -70,4 +70,3 @@ case "$1" in
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac
-#DEBHELPER#

@@ -444,7 +444,6 @@ Package: secubox-service-mail
 Architecture: all
 Depends: ${misc:Depends},
          secubox-mail
-Recommends: secubox-smtp-relay
 Suggests: secubox-clamav
 Description: SecuBox — service « Courrier »
  Serveur de courrier complet (conteneur mail, webmail) ; absorbe mail-lxc, webmail et webmail-lxc.
@@ -487,7 +486,6 @@ Package: secubox-service-fichiers
 Architecture: all
 Depends: ${misc:Depends},
          secubox-nextcloud
-Recommends: secubox-droplet
 Description: SecuBox — service « Fichiers »
  Nextcloud, partage SMB noyau, dépôt de fichiers éphémères.
  .
@@ -551,8 +549,7 @@ Description: SecuBox — service « Musique »
 Package: secubox-service-sites
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-metablogizer,
-         secubox-publish
+         secubox-metablogizer
 Description: SecuBox — service « Sites »
  Métablogs, plateforme de publication, catalogue.
  .

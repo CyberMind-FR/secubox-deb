@@ -1,22 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_install:
-	install -d debian/secubox-publish/usr/lib/secubox/publish
-	cp -r api debian/secubox-publish/usr/lib/secubox/publish/
-	install -d debian/secubox-publish/usr/share/secubox/www/publish
-	cp -r www/publish/. debian/secubox-publish/usr/share/secubox/www/publish/
-	install -d debian/secubox-publish/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-publish/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
-	install -d debian/secubox-publish/etc/nginx/secubox.d
-	[ -f nginx/publish.conf ] && cp nginx/publish.conf debian/secubox-publish/etc/nginx/secubox.d/ || true
-	# CLI tool — primary `publishctl` + `metactl` symlink for backward compat (#180)
-	install -d debian/secubox-publish/usr/sbin
-	[ -f bin/publishctl ] && install -m 755 bin/publishctl debian/secubox-publish/usr/sbin/publishctl || true
-	[ -f debian/secubox-publish/usr/sbin/publishctl ] && \
-	  ln -sf publishctl debian/secubox-publish/usr/sbin/metactl || true
-	# Plugins directory
-	install -d debian/secubox-publish/srv/secubox/modules/publish/plugins
-	[ -d plugins ] && cp -r plugins/. debian/secubox-publish/srv/secubox/modules/publish/plugins/ || true

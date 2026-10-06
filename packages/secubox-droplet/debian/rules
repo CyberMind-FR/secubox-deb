@@ -1,33 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_install:
-	install -d debian/secubox-droplet/usr/lib/secubox/droplet/
-	cp -r api debian/secubox-droplet/usr/lib/secubox/droplet/
-	install -d debian/secubox-droplet/usr/share/secubox/www
-	[ -d www ] && cp -r www/. debian/secubox-droplet/usr/share/secubox/www/ || true
-	install -d debian/secubox-droplet/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-droplet/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
-	install -d debian/secubox-droplet/etc/nginx/secubox.d
-	[ -f nginx/droplet.conf ] && cp nginx/droplet.conf debian/secubox-droplet/etc/nginx/secubox.d/ || true
-	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
-	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
-	# elle n etait jamais lue.
-	install -d debian/secubox-droplet/etc/nginx/secubox-routes.d
-	[ -f nginx/droplet.conf ] && cp nginx/droplet.conf debian/secubox-droplet/etc/nginx/secubox-routes.d/ || true
-	# Vhost de l espace de depot (#1026). LIVRE MAIS NON ACTIVE : un vhost
-	# demande aussi une entree HAProxy, une route WAF et un enregistrement DNS,
-	# qu un paquet ne doit pas decider seul. Voir README.
-	install -d debian/secubox-droplet/etc/nginx/sites-available
-	[ -f nginx/depot-vhost.conf ] && cp nginx/depot-vhost.conf debian/secubox-droplet/etc/nginx/sites-available/depot.gk2.conf || true
-	# dropletctl — static publisher (rewritten for issue #196 — superseded #181)
-	install -d debian/secubox-droplet/usr/sbin
-	install -m 755 sbin/dropletctl debian/secubox-droplet/usr/sbin/
-	# Configuration livree en modele (#1026). Le postinst ne l ecrase jamais :
-	# un plafond baisse a la main le jour d un abus ne doit pas remonter tout
-	# seul a la mise a jour suivante.
-	install -d debian/secubox-droplet/usr/share/secubox/droplet
-	install -m 0644 etc/secubox/droplet.toml \
-	  debian/secubox-droplet/usr/share/secubox/droplet/droplet.toml.exemple

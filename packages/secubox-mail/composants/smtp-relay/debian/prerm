@@ -6,4 +6,3 @@ case "$1" in
     systemctl disable secubox-smtp-relay.service || true
     ;;
 esac
-#DEBHELPER#
