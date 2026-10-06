@@ -1,9 +1,10 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-device-intel.service || true
-    systemctl start secubox-device-intel.service || true
+    # L'ancien paquet livrait une unité : on la retire sans rien démarrer (nac reprend le rôle).
+    systemctl disable --now secubox-device-intel.service 2>/dev/null || true
+    rm -f /etc/systemd/system/multi-user.target.wants/secubox-device-intel.service
+    systemctl daemon-reload || true
 fi
 #DEBHELPER#
 exit 0

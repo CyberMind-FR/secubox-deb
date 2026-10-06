@@ -1,19 +1,10 @@
-#!/bin/bash
+#!/bin/sh
 set -e
-case "$1" in
-  configure)
-    id -u secubox >/dev/null 2>&1 || \
-      adduser --system --group --no-create-home \
-        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    install -d -o root -g root -m 1777 /run/secubox
-    install -d -o secubox -g secubox -m 755 /var/lib/secubox
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox/mac-guard
-    systemctl daemon-reload
-    systemctl enable secubox-mac-guard.service
-    # restart, pas start : à la mise à jour, l'ancien code resterait en service (#1763).
-    systemctl restart secubox-mac-guard.service || true
-    install -d -m 755 /etc/nginx/secubox.d
-    systemctl reload nginx 2>/dev/null || true
-    ;;
-esac
+if [ "$1" = "configure" ]; then
+    # L'ancien paquet livrait une unité : on la retire sans rien démarrer (nac reprend le rôle).
+    systemctl disable --now secubox-mac-guard.service 2>/dev/null || true
+    rm -f /etc/systemd/system/multi-user.target.wants/secubox-mac-guard.service
+    systemctl daemon-reload || true
+fi
 #DEBHELPER#
+exit 0

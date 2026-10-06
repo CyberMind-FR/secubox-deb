@@ -1,3 +1,12 @@
+secubox-nac (3.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe mac-guard, device-intel et iot-guard (#2050, S1) : leurs anciennes adresses (/mac-guard/,
+    /device-intel/, /iot-guard/) redirigent vers /nac/ (301), leurs API repondent 410, par
+    nac-legacy.conf. Breaks sur les trois anciens paquets (devenus transitoires, vides) pour que
+    leur ancienne conf nginx soit retiree AVANT celle-ci (sinon location en double).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 11:35:00 +0200
+
 secubox-nac (3.1.8-1~bookworm1) bookworm; urgency=medium
 
   * Restaure ce que la fusion 0c07799fd avait écrasé (#1748) : _parse_arp consigne de nouveau l'interface de chaque voisin, discover() la conserve quand un bail de rang supérieur possède l'enregistrement, et br-lxc est de nouveau une interface LAN (les conteneurs sont découverts et se classent dans la zone lxc), en gardant eth2 ajouté depuis. Les deux tests de test_discovery qui échouaient sur master repassent.

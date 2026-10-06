@@ -49,6 +49,9 @@ hors-arbre:
   - secubox-profil-reseau
   - secubox-profil-media
   - secubox-profil-provision
+  - secubox-mac-guard         # transitoire → secubox-nac (#2050 S1)
+  - secubox-device-intel      # transitoire → secubox-nac (#2050 S1)
+  - secubox-iot-guard         # transitoire → secubox-nac (#2050 S1)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -303,7 +306,6 @@ recommande:
   - secubox-qos
   - secubox-traffic
   - secubox-netdiag
-  - secubox-mac-guard
 suggere:
   - secubox-nettweak
   - secubox-modem
@@ -403,7 +405,6 @@ recommande:
   - secubox-cyberfeed
   - secubox-threatmesh
   - secubox-antirootkit
-  - secubox-device-intel
 suggere:
   - secubox-ad-guard
   - secubox-cookies
@@ -581,7 +582,6 @@ requiert:
   - secubox-mqtt
 recommande:
   - secubox-zigbee
-  - secubox-iot-guard
 suggere:
   - secubox-picobrew
 

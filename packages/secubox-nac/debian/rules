@@ -20,6 +20,10 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-nac/etc/nginx/secubox.d
 	[ -f nginx/nac.conf ] && cp nginx/nac.conf debian/secubox-nac/etc/nginx/secubox.d/ || true
+	# Anciennes adresses mac-guard / device-intel / iot-guard (#2050, S1). Dans secubox-routes.d :
+	# c'est le seul répertoire que le vhost principal inclut (#989).
+	install -d debian/secubox-nac/etc/nginx/secubox-routes.d
+	install -m 0644 nginx/nac-legacy.conf debian/secubox-nac/etc/nginx/secubox-routes.d/nac-legacy.conf
 	# Project B (#820 Task 9): presence report timer/service + a commented
 	# alert-config .example (never the live /etc/secubox path — see
 	# postinst / the .example file's own header for the off-by-default

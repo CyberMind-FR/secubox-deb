@@ -1,3 +1,9 @@
+secubox-full (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Ne depend plus de secubox-mac-guard ni device-intel (transitoires) : nac porte le role (#2050, S1).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 11:41:00 +0200
+
 secubox-full (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Reprend la totalite du parc gk2 (working-set) au-dessus de secubox-isp, hors modules propres a la carte ou au demarrage (ref #1982).

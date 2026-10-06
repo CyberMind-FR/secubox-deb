@@ -34,7 +34,6 @@ depends:
   - secubox-vortex-dns
   - secubox-meshname
   - secubox-mediaflow
-  - secubox-device-intel
   - secubox-watchdog
   - secubox-metrics
   - secubox-soc
