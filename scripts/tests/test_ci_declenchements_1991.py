@@ -62,3 +62,10 @@ def test_les_images_ne_se_lancent_plus_en_double_sur_etiquette():
         on = _wf(nom).get(True) or _wf(nom).get("on")
         assert "push" not in on, nom                    # release.yml les appelle déjà
         assert "workflow_call" in on and "workflow_dispatch" in on, nom
+
+
+def test_dispatch_manuel_n_annule_pas_et_accepte_une_liste():
+    """Plusieurs dispatchs a la suite sur master s'annulaient mutuellement ; `package` n'acceptait qu'un nom."""
+    wf = (Path(__file__).resolve().parents[2] / ".github/workflows/build-packages.yml").read_text()
+    assert "github.event_name != 'workflow_dispatch'" in wf
+    assert "tr ',' ' '" in wf and 'grep -q " $pkg "' in wf
