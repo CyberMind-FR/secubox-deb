@@ -43,8 +43,8 @@ Packages are built as `~trixie1` and published in the `trixie` suite of
 
 - **Your hardware, your rules.** Everything runs on the box you own. No cloud
   account, no telemetry, no third-party cookie ever leaves the appliance.
-- **Whole stack, one install.** Around 190 packages covering security,
-  networking, applications and operations — instead of a weekend of glue work.
+- **Whole stack, one install.** About 135 packages (plus 57 meta-packages for profiles, services and functions)
+  covering security, networking, applications and operations — instead of a weekend of glue work.
 - **Sized to the machine.** Three profiles, from a 2 GB board to a full home
   server, each installing only what that machine can carry.
 - **Runs on what you already have.** Raspberry Pi, ESPRESSObin, MOCHAbin,
