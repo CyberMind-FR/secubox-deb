@@ -102,6 +102,30 @@ lxc_attach() {
     lxc-attach -n "$name" -- "$@"
 }
 
+# Désactive le bac à sable systemd d'UN service du conteneur. Dans un LXC sans privilèges, les montages que demandent
+# ProtectSystem, PrivateDevices, PrivateTmp, ProtectHome et ReadWritePaths échouent (226/NAMESPACE) : redis-server n'a pas
+# démarré depuis la migration Trixie du 2026-10-05, et rspamd attendait 65 s par message (règle REPLIES_SET). dovecot, apache2
+# et clamav-daemon portent la même surcharge ; redis-server n'en avait pas.
+lxc_service_sans_sandbox() {
+    local svc="${1:-}" cont="${2:-$CONTAINER}"
+    case "$svc" in
+        ""|*[!a-zA-Z0-9@._-]*) error "nom de service invalide : '$svc'"; return 1 ;;
+    esac
+    lxc_attach "$cont" sh -c "mkdir -p /etc/systemd/system/${svc}.service.d && cat > /etc/systemd/system/${svc}.service.d/10-lxc-sans-sandbox.conf" <<'EOF_SANDBOX'
+[Service]
+PrivateDevices=false
+PrivateTmp=false
+PrivateUsers=false
+ProtectControlGroups=false
+ProtectKernelTunables=false
+ProtectKernelModules=false
+ProtectSystem=false
+ProtectHome=false
+RestrictNamespaces=false
+EOF_SANDBOX
+    lxc_attach "$cont" systemctl daemon-reload
+}
+
 # ============================================================================
 # THREE-FOLD ARCHITECTURE: Components (What)
 # ============================================================================
@@ -460,6 +484,16 @@ cmd_autocrypt_sync() {
 #     symboles distincts — on peut donc voir lequel a tranche.
 #  3. le GESTE dans le webmail : le greffon markasjunk, qui poste le message au
 #     controleur avec le mot de passe deja provisionne.
+# Remet redis en marche dans le conteneur (surcharge du bac à sable, démarrage, puis rspamd qui le retrouve).
+cmd_redis() {
+    lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
+    lxc_service_sans_sandbox redis-server "$CONTAINER" || return 1
+    lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed redis-server 2>/dev/null; systemctl enable --now redis-server' >/dev/null 2>&1 \
+        || { error "redis-server n'a pas demarre dans '$CONTAINER'"; return 1; }
+    lxc_attach "$CONTAINER" systemctl restart rspamd >/dev/null 2>&1 || warn "rspamd non relance"
+    log "redis-server demarre ; rspamd relance"
+}
+
 cmd_antispam_apprentissage() {
     local wc="$WEBMAIL_CONTAINER"
     lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
@@ -470,7 +504,8 @@ cmd_antispam_apprentissage() {
     local pw; pw="$(cat "$pw_file")"
 
     # ── 1. le magasin ──────────────────────────────────────────────────────
-    lxc_attach "$CONTAINER" sh -c 'systemctl enable --now redis-server' >/dev/null 2>&1 \
+    lxc_service_sans_sandbox redis-server "$CONTAINER" || return 1
+    lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed redis-server 2>/dev/null; systemctl enable --now redis-server' >/dev/null 2>&1 \
         || { error "redis-server n'a pas demarre — sans lui rien n'est retenu"; return 1; }
     printf '%s\n' 'servers = "127.0.0.1";' \
         | lxc_attach "$CONTAINER" sh -c "cat > /etc/rspamd/local.d/redis.conf"
@@ -1778,6 +1813,7 @@ case "${1:-}" in
     autocrypt-sync) cmd_autocrypt_sync ;;
     webmail-pgp) cmd_webmail_pgp ;;
     antispam-apprentissage) cmd_antispam_apprentissage ;;
+    redis)       cmd_redis ;;
     sync)        cmd_sync ;;
     # Help
     help|--help|-h|'') show_help ;;
