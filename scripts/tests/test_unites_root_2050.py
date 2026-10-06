@@ -12,7 +12,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[2]
 
 PAQUETS_ROOT_TOLERES = {
-    "admin", "certs", "cloner", "cookies", "exposure", "groupd", "health",
+    "admin", "aggregator", "certs", "cloner", "cookies", "exposure", "health",
     "interceptor", "ksm", "led-heartbeat", "mail", "metrics", "netboot",
     "netdiag", "nettweak", "profiles", "qos", "threatmesh", "toolbox",
     "traffic", "vm", "zigbee",

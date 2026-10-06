@@ -1,15 +1,16 @@
 Source: secubox-defaults
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
-Homepage: https://secubox.in
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-defaults
 Architecture: all
-Depends: ${misc:Depends}
-Description: SecuBox board identity defaults
- Ships /etc/default/secubox, the single source of truth for SECUBOX_HOSTNAME
- and SECUBOX_DOMAIN_SUFFIX. Other SecuBox packages depend on this for the
- canonical admin URL pattern admin.<HOSTNAME>.<SUFFIX>.
+Depends: ${misc:Depends}, secubox-core (>= 1.6.0)
+Description: transitional package, replaced by secubox-core
+ The board identity defaults (/etc/default/secubox) are now shipped by
+ secubox-core. This empty package only pulls it in; it can be removed once
+ nothing depends on it.

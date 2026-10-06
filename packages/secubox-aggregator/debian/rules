@@ -23,3 +23,15 @@ override_dh_auto_install:
 	  $(CURDIR)/debian/secubox-aggregator/usr/sbin/
 	install -m 755 sbin/secubox-aggregator-watchdog.sh \
 	  $(CURDIR)/debian/secubox-aggregator/usr/sbin/
+	# Hote de groupe (absorbe secubox-groupd, #2050 N1) : plusieurs modules dans UN interpreteur.
+	install -m 755 sbin/secubox-groupd \
+	  $(CURDIR)/debian/secubox-aggregator/usr/sbin/
+	install -m 644 systemd/secubox-group@.service \
+	  $(CURDIR)/debian/secubox-aggregator/lib/systemd/system/
+	install -m 644 systemd/secubox-group-root@.service \
+	  $(CURDIR)/debian/secubox-aggregator/lib/systemd/system/
+	# Les repertoires de declaration existent des l'installation : un module qui arrive apres n'a
+	# qu'a y deposer son nom (groupable.d, groupable-root.d, groups.d).
+	install -d $(CURDIR)/debian/secubox-aggregator/usr/share/secubox/groupable.d
+	install -d $(CURDIR)/debian/secubox-aggregator/usr/share/secubox/groupable-root.d
+	install -d $(CURDIR)/debian/secubox-aggregator/etc/secubox/groups.d

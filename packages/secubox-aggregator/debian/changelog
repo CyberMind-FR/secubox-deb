@@ -1,3 +1,11 @@
+secubox-aggregator (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-groupd (#2050, N1) : hote de groupe (secubox-groupd, unites secubox-group@ et
+    secubox-group-root@, repertoires groupable.d / groupable-root.d / groups.d). Memes chemins, memes
+    noms d'unites : un groupe en marche (secubox-group@g1) n'est pas touche. Replaces/Breaks sur l'ancien.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 13:30:00 +0200
+
 secubox-aggregator (0.3.11-1~bookworm1) bookworm; urgency=low
 
   * Modules retirés ignorés sans erreur de chargement (hexo, ollama, gotosocial, redroid, simplex, newsbin, voip et frigate), encore cités dans /etc/secubox/aggregator.toml d'une box mise à jour (#1743).

@@ -1,3 +1,10 @@
+secubox-groupd (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : l'hote de groupe est livre par secubox-aggregator >= 0.4.0 (#2050, N1).
+    Les unites secubox-group@ gardent leur nom et leur chemin : un groupe en marche n'est pas touche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 13:31:00 +0200
+
 secubox-groupd (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Veille auto par sous-module (opt-in) : nouveau wrapper ASGI VeilleAuto +

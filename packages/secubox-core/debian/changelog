@@ -1,3 +1,11 @@
+secubox-core (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-defaults (#2050, N1) : /etc/default/secubox (conffile, repris tel quel) et
+    secubox-defaults-aligner. Le declencheur secubox-defaults-changed ne part que si l'alignement a change
+    le fichier. Replaces/Breaks sur l'ancien paquet.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 13:45:00 +0200
+
 secubox-core (1.5.58-1~bookworm1) bookworm; urgency=medium
 
   * Le postinst ne recree plus le lien sites-enabled/secubox derriere HAProxy (#2050) : sur gk3 il a
