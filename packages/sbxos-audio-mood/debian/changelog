@@ -1,3 +1,10 @@
+sbxos-audio-mood (0.10.6-1~bookworm1) bookworm; urgency=medium
+
+  * La route admin de Mood nomme aussi le Hall de CETTE box ($sbx_hall_box) dans frame-ancestors : sur gk3,
+    hall.gk3.secubox.in ne pouvait pas l'encadrer (CSP, carte vide). Test de garde dans scripts/tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 13:20:00 +0200
+
 sbxos-audio-mood (0.10.5-1~bookworm1) bookworm; urgency=medium
 
   * postinst : la route sbxwaf se déclare sous le nom de CETTE box (secubox-domaine), plus mood.gk2 figé (#1723, #1713).
