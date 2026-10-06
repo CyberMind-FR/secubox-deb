@@ -1,0 +1,10 @@
+secubox-ephemeride (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Nouveau module : l'API de la cardlet « Éphéméride » du Hall SBXOS (#2050 : nouvelle cardlet, pas une fusion).
+    Date, heure et fuseau, semaine ISO, jour de l'année, saison, lever/coucher/durée du soleil (jour et nuit polaires
+    compris), phase, illumination, lever/coucher et prochaine phase de la lune, saint du jour (données locales, fichier
+    d'administrateur prioritaire), météo et qualité de l'air (Open-Meteo, facultatives, par un cache, coordonnées arrondies),
+    observations de l'utilisateur (SQLite). Astronomie et calendrier calculés localement : la carte reste complète sans
+    Internet. Utilisateur dédié, durcissement complet, socket /run/secubox/ephemeride.sock.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 14:30:00 +0200

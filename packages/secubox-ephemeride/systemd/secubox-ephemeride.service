@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Éphéméride — API de la cardlet du Hall. Aucun privilège : utilisateur dédié, durcissement complet (RULES-CODE § 10).
+# Le seul accès réseau sortant est la météo et la qualité de l'air (HTTPS), facultatifs.
+[Unit]
+Description=SecuBox Éphéméride — API de la cardlet du Hall (soleil, lune, saint, météo)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-ephemeride
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/ephemeride
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède. Le préfixe « + » s'exécute en root malgré User=.
+ExecStartPre=+/bin/rm -f /run/secubox/ephemeride.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/ephemeride.sock --workers 1 --log-level warning
+# uvicorn force la socket en 0o666 après le bind (l'umask n'y change rien) : le chmod 660 est INDISPENSABLE (#2026).
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/ephemeride.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/ephemeride.sock'
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
+ReadWritePaths=/run/secubox /var/lib/secubox/ephemeride
+
+[Install]
+WantedBy=multi-user.target

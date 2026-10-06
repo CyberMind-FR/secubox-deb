@@ -199,7 +199,8 @@ Depends: ${misc:Depends},
          secubox-sbxid
 Recommends: secubox-surf,
          secubox-devwatch,
-         sbxos-audio-mood
+         sbxos-audio-mood,
+         secubox-ephemeride
 Suggests: secubox-ui-manager
 Description: SecuBox — service « Hall »
  SBX OS : le Hall, son registre de services, ses objets UI et l'admission des appareils.

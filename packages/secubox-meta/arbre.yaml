@@ -228,6 +228,7 @@ recommande:
   - secubox-surf
   - secubox-devwatch
   - sbxos-audio-mood            # « Mood » du Hall (#1577, #1587) ; amd64/arm64
+  - secubox-ephemeride         # cardlet « Éphéméride » du Hall (date, soleil, lune, saint, météo)
 suggere:
   - secubox-ui-manager
 

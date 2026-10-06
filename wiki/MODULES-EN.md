@@ -363,6 +363,14 @@ Central dashboard and control center
 
 ![SecuBox Hub](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/hub.png)
 
+#### 🌙 Ephemeris
+
+Hall cardlet: date, box-timezone clock, sunrise and sunset, moon phase, saint of the day, weather, air quality and user observations
+
+**Features:** Local astronomy (no network), Polar day and night, Saint of the day (customisable file), Optional weather with cache, Works offline, Observations (admin), Three display levels
+
+![Ephemeris](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/ephemeride.png)
+
 #### 🛡️ Security Operations Center
 
 SOC with world clock, threat map, tickets

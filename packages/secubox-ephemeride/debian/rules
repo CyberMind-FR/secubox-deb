@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ephemeride/usr/lib/secubox/ephemeride/api
+	install -m 644 api/*.py debian/secubox-ephemeride/usr/lib/secubox/ephemeride/api/
+	install -d debian/secubox-ephemeride/usr/share/secubox/ephemeride
+	install -m 644 data/saints.json debian/secubox-ephemeride/usr/share/secubox/ephemeride/saints.json
+	install -m 644 conf/ephemeride.toml debian/secubox-ephemeride/usr/share/secubox/ephemeride/ephemeride.toml
+	# Route AUSSI dans secubox-routes.d/ : c'est le seul répertoire que le vhost principal inclut (#989).
+	install -d debian/secubox-ephemeride/etc/nginx/secubox-routes.d
+	install -m 644 nginx/ephemeride.conf debian/secubox-ephemeride/etc/nginx/secubox-routes.d/ephemeride.conf
+	install -d debian/secubox-ephemeride/lib/systemd/system
+	install -m 644 systemd/secubox-ephemeride.service debian/secubox-ephemeride/lib/systemd/system/
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start

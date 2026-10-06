@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Cardlet « Éphéméride » du Hall SBXOS — configuration (/etc/secubox/ephemeride.toml).
+# Tout est facultatif : sans fichier, la carte utilise le fuseau de la box et la ville de référence de ce fuseau.
+[ephemeride]
+enabled = true
+timezone = "Europe/Paris"        # nom IANA ; heure d'été/hiver automatique
+format_24h = true
+
+[ephemeride.location]
+# Coordonnées du lieu (jamais envoyées au navigateur ; arrondies à 0,01° vers le fournisseur de météo).
+# Laissées vides : repli sur la ville de référence du fuseau, signalé « approximatif ».
+name = ""
+# latitude = 45.69
+# longitude = 5.91
+
+[ephemeride.weather]
+enabled = true
+provider = "auto"                # auto | open-meteo | none (aucun appel sortant)
+ttl_s = 900                      # durée de validité du cache (60 à 86400)
+
+[ephemeride.air_quality]
+enabled = true
+provider = "auto"
+ttl_s = 1800
+
+[ephemeride.saint]
+enabled = true
+# Fichier d'administrateur, prioritaire jour par jour sur les données livrées. Format :
+#   {"saints": {"10-06": [{"nom": "Bruno", "description": "…", "citation": "…"}]}}
+file = "/etc/secubox/ephemeride/saints.json"
+
+[ephemeride.observations]
+enabled = true
