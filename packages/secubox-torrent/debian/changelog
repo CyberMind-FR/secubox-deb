@@ -1,3 +1,9 @@
+secubox-torrent (2.4.10-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : torrent est un composant de secubox-ytsas >= 0.3.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-torrent (2.4.9-1~bookworm1) bookworm; urgency=medium
 
   * API hôte restaurée (4b17d51c0, d085371a9 — effacés par la fusion

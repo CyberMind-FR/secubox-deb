@@ -532,7 +532,6 @@ Depends: ${misc:Depends},
          secubox-peertube
 Recommends: secubox-jellyfin,
          secubox-freeboxtv,
-         secubox-torrent,
          secubox-ytsas
 Suggests: secubox-media
 Description: SecuBox — service « Vidéo »

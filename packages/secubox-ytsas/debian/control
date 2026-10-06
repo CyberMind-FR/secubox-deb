@@ -7,8 +7,21 @@ Standards-Version: 4.6.2
 
 Package: secubox-ytsas
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.39~), lxc, lxc-templates, debootstrap, nftables, sudo, curl, jq
-Recommends: secubox-peertube, secubox-lyrion, ffmpeg
+Depends: ${misc:Depends},
+ secubox-core (>= 1.5.39~),
+ lxc,
+ lxc-templates,
+ debootstrap,
+ nftables,
+ sudo,
+ curl,
+ jq,
+ secubox-hub
+Recommends: secubox-peertube,
+ secubox-lyrion,
+ ffmpeg
+Replaces: secubox-torrent (<< 2.4.10~)
+Breaks: secubox-torrent (<< 2.4.10~)
 Description: YouTube/web-media SAS for SecuBox (LXC-native)
  Paste a YouTube (or any yt-dlp-supported site) link, pull it into a staging
  space and watch it in the browser (HTTP Range) — then decide: Garder (conserve)

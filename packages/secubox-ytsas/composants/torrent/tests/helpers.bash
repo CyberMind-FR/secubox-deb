@@ -2,7 +2,7 @@
 # Shared bats helpers for secubox-torrent-conserve tests.
 
 # REPO_ROOT = top of the git checkout. PACKAGE_ROOT = packages/secubox-torrent/.
-export REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+export REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../../../.." && pwd)"
 export PACKAGE_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
 export CONSERVE="$PACKAGE_ROOT/sbin/secubox-torrent-conserve"
 

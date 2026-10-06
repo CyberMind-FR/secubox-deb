@@ -23,7 +23,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-REPO_ROOT = ROOT.parent.parent
+PKG = ROOT.parent.parent  # secubox-ytsas, absorbeur (#2050)
+REPO_ROOT = PKG.parent.parent
 
 ROUTE_FILE = ROOT / "nginx" / "torrent-routes.conf"
 PROXY_SNIPPET = REPO_ROOT / "common" / "nginx" / "secubox-proxy.conf"
@@ -57,7 +58,7 @@ def test_route_file_ip_matches_the_toml_source_of_truth():
 # ── Packaging wiring ─────────────────────────────────────────────────────
 
 def test_rules_installs_route_to_secubox_routes_d():
-    rules = _read(ROOT / "debian" / "rules")
+    rules = _read(PKG / "debian" / "rules")
     assert "etc/nginx/secubox-routes.d" in rules
     assert "nginx/torrent-routes.conf" in rules
 

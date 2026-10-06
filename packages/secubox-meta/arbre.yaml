@@ -72,6 +72,7 @@ hors-arbre:
   - secubox-reporter  # transitoire → secubox-metrics (#2050)
   - secubox-localrecall  # transitoire → secubox-ai-gateway (#2050)
   - secubox-mcp-server  # transitoire → secubox-ai-gateway (#2050)
+  - secubox-torrent  # transitoire → secubox-ytsas (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -538,7 +539,6 @@ requiert:
 recommande:
   - secubox-jellyfin
   - secubox-freeboxtv
-  - secubox-torrent             # cartes du Hall (#1577)
   - secubox-ytsas
 suggere:
   - secubox-media
