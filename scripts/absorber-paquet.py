@@ -233,6 +233,12 @@ Description: transitional package, replaced by secubox-{absorbant}
             continue
         t = ctrl.read_text()
         change = False
+        # Un commentaire au milieu d'un champ de dépendance (secubox-profils) : la réécriture par champ s'y arrêterait et
+        # casserait la liste (constaté, dpkg-gencontrol refusait le paquet). On ne touche pas, on le dit.
+        if re.search(rf"secubox-{re.escape(ancien)}\b", t) and re.search(
+                r"(?ms)^(?:" + "|".join(liens) + r"):[^\n]*\n(?:[ \t][^\n]*\n|#[^\n]*\n)*?#", t):
+            print(f"À FAIRE À LA MAIN (commentaire dans un champ de dépendance) : {nom} référence secubox-{ancien}")
+            continue
 
         def reecrire(mo):
             nonlocal change
