@@ -5,5 +5,6 @@
   "path": "/rlevel/",
   "category": "wall",
   "order": 27,
-  "description": "ToolBoX — niveau d'inspection MITM par peer (floor/force admin, self-service)"
+  "description": "ToolBoX — niveau d'inspection MITM par peer (floor/force admin, self-service)",
+  "theme": "bouclier"
 }

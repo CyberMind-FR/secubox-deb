@@ -5,5 +5,6 @@
   "path": "/matrix/",
   "category": "mesh",
   "order": 619,
-  "description": "Federated encrypted chat server"
+  "description": "Federated encrypted chat server",
+  "theme": "correspondance"
 }

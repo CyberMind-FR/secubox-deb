@@ -5,5 +5,6 @@
   "path": "/devwatch/",
   "category": "root",
   "order": 690,
-  "description": "Suivi de développement GitHub temps réel — cadence, coût, carbone, campagne"
+  "description": "Suivi de développement GitHub temps réel — cadence, coût, carbone, campagne",
+  "theme": "hall"
 }

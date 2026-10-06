@@ -5,5 +5,6 @@
   "icon": "📮",
   "path": "/billets/",
   "order": 415,
-  "description": "Micro-blog gateway inter-médias sociaux"
+  "description": "Micro-blog gateway inter-médias sociaux",
+  "theme": "correspondance"
 }

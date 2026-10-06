@@ -5,5 +5,6 @@
   "icon": "🤖",
   "path": "/ai-insights/",
   "order": 701,
-  "description": "ML-based threat detection and security insights"
+  "description": "ML-based threat detection and security insights",
+  "theme": "bouclier"
 }

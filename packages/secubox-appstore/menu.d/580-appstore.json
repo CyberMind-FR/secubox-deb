@@ -6,5 +6,6 @@
   "category": "root",
   "order": 10,
   "description": "Install, enable & configure SecuBox modules",
-  "requires": ["secubox-appstore"]
+  "requires": ["secubox-appstore"],
+  "theme": "socle"
 }

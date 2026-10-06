@@ -8,5 +8,6 @@
   "description": "Peer-to-Peer Network Hub",
   "requires": [
     "secubox-p2p"
-  ]
+  ],
+  "theme": "mesh"
 }

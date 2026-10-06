@@ -5,5 +5,6 @@
   "path": "/mesh/",
   "category": "mesh",
   "order": 24,
-  "description": "802.11s backhaul + Passpoint AP control plane (CM-MESH-MPCIE-2026-06)"
+  "description": "802.11s backhaul + Passpoint AP control plane (CM-MESH-MPCIE-2026-06)",
+  "theme": "mesh"
 }

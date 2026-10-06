@@ -5,5 +5,6 @@
   "icon": "\ud83d\udd10",
   "path": "/certs/",
   "order": 118,
-  "description": "ACME SSL/TLS certificate management"
+  "description": "ACME SSL/TLS certificate management",
+  "theme": "socle"
 }

@@ -5,5 +5,6 @@
   "icon": "🌐",
   "path": "/c3box/",
   "order": 503,
-  "description": "C3Box Services Portal"
+  "description": "C3Box Services Portal",
+  "theme": "supervision"
 }

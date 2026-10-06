@@ -5,5 +5,6 @@
   "path": "/cookies/",
   "category": "mesh",
   "order": 704,
-  "description": "Cookie tracking and privacy compliance"
+  "description": "Cookie tracking and privacy compliance",
+  "theme": "bouclier"
 }

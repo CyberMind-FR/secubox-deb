@@ -5,5 +5,6 @@
   "icon": "🛡️",
   "path": "/soc/",
   "order": 100,
-  "description": "Security Operations Center - Clock, Map, P2P Intel"
+  "description": "Security Operations Center - Clock, Map, P2P Intel",
+  "theme": "bouclier"
 }

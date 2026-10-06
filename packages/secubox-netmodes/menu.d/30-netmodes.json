@@ -5,5 +5,6 @@
   "icon": "🔀",
   "path": "/netmodes/",
   "order": 200,
-  "description": "Network topology configuration"
+  "description": "Network topology configuration",
+  "theme": "reseau"
 }

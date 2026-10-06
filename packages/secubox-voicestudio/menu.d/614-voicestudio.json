@@ -6,5 +6,6 @@
   "category": "mind",
   "order": 614,
   "description": "Moteur vocal studio : synthèse et reconnaissance, administration du LXC",
-  "same_origin": true
+  "same_origin": true,
+  "theme": "assistant"
 }

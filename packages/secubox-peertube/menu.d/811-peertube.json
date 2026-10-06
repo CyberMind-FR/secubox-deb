@@ -5,5 +5,6 @@
   "category": "mesh",
   "order": 811,
   "description": "Federated video platform",
-  "id": "peertube"
+  "id": "peertube",
+  "theme": "media"
 }

@@ -5,5 +5,6 @@
   "icon": "📊",
   "path": "/network-anomaly/",
   "order": 140,
-  "description": "Network Anomaly Detection"
+  "description": "Network Anomaly Detection",
+  "theme": "reseau"
 }

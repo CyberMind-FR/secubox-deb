@@ -6,5 +6,6 @@
   "path": "/threats/",
   "order": 707,
   "description": "Unified Threats Dashboard - Aggregated Security Alerts",
-  "accent": "#dc2626"
+  "accent": "#dc2626",
+  "theme": "bouclier"
 }
