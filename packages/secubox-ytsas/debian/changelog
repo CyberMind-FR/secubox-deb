@@ -1,3 +1,9 @@
+secubox-ytsas (0.2.14-1~bookworm1) bookworm; urgency=medium
+
+  * L'installation du LXC est reprenable : si le conteneur existe déjà (provisionnement interrompu), install-lxc.sh ne le recrée plus (« Container already exists » empêchait tout déploiement de l'application, Médiathèque en erreur sur gk3) et n'ajoute pas un second bloc réseau ; il le démarre et poursuit (ref #2034).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 14:00:00 +0200
+
 secubox-ytsas (0.2.13-1~bookworm1) bookworm; urgency=high
 
   * Un 403 sur les données vidéo avec des cookies (que YouTube n'accepte plus) ne fait plus échouer les vidéos publiques : le moteur retente sans cookies et marque les cookies périmés. Constaté sur gk2 : toute la radio écartée par un cookies.txt déposé le jour même (ref #2028).
