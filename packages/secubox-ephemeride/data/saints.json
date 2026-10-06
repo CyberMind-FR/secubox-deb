@@ -1,0 +1,2205 @@
+{
+ "source": "Usage français du calendrier des saints (martyrologe romain) ; à relire avant publication",
+ "saints": {
+  "01-01": [
+   {
+    "nom": "Marie, Mère de Dieu",
+    "description": "Solennité de la Vierge Marie, mère de Dieu"
+   }
+  ],
+  "01-02": [
+   {
+    "nom": "Basile",
+    "description": "Évêque de Césarée et docteur de l'Église, † 379"
+   }
+  ],
+  "01-03": [
+   {
+    "nom": "Geneviève",
+    "description": "Vierge, patronne de Paris, † vers 512"
+   }
+  ],
+  "01-04": [
+   {
+    "nom": "Odilon",
+    "description": "Abbé de Cluny, † 1049"
+   }
+  ],
+  "01-05": [
+   {
+    "nom": "Édouard",
+    "description": "Roi d'Angleterre, † 1066"
+   }
+  ],
+  "01-06": [
+   {
+    "nom": "Mélaine",
+    "description": "Évêque de Rennes, † vers 530"
+   }
+  ],
+  "01-07": [
+   {
+    "nom": "Raymond",
+    "description": "Dominicain, canoniste, † 1275"
+   }
+  ],
+  "01-08": [
+   {
+    "nom": "Lucien",
+    "description": "Prêtre et martyr, † 312"
+   }
+  ],
+  "01-09": [
+   {
+    "nom": "Alix",
+    "description": "Religieuse, fondatrice de la Congrégation de Notre-Dame, † 1622"
+   }
+  ],
+  "01-10": [
+   {
+    "nom": "Guillaume",
+    "description": "Archevêque de Bourges, † 1209"
+   }
+  ],
+  "01-11": [
+   {
+    "nom": "Paulin",
+    "description": "Évêque d'Aquilée, † 804"
+   }
+  ],
+  "01-12": [
+   {
+    "nom": "Tatiana",
+    "description": "Martyre à Rome, IIIe siècle"
+   }
+  ],
+  "01-13": [
+   {
+    "nom": "Hilaire",
+    "description": "Évêque de Poitiers et docteur de l'Église, † 367"
+   },
+   {
+    "nom": "Yvette",
+    "description": "Recluse à Huy, † 1228"
+   }
+  ],
+  "01-14": [
+   {
+    "nom": "Nina",
+    "description": "Apôtre de la Géorgie, † vers 335"
+   }
+  ],
+  "01-15": [
+   {
+    "nom": "Rémi",
+    "description": "Évêque de Reims, † vers 533"
+   }
+  ],
+  "01-16": [
+   {
+    "nom": "Marcel",
+    "description": "Pape, † 309"
+   }
+  ],
+  "01-17": [
+   {
+    "nom": "Antoine",
+    "description": "Père des moines, ermite d'Égypte, † 356"
+   }
+  ],
+  "01-18": [
+   {
+    "nom": "Prisca",
+    "description": "Martyre à Rome, Ier siècle"
+   }
+  ],
+  "01-19": [
+   {
+    "nom": "Marius",
+    "description": "Martyr à Rome, † vers 270"
+   }
+  ],
+  "01-20": [
+   {
+    "nom": "Sébastien",
+    "description": "Soldat romain et martyr, † vers 288"
+   }
+  ],
+  "01-21": [
+   {
+    "nom": "Agnès",
+    "description": "Vierge et martyre à Rome, † 304"
+   }
+  ],
+  "01-22": [
+   {
+    "nom": "Vincent",
+    "description": "Diacre et martyr, † 304"
+   }
+  ],
+  "01-23": [
+   {
+    "nom": "Barnard",
+    "description": "Archevêque de Vienne, † 842"
+   }
+  ],
+  "01-24": [
+   {
+    "nom": "François de Sales",
+    "description": "Évêque de Genève et docteur de l'Église, † 1622"
+   }
+  ],
+  "01-25": [
+   {
+    "nom": "Conversion de saint Paul",
+    "description": "Fête de la conversion de l'apôtre Paul"
+   }
+  ],
+  "01-26": [
+   {
+    "nom": "Timothée et Tite",
+    "description": "Disciples de saint Paul, évêques"
+   }
+  ],
+  "01-27": [
+   {
+    "nom": "Angèle",
+    "description": "Angèle Mérici, fondatrice des Ursulines, † 1540"
+   }
+  ],
+  "01-28": [
+   {
+    "nom": "Thomas d'Aquin",
+    "description": "Dominicain, docteur de l'Église, † 1274"
+   }
+  ],
+  "01-29": [
+   {
+    "nom": "Gildas",
+    "description": "Abbé en Bretagne, † vers 570"
+   }
+  ],
+  "01-30": [
+   {
+    "nom": "Martine",
+    "description": "Vierge et martyre à Rome, † vers 228"
+   }
+  ],
+  "01-31": [
+   {
+    "nom": "Jean Bosco",
+    "description": "Prêtre, éducateur de la jeunesse, † 1888"
+   }
+  ],
+  "02-01": [
+   {
+    "nom": "Ella",
+    "description": "Abbesse en Angleterre, † 1261"
+   }
+  ],
+  "02-02": [
+   {
+    "nom": "Présentation du Seigneur",
+    "description": "Fête de la Présentation de Jésus au Temple (Chandeleur)"
+   }
+  ],
+  "02-03": [
+   {
+    "nom": "Blaise",
+    "description": "Évêque de Sébaste et martyr, † 316"
+   }
+  ],
+  "02-04": [
+   {
+    "nom": "Véronique",
+    "description": "Femme pieuse de l'Évangile, selon la tradition"
+   }
+  ],
+  "02-05": [
+   {
+    "nom": "Agathe",
+    "description": "Vierge et martyre en Sicile, † 251"
+   }
+  ],
+  "02-06": [
+   {
+    "nom": "Paul Miki",
+    "description": "Martyr au Japon, † 1597"
+   }
+  ],
+  "02-07": [
+   {
+    "nom": "Théodore",
+    "description": "Martyr, soldat romain"
+   }
+  ],
+  "02-08": [
+   {
+    "nom": "Jérôme Émilien",
+    "description": "Prêtre, fondateur d'orphelinats, † 1537"
+   }
+  ],
+  "02-09": [
+   {
+    "nom": "Apolline",
+    "description": "Vierge et martyre à Alexandrie, † 249"
+   }
+  ],
+  "02-10": [
+   {
+    "nom": "Arnaud",
+    "description": "Moine bénédictin, † 1074"
+   }
+  ],
+  "02-11": [
+   {
+    "nom": "Notre-Dame de Lourdes",
+    "description": "Fête de la Vierge à Lourdes (apparitions, 1858)"
+   }
+  ],
+  "02-12": [
+   {
+    "nom": "Félix",
+    "description": "Évêque de Metz, VIIe siècle"
+   }
+  ],
+  "02-13": [
+   {
+    "nom": "Béatrice",
+    "description": "Martyre à Rome, † 303"
+   }
+  ],
+  "02-14": [
+   {
+    "nom": "Valentin",
+    "description": "Prêtre et martyr à Rome, † vers 269"
+   }
+  ],
+  "02-15": [
+   {
+    "nom": "Claude La Colombière",
+    "description": "Jésuite, apôtre du Sacré-Cœur, † 1682"
+   }
+  ],
+  "02-16": [
+   {
+    "nom": "Julienne",
+    "description": "Vierge et martyre à Nicomédie"
+   }
+  ],
+  "02-17": [
+   {
+    "nom": "Alexis",
+    "description": "Un des sept fondateurs des Servites de Marie, † 1310"
+   }
+  ],
+  "02-18": [
+   {
+    "nom": "Bernadette",
+    "description": "Bernadette Soubirous, voyante de Lourdes, † 1879"
+   }
+  ],
+  "02-19": [
+   {
+    "nom": "Gabin",
+    "description": "Prêtre et martyr à Rome, † 295"
+   }
+  ],
+  "02-20": [
+   {
+    "nom": "Aimée",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "02-21": [
+   {
+    "nom": "Pierre Damien",
+    "description": "Évêque et docteur de l'Église, † 1072"
+   }
+  ],
+  "02-22": [
+   {
+    "nom": "Isabelle",
+    "description": "Isabelle de France, sœur de saint Louis, † 1270"
+   }
+  ],
+  "02-23": [
+   {
+    "nom": "Lazare",
+    "description": "Évêque d'Aix-en-Provence, selon la tradition"
+   }
+  ],
+  "02-24": [
+   {
+    "nom": "Modeste",
+    "description": "Évêque de Trèves, † vers 489"
+   }
+  ],
+  "02-25": [
+   {
+    "nom": "Roméo",
+    "description": "Moine, ermite à Limoges"
+   }
+  ],
+  "02-26": [
+   {
+    "nom": "Nestor",
+    "description": "Évêque de Magydos et martyr, † vers 250"
+   }
+  ],
+  "02-27": [
+   {
+    "nom": "Honorine",
+    "description": "Vierge et martyre en Normandie"
+   }
+  ],
+  "02-28": [
+   {
+    "nom": "Romain",
+    "description": "Abbé du Jura, † vers 460"
+   }
+  ],
+  "02-29": [
+   {
+    "nom": "Auguste",
+    "description": "Jour intercalaire : saint Oswald, évêque de Worcester, † 992"
+   }
+  ],
+  "03-01": [
+   {
+    "nom": "Aubin",
+    "description": "Évêque d'Angers, † 550"
+   }
+  ],
+  "03-02": [
+   {
+    "nom": "Charles le Bon",
+    "description": "Comte de Flandre, martyr, † 1127"
+   }
+  ],
+  "03-03": [
+   {
+    "nom": "Guénolé",
+    "description": "Abbé de Landévennec, † vers 532"
+   }
+  ],
+  "03-04": [
+   {
+    "nom": "Casimir",
+    "description": "Prince de Pologne, † 1484"
+   }
+  ],
+  "03-05": [
+   {
+    "nom": "Olive",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "03-06": [
+   {
+    "nom": "Colette",
+    "description": "Réformatrice des Clarisses, † 1447"
+   }
+  ],
+  "03-07": [
+   {
+    "nom": "Félicité",
+    "description": "Martyre à Carthage avec Perpétue, † 203"
+   }
+  ],
+  "03-08": [
+   {
+    "nom": "Jean de Dieu",
+    "description": "Fondateur des Frères hospitaliers, † 1550"
+   }
+  ],
+  "03-09": [
+   {
+    "nom": "Françoise",
+    "description": "Françoise Romaine, veuve et fondatrice, † 1440"
+   }
+  ],
+  "03-10": [
+   {
+    "nom": "Vivien",
+    "description": "Évêque de Saintes"
+   }
+  ],
+  "03-11": [
+   {
+    "nom": "Rosine",
+    "description": "Moniale"
+   }
+  ],
+  "03-12": [
+   {
+    "nom": "Justine",
+    "description": "Vierge et martyre à Padoue"
+   }
+  ],
+  "03-13": [
+   {
+    "nom": "Rodrigue",
+    "description": "Prêtre et martyr à Cordoue, † 857"
+   }
+  ],
+  "03-14": [
+   {
+    "nom": "Mathilde",
+    "description": "Reine de Germanie, † 968"
+   }
+  ],
+  "03-15": [
+   {
+    "nom": "Louise de Marillac",
+    "description": "Cofondatrice des Filles de la Charité, † 1660"
+   }
+  ],
+  "03-16": [
+   {
+    "nom": "Bénédicte",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "03-17": [
+   {
+    "nom": "Patrice",
+    "description": "Évêque, apôtre de l'Irlande, † vers 461"
+   }
+  ],
+  "03-18": [
+   {
+    "nom": "Cyrille",
+    "description": "Cyrille de Jérusalem, évêque et docteur de l'Église, † 386"
+   }
+  ],
+  "03-19": [
+   {
+    "nom": "Joseph",
+    "description": "Époux de la Vierge Marie, père nourricier de Jésus"
+   }
+  ],
+  "03-20": [
+   {
+    "nom": "Herbert",
+    "description": "Ermite, † 687"
+   }
+  ],
+  "03-21": [
+   {
+    "nom": "Clémence",
+    "description": "Vierge, † 1176"
+   }
+  ],
+  "03-22": [
+   {
+    "nom": "Léa",
+    "description": "Veuve, disciple de saint Jérôme, † 384"
+   }
+  ],
+  "03-23": [
+   {
+    "nom": "Victorien",
+    "description": "Martyr en Afrique, † 484"
+   }
+  ],
+  "03-24": [
+   {
+    "nom": "Karine",
+    "description": "Catherine de Suède, abbesse, † 1381"
+   }
+  ],
+  "03-25": [
+   {
+    "nom": "Annonciation",
+    "description": "Fête de l'Annonciation du Seigneur à Marie"
+   }
+  ],
+  "03-26": [
+   {
+    "nom": "Larissa",
+    "description": "Martyre en Crimée"
+   }
+  ],
+  "03-27": [
+   {
+    "nom": "Habib",
+    "description": "Diacre et martyr à Édesse, † 322"
+   }
+  ],
+  "03-28": [
+   {
+    "nom": "Gontran",
+    "description": "Roi des Francs, † 592"
+   }
+  ],
+  "03-29": [
+   {
+    "nom": "Gladys",
+    "description": "Princesse galloise, ermite, Ve siècle"
+   }
+  ],
+  "03-30": [
+   {
+    "nom": "Amédée",
+    "description": "Duc de Savoie, † 1472"
+   }
+  ],
+  "03-31": [
+   {
+    "nom": "Benjamin",
+    "description": "Diacre et martyr en Perse, † 424"
+   }
+  ],
+  "04-01": [
+   {
+    "nom": "Hugues",
+    "description": "Évêque de Grenoble, † 1132"
+   }
+  ],
+  "04-02": [
+   {
+    "nom": "Sandrine",
+    "description": "Vierge, † 1263"
+   }
+  ],
+  "04-03": [
+   {
+    "nom": "Richard",
+    "description": "Évêque de Chichester, † 1253"
+   }
+  ],
+  "04-04": [
+   {
+    "nom": "Isidore",
+    "description": "Évêque de Séville et docteur de l'Église, † 636"
+   }
+  ],
+  "04-05": [
+   {
+    "nom": "Irène",
+    "description": "Vierge et martyre à Thessalonique, † 304"
+   }
+  ],
+  "04-06": [
+   {
+    "nom": "Marcellin",
+    "description": "Évêque et martyr, † 304"
+   }
+  ],
+  "04-07": [
+   {
+    "nom": "Jean-Baptiste de La Salle",
+    "description": "Prêtre, fondateur des Frères des écoles chrétiennes, † 1719"
+   }
+  ],
+  "04-08": [
+   {
+    "nom": "Julie",
+    "description": "Julie Billiart, fondatrice, † 1816"
+   }
+  ],
+  "04-09": [
+   {
+    "nom": "Gautier",
+    "description": "Abbé de Pontoise, † 1099"
+   }
+  ],
+  "04-10": [
+   {
+    "nom": "Fulbert",
+    "description": "Évêque de Chartres, † 1028"
+   }
+  ],
+  "04-11": [
+   {
+    "nom": "Stanislas",
+    "description": "Évêque de Cracovie et martyr, † 1079"
+   }
+  ],
+  "04-12": [
+   {
+    "nom": "Jules",
+    "description": "Pape, † 352"
+   }
+  ],
+  "04-13": [
+   {
+    "nom": "Ida",
+    "description": "Veuve, mère de Godefroy de Bouillon, † 1113"
+   }
+  ],
+  "04-14": [
+   {
+    "nom": "Maxime",
+    "description": "Martyr, † vers 228"
+   }
+  ],
+  "04-15": [
+   {
+    "nom": "Paterne",
+    "description": "Évêque d'Avranches, † vers 565"
+   }
+  ],
+  "04-16": [
+   {
+    "nom": "Benoît-Joseph Labre",
+    "description": "Pèlerin mendiant, † 1783"
+   }
+  ],
+  "04-17": [
+   {
+    "nom": "Anicet",
+    "description": "Pape et martyr, † 166"
+   }
+  ],
+  "04-18": [
+   {
+    "nom": "Parfait",
+    "description": "Prêtre et martyr à Cordoue, † 850"
+   }
+  ],
+  "04-19": [
+   {
+    "nom": "Emma",
+    "description": "Comtesse de Carinthie, † 1045"
+   }
+  ],
+  "04-20": [
+   {
+    "nom": "Odette",
+    "description": "Veuve, † 1220"
+   }
+  ],
+  "04-21": [
+   {
+    "nom": "Anselme",
+    "description": "Archevêque de Cantorbéry et docteur de l'Église, † 1109"
+   }
+  ],
+  "04-22": [
+   {
+    "nom": "Alexandre",
+    "description": "Martyr à Lyon, † 177"
+   }
+  ],
+  "04-23": [
+   {
+    "nom": "Georges",
+    "description": "Soldat et martyr, † vers 303"
+   }
+  ],
+  "04-24": [
+   {
+    "nom": "Fidèle",
+    "description": "Fidèle de Sigmaringen, capucin et martyr, † 1622"
+   }
+  ],
+  "04-25": [
+   {
+    "nom": "Marc",
+    "description": "Évangéliste, compagnon de Pierre et de Paul"
+   }
+  ],
+  "04-26": [
+   {
+    "nom": "Alida",
+    "description": "Religieuse, † 1235"
+   }
+  ],
+  "04-27": [
+   {
+    "nom": "Zita",
+    "description": "Servante, † 1272"
+   }
+  ],
+  "04-28": [
+   {
+    "nom": "Valérie",
+    "description": "Martyre à Milan, Ier siècle"
+   }
+  ],
+  "04-29": [
+   {
+    "nom": "Catherine de Sienne",
+    "description": "Dominicaine, docteur de l'Église, † 1380"
+   }
+  ],
+  "04-30": [
+   {
+    "nom": "Robert",
+    "description": "Abbé de Molesme, fondateur de Cîteaux, † 1111"
+   }
+  ],
+  "05-01": [
+   {
+    "nom": "Joseph travailleur",
+    "description": "Fête de saint Joseph artisan"
+   }
+  ],
+  "05-02": [
+   {
+    "nom": "Boris",
+    "description": "Prince de Kiev, martyr, † 1015"
+   }
+  ],
+  "05-03": [
+   {
+    "nom": "Philippe et Jacques",
+    "description": "Apôtres"
+   }
+  ],
+  "05-04": [
+   {
+    "nom": "Sylvain",
+    "description": "Évêque et martyr, † 311"
+   }
+  ],
+  "05-05": [
+   {
+    "nom": "Judith",
+    "description": "Veuve de l'Ancien Testament"
+   }
+  ],
+  "05-06": [
+   {
+    "nom": "Prudence",
+    "description": "Vierge, † 1492"
+   }
+  ],
+  "05-07": [
+   {
+    "nom": "Gisèle",
+    "description": "Reine de Hongrie, † vers 1060"
+   }
+  ],
+  "05-08": [
+   {
+    "nom": "Désiré",
+    "description": "Évêque de Bourges, † vers 550"
+   }
+  ],
+  "05-09": [
+   {
+    "nom": "Pacôme",
+    "description": "Père du monachisme cénobitique, † 348"
+   }
+  ],
+  "05-10": [
+   {
+    "nom": "Solange",
+    "description": "Bergère et martyre, † 878"
+   }
+  ],
+  "05-11": [
+   {
+    "nom": "Estelle",
+    "description": "Martyre en Auvergne"
+   }
+  ],
+  "05-12": [
+   {
+    "nom": "Achille",
+    "description": "Évêque de Larissa, † vers 330"
+   }
+  ],
+  "05-13": [
+   {
+    "nom": "Rolande",
+    "description": "Moniale"
+   }
+  ],
+  "05-14": [
+   {
+    "nom": "Matthias",
+    "description": "Apôtre, choisi pour remplacer Judas"
+   }
+  ],
+  "05-15": [
+   {
+    "nom": "Denise",
+    "description": "Martyre à Lampsaque, † 250"
+   }
+  ],
+  "05-16": [
+   {
+    "nom": "Honoré",
+    "description": "Évêque d'Amiens, † 600"
+   }
+  ],
+  "05-17": [
+   {
+    "nom": "Pascal",
+    "description": "Pascal Baylon, franciscain, † 1592"
+   }
+  ],
+  "05-18": [
+   {
+    "nom": "Éric",
+    "description": "Roi de Suède, martyr, † 1160"
+   }
+  ],
+  "05-19": [
+   {
+    "nom": "Yves",
+    "description": "Yves Hélory, prêtre et juge, † 1303"
+   }
+  ],
+  "05-20": [
+   {
+    "nom": "Bernardin",
+    "description": "Bernardin de Sienne, franciscain, † 1444"
+   }
+  ],
+  "05-21": [
+   {
+    "nom": "Constantin",
+    "description": "Empereur romain, † 337"
+   }
+  ],
+  "05-22": [
+   {
+    "nom": "Émile",
+    "description": "Martyr, † 250"
+   }
+  ],
+  "05-23": [
+   {
+    "nom": "Didier",
+    "description": "Évêque de Langres et martyr, † 407"
+   }
+  ],
+  "05-24": [
+   {
+    "nom": "Donatien",
+    "description": "Martyr à Nantes, † vers 304"
+   }
+  ],
+  "05-25": [
+   {
+    "nom": "Sophie",
+    "description": "Martyre à Rome"
+   }
+  ],
+  "05-26": [
+   {
+    "nom": "Bérenger",
+    "description": "Moine, † 1050"
+   }
+  ],
+  "05-27": [
+   {
+    "nom": "Augustin de Cantorbéry",
+    "description": "Évêque, apôtre de l'Angleterre, † 604"
+   }
+  ],
+  "05-28": [
+   {
+    "nom": "Germain",
+    "description": "Évêque de Paris, † 576"
+   }
+  ],
+  "05-29": [
+   {
+    "nom": "Aymar",
+    "description": "Chevalier de Provence, moine de Cluny"
+   }
+  ],
+  "05-30": [
+   {
+    "nom": "Ferdinand",
+    "description": "Roi de Castille, † 1252"
+   }
+  ],
+  "05-31": [
+   {
+    "nom": "Visitation de la Vierge Marie",
+    "description": "Fête de la Visitation de Marie à Élisabeth"
+   }
+  ],
+  "06-01": [
+   {
+    "nom": "Justin",
+    "description": "Philosophe et martyr à Rome, † 165"
+   }
+  ],
+  "06-02": [
+   {
+    "nom": "Blandine",
+    "description": "Martyre à Lyon, † 177"
+   }
+  ],
+  "06-03": [
+   {
+    "nom": "Kévin",
+    "description": "Abbé de Glendalough, † 618"
+   }
+  ],
+  "06-04": [
+   {
+    "nom": "Clotilde",
+    "description": "Reine des Francs, † 545"
+   }
+  ],
+  "06-05": [
+   {
+    "nom": "Igor",
+    "description": "Prince de Kiev, † 1147"
+   }
+  ],
+  "06-06": [
+   {
+    "nom": "Norbert",
+    "description": "Archevêque de Magdebourg, fondateur des Prémontrés, † 1134"
+   }
+  ],
+  "06-07": [
+   {
+    "nom": "Gilbert",
+    "description": "Abbé, † 1152"
+   }
+  ],
+  "06-08": [
+   {
+    "nom": "Médard",
+    "description": "Évêque de Noyon, † vers 560"
+   }
+  ],
+  "06-09": [
+   {
+    "nom": "Diane",
+    "description": "Dominicaine, † 1236"
+   }
+  ],
+  "06-10": [
+   {
+    "nom": "Landry",
+    "description": "Évêque de Paris, † vers 656"
+   }
+  ],
+  "06-11": [
+   {
+    "nom": "Barnabé",
+    "description": "Apôtre, compagnon de saint Paul"
+   }
+  ],
+  "06-12": [
+   {
+    "nom": "Guy",
+    "description": "Moine, † 1046"
+   }
+  ],
+  "06-13": [
+   {
+    "nom": "Antoine de Padoue",
+    "description": "Franciscain, docteur de l'Église, † 1231"
+   }
+  ],
+  "06-14": [
+   {
+    "nom": "Élisée",
+    "description": "Prophète de l'Ancien Testament"
+   }
+  ],
+  "06-15": [
+   {
+    "nom": "Germaine",
+    "description": "Bergère de Pibrac, † 1601"
+   }
+  ],
+  "06-16": [
+   {
+    "nom": "Jean-François Régis",
+    "description": "Jésuite, apôtre du Vivarais, † 1640"
+   }
+  ],
+  "06-17": [
+   {
+    "nom": "Hervé",
+    "description": "Ermite breton, VIe siècle"
+   }
+  ],
+  "06-18": [
+   {
+    "nom": "Léonce",
+    "description": "Martyr en Phénicie"
+   }
+  ],
+  "06-19": [
+   {
+    "nom": "Romuald",
+    "description": "Fondateur des Camaldules, † 1027"
+   }
+  ],
+  "06-20": [
+   {
+    "nom": "Silvère",
+    "description": "Pape et martyr, † 537"
+   }
+  ],
+  "06-21": [
+   {
+    "nom": "Rodolphe",
+    "description": "Évêque de Gubbio, † 1066"
+   }
+  ],
+  "06-22": [
+   {
+    "nom": "Alban",
+    "description": "Premier martyr de Grande-Bretagne, † vers 303"
+   }
+  ],
+  "06-23": [
+   {
+    "nom": "Audrey",
+    "description": "Reine de Northumbrie, abbesse d'Ely, † 679"
+   }
+  ],
+  "06-24": [
+   {
+    "nom": "Jean-Baptiste",
+    "description": "Nativité de saint Jean le Baptiste"
+   }
+  ],
+  "06-25": [
+   {
+    "nom": "Prosper",
+    "description": "Évêque de Reggio, † vers 463"
+   }
+  ],
+  "06-26": [
+   {
+    "nom": "Anthelme",
+    "description": "Évêque de Belley, chartreux, † 1178"
+   }
+  ],
+  "06-27": [
+   {
+    "nom": "Fernand",
+    "description": "Fernand de Portugal, † 1443"
+   }
+  ],
+  "06-28": [
+   {
+    "nom": "Irénée",
+    "description": "Évêque de Lyon et docteur de l'Église, † 202"
+   }
+  ],
+  "06-29": [
+   {
+    "nom": "Pierre et Paul",
+    "description": "Solennité des apôtres Pierre et Paul"
+   }
+  ],
+  "06-30": [
+   {
+    "nom": "Martial",
+    "description": "Évêque de Limoges, IIIe siècle"
+   }
+  ],
+  "07-01": [
+   {
+    "nom": "Thierry",
+    "description": "Moine à Reims, † 533"
+   }
+  ],
+  "07-02": [
+   {
+    "nom": "Martinien",
+    "description": "Soldat et martyr à Rome"
+   }
+  ],
+  "07-03": [
+   {
+    "nom": "Thomas",
+    "description": "Apôtre, « l'incrédule »"
+   }
+  ],
+  "07-04": [
+   {
+    "nom": "Florent",
+    "description": "Moine, † 1055"
+   }
+  ],
+  "07-05": [
+   {
+    "nom": "Antoine-Marie Zaccaria",
+    "description": "Prêtre, fondateur des Barnabites, † 1539"
+   }
+  ],
+  "07-06": [
+   {
+    "nom": "Mariette",
+    "description": "Maria Goretti, vierge et martyre, † 1902"
+   }
+  ],
+  "07-07": [
+   {
+    "nom": "Raoul",
+    "description": "Archevêque de Bourges, † 866"
+   }
+  ],
+  "07-08": [
+   {
+    "nom": "Thibaut",
+    "description": "Ermite, † 1066"
+   }
+  ],
+  "07-09": [
+   {
+    "nom": "Amandine",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "07-10": [
+   {
+    "nom": "Ulrich",
+    "description": "Évêque d'Augsbourg, † 973"
+   }
+  ],
+  "07-11": [
+   {
+    "nom": "Benoît",
+    "description": "Père du monachisme occidental, patron de l'Europe, † vers 547"
+   }
+  ],
+  "07-12": [
+   {
+    "nom": "Olivier",
+    "description": "Archevêque d'Armagh, martyr, † 1681"
+   }
+  ],
+  "07-13": [
+   {
+    "nom": "Henri",
+    "description": "Empereur germanique, † 1024"
+   }
+  ],
+  "07-14": [
+   {
+    "nom": "Camille",
+    "description": "Camille de Lellis, fondateur des Camilliens, † 1614"
+   }
+  ],
+  "07-15": [
+   {
+    "nom": "Donald",
+    "description": "Moine écossais"
+   }
+  ],
+  "07-16": [
+   {
+    "nom": "Notre-Dame du Mont-Carmel",
+    "description": "Fête de la Vierge du Carmel"
+   }
+  ],
+  "07-17": [
+   {
+    "nom": "Charlotte",
+    "description": "Martyre de Compiègne, † 1794"
+   }
+  ],
+  "07-18": [
+   {
+    "nom": "Frédéric",
+    "description": "Évêque d'Utrecht, martyr, † 838"
+   }
+  ],
+  "07-19": [
+   {
+    "nom": "Arsène",
+    "description": "Ermite d'Égypte, † vers 445"
+   }
+  ],
+  "07-20": [
+   {
+    "nom": "Marina",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "07-21": [
+   {
+    "nom": "Victor",
+    "description": "Martyr à Marseille, † vers 290"
+   }
+  ],
+  "07-22": [
+   {
+    "nom": "Marie-Madeleine",
+    "description": "Disciple du Christ, première témoin de la Résurrection"
+   }
+  ],
+  "07-23": [
+   {
+    "nom": "Brigitte",
+    "description": "Brigitte de Suède, fondatrice, † 1373"
+   }
+  ],
+  "07-24": [
+   {
+    "nom": "Christine",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "07-25": [
+   {
+    "nom": "Jacques",
+    "description": "Apôtre, « le Majeur », † 44"
+   }
+  ],
+  "07-26": [
+   {
+    "nom": "Anne et Joachim",
+    "description": "Parents de la Vierge Marie"
+   }
+  ],
+  "07-27": [
+   {
+    "nom": "Nathalie",
+    "description": "Martyre à Cordoue, † 852"
+   }
+  ],
+  "07-28": [
+   {
+    "nom": "Samson",
+    "description": "Évêque de Dol, † vers 565"
+   }
+  ],
+  "07-29": [
+   {
+    "nom": "Marthe",
+    "description": "Sœur de Marie et de Lazare, amie de Jésus"
+   }
+  ],
+  "07-30": [
+   {
+    "nom": "Juliette",
+    "description": "Martyre à Césarée, † 303"
+   }
+  ],
+  "07-31": [
+   {
+    "nom": "Ignace de Loyola",
+    "description": "Fondateur de la Compagnie de Jésus, † 1556"
+   }
+  ],
+  "08-01": [
+   {
+    "nom": "Alphonse",
+    "description": "Alphonse de Liguori, évêque et docteur de l'Église, † 1787"
+   }
+  ],
+  "08-02": [
+   {
+    "nom": "Julien Eymard",
+    "description": "Fondateur des Pères du Saint-Sacrement, † 1868"
+   }
+  ],
+  "08-03": [
+   {
+    "nom": "Lydie",
+    "description": "Première convertie d'Europe, disciple de Paul"
+   }
+  ],
+  "08-04": [
+   {
+    "nom": "Jean-Marie Vianney",
+    "description": "Curé d'Ars, † 1859"
+   }
+  ],
+  "08-05": [
+   {
+    "nom": "Abel",
+    "description": "Fils d'Adam, premier juste"
+   }
+  ],
+  "08-06": [
+   {
+    "nom": "Transfiguration du Seigneur",
+    "description": "Fête de la Transfiguration de Jésus"
+   }
+  ],
+  "08-07": [
+   {
+    "nom": "Gaétan",
+    "description": "Prêtre, fondateur des Théatins, † 1547"
+   }
+  ],
+  "08-08": [
+   {
+    "nom": "Dominique",
+    "description": "Fondateur des Frères prêcheurs, † 1221"
+   }
+  ],
+  "08-09": [
+   {
+    "nom": "Amour",
+    "description": "Moine, ermite"
+   }
+  ],
+  "08-10": [
+   {
+    "nom": "Laurent",
+    "description": "Diacre de Rome et martyr, † 258"
+   }
+  ],
+  "08-11": [
+   {
+    "nom": "Claire",
+    "description": "Claire d'Assise, fondatrice des Clarisses, † 1253"
+   }
+  ],
+  "08-12": [
+   {
+    "nom": "Clarisse",
+    "description": "Moniale, compagne de sainte Claire"
+   }
+  ],
+  "08-13": [
+   {
+    "nom": "Hippolyte",
+    "description": "Prêtre et martyr à Rome, † 235"
+   }
+  ],
+  "08-14": [
+   {
+    "nom": "Évrard",
+    "description": "Prêtre, † 1100"
+   }
+  ],
+  "08-15": [
+   {
+    "nom": "Assomption de la Vierge Marie",
+    "description": "Solennité de l'Assomption de Marie"
+   }
+  ],
+  "08-16": [
+   {
+    "nom": "Armel",
+    "description": "Abbé en Bretagne, † vers 552"
+   }
+  ],
+  "08-17": [
+   {
+    "nom": "Hyacinthe",
+    "description": "Dominicain, apôtre de la Pologne, † 1257"
+   }
+  ],
+  "08-18": [
+   {
+    "nom": "Hélène",
+    "description": "Mère de l'empereur Constantin, † vers 330"
+   }
+  ],
+  "08-19": [
+   {
+    "nom": "Jean Eudes",
+    "description": "Prêtre, fondateur des Eudistes, † 1680"
+   }
+  ],
+  "08-20": [
+   {
+    "nom": "Bernard",
+    "description": "Abbé de Clairvaux et docteur de l'Église, † 1153"
+   }
+  ],
+  "08-21": [
+   {
+    "nom": "Christophe",
+    "description": "Martyr, † vers 250"
+   }
+  ],
+  "08-22": [
+   {
+    "nom": "Fabrice",
+    "description": "Martyr"
+   }
+  ],
+  "08-23": [
+   {
+    "nom": "Rose de Lima",
+    "description": "Dominicaine péruvienne, † 1617"
+   }
+  ],
+  "08-24": [
+   {
+    "nom": "Barthélemy",
+    "description": "Apôtre"
+   }
+  ],
+  "08-25": [
+   {
+    "nom": "Louis",
+    "description": "Roi de France, † 1270"
+   }
+  ],
+  "08-26": [
+   {
+    "nom": "Natacha",
+    "description": "Martyre à Rome, † 304"
+   }
+  ],
+  "08-27": [
+   {
+    "nom": "Monique",
+    "description": "Mère de saint Augustin, † 387"
+   }
+  ],
+  "08-28": [
+   {
+    "nom": "Augustin",
+    "description": "Évêque d'Hippone et docteur de l'Église, † 430"
+   }
+  ],
+  "08-29": [
+   {
+    "nom": "Sabine",
+    "description": "Martyre à Rome, † 126"
+   }
+  ],
+  "08-30": [
+   {
+    "nom": "Fiacre",
+    "description": "Ermite irlandais, patron des jardiniers, † 670"
+   }
+  ],
+  "08-31": [
+   {
+    "nom": "Aristide",
+    "description": "Philosophe d'Athènes, IIe siècle"
+   }
+  ],
+  "09-01": [
+   {
+    "nom": "Gilles",
+    "description": "Abbé, † vers 720"
+   }
+  ],
+  "09-02": [
+   {
+    "nom": "Ingrid",
+    "description": "Religieuse suédoise, † 1282"
+   }
+  ],
+  "09-03": [
+   {
+    "nom": "Grégoire",
+    "description": "Grégoire le Grand, pape et docteur de l'Église, † 604"
+   }
+  ],
+  "09-04": [
+   {
+    "nom": "Rosalie",
+    "description": "Ermite en Sicile, † 1166"
+   }
+  ],
+  "09-05": [
+   {
+    "nom": "Raïssa",
+    "description": "Martyre à Alexandrie"
+   }
+  ],
+  "09-06": [
+   {
+    "nom": "Bertrand",
+    "description": "Évêque de Comminges, † 1123"
+   }
+  ],
+  "09-07": [
+   {
+    "nom": "Reine",
+    "description": "Vierge et martyre à Alise, † 253"
+   }
+  ],
+  "09-08": [
+   {
+    "nom": "Nativité de la Vierge Marie",
+    "description": "Fête de la naissance de Marie"
+   }
+  ],
+  "09-09": [
+   {
+    "nom": "Alain",
+    "description": "Évêque d'Auxerre, † 1202"
+   }
+  ],
+  "09-10": [
+   {
+    "nom": "Inès",
+    "description": "Vierge, patronne de Rome"
+   }
+  ],
+  "09-11": [
+   {
+    "nom": "Adelphe",
+    "description": "Évêque de Metz"
+   }
+  ],
+  "09-12": [
+   {
+    "nom": "Apollinaire",
+    "description": "Évêque de Valence, † 520"
+   }
+  ],
+  "09-13": [
+   {
+    "nom": "Aimé",
+    "description": "Évêque de Sion, † vers 690"
+   }
+  ],
+  "09-14": [
+   {
+    "nom": "Croix glorieuse",
+    "description": "Fête de la Croix glorieuse"
+   }
+  ],
+  "09-15": [
+   {
+    "nom": "Roland",
+    "description": "Abbé en Toscane"
+   }
+  ],
+  "09-16": [
+   {
+    "nom": "Édith",
+    "description": "Princesse anglaise, † 984"
+   }
+  ],
+  "09-17": [
+   {
+    "nom": "Renaud",
+    "description": "Moine"
+   }
+  ],
+  "09-18": [
+   {
+    "nom": "Nadège",
+    "description": "Moniale"
+   }
+  ],
+  "09-19": [
+   {
+    "nom": "Émilie",
+    "description": "Émilie de Rodat, fondatrice, † 1852"
+   }
+  ],
+  "09-20": [
+   {
+    "nom": "Davy",
+    "description": "Martyr, † vers 304"
+   }
+  ],
+  "09-21": [
+   {
+    "nom": "Matthieu",
+    "description": "Apôtre et évangéliste"
+   }
+  ],
+  "09-22": [
+   {
+    "nom": "Maurice",
+    "description": "Chef de la Légion thébaine, martyr, † vers 287"
+   }
+  ],
+  "09-23": [
+   {
+    "nom": "Constant",
+    "description": "Martyr"
+   }
+  ],
+  "09-24": [
+   {
+    "nom": "Thècle",
+    "description": "Vierge et martyre, disciple de saint Paul"
+   }
+  ],
+  "09-25": [
+   {
+    "nom": "Hermann",
+    "description": "Moine de Reichenau, † 1054"
+   }
+  ],
+  "09-26": [
+   {
+    "nom": "Côme et Damien",
+    "description": "Médecins et martyrs, † vers 287"
+   }
+  ],
+  "09-27": [
+   {
+    "nom": "Vincent de Paul",
+    "description": "Prêtre, fondateur des Lazaristes, † 1660"
+   }
+  ],
+  "09-28": [
+   {
+    "nom": "Venceslas",
+    "description": "Duc de Bohême, martyr, † 935"
+   }
+  ],
+  "09-29": [
+   {
+    "nom": "Michel, Gabriel et Raphaël",
+    "description": "Fête des archanges"
+   }
+  ],
+  "09-30": [
+   {
+    "nom": "Jérôme",
+    "description": "Prêtre et docteur de l'Église, traducteur de la Bible, † 420"
+   }
+  ],
+  "10-01": [
+   {
+    "nom": "Thérèse de l'Enfant-Jésus",
+    "description": "Carmélite et docteur de l'Église, † 1897"
+   }
+  ],
+  "10-02": [
+   {
+    "nom": "Léger",
+    "description": "Évêque d'Autun, martyr, † 678"
+   }
+  ],
+  "10-03": [
+   {
+    "nom": "Gérard",
+    "description": "Abbé de Brogne, † 959"
+   }
+  ],
+  "10-04": [
+   {
+    "nom": "François d'Assise",
+    "description": "Fondateur des Frères mineurs, patron de l'Italie, † 1226"
+   }
+  ],
+  "10-05": [
+   {
+    "nom": "Fleur",
+    "description": "Moniale, † 1347"
+   }
+  ],
+  "10-06": [
+   {
+    "nom": "Bruno",
+    "description": "Fondateur des Chartreux, † 1101"
+   }
+  ],
+  "10-07": [
+   {
+    "nom": "Serge",
+    "description": "Soldat et martyr, † vers 303"
+   }
+  ],
+  "10-08": [
+   {
+    "nom": "Pélagie",
+    "description": "Pénitente d'Antioche"
+   }
+  ],
+  "10-09": [
+   {
+    "nom": "Denis",
+    "description": "Premier évêque de Paris, martyr, IIIe siècle"
+   }
+  ],
+  "10-10": [
+   {
+    "nom": "Ghislain",
+    "description": "Moine, fondateur d'abbaye, † vers 680"
+   }
+  ],
+  "10-11": [
+   {
+    "nom": "Firmin",
+    "description": "Évêque d'Uzès, † 553"
+   }
+  ],
+  "10-12": [
+   {
+    "nom": "Wilfrid",
+    "description": "Évêque d'York, † 709"
+   }
+  ],
+  "10-13": [
+   {
+    "nom": "Géraud",
+    "description": "Comte d'Aurillac, † 909"
+   }
+  ],
+  "10-14": [
+   {
+    "nom": "Juste",
+    "description": "Évêque de Lyon, † vers 390"
+   }
+  ],
+  "10-15": [
+   {
+    "nom": "Thérèse d'Avila",
+    "description": "Carmélite et docteur de l'Église, † 1582"
+   }
+  ],
+  "10-16": [
+   {
+    "nom": "Edwige",
+    "description": "Duchesse de Silésie, † 1243"
+   }
+  ],
+  "10-17": [
+   {
+    "nom": "Baudouin",
+    "description": "Moine, † 1198"
+   }
+  ],
+  "10-18": [
+   {
+    "nom": "Luc",
+    "description": "Évangéliste, médecin, compagnon de Paul"
+   }
+  ],
+  "10-19": [
+   {
+    "nom": "René",
+    "description": "René Goupil, jésuite martyr au Canada, † 1642"
+   }
+  ],
+  "10-20": [
+   {
+    "nom": "Adeline",
+    "description": "Abbesse, † 1125"
+   }
+  ],
+  "10-21": [
+   {
+    "nom": "Céline",
+    "description": "Vierge, mère de saint Rémi"
+   }
+  ],
+  "10-22": [
+   {
+    "nom": "Élodie",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "10-23": [
+   {
+    "nom": "Jean de Capistran",
+    "description": "Franciscain, † 1456"
+   }
+  ],
+  "10-24": [
+   {
+    "nom": "Florentin",
+    "description": "Évêque"
+   }
+  ],
+  "10-25": [
+   {
+    "nom": "Crépin",
+    "description": "Martyr, patron des cordonniers, † vers 285"
+   }
+  ],
+  "10-26": [
+   {
+    "nom": "Dimitri",
+    "description": "Martyr à Thessalonique, † 306"
+   }
+  ],
+  "10-27": [
+   {
+    "nom": "Émeline",
+    "description": "Vierge"
+   }
+  ],
+  "10-28": [
+   {
+    "nom": "Simon et Jude",
+    "description": "Apôtres"
+   }
+  ],
+  "10-29": [
+   {
+    "nom": "Narcisse",
+    "description": "Évêque de Jérusalem, † vers 215"
+   }
+  ],
+  "10-30": [
+   {
+    "nom": "Bienvenue",
+    "description": "Moniale"
+   }
+  ],
+  "10-31": [
+   {
+    "nom": "Quentin",
+    "description": "Missionnaire et martyr, † vers 287"
+   }
+  ],
+  "11-01": [
+   {
+    "nom": "Toussaint",
+    "description": "Solennité de tous les saints"
+   }
+  ],
+  "11-02": [
+   {
+    "nom": "Défunts",
+    "description": "Commémoration de tous les fidèles défunts"
+   }
+  ],
+  "11-03": [
+   {
+    "nom": "Hubert",
+    "description": "Évêque de Liège, † 727"
+   }
+  ],
+  "11-04": [
+   {
+    "nom": "Charles Borromée",
+    "description": "Archevêque de Milan, † 1584"
+   }
+  ],
+  "11-05": [
+   {
+    "nom": "Sylvie",
+    "description": "Mère de saint Grégoire le Grand"
+   }
+  ],
+  "11-06": [
+   {
+    "nom": "Bertille",
+    "description": "Abbesse de Chelles, † vers 705"
+   }
+  ],
+  "11-07": [
+   {
+    "nom": "Carine",
+    "description": "Martyre"
+   }
+  ],
+  "11-08": [
+   {
+    "nom": "Geoffroy",
+    "description": "Évêque d'Amiens, † 1115"
+   }
+  ],
+  "11-09": [
+   {
+    "nom": "Théodore",
+    "description": "Théodore le Studite ou Théodore de Tyr, martyr"
+   }
+  ],
+  "11-10": [
+   {
+    "nom": "Léon",
+    "description": "Léon le Grand, pape et docteur de l'Église, † 461"
+   }
+  ],
+  "11-11": [
+   {
+    "nom": "Martin",
+    "description": "Martin de Tours, évêque, † 397"
+   }
+  ],
+  "11-12": [
+   {
+    "nom": "Christian",
+    "description": "Moine"
+   }
+  ],
+  "11-13": [
+   {
+    "nom": "Brice",
+    "description": "Évêque de Tours, † 444"
+   }
+  ],
+  "11-14": [
+   {
+    "nom": "Sidoine",
+    "description": "Abbé de Saint-Saëns, † vers 687"
+   }
+  ],
+  "11-15": [
+   {
+    "nom": "Albert",
+    "description": "Albert le Grand, dominicain et docteur de l'Église, † 1280"
+   }
+  ],
+  "11-16": [
+   {
+    "nom": "Marguerite",
+    "description": "Marguerite d'Écosse, reine, † 1093"
+   }
+  ],
+  "11-17": [
+   {
+    "nom": "Élisabeth",
+    "description": "Élisabeth de Hongrie, † 1231"
+   }
+  ],
+  "11-18": [
+   {
+    "nom": "Aude",
+    "description": "Vierge, VIIe siècle"
+   }
+  ],
+  "11-19": [
+   {
+    "nom": "Tanguy",
+    "description": "Moine breton, † vers 550"
+   }
+  ],
+  "11-20": [
+   {
+    "nom": "Edmond",
+    "description": "Roi d'Est-Anglie et martyr, † 870"
+   }
+  ],
+  "11-21": [
+   {
+    "nom": "Présentation de Marie",
+    "description": "Fête de la Présentation de la Vierge au Temple"
+   }
+  ],
+  "11-22": [
+   {
+    "nom": "Cécile",
+    "description": "Vierge et martyre à Rome, patronne des musiciens, † vers 230"
+   }
+  ],
+  "11-23": [
+   {
+    "nom": "Clément",
+    "description": "Pape et martyr, † 101"
+   }
+  ],
+  "11-24": [
+   {
+    "nom": "Flora",
+    "description": "Vierge et martyre à Cordoue, † 851"
+   }
+  ],
+  "11-25": [
+   {
+    "nom": "Catherine",
+    "description": "Catherine d'Alexandrie, vierge et martyre"
+   }
+  ],
+  "11-26": [
+   {
+    "nom": "Delphine",
+    "description": "Épouse de saint Élzéar, † 1360"
+   }
+  ],
+  "11-27": [
+   {
+    "nom": "Séverin",
+    "description": "Ermite, † 507"
+   }
+  ],
+  "11-28": [
+   {
+    "nom": "Jacques de la Marche",
+    "description": "Franciscain, † 1476"
+   }
+  ],
+  "11-29": [
+   {
+    "nom": "Saturnin",
+    "description": "Évêque de Toulouse et martyr, † vers 250"
+   }
+  ],
+  "11-30": [
+   {
+    "nom": "André",
+    "description": "Apôtre, frère de Pierre"
+   }
+  ],
+  "12-01": [
+   {
+    "nom": "Florence",
+    "description": "Vierge, VIIe siècle"
+   }
+  ],
+  "12-02": [
+   {
+    "nom": "Viviane",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "12-03": [
+   {
+    "nom": "François Xavier",
+    "description": "Jésuite, apôtre des Indes, † 1552"
+   }
+  ],
+  "12-04": [
+   {
+    "nom": "Barbara",
+    "description": "Vierge et martyre, patronne des mineurs"
+   }
+  ],
+  "12-05": [
+   {
+    "nom": "Gérald",
+    "description": "Évêque de Braga, † 1109"
+   }
+  ],
+  "12-06": [
+   {
+    "nom": "Nicolas",
+    "description": "Évêque de Myre, IVe siècle"
+   }
+  ],
+  "12-07": [
+   {
+    "nom": "Ambroise",
+    "description": "Évêque de Milan et docteur de l'Église, † 397"
+   }
+  ],
+  "12-08": [
+   {
+    "nom": "Immaculée Conception",
+    "description": "Solennité de l'Immaculée Conception de la Vierge Marie"
+   }
+  ],
+  "12-09": [
+   {
+    "nom": "Pierre Fourier",
+    "description": "Chanoine, fondateur des Chanoinesses de Notre-Dame, † 1640"
+   }
+  ],
+  "12-10": [
+   {
+    "nom": "Romaric",
+    "description": "Abbé de Remiremont, † 653"
+   }
+  ],
+  "12-11": [
+   {
+    "nom": "Daniel",
+    "description": "Daniel le Stylite, † 493"
+   }
+  ],
+  "12-12": [
+   {
+    "nom": "Jeanne-Françoise de Chantal",
+    "description": "Cofondatrice de la Visitation, † 1641"
+   }
+  ],
+  "12-13": [
+   {
+    "nom": "Lucie",
+    "description": "Vierge et martyre à Syracuse, † 304"
+   }
+  ],
+  "12-14": [
+   {
+    "nom": "Odile",
+    "description": "Abbesse, patronne de l'Alsace, † vers 720"
+   }
+  ],
+  "12-15": [
+   {
+    "nom": "Ninon",
+    "description": "Vierge et martyre"
+   }
+  ],
+  "12-16": [
+   {
+    "nom": "Alice",
+    "description": "Religieuse, † 1250"
+   }
+  ],
+  "12-17": [
+   {
+    "nom": "Gaël",
+    "description": "Abbé en Bretagne"
+   }
+  ],
+  "12-18": [
+   {
+    "nom": "Gatien",
+    "description": "Premier évêque de Tours, IIIe siècle"
+   }
+  ],
+  "12-19": [
+   {
+    "nom": "Urbain",
+    "description": "Urbain V, pape, † 1370"
+   }
+  ],
+  "12-20": [
+   {
+    "nom": "Théophile",
+    "description": "Évêque d'Antioche, † vers 185"
+   }
+  ],
+  "12-21": [
+   {
+    "nom": "Pierre Canisius",
+    "description": "Jésuite et docteur de l'Église, † 1597"
+   }
+  ],
+  "12-22": [
+   {
+    "nom": "Françoise-Xavière",
+    "description": "Françoise-Xavière Cabrini, fondatrice, † 1917"
+   }
+  ],
+  "12-23": [
+   {
+    "nom": "Armand",
+    "description": "Évêque de Maastricht, † 679"
+   }
+  ],
+  "12-24": [
+   {
+    "nom": "Adèle",
+    "description": "Abbesse de Pfalzel, † 735"
+   }
+  ],
+  "12-25": [
+   {
+    "nom": "Noël",
+    "description": "Solennité de la Nativité du Seigneur"
+   }
+  ],
+  "12-26": [
+   {
+    "nom": "Étienne",
+    "description": "Premier martyr, diacre, † vers 36"
+   }
+  ],
+  "12-27": [
+   {
+    "nom": "Jean",
+    "description": "Apôtre et évangéliste"
+   }
+  ],
+  "12-28": [
+   {
+    "nom": "Innocents",
+    "description": "Fête des saints Innocents, martyrs"
+   }
+  ],
+  "12-29": [
+   {
+    "nom": "David",
+    "description": "Roi d'Israël, psalmiste"
+   }
+  ],
+  "12-30": [
+   {
+    "nom": "Roger",
+    "description": "Évêque de Cannes, † 1236"
+   }
+  ],
+  "12-31": [
+   {
+    "nom": "Sylvestre",
+    "description": "Pape, † 335"
+   }
+  ]
+ }
+}
