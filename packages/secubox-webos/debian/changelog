@@ -1,3 +1,10 @@
+secubox-webos (1.0.406-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Éphéméride plus dense : en-tête sur une ligne, horloge réduite, soleil et Lune côte à côte dès 360 px de large
+    (container query), saint sur une ligne. Tout tient dans les 430 px de la carte du Hall, sans défilement (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 16:10:00 +0200
+
 secubox-webos (1.0.405-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet « Éphéméride » dans le Hall (secubox-ephemeride) : page cardlets/ephemeride.html (un composant, trois niveaux compact /

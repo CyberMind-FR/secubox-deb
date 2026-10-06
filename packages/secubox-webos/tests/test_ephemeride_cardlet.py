@@ -56,3 +56,11 @@ def test_l_horloge_utilise_le_fuseau_du_serveur_pas_celui_du_navigateur():
 def test_la_carte_dit_quand_elle_est_absente_ou_hors_ligne():
     assert "non installée" in CARTE and "Hors ligne" in CARTE and "Météo indisponible" in CARTE
     assert "dernière mise à jour" in CARTE
+
+
+def test_la_carte_tient_dans_la_hauteur_du_hall_soleil_et_lune_cote_a_cote():
+    """Densité (#2050) : la carte du Hall fait 430 px ; au-delà de 360 px de large, soleil et Lune partagent une ligne."""
+    assert "@container (min-width:360px)" in CARTE and "container-type:inline-size" in CARTE
+    assert 'class="duo"' in CARTE and "grid-template-columns:1fr 1fr" in CARTE
+    m = re.search(r'\{id:"ephemeride"[^\n]*h:(\d+)', HALL)
+    assert m and int(m.group(1)) <= 430

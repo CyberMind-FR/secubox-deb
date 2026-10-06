@@ -34,42 +34,47 @@
   html,body{margin:0;height:100%}
   body{background:linear-gradient(160deg,var(--fond),var(--fond2));color:var(--texte);
        font:14px/1.35 "IBM Plex Sans",Inter,system-ui,sans-serif;overflow:auto}
-  .eph{display:flex;flex-direction:column;gap:.5rem;padding:.6rem .7rem;min-height:100%;max-width:640px;margin:0 auto}
-  .verre{background:var(--verre);border:1px solid var(--line);border-radius:14px;padding:.55rem .7rem;
+  .eph{display:flex;flex-direction:column;gap:.4rem;padding:.5rem .6rem;min-height:100%;max-width:640px;margin:0 auto;container-type:inline-size;position:relative}
+  .verre{background:var(--verre);border:1px solid var(--line);border-radius:14px;padding:.4rem .6rem;
          -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-  .bandeau{display:flex;align-items:flex-start;gap:.5rem}
+  .bandeau{display:flex;align-items:center;gap:.5rem;padding-right:50px;min-height:44px}
+  .bandeau>svg{flex:0 0 auto;width:28px;height:28px}
   .date{flex:1;min-width:0}
-  .date .jour{font-size:1.05rem;font-weight:700;letter-spacing:.01em}
-  .date .sous{font-size:.74rem;color:var(--muted)}
-  .lieu{font-size:.68rem;color:var(--muted);text-align:right;line-height:1.3}
-  .rouage{min-width:44px;min-height:44px;border-radius:50%;border:1px solid var(--line);background:var(--verre);color:var(--texte);cursor:pointer;font-size:1.05rem}
+  .date .jour{font-size:.98rem;font-weight:700;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .date .sous{font-size:.7rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lieu{font-size:.64rem;color:var(--muted);white-space:nowrap}
+  .rouage{position:absolute;top:.35rem;right:.5rem;min-width:44px;min-height:44px;border-radius:50%;border:1px solid var(--line);background:var(--verre);color:var(--texte);cursor:pointer;font-size:1rem}
   .rouage:focus-visible,.btn:focus-visible,textarea:focus-visible{outline:2px solid var(--ciel);outline-offset:2px}
   .reglages{display:flex;gap:.6rem;align-items:center;font-size:.78rem;color:var(--muted)}
   .reglages[hidden]{display:none}
-  .heure{text-align:center;padding:.35rem 0 .1rem}
-  .heure time{font:700 clamp(2.4rem,14vw,3.6rem)/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+  .heure{display:flex;align-items:baseline;justify-content:center;gap:.7rem;flex-wrap:wrap;padding:.1rem 0}
+  .heure time{font:700 clamp(2rem,10vw,2.8rem)/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.02em;font-variant-numeric:tabular-nums}
   .heure .sec{font-size:.5em;color:var(--muted)}
-  .heure .tz{font-size:.74rem;color:var(--muted);margin-top:.15rem}
-  .heure .tz b{color:var(--ok);font-size:.62rem;margin-right:.3rem}
+  .heure .tz{font-size:.7rem;color:var(--muted)}
+  .heure .tz b{color:var(--ok);font-size:.6rem;margin-right:.3rem}
   svg{display:block;max-width:100%}
-  .soleil .arc{width:100%;height:auto;max-height:78px}
-  .soleil .legende{display:flex;justify-content:space-between;font-size:.78rem;font-variant-numeric:tabular-nums}
-  .soleil .centre{text-align:center;font-size:.74rem;color:var(--muted);margin-top:.1rem}
-  .lune{display:flex;gap:.8rem;align-items:center}
-  .lune svg{flex:0 0 auto;width:84px;height:84px}
+  .duo{display:flex;flex-direction:column;gap:.4rem}
+  .soleil .arc{width:100%;height:auto;max-height:64px}
+  .soleil .legende{display:flex;justify-content:space-between;gap:.3rem;font-size:.72rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .soleil .centre{text-align:center;font-size:.68rem;color:var(--muted);margin-top:.05rem}
+  .lune{display:flex;gap:.7rem;align-items:center}
+  .lune svg{flex:0 0 auto;width:60px;height:60px}
   .lune .txt{min-width:0;flex:1}
-  .lune .nom{font-size:1.02rem;font-weight:700}
-  .lune .ligne{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
-  .saint{display:flex;gap:.7rem;align-items:center}
-  .saint .croix{font-size:1.5rem;color:var(--accent);width:2rem;text-align:center}
-  .saint .etiquette{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
-  .saint .nom{font-weight:700}
-  .saint .desc{font-size:.76rem;color:var(--muted)}
-  .puces{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.4rem}
-  .puce{padding:.45rem .6rem}
-  .puce .t{font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
-  .puce .v{font-weight:700}
-  .puce .s{font-size:.72rem;color:var(--muted)}
+  .lune .nom{font-size:.95rem;font-weight:700}
+  .lune .ligne{font-size:.74rem;color:var(--muted);font-variant-numeric:tabular-nums}
+  .lune .ligne .bloc{white-space:nowrap}
+  .lune .ligne .bloc + .bloc::before{content:" · "}
+  .saint{display:flex;gap:.6rem;align-items:center}
+  .saint .croix{font-size:1.2rem;color:var(--accent);width:1.6rem;text-align:center}
+  .saint .etiquette{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .saint .nom{font-weight:700;font-size:.92rem}
+  .saint .desc{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .saint>div:last-child{min-width:0}
+  .puces{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem}
+  .puce{padding:.3rem .5rem;min-width:0}
+  .puce .t{font-size:.58rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+  .puce .v{font-weight:700;font-size:.9rem}
+  .puce .s{font-size:.66rem;color:var(--muted)}
   .obs h2{margin:0 0 .25rem;font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:.4rem}
   .obs h2 .btn{margin-left:auto}
   .obs .note{white-space:pre-wrap;word-break:break-word;font-size:.84rem}
@@ -81,9 +86,17 @@
   .btn.danger{color:var(--alerte)}
   .actions{display:flex;gap:.4rem;margin-top:.4rem;flex-wrap:wrap}
   .actions[hidden],.editeur[hidden]{display:none}
-  .etat-donnees{font-size:.68rem;color:var(--faint);text-align:center}
+  .etat-donnees{font-size:.66rem;color:var(--faint);text-align:center}
   .etat-donnees .point{color:var(--alerte)}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  /* dès 360 px de large : soleil et Lune côte à côte (la carte du Hall tient alors en 430 px de haut) */
+  @container (min-width:360px){
+    .duo{display:grid;grid-template-columns:1fr 1fr}
+    .lune{flex-direction:column;text-align:center;justify-content:center;gap:.25rem}
+    .lune .ligne .bloc{display:block}
+    .lune .ligne .bloc + .bloc::before{content:none}
+    .lune svg{width:54px;height:54px}
+  }
   /* niveaux : un seul composant, des blocs masqués */
   [data-niveau="compact"] .n-standard,[data-niveau="compact"] .n-etendu,
   [data-niveau="standard"] .n-etendu{display:none}
@@ -96,8 +109,7 @@
   <div class="bandeau">
     <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round">
       <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
-    <div class="date"><div class="jour" id="jour">—</div><div class="sous" id="sous">&nbsp;</div></div>
-    <div class="lieu" id="lieu"></div>
+    <div class="date"><div class="jour" id="jour">—</div><div class="sous" id="sous">&nbsp;</div><div class="lieu" id="lieu"></div></div>
     <button class="rouage" id="rouage" type="button" aria-label="Réglages de l'éphéméride" aria-expanded="false">⚙</button>
   </div>
   <div class="reglages verre" id="reglages" hidden>
@@ -105,6 +117,7 @@
   </div>
   <div class="heure"><time id="heure" aria-label="Heure locale">--:--</time>
     <div class="tz" id="tz"><b>●</b><span id="tz-t">&nbsp;</span></div></div>
+  <div class="duo">
   <div class="soleil verre" id="soleil">
     <svg class="arc" id="arc" viewBox="0 0 200 64" role="img" aria-label="Soleil">
       <path d="M10 54 Q100 -22 190 54" fill="none" stroke="var(--line)" stroke-width="2.2" stroke-dasharray="3 4"/>
@@ -121,6 +134,7 @@
     <div class="txt"><div class="nom" id="lune-nom">—</div><div class="ligne" id="lune-ill"></div>
       <div class="ligne" id="lune-lc"></div>
       <div class="ligne n-etendu" id="lune-age"></div><div class="ligne n-etendu" id="lune-next"></div></div>
+  </div>
   </div>
   <div class="saint verre" id="saint"><div class="croix" aria-hidden="true">✝</div>
     <div><div class="etiquette">Saint du jour</div><div class="nom" id="saint-nom">—</div><div class="desc" id="saint-desc"></div></div></div>
@@ -243,12 +257,13 @@
     $('sous').textContent = 'Semaine ' + c.semaine_iso + ' · Jour ' + c.jour_annee + ' · ' + maj1(c.saison);
     $('lieu').textContent = (D.lieu.nom || '') + (D.lieu.approximatif && D.lieu.nom ? ' (approx.)' : '');
     $('tz-t').textContent = D.fuseau.nom + ' · ' + D.fuseau.decalage;
-    $('lever').textContent = '☀ ' + hhmm(D.soleil.lever) + ' lever';
-    $('coucher').textContent = 'coucher ' + hhmm(D.soleil.coucher) + ' ☀';
+    $('lever').textContent = '☀ ' + hhmm(D.soleil.lever);
+    $('coucher').textContent = hhmm(D.soleil.coucher) + ' ☀';
     var l = D.lune;
     $('lune-nom').textContent = maj1(l.nom);
     $('lune-ill').textContent = Math.round(l.illumination) + ' % éclairée';
-    $('lune-lc').textContent = 'Lever ' + hhmm(l.lever) + ' · Coucher ' + hhmm(l.coucher);
+    var lc = $('lune-lc'); while (lc.firstChild) lc.removeChild(lc.firstChild);
+    [['Lever ', l.lever], ['Coucher ', l.coucher]].forEach(function(x, i){ var s = document.createElement('span'); s.className = 'bloc'; s.textContent = x[0] + hhmm(x[1]); lc.appendChild(s); });
     $('lune-age').textContent = 'Âge : ' + String(l.age_jours).replace('.', ',') + ' jours';
     $('lune-next').textContent = 'Prochaine phase : ' + l.prochaine_phase.nom + ' le ' + fmt({weekday:'short', day:'numeric', month:'long'}, new Date(l.prochaine_phase.quand));
     $('lune-svg').setAttribute('aria-label', 'Lune : ' + l.nom + ', ' + Math.round(l.illumination) + ' % éclairée');
