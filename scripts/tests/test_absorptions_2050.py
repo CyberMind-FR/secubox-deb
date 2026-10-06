@@ -8,7 +8,7 @@ PAQ = Path(__file__).resolve().parents[2] / "packages"
 # (absorbant, absorbé) — les fusions déjà faites par scripts/absorber-paquet.py (S1, S2 et N1 ont leurs propres tests)
 FUSIONS = [("matrix", "jabber"), ("dns-guard", "network-anomaly"), ("dns", "dns-provider"), ("threats", "ai-insights"),
            ("health", "health-doctor"), ("health", "watchdog"), ("webos", "sbxui"), ("appstore", "metacatalog"),
-           ("dns", "dns-lan"), ("qos", "traffic"), ("streamlit", "streamforge"), ("media", "smb"), ("media", "freeboxtv"), ("repo", "release"), ("jitsi", "turn"), ("mail", "smtp-relay"), ("metrics", "grafana"), ("metablogizer", "droplet"), ("metablogizer", "publish"), ("ytsas", "torrent"), ("mqtt", "zigbee"),
+           ("dns", "dns-lan"), ("qos", "traffic"), ("streamlit", "streamforge"), ("media", "smb"), ("media", "freeboxtv"), ("repo", "release"), ("jitsi", "turn"), ("mail", "smtp-relay"), ("dpi", "ndpid"), ("dpi", "mediaflow"), ("metrics", "grafana"), ("metablogizer", "droplet"), ("metablogizer", "publish"), ("ytsas", "torrent"), ("mqtt", "zigbee"),
            ("backup", "cloner"), ("metrics", "glances"), ("metrics", "reporter"), ("ai-gateway", "localrecall"),
            ("ai-gateway", "mcp-server")]
 
@@ -43,7 +43,7 @@ def test_les_absorbants_portent_le_composant_et_remplacent_l_ancien():
 def test_aucun_paquet_ne_depend_plus_de_l_absorbe():
     liens = ("Depends", "Pre-Depends", "Recommends", "Suggests", "Enhances")
     for a, o in FUSIONS:
-        motif = re.compile(rf"secubox-{re.escape(o)}\b")
+        motif = re.compile(rf"secubox-{re.escape(o)}(?![\w-])")
         for ctrl in PAQ.glob("*/debian/control"):
             nom = ctrl.parts[-3].removeprefix("secubox-")
             if nom == o or "/debian/secubox-" in str(ctrl):
@@ -60,12 +60,12 @@ def test_l_arbre_met_les_absorbes_hors_arbre():
     arbre = (PAQ / "secubox-meta/arbre.yaml").read_text()
     avant, _, apres = arbre.partition("# ═══ RACINES")
     for _, o in FUSIONS:
-        assert re.search(rf"secubox-{o}\b", avant), o
-        assert not re.search(rf"(?m)^\s+- secubox-{o}\b", apres), o
+        assert re.search(rf"secubox-{o}(?![\w-])", avant), o
+        assert not re.search(rf"(?m)^\s+- secubox-{o}(?![\w-])", apres), o
 
 
 # L'ancien prerm de ces paquets arrêtait l'unité à la mise à jour : le transitoire la remet en route (#2050).
-ARRETAIENT_A_LA_MISE_A_JOUR = ("grafana", "reporter", "smtp-relay", "traffic", "zigbee")
+ARRETAIENT_A_LA_MISE_A_JOUR = ("grafana", "reporter", "smtp-relay", "traffic", "zigbee", "ndpid", "mediaflow")
 
 
 def test_transitoires_remettent_l_unite_en_route():

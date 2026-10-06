@@ -188,7 +188,12 @@ def absorber(absorbant: str, ancien: str, sec: bool) -> None:
     # 2 bis. unités nommées debian/<paquet>.service : debhelper les installait tout seul, plus maintenant
     for u in sorted((C / "debian").glob("*")) if (C / "debian").is_dir() else []:
         if u.suffix in (".service", ".timer", ".path", ".socket") and not u.name.startswith(("postinst", "prerm", "postrm")):
-            ligne_regles.append(f"\tinstall -D -m 644 composants/{ancien}/debian/{u.name} debian/secubox-{absorbant}/usr/lib/systemd/system/{u.name}")
+            # debhelper : debian/<paquet>.<nom>.service est installé sous <nom>.service (le préfixe du paquet tombe)
+            dest = u.name
+            reste = u.name.removeprefix(f"secubox-{ancien}.")
+            if reste != u.name and reste not in ("service", "timer", "path", "socket"):
+                dest = reste
+            ligne_regles.append(f"\tinstall -D -m 644 composants/{ancien}/debian/{u.name} debian/secubox-{absorbant}/usr/lib/systemd/system/{dest}")
     # 3. rules de l'absorbant
     ra = (A / "debian/rules").read_text()
     m = re.search(r"(?ms)^override_dh_auto_install:\n(.*?)(?=^\S|\Z)", ra)
@@ -262,7 +267,7 @@ Description: transitional package, replaced by secubox-{absorbant}
     # 7. arbre : l'ancien passe hors-arbre
     arbre = P / "secubox-meta/arbre.yaml"
     t = arbre.read_text()
-    t = re.sub(rf"(?m)^  - secubox-{re.escape(ancien)}\b.*\n", "", t, count=0)
+    t = re.sub(rf"(?m)^  - secubox-{re.escape(ancien)}(?![\w-]).*\n", "", t, count=0)
     t = t.replace("  - secubox-eye-square        #", f"  - secubox-{ancien}  # transitoire → secubox-{absorbant} (#2050)\n  - secubox-eye-square        #", 1)
     arbre.write_text(t)
     # 8. autres paquets qui dépendaient de l'ancien (champs de dépendance SEULEMENT ; jamais Replaces/Breaks/Conflicts/Provides,
@@ -277,7 +282,7 @@ Description: transitional package, replaced by secubox-{absorbant}
         change = False
         # Un commentaire au milieu d'un champ de dépendance (secubox-profils) : la réécriture par champ s'y arrêterait et
         # casserait la liste (constaté, dpkg-gencontrol refusait le paquet). On ne touche pas, on le dit.
-        if re.search(rf"secubox-{re.escape(ancien)}\b", t) and re.search(
+        if re.search(rf"secubox-{re.escape(ancien)}(?![\w-])", t) and re.search(
                 r"(?ms)^(?:" + "|".join(liens) + r"):[^\n]*\n(?:[ \t][^\n]*\n|#[^\n]*\n)*?#", t):
             print(f"À FAIRE À LA MAIN (commentaire dans un champ de dépendance) : {nom} référence secubox-{ancien}")
             continue

@@ -368,9 +368,7 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-dpi,
          secubox-ndpid-engine
-Recommends: secubox-mediaflow
-Suggests: secubox-ndpid,
-         secubox-interceptor
+Suggests: secubox-interceptor
 Description: SecuBox — service « Inspection de flux »
  nDPId et sbxdpi : quelle application parle, sur quel flux.
  .

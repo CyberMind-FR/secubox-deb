@@ -27,3 +27,13 @@ SUDOERS
     ;;
 esac
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/dpi/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "dpi : postinst de $(basename "$_s") en échec" >&2; }
+done
+
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/dpi/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "dpi : postinst de $(basename "$_s") en échec" >&2; }
+done
+exit 0

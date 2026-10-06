@@ -1,3 +1,9 @@
+secubox-isp (1.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-mediaflow retire, secubox-dpi (>= 1.7.0) l'absorbe (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 02:30:00 +0200
+
 secubox-isp (1.2.5-1~bookworm1) bookworm; urgency=medium
 
   * secubox-publish remplace par metablogizer (>= 1.10.0), qui l'absorbe (#2050).

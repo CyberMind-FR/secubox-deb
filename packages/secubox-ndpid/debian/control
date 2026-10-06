@@ -1,29 +1,15 @@
 Source: secubox-ndpid
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-ndpid
 Architecture: all
-# DEPENDANCE INSATISFIABLE, PASSEE EN Recommends (#1294).
-# ndpid et ndpi-reader ne sont dans AUCUNE Debian, et aucun paquet SecuBox
-# ne les fournit : secubox-dpi-engine est construit HORS CI et n'existe
-# meme pas dans ce depot.
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-zmq
-# secubox-ndpid-engine FOURNIT `ndpid` (Provides). Il est desormais un vrai
-# paquet construit par la CI (#1294) : la dependance redevient satisfiable
-# depuis notre propre depot. Elle reste en Recommends et non en Depends —
-# le tableau de bord doit pouvoir s'installer et se degrader si le moteur
-# n'est pas la, plutot que de faire echouer toute la transaction apt.
-Recommends: secubox-dpi, secubox-ndpid-engine | ndpid | ndpi-reader
-Description: SecuBox nDPId — DPI dashboard with JA3/JA4 TLS fingerprinting
- nDPId-backed deep packet inspection dashboard: JA3/JA3S/JA4 TLS
- fingerprinting, protocol detection, application classification,
- risk scoring, and SQLite flow database.
- .
- Distinct from sibling packages in the DPI cluster:
-  - secubox-dpi — DPI-backed analytics layer (top apps,
-    bandwidth, mirred setup) — see #382 for the layered model.
-  - secubox-mediaflow — streaming/VoIP classifier consuming DPI.
+Depends: ${misc:Depends}, secubox-dpi (>= 1.6.0)
+Description: transitional package, replaced by secubox-dpi
+ ndpid is now a component of secubox-dpi. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

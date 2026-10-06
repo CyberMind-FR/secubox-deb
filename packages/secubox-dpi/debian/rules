@@ -52,6 +52,45 @@ override_dh_auto_install:
 	install -d debian/secubox-dpi/usr/lib/systemd/system
 	install -m 0644 systemd/secubox-dpi-flowcap.service \
 	  debian/secubox-dpi/usr/lib/systemd/system/secubox-dpi-flowcap.service
+	# Composant absorbé : ndpid (#2050)
+	install -d debian/secubox-dpi/usr/lib/secubox/ndpid
+	cp -r composants/ndpid/api debian/secubox-dpi/usr/lib/secubox/ndpid/
+	install -d debian/secubox-dpi/usr/share/secubox/www/ndpid
+	cp -r composants/ndpid/www/ndpid/. debian/secubox-dpi/usr/share/secubox/www/ndpid/
+	install -d debian/secubox-dpi/usr/share/secubox/menu.d
+	[ -d composants/ndpid/menu.d ] && cp -r composants/ndpid/menu.d/. debian/secubox-dpi/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-dpi/etc/secubox
+	[ -f composants/ndpid/config/ndpid.toml ] && install -m 644 composants/ndpid/config/ndpid.toml debian/secubox-dpi/etc/secubox/ || true
+	install -d debian/secubox-dpi/usr/bin
+	[ -f composants/ndpid/scripts/ndpidctl ] && install -m 755 composants/ndpid/scripts/ndpidctl debian/secubox-dpi/usr/bin/ || true
+	install -d debian/secubox-dpi/etc/nginx/secubox.d
+	[ -f composants/ndpid/nginx/ndpid.conf ] && install -m 644 composants/ndpid/nginx/ndpid.conf debian/secubox-dpi/etc/nginx/secubox.d/ || true
+	install -D -m 755 composants/ndpid/debian/postinst debian/secubox-dpi/usr/lib/secubox/dpi/maintscripts/ndpid.postinst
+	install -D -m 755 composants/ndpid/debian/prerm debian/secubox-dpi/usr/lib/secubox/dpi/maintscripts/ndpid.prerm
+	install -D -m 644 composants/ndpid/debian/secubox-ndpid.service debian/secubox-dpi/usr/lib/systemd/system/secubox-ndpid.service
+	# Composant absorbé : mediaflow (#2050)
+	install -d debian/secubox-dpi/usr/lib/secubox/mediaflow/
+	cp -r composants/mediaflow/api debian/secubox-dpi/usr/lib/secubox/mediaflow/
+	install -d debian/secubox-dpi/usr/share/secubox/www
+	[ -d composants/mediaflow/www ] && cp -r composants/mediaflow/www/. debian/secubox-dpi/usr/share/secubox/www/ || true
+	install -d debian/secubox-dpi/usr/share/secubox/menu.d
+	[ -d composants/mediaflow/menu.d ] && cp -r composants/mediaflow/menu.d/. debian/secubox-dpi/usr/share/secubox/menu.d/ || true
+	# Modular composants/mediaflow/nginx composants/mediaflow/config
+	install -d debian/secubox-dpi/etc/nginx/secubox.d
+	[ -f composants/mediaflow/nginx/mediaflow.conf ] && cp composants/mediaflow/nginx/mediaflow.conf debian/secubox-dpi/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-dpi/etc/nginx/secubox-routes.d
+	[ -f composants/mediaflow/nginx/mediaflow.conf ] && cp composants/mediaflow/nginx/mediaflow.conf debian/secubox-dpi/etc/nginx/secubox-routes.d/ || true
+	# R4 cloner helper (#736): keep yt-dlp current for Discovered Media
+	install -d debian/secubox-dpi/usr/sbin
+	install -m 0755 composants/mediaflow/sbin/secubox-yt-dlp-refresh debian/secubox-dpi/usr/sbin/
+	install -D -m 755 composants/mediaflow/debian/postinst debian/secubox-dpi/usr/lib/secubox/dpi/maintscripts/mediaflow.postinst
+	install -D -m 755 composants/mediaflow/debian/prerm debian/secubox-dpi/usr/lib/secubox/dpi/maintscripts/mediaflow.prerm
+	install -D -m 644 composants/mediaflow/debian/secubox-mediaflow.secubox-yt-dlp-refresh.service debian/secubox-dpi/usr/lib/systemd/system/secubox-yt-dlp-refresh.service
+	install -D -m 644 composants/mediaflow/debian/secubox-mediaflow.secubox-yt-dlp-refresh.timer debian/secubox-dpi/usr/lib/systemd/system/secubox-yt-dlp-refresh.timer
+	install -D -m 644 composants/mediaflow/debian/secubox-mediaflow.service debian/secubox-dpi/usr/lib/systemd/system/secubox-mediaflow.service
 
 override_dh_auto_clean:
 	rm -f collector/secubox-dpi-collector

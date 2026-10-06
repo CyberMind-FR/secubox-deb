@@ -1,3 +1,9 @@
+secubox-full (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-ndpid remplace par secubox-dpi (>= 1.7.0), qui l'absorbe (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 02:30:00 +0200
+
 secubox-full (1.4.6-1~bookworm1) bookworm; urgency=medium
 
   * Retire secubox-publish et secubox-droplet (absorbes par metablogizer, #2050).

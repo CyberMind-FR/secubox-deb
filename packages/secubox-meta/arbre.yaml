@@ -80,6 +80,8 @@ hors-arbre:
   - secubox-droplet  # transitoire → secubox-metablogizer (#2050)
   - secubox-publish  # transitoire → secubox-metablogizer (#2050)
   - secubox-grafana  # transitoire → secubox-metrics (#2050)
+  - secubox-ndpid  # transitoire → secubox-dpi (#2050)
+  - secubox-mediaflow  # transitoire → secubox-dpi (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -408,9 +410,7 @@ requiert:
   - secubox-dpi
   - secubox-ndpid-engine
 recommande:
-  - secubox-mediaflow
 suggere:
-  - secubox-ndpid
   - secubox-interceptor
 
 meta: secubox-service-detection
