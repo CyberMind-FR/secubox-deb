@@ -33,6 +33,7 @@ import asyncio
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core import qdisc
 from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Traffic Shaper API", version="2.0.0")
@@ -301,9 +302,16 @@ def get_shaped_interfaces() -> list:
     return list(interfaces)
 
 
+def _a_nous(iface: str) -> bool:
+    """Interface libre ou déjà à traffic ; False si qos la pilote (#2050)."""
+    return qdisc.owner(iface) in (None, "traffic")
+
+
 def apply_tc_config(config: dict):
     for iface in get_shaped_interfaces():
-        run_cmd(["tc", "qdisc", "del", "dev", iface, "root"])
+        if _a_nous(iface):
+            run_cmd(["tc", "qdisc", "del", "dev", iface, "root"])
+            qdisc.release(iface, "traffic")
 
     interfaces = set()
     for cls in config.get("classes", []):
@@ -311,6 +319,8 @@ def apply_tc_config(config: dict):
             interfaces.add(cls.get("interface", "wan"))
 
     for iface in interfaces:
+        if not qdisc.claim(iface, "traffic"):
+            continue
         success, _, _ = run_cmd([
             "tc", "qdisc", "add", "dev", iface, "root",
             "cake", "bandwidth", "100mbit", "diffserv4"
@@ -633,7 +643,9 @@ async def apply_config():
 @app.post("/clear", dependencies=[Depends(require_jwt)])
 async def clear_shaping():
     for iface in get_shaped_interfaces():
-        run_cmd(["tc", "qdisc", "del", "dev", iface, "root"])
+        if _a_nous(iface):
+            run_cmd(["tc", "qdisc", "del", "dev", iface, "root"])
+            qdisc.release(iface, "traffic")
     stats_cache.invalidate()
 
     add_event("shaping_cleared", {})

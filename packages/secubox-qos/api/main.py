@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from secubox_core.auth   import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core import qdisc
 import subprocess, json, re
 from pathlib import Path
 from typing import Optional
@@ -221,6 +222,12 @@ def _apply_htb(conf: dict, iface: str = None) -> dict:
         up_kbps = int(conf.get("upload_mbps", 100)) * 1000
         down_kbps = int(conf.get("download_mbps", 200)) * 1000
         prio_offset = 0
+
+    # Un seul propriétaire du qdisc racine par interface (#2050) : traffic (CAKE)
+    # pose le sien sur les mêmes interfaces ; le second défaisait le premier.
+    if not qdisc.claim(iface, "qos"):
+        return {"steps": [], "interface": iface, "skipped": True,
+                "error": f"interface {iface} pilotée par {qdisc.owner(iface)}"}
 
     cmds = [
         # Reset

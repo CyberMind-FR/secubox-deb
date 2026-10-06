@@ -1,3 +1,10 @@
+secubox-core (1.5.57-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.qdisc : un seul proprietaire du qdisc racine par interface
+    (#2050, vague 0), utilise par qos et traffic.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 09:40:00 +0200
+
 secubox-core (1.5.56-1~bookworm1) bookworm; urgency=medium
 
   * Les commentaires du champ Depends sont a la colonne 0 : indentes, dpkg-gencontrol les lisait comme des dependances et le paquet ne se construisait plus (Debian 13) (ref #1997).
