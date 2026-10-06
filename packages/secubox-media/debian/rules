@@ -54,10 +54,3 @@ override_dh_auto_install:
 	cp composants/freeboxtv/systemd/secubox-freeboxtv.service \
 	  debian/secubox-media/usr/lib/systemd/system/
 	install -D -m 755 composants/freeboxtv/debian/postinst debian/secubox-media/usr/lib/secubox/media/maintscripts/freeboxtv.postinst
-
-
-override_dh_installsystemd:
-	# Unités propres au média (debian/secubox-media*.service) puis celle du composant freeboxtv (#2050),
-	# qui ne doit pas être arrêtée pendant une mise à jour.
-	dh_installsystemd
-	dh_installsystemd --name=secubox-freeboxtv --no-stop-on-upgrade

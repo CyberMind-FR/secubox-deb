@@ -7,10 +7,24 @@ Standards-Version: 4.6.2
 
 Package: secubox-mail
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.41~), lxc, debootstrap, openssl, python3-httpx
-Breaks: secubox-mail-lxc (<< 2.2), secubox-webmail (<< 2.2), secubox-webmail-lxc (<< 2.2)
-Replaces: secubox-mail-lxc (<< 2.2), secubox-webmail (<< 2.2), secubox-webmail-lxc (<< 2.2)
+Depends: ${misc:Depends},
+ secubox-core (>= 1.5.41~),
+ lxc,
+ debootstrap,
+ openssl,
+ python3-httpx,
+ postfix | msmtp
+Breaks: secubox-mail-lxc (<< 2.2),
+ secubox-webmail (<< 2.2),
+ secubox-webmail-lxc (<< 2.2),
+ secubox-smtp-relay (<< 1.1.2~)
+Replaces: secubox-mail-lxc (<< 2.2),
+ secubox-webmail (<< 2.2),
+ secubox-webmail-lxc (<< 2.2),
+ secubox-smtp-relay (<< 1.1.2~)
 Suggests: acme.sh
+Recommends: libsasl2-modules,
+ ca-certificates
 Description: SecuBox Mail Module
  Complete email server management API and dashboard.
  Postfix/Dovecot mail server and Roundcube webmail in Debian LXC containers.

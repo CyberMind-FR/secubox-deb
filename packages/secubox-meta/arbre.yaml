@@ -76,6 +76,7 @@ hors-arbre:
   - secubox-freeboxtv  # transitoire → secubox-media (#2050)
   - secubox-turn  # transitoire → secubox-jitsi (#2050)
   - secubox-release  # transitoire → secubox-repo (#2050)
+  - secubox-smtp-relay  # transitoire → secubox-mail (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -469,7 +470,6 @@ description: "Serveur de courrier complet (conteneur mail, webmail) ; absorbe ma
 requiert:
   - secubox-mail
 recommande:
-  - secubox-smtp-relay
 suggere:
   - secubox-clamav          # antivirus dans un LXC dédié éveillé à la demande (#1912) ; ~600 Mo + base, jamais sans le demander
 

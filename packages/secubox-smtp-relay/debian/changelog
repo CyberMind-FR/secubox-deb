@@ -1,3 +1,9 @@
+secubox-smtp-relay (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : smtp-relay est un composant de secubox-mail >= 2.13.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-smtp-relay (1.1.1-1~bookworm2) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

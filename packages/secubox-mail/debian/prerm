@@ -8,4 +8,8 @@ if [ "$1" = "remove" ]; then
     systemctl reload nginx 2>/dev/null || true
 fi
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/mail/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "mail : prerm de $(basename "$_s") en échec" >&2; }
+done
 exit 0

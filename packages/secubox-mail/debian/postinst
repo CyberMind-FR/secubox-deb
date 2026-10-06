@@ -129,4 +129,8 @@ if [ "$1" = "configure" ]; then
 fi
 
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/mail/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "mail : postinst de $(basename "$_s") en échec" >&2; }
+done
 exit 0
