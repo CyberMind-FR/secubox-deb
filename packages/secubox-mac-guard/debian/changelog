@@ -1,3 +1,10 @@
+secubox-mac-guard (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * Retire ses conffiles nginx obsoletes (rm_conffile) : dpkg ne les supprime pas a la mise a jour, et
+    l'ancienne conf doublait les location de nac-legacy.conf (nginx -t en echec, constate sur gk3) (#2050, S1).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 12:00:00 +0200
+
 secubox-mac-guard (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * Paquet transitoire : le role est tenu par secubox-nac >= 3.2.0 (#2050, S1). Plus d'API,
