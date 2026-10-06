@@ -1,3 +1,9 @@
+secubox-reporter (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * Transitoire : remet en route l'unite secubox-reporter apres la mise a jour (l'ancien prerm l'arretait), #2050.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 01:30:00 +0200
+
 secubox-reporter (1.2.4-1~bookworm1) bookworm; urgency=medium
 
   * Paquet transitoire : reporter est un composant de secubox-metrics >= 1.14.0 (#2050).
