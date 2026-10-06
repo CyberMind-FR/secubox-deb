@@ -7,5 +7,4 @@ case "$1" in
     [ -d /etc/secubox ] && chmod 0755 /etc/secubox 2>/dev/null || true
     ;;
 esac
-#DEBHELPER#
 exit 0

@@ -1,21 +1,15 @@
 Source: secubox-turn
-Section: net
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-turn
 Architecture: all
-Depends: ${misc:Depends},
-         secubox-core,
-         coturn
-Description: SecuBox TURN/STUN Server Management
- TURN/STUN server management interface for SecuBox WebRTC.
- Features:
-  - coturn service control (start/stop/restart)
-  - User management with turnadmin integration
-  - Temporary credential generation (HMAC)
-  - Active session monitoring
-  - Configuration editor
-  - Three-fold architecture (Components/Status/Access)
+Depends: ${misc:Depends}, secubox-jitsi (>= 2.2.0)
+Description: transitional package, replaced by secubox-jitsi
+ turn is now a component of secubox-jitsi. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

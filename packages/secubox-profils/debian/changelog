@@ -1,3 +1,9 @@
+secubox-profils (1.0.27-1~bookworm1) bookworm; urgency=medium
+
+  * Retire secubox-turn du profil (absorbe par secubox-jitsi, deja liste ; #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 22:30:00 +0200
+
 secubox-profils (1.0.26-1~bookworm1) bookworm; urgency=medium
 
   * Retire secubox-torrent du profil (absorbe par secubox-ytsas, deja liste ; #2050).

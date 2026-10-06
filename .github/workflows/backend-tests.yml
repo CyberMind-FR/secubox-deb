@@ -40,7 +40,6 @@ on:
       - 'packages/secubox-radio/**'
       - 'packages/secubox-haproxy/sbin/haproxyctl'
       - 'packages/secubox-haproxy/tests/test_frontal_1841.py'
-      - 'packages/secubox-defaults/**'
       - 'packages/secubox-vault/**'
       - 'packages/secubox-auth/**'
       - 'packages/secubox-openpgp/**'
@@ -50,11 +49,11 @@ on:
       - 'packages/secubox-certs/**'
       - 'packages/secubox-publish/**'
       - 'packages/secubox-streamlit/**'
-      - 'packages/secubox-metacatalog/**'
+      - 'packages/secubox-appstore/**'
       - 'packages/secubox-health/**'
       - 'packages/secubox-c3box/**'
       - 'packages/secubox-hub/**'
-      - 'packages/secubox-zigbee/**'
+      - 'packages/secubox-mqtt/**'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
       # LXC uniquement (#1743) : toute relation de paquet est relue.
@@ -124,7 +123,7 @@ jobs:
           # Catalogue écrit par la minuterie, un seul systemctl (#1835) : la
           # boucle de 60 s lançait ~290 systemctl en cinq minutes sur gk2.
           - suite: secubox-metacatalog
-            chemin: packages/secubox-metacatalog/tests
+            chemin: packages/secubox-appstore/composants/metacatalog/tests
           # Un seul systemctl par passage du prober (#1835) : ~310 en cinq minutes.
           - suite: secubox-health
             chemin: packages/secubox-health/tests
@@ -137,14 +136,11 @@ jobs:
             chemin: packages/secubox-hub/tests
           # zigbee : relevé partagé, plus de mosquitto par lecteur (#1835).
           - suite: secubox-zigbee
-            chemin: packages/secubox-zigbee/tests
+            chemin: packages/secubox-mqtt/composants/zigbee/tests
           # haproxyctl frontal : la box derrière HAProxy + sbxwaf (#1841). Ce fichier
           # seul : les tests de generate veulent créer /run/haproxy (root).
           - suite: secubox-haproxy-frontal
             chemin: packages/secubox-haproxy/tests/test_frontal_1841.py
-          # Box neuve derrière HAProxy dès le premier démarrage (#1845).
-          - suite: secubox-defaults
-            chemin: packages/secubox-defaults/tests
           # Le Coffre P1 (#1367) : MK, serrures, compartiments, journal chaîné, API.
           - suite: secubox-vault
             chemin: packages/secubox-vault/tests

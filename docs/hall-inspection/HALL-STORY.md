@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # HALL-STORY — présenter SecuBox à quelqu'un qui ne connaît pas le produit
 
 Parcours idéal en **8 minutes**, en visiteur invité, sur https://hall.gk2.secubox.in/. Chaque étape ne s'appuie que sur ce que Chromium a réellement affiché et fait fonctionner (voir HALL-SCREENS.md pour les captures). Les écrans cassés sont **évités** ; ils sont listés à la fin.

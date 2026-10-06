@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # HALL-SCREENS — description écran par écran
 
 Parcours d'un **visiteur invité** sur https://hall.gk2.secubox.in/, le 2026-10-02, par **Chromium headless 145** (Playwright), JavaScript exécuté. Chaque description vient de ce que le navigateur a chargé et affiché ; rien n'est tiré du code source ni de la documentation.

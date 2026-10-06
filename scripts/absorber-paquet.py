@@ -68,6 +68,22 @@ def ecrire_champ(control: str, nom: str, valeurs: list[str]) -> str:
     return control.replace("\nDescription:", f"\n{texte}Description:", 1) if texte else control
 
 
+def install_vers_regles(texte: str, ancien: str) -> str:
+    """Un paquet qui installe par `debian/<paquet>.install` (dh_install) : on le traduit en lignes `install`/`cp`
+    de `override_dh_auto_install`, que traduire_rules réécrit ensuite comme les autres."""
+    sortie = ["\noverride_dh_auto_install:"]
+    for ligne in texte.splitlines():
+        ligne = ligne.strip()
+        if not ligne or ligne.startswith("#"):
+            continue
+        *sources, dest = ligne.split()
+        d = f"debian/secubox-{ancien}/{dest.strip('/')}"
+        sortie.append(f"\tinstall -d {d}")
+        for src in sources:
+            sortie.append(f"\tcp -r {src} {d}/")
+    return "\n".join(sortie) + "\n"
+
+
 def traduire_rules(rules: str, ancien: str, absorbant: str, tops: set[str] | None = None) -> list[str]:
     """Les lignes de `override_dh_auto_install` de l'ancien, réécrites pour l'absorbant."""
     cibles = re.findall(r"(?m)^([A-Za-z_%][^\s:]*):", rules)
@@ -101,6 +117,9 @@ def absorber(absorbant: str, ancien: str, sec: bool) -> None:
     if C.exists():
         raise SystemExit(f"{C} existe déjà")
     regles_o = (O / "debian/rules").read_text()
+    liste = O / "debian" / f"secubox-{ancien}.install"
+    if "override_dh_auto_install" not in regles_o and liste.exists():
+        regles_o += install_vers_regles(liste.read_text(), ancien)
     ligne_regles = traduire_rules(regles_o, ancien, absorbant, {x.name for x in O.iterdir() if x.name != "debian"})
     ctrl_a, ctrl_o = (A / "debian/control").read_text(), (O / "debian/control").read_text()
     ver_a = re.match(r"\S+ \((\d+)\.(\d+)\.(\d+)-", (A / "debian/changelog").read_text()).groups()

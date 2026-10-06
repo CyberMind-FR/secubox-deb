@@ -1,3 +1,10 @@
+secubox-jitsi (2.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-turn (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/turn/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-jitsi (2.1.8-1~bookworm1) bookworm; urgency=high
 
   * API native LXC restaurée (bc5546109, effacé par la fusion aff481735 ;

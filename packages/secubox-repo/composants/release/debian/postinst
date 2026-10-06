@@ -20,7 +20,6 @@ if [ -d /etc/secubox/secrets ]; then
     chmod o+x /etc/secubox/secrets 2>/dev/null || true
 fi
 
-#DEBHELPER#
 
 systemctl daemon-reload 2>/dev/null || true
 systemctl enable --now secubox-release-api.service 2>/dev/null || true

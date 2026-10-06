@@ -476,8 +476,7 @@ Description: SecuBox — service « Fédivers »
 Package: secubox-service-visio
 Architecture: all
 Depends: ${misc:Depends}
-Recommends: secubox-jitsi,
-         secubox-turn
+Recommends: secubox-jitsi
 Description: SecuBox — service « Visio et téléphonie »
  Jitsi, TURN/STUN, PBX.
  .
@@ -531,7 +530,6 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-peertube
 Recommends: secubox-jellyfin,
-         secubox-freeboxtv,
          secubox-ytsas
 Suggests: secubox-media
 Description: SecuBox — service « Vidéo »
@@ -609,8 +607,7 @@ Package: secubox-service-provision
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-netboot
-Suggests: secubox-release,
-         secubox-vm
+Suggests: secubox-vm
 Description: SecuBox — service « Provision »
  Clonage, amorçage réseau, déploiement, anneaux de release, VM.
  .

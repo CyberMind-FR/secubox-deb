@@ -173,7 +173,7 @@ def test_no_mount_invocation_hardcodes_write_access(tmp_path):
 def test_device_label_is_sanitised_before_composing_a_path(tmp_path):
     """L'etiquette vient du support, donc d'une source non maitrisee."""
     src = CTL.read_text()
-    i = src.index("cmd_mount")
+    i = src.index("cmd_mount()")
     assert "tr -c 'A-Za-z0-9._-' '_'" in src[i:i + 1500]
 
 

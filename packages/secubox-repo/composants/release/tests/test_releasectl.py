@@ -6,7 +6,7 @@ import json, os, subprocess, sys
 from pathlib import Path
 
 CTL = str(Path(__file__).resolve().parent.parent / "sbin" / "secubox-releasectl")
-ANN = str(Path(__file__).resolve().parents[2] / "secubox-annuaire")
+ANN = str(Path(__file__).resolve().parents[4] / "secubox-annuaire")
 REL = str(Path(__file__).resolve().parent.parent)
 
 

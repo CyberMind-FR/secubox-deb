@@ -61,7 +61,7 @@ Depends: ${misc:Depends},
  secubox-photoprism,
  secubox-picobrew,
  secubox-reality,
- secubox-reporter,
+ secubox-metrics (>= 1.14.0),
  secubox-saas-relay,
  secubox-sentinelle-gsm,
  secubox-soc,
@@ -70,7 +70,6 @@ Depends: ${misc:Depends},
  secubox-threatmesh,
  secubox-threats,
  secubox-toolbox,
- secubox-turn,
  secubox-yacy
 Recommends: wireguard-tools
 Description: SecuBox Full — socle ISP + applications working (catalogue all.gk2)
