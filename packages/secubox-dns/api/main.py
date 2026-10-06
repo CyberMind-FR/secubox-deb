@@ -319,39 +319,9 @@ async def get_records(zone_name: str):
 
 
 # Protected endpoints
-@app.post("/zone", dependencies=[Depends(require_jwt)])
-async def add_zone(data: ZoneCreate):
-    """Create a new DNS zone"""
-    code, out, err = run_cmd(["zone-add", data.name])
-    return {"success": code == 0, "code": code, "output": out or err}
-
-
-@app.delete("/zone/{zone_name}", dependencies=[Depends(require_jwt)])
-async def delete_zone(zone_name: str):
-    """Delete a DNS zone"""
-    code, out, err = run_cmd(["zone-del", zone_name])
-    return {"success": code == 0, "code": code, "output": out or err}
-
-
-@app.post("/record", dependencies=[Depends(require_jwt)])
-async def add_record(data: RecordCreate):
-    """Add a DNS record"""
-    args = ["record-add", data.zone, data.type, data.name, data.value]
-    if data.ttl:
-        args.append(str(data.ttl))
-    code, out, err = run_cmd(args)
-    return {"success": code == 0, "code": code, "output": out or err}
-
-
-@app.delete("/record", dependencies=[Depends(require_jwt)])
-async def delete_record(data: RecordDelete):
-    """Delete a DNS record"""
-    args = ["record-del", data.zone, data.type, data.name]
-    if data.value:
-        args.append(data.value)
-    code, out, err = run_cmd(args)
-    return {"success": code == 0, "code": code, "output": out or err}
-
+# Les routes de zone et d'enregistrement (POST/DELETE /zone, POST/DELETE /record) sont définies plus bas, dans les sections
+# « Enhanced » (journal des changements et webhooks). Elles étaient AUSSI déclarées ici en version basique : FastAPI applique
+# la première déclaration, donc la version améliorée était du code mort (#2050).
 
 @app.post("/reload", dependencies=[Depends(require_jwt)])
 async def reload_bind():

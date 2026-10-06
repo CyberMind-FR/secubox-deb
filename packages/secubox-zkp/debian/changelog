@@ -1,3 +1,9 @@
+secubox-zkp (1.2.4-1~bookworm1) bookworm; urgency=low
+
+  * Recommends: zkp-hamiltonian-tools : l'API appelle zkp_keygen, zkp_prover et zkp_verifier sans que le paquet qui les fournit soit recommandé (dégradation propre conservée, donc Recommends et non Depends). (ref #2050)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 07 Oct 2026 08:10:00 +0200
+
 secubox-zkp (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * Entrée de menu installée dans /usr/share/secubox/menu.d, le répertoire que lit le hub (#1888).
