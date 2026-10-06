@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox VoiceStudio — démarre le LXC au boot en mode « permanent » [#2021]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2021
+# Les conteneurs vivent sur le grand volume ; le réseau du pont br-lxc doit exister avant le démarrage.
+After=data-lxc.mount network-online.target secubox-voicestudio-provision.service
+Wants=network-online.target
+# Rien à démarrer tant que le LXC n'a pas été installé (le provisionnement écrit ce marqueur à la fin).
+ConditionPathExists=/var/lib/secubox/voicestudio/.lxc-provisioned
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# lxc.service est masqué sur certaines box (gk3) : l'autostart LXC n'y joue pas, et seul le mandataire du
+# port 3900 réveillait le conteneur, pas l'interface du Hall (502 après chaque redémarrage). `boot` est
+# un no-op en mode « demande » : le LXC y dort jusqu'au premier appel.
+ExecStart=/usr/sbin/voicestudioctl boot
+TimeoutStartSec=600
+# Root (lxc-start) : même confinement mesuré que le provisionnement (RestrictSUIDSGID exclu, § 10).
+ProtectHome=true
+PrivateTmp=true
+LockPersonality=true
+ProtectKernelModules=true
+
+[Install]
+WantedBy=multi-user.target

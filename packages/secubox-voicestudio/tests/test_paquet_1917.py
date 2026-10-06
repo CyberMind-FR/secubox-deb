@@ -396,3 +396,15 @@ def test_le_serveur_de_la_voix_rapide_exige_la_cle_et_borne_l_entree(monkeypatch
         assert post({"input": "a", "response_format": "exe"})[0] == 422
     finally:
         srv.shutdown()
+
+
+def test_unite_de_demarrage_du_lxc_est_livree_et_activee_2021():
+    # #2021 : sans elle, un LXC arrêté au boot (lxc.service masqué sur gk3) donne un 502 à l'interface.
+    unite = (PKG / "systemd" / "secubox-voicestudio-demarrage.service").read_text()
+    assert "ExecStart=/usr/sbin/voicestudioctl boot" in unite
+    assert "Type=oneshot" in unite and "RemainAfterExit=yes" in unite
+    assert "data-lxc.mount" in unite                       # les conteneurs vivent sur ce volume
+    assert "ConditionPathExists=/var/lib/secubox/voicestudio/.lxc-provisioned" in unite
+    assert "secubox-voicestudio-demarrage.service" in (PKG / "debian" / "rules").read_text()
+    assert "enable secubox-voicestudio-demarrage.service" in (PKG / "debian" / "postinst").read_text()
+    assert "secubox-voicestudio-demarrage.service" in (PKG / "debian" / "prerm").read_text()

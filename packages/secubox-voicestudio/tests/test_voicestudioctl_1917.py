@@ -1686,3 +1686,30 @@ def test_le_studio_natif_est_reserve_au_reseau_local(bac_a_sable):
     assert "set $sbx_vs_lan $lan_client;" in v and "if ($sbx_vs_lan != 1)" in v and "return 403" in v
     assert v.index("if ($sbx_vs_lan != 1)") < v.index("auth_request /__sbx_voicestudio_garde;")     # avant la garde
     assert "$http_x_forwarded_for" not in v                           # jamais un en-tête du client
+
+
+# ── #2021 : le LXC démarre tout seul au boot en mode « permanent » ───────────────────────────────
+# Constaté sur gk3 après la migration trixie : lxc.service y est masqué (autostart LXC inopérant) et
+# seul le mandataire du port 3900 réveillait le conteneur, pas l'interface du Hall : 502 jusqu'au
+# premier appel sur le port. En « permanent », le module doit se démarrer lui-même.
+
+def test_boot_permanent_reveille_le_lxc(bac_a_sable, monkeypatch):
+    appels = []
+    monkeypatch.setattr(c, "reveiller", lambda cfg, run=None, **k: appels.append("reveil") or True)
+    assert c.cmd_boot(run=LxcFaux("STOPPED")) == 0
+    assert appels == ["reveil"]
+
+
+def test_boot_demande_laisse_dormir_le_lxc(bac_a_sable, monkeypatch):
+    cfg = c.charger()
+    cfg["lxc"]["mode"] = "demande"
+    monkeypatch.setattr(c, "charger", lambda: cfg)
+    appels = []
+    monkeypatch.setattr(c, "reveiller", lambda *a, **k: appels.append("reveil") or True)
+    assert c.cmd_boot(run=LxcFaux("STOPPED")) == 0
+    assert appels == []            # le mode « demande » garde son sommeil : réveil au premier appel seulement
+
+
+def test_boot_echec_du_reveil_se_voit_dans_le_code_retour(bac_a_sable, monkeypatch):
+    monkeypatch.setattr(c, "reveiller", lambda *a, **k: False)
+    assert c.cmd_boot(run=LxcFaux("STOPPED")) == 1
