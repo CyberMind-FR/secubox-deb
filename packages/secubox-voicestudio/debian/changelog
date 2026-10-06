@@ -1,3 +1,9 @@
+secubox-voicestudio (0.5.8-1~bookworm1) bookworm; urgency=medium
+
+  * `appliquer` écrit les limites (mémoire, swap, poids CPU) dans le cgroup du conteneur en marche : `restart` ne relançait que le service du moteur, donc une limite modifiée n'était prise en compte qu'au prochain démarrage du conteneur (ref #2045).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-voicestudio (0.5.7-1~bookworm1) bookworm; urgency=medium
 
   * Plafond de swap du conteneur du moteur (lxc.cgroup2.memory.swap.max, [lxc] swap, défaut 1G) : sur gk3 le moteur tenait 3,3 Go en swap, des chargements de modèle dépassaient 1200 s et génération comme transcription expiraient. Il est maintenant tué et redémarré vite au lieu de s'enliser (ref #2045).

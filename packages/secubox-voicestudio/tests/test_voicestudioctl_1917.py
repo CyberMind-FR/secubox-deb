@@ -1734,3 +1734,38 @@ def test_le_plafond_de_swap_est_reglable():
 def test_le_toml_du_paquet_documente_le_swap():
     toml = (PKG / "conf" / "voicestudio.toml").read_text()
     assert re.search(r'(?m)^swap\s*=\s*"1G"', toml)
+
+
+# ── #2045 : les limites cgroup s'appliquent AU CONTENEUR EN MARCHE, sans le recréer ────────────────────
+# `voicestudioctl restart` ne relance que le service du moteur : une limite modifiée dans le TOML (swap, mémoire)
+# n'était prise en compte qu'au prochain démarrage du conteneur. `appliquer` les écrit maintenant dans le cgroup.
+
+def _cgroup(tmp_path, monkeypatch, memory="max", swap="max", poids="100"):
+    d = tmp_path / "cg" / "lxc.payload.voicestudio"
+    d.mkdir(parents=True)
+    (d / "memory.max").write_text(memory + "\n")
+    (d / "memory.swap.max").write_text(swap + "\n")
+    (d / "cpu.weight").write_text(poids + "\n")
+    monkeypatch.setattr(c, "CGROUP_LXC", tmp_path / "cg")
+    return d
+
+
+def test_appliquer_ecrit_les_limites_dans_le_cgroup_du_conteneur_en_marche(tmp_path, monkeypatch):
+    d = _cgroup(tmp_path, monkeypatch)
+    cfg = {"lxc": {"nom": "voicestudio", "memoire": "4G", "swap": "1G", "cpu_poids": 50}}
+    ecrits = c.appliquer_cgroup_vif(cfg)
+    assert (d / "memory.max").read_text().strip() == "4G"
+    assert (d / "memory.swap.max").read_text().strip() == "1G"
+    assert (d / "cpu.weight").read_text().strip() == "50"
+    assert set(ecrits) == {"memory.max", "memory.swap.max", "cpu.weight"}
+
+
+def test_conteneur_arrete_aucun_cgroup_aucune_erreur(tmp_path, monkeypatch):
+    monkeypatch.setattr(c, "CGROUP_LXC", tmp_path / "absent")
+    assert c.appliquer_cgroup_vif({"lxc": {"nom": "voicestudio"}}) == []
+
+
+def test_une_limite_deja_a_jour_n_est_pas_reecrite(tmp_path, monkeypatch):
+    _cgroup(tmp_path, monkeypatch, memory="4G", swap="1G", poids="50")
+    cfg = {"lxc": {"nom": "voicestudio", "memoire": "4G", "swap": "1G", "cpu_poids": 50}}
+    assert c.appliquer_cgroup_vif(cfg) == []               # idempotent
