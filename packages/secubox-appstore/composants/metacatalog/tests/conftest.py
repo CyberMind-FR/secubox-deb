@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-R = Path(__file__).resolve().parents[3]
+R = Path(__file__).resolve().parents[5]
 sys.path[:0] = [str(R / "common"), str(R / "packages" / "secubox-metacatalog")]
 import secubox_core.config as _conf  # noqa: E402
 _conf._CONF_PATHS[:] = [p for p in _conf._CONF_PATHS if os.access(p, os.R_OK)] or [R / "secubox.conf.example"]

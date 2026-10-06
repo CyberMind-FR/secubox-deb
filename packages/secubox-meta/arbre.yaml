@@ -55,6 +55,13 @@ hors-arbre:
   - secubox-groupd            # transitoire → secubox-aggregator (#2050 N1)
   - secubox-defaults          # transitoire → secubox-core (#2050 N1)
   - secubox-jabber  # transitoire → secubox-matrix (#2050)
+  - secubox-network-anomaly  # transitoire → secubox-dns-guard (#2050)
+  - secubox-dns-provider  # transitoire → secubox-dns (#2050)
+  - secubox-ai-insights  # transitoire → secubox-threats (#2050)
+  - secubox-health-doctor  # transitoire → secubox-health (#2050)
+  - secubox-watchdog  # transitoire → secubox-health (#2050)
+  - secubox-sbxui  # transitoire → secubox-webos (#2050)
+  - secubox-metacatalog  # transitoire → secubox-appstore (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -220,7 +227,6 @@ label: Hall
 description: "SBX OS : le Hall, son registre de services, ses objets UI et l'admission des appareils."
 requiert:
   - secubox-webos
-  - secubox-sbxui
   - secubox-sbxos
   - secubox-portal
   - secubox-hub                 # vivant : génère le menu du Hall (#2050 ; faussement « remplacé » avant)
@@ -257,8 +263,6 @@ requiert:
 recommande:
   - secubox-premier-pas         # assistant du premier démarrage + majauto (#1522)
   - secubox-health
-  - secubox-health-doctor
-  - secubox-watchdog
   - secubox-system-tuning
 suggere:
   - secubox-led-heartbeat
@@ -322,8 +326,6 @@ requiert:
   - secubox-vortex-dns
 recommande:
   - secubox-dns-guard
-  - secubox-dns-provider
-  - secubox-network-anomaly
   - secubox-dns-lan
   - secubox-webfilter
 
@@ -410,7 +412,6 @@ recommande:
 suggere:
   - secubox-ad-guard
   - secubox-cookies
-  - secubox-ai-insights
   - secubox-toolbox
 
 meta: secubox-service-soc
@@ -552,7 +553,6 @@ requiert:
   - secubox-metablogizer
   - secubox-publish
 recommande:
-  - secubox-metacatalog
 suggere:
 
 meta: secubox-service-bbs

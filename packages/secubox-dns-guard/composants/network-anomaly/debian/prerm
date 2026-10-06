@@ -4,5 +4,4 @@ if [ "$1" = "remove" ]; then
     systemctl stop secubox-network-anomaly.service || true
     systemctl disable secubox-network-anomaly.service || true
 fi
-#DEBHELPER#
 exit 0

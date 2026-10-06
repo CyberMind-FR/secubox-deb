@@ -11,4 +11,3 @@ case "$1" in
 esac
 systemctl stop    secubox-ai-insights.service 2>/dev/null || true
 systemctl disable secubox-ai-insights.service 2>/dev/null || true
-#DEBHELPER#

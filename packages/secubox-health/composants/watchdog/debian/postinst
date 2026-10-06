@@ -5,5 +5,4 @@ if [ "$1" = "configure" ]; then
     systemctl enable secubox-watchdog.service || true
     systemctl start secubox-watchdog.service || true
 fi
-#DEBHELPER#
 exit 0

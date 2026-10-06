@@ -9,5 +9,4 @@ if [ "$1" = "configure" ]; then
     systemctl enable secubox-dns-provider.service || true
     systemctl start secubox-dns-provider.service || true
 fi
-#DEBHELPER#
 exit 0

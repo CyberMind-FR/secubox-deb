@@ -1,23 +1,15 @@
 Source: secubox-watchdog
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-watchdog
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.46)
-Description: SecuBox Watchdog — LXC + service + HTTP health monitor
- Health monitor for LXC containers, systemd services, and HTTP
- endpoints with auto-restart for failed targets. Real-time
- dashboard with 30-second auto-refresh.
- .
- Distinct from sibling packages in the monitoring cluster:
-  - secubox-health-doctor — vital-services health check (different
-    target set: focuses on SecuBox-internal critical services).
-  - secubox-device-intel — asset discovery + device fingerprinting
-    (network-side, not service-side).
-  - secubox-glances, secubox-metrics — system
-    metrics dashboards (different upstreams: Glances vs
-    Prometheus).
+Depends: ${misc:Depends}, secubox-health (>= 1.2.0)
+Description: transitional package, replaced by secubox-health
+ watchdog is now a component of secubox-health. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

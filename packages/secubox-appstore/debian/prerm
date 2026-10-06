@@ -5,5 +5,9 @@ case "$1" in
         systemctl stop secubox-appstore.service 2>/dev/null || true
         ;;
 esac
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/appstore/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "appstore : prerm de $(basename "$_s") en échec" >&2; }
+done
 #DEBHELPER#
 exit 0

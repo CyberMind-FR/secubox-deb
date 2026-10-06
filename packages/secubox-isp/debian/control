@@ -28,7 +28,6 @@ Depends: ${misc:Depends},
  secubox-wireguard (>= 1.0),
  secubox-dns (>= 1.0),
  secubox-vortex-dns (>= 1.0),
- secubox-dns-provider (>= 1.0),
  secubox-modem (>= 1.0),
  secubox-routes (>= 1.0),
  secubox-netdiag (>= 1.0),
@@ -50,8 +49,7 @@ Depends: ${misc:Depends},
 # est deliberement absent de ce commentaire — verify-profile.sh lit les
 # dependances par un grep brut sur le champ Depends, commentaires
 # compris, et le citer ici le ferait passer pour une dependance vivante.
- secubox-watchdog (>= 1.0),
- secubox-health-doctor (>= 1.0),
+ secubox-health,
  secubox-tor (>= 1.0),
  secubox-mesh (>= 1.0),
  secubox-p2p (>= 1.0),

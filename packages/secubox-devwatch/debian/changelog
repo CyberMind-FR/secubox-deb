@@ -1,3 +1,9 @@
+secubox-devwatch (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-webos au lieu de secubox-sbxui (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:04:00 +0200
+
 secubox-devwatch (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Le chmod 660 du socket attend jusqu'à 120 s (au lieu de 15 s) et TimeoutStartSec passe à 180 s : sous la charge du démarrage la boucle de 15 s expirait et l'unité échouait au premier essai. uvicorn force le socket en 0o666, donc le chmod reste indispensable (ref #2026).

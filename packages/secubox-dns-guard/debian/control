@@ -7,8 +7,11 @@ Standards-Version: 4.6.2
 
 Package: secubox-dns-guard
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
+Depends: ${misc:Depends},
+ secubox-core (>= 1.4.0)
 Recommends: dnsmasq
+Replaces: secubox-network-anomaly (<< 1.1.4~)
+Breaks: secubox-network-anomaly (<< 1.1.4~)
 Description: SecuBox DNS Guard — anomaly detection + dnsmasq blocking
  Watches recursive DNS resolution for anomalous patterns and pushes
  blocklists to dnsmasq via /etc/dnsmasq.d/secubox-blocklist.conf.

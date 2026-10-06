@@ -12,3 +12,22 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-dns/etc/nginx/secubox.d
 	[ -f nginx/dns.conf ] && cp nginx/dns.conf debian/secubox-dns/etc/nginx/secubox.d/ || true
+	# Composant absorbé : dns-provider (#2050)
+	install -d debian/secubox-dns/usr/lib/secubox/dns-provider
+	cp -r composants/dns-provider/api debian/secubox-dns/usr/lib/secubox/dns-provider/
+	install -d debian/secubox-dns/usr/share/secubox/www/dns-provider
+	cp -r composants/dns-provider/www/dns-provider/. debian/secubox-dns/usr/share/secubox/www/dns-provider/
+	install -d debian/secubox-dns/usr/share/secubox/menu.d
+	[ -d composants/dns-provider/menu.d ] && cp -r composants/dns-provider/menu.d/. debian/secubox-dns/usr/share/secubox/menu.d/ || true
+	# Modular composants/dns-provider/nginx composants/dns-provider/config
+	install -d debian/secubox-dns/etc/nginx/secubox.d
+	[ -f composants/dns-provider/nginx/dns-provider.conf ] && cp composants/dns-provider/nginx/dns-provider.conf debian/secubox-dns/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul
+	# repertoire que le vhost principal inclut (#989). Livree dans
+	# secubox.d/ uniquement, elle n etait jamais lue.
+	install -d debian/secubox-dns/etc/nginx/secubox-routes.d
+	[ -f composants/dns-provider/nginx/dns-provider.conf ] && cp composants/dns-provider/nginx/dns-provider.conf debian/secubox-dns/etc/nginx/secubox-routes.d/ || true
+	install -D -m 644 composants/dns-provider/debian/secubox-dns-provider.service debian/secubox-dns/usr/lib/systemd/system/secubox-dns-provider.service
+	install -D -m 755 composants/dns-provider/debian/postinst debian/secubox-dns/usr/lib/secubox/dns/maintscripts/dns-provider.postinst
+	install -D -m 755 composants/dns-provider/debian/prerm debian/secubox-dns/usr/lib/secubox/dns/maintscripts/dns-provider.prerm
+

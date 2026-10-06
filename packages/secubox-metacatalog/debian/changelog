@@ -1,3 +1,9 @@
+secubox-metacatalog (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : metacatalog est un composant de secubox-appstore >= 0.5.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-metacatalog (1.2.4-1~bookworm1) bookworm; urgency=medium
 
   * Le catalogue vient de la minuterie, plus d'une boucle (#1835). La boucle

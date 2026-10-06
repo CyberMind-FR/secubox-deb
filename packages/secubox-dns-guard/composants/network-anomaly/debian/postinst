@@ -5,5 +5,4 @@ if [ "$1" = "configure" ]; then
     systemctl enable secubox-network-anomaly.service || true
     systemctl start secubox-network-anomaly.service || true
 fi
-#DEBHELPER#
 exit 0

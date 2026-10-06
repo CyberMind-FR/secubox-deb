@@ -1,3 +1,17 @@
+secubox-health (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-watchdog (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/watchdog/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
+secubox-health (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-health-doctor (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/health-doctor/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-health (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * module-prober : un seul `systemctl show` par passage (#1835), au lieu d'un

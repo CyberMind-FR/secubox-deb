@@ -192,7 +192,6 @@ Package: secubox-service-hall
 Architecture: all
 Depends: ${misc:Depends},
          secubox-webos,
-         secubox-sbxui,
          secubox-sbxos,
          secubox-portal,
          secubox-hub,
@@ -231,8 +230,6 @@ Depends: ${misc:Depends},
          secubox-hardening
 Recommends: secubox-premier-pas,
          secubox-health,
-         secubox-health-doctor,
-         secubox-watchdog,
          secubox-system-tuning
 Suggests: secubox-led-heartbeat,
          secubox-ksm,
@@ -300,8 +297,6 @@ Depends: ${misc:Depends},
          secubox-dns,
          secubox-vortex-dns
 Recommends: secubox-dns-guard,
-         secubox-dns-provider,
-         secubox-network-anomaly,
          secubox-dns-lan,
          secubox-webfilter
 Description: SecuBox — service « Résolution DNS »
@@ -395,7 +390,6 @@ Recommends: secubox-cve-triage,
          secubox-antirootkit
 Suggests: secubox-ad-guard,
          secubox-cookies,
-         secubox-ai-insights,
          secubox-toolbox
 Description: SecuBox — service « Détection »
  Posture de sécurité, menaces, CVE, renseignement partagé.
@@ -567,7 +561,6 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-metablogizer,
          secubox-publish
-Recommends: secubox-metacatalog
 Description: SecuBox — service « Sites »
  Métablogs, plateforme de publication, catalogue.
  .

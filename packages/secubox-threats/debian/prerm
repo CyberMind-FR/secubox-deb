@@ -6,5 +6,9 @@ if [ "$1" = "remove" ]; then
     systemctl disable secubox-threats.service || true
 fi
 
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/threats/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "threats : prerm de $(basename "$_s") en échec" >&2; }
+done
 #DEBHELPER#
 exit 0

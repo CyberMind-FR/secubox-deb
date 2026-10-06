@@ -4,5 +4,4 @@ if [ "$1" = "remove" ]; then
     systemctl stop secubox-watchdog.service || true
     systemctl disable secubox-watchdog.service || true
 fi
-#DEBHELPER#
 exit 0

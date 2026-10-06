@@ -34,7 +34,7 @@ def git(*a, check=True):
 
 def suivis(dossier: Path) -> list[Path]:
     sortie = git("ls-files", str(dossier.relative_to(RACINE))).stdout.split("\n")
-    return [RACINE / f for f in sortie if f and "/debian/secubox-" not in f]
+    return [RACINE / f for f in sortie if f and not re.search(r"/debian/secubox-[^/]+/", f)]
 
 
 def champ(control: str, nom: str) -> list[str]:
@@ -141,6 +141,10 @@ def absorber(absorbant: str, ancien: str, sec: bool) -> None:
             (C / "debian" / s).write_text(corps if corps.endswith("\n") else corps + "\n")
             scripts_installes.append(s)
             ligne_regles.append(f"\tinstall -D -m 755 composants/{ancien}/debian/{s} debian/secubox-{absorbant}/usr/lib/secubox/{absorbant}/maintscripts/{ancien}.{s}")
+    # 2 bis. unités nommées debian/<paquet>.service : debhelper les installait tout seul, plus maintenant
+    for u in sorted((C / "debian").glob("*")) if (C / "debian").is_dir() else []:
+        if u.suffix in (".service", ".timer", ".path", ".socket") and not u.name.startswith(("postinst", "prerm", "postrm")):
+            ligne_regles.append(f"\tinstall -D -m 644 composants/{ancien}/debian/{u.name} debian/secubox-{absorbant}/usr/lib/systemd/system/{u.name}")
     # 3. rules de l'absorbant
     ra = (A / "debian/rules").read_text()
     m = re.search(r"(?ms)^override_dh_auto_install:\n(.*?)(?=^\S|\Z)", ra)
@@ -209,19 +213,37 @@ Description: transitional package, replaced by secubox-{absorbant}
     t = re.sub(rf"(?m)^  - secubox-{re.escape(ancien)}\b.*\n", "", t, count=0)
     t = t.replace("  - secubox-eye-square        #", f"  - secubox-{ancien}  # transitoire → secubox-{absorbant} (#2050)\n  - secubox-eye-square        #", 1)
     arbre.write_text(t)
-    # 8. autres paquets qui dépendaient de l'ancien
+    # 8. autres paquets qui dépendaient de l'ancien (champs de dépendance SEULEMENT ; jamais Replaces/Breaks/Conflicts/Provides,
+    #    ni le paquet absorbant lui-même)
+    liens = ("Depends", "Pre-Depends", "Recommends", "Suggests", "Enhances")
+    champ_re = re.compile(r"(?ms)^(" + "|".join(liens) + r"):(.*?)(?=^\S|\Z)")
     for ctrl in sorted(P.glob("*/debian/control")):
         nom = ctrl.parts[-3]
-        if nom in (f"secubox-{ancien}", "secubox-meta") or "/debian/secubox-" in str(ctrl):
+        if nom in (f"secubox-{ancien}", f"secubox-{absorbant}", "secubox-meta") or "/debian/secubox-" in str(ctrl):
             continue
         t = ctrl.read_text()
-        deja = re.search(rf"(?m)^\s*secubox-{re.escape(absorbant)}\b", t) is not None
-        # l'absorbant est déjà là : on retire la ligne de l'ancien au lieu de la renommer (pas de doublon)
-        n = re.sub(rf"(?m)^(\s*)secubox-{re.escape(ancien)}(\s*\([^)]*\))?(,?)\s*\n" if deja else rf"(?m)^(\s*)secubox-{re.escape(ancien)}(\s*\([^)]*\))?(,?)\s*$",
-                   (lambda mo: "") if deja else (lambda mo: f"{mo.group(1)}secubox-{absorbant}{mo.group(3)}"), t)
-        if n != t and not re.search(r"(?m)^Package: " + re.escape(nom), n):
-            pass
-        if n != t:
+        change = False
+
+        def reecrire(mo):
+            nonlocal change
+            items = [x.strip() for x in re.sub(r"\s*\n\s*", " ", mo.group(2)).split(",") if x.strip()]
+            if not any(nom_pkg(i) == f"secubox-{ancien}" for i in items):
+                return mo.group(0)
+            change = True
+            neuf, vus = [], set()
+            for i in items:
+                n_ = nom_pkg(i)
+                cible = f"secubox-{absorbant}" if n_ == f"secubox-{ancien}" else i
+                cle = nom_pkg(cible)
+                if cle in vus:
+                    continue
+                vus.add(cle)
+                contrainte = f" (>= {nv_a})" if mo.group(1) in ("Depends", "Pre-Depends") else ""
+                neuf.append(f"secubox-{absorbant}{contrainte}" if n_ == f"secubox-{ancien}" else i)
+            return f"{mo.group(1)}: " + ",\n ".join(neuf) + "\n"
+        n = champ_re.sub(reecrire, t)
+        if change:
+            # un paquet qui a déjà l'absorbant dans un AUTRE champ de dépendance garde les deux : valide, sans doublon dans un champ
             ctrl.write_text(n)
             ch = ctrl.parent / "changelog"
             m2 = re.match(r"(\S+) \((\d+)\.(\d+)\.(\d+)-", ch.read_text())

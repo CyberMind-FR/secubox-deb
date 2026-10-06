@@ -15,3 +15,26 @@ override_dh_auto_install:
 	# Systemd service
 	install -d debian/secubox-threats/usr/lib/systemd/system
 	[ -f systemd/secubox-threats.service ] && cp systemd/secubox-threats.service debian/secubox-threats/usr/lib/systemd/system/ || true
+	# Composant absorbé : ai-insights (#2050)
+	install -d debian/secubox-threats/usr/lib/secubox/ai-insights/
+	cp -r composants/ai-insights/api debian/secubox-threats/usr/lib/secubox/ai-insights/
+	install -d debian/secubox-threats/usr/share/secubox/www
+	[ -d composants/ai-insights/www ] && cp -r composants/ai-insights/www/. debian/secubox-threats/usr/share/secubox/www/ || true
+	install -d debian/secubox-threats/usr/share/secubox/menu.d
+	[ -d composants/ai-insights/menu.d ] && cp -r composants/ai-insights/menu.d/. debian/secubox-threats/usr/share/secubox/menu.d/ || true
+	# Modular composants/ai-insights/nginx composants/ai-insights/config
+	install -d debian/secubox-threats/etc/nginx/secubox.d
+	[ -f composants/ai-insights/nginx/ai-insights.conf ] && cp composants/ai-insights/nginx/ai-insights.conf debian/secubox-threats/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul
+	# repertoire que le vhost principal inclut (#989). Livree dans
+	# secubox.d/ uniquement, elle n etait jamais lue.
+	install -d debian/secubox-threats/etc/nginx/secubox-routes.d
+	[ -f composants/ai-insights/nginx/ai-insights.conf ] && cp composants/ai-insights/nginx/ai-insights.conf debian/secubox-threats/etc/nginx/secubox-routes.d/ || true
+	# Systemd service
+	install -d debian/secubox-threats/usr/lib/systemd/system
+	[ -f composants/ai-insights/systemd/secubox-ai-insights.service ] && cp composants/ai-insights/systemd/secubox-ai-insights.service debian/secubox-threats/usr/lib/systemd/system/ || true
+	# Config directory
+	install -d debian/secubox-threats/etc/secubox
+	install -D -m 755 composants/ai-insights/debian/postinst debian/secubox-threats/usr/lib/secubox/threats/maintscripts/ai-insights.postinst
+	install -D -m 755 composants/ai-insights/debian/prerm debian/secubox-threats/usr/lib/secubox/threats/maintscripts/ai-insights.prerm
+

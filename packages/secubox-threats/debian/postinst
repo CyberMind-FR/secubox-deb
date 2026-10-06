@@ -21,5 +21,9 @@ if [ "$1" = "configure" ]; then
     fi
 fi
 
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/threats/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "threats : postinst de $(basename "$_s") en échec" >&2; }
+done
 #DEBHELPER#
 exit 0

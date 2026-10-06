@@ -6,7 +6,8 @@ from pathlib import Path
 
 PAQ = Path(__file__).resolve().parents[2] / "packages"
 # (absorbant, absorbé) — les fusions déjà faites par scripts/absorber-paquet.py (S1, S2 et N1 ont leurs propres tests)
-FUSIONS = [("matrix", "jabber")]
+FUSIONS = [("matrix", "jabber"), ("dns-guard", "network-anomaly"), ("dns", "dns-provider"), ("threats", "ai-insights"),
+           ("health", "health-doctor"), ("health", "watchdog"), ("webos", "sbxui"), ("appstore", "metacatalog")]
 
 
 def _c(p):

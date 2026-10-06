@@ -1,3 +1,10 @@
+secubox-dns (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-dns-provider (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/dns-provider/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-dns (1.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Les routes de zone et d'enregistrement n'étaient plus déclarées deux fois : la version basique masquait la version améliorée, donc le journal des changements (/changes) et les webhooks ne recevaient jamais d'événement. La version améliorée est maintenant la seule (ref #2050).

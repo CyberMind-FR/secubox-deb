@@ -15,7 +15,7 @@ Depends: ${misc:Depends},
          python3-httpx | python3-pip,
          python3-fastapi | python3-pip,
          uvicorn
-Suggests: secubox-watchdog
+Suggests: secubox-health
 Description: SecuBox SOC Agent — Edge Node Agent for SOC Integration
  Edge node agent that collects system metrics and security alerts,
  then pushes them to an upstream SOC gateway for centralized monitoring.

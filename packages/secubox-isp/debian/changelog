@@ -1,3 +1,21 @@
+secubox-isp (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-health au lieu de secubox-watchdog (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-isp (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-health au lieu de secubox-health-doctor (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-isp (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-dns au lieu de secubox-dns-provider (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-isp (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Ne depend plus de secubox-defaults (transitoire, absorbe par core) (#2050, N1).
