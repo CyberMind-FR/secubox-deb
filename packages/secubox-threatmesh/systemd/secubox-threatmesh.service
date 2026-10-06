@@ -13,8 +13,12 @@ ExecStartPre=-/usr/sbin/nft -f /usr/share/secubox/threatmesh/nftables.d/secubox-
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8780 --workers 1
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=no
+NoNewPrivileges=yes
 ProtectSystem=full
+ProtectHome=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
 PrivateTmp=true
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
 
