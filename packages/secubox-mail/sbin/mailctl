@@ -122,6 +122,20 @@ ProtectKernelModules=false
 ProtectSystem=false
 ProtectHome=false
 RestrictNamespaces=false
+ProtectClock=false
+ProtectHostname=false
+ProtectKernelLogs=false
+ProtectProc=default
+ProcSubset=all
+ReadWritePaths=
+ReadWriteDirectories=
+ReadOnlyPaths=
+InaccessiblePaths=
+ExecPaths=
+NoExecPaths=
+TemporaryFileSystem=
+BindPaths=
+BindReadOnlyPaths=
 EOF_SANDBOX
     lxc_attach "$cont" systemctl daemon-reload
 }
@@ -487,6 +501,9 @@ cmd_autocrypt_sync() {
 # Remet redis en marche dans le conteneur (surcharge du bac à sable, démarrage, puis rspamd qui le retrouve).
 cmd_redis() {
     lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
+    # Les retardataires du décalage (redis écrit en « nobody » sinon), puis la surcharge du bac à sable.
+    secubox-lxc-decaler "${LXC_PATH:-/var/lib/lxc}/$CONTAINER/rootfs" >/dev/null \
+        || { error "decalage du rootfs de '$CONTAINER' impossible"; return 1; }
     lxc_service_sans_sandbox redis-server "$CONTAINER" || return 1
     lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed redis-server 2>/dev/null; systemctl enable --now redis-server' >/dev/null 2>&1 \
         || { error "redis-server n'a pas demarre dans '$CONTAINER'"; return 1; }

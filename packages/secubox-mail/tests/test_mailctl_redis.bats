@@ -12,6 +12,8 @@ setup() {
   lxc_attach() { echo "ATTACH $*" >> "$CALLS"; case "$*" in *"cat >"*) cat >> "$CALLS" ;; esac; }
   lxc_running() { return 0; }
   export -f lxc_attach lxc_running
+  mkdir -p "$BATS_TEST_TMPDIR/bin"; printf '#!/bin/sh\necho "DECALER $*" >> "%s"\n' "$CALLS" > "$BATS_TEST_TMPDIR/bin/secubox-lxc-decaler"
+  chmod +x "$BATS_TEST_TMPDIR/bin/secubox-lxc-decaler"; export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
 @test "la surcharge désactive le bac à sable du service" {
@@ -31,6 +33,7 @@ setup() {
 @test "mailctl redis pose la surcharge, démarre redis puis relance rspamd" {
   run cmd_redis
   [ "$status" -eq 0 ]
+  grep -q 'DECALER' "$CALLS"
   grep -q 'redis-server.service.d' "$CALLS"
   grep -q 'enable --now redis-server' "$CALLS"
   grep -q 'restart rspamd' "$CALLS"
