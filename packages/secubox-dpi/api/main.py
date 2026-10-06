@@ -60,7 +60,7 @@ def _dpi_enrich(event: dict) -> dict:
 mount_ingest_routes(
     app,
     endpoint_path="/classify",
-    db_path="/var/lib/secubox/dpi/mitm-ingest.db",
+    db_path="/var/lib/secubox/dpi-ingest/mitm-ingest.db",
     kind="dpi",
     enrich_hook=_dpi_enrich,
 )

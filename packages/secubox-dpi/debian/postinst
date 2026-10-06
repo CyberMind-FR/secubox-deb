@@ -11,6 +11,15 @@ case "$1" in
     # dpi API (secubox) reads it; keep 0755 so secubox can traverse.
     install -d -o root -g root -m 0755 /var/lib/secubox/dpi
     install -d -o root -g root -m 0755 /run/secubox/dpi
+    # Base d'ingestion mitm : l'API (secubox) la crée et l'écrit. Elle vivait dans /var/lib/secubox/dpi, qui
+    # appartient à root (collecteur) : sur un état neuf, « unable to open database file » en boucle. Son propre
+    # répertoire, et on y déplace l'ancienne base si elle existe.
+    install -d -o secubox -g secubox -m 0755 /var/lib/secubox/dpi-ingest
+    for _f in mitm-ingest.db mitm-ingest.db-wal mitm-ingest.db-shm; do
+      if [ -f "/var/lib/secubox/dpi/$_f" ] && [ ! -e "/var/lib/secubox/dpi-ingest/$_f" ]; then
+        mv "/var/lib/secubox/dpi/$_f" "/var/lib/secubox/dpi-ingest/$_f" || true
+      fi
+    done
     # The dpi API runs unprivileged as `secubox` but the webui's service
     # controls (Restart R3 Engine) must (re)start the Go flow collector. Grant a
     # tightly-scoped sudoers rule for exactly that unit — nothing else.

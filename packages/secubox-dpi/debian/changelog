@@ -1,3 +1,9 @@
+secubox-dpi (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Base d'ingestion mitm dans /var/lib/secubox/dpi-ingest (secubox) au lieu de /var/lib/secubox/dpi (root) : sur un etat neuf l'API bouclait sur « unable to open database file » (gk3, depuis au moins le 5 octobre). L'ancienne base est deplacee par le postinst.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 05:00:00 +0200
+
 secubox-dpi (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * Commentaire de debian/control reformule : la CI prenait la phrase pour une declaration d'architecture et sautait la construction arm64.
