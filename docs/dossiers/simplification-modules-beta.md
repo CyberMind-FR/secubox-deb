@@ -421,3 +421,23 @@ Chaque vague : une issue, un lot de tests, un déploiement sur gk3 (amd64) puis 
 - Schéma exact de `menu.d` et capacité du Hall à lire des clés supplémentaires sans modification.
 - Contenu des `www/` portés (portabilité réelle des frontends), `debian/*.install`, `postinst` de migration.
 - Les tests n'ont pas été exécutés ; l'analyse est statique.
+
+---
+
+## 16. Avancement (2026-10-06)
+
+**Outil** : `scripts/absorber-paquet.py <absorbant> <absorbé>` applique le patron du §10 (sources sous `composants/<absorbé>/`, mêmes
+chemins installés, scripts de maintenance rejoués par ceux de l'absorbant, absorbé devenu transitoire, arbre et dépendants mis à jour) ;
+`--comparer ancien.deb nouveau.deb` vérifie qu'aucun fichier du .deb d'origine n'a disparu. Il a attrapé en chemin quatre fichiers
+d'unité (`debian/<paquet>.service`, installés tout seuls par debhelper) que la traduction des `rules` avait oubliés.
+
+**Vague 2 faite** (chaque fusion vérifiée par comparaison de contenu) : S1 `nac` ← `mac-guard`, `device-intel`, `iot-guard` ; S2 `soc-web`
+supprimé ; N1 `core` ← `defaults`, `aggregator` ← `groupd` ; **D1** `dns` ← `dns-provider`, `dns-lan` (`unbound` repasse en Recommends) ; **D2**
+`dns-guard` ← `network-anomaly` ; **S4** `threats` ← `ai-insights` ; **N3** `health` ← `health-doctor`, `watchdog` ; **N5** `webos` ← `sbxui`
+(`sbxos` reste hors périmètre, pré-alpha) ; **M2** `matrix` ← `jabber` ; **M8** `appstore` ← `metacatalog`.
+
+**Écartées, avec la raison** :
+- **M3 `bbs` ← `messagerie`** : `bbs` déclare volontairement `secubox-core` en simple Recommends (son cœur Go n'en dépend pas) ;
+  `messagerie` exige `core`, `aggregator` et Python. Les fondre imposerait ces dépendances à tous les `bbs`.
+- **I2 `zkp` ← `zkp-hamiltonian-tools`** : le second est un paquet C par architecture ; le fondre dans un paquet `all` demande une
+  construction mixte, à traiter avec la vague des paquets par architecture.

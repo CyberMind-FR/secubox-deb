@@ -1,15 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_build:
-override_dh_auto_test:
-
-override_dh_auto_install:
-	install -d debian/secubox-dns-lan/usr/sbin debian/secubox-dns-lan/usr/lib/secubox/dns-lan/dns_lan \
-	  debian/secubox-dns-lan/usr/share/secubox/dns-lan
-	install -m 755 sbin/secubox-dns-lan debian/secubox-dns-lan/usr/sbin/
-	install -m 644 dns_lan/*.py debian/secubox-dns-lan/usr/lib/secubox/dns-lan/dns_lan/
-	install -m 644 conf/dns-lan.toml debian/secubox-dns-lan/usr/share/secubox/dns-lan/dns-lan.toml.exemple
-	install -d debian/secubox-dns-lan/usr/lib/systemd/system/unbound.service.d
-	install -m 644 conf/unbound-demarrage.conf debian/secubox-dns-lan/usr/lib/systemd/system/unbound.service.d/10-secubox-demarrage.conf

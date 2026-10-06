@@ -68,16 +68,20 @@ def ecrire_champ(control: str, nom: str, valeurs: list[str]) -> str:
     return control.replace("\nDescription:", f"\n{texte}Description:", 1) if texte else control
 
 
-def traduire_rules(rules: str, ancien: str, absorbant: str) -> list[str]:
+def traduire_rules(rules: str, ancien: str, absorbant: str, tops: set[str] | None = None) -> list[str]:
     """Les lignes de `override_dh_auto_install` de l'ancien, réécrites pour l'absorbant."""
     cibles = re.findall(r"(?m)^([A-Za-z_%][^\s:]*):", rules)
-    autres = [c for c in cibles if c not in ("%", "override_dh_auto_install", "override_dh_installsystemd")]
+    # des cibles VIDES (override_dh_auto_build:, override_dh_auto_test:) ne font rien : elles sont permises
+    vides = [c for c in cibles if re.search(rf"(?m)^{re.escape(c)}:[ \t]*\n(?!\t)", rules)]
+    autres = [c for c in cibles if c not in ("%", "override_dh_auto_install", "override_dh_installsystemd") and c not in vides]
     if autres:
         raise SystemExit(f"{ancien} : cibles de rules non gérées {autres} — à fusionner à la main")
     m = re.search(r"(?ms)^override_dh_auto_install:\n(.*?)(?=^\S|\Z)", rules)
     if not m:
         raise SystemExit(f"{ancien} : pas de override_dh_auto_install")
-    dirs = r"(?:api|www|nginx|systemd|menu\.d|sbin|config|conf|templates|data|lib|bin|etc|usr|docs|static|debian|app|roundcube|haproxy)"
+    noms = set(tops or ()) | {"api", "www", "nginx", "systemd", "menu.d", "sbin", "config", "conf", "templates", "data", "lib", "bin", "etc",
+                              "usr", "docs", "static", "debian", "app", "roundcube", "haproxy"}
+    dirs = "(?:" + "|".join(re.escape(n) for n in sorted(noms, key=len, reverse=True)) + ")"
     sortie = []
     for ligne in m.group(1).split("\n"):
         if not ligne.strip():
@@ -97,7 +101,7 @@ def absorber(absorbant: str, ancien: str, sec: bool) -> None:
     if C.exists():
         raise SystemExit(f"{C} existe déjà")
     regles_o = (O / "debian/rules").read_text()
-    ligne_regles = traduire_rules(regles_o, ancien, absorbant)
+    ligne_regles = traduire_rules(regles_o, ancien, absorbant, {x.name for x in O.iterdir() if x.name != "debian"})
     ctrl_a, ctrl_o = (A / "debian/control").read_text(), (O / "debian/control").read_text()
     ver_a = re.match(r"\S+ \((\d+)\.(\d+)\.(\d+)-", (A / "debian/changelog").read_text()).groups()
     ver_o = re.match(r"\S+ \((\d+)\.(\d+)\.(\d+)-", (O / "debian/changelog").read_text()).groups()

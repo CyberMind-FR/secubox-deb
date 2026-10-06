@@ -1,3 +1,9 @@
+secubox-dns-lan (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : dns-lan est un composant de secubox-dns >= 1.3.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-dns-lan (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Drop-in unbound.service.d/10-secubox-demarrage.conf (TimeoutStartSec=600) : Unbound dépassait 90 s au démarrage de gk2 et le DNS du LAN restait coupé ~4 min (ref #2018). Unbound n'est pas redémarré à l'installation.

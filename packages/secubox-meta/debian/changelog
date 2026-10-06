@@ -1,6 +1,6 @@
 secubox-meta (0.1.23-1~bookworm1) bookworm; urgency=medium
 
-  * jabber, network-anomaly, dns-provider, ai-insights, health-doctor, watchdog, sbxui et metacatalog passent hors-arbre (transitoires, absorbes par matrix, dns-guard, dns, threats, health, webos et appstore, #2050).
+  * jabber, network-anomaly, dns-provider, dns-lan, ai-insights, health-doctor, watchdog, sbxui et metacatalog passent hors-arbre (transitoires, absorbes par matrix, dns-guard, dns, threats, health, webos et appstore, #2050).
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:03:00 +0200
 

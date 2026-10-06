@@ -297,7 +297,6 @@ Depends: ${misc:Depends},
          secubox-dns,
          secubox-vortex-dns
 Recommends: secubox-dns-guard,
-         secubox-dns-lan,
          secubox-webfilter
 Description: SecuBox — service « Résolution DNS »
  Zones faisant autorité, résolveur récursif pare-feu, garde DNS.

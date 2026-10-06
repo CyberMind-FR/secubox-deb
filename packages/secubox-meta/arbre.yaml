@@ -62,6 +62,7 @@ hors-arbre:
   - secubox-watchdog  # transitoire → secubox-health (#2050)
   - secubox-sbxui  # transitoire → secubox-webos (#2050)
   - secubox-metacatalog  # transitoire → secubox-appstore (#2050)
+  - secubox-dns-lan  # transitoire → secubox-dns (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -326,7 +327,6 @@ requiert:
   - secubox-vortex-dns
 recommande:
   - secubox-dns-guard
-  - secubox-dns-lan
   - secubox-webfilter
 
 meta: secubox-service-exposition
