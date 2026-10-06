@@ -1438,6 +1438,11 @@ const FEATURED = [
   {id:"voicestudio", label:"VoiceStudio", icon:"🎙️", color:"#c87832", url:"voicestudio.gk2.secubox.in", carte:"/cardlets/voicestudio-admin.html", h:160, auth:true, admin:"/voicestudio/", micro_embed:true},
   {id:"voix",        label:"Voix",        icon:"🗣️", color:"#c87832", carte:"/cardlets/voicestudio.html", h:300, auth:true, micro_audio:true, admin:false},
   {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360, admin:false},
+  // ÉPHÉMÉRIDE (secubox-ephemeride) : la date, l'heure du fuseau de la box, le soleil, la Lune, le saint du jour, la météo et une
+  // note d'observation. Cardlet locale (pas de vhost), lecture gardée (`auth:true`), pas de ⚙️ d'administration (`admin:false`) :
+  // les observations s'écrivent depuis la carte, réservées à l'administrateur par le module. Absente d'une box sans le module :
+  // la carte le DIT (502 → « non installée sur cette box »).
+  {id:"ephemeride", label:"Éphéméride", icon:"🌙", color:"#2b6cb0", carte:"/cardlets/ephemeride.html", h:430, auth:true, admin:false},
   // SBX OS (#1293) : pas une cardlet mais la COQUILLE, servie par le Hall a
   // `/sbxos/`. Entree `carte` sans `url` — le meme motif que Freebox TV
   // au-dessus : pas de vhost, donc le Hall agrandit la page elle-meme plutot

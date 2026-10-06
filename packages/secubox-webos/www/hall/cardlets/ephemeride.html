@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — carte « Éphéméride » du Hall (secubox-ephemeride).
+
+  UN SEUL composant, TROIS niveaux d'affichage :
+    compact   date, heure, lune, lever/coucher, saint
+    standard  + durée du jour, saison, météo, qualité de l'air
+    étendu    + astronomie détaillée (âge, prochaine phase) et observations
+  Le niveau vient de ?niveau=compact|standard|etendu, sinon de la hauteur de la carte.
+
+  L'HORLOGE tourne ICI (une fois par seconde), sans solliciter l'API : l'heure est celle du serveur (décalage mesuré à chaque
+  lecture) exprimée dans le FUSEAU DE LA BOX — jamais celui du navigateur. Les données sont relues toutes les minutes.
+  Hors-ligne : la dernière lecture reste affichée, l'horloge et le soleil continuent, la météo dit quand elle date.
+  Tout texte venu du serveur ou de l'utilisateur passe par textContent : aucune injection HTML.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Éphéméride</title>
+<style>
+  :root{ --fond:#0c1626; --fond2:#142744; --texte:#eaf1fb; --muted:#9db0cc; --faint:#7c8fae; --line:rgba(255,255,255,.14);
+         --verre:rgba(255,255,255,.07); --accent:#f6b94a; --ciel:#5cc2ff; --ok:#46d38b; --alerte:#ff7a7a; --lune:#e9eef7; --ombre:#1b2740; }
+  :root[data-theme="light"]{ color-scheme:light; --fond:#eef3fb; --fond2:#dbe7f7; --texte:#13213a; --muted:#46587a; --faint:#5d6f90;
+         --line:rgba(19,33,58,.16); --verre:rgba(255,255,255,.62); --accent:#b86a00; --ciel:#0a6aa8; --ok:#0b7d45; --alerte:#b3261e;
+         --lune:#f7f2e2; --ombre:#7d8bad; }
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ color-scheme:light; --fond:#eef3fb; --fond2:#dbe7f7; --texte:#13213a;
+         --muted:#46587a; --faint:#5d6f90; --line:rgba(19,33,58,.16); --verre:rgba(255,255,255,.62); --accent:#b86a00; --ciel:#0a6aa8;
+         --ok:#0b7d45; --alerte:#b3261e; --lune:#f7f2e2; --ombre:#7d8bad; } }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:linear-gradient(160deg,var(--fond),var(--fond2));color:var(--texte);
+       font:14px/1.35 "IBM Plex Sans",Inter,system-ui,sans-serif;overflow:auto}
+  .eph{display:flex;flex-direction:column;gap:.5rem;padding:.6rem .7rem;min-height:100%;max-width:640px;margin:0 auto}
+  .verre{background:var(--verre);border:1px solid var(--line);border-radius:14px;padding:.55rem .7rem;
+         -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .bandeau{display:flex;align-items:flex-start;gap:.5rem}
+  .date{flex:1;min-width:0}
+  .date .jour{font-size:1.05rem;font-weight:700;letter-spacing:.01em}
+  .date .sous{font-size:.74rem;color:var(--muted)}
+  .lieu{font-size:.68rem;color:var(--muted);text-align:right;line-height:1.3}
+  .rouage{min-width:44px;min-height:44px;border-radius:50%;border:1px solid var(--line);background:var(--verre);color:var(--texte);cursor:pointer;font-size:1.05rem}
+  .rouage:focus-visible,.btn:focus-visible,textarea:focus-visible{outline:2px solid var(--ciel);outline-offset:2px}
+  .reglages{display:flex;gap:.6rem;align-items:center;font-size:.78rem;color:var(--muted)}
+  .reglages[hidden]{display:none}
+  .heure{text-align:center;padding:.35rem 0 .1rem}
+  .heure time{font:700 clamp(2.4rem,14vw,3.6rem)/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+  .heure .sec{font-size:.5em;color:var(--muted)}
+  .heure .tz{font-size:.74rem;color:var(--muted);margin-top:.15rem}
+  .heure .tz b{color:var(--ok);font-size:.62rem;margin-right:.3rem}
+  svg{display:block;max-width:100%}
+  .soleil .arc{width:100%;height:auto;max-height:78px}
+  .soleil .legende{display:flex;justify-content:space-between;font-size:.78rem;font-variant-numeric:tabular-nums}
+  .soleil .centre{text-align:center;font-size:.74rem;color:var(--muted);margin-top:.1rem}
+  .lune{display:flex;gap:.8rem;align-items:center}
+  .lune svg{flex:0 0 auto;width:84px;height:84px}
+  .lune .txt{min-width:0;flex:1}
+  .lune .nom{font-size:1.02rem;font-weight:700}
+  .lune .ligne{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+  .saint{display:flex;gap:.7rem;align-items:center}
+  .saint .croix{font-size:1.5rem;color:var(--accent);width:2rem;text-align:center}
+  .saint .etiquette{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .saint .nom{font-weight:700}
+  .saint .desc{font-size:.76rem;color:var(--muted)}
+  .puces{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.4rem}
+  .puce{padding:.45rem .6rem}
+  .puce .t{font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+  .puce .v{font-weight:700}
+  .puce .s{font-size:.72rem;color:var(--muted)}
+  .obs h2{margin:0 0 .25rem;font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:.4rem}
+  .obs h2 .btn{margin-left:auto}
+  .obs .note{white-space:pre-wrap;word-break:break-word;font-size:.84rem}
+  .obs .meta{font-size:.68rem;color:var(--muted);margin-top:.2rem}
+  textarea{width:100%;min-height:84px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.18);color:var(--texte);padding:.5rem;font:inherit;resize:vertical}
+  :root[data-theme="light"] textarea{background:rgba(255,255,255,.8)}
+  .btn{font-size:1.1rem;min-height:44px;min-width:44px;padding:0 .8rem;border-radius:10px;border:1px solid var(--line);background:var(--verre);color:var(--texte);cursor:pointer;font:inherit;font-weight:600}
+  .btn.principal{background:var(--ciel);border-color:var(--ciel);color:#06121f}
+  .btn.danger{color:var(--alerte)}
+  .actions{display:flex;gap:.4rem;margin-top:.4rem;flex-wrap:wrap}
+  .actions[hidden],.editeur[hidden]{display:none}
+  .etat-donnees{font-size:.68rem;color:var(--faint);text-align:center}
+  .etat-donnees .point{color:var(--alerte)}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  /* niveaux : un seul composant, des blocs masqués */
+  [data-niveau="compact"] .n-standard,[data-niveau="compact"] .n-etendu,
+  [data-niveau="standard"] .n-etendu{display:none}
+  [data-niveau="compact"] .lune svg{width:56px;height:56px}
+  [data-niveau="compact"] .heure time{font-size:clamp(2rem,11vw,2.8rem)}
+  [data-niveau="etendu"] .eph{max-width:760px}
+  @media (prefers-reduced-motion: no-preference){ .anime .point-soleil{transition:cx .6s ease,cy .6s ease} }
+</style>
+<div class="eph" id="eph" role="region" aria-label="Éphéméride" data-niveau="standard">
+  <div class="bandeau">
+    <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round">
+      <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    <div class="date"><div class="jour" id="jour">—</div><div class="sous" id="sous">&nbsp;</div></div>
+    <div class="lieu" id="lieu"></div>
+    <button class="rouage" id="rouage" type="button" aria-label="Réglages de l'éphéméride" aria-expanded="false">⚙</button>
+  </div>
+  <div class="reglages verre" id="reglages" hidden>
+    <label><input type="checkbox" id="h24"> Affichage 24 h</label>
+  </div>
+  <div class="heure"><time id="heure" aria-label="Heure locale">--:--</time>
+    <div class="tz" id="tz"><b>●</b><span id="tz-t">&nbsp;</span></div></div>
+  <div class="soleil verre" id="soleil">
+    <svg class="arc" id="arc" viewBox="0 0 200 64" role="img" aria-label="Soleil">
+      <path d="M10 54 Q100 -22 190 54" fill="none" stroke="var(--line)" stroke-width="2.2" stroke-dasharray="3 4"/>
+      <path id="arc-fait" d="M10 54 Q100 -22 190 54" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" pathLength="1" stroke-dasharray="0 1"/>
+      <line x1="4" y1="54.5" x2="196" y2="54.5" stroke="var(--line)" stroke-width="1"/>
+      <circle class="point-soleil" id="pt-soleil" cx="10" cy="54" r="6.5" fill="var(--accent)"/></svg>
+    <div class="legende"><span id="lever">☀ —</span><span id="coucher">— ☀</span></div>
+    <div class="centre n-standard" id="duree"></div>
+  </div>
+  <div class="lune verre" id="lune">
+    <svg id="lune-svg" viewBox="0 0 100 100" role="img" aria-label="Lune">
+      <circle cx="50" cy="50" r="44" fill="var(--ombre)" opacity=".55"/><path id="lune-clair" fill="var(--lune)" d=""/>
+      <circle cx="50" cy="50" r="44" fill="none" stroke="var(--line)" stroke-width="1.2"/></svg>
+    <div class="txt"><div class="nom" id="lune-nom">—</div><div class="ligne" id="lune-ill"></div>
+      <div class="ligne" id="lune-lc"></div>
+      <div class="ligne n-etendu" id="lune-age"></div><div class="ligne n-etendu" id="lune-next"></div></div>
+  </div>
+  <div class="saint verre" id="saint"><div class="croix" aria-hidden="true">✝</div>
+    <div><div class="etiquette">Saint du jour</div><div class="nom" id="saint-nom">—</div><div class="desc" id="saint-desc"></div></div></div>
+  <div class="puces n-standard">
+    <div class="puce verre"><div class="t">Saison</div><div class="v" id="saison">—</div><div class="s" id="saison-s"></div></div>
+    <div class="puce verre"><div class="t">Météo</div><div class="v" id="meteo">—</div><div class="s" id="meteo-s"></div></div>
+    <div class="puce verre"><div class="t">Air</div><div class="v" id="air">—</div><div class="s" id="air-s"></div></div>
+  </div>
+  <div class="obs verre n-etendu" id="obs">
+    <h2><span aria-hidden="true">🔭</span> Observations <button class="btn" id="obs-plus" type="button" aria-label="Ajouter ou modifier une observation">+</button></h2>
+    <div class="note" id="obs-note">Aucune observation.</div><div class="meta" id="obs-meta"></div>
+    <div class="editeur" id="editeur" hidden>
+      <label class="sr" for="obs-texte">Texte de l'observation</label>
+      <textarea id="obs-texte" maxlength="2000" placeholder="Ciel dégagé ce soir…"></textarea>
+      <div class="actions"><button class="btn principal" id="obs-ok" type="button">Enregistrer</button>
+        <button class="btn" id="obs-annule" type="button">Annuler</button>
+        <button class="btn danger" id="obs-suppr" type="button" hidden>Supprimer</button></div>
+      <div class="meta" id="obs-msg" role="status"></div></div>
+  </div>
+  <div class="etat-donnees" id="etat-donnees" role="status"></div>
+</div>
+<script src="../sonde.js"></script>
+<script>
+(function(){
+  'use strict';
+  var $ = function(id){ return document.getElementById(id); };
+  var API = '/api/v1/ephemeride/';
+  var D = null, delta = 0, dernierJour = null, h24 = true, edition = null, horsLigne = false;
+  var qs = new URLSearchParams(location.search);
+
+  /* ── thème et niveau ─────────────────────────────────────────────────────────────────────────── */
+  if (qs.get('theme') === 'dark' || qs.get('theme') === 'light') document.documentElement.setAttribute('data-theme', qs.get('theme'));
+  window.addEventListener('message', function(ev){
+    if (ev.origin !== location.origin || !ev.data || ev.data.sbx !== 'theme') return;
+    if (ev.data.theme === 'dark' || ev.data.theme === 'light') document.documentElement.setAttribute('data-theme', ev.data.theme);
+  });
+  function niveau(){
+    var n = qs.get('niveau');
+    if (n === 'compact' || n === 'standard' || n === 'etendu') return n;
+    var h = window.innerHeight;
+    return h < 330 ? 'compact' : (h < 640 ? 'standard' : 'etendu');
+  }
+  function applique(){ $('eph').setAttribute('data-niveau', niveau()); }
+  window.addEventListener('resize', applique); applique();
+
+  /* ── format ──────────────────────────────────────────────────────────────────────────────────── */
+  function fmt(opts, date){
+    try { return new Intl.DateTimeFormat('fr-FR', Object.assign({timeZone: D.fuseau.nom}, opts)).format(date); }
+    catch (e) { return new Intl.DateTimeFormat('fr-FR', opts).format(date); }
+  }
+  function hhmm(iso){ return iso ? fmt({hour:'2-digit', minute:'2-digit', hour12:!h24}, new Date(iso)) : '—'; }
+  function duree(s){ var h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); if (m === 60){ h++; m = 0; } return h + ' h ' + (m < 10 ? '0' : '') + m; }
+  function maj1(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+  function maintenant(){ return new Date(Date.now() + delta); }
+
+  /* ── lune : disque + terminateur (SVG) ───────────────────────────────────────────────────────── */
+  function dessineLune(l, lat){
+    var k = Math.max(0, Math.min(1, l.illumination / 100)), r = 44, cx = 50, cy = 50;
+    var rx = Math.abs(1 - 2 * k) * r, croissante = l.croissante;
+    if (lat < 0) croissante = !croissante;                    // hémisphère sud : la Lune apparaît renversée
+    var ext = croissante ? 1 : 0, int = croissante ? (k < 0.5 ? 0 : 1) : (k < 0.5 ? 1 : 0);
+    var d = k <= 0.004 ? '' : 'M' + cx + ' ' + (cy - r) + ' A' + r + ' ' + r + ' 0 0 ' + ext + ' ' + cx + ' ' + (cy + r) +
+                              ' A' + rx.toFixed(2) + ' ' + r + ' 0 0 ' + int + ' ' + cx + ' ' + (cy - r) + ' Z';
+    $('lune-clair').setAttribute('d', d);
+  }
+
+  /* ── soleil : arc quadratique, position recalculée chaque seconde ────────────────────────────── */
+  function pointArc(p){
+    var x0 = 10, y0 = 54, x1 = 100, y1 = -22, x2 = 190, y2 = 54, q = 1 - p;
+    return [q * q * x0 + 2 * q * p * x1 + p * p * x2, q * q * y0 + 2 * q * p * y1 + p * p * y2];
+  }
+  function etatSoleil(now){
+    var s = D.soleil;
+    if (s.etat === 'jour_polaire' || s.etat === 'nuit_polaire') return {etat: s.etat, p: s.etat === 'jour_polaire' ? 0.5 : 0};
+    var lev = s.lever ? new Date(s.lever) : null, cou = s.coucher ? new Date(s.coucher) : null;
+    if (lev && cou && cou > lev){
+      if (now < lev) return {etat: 'avant_lever', p: 0, dans: lev - now};
+      if (now > cou) return {etat: 'apres_coucher', p: 1};
+      return {etat: 'jour', p: (now - lev) / (cou - lev)};
+    }
+    return {etat: s.etat, p: Math.max(0, Math.min(1, s.progression))};
+  }
+  function dessineSoleil(now){
+    var e = etatSoleil(now), pt = pointArc(e.p), nuit = e.etat === 'avant_lever' || e.etat === 'apres_coucher' || e.etat === 'nuit_polaire';
+    $('pt-soleil').setAttribute('cx', pt[0].toFixed(1)); $('pt-soleil').setAttribute('cy', pt[1].toFixed(1));
+    $('pt-soleil').setAttribute('opacity', nuit ? '.45' : '1');
+    $('arc-fait').setAttribute('stroke-dasharray', (e.etat === 'nuit_polaire' ? 0 : e.p).toFixed(3) + ' 1');
+    var txt = {avant_lever: 'avant le lever', jour: 'en journée', apres_coucher: 'après le coucher', jour_polaire: 'jour polaire', nuit_polaire: 'nuit polaire'}[e.etat] || '';
+    $('arc').setAttribute('aria-label', 'Soleil : ' + txt + ', lever ' + hhmm(D.soleil.lever) + ', coucher ' + hhmm(D.soleil.coucher));
+    var c = '';
+    if (e.etat === 'jour_polaire') c = 'Jour polaire : le soleil ne se couche pas aujourd’hui';
+    else if (e.etat === 'nuit_polaire') c = 'Nuit polaire : le soleil ne se lève pas aujourd’hui';
+    else {
+      c = 'Durée du jour : ' + duree(D.soleil.duree_s);
+      if (e.etat === 'avant_lever') c += ' · lever dans ' + duree(Math.max(0, e.dans) / 1000);
+      if (e.etat === 'apres_coucher') c += ' · coucher passé';
+    }
+    $('duree').textContent = c;
+  }
+
+  /* ── horloge ─────────────────────────────────────────────────────────────────────────────────── */
+  function tick(){
+    if (!D) return;
+    var now = maintenant(), t = $('heure');
+    var hm = fmt({hour:'2-digit', minute:'2-digit', hour12:!h24}, now), ss = fmt({second:'2-digit'}, now);
+    while (t.firstChild) t.removeChild(t.firstChild);
+    t.appendChild(document.createTextNode(hm));
+    var s = document.createElement('span'); s.className = 'sec'; s.setAttribute('aria-hidden', 'true'); s.textContent = ':' + ss; t.appendChild(s);
+    t.setAttribute('datetime', now.toISOString());
+    dessineSoleil(now);
+    var jour = fmt({year:'numeric', month:'2-digit', day:'2-digit'}, now);
+    if (dernierJour && jour !== dernierJour) charge();       // minuit local passé : tout le jour change (saint, soleil, lune)
+  }
+
+  /* ── rendu des données ───────────────────────────────────────────────────────────────────────── */
+  function rend(){
+    var c = D.calendrier, now = maintenant();
+    dernierJour = fmt({year:'numeric', month:'2-digit', day:'2-digit'}, now);
+    $('jour').textContent = maj1(c.jour_semaine) + ' ' + c.jour + ' ' + c.mois + ' ' + c.annee;
+    $('sous').textContent = 'Semaine ' + c.semaine_iso + ' · Jour ' + c.jour_annee + ' · ' + maj1(c.saison);
+    $('lieu').textContent = (D.lieu.nom || '') + (D.lieu.approximatif && D.lieu.nom ? ' (approx.)' : '');
+    $('tz-t').textContent = D.fuseau.nom + ' · ' + D.fuseau.decalage;
+    $('lever').textContent = '☀ ' + hhmm(D.soleil.lever) + ' lever';
+    $('coucher').textContent = 'coucher ' + hhmm(D.soleil.coucher) + ' ☀';
+    var l = D.lune;
+    $('lune-nom').textContent = maj1(l.nom);
+    $('lune-ill').textContent = Math.round(l.illumination) + ' % éclairée';
+    $('lune-lc').textContent = 'Lever ' + hhmm(l.lever) + ' · Coucher ' + hhmm(l.coucher);
+    $('lune-age').textContent = 'Âge : ' + String(l.age_jours).replace('.', ',') + ' jours';
+    $('lune-next').textContent = 'Prochaine phase : ' + l.prochaine_phase.nom + ' le ' + fmt({weekday:'short', day:'numeric', month:'long'}, new Date(l.prochaine_phase.quand));
+    $('lune-svg').setAttribute('aria-label', 'Lune : ' + l.nom + ', ' + Math.round(l.illumination) + ' % éclairée');
+    dessineLune(l, D.lieu.latitude);
+    var sa = D.saints || [];
+    $('saint-nom').textContent = sa.length ? sa.map(function(x){ return x.nom; }).join(' · ') : 'Pas de saint ce jour';
+    $('saint-desc').textContent = sa.length ? (sa[0].description || '') : '';
+    $('saison').textContent = maj1(c.saison);
+    $('saison-s').textContent = 'depuis le ' + new Intl.DateTimeFormat('fr-FR', {timeZone:'UTC', day:'numeric', month:'short'}).format(new Date(c.saison_debut + 'T12:00:00Z')) + ' · J-' + c.jours_avant_saison_suivante;
+    var m = D.meteo;
+    if (m){ $('meteo').textContent = Math.round(m.temperature_c) + ' °C'; $('meteo-s').textContent = m.condition + (m.vent_kmh != null ? ' · ' + Math.round(m.vent_kmh) + '\u00a0km\u2060/\u2060h' : ''); }
+    else { $('meteo').textContent = D.meteo_etat.etat === 'desactive' ? 'Désactivée' : 'Indisponible'; $('meteo-s').textContent = D.meteo_etat.etat === 'desactive' ? '' : 'Météo indisponible'; }
+    var a = D.air;
+    if (a){ $('air').textContent = a.niveau; $('air-s').textContent = 'AQI ' + a.indice + (a.polluant_principal ? ' · ' + a.polluant_principal : ''); }
+    else { $('air').textContent = D.air_etat.etat === 'desactive' ? 'Désactivée' : 'Indisponible'; $('air-s').textContent = ''; }
+    var o = (D.observations || [])[0];
+    edition = o || null;
+    $('obs-note').textContent = o ? o.texte : 'Aucune observation.';
+    $('obs-meta').textContent = o ? 'Notée le ' + fmt({day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'}, new Date(o.modifie)) : '';
+    $('obs').hidden = !D.reglages.observations;
+    var infos = [];
+    if (D.meteo_etat.etat === 'perime' && D.meteo_etat.maj) infos.push('Données météo : dernière mise à jour ' + hhmm(new Date(D.meteo_etat.maj * 1000).toISOString()));
+    if (horsLigne) infos.push('Hors ligne : dernières données connues');
+    var e = $('etat-donnees'); while (e.firstChild) e.removeChild(e.firstChild);
+    if (infos.length){ var p = document.createElement('span'); p.className = 'point'; p.textContent = '● '; e.appendChild(p); e.appendChild(document.createTextNode(infos.join(' — '))); }
+    tick();
+    if (!document.getElementById('eph').classList.contains('anime')) setTimeout(function(){ document.getElementById('eph').classList.add('anime'); }, 50);
+  }
+
+  /* ── lecture de l'API ────────────────────────────────────────────────────────────────────────── */
+  function charge(){
+    var ctl = ('AbortController' in window) ? new AbortController() : null, t0 = Date.now();
+    var arret = ctl ? setTimeout(function(){ ctl.abort(); }, 8000) : null;
+    fetch(API, {headers:{'Accept':'application/json'}, credentials:'same-origin', signal: ctl ? ctl.signal : undefined})
+      .then(function(r){
+        if (r.status === 401 || r.status === 403){ throw {motif:'reserve'}; }
+        if (r.status === 502 || r.status === 404){ throw {motif:'absent'}; }
+        if (!r.ok) throw {motif:'erreur'};
+        return r.json();
+      })
+      .then(function(j){
+        if (arret) clearTimeout(arret);
+        D = j; delta = j.serveur_epoch_ms - Date.now(); horsLigne = false;
+        if (localStorage.getItem('eph.h24') !== null) h24 = localStorage.getItem('eph.h24') === '1'; else h24 = !!j.reglages.format_24h;
+        $('h24').checked = h24; rend();
+      })
+      .catch(function(e){
+        if (arret) clearTimeout(arret);
+        if (e && e.motif === 'reserve'){ $('etat-donnees').textContent = 'Connectez-vous pour voir l’éphéméride.'; return; }
+        if (e && e.motif === 'absent'){ $('etat-donnees').textContent = 'Éphéméride non installée sur cette box.'; return; }
+        horsLigne = true; if (D) rend(); else $('etat-donnees').textContent = 'Éphéméride momentanément indisponible.';
+      });
+  }
+
+  /* ── réglages et observations ────────────────────────────────────────────────────────────────── */
+  $('rouage').addEventListener('click', function(){
+    var ouvert = $('reglages').hidden; $('reglages').hidden = !ouvert; $('rouage').setAttribute('aria-expanded', String(ouvert));
+  });
+  $('h24').addEventListener('change', function(){
+    h24 = $('h24').checked; try { localStorage.setItem('eph.h24', h24 ? '1' : '0'); } catch (e) {}
+    if (D) rend();
+  });
+  function ouvreEditeur(modif){
+    $('editeur').hidden = false; $('obs-texte').value = modif && edition ? edition.texte : ''; $('obs-suppr').hidden = !(modif && edition);
+    $('obs-msg').textContent = ''; $('obs-texte').focus();
+  }
+  $('obs-plus').addEventListener('click', function(){ ouvreEditeur(!!edition); });
+  $('obs-annule').addEventListener('click', function(){ $('editeur').hidden = true; });
+  function envoie(methode, url, corps){
+    return fetch(url, {method:methode, credentials:'same-origin', headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body: corps ? JSON.stringify(corps) : undefined}).then(function(r){
+        if (r.status === 401 || r.status === 403) throw {msg:'Réservé à l’administrateur de la box.'};
+        if (r.status === 422) throw {msg:'Texte vide ou trop long (2000 caractères au plus).'};
+        if (!r.ok) throw {msg:'Enregistrement impossible pour le moment.'};
+        return r.json();
+      });
+  }
+  $('obs-ok').addEventListener('click', function(){
+    var t = $('obs-texte').value;
+    envoie(edition ? 'PUT' : 'POST', API + 'observations' + (edition ? '/' + edition.id : ''), {texte: t})
+      .then(function(){ $('editeur').hidden = true; charge(); })
+      .catch(function(e){ $('obs-msg').textContent = (e && e.msg) || 'Enregistrement impossible.'; });
+  });
+  $('obs-suppr').addEventListener('click', function(){
+    if (!edition) return;
+    envoie('DELETE', API + 'observations/' + edition.id)
+      .then(function(){ $('editeur').hidden = true; charge(); })
+      .catch(function(e){ $('obs-msg').textContent = (e && e.msg) || 'Suppression impossible.'; });
+  });
+
+  charge();
+  setInterval(tick, 1000);
+  setInterval(charge, 60000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) charge(); });
+})();
+</script>

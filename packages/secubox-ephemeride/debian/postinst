@@ -1,0 +1,32 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    getent group secubox >/dev/null || addgroup --system secubox >/dev/null
+    id -u secubox-ephemeride >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox --no-create-home --home /var/lib/secubox/ephemeride \
+        --shell /usr/sbin/nologin secubox-ephemeride >/dev/null
+    install -d -m 0755 /var/lib/secubox
+    install -d -o secubox-ephemeride -g secubox -m 0750 /var/lib/secubox/ephemeride
+    install -d -m 0755 /etc/secubox /etc/secubox/ephemeride
+    # La configuration de l'opérateur n'est JAMAIS écrasée.
+    if [ ! -e /etc/secubox/ephemeride.toml ]; then
+      install -m 0644 /usr/share/secubox/ephemeride/ephemeride.toml /etc/secubox/ephemeride.toml
+    fi
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      systemctl enable secubox-ephemeride.service >/dev/null 2>&1 || true
+      # try-restart : une mise à jour recharge le code sans démarrer ce que l'opérateur a arrêté ; un premier démarrage se fait.
+      if systemctl is-active --quiet secubox-ephemeride.service; then
+        systemctl try-restart secubox-ephemeride.service || true
+      else
+        systemctl start secubox-ephemeride.service || true
+      fi
+      if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+      fi
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

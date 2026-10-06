@@ -363,6 +363,14 @@ Tableau de bord central et centre de contrôle
 
 ![SecuBox Hub](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/hub.png)
 
+#### 🌙 Éphéméride
+
+Cardlet du Hall : date, heure du fuseau de la box, lever et coucher du soleil, phase de la Lune, saint du jour, météo, qualité de l'air et observations
+
+**Fonctionnalités:** Calcul astronomique local (sans réseau), Jour et nuit polaires, Saint du jour (fichier personnalisable), Météo facultative avec cache, Hors-ligne, Observations (administrateur), Trois niveaux d'affichage
+
+![Éphéméride](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/ephemeride.png)
+
 #### 🛡️ Security Operations Center
 
 SOC avec horloge mondiale, carte menaces, tickets

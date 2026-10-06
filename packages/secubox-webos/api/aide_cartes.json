@@ -163,6 +163,14 @@
       ]
     },
     {
+      "id": "ephemeride", "ic": "🌙", "nom": "Éphéméride", "service": "ephemeride", "acces": "session",
+      "role": "Où et quand nous sommes : la date, l'heure dans le fuseau de la box, la saison, le lever et le coucher du soleil, la phase de la Lune, le saint du jour, la météo et la qualité de l'air. L'astronomie et le calendrier sont calculés sur la box, sans Internet.",
+      "usage": ["La carte se met à jour seule : l'horloge tourne chaque seconde, le reste chaque minute.", "Sans Internet, la date, le soleil, la Lune et le saint restent affichés ; la météo indique l'heure de sa dernière mise à jour.", "Agrandie, la carte montre l'âge de la Lune, sa prochaine phase et une zone « Observations » : + écrit une note (réservé à l'administrateur de la box).", "⚙ règle l'affichage 12 h / 24 h sur cet appareil."],
+      "metriques": [
+        {"libelle": "observations", "url": "/api/v1/ephemeride/observations", "compte": "observations", "session": true}
+      ]
+    },
+    {
       "id": "sbxos", "ic": "▲", "nom": "SBX OS", "service": "", "acces": "public",
       "role": "La nouvelle interface de la box (Aurora), jouable à côté du Hall : espaces, palette Ctrl K vers ZIA, lecteur et réglages.",
       "usage": ["Ouvrir la carte lance SBX OS en grand ; le Hall reste tel quel."],

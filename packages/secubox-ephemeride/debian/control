@@ -1,0 +1,18 @@
+Source: secubox-ephemeride
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-ephemeride
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, python3-pydantic, adduser, tzdata, secubox-core (>= 1.6.0)
+Recommends: secubox-webos
+Description: SecuBox Éphéméride — cardlet astronomique du Hall SBXOS
+ Date, heure locale, saison, lever et coucher du soleil, phase de la lune, saint du jour,
+ météo et qualité de l'air, et observations de l'utilisateur. L'astronomie et le calendrier
+ sont calculés localement, sans réseau ; la météo (facultative) passe par un cache et la carte
+ reste complète sans Internet.
