@@ -127,9 +127,7 @@ jobs:
           # fichier de chaine croisee, donc `-a arm64` aurait produit des binaires
           # amd64 estampilles arm64 — un mensonge silencieux, pire que l'absence.
           # Il se construit desormais EN NATIF dans un conteneur arm64 emule.
-          #  - secubox-voice-moteur : le moteur vocal de Lexie (piper + vosk aarch64 + whisper-cli) se
-          #    construit HORS-CI, sur gk2, par outils/construire-whisper.sh ; le CI n'a pas vendor/whisper-cli.
-          SKIP_ARM64="secubox-zia-llm secubox-voice-moteur"
+          SKIP_ARM64="secubox-zia-llm"
           arm64_ok() { case " $SKIP_ARM64 " in *" $1 "*) return 1;; *) return 0;; esac; }
 
           combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \

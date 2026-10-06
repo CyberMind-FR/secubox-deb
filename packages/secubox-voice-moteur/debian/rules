@@ -4,9 +4,12 @@
 
 # Les éléments (binaires amont, voix, modèle) sont TÉLÉCHARGÉS et VÉRIFIÉS par
 # outils/recuperer.sh, jamais versés dans git ; whisper-cli est compilé sur un
-# hôte bookworm arm64 par outils/construire-whisper.sh (#1646).
+# hôte arm64 par outils/construire-whisper.sh (#1646), ou pendant le build natif arm64 du CI (#2020).
 M := $(CURDIR)/debian/secubox-voice-moteur
 override_dh_auto_build:
+	# whisper-cli (whisper.cpp épinglé) : compilé ici quand il est absent et que l'hôte est arm64
+	# (conteneur natif du CI, #2020) ; sinon fourni par outils/construire-whisper.sh à la main.
+	[ -x vendor/whisper-cli ] || [ "$$(uname -m)" != "aarch64" ] || bash outils/construire-whisper.sh local
 	bash outils/recuperer.sh
 
 override_dh_auto_install:
