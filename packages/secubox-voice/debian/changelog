@@ -1,3 +1,9 @@
+secubox-voice (0.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * Disjoncteur sur la reconnaissance au studio : après un échec, la reconnaissance reste locale pendant 5 min au lieu d'attendre 25 s le studio à chaque requête. Studio saturé (gk3), ces 25 s plus la reconnaissance locale dépassaient la coupure de 30 s de HAProxy : ZIA affichait « Voix indisponible (504) » (ref #2037).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 16:00:00 +0200
+
 secubox-voice (0.1.9-1~bookworm1) bookworm; urgency=medium
 
   * Le chmod 660 du socket attend jusqu'à 120 s (au lieu de 15 s) et TimeoutStartSec passe à 180 s : sous la charge du démarrage la boucle de 15 s expirait et l'unité échouait au premier essai. uvicorn force le socket en 0o666, donc le chmod reste indispensable (ref #2026).
