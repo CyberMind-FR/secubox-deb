@@ -1,14 +1,15 @@
 Source: secubox-streamforge
-Section: net
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-streamforge
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.3), python3-uvicorn | python3-pip, python3-psutil
-Recommends: secubox-streamlit
-Description: SecuBox Streamlit Forge
- Gestionnaire d'applications Streamlit avec templates.
- Port Debian bookworm de luci-app-streamlit-forge (SecuBox OpenWrt).
+Depends: ${misc:Depends}, secubox-streamlit (>= 1.5.0)
+Description: transitional package, replaced by secubox-streamlit
+ streamforge is now a component of secubox-streamlit. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

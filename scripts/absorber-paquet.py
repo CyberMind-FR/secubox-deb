@@ -169,10 +169,16 @@ def absorber(absorbant: str, ancien: str, sec: bool) -> None:
         if f.is_file():
             t = f.read_text()
             marque = "#DEBHELPER#"
-            t = t.replace(marque, boucle + marque, 1) if marque in t else t.rstrip("\n") + "\n" + boucle
+            # APRÈS #DEBHELPER# : les snippets de debhelper (enable/start) passent d'abord, un `systemctl disable` explicite de
+            # l'absorbé a le dernier mot. Avant `exit 0` s'il y en a un.
+            if marque in t:
+                t = t.replace(marque, marque + "\n" + boucle, 1)
+            else:
+                t = t.rstrip("\n") + "\n" + boucle
+            t = re.sub(r"(?m)^exit 0\s*$", "", t).rstrip("\n") + "\nexit 0\n" if t.lstrip().startswith("#!") else t
             f.write_text(t)
         else:
-            f.write_text("#!/bin/sh\nset -e\n" + boucle + "#DEBHELPER#\nexit 0\n")
+            f.write_text("#!/bin/sh\nset -e\n#DEBHELPER#\n" + boucle + "exit 0\n")
             f.chmod(0o755)
     # 5. control de l'absorbant
     for nom in ("Depends", "Recommends", "Suggests"):

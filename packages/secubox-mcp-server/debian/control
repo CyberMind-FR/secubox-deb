@@ -1,19 +1,15 @@
 Source: secubox-mcp-server
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-mcp-server
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
-Description: SecuBox MCP Server — Model Context Protocol server for AI tools
- Hosts a Model Context Protocol (MCP) server exposing SecuBox
- telemetry, config, and operations to MCP-compatible AI clients
- (Claude Desktop, Cursor, etc.). Operator-controlled tool surface
- with per-client authentication.
- .
- Distinct from sibling packages in the AI cluster:
-  - secubox-ai-gateway — request router with sovereignty policy.
-  - secubox-ai-insights — ML-based threat detection.
+Depends: ${misc:Depends}, secubox-ai-gateway (>= 1.3.0)
+Description: transitional package, replaced by secubox-ai-gateway
+ mcp-server is now a component of secubox-ai-gateway. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

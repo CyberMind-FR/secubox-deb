@@ -67,6 +67,16 @@ if [ "$1" = "configure" ]; then
 fi
 
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/metrics/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "metrics : postinst de $(basename "$_s") en échec" >&2; }
+done
+
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/metrics/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "metrics : postinst de $(basename "$_s") en échec" >&2; }
+done
+
 
 # ── LE SERVICE PRINCIPAL DOIT TOUJOURS ETRE ARME (#1368) ──────────────────────
 # secubox-metrics.service est l'API du tableau de bord : un service coeur, pas
@@ -80,5 +90,4 @@ if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
     systemctl enable secubox-metrics.service >/dev/null 2>&1 || true
     systemctl restart secubox-metrics.service >/dev/null 2>&1 || true
 fi
-
 exit 0

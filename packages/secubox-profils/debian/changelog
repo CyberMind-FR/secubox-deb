@@ -1,3 +1,45 @@
+secubox-profils (1.0.24-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-ai-gateway au lieu de secubox-mcp-server (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-profils (1.0.23-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-ai-gateway au lieu de secubox-localrecall (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-profils (1.0.22-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-metrics au lieu de secubox-glances (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-profils (1.0.21-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-backup au lieu de secubox-cloner (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-profils (1.0.20-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-mqtt au lieu de secubox-zigbee (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-profils (1.0.19-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-streamlit au lieu de secubox-streamforge (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
+secubox-profils (1.0.18-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-qos au lieu de secubox-traffic (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-profils (1.0.17-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-appstore au lieu de secubox-metacatalog (transitoire, #2050).

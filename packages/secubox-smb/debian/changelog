@@ -1,3 +1,9 @@
+secubox-smb (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : smb est un composant de secubox-media >= 1.7.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-smb (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * UN PARTAGE PAR SUPPORT MONTE. ksmbd ne traverse pas les points de montage

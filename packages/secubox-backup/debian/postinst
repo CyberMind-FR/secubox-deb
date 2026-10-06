@@ -20,4 +20,8 @@ if [ "$1" = "configure" ]; then
     systemctl start secubox-backup.service || true
 fi
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/backup/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "backup : postinst de $(basename "$_s") en échec" >&2; }
+done
 exit 0

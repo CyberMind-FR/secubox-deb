@@ -1,3 +1,0 @@
-/etc/ksmbd/ksmbd.conf
-/etc/nftables.d/zz-secubox-smb.nft
-/etc/avahi/services/secubox-smb.service

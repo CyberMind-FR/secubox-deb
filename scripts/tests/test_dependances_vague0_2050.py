@@ -22,10 +22,11 @@ def _binaires():
     return noms
 
 
-def test_streamforge_recommande_le_vrai_nom_du_paquet_streamlit():
-    rec = _champ("secubox-streamforge", "Recommends")
-    assert "secubox-streamlit" in rec
-    assert not re.search(r"(?<![\w-])streamlit(?![\w-])", rec)          # « streamlit » seul n'existe pas
+def test_streamforge_transitoire_tire_le_vrai_nom_du_paquet_streamlit():
+    """streamforge est un composant de streamlit depuis #2050 ; le transitoire dépend du VRAI nom (« streamlit » seul n'existe pas)."""
+    dep = _champ("secubox-streamforge", "Depends")
+    assert "secubox-streamlit" in dep
+    assert not re.search(r"(?<![\w-])streamlit(?![\w-])", dep)
     assert "secubox-streamlit" in _binaires()
 
 

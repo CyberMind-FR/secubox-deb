@@ -37,6 +37,39 @@ override_dh_auto_install:
 	# l'utilisent, metrics n'est dans aucun profil → nginx -t cassé).
 	install -D -m 0755 sbin/secubox-vhost-logs \
 	    $(CURDIR)/debian/secubox-metrics/usr/sbin/secubox-vhost-logs
+	# Composant absorbé : glances (#2050)
+	install -d debian/secubox-metrics/usr/lib/secubox/glances/
+	cp -r composants/glances/api debian/secubox-metrics/usr/lib/secubox/glances/
+	install -d debian/secubox-metrics/usr/share/secubox/www
+	[ -d composants/glances/www ] && cp -r composants/glances/www/. debian/secubox-metrics/usr/share/secubox/www/ || true
+	install -d debian/secubox-metrics/usr/share/secubox/menu.d
+	[ -d composants/glances/menu.d ] && cp -r composants/glances/menu.d/. debian/secubox-metrics/usr/share/secubox/menu.d/ || true
+	# Modular composants/glances/nginx composants/glances/config
+	install -d debian/secubox-metrics/etc/nginx/secubox.d
+	[ -f composants/glances/nginx/glances.conf ] && cp composants/glances/nginx/glances.conf debian/secubox-metrics/etc/nginx/secubox.d/ || true
+	install -D -m 755 composants/glances/debian/postinst debian/secubox-metrics/usr/lib/secubox/metrics/maintscripts/glances.postinst
+	install -D -m 755 composants/glances/debian/prerm debian/secubox-metrics/usr/lib/secubox/metrics/maintscripts/glances.prerm
+	install -D -m 644 composants/glances/debian/secubox-glances.service debian/secubox-metrics/usr/lib/systemd/system/secubox-glances.service
+	# Composant absorbé : reporter (#2050)
+	install -d debian/secubox-metrics/usr/lib/secubox/reporter/
+	cp -r composants/reporter/api debian/secubox-metrics/usr/lib/secubox/reporter/
+	install -d debian/secubox-metrics/usr/share/secubox/www
+	[ -d composants/reporter/www ] && cp -r composants/reporter/www/. debian/secubox-metrics/usr/share/secubox/www/ || true
+	install -d debian/secubox-metrics/usr/share/secubox/menu.d
+	[ -d composants/reporter/menu.d ] && cp -r composants/reporter/menu.d/. debian/secubox-metrics/usr/share/secubox/menu.d/ || true
+	# Modular composants/reporter/nginx composants/reporter/config
+	install -d debian/secubox-metrics/etc/nginx/secubox.d
+	[ -f composants/reporter/nginx/reporter.conf ] && cp composants/reporter/nginx/reporter.conf debian/secubox-metrics/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-metrics/etc/nginx/secubox-routes.d
+	[ -f composants/reporter/nginx/reporter.conf ] && cp composants/reporter/nginx/reporter.conf debian/secubox-metrics/etc/nginx/secubox-routes.d/ || true
+	# Report composants/reporter/templates directory
+	install -d debian/secubox-metrics/usr/share/secubox/reporter/templates
+	install -D -m 755 composants/reporter/debian/postinst debian/secubox-metrics/usr/lib/secubox/metrics/maintscripts/reporter.postinst
+	install -D -m 755 composants/reporter/debian/prerm debian/secubox-metrics/usr/lib/secubox/metrics/maintscripts/reporter.prerm
+	install -D -m 644 composants/reporter/debian/secubox-reporter.service debian/secubox-metrics/usr/lib/systemd/system/secubox-reporter.service
 
 override_dh_install:
 	dh_install

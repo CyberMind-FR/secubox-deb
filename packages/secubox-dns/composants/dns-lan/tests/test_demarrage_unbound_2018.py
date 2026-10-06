@@ -20,5 +20,6 @@ def test_dropin_demarrage_unbound_a_un_delai_assez_long():
 
 
 def test_dropin_est_installe_par_le_paquet():
-    rules = (PAQUET / "debian" / "rules").read_text()
+    # dns-lan est un composant de secubox-dns depuis #2050 : l'installation vit dans les rules de l'absorbant
+    rules = (PAQUET.parents[1] / "debian" / "rules").read_text()
     assert "unbound.service.d/10-secubox-demarrage.conf" in rules

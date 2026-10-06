@@ -1,3 +1,9 @@
+secubox-cloner (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : cloner est un composant de secubox-backup >= 2.2.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-cloner (1.1.1-1~bookworm1) bookworm; urgency=high
 
   * 11 routes ouvertes, dont POST /backups/{id}/restore (ecrase le systeme

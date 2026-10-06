@@ -43,3 +43,25 @@ override_dh_auto_install:
 	# Example config
 	install -d debian/secubox-streamlit/usr/share/doc/secubox-streamlit/examples
 	[ -f config/streamlit.toml.example ] && install -m 644 config/streamlit.toml.example debian/secubox-streamlit/usr/share/doc/secubox-streamlit/examples/ || true
+	# Composant absorbé : streamforge (#2050)
+	install -d debian/secubox-streamlit/usr/lib/secubox/streamforge/
+	cp -r composants/streamforge/api debian/secubox-streamlit/usr/lib/secubox/streamforge/
+	install -d debian/secubox-streamlit/usr/share/secubox/www
+	[ -d composants/streamforge/www ] && cp -r composants/streamforge/www/. debian/secubox-streamlit/usr/share/secubox/www/ || true
+	install -d debian/secubox-streamlit/usr/share/secubox/menu.d
+	[ -d composants/streamforge/menu.d ] && cp -r composants/streamforge/menu.d/. debian/secubox-streamlit/usr/share/secubox/menu.d/ || true
+	# Modular composants/streamforge/nginx composants/streamforge/config
+	install -d debian/secubox-streamlit/etc/nginx/secubox.d
+	[ -f composants/streamforge/nginx/streamforge.conf ] && cp composants/streamforge/nginx/streamforge.conf debian/secubox-streamlit/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-streamlit/etc/nginx/secubox-routes.d
+	[ -f composants/streamforge/nginx/streamforge.conf ] && cp composants/streamforge/nginx/streamforge.conf debian/secubox-streamlit/etc/nginx/secubox-routes.d/ || true
+	# streamforgectl (#183)
+	install -d debian/secubox-streamlit/usr/sbin
+	install -m 755 composants/streamforge/sbin/streamforgectl debian/secubox-streamlit/usr/sbin/
+	install -D -m 755 composants/streamforge/debian/postinst debian/secubox-streamlit/usr/lib/secubox/streamlit/maintscripts/streamforge.postinst
+	install -D -m 755 composants/streamforge/debian/prerm debian/secubox-streamlit/usr/lib/secubox/streamlit/maintscripts/streamforge.prerm
+	install -D -m 644 composants/streamforge/debian/secubox-streamforge.service debian/secubox-streamlit/usr/lib/systemd/system/secubox-streamforge.service
+

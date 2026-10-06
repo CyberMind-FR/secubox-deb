@@ -1,22 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_install:
-	install -d debian/secubox-streamforge/usr/lib/secubox/streamforge/
-	cp -r api debian/secubox-streamforge/usr/lib/secubox/streamforge/
-	install -d debian/secubox-streamforge/usr/share/secubox/www
-	[ -d www ] && cp -r www/. debian/secubox-streamforge/usr/share/secubox/www/ || true
-	install -d debian/secubox-streamforge/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-streamforge/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
-	install -d debian/secubox-streamforge/etc/nginx/secubox.d
-	[ -f nginx/streamforge.conf ] && cp nginx/streamforge.conf debian/secubox-streamforge/etc/nginx/secubox.d/ || true
-	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
-	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
-	# elle n etait jamais lue.
-	install -d debian/secubox-streamforge/etc/nginx/secubox-routes.d
-	[ -f nginx/streamforge.conf ] && cp nginx/streamforge.conf debian/secubox-streamforge/etc/nginx/secubox-routes.d/ || true
-	# streamforgectl (#183)
-	install -d debian/secubox-streamforge/usr/sbin
-	install -m 755 sbin/streamforgectl debian/secubox-streamforge/usr/sbin/

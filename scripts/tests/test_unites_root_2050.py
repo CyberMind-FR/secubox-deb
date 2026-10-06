@@ -12,16 +12,18 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[2]
 
 PAQUETS_ROOT_TOLERES = {
-    "admin", "aggregator", "certs", "cloner", "cookies", "exposure", "health",
+    "admin", "aggregator", "backup", "certs", "cookies", "exposure", "health",
     "interceptor", "ksm", "led-heartbeat", "mail", "metrics", "netboot",
     "netdiag", "nettweak", "profiles", "qos", "threatmesh", "toolbox",
-    "traffic", "vm", "zigbee",
+    "mqtt", "vm",
 }
 
 
 def _paquets_root():
     trouves = set()
-    motifs = ("packages/*/debian/*.service", "packages/*/systemd/*.service")
+    # les unités d'un composant absorbé (#2050) vivent sous composants/<absorbé>/ : le garde-fou les suit
+    motifs = ("packages/*/debian/*.service", "packages/*/systemd/*.service",
+              "packages/*/composants/*/debian/*.service", "packages/*/composants/*/systemd/*.service")
     for motif in motifs:
         for f in glob.glob(str(RACINE / motif)):
             if re.search(r"/debian/secubox-[a-z0-9-]+/", f):

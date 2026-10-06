@@ -1,3 +1,9 @@
+secubox-streamforge (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : streamforge est un composant de secubox-streamlit >= 1.5.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-streamforge (1.2.4-1~bookworm1) bookworm; urgency=low
 
   * Recommends: secubox-streamlit (le nom « streamlit » n'existe pas : la recommandation ne s'appliquait à rien). (ref #2050)
