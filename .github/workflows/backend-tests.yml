@@ -124,6 +124,9 @@ jobs:
           # boucle de 60 s lançait ~290 systemctl en cinq minutes sur gk2.
           - suite: secubox-metacatalog
             chemin: packages/secubox-appstore/composants/metacatalog/tests
+          # Le catalogue se génère : un groupe ne cite pas un module absorbé (#2050).
+          - suite: secubox-appstore-catalogue
+            chemin: packages/secubox-appstore/tests/test_catalogue_groupes_2050.py
           # Un seul systemctl par passage du prober (#1835) : ~310 en cinq minutes.
           - suite: secubox-health
             chemin: packages/secubox-health/tests
