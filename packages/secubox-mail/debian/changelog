@@ -1,3 +1,9 @@
+secubox-mail (2.13.1-1~bookworm1) bookworm; urgency=medium
+
+  * Unite smtp-relay : /var/log/mail.log devient optionnel (prefixe -). Le courrier tourne dans le LXC, le fichier n'existe pas sur l'hote : l'unite echouait en 226/NAMESPACE en boucle.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 00:15:00 +0200
+
 secubox-mail (2.13.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-smtp-relay (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
