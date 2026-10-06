@@ -51,7 +51,7 @@ setup() {
 
 @test "mailctl redis répare aussi systemd-resolved du conteneur quand il existe et ne tourne pas" {
   lxc_attach() { echo "ATTACH $*" >> "$CALLS"; case "$*" in *"cat >"*) cat >> "$CALLS" ;; esac
-    case "$*" in *"is-active systemd-resolved"*) return 3 ;; *"cat systemd-resolved"*|*"list-unit-files systemd-resolved"*) return 0 ;; esac; return 0; }
+    case "$*" in *"is-active --quiet systemd-resolved"*) return 3 ;; *"cat systemd-resolved"*|*"list-unit-files systemd-resolved"*) return 0 ;; esac; return 0; }
   export -f lxc_attach
   run cmd_redis
   [ "$status" -eq 0 ]
