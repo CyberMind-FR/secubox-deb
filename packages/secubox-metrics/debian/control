@@ -18,7 +18,7 @@ Depends: ${misc:Depends},
          python3-cryptography,
          nftables
 Recommends: geoipupdate,
-            python3-fpdf2,
+            python3-fpdf2 | python3-fpdf (>= 2),
             python3-matplotlib
 Replaces: secubox-metalogizer
 Conflicts: secubox-metalogizer

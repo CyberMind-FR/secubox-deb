@@ -1,3 +1,10 @@
+secubox-metrics (1.12.14-1~bookworm1) bookworm; urgency=medium
+
+  * Le rapport WAF quotidien echouait depuis la migration Trixie (« No module named 'fpdf' ») : Debian 13 n'a pas python3-fpdf2,
+    le paquet y est python3-fpdf (2.8.3). Recommends: python3-fpdf2 | python3-fpdf (>= 2).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 17:40:00 +0200
+
 secubox-metrics (1.12.13-1~bookworm1) bookworm; urgency=medium
 
   * geoipupdate attend unbound.service et se relance en cas d'echec de resolution (Debian 13) (ref #1997).
