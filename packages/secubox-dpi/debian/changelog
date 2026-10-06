@@ -1,3 +1,9 @@
+secubox-dpi (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * SECUBOX_DPI_PAUSE : pause configurable entre deux fenêtres de capture (défaut 0, comportement inchangé) et fichier d'environnement optionnel /etc/secubox/dpi-flowcap.env, pour les box saturées (gk3) (ref #2045).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 19:00:00 +0200
+
 secubox-dpi (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Données d'ad-guard (ref #1960), en LECTURE SEULE : le DPI lit les fichiers de DONNÉES d'ad-guard (`services.txt`, listes publicité/pistage/télémétrie/réseaux sociaux) et son fichier

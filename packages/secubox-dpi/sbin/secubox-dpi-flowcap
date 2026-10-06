@@ -15,6 +15,9 @@ readonly MODULE="secubox-dpi-flowcap"
 
 IFACE="${SECUBOX_DPI_IFACE:-wg-toolbox}"
 WINDOW="${SECUBOX_DPI_WINDOW:-60}"
+# Pause (secondes) entre deux fenetres de capture : 0 = enchainees (comportement historique). Sur une box saturee
+# (gk3), 240 ramene la capture a ~20 % du temps (#2045).
+PAUSE="${SECUBOX_DPI_PAUSE:-0}"
 CSV="${SECUBOX_DPI_CSV:-/run/secubox/dpi/flows.csv}"
 COLLECTOR="${SECUBOX_DPI_COLLECTOR:-/usr/sbin/secubox-dpi-collector}"
 
@@ -32,5 +35,8 @@ while true; do
     if [ -s "$CSV" ]; then
         nice -n 15 "$COLLECTOR" "$CSV" >/dev/null 2>&1 || \
             echo "[$MODULE] collector run failed" >&2
+    fi
+    if [ "$PAUSE" -gt 0 ] 2>/dev/null; then
+        sleep "$PAUSE"
     fi
 done

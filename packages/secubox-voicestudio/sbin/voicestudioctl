@@ -411,6 +411,7 @@ def bloc_lxc(c: dict) -> str:
     auto = 1 if sec.get("mode", "permanent") == "permanent" else 0
     return (f"{MARQUE_DEBUT}\nlxc.start.auto = {auto}\n"
             f"lxc.cgroup2.memory.max = {sec.get('memoire', '4G')}\n"
+            f"lxc.cgroup2.memory.swap.max = {sec.get('swap', '1G')}\n"
             f"lxc.cgroup2.cpu.weight = {int(sec.get('cpu_poids', 50))}\n{MARQUE_FIN}\n")
 
 

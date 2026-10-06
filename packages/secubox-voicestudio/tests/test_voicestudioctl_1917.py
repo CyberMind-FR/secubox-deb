@@ -1713,3 +1713,24 @@ def test_boot_demande_laisse_dormir_le_lxc(bac_a_sable, monkeypatch):
 def test_boot_echec_du_reveil_se_voit_dans_le_code_retour(bac_a_sable, monkeypatch):
     monkeypatch.setattr(c, "reveiller", lambda *a, **k: False)
     assert c.cmd_boot(run=LxcFaux("STOPPED")) == 1
+
+
+# ── #2045 : plafond de swap du moteur — échec rapide plutôt qu'un enlisement de 20 min ────────────────
+# gk3 (7,8 Go) : le moteur tenait 2,2 Go en RAM + 3,3 Go en swap, des chargements de modèle dépassaient
+# 1200 s et tout expirait. Un plafond de swap fait échouer vite (le service du moteur redémarre) au lieu de
+# faire ramer toute la machine.
+
+def test_le_bloc_lxc_plafonne_le_swap_du_moteur():
+    bloc = c.bloc_lxc({"lxc": {"memoire": "4G"}})
+    assert "lxc.cgroup2.memory.max = 4G" in bloc
+    assert "lxc.cgroup2.memory.swap.max = 1G" in bloc          # défaut
+
+
+def test_le_plafond_de_swap_est_reglable():
+    bloc = c.bloc_lxc({"lxc": {"memoire": "4G", "swap": "512M"}})
+    assert "lxc.cgroup2.memory.swap.max = 512M" in bloc
+
+
+def test_le_toml_du_paquet_documente_le_swap():
+    toml = (PKG / "conf" / "voicestudio.toml").read_text()
+    assert re.search(r'(?m)^swap\s*=\s*"1G"', toml)
