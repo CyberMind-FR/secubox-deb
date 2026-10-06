@@ -394,14 +394,23 @@ async def apply_wireguard_config(req: WireguardConfigRequest, user=Depends(requi
     return {"success": True}
 
 
+# Serrage du MSS au PMTU (nftables). Table DÉDIÉE, supprimée puis recréée à chaque appel : l'ancienne version appelait
+# `iptables -A FORWARD …` (interdit par les règles du projet) et AJOUTAIT une règle de plus à chaque appel (#2050).
+_MSS_NFT = """table inet secubox_netmodes_mss
+delete table inet secubox_netmodes_mss
+table inet secubox_netmodes_mss {
+    chain forward {
+        type filter hook forward priority mangle; policy accept;
+        tcp flags & (syn | rst) == syn tcp option maxseg size set rt mtu
+    }
+}
+"""
+
+
 @router.post("/apply_mtu_clamping")
 def apply_mtu_clamping(mtu: int = 1280, user=Depends(require_jwt)):
-    """Appliquer le MTU clamping."""
-    r = subprocess.run(
-        ["iptables", "-A", "FORWARD", "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
-         "-j", "TCPMSS", "--clamp-mss-to-pmtu"],
-        capture_output=True, text=True
-    )
+    """Appliquer le serrage du MSS au PMTU (le paramètre `mtu` est conservé pour compatibilité de l'API, sans effet)."""
+    r = subprocess.run(["nft", "-f", "-"], input=_MSS_NFT, capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
