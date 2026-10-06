@@ -17,6 +17,8 @@ nom      = "voicestudio"
 chemin   = "/data/lxc"
 ip       = "10.100.0.230"
 memoire  = "4G"        # plafond cgroup du conteneur
+swap     = "1G"        # plafond de SWAP du conteneur : au-delà, le moteur est tué et redémarre (échec rapide) au lieu de
+                       # s'enliser des minutes dans le swap (gk3 : 3,3 Go swappés, chargements de modèle > 1200 s, #2045)
 cpu_poids = 50         # 1–10000 ; 100 = poids par défaut, bas = cède le pas aux autres services
 
 # « permanent » : le LXC démarre avec la box (comportement historique, Lexie

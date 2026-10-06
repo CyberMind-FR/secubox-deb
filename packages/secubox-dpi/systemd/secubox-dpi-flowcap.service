@@ -9,6 +9,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Reglages propres a la box (ex. SECUBOX_DPI_PAUSE=240) : fichier optionnel, hors paquet (#2045).
+EnvironmentFile=-/etc/secubox/dpi-flowcap.env
 ExecStart=/usr/sbin/secubox-dpi-flowcap
 Restart=always
 RestartSec=10
