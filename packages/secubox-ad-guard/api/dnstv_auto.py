@@ -149,4 +149,13 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
     for r in regles.liste():
         if r["id"] not in avant_ids:
             changements.append({"appareil": r["appareil"], "domaine": r["domaine"], "de": "", "vers": "candidat", "motif": r["motif"]})
+    # Un domaine que l'administrateur a CONFIRMÉ sur ≥ N autres appareils entre à l'ESSAI (24 h, réversible : rafale de refus ou
+    # contenu disparu le retire) quand l'essai automatique est actif. Restés « candidat » faute de cette étape, ads-canalplus et
+    # vizchoice laissaient passer la pub sur une TV (gk2). Les autres candidats (risque non faible, proposés à la main) restent humains.
+    if reglage.auto_essai:
+        for r in regles.liste():
+            if (r["etat"] == "candidat" and r.get("origine") == "auto" and r["risque"] == "faible"
+                    and str(r.get("motif", "")).startswith("confirmé sur ")):
+                note(regles.transiter(r["id"], "essai", "auto", "essai automatique (confirmé ailleurs)", maintenant),
+                     "candidat", "essai", "essai automatique (confirmé ailleurs)")
     return {"changements": changements, "candidats": candidats, "applique": applique, "agrege": agrege}

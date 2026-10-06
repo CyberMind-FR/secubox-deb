@@ -1,3 +1,12 @@
+secubox-ad-guard (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Un domaine confirme par l'administrateur sur plusieurs autres appareils entre a l'ESSAI (24 h, reversible) quand l'essai
+    automatique est actif : les candidats agreges restaient « candidat » indefiniment (ads-canalplus.akamaized.net et
+    vizchoice.viznet.tv laissaient passer de la pub sur une TV de gk2). Les candidats a risque non faible ou proposes a la
+    main restent a valider par un humain.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 13:50:00 +0200
+
 secubox-ad-guard (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Détection automatique permanente (réglages `confirmation_auto` et `declencheurs_pub`, faux par défaut) : un essai de 24 h sans régression devient une règle confirmée à l'échéance au lieu d'être retiré faute de validation humaine (prolongé si l'appareil a été trop peu actif, retiré sur rafale de refus ou contenu habituel disparu) ; un hôte de pub connu, même déjà bloqué, ouvre la fenêtre de détection des nouveaux hôtes (ref #2047).

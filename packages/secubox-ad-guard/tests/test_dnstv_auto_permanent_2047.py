@@ -113,3 +113,54 @@ def test_le_reglage_se_lit_dans_le_toml(tmp_path):
     rg = M.reglage_depuis({}, f)
     assert rg.confirmation_auto is True and rg.declencheurs_pub is True
     assert M.reglage_depuis({}, tmp_path / "absent.toml").confirmation_auto is False
+
+
+# ── un domaine confirmé ailleurs par l'administrateur entre à l'essai (constaté sur gk2 : pub Canal+) ─────────────────
+
+ETAT3 = {"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "TV a", "mode": "auto"},
+                                     {"ip": "192.168.1.96", "nom": "TV b", "mode": "auto"},
+                                     {"ip": "192.168.1.97", "nom": "TV c", "mode": "auto"}]}
+
+
+def confirme_par_admin(regles, appareil, domaine, t):
+    rid = regles.proposer(appareil, domaine, 50, "faible", t - 100, origine="admin")["id"]
+    regles.transiter(rid, "essai", "admin", "", t - 100)
+    regles.transiter(rid, "confirme", "admin", "ok", t - 90)
+
+
+def test_un_candidat_agrege_entre_a_l_essai_si_l_essai_automatique_est_actif(magasin):
+    t = int(time.time())
+    r = R.Regles()
+    for app in ("tv-a", "tv-b"):
+        confirme_par_admin(r, app, "ads-canalplus.akamaized.net", t)
+    M.tick(ETAT3, r, magasin, classer, M.Reglage(auto_essai=True), t)
+    c = [x for x in r.liste() if x["appareil"] == "tv-c"]
+    assert [x["etat"] for x in c] == ["essai"]
+    assert c[0]["historique"][-1]["origine"] == "auto"
+
+
+def test_un_candidat_agrege_reste_candidat_sans_essai_automatique(magasin):
+    t = int(time.time())
+    r = R.Regles()
+    for app in ("tv-a", "tv-b"):
+        confirme_par_admin(r, app, "ads-canalplus.akamaized.net", t)
+    M.tick(ETAT3, r, magasin, classer, M.Reglage(), t)
+    assert [x["etat"] for x in r.liste() if x["appareil"] == "tv-c"] == ["candidat"]
+
+
+def test_un_candidat_agrege_deja_la_depuis_un_passage_precedent_est_aussi_promu(magasin):
+    t = int(time.time())
+    r = R.Regles()
+    for app in ("tv-a", "tv-b"):
+        confirme_par_admin(r, app, "vizchoice.viznet.tv", t)
+    M.tick(ETAT3, r, magasin, classer, M.Reglage(), t)                      # créé en candidat (essai auto inactif)
+    M.tick(ETAT3, r, magasin, classer, M.Reglage(auto_essai=True), t + 60)  # puis l'essai auto est activé
+    assert [x["etat"] for x in r.liste() if x["appareil"] == "tv-c"] == ["essai"]
+
+
+def test_un_candidat_a_risque_non_faible_n_est_pas_promu(magasin):
+    t = int(time.time())
+    r = R.Regles()
+    r.proposer("tv-c", "partage.example.com", 50, "partage", t, origine="auto", motif="confirmé sur 2 autres appareils")
+    M.tick(ETAT3, r, magasin, classer, M.Reglage(auto_essai=True), t + 60)
+    assert [x["etat"] for x in r.liste() if x["appareil"] == "tv-c"] == ["candidat"]
