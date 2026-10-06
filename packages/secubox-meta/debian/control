@@ -195,6 +195,7 @@ Depends: ${misc:Depends},
          secubox-sbxui,
          secubox-sbxos,
          secubox-portal,
+         secubox-hub,
          secubox-sbxid
 Recommends: secubox-surf,
          secubox-devwatch,

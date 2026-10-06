@@ -124,3 +124,11 @@ def test_sbxos_pose_tout_le_hall():
         if p not in pose:
             manquants.append(f"{i} → {p}")
     assert not manquants, "cartes du Hall que sbxos n'installe pas : " + ", ".join(manquants)
+
+
+def test_le_hub_vivant_est_dans_l_arbre_pas_hors_arbre():
+    """#2050 : secubox-hub générait le menu du Hall mais était classé « remplacé »."""
+    depot, noeuds, hors = _etat()
+    assert "secubox-hub" not in hors
+    hall = next(n for n in noeuds if n.get("meta") == "secubox-service-hall")
+    assert "secubox-hub" in hall["requiert"]

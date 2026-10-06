@@ -1,3 +1,10 @@
+secubox-meta (0.1.18-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-hub reintegre dans l'arbre (service Hall) : il est vivant et genere le menu
+    du Hall, il etait faussement classe « remplace » (#2050, vague 0).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 10:05:00 +0200
+
 secubox-meta (0.1.17-1~bookworm1) bookworm; urgency=medium
 
   * secubox-eye-square n'est plus proposé par défaut (groupe Écrans) ; il reste installable à la demande. Le test du Hall reconnaît VoiceStudio (amd64 seul, suggéré) et la carte Voix (secubox-voice) (ref #2018).
