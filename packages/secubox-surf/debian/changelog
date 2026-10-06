@@ -1,3 +1,9 @@
+secubox-surf (1.0.31-1~bookworm1) bookworm; urgency=high
+
+  * python3-socksio devient une dépendance ferme : « python3-socksio | python3-pip » était satisfaite par pip, donc socksio n'était pas installé sur gk3 et tout .onion répondait HTTP 500 (« Using SOCKS proxy, but the 'socksio' package is not installed »). L'unité ne fige plus l'adresse Tor de gk2 : chaque box détecte son propre SOCKS (ref #2039).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 17:00:00 +0200
+
 secubox-surf (1.0.30-1~bookworm1) bookworm; urgency=medium
 
   * Un .onion se joint en http : le surfer forcait https:// vers toute cible, et le service cache de gk2 (port 80 seulement) repondait « destination refusee » (502/504) (ref #1997).
