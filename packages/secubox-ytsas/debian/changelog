@@ -1,3 +1,9 @@
+secubox-ytsas (0.2.13-1~bookworm1) bookworm; urgency=high
+
+  * Un 403 sur les données vidéo avec des cookies (que YouTube n'accepte plus) ne fait plus échouer les vidéos publiques : le moteur retente sans cookies et marque les cookies périmés. Constaté sur gk2 : toute la radio écartée par un cookies.txt déposé le jour même (ref #2028).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 11:00:00 +0200
+
 secubox-ytsas (0.2.12-1~bookworm1) bookworm; urgency=medium
 
   * billets YTSaS : liens vers le YTSaS de CETTE box ; ytsas.toml sans nom gk2 (#1723, #1713).
