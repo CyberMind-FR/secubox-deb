@@ -1,7 +1,16 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """Freebox TV — parsing de la playlist M3U (variante standard uniquement)."""
-from api.main import parse_playlist
+import importlib.util
+from pathlib import Path
+
+# Composant de secubox-media (#2050) : `api.main` désigne alors l'API du média,
+# on charge donc celle de freeboxtv par son chemin.
+_spec = importlib.util.spec_from_file_location(
+    "freeboxtv_main", Path(__file__).resolve().parent.parent / "api" / "main.py")
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+parse_playlist = _mod.parse_playlist
 
 SAMPLE = """#EXTM3U
 #EXTINF:0,2 - France 2 (auto)

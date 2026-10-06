@@ -1,3 +1,9 @@
+secubox-meta (0.1.26-1~bookworm1) bookworm; urgency=medium
+
+  * Le service Video recommande secubox-media (qui absorbe freeboxtv, #2050) au lieu de secubox-freeboxtv.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 22:00:00 +0200
+
 secubox-meta (0.1.25-1~bookworm1) bookworm; urgency=medium
 
   * Retire la dependance directe a secubox-torrent (absorbe par secubox-ytsas, #2050) ; secubox-ytsas la porte deja.

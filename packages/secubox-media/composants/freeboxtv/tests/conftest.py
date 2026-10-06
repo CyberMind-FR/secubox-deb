@@ -6,7 +6,7 @@ from pathlib import Path
 
 _pkg = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_pkg))
-_repo = Path(__file__).resolve().parents[3]
+_repo = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(_repo / "common"))
 
 # Le harnais represente un client de tableau de bord LAN (#1256) : mode arme +
