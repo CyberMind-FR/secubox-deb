@@ -2,7 +2,7 @@
 set -e
 case "$1" in
   remove|deconfigure)
-    systemctl disable --now secubox-voicestudio-pub.socket secubox-voicestudio-api.service secubox-voicestudio-provision.service secubox-voicestudio-interface.service secubox-voicestudio-rapide.service >/dev/null 2>&1 || true
+    systemctl disable --now secubox-voicestudio-pub.socket secubox-voicestudio-api.service secubox-voicestudio-provision.service secubox-voicestudio-interface.service secubox-voicestudio-rapide.service secubox-voicestudio-demarrage.service >/dev/null 2>&1 || true
     systemctl stop secubox-voicestudio-pub.service >/dev/null 2>&1 || true
     # Le conteneur et ses données restent sur le disque : on le rendort, on ne le détruit pas.
     /usr/sbin/voicestudioctl sleep >/dev/null 2>&1 || true

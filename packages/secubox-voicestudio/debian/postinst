@@ -42,6 +42,9 @@ case "$1" in
     systemctl enable secubox-voicestudio-interface.service 2>/dev/null || true
     systemctl start --no-block secubox-voicestudio-interface.service 2>/dev/null || true
     systemctl enable secubox-voicestudio-rapide.service 2>/dev/null || true
+    # Démarrage du LXC au boot en mode « permanent » (#2021) : activé ; lancé tout de suite seulement si le LXC existe.
+    systemctl enable secubox-voicestudio-demarrage.service 2>/dev/null || true
+    systemctl start --no-block secubox-voicestudio-demarrage.service 2>/dev/null || true
     systemctl start --no-block secubox-voicestudio-rapide.service 2>/dev/null || true
     DOMAINE="$(secubox-domaine voicestudio 2>/dev/null || true)"
     CLE_VHOST="$(printf '%s' "$DOMAINE" | tr '.' '_')"

@@ -27,6 +27,7 @@ Seule surface privilégiée du module : le panneau (utilisateur `secubox`) l'app
   status [--json]    état du LXC, du moteur, de la configuration
   start | stop | restart
   wake | sleep       appelés par le mandataire (ne touchent pas à la socket)
+  boot               au démarrage : réveille le LXC en mode « permanent », ne fait rien en « demande » (#2021)
   logs [N]           journal du moteur (dans le LXC)
   cle | init         affiche / crée la clé d'API
   cle-renouveler     nouvelle clé, poussée dans le LXC ; l'affiche UNE fois
@@ -1151,6 +1152,19 @@ def cmd_wake(run=_run) -> int:
 
 
 @sous_verrou(bloquant=True)
+def cmd_boot(run=_run) -> int:
+    """Au démarrage de la box (unité secubox-voicestudio-demarrage, #2021). En « permanent » le LXC doit
+    tourner sans attendre un appel : on le réveille. En « demande » il dort jusqu'au premier appel."""
+    c = charger()
+    if c.get("lxc", {}).get("mode", "permanent") != "permanent":
+        return 0
+    if not reveiller(c, run):
+        return 1
+    memoriser_etat("RUNNING")
+    return 0
+
+
+@sous_verrou(bloquant=True)
 def cmd_sleep(run=_run) -> int:
     c = charger()
     ok = endormir(c, run)
@@ -1600,6 +1614,8 @@ def main(argv: list[str]) -> int:
             return cmd_restart()
         if cmd == "wake":
             return cmd_wake()
+        if cmd == "boot":
+            return cmd_boot()
         if cmd == "sleep":
             return cmd_sleep()
         if cmd == "logs":
