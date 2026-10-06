@@ -1,3 +1,9 @@
+secubox-webos (1.0.403-1~bookworm1) bookworm; urgency=medium
+
+  * Le studio VoiceStudio embarqué peut demander le micro : drapeau micro_embed (le micro n'est délégué qu'au cadre embarqué des services qui le déclarent) et origine voicestudio.<domaine du Hall> dans le Permissions-Policy, comme mood. Corrige « Accès au microphone refusé » dans le studio natif (ref #2030).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 12:00:00 +0200
+
 secubox-webos (1.0.402-1~bookworm1) bookworm; urgency=medium
 
   * Compatibilité Debian 13 (ref #1294) : python3-python-multipart (voir secubox-core 1.5.55).

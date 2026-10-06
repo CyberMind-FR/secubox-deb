@@ -1435,7 +1435,7 @@ const FEATURED = [
   //    /api/v1/voicestudio/usager/. `auth:true` (les routes exigent une personne) ; `micro_audio:true` (la dictée ; jamais
   //    d'écoute d'elle-même : il faut un clic) ; `admin:false` : pas de ⚙️ pour un usager. Absente d'une box sans le module :
   //    les cartes le DISENT (502 → « pas installé sur cette box »).
-  {id:"voicestudio", label:"VoiceStudio", icon:"🎙️", color:"#c87832", url:"voicestudio.gk2.secubox.in", carte:"/cardlets/voicestudio-admin.html", h:160, auth:true, admin:"/voicestudio/"},
+  {id:"voicestudio", label:"VoiceStudio", icon:"🎙️", color:"#c87832", url:"voicestudio.gk2.secubox.in", carte:"/cardlets/voicestudio-admin.html", h:160, auth:true, admin:"/voicestudio/", micro_embed:true},
   {id:"voix",        label:"Voix",        icon:"🗣️", color:"#c87832", carte:"/cardlets/voicestudio.html", h:300, auth:true, micro_audio:true, admin:false},
   {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360, admin:false},
   // SBX OS (#1293) : pas une cardlet mais la COQUILLE, servie par le Hall a
@@ -1881,6 +1881,9 @@ function svcDesc(id){
           path:(f&&typeof f.admin==='string')?f.admin:(s.path||('/'+id+'/')),
           sansAdmin:!!(f&&f.admin===false),
           carte:(f&&f.carte)||null, noVhost:noVhost, mode:(f&&f.mode)||null,
+          // Le micro n'est délégué qu'au CADRE EMBARQUÉ des services qui le déclarent (`micro_embed`, #2030) :
+          // le studio VoiceStudio (dictée) en a besoin, la carte d'administration et les autres services non.
+          microEmbed:!!(f&&f.micro_embed),
           // Vrai vhost : déclaré par l'entrée, ou connu du registre.
           vhostReel:!!((f&&f.url)||(s.urls&&(s.urls.wan||s.urls.lan)))};
 }
@@ -1921,7 +1924,7 @@ function frameFor(mode){
   if(_frames[mode]) return _frames[mode];
   const f=document.createElement('iframe');
   f.title='Service embarqué'; f.setAttribute('referrerpolicy','no-referrer');
-  f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
+  f.setAttribute('allow','autoplay; fullscreen'+((mode==='embed' && _svc && _svc.microEmbed)?'; microphone':'')); f.setAttribute('allowfullscreen','');
   // Le cadre embarqué porte l'IDENTITÉ du service : sans elle, la barre média
   // ne pouvait ni le reconnaître ni le commander, et la carte restée en fond
   // continuait de jouer le même flux — deux fois la même chose (#1276).
