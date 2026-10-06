@@ -507,14 +507,12 @@ cmd_redis() {
     lxc_service_sans_sandbox redis-server "$CONTAINER" || return 1
     lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed redis-server 2>/dev/null; systemctl enable --now redis-server' >/dev/null 2>&1 \
         || { error "redis-server n'a pas demarre dans '$CONTAINER'"; return 1; }
-    # Le résolveur du conteneur (systemd-resolved) tombe pour la même raison que redis : sans /etc/resolv.conf, rspamd attend ses
-    # délais DNS sur chaque message (les envois du rapport WAF expiraient à 20 s). Réparé seulement s'il existe et ne tourne pas.
-    if lxc_attach "$CONTAINER" systemctl cat systemd-resolved >/dev/null 2>&1 \
-            && ! lxc_attach "$CONTAINER" systemctl is-active --quiet systemd-resolved >/dev/null 2>&1; then
-        lxc_service_sans_sandbox systemd-resolved "$CONTAINER" || return 1
-        lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed systemd-resolved 2>/dev/null; systemctl restart systemd-resolved' >/dev/null 2>&1 \
-            || warn "systemd-resolved n'a pas demarre dans '$CONTAINER'"
-    fi
+    # Le résolveur du conteneur : /etc/resolv.conf pointe vers systemd-resolved, qui tombe pour la même raison que redis (AppArmor refuse
+    # le montage dont son bac à sable a besoin ; même surchargé il réclame un espace de montage). Sans resolv.conf, rspamd attend ses
+    # délais DNS sur chaque message (les envois du rapport WAF expiraient à 20 s). Un fichier STATIQUE, posé seulement s'il manque ou
+    # si le lien est pendant, comme sur gk3 ; jamais par-dessus un fichier valide.
+    lxc_attach "$CONTAINER" sh -c '[ ! -e /etc/resolv.conf ] && { rm -f /etc/resolv.conf; printf "nameserver 10.100.0.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf; }; true' \
+        || warn "resolv.conf non retabli dans '$CONTAINER'"
     lxc_attach "$CONTAINER" systemctl restart rspamd >/dev/null 2>&1 || warn "rspamd non relance"
     log "redis-server demarre ; rspamd relance"
 }

@@ -1,3 +1,11 @@
+secubox-mail (2.12.5-1~bookworm1) bookworm; urgency=medium
+
+  * mailctl redis retablit un /etc/resolv.conf STATIQUE dans le conteneur quand le lien vers systemd-resolved est casse (resolved ne
+    demarre plus : AppArmor refuse le montage dont son bac a sable a besoin, meme surcharge). Sans resolveur rspamd attendait ses
+    delais DNS sur chaque message. Remplace la surcharge de resolved de 2.12.4 (qui ne suffisait pas). Tests bats.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 19:30:00 +0200
+
 secubox-mail (2.12.4-1~bookworm1) bookworm; urgency=medium
 
   * mailctl redis repare aussi systemd-resolved du conteneur quand il existe et ne tourne pas : meme cause que redis (AppArmor
