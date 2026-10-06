@@ -18,8 +18,13 @@ Inventaire et profils des modules SecuBox. **Phase 1 : lecture seule.**
     secubox-profilectl diff --profile <nom> [--json]   # ce qu'un profil changerait
     secubox-profilectl export <nom> [--format pkglist|apt|json]  # paquets d'un profil
 
-`apply` n'existe pas encore (Phase 3) : rien n'est jamais allumé ni éteint ici.
-`export` aussi est lecture seule : il lit dpkg + la config, ne touche à rien.
+    secubox-profilectl apply <nom> [--yes]       # applique un profil (dry-run par défaut)
+    secubox-profilectl rollback <snapshot> [--yes]  # restaure un snapshot (R1..R4)
+
+`scan`, `status`, `diff` et `export` sont en lecture seule : ils lisent dpkg et la
+config, ne touchent à rien. `apply` et `rollback` n'agissent qu'avec `--yes` ; sans
+lui, ils décrivent seulement ce qu'ils feraient. `apply` est le SEUL décideur de ce
+qui est allumé ou éteint (voir `docs/dossiers/simplification-modules-beta.md`).
 
 ## Profils & export
 

@@ -556,3 +556,11 @@ def test_set_lifecycle_protected_module_refused(lc_root, capsys):
     assert rc == 3 and out["status"] == "refused" and out["reason"] == "protected"
     # manifest NOT rewritten
     assert 'lifecycle="always-on"' in (lc_root / "modules.d" / "auth.toml").read_text()
+
+
+def test_readme_ne_pretend_plus_que_apply_n_existe_pas():
+    """#2050 : le README disait « apply n'existe pas encore » alors qu'il existe."""
+    from pathlib import Path
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
+    assert "n'existe pas encore" not in readme
+    assert "secubox-profilectl apply" in readme
