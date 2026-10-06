@@ -1,3 +1,10 @@
+secubox-profiles (0.19.17-1~bookworm1) bookworm; urgency=medium
+
+  * README : apply et rollback existent (dry-run par defaut, --yes pour agir) ; le texte
+    disait encore « apply n'existe pas encore » (#2050, vague 0).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 10:30:00 +0200
+
 secubox-profiles (0.19.16-1~bookworm1) bookworm; urgency=medium
 
   * Retire secubox-threat-analyst (module supprime) (ref #1997).
