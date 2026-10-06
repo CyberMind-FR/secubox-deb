@@ -70,3 +70,11 @@ def test_conteneur_absent_est_cree_comme_avant(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "lxc-create" in appels and "lxc-start" in appels
     assert "10.100.0.180/24" in config                   # le bloc réseau statique est bien ajouté
+
+
+def test_deno_est_precede_de_unzip():
+    # Le programme d'installation de Deno exige unzip ou 7z : sans lui « either unzip or 7z is required » et
+    # YouTube est dégradé (constaté à la reprise de l'installation sur gk3).
+    texte = SCRIPT.read_text()
+    deno = texte.index("deno.land/install.sh")
+    assert "unzip" in texte[:deno] and texte.index("unzip") < deno

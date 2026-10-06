@@ -119,6 +119,10 @@ log "yt-dlp version: $(la yt-dlp --version 2>/dev/null || echo MISSING)"
 # videos fail with "Requested format is not available". Install once + symlink
 # onto PATH so yt-dlp auto-detects it. ---
 if ! la test -x /usr/local/bin/deno; then
+  # Le programme d'installation de Deno exige unzip (ou 7z) : sans lui « either unzip or 7z is required » et
+  # YouTube est dégradé. Garanti ici, aussi pour les conteneurs déjà provisionnés (#2034).
+  la sh -c 'command -v unzip >/dev/null 2>&1 || apt-get install -y --no-install-recommends unzip' \
+    || log "WARN unzip install failed — deno install may fail"
   la sh -c 'curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- -y' \
     || log "WARN deno install failed — YouTube extraction may be degraded"
 fi
