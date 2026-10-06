@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vague 3g : metrics←grafana ; transitoires qui remettent l'unité en route ; déployés gk3 + gk2, publiés (ref #2050)
+grafana arrêté à la mise à jour par l'ancien `prerm` et jamais relancé (gk2) : les transitoires grafana, reporter, smtp-relay, traffic et zigbee (dont l'ancien prerm arrêtait l'unité sur `upgrade`) portent maintenant un `postinst` qui la rétablit sauf si masquée ; l'outil l'écrit pour les prochaines fusions, test de garde ajouté. iot-guard était déjà un transitoire vers nac : rien à absorber (I5 sans objet). Versions : metrics 1.15.0, meta 0.1.29, profils 1.0.29.
+
 ## 2026-10-07 — Rassemblement, vagues 3e et 3f : mail←smtp-relay, metablogizer←droplet,publish ; déployées gk3 + gk2, publiées (ref #2050)
 Unités vérifiées sur build local : dh détecte déjà les unités installées dans l'arbre, un `dh_installsystemd --name=` en plus les déclare deux fois (retiré de media 1.8.1). L'unité smtp-relay bouclait en 226/NAMESPACE (`ReadWritePaths` sur `/var/log/mail.log`, absent de l'hôte car le courrier est dans le LXC) : préfixe `-`, mail 2.13.1. Dépendants full 1.4.6, isp 1.2.5, profils 1.0.28, meta 0.1.28. CI : suite publish déplacée.
 
