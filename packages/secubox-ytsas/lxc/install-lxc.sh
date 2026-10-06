@@ -34,6 +34,14 @@ la()  { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- "$@"; }
 mkdir -p "$STATE_DIR" "$DATA_DIR"
 chown -R "$LXC_ROOT_UID:$LXC_ROOT_UID" "$DATA_DIR"
 if [ -f "$SENTINEL" ]; then log "already provisioned; skipping create"; else
+  # INSTALLATION REPRENABLE (#2034). Un provisionnement interrompu avant le marqueur laisse un conteneur nu :
+  # relancer lxc-create sortait en « Container already exists » et l'application n'était jamais déployée.
+  # S'il existe, on ne le recrée pas et on n'ajoute surtout pas un second bloc lxc.net.0 à sa config
+  # (un conteneur à deux blocs réseau perd son adresse) : on le démarre et on poursuit.
+  # (Le bloc de création n'est pas réindenté : le terminateur du here-document doit rester en colonne 0.)
+  if [ -e "$LXC_PATH/$LXC_NAME/config" ]; then
+    log "conteneur $LXC_NAME déjà créé (installation interrompue) : reprise sans le recréer"
+  else
   # Use the DOWNLOAD template (not -t debian): gk2 runs UNPRIVILEGED containers
   # and the debian template refuses ("can't be used for unprivileged
   # containers"). Download template + idmap is the working pattern (matches
@@ -84,7 +92,9 @@ EOF
         chown -R 100000:100000 "$LXC_PATH/$LXC_NAME/rootfs"
         chown 100000:100000 "$LXC_PATH/$LXC_NAME"
     fi
-  lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
+  fi
+  lxc-info -n "$LXC_NAME" -P "$LXC_PATH" -s 2>/dev/null | grep -q RUNNING \
+    || lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
   sleep 5
   # Seed DNS: the download-template rootfs ships no resolver, so apt/pip can't
   # resolve deb.debian.org / pypi.org. Matches secubox-torrent/peertube.
