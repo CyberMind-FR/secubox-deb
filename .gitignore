@@ -119,3 +119,7 @@ packages/secubox-voice-moteur/vendor/
 .claude/settings.local.json
 .claude/settings.local.json.avant-*
 CLAUDE.local.md
+
+# Vidéo du Hall : images intermédiaires et rendu final (plusieurs Go), régénérables par render_hall_video.py
+/build_video/
+/secubox-entrez-dans-le-hall.mp4
