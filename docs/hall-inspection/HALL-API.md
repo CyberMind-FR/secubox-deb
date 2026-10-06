@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # HALL-API — endpoints réellement appelés pendant le parcours invité
 
 Relevé par Chromium headless 145 (Playwright) sur https://hall.gk2.secubox.in/ le 2026-10-02 : chaque requête `fetch`/XHR émise par le Hall et par les écrans qu'il embarque, avec le statut reçu. *La comparaison entre un client du réseau local et un visiteur externe n'est pas publiée ici.* Aucune URL n'a été devinée : tout ce qui suit a été appelé par l'interface elle-même. Les **écritures** (POST/PUT/DELETE) ont été bloquées par le navigateur avant d'atteindre le serveur.
