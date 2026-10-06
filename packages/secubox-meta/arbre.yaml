@@ -74,6 +74,8 @@ hors-arbre:
   - secubox-mcp-server  # transitoire → secubox-ai-gateway (#2050)
   - secubox-torrent  # transitoire → secubox-ytsas (#2050)
   - secubox-freeboxtv  # transitoire → secubox-media (#2050)
+  - secubox-turn  # transitoire → secubox-jitsi (#2050)
+  - secubox-release  # transitoire → secubox-repo (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -494,7 +496,6 @@ label: Visio et téléphonie
 description: "Jitsi, TURN/STUN, PBX."
 recommande:
   - secubox-jitsi
-  - secubox-turn
 suggere:
 
 meta: secubox-service-fichiers
@@ -605,5 +606,4 @@ description: "Clonage, amorçage réseau, déploiement, anneaux de release, VM."
 recommande:
   - secubox-netboot
 suggere:
-  - secubox-release
   - secubox-vm

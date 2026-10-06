@@ -94,6 +94,11 @@ TOML
     ;;
 esac
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/jitsi/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "jitsi : postinst de $(basename "$_s") en échec" >&2; }
+done
+
 
 # Le provisionnement est démarré APRÈS le bloc debhelper, délibérément.
 #
@@ -119,3 +124,4 @@ case "$1" in
     systemctl start --no-block secubox-jitsi-provision.service 2>/dev/null || true
     ;;
 esac
+exit 0

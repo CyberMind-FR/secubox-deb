@@ -23,7 +23,11 @@ def test_sudoers_principal_is_api_user():
 
 def test_api_unit_non_root_preserve_runtime():
     u = (ROOT / "systemd" / "secubox-release-api.service").read_text()
-    assert "User=secubox" in u and "RuntimeDirectoryPreserve=yes" in u
+    # RuntimeDirectory=secubox est retiré (#1022) : /run/secubox est partagé, systemd en
+    # effacerait le contenu au redémarrage. Il ne doit plus être une directive active.
+    actives = [l for l in u.splitlines() if l.strip() and not l.lstrip().startswith("#")]
+    assert "User=secubox" in u
+    assert not any(l.startswith("RuntimeDirectory=") for l in actives)
 
 
 def test_api_unit_socket_and_hardening():

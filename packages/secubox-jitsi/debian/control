@@ -12,8 +12,11 @@ Depends: ${misc:Depends},
  secubox-core (>= 1.5.39~),
  python3-uvicorn | python3-pip,
  lxc,
- curl
+ curl,
+ coturn
 Recommends: nginx
+Replaces: secubox-turn (<< 1.2.2~)
+Breaks: secubox-turn (<< 1.2.2~)
 Description: SecuBox Jitsi Meet - Video Conferencing (LXC-native)
  Jitsi Meet running natively in an unprivileged Debian LXC: prosody (XMPP),
  jicofo (focus), jitsi-videobridge2 (media) and an internal nginx serving the

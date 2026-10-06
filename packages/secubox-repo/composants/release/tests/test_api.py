@@ -4,9 +4,9 @@
 # See LICENCE-CMSD-1.0.md for terms.
 import os, sys
 from pathlib import Path
-ANNUAIRE = str(Path(__file__).resolve().parents[2] / "secubox-annuaire")
+ANNUAIRE = str(Path(__file__).resolve().parents[4] / "secubox-annuaire")
 RELEASE_LIB = str(Path(__file__).resolve().parent.parent)
-CORE = str(Path(__file__).resolve().parents[2].parent / "common")
+CORE = str(Path(__file__).resolve().parents[4].parent / "common")
 sys.path.insert(0, ANNUAIRE)
 sys.path.insert(0, RELEASE_LIB)
 sys.path.insert(0, CORE)

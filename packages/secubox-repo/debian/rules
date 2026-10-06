@@ -31,6 +31,29 @@ override_dh_auto_install:
 
 	# Install menu entries (canonical menu.d/ location, matches other packages)
 	[ -d menu.d ] && cp -r menu.d/. $(CURDIR)/debian/secubox-repo/usr/share/secubox/menu.d/ || true
+	# Composant absorbé : release (#2050)
+	install -d debian/secubox-repo/usr/lib/secubox/release/release
+	cp -r composants/release/release/*.py debian/secubox-repo/usr/lib/secubox/release/release/
+	install -d debian/secubox-repo/usr/lib/secubox/release/api
+	cp -r composants/release/api/*.py debian/secubox-repo/usr/lib/secubox/release/api/
+	install -d debian/secubox-repo/usr/sbin
+	cp -r composants/release/sbin/secubox-releasectl debian/secubox-repo/usr/sbin/
+	install -d debian/secubox-repo/usr/sbin
+	cp -r composants/release/sbin/secubox-release-repo debian/secubox-repo/usr/sbin/
+	install -d debian/secubox-repo/usr/share/secubox/www/releases
+	cp -r composants/release/www/releases/* debian/secubox-repo/usr/share/secubox/www/releases/
+	install -d debian/secubox-repo/usr/share/secubox/menu.d
+	cp -r composants/release/menu.d/*.json debian/secubox-repo/usr/share/secubox/menu.d/
+	install -d debian/secubox-repo/etc/nginx/secubox.d
+	cp -r composants/release/nginx/releases.conf debian/secubox-repo/etc/nginx/secubox.d/
+	install -d debian/secubox-repo/lib/systemd/system
+	cp -r composants/release/systemd/*.service debian/secubox-repo/lib/systemd/system/
+	install -d debian/secubox-repo/etc/sudoers.d
+	cp -r composants/release/sudoers/secubox-release debian/secubox-repo/etc/sudoers.d/
+	install -D -m 755 composants/release/debian/postinst debian/secubox-repo/usr/lib/secubox/repo/maintscripts/release.postinst
+	install -D -m 755 composants/release/debian/prerm debian/secubox-repo/usr/lib/secubox/repo/maintscripts/release.prerm
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-repo
+	# Composant release (#2050) : son unité (installée dans lib/systemd/system) garde la gestion dh.
+	dh_installsystemd --name=secubox-release-api

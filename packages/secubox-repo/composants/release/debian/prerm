@@ -5,5 +5,4 @@ set -e
 if [ "$1" = remove ] || [ "$1" = deconfigure ]; then
     systemctl stop secubox-release-api.service 2>/dev/null || true
 fi
-#DEBHELPER#
 exit 0
