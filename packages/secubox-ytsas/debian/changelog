@@ -1,3 +1,9 @@
+secubox-ytsas (0.2.15-1~bookworm1) bookworm; urgency=medium
+
+  * L'installation garantit unzip avant Deno (« either unzip or 7z is required » : Deno absent, YouTube dégradé, constaté à la reprise de l'installation sur gk3) (ref #2034).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 15:00:00 +0200
+
 secubox-ytsas (0.2.14-1~bookworm1) bookworm; urgency=medium
 
   * L'installation du LXC est reprenable : si le conteneur existe déjà (provisionnement interrompu), install-lxc.sh ne le recrée plus (« Container already exists » empêchait tout déploiement de l'application, Médiathèque en erreur sur gk3) et n'ajoute pas un second bloc réseau ; il le démarre et poursuit (ref #2034).
