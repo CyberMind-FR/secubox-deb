@@ -1,3 +1,12 @@
+secubox-mail (2.12.2-1~bookworm1) bookworm; urgency=medium
+
+  * redis-server du conteneur ne demarrait plus depuis la migration Trixie (226/NAMESPACE : ProtectSystem, PrivateDevices, PrivateTmp
+    ne se montent plus dans le LXC sans privileges). rspamd attendait alors 65 s par message (regle REPLIES_SET) : les envois du
+    rapport WAF expiraient (20 s). Nouvelle fonction lxc_service_sans_sandbox (meme surcharge que dovecot, apache2, clamav-daemon),
+    nouvelle sous-commande `mailctl redis` (surcharge, demarrage, rspamd relance), reprise par antispam-apprentissage. Test bats.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 18:10:00 +0200
+
 secubox-mail (2.12.1-1~bookworm1) bookworm; urgency=medium
 
   * `mailctl webmail-pgp` : pose le lien /var/lib/roundcube/plugins/secubox_pgp -> /usr/share/roundcube/plugins/secubox_pgp (Roundcube
