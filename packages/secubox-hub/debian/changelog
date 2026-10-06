@@ -1,3 +1,11 @@
+secubox-hub (1.9.38-1~bookworm1) bookworm; urgency=medium
+
+  * Le menu expose aussi « themes » : les modules installes regroupes par la cle theme des menu.d
+    (derivee de arbre.yaml), pour les onglets du Hall ; une entree sans theme va dans « autre ».
+    Additif : categories est inchange (#2050, vague 1).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 11:00:00 +0200
+
 secubox-hub (1.9.37-1~bookworm1) bookworm; urgency=medium
 
   * Une entrée de menu peut nommer le dossier www de son module (clé optionnelle « www », défaut : l'id) : l'entrée « Voix » (voicestudio-usager) n'apparaissait jamais au menu ni dans le registre du Hall faute de dossier à son nom (ref #2024).
