@@ -1,3 +1,12 @@
+secubox-mail (2.12.3-1~bookworm1) bookworm; urgency=medium
+
+  * Rootfs du conteneur decale a moitie (gk3 : 12 975 entrees restees en uid bas apres un apt en chroot) : redis ecrivait en
+    « nobody », rspamd et mail-autocrypt echouaient. lxc_decaler decide sur le NOMBRE d'entrees restantes (plus sur la seule
+    racine) ; mailctl redis decale les retardataires avant de demarrer redis. La surcharge du bac a sable de redis efface aussi
+    ses directives de montage (ReadWritePaths, ExecPaths, ProtectProc…), qui echouaient encore en 226/NAMESPACE. Tests bats.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 18:40:00 +0200
+
 secubox-mail (2.12.2-1~bookworm1) bookworm; urgency=medium
 
   * redis-server du conteneur ne demarrait plus depuis la migration Trixie (226/NAMESPACE : ProtectSystem, PrivateDevices, PrivateTmp

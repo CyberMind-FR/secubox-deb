@@ -67,10 +67,15 @@ EOF
 # Le rootfs vient de debootstrap, en root (0:0) ; le conteneur est NON
 # privilégié (idmap 100000). Sans décalage, lxc-start avorte (« Permission
 # denied … var/vmail ») — gk3 ; gk2 avait été décalée à la main (#1729).
+# La décision se prend sur le NOMBRE d'entrées restées en uid bas, pas sur la seule racine : un rootfs décalé À MOITIÉ
+# (racine à 100000, des milliers d'entrées en retard — 12 975 sur gk3, après un apt dans un chroot) laissait redis écrire
+# en « nobody » et faisait échouer rspamd. L'outil est idempotent : il ne touche que ce qui est en retard.
 lxc_decaler() {
-    local r="${LXC_BASE:-/var/lib/lxc}/$1/rootfs"
-    [ -d "$r" ] && [ "$(stat -c %u "$r")" -lt 100000 ] || return 0
-    echo "[lxc] décalage du rootfs de $1 pour le conteneur non privilégié"
+    local r="${LXC_BASE:-/var/lib/lxc}/$1/rootfs" n
+    [ -d "$r" ] || return 0
+    n="$(secubox-lxc-decaler "$r" --etat 2>/dev/null | sed -n 's/.*: \([0-9][0-9]*\) entrée.*/\1/p')"
+    [ "${n:-0}" -gt 0 ] || return 0
+    echo "[lxc] décalage de $n entrée(s) du rootfs de $1 pour le conteneur non privilégié"
     secubox-lxc-decaler "$r"
 }
 
