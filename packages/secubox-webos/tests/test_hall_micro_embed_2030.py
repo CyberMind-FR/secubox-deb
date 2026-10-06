@@ -45,3 +45,17 @@ def test_le_permissions_policy_du_hall_autorise_l_origine_du_studio():
     assert "voicestudio.$sbx_hall_dom_vs" in VHOST
     ligne = re.search(r'add_header Permissions-Policy "microphone=\(self.*\$sbx_mood_du_hall.*\), camera=\(\)" always;', VHOST)
     assert ligne and "$sbx_voicestudio_du_hall" in ligne.group(0)
+
+
+# ── #2042 : les pochettes des services s'affichent dans le Hall ──────────────────────────────────────
+# Les services annoncent leur vignette avec l'origine de leur PROPRE vhost (podcaster.<domaine>/…/cover) ;
+# le Hall, d'origine différente, la bloquait (img-src 'self' data:). Il autorise déjà les cadres des
+# sous-domaines de la box (frame-src … $sbx_cadres_box) : même source pour les images du document principal,
+# sans ouvrir au monde extérieur.
+
+def test_la_csp_du_hall_autorise_les_images_des_services_de_la_box():
+    principale = next(l for l in VHOST.splitlines()
+                      if "Content-Security-Policy" in l and "frame-ancestors 'none'" in l and "worker-src" in l)
+    img = re.search(r"img-src ([^;]*);", principale).group(1)
+    assert "$sbx_cadres_box" in img and "'self'" in img and "data:" in img
+    assert "*" not in img.replace("$sbx_cadres_box", "")      # jamais de joker ouvert à l'extérieur
