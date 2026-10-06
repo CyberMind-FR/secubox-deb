@@ -84,6 +84,27 @@ def install_vers_regles(texte: str, ancien: str) -> str:
     return "\n".join(sortie) + "\n"
 
 
+def ecrire_postinst_transitoire(O: Path, ancien: str, absorbant: str) -> None:
+    """L'ancien `prerm` arrête (et désactive) l'unité à la mise à jour, APRÈS que l'absorbant l'a démarrée selon l'ordre
+    d'apt : le transitoire la remet en route à la fin, sauf si elle est masquée (constaté sur grafana, gk2)."""
+    u = f"secubox-{ancien}.service"
+    (O / "debian/postinst").write_text(f"""#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Transitoire (#2050) : l'unité {u} est désormais livrée par secubox-{absorbant}. L'ancien prerm
+# de la version précédente l'arrête à la mise à jour ; on la rétablit une fois l'absorbant configuré.
+set -e
+#DEBHELPER#
+if [ "$1" = configure ] && [ -e /usr/lib/systemd/system/{u} -o -e /lib/systemd/system/{u} ]; then
+    if [ "$(systemctl is-enabled {u} 2>/dev/null)" != masked ]; then
+        systemctl enable {u} >/dev/null 2>&1 || true
+        systemctl start {u} >/dev/null 2>&1 || true
+    fi
+fi
+exit 0
+""")
+    (O / "debian/postinst").chmod(0o755)
+
+
 def traduire_rules(rules: str, ancien: str, absorbant: str, tops: set[str] | None = None) -> list[str]:
     """Les lignes de `override_dh_auto_install` de l'ancien, réécrites pour l'absorbant."""
     cibles = re.findall(r"(?m)^([A-Za-z_%][^\s:]*):", rules)
@@ -232,6 +253,8 @@ Description: transitional package, replaced by secubox-{absorbant}
  it in; it can be removed once nothing depends on it.
 """)
     (O / "debian/rules").write_text("#!/usr/bin/make -f\n%:\n\tdh $@\n")
+    if (C / "debian" / f"secubox-{ancien}.service").exists() or any(C.rglob(f"secubox-{ancien}.service")):
+        ecrire_postinst_transitoire(O, ancien, absorbant)
     (O / "README.md").write_text(f"<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->\n# secubox-{ancien} (transitoire)\n\nPaquet vide : {ancien} est un composant de `secubox-{absorbant}` depuis {nv_a} (#2050).\nIl sera retiré une fois publié un cycle complet.\n")
     git("add", "-f", str((O / "README.md").relative_to(RACINE)))
     och = O / "debian/changelog"

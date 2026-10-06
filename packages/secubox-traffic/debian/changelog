@@ -1,3 +1,9 @@
+secubox-traffic (1.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Transitoire : remet en route l'unite secubox-traffic apres la mise a jour (l'ancien prerm l'arretait), #2050.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 01:30:00 +0200
+
 secubox-traffic (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Paquet transitoire : traffic est un composant de secubox-qos >= 1.3.0 (#2050).

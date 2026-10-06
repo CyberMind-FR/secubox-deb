@@ -60,3 +60,16 @@ def test_l_arbre_met_les_absorbes_hors_arbre():
     for _, o in FUSIONS:
         assert re.search(rf"secubox-{o}\b", avant), o
         assert not re.search(rf"(?m)^\s+- secubox-{o}\b", apres), o
+
+
+# L'ancien prerm de ces paquets arrêtait l'unité à la mise à jour : le transitoire la remet en route (#2050).
+ARRETAIENT_A_LA_MISE_A_JOUR = ("grafana", "reporter", "smtp-relay", "traffic", "zigbee")
+
+
+def test_transitoires_remettent_l_unite_en_route():
+    for o in ARRETAIENT_A_LA_MISE_A_JOUR:
+        postinst = PAQ / f"secubox-{o}" / "debian" / "postinst"
+        assert postinst.is_file(), o
+        t = postinst.read_text()
+        assert f"secubox-{o}.service" in t and "masked" in t and "#DEBHELPER#" in t, o
+        assert postinst.stat().st_mode & 0o111, f"{o} : postinst non exécutable"
