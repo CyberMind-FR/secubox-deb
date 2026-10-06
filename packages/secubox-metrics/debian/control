@@ -17,7 +17,15 @@ Depends: ${misc:Depends},
  python3-geoip2 | python3-pip,
  python3-cryptography,
  nftables,
- python3-psutil
+ python3-psutil,
+ secubox-haproxy,
+ lxc,
+ lxc-templates,
+ debootstrap,
+ python3-toml,
+ openssl,
+ curl,
+ jq
 Recommends: geoipupdate,
  python3-fpdf2 | python3-fpdf (>= 2),
  python3-matplotlib,
@@ -25,11 +33,13 @@ Recommends: geoipupdate,
  glances
 Replaces: secubox-metalogizer,
  secubox-glances (<< 1.1.4~),
- secubox-reporter (<< 1.2.4~)
+ secubox-reporter (<< 1.2.4~),
+ secubox-grafana (<< 1.0.18~)
 Conflicts: secubox-metalogizer
 Provides: secubox-metalogizer
 Breaks: secubox-glances (<< 1.1.4~),
- secubox-reporter (<< 1.2.4~)
+ secubox-reporter (<< 1.2.4~),
+ secubox-grafana (<< 1.0.18~)
 Description: SecuBox Metrics Dashboard
  Real-time system metrics dashboard with caching.
  Provides overview stats, WAF metrics, connection counts,

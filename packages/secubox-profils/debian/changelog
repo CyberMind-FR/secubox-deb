@@ -1,3 +1,9 @@
+secubox-profils (1.0.29-1~bookworm1) bookworm; urgency=medium
+
+  * Profil : secubox-grafana retire (absorbe par secubox-metrics, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 00:45:00 +0200
+
 secubox-profils (1.0.28-1~bookworm1) bookworm; urgency=medium
 
   * Profil provision : droplet et publish remplaces par metablogizer (>= 1.10.0) (#2050).

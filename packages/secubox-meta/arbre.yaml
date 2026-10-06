@@ -79,6 +79,7 @@ hors-arbre:
   - secubox-smtp-relay  # transitoire → secubox-mail (#2050)
   - secubox-droplet  # transitoire → secubox-metablogizer (#2050)
   - secubox-publish  # transitoire → secubox-metablogizer (#2050)
+  - secubox-grafana  # transitoire → secubox-metrics (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -454,7 +455,6 @@ requiert:
   - secubox-metrics
 recommande:
 suggere:
-  - secubox-grafana
 
 meta: secubox-service-ecrans
 niveau: service
