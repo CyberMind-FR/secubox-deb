@@ -118,9 +118,12 @@ ExecStartPre=+/bin/chmod 0770 /var/lib/secubox/waf
 # du corps est levee, et pour ce seul hote. Ce n'est PAS un `waf_bypass` : la
 # requete traverse toujours sbxwaf — routage, reveil, bannissement nft, journal
 # des menaces. Chaque saut est journalise en `body-inspect-skipped`.
+# DÉLAI AMONT (--upstream-timeout 1h) = le plus long délai que HAProxy accorde (1 h pour le studio natif de VoiceStudio,
+# 10 min pour la synthèse). HAProxy borne déjà le trafic ordinaire à 30 s ; sbxwaf coupait à 120 s une génération à
+# froid (« 504 : timeout awaiting response headers » sur /generate, #2032).
 ExecStart=/usr/sbin/sbxwaf \
   --listen 127.0.0.1:8085 \
-  --upstream-timeout 120s \
+  --upstream-timeout 1h \
   --waf-skip-body-hosts depot.gk2.secubox.in \
   --routes /etc/secubox/waf/haproxy-routes.json \
   --rules /etc/secubox/waf/waf-rules.json \

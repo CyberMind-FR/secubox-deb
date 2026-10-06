@@ -1,3 +1,9 @@
+secubox-waf-ng (1.18.13-1~bookworm1) bookworm; urgency=medium
+
+  * Délai amont de sbxwaf porté de 120 s à 1 h, aligné sur le plus long délai HAProxy (studio natif de VoiceStudio 1 h, synthèse 10 min) : une génération vocale à froid (110 à 140 s, plus sous pression mémoire) répondait « 504 : timeout awaiting response headers » sur gk3. HAProxy borne toujours le trafic ordinaire à 30 s (ref #2032).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 13:00:00 +0200
+
 secubox-waf-ng (1.18.12-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf (#1859) : la boîte qui s'appelle elle-même n'est plus une anomalie
