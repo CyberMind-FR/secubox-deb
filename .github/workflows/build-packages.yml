@@ -244,7 +244,7 @@ jobs:
         id: check-arch
         run: |
           if [ -f "packages/${{ matrix.package }}/debian/control" ]; then
-            if grep -q "Architecture: all" "packages/${{ matrix.package }}/debian/control"; then
+            if grep -q "^Architecture: all" "packages/${{ matrix.package }}/debian/control"; then
               echo "is_arch_all=true" >> $GITHUB_OUTPUT
             else
               echo "is_arch_all=false" >> $GITHUB_OUTPUT

@@ -14,7 +14,7 @@ Architecture: any
 # la construction installe avec --no-install-recommends, et la selection
 # par profil ne suit que les Depends. Constate sur la VM trixie — le
 # tableau de bord tournait au-dessus de la libndpi 4.2 de Debian, sans
-# jamais son moteur. Le paquet vise est Architecture: all et ses propres
+# jamais son moteur. Le paquet vise est de type « all » et ses propres
 # dependances sont satisfaites partout : durcir ne ferme aucune arche.
 Depends: ${misc:Depends},
  secubox-core (>= 1.4.3),
