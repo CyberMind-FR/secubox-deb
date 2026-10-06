@@ -1,3 +1,9 @@
+secubox-appstore (0.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * Groupe publication : droplet, absorbe par metablogizer (#2050), n'est plus cite ; test de generation du catalogue ajoute (la construction echouait).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 04:00:00 +0200
+
 secubox-appstore (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Groupes du catalogue : smb et zigbee, absorbes par media et mqtt (#2050), ne sont plus cites a part ; la construction echouait.

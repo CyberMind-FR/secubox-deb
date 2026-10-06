@@ -84,7 +84,6 @@ description: "Publier : sites statiques, billets et dépôt de fichiers éphém�
 modules:
   - secubox-metablogizer
   - secubox-billets
-  - secubox-droplet
 
 
 groupe: veille
