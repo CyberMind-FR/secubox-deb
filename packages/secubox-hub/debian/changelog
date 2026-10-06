@@ -1,3 +1,9 @@
+secubox-hub (1.9.37-1~bookworm1) bookworm; urgency=medium
+
+  * Une entrée de menu peut nommer le dossier www de son module (clé optionnelle « www », défaut : l'id) : l'entrée « Voix » (voicestudio-usager) n'apparaissait jamais au menu ni dans le registre du Hall faute de dossier à son nom (ref #2024).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 09:00:00 +0200
+
 secubox-hub (1.9.36-1~bookworm1) bookworm; urgency=high
 
   * nginx ne croit X-Forwarded-For que des adresses PROPRES de la box (#1754). secubox-lan-geo.conf ne trustait plus que 127.0.0.1 ; les adresses locales sont engendrées par secubox-realip (/etc/nginx/conf.d/secubox-real-ip-local.conf, relu chaque minute, nginx -t avant reload). Avant, 192.168.1.0/24, 10.100.0.0/24 et 192.168.255.0/24 étaient crues : tout poste de ces plages dictait son adresse, donc son verdict $lan_client, par un simple en-tête. Le verdict LAN (geo) est inchangé.

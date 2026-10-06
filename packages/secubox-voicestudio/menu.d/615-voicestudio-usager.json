@@ -1,5 +1,6 @@
 {
   "id": "voicestudio-usager",
+  "www": "voicestudio",
   "name": "Voix",
   "icon": "🗣️",
   "path": "/voicestudio/usager.html",

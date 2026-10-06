@@ -115,11 +115,15 @@ def _compute_menu_sync() -> dict:
         if module_id in epingles_off:
             continue
 
-        # Check if module is installed (has www directory with content)
-        if _check_module_installed(module_id):
+        # Check if module is installed (has www directory with content).
+        # Une entree peut nommer le dossier www de son module avec la cle optionnelle `"www"` :
+        # « Voix » (voicestudio-usager) sert usager.html depuis www/voicestudio/, sans dossier
+        # a son nom, et n'apparaissait donc jamais (#2024). Par defaut le dossier est l'id.
+        module_www = item.get("www") or module_id
+        if _check_module_installed(module_www):
             item_copy = item.copy()
             item_copy["installed"] = True
-            item_copy["active"] = _check_module_active(module_id)
+            item_copy["active"] = _check_module_active(module_www)
             installed_items.append(item_copy)
 
     # Group by category
