@@ -1,3 +1,9 @@
+secubox-meta (0.1.25-1~bookworm1) bookworm; urgency=medium
+
+  * Retire la dependance directe a secubox-torrent (absorbe par secubox-ytsas, #2050) ; secubox-ytsas la porte deja.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 21:00:00 +0200
+
 secubox-meta (0.1.24-1~bookworm1) bookworm; urgency=medium
 
   * traffic, streamforge, smb, zigbee, cloner, glances, reporter, localrecall et mcp-server passent hors-arbre (transitoires, absorbes par qos, streamlit, media, mqtt, backup, metrics et ai-gateway, #2050).
