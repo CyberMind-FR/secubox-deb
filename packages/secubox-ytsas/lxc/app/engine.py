@@ -30,6 +30,9 @@ import time
 # Progress lines from `yt-dlp --newline`: "[download]  12.3% of ...".
 _PROGRESS_RE = re.compile(r"\[download\]\s+([\d.]+)%")
 
+# YouTube refuse les données vidéo avec des cookies qu'il n'accepte plus (#2028).
+_FORBIDDEN_RE = re.compile(r"HTTP Error 403|403: Forbidden", re.IGNORECASE)
+
 # Signatures that mean "this needs (fresh) cookies", not a generic failure.
 # Matched against yt-dlp stderr so the user gets an actionable status.
 _AUTH_RE = re.compile(
@@ -278,60 +281,74 @@ class Engine:
                 return
             # Output template inside the per-id dir; predictable id-based name.
             out_tmpl = os.path.join(item_dir, "%(id)s.%(ext)s")
-            argv = [
-                # --newline (one progress line per update) WITHOUT --no-progress,
-                # else yt-dlp emits no "[download] N%" lines and the bar sticks at 0.
-                self.ytdlp_bin, "--newline", "--no-playlist",
-                "--restrict-filenames",
-                # Pull the EJS solver so YouTube's n-challenge yields real formats.
-                "--remote-components", "ejs:github",
-                # Prefer H.264 + AAC. "bv*+ba" grabs YouTube's best, which today
-                # means AV1/VP9 video + Opus audio — codecs PeerTube's quick
-                # transcode path REFUSES, forcing a full re-encode of every
-                # imported video (expensive on ARM, and AV1 decode doubly so).
-                # With avc1+mp4a, PeerTube transmuxes (-c copy) instead.
-                # The ladder degrades gracefully so a download never fails:
-                # avc1+mp4a → avc1+any → any progressive mp4 → whatever exists.
-                "-f", "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/bv*[vcodec^=avc1]+ba/"
-                      "b[ext=mp4]/bv*+ba/b",
-                "--merge-output-format", "mp4",
-                "-o", out_tmpl,
-                *self._cookie_args(),
-                url,
-            ]
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *argv, stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE)
-            except FileNotFoundError:
+
+            async def essai(avec_cookies):
+                """Un passage de yt-dlp. Retourne (rc, stderr) ; rc None si yt-dlp est introuvable."""
+                argv = [
+                    # --newline (one progress line per update) WITHOUT --no-progress,
+                    # else yt-dlp emits no "[download] N%" lines and the bar sticks at 0.
+                    self.ytdlp_bin, "--newline", "--no-playlist",
+                    "--restrict-filenames",
+                    # Pull the EJS solver so YouTube's n-challenge yields real formats.
+                    "--remote-components", "ejs:github",
+                    # Prefer H.264 + AAC. "bv*+ba" grabs YouTube's best, which today
+                    # means AV1/VP9 video + Opus audio — codecs PeerTube's quick
+                    # transcode path REFUSES, forcing a full re-encode of every
+                    # imported video (expensive on ARM, and AV1 decode doubly so).
+                    # With avc1+mp4a, PeerTube transmuxes (-c copy) instead.
+                    # The ladder degrades gracefully so a download never fails:
+                    # avc1+mp4a → avc1+any → any progressive mp4 → whatever exists.
+                    "-f", "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/bv*[vcodec^=avc1]+ba/"
+                          "b[ext=mp4]/bv*+ba/b",
+                    "--merge-output-format", "mp4",
+                    "-o", out_tmpl,
+                    *(self._cookie_args() if avec_cookies else []),
+                    url,
+                ]
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        *argv, stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE)
+                except FileNotFoundError:
+                    return None, ""
+                stderr_buf = []
+                # Drain stdout line-by-line for progress; buffer stderr for errors.
+                async def _read_progress():
+                    assert proc.stdout is not None
+                    while True:
+                        line = await proc.stdout.readline()
+                        if not line:
+                            break
+                        m = _PROGRESS_RE.search(line.decode("utf-8", "replace"))
+                        if m:
+                            try:
+                                job["progress"] = float(m.group(1))
+                            except ValueError:
+                                pass
+
+                async def _read_err():
+                    assert proc.stderr is not None
+                    while True:
+                        line = await proc.stderr.readline()
+                        if not line:
+                            break
+                        stderr_buf.append(line.decode("utf-8", "replace"))
+
+                await asyncio.gather(_read_progress(), _read_err())
+                return await proc.wait(), "".join(stderr_buf)
+
+            rc, stderr = await essai(avec_cookies=True)
+            if rc is None:
                 job.update(status="error", error="yt-dlp introuvable")
                 return
-            stderr_buf = []
-            # Drain stdout line-by-line for progress; buffer stderr for errors.
-            async def _read_progress():
-                assert proc.stdout is not None
-                while True:
-                    line = await proc.stdout.readline()
-                    if not line:
-                        break
-                    m = _PROGRESS_RE.search(line.decode("utf-8", "replace"))
-                    if m:
-                        try:
-                            job["progress"] = float(m.group(1))
-                        except ValueError:
-                            pass
-
-            async def _read_err():
-                assert proc.stderr is not None
-                while True:
-                    line = await proc.stderr.readline()
-                    if not line:
-                        break
-                    stderr_buf.append(line.decode("utf-8", "replace"))
-
-            await asyncio.gather(_read_progress(), _read_err())
-            rc = await proc.wait()
-            stderr = "".join(stderr_buf)
+            # YouTube refuse les données vidéo (403) avec des cookies qu'il n'accepte plus : une vidéo
+            # publique n'en a pas besoin. On retente SANS cookies et on signale les cookies périmés (#2028).
+            if rc != 0 and self._has_cookies() and _FORBIDDEN_RE.search(stderr):
+                self.cookies_stale = True
+                rc, stderr = await essai(avec_cookies=False)
+                if rc is None:
+                    job.update(status="error", error="yt-dlp introuvable")
+                    return
             if rc == 0:
                 path = self._pick_file(item_dir) or item_dir
                 job.update(status="complete", progress=100.0, error=None)
