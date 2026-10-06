@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-06 (nuit) — Rassemblement, vagues 3c et 3d : media←freeboxtv, repo←release, jitsi←turn ; déployées gk3 + gk2, publiées (ref #2050)
+Overrides `dh_installsystemd` fusionnés à la main et vérifiés sur un build local (une seule gestion par unité). `absorber-paquet` sait désormais absorber un paquet installé par `debian/<paquet>.install`. Constats corrigés au passage : la CI échouait sur trois suites déplacées (metacatalog, zigbee, defaults) → chemins mis à jour ; appstore 0.5.1 (groupes du catalogue citaient smb et zigbee, la construction cassait) ; test périmé de l'unité release (RuntimeDirectory retiré, #1022) ; mediactl ancrait sur un commentaire. README : « environ 135 paquets + 57 méta-paquets » (chiffres comptés). Méta : meta 0.1.27, full 1.4.5, profils 1.0.27. Reste le contrôle d'en-têtes de licence (dizaines de fichiers `.claude/`, ancien).
+
 ## 2026-10-06 (nuit) — Rassemblement, vague 3b : ytsas absorbe torrent, déployé gk3 + gk2, publié (ref #2050)
 Première fusion à `override_dh_installsystemd` : les minuteries `conserve` des deux paquets sont déclarées ensemble dans ytsas 0.3.0 ; torrent 2.4.10 devient transitoire. Tests de torrent repointés vers le composant (14 pytest + 17 bats verts), dépendants `full`, `profils`, `meta` mis à jour avec montée de version (meta 0.1.25, profils 1.0.26). Constat sans lien avec la fusion : l'actuateur de profils (`profilectl apply`) a ramené ai-gateway, glances et mcp-server à l'état du profil de gk2 (désactivés) après leur activation par les postinst ; mcp-server plante en boucle sur gk2 quand on l'active (`/tmp/secubox` appartient à root), il l'était déjà avant la vague.
 
