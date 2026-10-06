@@ -39,9 +39,8 @@ on:
         type: choice
         options: [bookworm, trixie]
         default: trixie
-  push:
-    tags:
-      - 'v*'
+  # Pas de `push: tags` : release.yml appelle déjà ce workflow ; son propre déclencheur sur l'étiquette le
+  # lançait EN DOUBLE et monopolisait les runners (#1991). Reste appelable (workflow_call) et manuel.
 
 env:
   # SUITE PARAMETRABLE (#1294). Elle etait figee a `bookworm` : demander une

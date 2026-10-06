@@ -55,6 +55,12 @@ on:
         options: [bookworm, trixie]
         default: trixie
 
+# Un push de branche ou une PR ANNULE le run précédent de la même référence (la file de runners ne s'empile plus) ;
+# une étiquette (release) a son propre groupe par run : jamais groupée, jamais annulée (#1991).
+concurrency:
+  group: build-packages-${{ github.ref_type == 'branch' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
 env:
   # SUITE PARAMETRABLE (#1294). Le repli litteral `bookworm` n'est pas
   # decoratif : un `push` ne porte aucun input, et sans lui la suite serait
@@ -96,6 +102,12 @@ jobs:
         env:
           REQUESTED_ARCH: ${{ github.event.inputs.arch }}
           REQUESTED_PKG:  ${{ github.event.inputs.package }}
+          GH_TOKEN:       ${{ github.token }}
+          EVENT_NAME:     ${{ github.event_name }}
+          REF_TYPE:       ${{ github.ref_type }}
+          BEFORE:         ${{ github.event.before }}
+          SHA:            ${{ github.sha }}
+          PR_NUMBER:      ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           # Still emit the legacy `packages` output for backwards compat.
@@ -130,17 +142,43 @@ jobs:
           SKIP_ARM64="secubox-zia-llm"
           arm64_ok() { case " $SKIP_ARM64 " in *" $1 "*) return 1;; *) return 0;; esac; }
 
+          # PAQUETS MODIFIES (#1991). Un push de branche ou une PR ne reconstruit que ce qui a change ; une etiquette,
+          # un appel de release ou un declenchement manuel construisent tout. Repli sur « tout » si l'API echoue.
+          changed=""
+          if [ -z "$requested_pkg" ] && [ "${REF_TYPE:-}" = "branch" ] \
+             && { [ "${EVENT_NAME:-}" = "push" ] || [ "${EVENT_NAME:-}" = "pull_request" ]; }; then
+            files=""
+            if [ "$EVENT_NAME" = "pull_request" ]; then
+              files=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' 2>/dev/null || true)
+            elif [ -n "${BEFORE:-}" ] && ! echo "$BEFORE" | grep -qE '^0+$'; then
+              files=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BEFORE}...${SHA}" --jq '.files[].filename' 2>/dev/null || true)
+            fi
+            if [ -n "$files" ] && [ "$(echo "$files" | wc -l)" -lt 290 ]; then
+              if echo "$files" | grep -qE '^(common/|debian/|\.github/workflows/build-packages\.yml|scripts/restamp-changelog\.sh)'; then
+                changed=""                                   # code partage ou construction : tout reconstruire
+              else
+                changed=$(echo "$files" | sed -n 's|^packages/\([^/]*\)/.*|\1|p' | sort -u | tr '\n' ' ')
+                [ -n "$changed" ] || changed="__aucun__"      # rien d'empaquete (docs, wiki, .claude) : matrice vide
+              fi
+            fi
+            echo "Paquets modifies : ${changed:-(tous)}"
+          fi
+
           combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
             | sort | while read -r ctrl; do
               pkg=$(basename "$(dirname "$(dirname "$ctrl")")")
               if [ -n "$requested_pkg" ] && [ "$requested_pkg" != "$pkg" ]; then
                 continue
               fi
-              # Une version ~aurora est un canal d'apercu : son debian/rules refuse de se
-              # construire sur une etiquette (secubox-sbxos). Hors des releases.
-              if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+              # Une version ~aurora est un APERCU en developpement (pre-alpha) : jamais dans un build, quel que soit
+              # l'evenement (push, PR, release). Seule une demande explicite du paquet (workflow_dispatch) la construit.
+              if [ -z "$requested_pkg" ]; then
                 ver=$(head -1 "$(dirname "$ctrl")/changelog" | sed -E 's/^[^(]*\(([^)]*)\).*/\1/')
-                case "$ver" in *~aurora*) echo "::notice::$pkg $ver : apercu, exclu de la release" >&2; continue ;; esac
+                case "$ver" in *~aurora*) echo "::notice::$pkg $ver : apercu (pre-alpha), exclu des builds" >&2; continue ;; esac
+              fi
+              # Push de branche ou PR : seuls les paquets MODIFIES sont construits (#1991).
+              if [ -n "$changed" ] && ! echo " $changed " | grep -q " $pkg "; then
+                continue
               fi
               # Read the binary-package Architecture: line (the one after
               # "Package: <name>", not the Source stanza). All current
@@ -184,6 +222,7 @@ jobs:
   # Build packages — one job per {package, arch} entry from discover.
   build:
     needs: discover
+    if: ${{ needs.discover.outputs.matrix != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -416,7 +455,7 @@ jobs:
   # entries failed (partial-release resilience).
   collect:
     needs: build
-    if: ${{ always() && needs.build.result != 'cancelled' }}
+    if: ${{ always() && needs.build.result != 'cancelled' && needs.build.result != 'skipped' }}
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
