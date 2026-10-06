@@ -41,6 +41,7 @@ succès : une panne de moteur doit se voir, comme la panne d'API des certificats
 from __future__ import annotations
 
 import asyncio
+import time
 import os
 import shutil
 import subprocess
@@ -305,8 +306,16 @@ class MoteurMixte(Moteur):
     la RECONNAISSANCE part au studio du parc (VoiceStudio, meilleur modèle) —
     et retombe sur le modèle local s'il ne répond pas à temps."""
 
-    def __init__(self, local: "MoteurLocal", distant: "MoteurDistant") -> None:
+    # DISJONCTEUR (#2037). Un studio saturé met son délai entier (25 s) à échouer, à CHAQUE requête, puis la
+    # reconnaissance locale prend encore ~10 s : au-delà de la coupure de 30 s de HAProxy, l'usager voit un 504.
+    # Après un échec, on va DIRECTEMENT en local pendant `pause_s` ; passé ce délai, le studio est réessayé.
+    PAUSE_STUDIO_S = 300
+
+    def __init__(self, local: "MoteurLocal", distant: "MoteurDistant",
+                 pause_s: float = PAUSE_STUDIO_S, horloge=time.monotonic) -> None:
         self.local, self.distant = local, distant
+        self._pause_s, self._horloge = pause_s, horloge
+        self._pause_jusqu_a = 0.0
 
     async def etat(self) -> Etat:
         l, d = await self.local.etat(), await self.distant.etat()
@@ -318,10 +327,13 @@ class MoteurMixte(Moteur):
         return await self.local.dire(texte, voix, format_)
 
     async def transcrire(self, audio: bytes, nom: str) -> str:
+        if self._horloge() < self._pause_jusqu_a:
+            return await self.local.transcrire(audio, nom)      # studio en pause : pas d'attente inutile
         try:
             return await self.distant.transcrire(audio, nom)
         except Exception as e:  # noqa: BLE001 — tout échec du studio : repli local
-            log.warning("studio vocal indisponible (%s) — reconnaissance locale", e)
+            self._pause_jusqu_a = self._horloge() + self._pause_s
+            log.warning("studio vocal indisponible (%s) — reconnaissance locale pendant %d s", e, self._pause_s)
             return await self.local.transcrire(audio, nom)
 
 
