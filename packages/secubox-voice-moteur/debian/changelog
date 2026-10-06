@@ -1,3 +1,9 @@
+secubox-voice-moteur (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * whisper-cli est compilé pendant le build du paquet quand il est absent et que l'hôte est aarch64 (outils/construire-whisper.sh local, whisper.cpp v1.7.6 épinglé) : le CI arm64 natif ne dépend plus d'un binaire posé à la main, et le paquet revient dans la matrice (ref #2020).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 07:00:00 +0200
+
 secubox-voice-moteur (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Commandes courantes (#1656) : Vosk 0.3.45 (arm64) et le petit modèle
