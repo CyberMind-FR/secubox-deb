@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vagues 3e et 3f : mail←smtp-relay, metablogizer←droplet,publish ; déployées gk3 + gk2, publiées (ref #2050)
+Unités vérifiées sur build local : dh détecte déjà les unités installées dans l'arbre, un `dh_installsystemd --name=` en plus les déclare deux fois (retiré de media 1.8.1). L'unité smtp-relay bouclait en 226/NAMESPACE (`ReadWritePaths` sur `/var/log/mail.log`, absent de l'hôte car le courrier est dans le LXC) : préfixe `-`, mail 2.13.1. Dépendants full 1.4.6, isp 1.2.5, profils 1.0.28, meta 0.1.28. CI : suite publish déplacée.
+
 ## 2026-10-06 (nuit) — Rassemblement, vagues 3c et 3d : media←freeboxtv, repo←release, jitsi←turn ; déployées gk3 + gk2, publiées (ref #2050)
 Overrides `dh_installsystemd` fusionnés à la main et vérifiés sur un build local (une seule gestion par unité). `absorber-paquet` sait désormais absorber un paquet installé par `debian/<paquet>.install`. Constats corrigés au passage : la CI échouait sur trois suites déplacées (metacatalog, zigbee, defaults) → chemins mis à jour ; appstore 0.5.1 (groupes du catalogue citaient smb et zigbee, la construction cassait) ; test périmé de l'unité release (RuntimeDirectory retiré, #1022) ; mediactl ancrait sur un commentaire. README : « environ 135 paquets + 57 méta-paquets » (chiffres comptés). Méta : meta 0.1.27, full 1.4.5, profils 1.0.27. Reste le contrôle d'en-têtes de licence (dizaines de fichiers `.claude/`, ancien).
 
