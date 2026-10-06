@@ -67,6 +67,14 @@ PROFIL_SOCLE = "isp"
 #: ce que produisent les cartes qui marchent déjà.
 PROFIL_DEFAUT = "full"
 
+#: Profils PUBLIÉS pour certaines cartes, quoi que la carte déclare.
+#:
+#: La MOCHAbin déclare `full` (c'est ce qu'elle porte, et ce que fabrique `build-image.sh` en local), mais
+#: `secubox-full-mochabin-<suite>.img.gz` pèse 2,6 Go : un fichier de release GitHub ne peut dépasser 2 Gio, et
+#: l'étape « Create GitHub Release » échouait (alpha 9). La release ne porte donc que lite et isp pour cette
+#: carte ; `full` reste constructible à la main (workflow_dispatch / build-image.sh --profile full).
+PROFILS_PUBLIES = {"mochabin": ["lite", "isp"]}
+
 _RE_PROFIL = re.compile(r"^\s*SECUBOX_PROFILE\s*=\s*(\S+)", re.M)
 
 
@@ -95,6 +103,8 @@ def profils_pour(racine: Path, carte: str) -> list[str]:
     L'ordre compte : deux exécutions doivent produire la même matrice, sinon
     les journaux de CI cessent de se comparer d'une fois sur l'autre.
     """
+    if carte in PROFILS_PUBLIES:
+        return list(PROFILS_PUBLIES[carte])
     declare = profil_de_carte(racine / "board" / carte / "config.mk") or PROFIL_DEFAUT
     profils = [declare]
     if PROFIL_SOCLE not in profils:
