@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=exec
 # Pas de SECUBOX_TOR_SOCKS fige ici : surf/egress.py detecte le SOCKS de Tor de CETTE machine (127.0.0.1:9050, puis son
-# adresse locale). L'unite figeait celui de gk2 (192.168.1.200) : sur gk3 le surfer serait sorti par le Tor d'une
+# adresse locale). L'unite figeait celui de gk2 (son adresse LAN) : sur gk3 le surfer serait sorti par le Tor d'une
 # autre box (#2039). Un reglage propre a une machine se pose dans un drop-in.
 WorkingDirectory=/usr/lib/secubox/surf
 ExecStart=/usr/local/bin/uvicorn surf.serveur:app --host 127.0.0.1 --port 9082
