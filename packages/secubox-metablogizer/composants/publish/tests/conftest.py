@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[5]
-sys.path[:0] = [str(R / "common"), str(R / "packages" / "secubox-publish")]
+sys.path[:0] = [str(R / "common"), str(R / "packages" / "secubox-metablogizer" / "composants" / "publish")]
 # Le module crée ses répertoires à l'import : jamais sous /var ni /srv en test.
 _BANC = Path(tempfile.mkdtemp(prefix="publish-banc-"))
 os.environ.setdefault("SECUBOX_PUBLISH_DATA", str(_BANC / "data"))

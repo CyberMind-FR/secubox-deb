@@ -173,8 +173,15 @@ def absorber(absorbant: str, ancien: str, sec: bool) -> None:
     for t in C.rglob("tests/*.py"):
         s = t.read_text()
         s2 = re.sub(r"parents\[(\d+)\]", lambda m: f"parents[{int(m.group(1)) + 2}]" if int(m.group(1)) >= 2 else m.group(0), s)
+        # le conftest qui désigne l'ancien dossier du paquet : il est devenu un composant de l'absorbant
+        s2 = s2.replace(f'"packages" / "secubox-{ancien}"', f'"packages" / "secubox-{absorbant}" / "composants" / "{ancien}"')
         if s2 != s:
             t.write_text(s2)
+    for h in C.rglob("tests/helpers.bash"):
+        hs = h.read_text()
+        h2 = hs.replace('$BATS_TEST_DIRNAME/../../..', '$BATS_TEST_DIRNAME/../../../../..')
+        if h2 != hs:
+            h.write_text(h2)
     # 2. scripts de maintenance de l'ancien → composants/<ancien>/debian/, installés puis rejoués
     scripts_installes = []
     for s in SCRIPTS:
