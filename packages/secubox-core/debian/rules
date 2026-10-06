@@ -60,6 +60,11 @@ override_dh_auto_install:
 	cp ../../secubox.conf.example \
 	   debian/secubox-core/usr/share/secubox-core/
 
+	# Identite de la box (absorbe secubox-defaults, #2050 N1) : /etc/default/secubox est un conffile,
+	# l'aligneur le renseigne au configure (et firstboot l'appelle une fois le nom pose).
+	install -D -m 0644 etc/default/secubox debian/secubox-core/etc/default/secubox
+	install -D -m 0755 sbin/secubox-defaults-aligner debian/secubox-core/usr/sbin/secubox-defaults-aligner
+
 	# Script firstboot
 	install -d debian/secubox-core/usr/bin
 	install -m 755 ../../image/firstboot.sh \

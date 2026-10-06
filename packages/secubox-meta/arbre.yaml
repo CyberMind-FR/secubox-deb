@@ -52,6 +52,8 @@ hors-arbre:
   - secubox-mac-guard         # transitoire → secubox-nac (#2050 S1)
   - secubox-device-intel      # transitoire → secubox-nac (#2050 S1)
   - secubox-iot-guard         # transitoire → secubox-nac (#2050 S1)
+  - secubox-groupd            # transitoire → secubox-aggregator (#2050 N1)
+  - secubox-defaults          # transitoire → secubox-core (#2050 N1)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -248,8 +250,6 @@ description: "Bibliothèque centrale, passerelle d'API, hôte de groupe, santé.
 requiert:
   - secubox-core
   - secubox-aggregator
-  - secubox-groupd
-  - secubox-defaults
   - secubox-system
   - secubox-hardening
 recommande:

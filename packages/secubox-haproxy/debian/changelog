@@ -1,3 +1,10 @@
+secubox-haproxy (1.8.27-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-core >= 1.6.0, qui porte /etc/default/secubox : secubox-defaults est devenu
+    transitoire (#2050, N1). Le declencheur secubox-defaults-changed est inchange (emis par core).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 13:55:00 +0200
+
 secubox-haproxy (1.8.26-1~bookworm1) bookworm; urgency=high
 
   * Reecriture d'URI vers le WAF : %[pathq] au lieu de %[url]. En HTTP/2, que HAProxy 3.0 negocie par defaut, %[url] est l'adresse absolue et l'hote etait duplique (« hotehttps:// »), d'ou un 421 sur tous les domaines publics pour les navigateurs (Debian 13) (ref #1997).

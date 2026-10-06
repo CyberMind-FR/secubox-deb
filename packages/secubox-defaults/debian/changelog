@@ -1,3 +1,9 @@
+secubox-defaults (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : /etc/default/secubox et l'aligneur sont livres par secubox-core >= 1.6.0 (#2050, N1).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 13:46:00 +0200
+
 secubox-defaults (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * secubox-defaults-aligner (#1845) : l'alignement de /etc/default/secubox sur

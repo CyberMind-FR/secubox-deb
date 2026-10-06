@@ -37,7 +37,7 @@ vaut une prise de contrôle. Cible : utilisateur `secubox-<module>`, `AmbientCap
 
 | Paquet | Unité | Justification |
 |---|---|---|
-| `groupd` | `secubox-group-root@` | groupe volontairement root (isolation par groupe) |
+| `aggregator` | `secubox-group-root@` | groupe volontairement root (isolation par groupe) ; livrée par `groupd` jusqu'à #2050 N1 |
 | `health` | `secubox-module-prober` | sondes de services (`systemctl`) |
 | `led-heartbeat` | `secubox-led-heartbeat` | accès matériel (LED) |
 | `metrics` | `secubox-geoipupdate` | `oneshot` ; déjà `NoNewPrivileges=true` |

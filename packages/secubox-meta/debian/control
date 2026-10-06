@@ -226,8 +226,6 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-core,
          secubox-aggregator,
-         secubox-groupd,
-         secubox-defaults,
          secubox-system,
          secubox-hardening
 Recommends: secubox-premier-pas,

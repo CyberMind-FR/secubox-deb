@@ -135,6 +135,18 @@ PY
         /etc/secubox/secubox.conf
     fi
 
+    # ── Identité de la box (absorbe secubox-defaults, #2050 N1) ──
+    # L'aligneur nomme CETTE box d'après secubox-domaine (#1841, #1845). Le déclencheur ne part QUE si le
+    # fichier a changé : sinon haproxy régénérerait sa configuration à chaque montée de core.
+    if [ -x /usr/sbin/secubox-defaults-aligner ]; then
+      _avant=$(cksum < /etc/default/secubox 2>/dev/null || true)
+      /usr/sbin/secubox-defaults-aligner || true
+      _apres=$(cksum < /etc/default/secubox 2>/dev/null || true)
+      if [ "$_avant" != "$_apres" ]; then
+        dpkg-trigger secubox-defaults-changed || true
+      fi
+    fi
+
     # ── Nginx ──
     # The /etc/nginx/sites-available/secubox file ships with three server
     # blocks bound to 80/443 — fine for standalone-nginx topologies, fatal
