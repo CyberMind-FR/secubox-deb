@@ -60,3 +60,12 @@ delai_s = 3600              # un changement du périmètre au plus par heure (ch
 retrait_jours = 7           # une adresse d'un appareil ajouté automatiquement, non vue depuis, est retirée (une reste toujours)
 min_appareils_agreg = 2     # appareils où un domaine est confirmé par l'administrateur pour entrer dans le profil agrégé
 
+# Détection PERMANENTE (#2047), fausse par défaut : à activer par l'administrateur (avec `auto_essai` dans le panneau).
+# confirmation_auto : un essai (24 h) sans régression devient une règle confirmée à l'échéance au lieu d'être retiré ; un appareil
+#   trop peu actif pour éprouver la règle voit l'essai prolongé d'une période ; une rafale de refus ou la disparition du contenu
+#   habituel retirent la règle.
+# declencheurs_pub : un hôte de pub connu des listes (advertising, tracking), MÊME DÉJÀ BLOQUÉ, ouvre la fenêtre de détection :
+#   les hôtes nouveaux qui y apparaissent deviennent des candidats (utile quand le service n'utilise pas fwmrm.net).
+confirmation_auto = false
+declencheurs_pub = false
+

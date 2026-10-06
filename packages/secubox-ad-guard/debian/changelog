@@ -1,3 +1,9 @@
+secubox-ad-guard (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Détection automatique permanente (réglages `confirmation_auto` et `declencheurs_pub`, faux par défaut) : un essai de 24 h sans régression devient une règle confirmée à l'échéance au lieu d'être retiré faute de validation humaine (prolongé si l'appareil a été trop peu actif, retiré sur rafale de refus ou contenu habituel disparu) ; un hôte de pub connu, même déjà bloqué, ouvre la fenêtre de détection des nouveaux hôtes (ref #2047).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 21:00:00 +0200
+
 secubox-ad-guard (1.6.3-1~bookworm1) bookworm; urgency=medium
 
   * Le suivi des adresses IPv6 couvre aussi les appareils DECLARES A LA MAIN qui portent une MAC : une TV declaree sortait de sa vue Unbound au premier changement d'IPv6 temporaire, ses exceptions (imasdk.googleapis.com) ne s'appliquaient plus et le replay restait sur sa roue. Les adresses ajoutees ont l'origine « suivi » (expirables) ; les adresses declarees ne sont jamais retirees (ref #2011).

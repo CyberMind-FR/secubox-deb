@@ -151,6 +151,16 @@ class Regles:
         r["fin_essai"] = maintenant + ESSAI_S if vers == "essai" else 0
         return dict(r)
 
+    def prolonger_essai(self, rid: str, maintenant: int, motif: str = "essai prolongé : appareil peu actif") -> dict:
+        """Reconduit l'essai d'une période (#2047) : une règle qu'aucune activité n'a éprouvée n'est ni confirmée à l'aveugle, ni retirée."""
+        r = self._r.get(rid)
+        if r is None or r["etat"] != "essai":
+            raise ErreurRegle("seul un essai peut être prolongé")
+        r["fin_essai"] = maintenant + ESSAI_S
+        r["historique"] = (r["historique"] + [{"ts": maintenant, "de": "essai", "vers": "essai", "origine": "auto", "motif": motif[:120]}])[-HISTORIQUE_MAX:]
+        r["maj"], r["motif"] = maintenant, motif[:120]
+        return dict(r)
+
     def expirer(self, maintenant: int) -> List[dict]:
         """Essais non confirmés → retirés ; candidats trop anciens → retirés ; règles retirées depuis longtemps → oubliées. Rend les règles changées."""
         out = []

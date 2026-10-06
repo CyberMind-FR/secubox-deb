@@ -29,6 +29,9 @@ class Reglage:
     min_declencheurs: int = 5
     min_services: int = 2
     min_appareils_agreg: int = 2
+    # Détection permanente (#2047), faux par défaut : l'administrateur les active dans ad-guard.toml
+    confirmation_auto: bool = False      # un essai sans régression devient règle confirmée à l'échéance (au lieu d'être retiré)
+    declencheurs_pub: bool = False       # un hôte de pub connu (listes), même déjà bloqué, ouvre la fenêtre de détection
 
 
 TOML = Path("/etc/secubox/ad-guard.toml")
@@ -43,6 +46,9 @@ def reglage_depuis(etat: dict, toml: Path = TOML) -> Reglage:
             c = tomllib.load(h).get("adblock_tv_auto", {})
     except (OSError, ValueError, ImportError):
         return r
+    for k in ("confirmation_auto", "declencheurs_pub"):
+        if isinstance(c.get(k), bool):
+            setattr(r, k, c[k])
     decl = c.get("declencheurs")
     if isinstance(decl, list) and decl and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in decl):
         r.declencheurs = tuple(decl)
@@ -61,6 +67,28 @@ def appareils(etat: dict) -> Dict[str, List[str]]:
     return out
 
 
+def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note) -> None:
+    """Essais arrivés à échéance (#2047) : sans régression, la règle est CONFIRMÉE automatiquement ; si l'appareil a été trop peu
+    actif pour l'éprouver, l'essai est prolongé d'une période ; en cas de régression (rafale de refus, contenu habituel disparu),
+    on ne touche à rien : l'expiration normale retire la règle."""
+    adr = appareils(etat)
+    for r in [x for x in regles.liste() if x["etat"] == "essai" and maintenant > x["fin_essai"]]:
+        adresses = adr.get(r["appareil"])
+        if not adresses:
+            continue                                         # appareil plus en mode auto : l'expiration joue
+        evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
+        if dnstv_signaux.rafale(evts, {r["domaine"]}, maintenant, reglage.seuil_refus_min, reglage.duree_rafale_min):
+            continue
+        depuis = [e for e in evts if e["ts"] >= r["maj"] and e["decision"] != "BLOCKED"]
+        if len(depuis) < reglage.min_requetes_actif:
+            regles.prolonger_essai(r["id"], maintenant)
+            continue
+        jours = magasin.jours_vus(adresses, dnstv._jour(r["maj"]), dnstv._jour(r["maj"] - 7 * 86400))
+        if dnstv_signaux.contenu_disparu(jours, {e["domaine"] for e in depuis}, len(depuis), min_requetes=reglage.min_requetes_actif):
+            continue
+        note(regles.transiter(r["id"], "confirme", "auto", "essai sans régression", maintenant), "essai", "confirme", "essai sans régression")
+
+
 def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
     changements, applique, candidats = [], False, 0
     def note(r, de, vers, motif):
@@ -69,15 +97,21 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
         if (de in ("essai", "confirme")) != (vers in ("essai", "confirme")):
             applique = True
     avant = {r["id"]: r["etat"] for r in regles.liste()}
+    if reglage.confirmation_auto:
+        _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note)
+    avant = {r["id"]: r["etat"] for r in regles.liste()}
     for r in regles.expirer(maintenant):
         note(r, avant[r["id"]], r["etat"], r["motif"])
     def declencheur(d: str) -> bool:
-        return any(d == s or d.endswith("." + s) for s in reglage.declencheurs)
+        if any(d == s or d.endswith("." + s) for s in reglage.declencheurs):
+            return True
+        return reglage.declencheurs_pub and classer(d) in dnstv_detect.CLASSES_PUB      # repère intelligent (#2047)
 
     for appareil, adresses in appareils(etat).items():
         evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
         exclus = {r["domaine"] for r in regles.liste() if r["appareil"] == appareil}
-        for c in dnstv_detect.detecter(evts, declencheur, classer, exclus):
+        for c in dnstv_detect.detecter(evts, declencheur, classer, exclus,
+                                       evts_declencheurs=evts if reglage.declencheurs_pub else None):
             try:
                 n = regles.proposer(appareil, c.domaine, c.score, c.risque, maintenant)
             except dnstv_regles.ErreurRegle:
