@@ -1,3 +1,9 @@
+secubox-dpi (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Commentaire de debian/control reformule : la CI prenait la phrase pour une declaration d'architecture et sautait la construction arm64.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 03:30:00 +0200
+
 secubox-dpi (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-mediaflow (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
