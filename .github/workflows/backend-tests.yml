@@ -47,7 +47,7 @@ on:
       - 'image/firstboot.sh'
       - 'scripts/tests/test_firstboot_frontal_1845.py'
       - 'packages/secubox-certs/**'
-      - 'packages/secubox-publish/**'
+      - 'packages/secubox-metablogizer/**'
       - 'packages/secubox-streamlit/**'
       - 'packages/secubox-appstore/**'
       - 'packages/secubox-health/**'
@@ -115,7 +115,7 @@ jobs:
           # Une publication dit ce qui s'est VRAIMENT passé (#1823) : la page
           # affichait « Published Successfully » sur un site inexistant.
           - suite: secubox-publish
-            chemin: packages/secubox-publish/tests
+            chemin: packages/secubox-metablogizer/composants/publish/tests
           # Cache rafraîchi à la demande, plus en boucle (#1835) : ~14 000
           # lancements en dix minutes sur gk2 pour aucune lecture.
           - suite: secubox-streamlit

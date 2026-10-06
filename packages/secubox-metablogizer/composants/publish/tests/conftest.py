@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-R = Path(__file__).resolve().parents[3]
+R = Path(__file__).resolve().parents[5]
 sys.path[:0] = [str(R / "common"), str(R / "packages" / "secubox-publish")]
 # Le module crée ses répertoires à l'import : jamais sous /var ni /srv en test.
 _BANC = Path(tempfile.mkdtemp(prefix="publish-banc-"))

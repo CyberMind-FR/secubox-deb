@@ -1,3 +1,17 @@
+secubox-metablogizer (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-publish (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/publish/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
+secubox-metablogizer (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-droplet (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/droplet/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-metablogizer (1.8.30-1~bookworm1) bookworm; urgency=medium
 
   * Les routes d'affichage lisent le cache, elles ne balayent plus (#1835) :

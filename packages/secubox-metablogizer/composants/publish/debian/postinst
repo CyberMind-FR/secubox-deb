@@ -5,5 +5,4 @@ if [ "$1" = "configure" ]; then
     systemctl enable secubox-publish.service || true
     systemctl start secubox-publish.service || true
 fi
-#DEBHELPER#
 exit 0

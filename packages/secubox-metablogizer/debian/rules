@@ -74,3 +74,57 @@ override_dh_auto_install:
 	# Example config
 	install -d debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples
 	[ -f config/metablogizer.toml.example ] && install -m 644 config/metablogizer.toml.example debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples/ || true
+	# Composant absorbé : droplet (#2050)
+	install -d debian/secubox-metablogizer/usr/lib/secubox/droplet/
+	cp -r composants/droplet/api debian/secubox-metablogizer/usr/lib/secubox/droplet/
+	install -d debian/secubox-metablogizer/usr/share/secubox/www
+	[ -d composants/droplet/www ] && cp -r composants/droplet/www/. debian/secubox-metablogizer/usr/share/secubox/www/ || true
+	install -d debian/secubox-metablogizer/usr/share/secubox/menu.d
+	[ -d composants/droplet/menu.d ] && cp -r composants/droplet/menu.d/. debian/secubox-metablogizer/usr/share/secubox/menu.d/ || true
+	# Modular composants/droplet/nginx composants/droplet/config
+	install -d debian/secubox-metablogizer/etc/nginx/secubox.d
+	[ -f composants/droplet/nginx/droplet.conf ] && cp composants/droplet/nginx/droplet.conf debian/secubox-metablogizer/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-metablogizer/etc/nginx/secubox-routes.d
+	[ -f composants/droplet/nginx/droplet.conf ] && cp composants/droplet/nginx/droplet.conf debian/secubox-metablogizer/etc/nginx/secubox-routes.d/ || true
+	# Vhost de l espace de depot (#1026). LIVRE MAIS NON ACTIVE : un vhost
+	# demande aussi une entree HAProxy, une route WAF et un enregistrement DNS,
+	# qu un paquet ne doit pas decider seul. Voir README.
+	install -d debian/secubox-metablogizer/etc/nginx/sites-available
+	[ -f composants/droplet/nginx/depot-vhost.conf ] && cp composants/droplet/nginx/depot-vhost.conf debian/secubox-metablogizer/etc/nginx/sites-available/depot.gk2.conf || true
+	# dropletctl — composants/droplet/static publisher (rewritten for issue #196 — superseded #181)
+	install -d debian/secubox-metablogizer/usr/sbin
+	install -m 755 composants/droplet/sbin/dropletctl debian/secubox-metablogizer/usr/sbin/
+	# Configuration livree en modele (#1026). Le postinst ne l ecrase jamais :
+	# un plafond baisse a la main le jour d un abus ne doit pas remonter tout
+	# seul a la mise a jour suivante.
+	install -d debian/secubox-metablogizer/usr/share/secubox/droplet
+	install -m 0644 composants/droplet/etc/secubox/droplet.toml \
+	  debian/secubox-metablogizer/usr/share/secubox/droplet/droplet.toml.exemple
+	install -D -m 755 composants/droplet/debian/postinst debian/secubox-metablogizer/usr/lib/secubox/metablogizer/maintscripts/droplet.postinst
+	install -D -m 755 composants/droplet/debian/prerm debian/secubox-metablogizer/usr/lib/secubox/metablogizer/maintscripts/droplet.prerm
+	install -D -m 644 composants/droplet/debian/secubox-droplet.service debian/secubox-metablogizer/usr/lib/systemd/system/secubox-droplet.service
+	# Composant absorbé : publish (#2050)
+	install -d debian/secubox-metablogizer/usr/lib/secubox/publish
+	cp -r composants/publish/api debian/secubox-metablogizer/usr/lib/secubox/publish/
+	install -d debian/secubox-metablogizer/usr/share/secubox/www/publish
+	cp -r composants/publish/www/publish/. debian/secubox-metablogizer/usr/share/secubox/www/publish/
+	install -d debian/secubox-metablogizer/usr/share/secubox/menu.d
+	[ -d composants/publish/menu.d ] && cp -r composants/publish/menu.d/. debian/secubox-metablogizer/usr/share/secubox/menu.d/ || true
+	# Modular composants/publish/nginx composants/publish/config
+	install -d debian/secubox-metablogizer/etc/nginx/secubox.d
+	[ -f composants/publish/nginx/publish.conf ] && cp composants/publish/nginx/publish.conf debian/secubox-metablogizer/etc/nginx/secubox.d/ || true
+	# CLI tool — primary `publishctl` + `metactl` symlink for backward compat (#180)
+	install -d debian/secubox-metablogizer/usr/sbin
+	[ -f composants/publish/bin/publishctl ] && install -m 755 composants/publish/bin/publishctl debian/secubox-metablogizer/usr/sbin/publishctl || true
+	[ -f debian/secubox-metablogizer/usr/sbin/publishctl ] && \
+	  ln -sf publishctl debian/secubox-metablogizer/usr/sbin/metactl || true
+	# Plugins directory
+	install -d debian/secubox-metablogizer/srv/secubox/modules/publish/plugins
+	[ -d composants/publish/plugins ] && cp -r composants/publish/plugins/. debian/secubox-metablogizer/srv/secubox/modules/publish/plugins/ || true
+	install -D -m 755 composants/publish/debian/postinst debian/secubox-metablogizer/usr/lib/secubox/metablogizer/maintscripts/publish.postinst
+	install -D -m 755 composants/publish/debian/prerm debian/secubox-metablogizer/usr/lib/secubox/metablogizer/maintscripts/publish.prerm
+	install -D -m 644 composants/publish/debian/secubox-publish.service debian/secubox-metablogizer/usr/lib/systemd/system/secubox-publish.service
+

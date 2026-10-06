@@ -486,7 +486,6 @@ Package: secubox-service-fichiers
 Architecture: all
 Depends: ${misc:Depends},
          secubox-nextcloud
-Recommends: secubox-droplet
 Description: SecuBox — service « Fichiers »
  Nextcloud, partage SMB noyau, dépôt de fichiers éphémères.
  .
@@ -550,8 +549,7 @@ Description: SecuBox — service « Musique »
 Package: secubox-service-sites
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-metablogizer,
-         secubox-publish
+         secubox-metablogizer
 Description: SecuBox — service « Sites »
  Métablogs, plateforme de publication, catalogue.
  .
