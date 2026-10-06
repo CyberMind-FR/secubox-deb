@@ -49,20 +49,15 @@ setup() {
   grep -q '^    redis)' "$BATS_TEST_DIRNAME/../sbin/mailctl"
 }
 
-@test "mailctl redis répare aussi systemd-resolved du conteneur quand il existe et ne tourne pas" {
-  lxc_attach() { echo "ATTACH $*" >> "$CALLS"; case "$*" in *"cat >"*) cat >> "$CALLS" ;; esac
-    case "$*" in *"is-active --quiet systemd-resolved"*) return 3 ;; *"cat systemd-resolved"*|*"list-unit-files systemd-resolved"*) return 0 ;; esac; return 0; }
-  export -f lxc_attach
+@test "mailctl redis rétablit un resolv.conf statique quand le lien vers systemd-resolved est cassé" {
   run cmd_redis
   [ "$status" -eq 0 ]
-  grep -q 'systemd-resolved.service.d' "$CALLS"
-  grep -q 'restart systemd-resolved' "$CALLS"
+  grep -q '! -e /etc/resolv.conf' "$CALLS"          # seulement si absent ou lien pendant
+  grep -q 'nameserver 10.100.0.1' "$CALLS"
+  grep -q 'nameserver 9.9.9.9' "$CALLS"
 }
 
-@test "mailctl redis ne touche pas à systemd-resolved s'il tourne déjà" {
-  lxc_attach() { echo "ATTACH $*" >> "$CALLS"; case "$*" in *"cat >"*) cat >> "$CALLS" ;; esac; return 0; }
-  export -f lxc_attach
-  run cmd_redis
-  [ "$status" -eq 0 ]
-  ! grep -q 'systemd-resolved.service.d' "$CALLS"
+@test "le resolv.conf statique n'est jamais posé par-dessus un fichier valide" {
+  corps="$(awk '/^cmd_redis\(\) \{/,/^\}/' "$BATS_TEST_DIRNAME/../sbin/mailctl")"
+  [[ "$corps" == *'[ ! -e /etc/resolv.conf ]'* ]]
 }
