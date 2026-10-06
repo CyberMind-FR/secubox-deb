@@ -1,3 +1,9 @@
+secubox-appstore (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Groupes du catalogue : smb et zigbee, absorbes par media et mqtt (#2050), ne sont plus cites a part ; la construction echouait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 23:00:00 +0200
+
 secubox-appstore (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-metacatalog (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

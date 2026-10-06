@@ -59,7 +59,7 @@ description: "Ses fichiers et ses photos chez soi, partagés sans intermédiaire
 modules:
   - secubox-nextcloud
   - secubox-photoprism
-  - secubox-smb
+  - secubox-media
 
 
 groupe: correspondance
@@ -103,6 +103,5 @@ description: "Piloter le domicile : passerelle Zigbee, courtier MQTT et vidéosu
 # `homeassistant` et `roundcube` ne sont pas des paquets SecuBox : ils vivent
 # en conteneur, hors catalogue. Un groupe ne cite que ce qui s'installe ici.
 modules:
-  - secubox-zigbee
   - secubox-mqtt
 
