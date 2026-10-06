@@ -507,6 +507,14 @@ cmd_redis() {
     lxc_service_sans_sandbox redis-server "$CONTAINER" || return 1
     lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed redis-server 2>/dev/null; systemctl enable --now redis-server' >/dev/null 2>&1 \
         || { error "redis-server n'a pas demarre dans '$CONTAINER'"; return 1; }
+    # Le résolveur du conteneur (systemd-resolved) tombe pour la même raison que redis : sans /etc/resolv.conf, rspamd attend ses
+    # délais DNS sur chaque message (les envois du rapport WAF expiraient à 20 s). Réparé seulement s'il existe et ne tourne pas.
+    if lxc_attach "$CONTAINER" systemctl cat systemd-resolved >/dev/null 2>&1 \
+            && ! lxc_attach "$CONTAINER" systemctl is-active --quiet systemd-resolved >/dev/null 2>&1; then
+        lxc_service_sans_sandbox systemd-resolved "$CONTAINER" || return 1
+        lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed systemd-resolved 2>/dev/null; systemctl restart systemd-resolved' >/dev/null 2>&1 \
+            || warn "systemd-resolved n'a pas demarre dans '$CONTAINER'"
+    fi
     lxc_attach "$CONTAINER" systemctl restart rspamd >/dev/null 2>&1 || warn "rspamd non relance"
     log "redis-server demarre ; rspamd relance"
 }

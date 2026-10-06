@@ -1,3 +1,11 @@
+secubox-mail (2.12.4-1~bookworm1) bookworm; urgency=medium
+
+  * mailctl redis repare aussi systemd-resolved du conteneur quand il existe et ne tourne pas : meme cause que redis (AppArmor
+    lxc-container-default-cgns refuse le rbind de / dont le bac a sable systemd a besoin). Sans /etc/resolv.conf, rspamd attendait
+    ses delais DNS sur chaque message et les envois du rapport WAF expiraient. Tests bats.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 19:10:00 +0200
+
 secubox-mail (2.12.3-1~bookworm1) bookworm; urgency=medium
 
   * Rootfs du conteneur decale a moitie (gk3 : 12 975 entrees restees en uid bas apres un apt en chroot) : redis ecrivait en
