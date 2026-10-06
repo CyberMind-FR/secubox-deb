@@ -1,3 +1,9 @@
+secubox-profils (1.0.11-1~bookworm1) bookworm; urgency=medium
+
+  * Ne depend plus de secubox-mac-guard (transitoire) : nac porte le role (#2050, S1).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 11:45:00 +0200
+
 secubox-profils (1.0.10-1~bookworm1) bookworm; urgency=medium
 
   * Retire secubox-threat-analyst (module supprime) (ref #1997).

@@ -285,8 +285,7 @@ Depends: ${misc:Depends},
          secubox-nac
 Recommends: secubox-qos,
          secubox-traffic,
-         secubox-netdiag,
-         secubox-mac-guard
+         secubox-netdiag
 Suggests: secubox-nettweak,
          secubox-modem,
          secubox-wan-link-guard
@@ -394,8 +393,7 @@ Depends: ${misc:Depends},
 Recommends: secubox-cve-triage,
          secubox-cyberfeed,
          secubox-threatmesh,
-         secubox-antirootkit,
-         secubox-device-intel
+         secubox-antirootkit
 Suggests: secubox-ad-guard,
          secubox-cookies,
          secubox-ai-insights,
@@ -605,8 +603,7 @@ Package: secubox-service-domotique
 Architecture: all
 Depends: ${misc:Depends},
          secubox-mqtt
-Recommends: secubox-zigbee,
-         secubox-iot-guard
+Recommends: secubox-zigbee
 Suggests: secubox-picobrew
 Description: SecuBox — service « Domotique »
  Courtier MQTT, coordinateur Zigbee, garde IoT, NVR.

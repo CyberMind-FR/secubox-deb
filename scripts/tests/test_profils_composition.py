@@ -14,7 +14,7 @@ def deps(profil):
 
 
 PROTECTIONS = {"waf", "waf-ng", "dpi", "ndpid-engine", "toolbox", "toolbox-ng", "threats",
-               "antirootkit", "mac-guard", "ad-guard", "webfilter", "vortex-firewall", "haproxy"}
+               "antirootkit", "nac", "ad-guard", "webfilter", "vortex-firewall", "haproxy"}
 APPLICATIONS = {"nextcloud", "gitea", "jellyfin", "peertube", "mail", "metablogizer", "publish", "radio"}
 
 

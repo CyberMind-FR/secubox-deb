@@ -1,47 +1,6 @@
-<!--
-  SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
--->
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+# secubox-device-intel (transitoire)
 
-# 📱 Device Intelligence
-
-Asset discovery and fingerprinting
-
-**Category:** Monitoring
-
-## Screenshot
-
-![Device Intelligence](../../docs/screenshots/vm/device-intel.png)
-
-## Features
-
-- ARP scanning
-- MAC vendor lookup
-- OS detection
-- Services
-
-## Installation
-
-```bash
-# Add SecuBox repository
-curl -fsSL https://apt.secubox.in/install.sh | sudo bash
-
-# Install package
-sudo apt install secubox-device-intel
-```
-
-## Configuration
-
-Configuration file: `/etc/secubox/device-intel.toml`
-
-## API Endpoints
-
-- `GET /api/v1/device-intel/status` - Module status
-- `GET /api/v1/device-intel/health` - Health check
-
-## License
-
-LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
-See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+Paquet vide : device-intel est servi par `secubox-nac` (Client Guardian) depuis la consolidation Device Guardian
+(#817) ; les anciennes URL redirigent vers `/nac/` (voir `secubox-nac/nginx/nac-legacy.conf`).
+Il sera retiré une fois publié un cycle complet (#2050, simplification des modules).
