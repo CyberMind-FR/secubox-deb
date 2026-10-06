@@ -54,9 +54,13 @@ def _coupures(evts: List[dict], est_declencheur: Callable[[str], bool], fenetre_
 
 
 def detecter(evts: List[dict], est_declencheur: Callable[[str], bool], classer: Callable[[str], str], exclus: Set[str],
-             fenetre_s: int = 60, pause_s: int = 120, min_coupures: int = 2, min_variantes: int = 3) -> List[Candidat]:
-    evts = [e for e in evts if e.get("decision") != "BLOCKED" and dnstv.valider_domaine(e.get("domaine", "")) == e.get("domaine")]
-    fenetres = _coupures(evts, est_declencheur, fenetre_s, pause_s)
+             fenetre_s: int = 60, pause_s: int = 120, min_coupures: int = 2, min_variantes: int = 3,
+             evts_declencheurs: List[dict] | None = None) -> List[Candidat]:
+    # `evts_declencheurs` (#2047) : événements qui ouvrent les fenêtres, bloqués compris. Un hôte de pub DÉJÀ bloqué est un
+    # excellent repère de coupure ; les candidats, eux, ne sont jamais tirés d'un événement bloqué.
+    valides = lambda L: [e for e in L if dnstv.valider_domaine(e.get("domaine", "")) == e.get("domaine")]  # noqa: E731
+    evts = [e for e in valides(evts) if e.get("decision") != "BLOCKED"]
+    fenetres = _coupures(valides(evts_declencheurs) if evts_declencheurs is not None else evts, est_declencheur, fenetre_s, pause_s)
     if not fenetres:
         return []
     dans: Dict[str, Set[int]] = defaultdict(set)      # domaine → coupures où il apparaît
