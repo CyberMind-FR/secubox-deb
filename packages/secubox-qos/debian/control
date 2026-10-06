@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-qos
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, nftables
+Depends: ${misc:Depends}, secubox-core (>= 1.5.57), iproute2, nftables
 Recommends: vnstat
 Suggests: python3-pyroute2
 Description: SecuBox QoS / Bandwidth Manager
