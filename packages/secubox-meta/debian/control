@@ -421,7 +421,6 @@ Package: secubox-service-metriques
 Architecture: all
 Depends: ${misc:Depends},
          secubox-metrics
-Suggests: secubox-grafana
 Description: SecuBox — service « Métriques »
  Métriques temps réel, tableaux et rapports.
  .

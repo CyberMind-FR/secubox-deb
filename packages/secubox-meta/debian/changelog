@@ -1,3 +1,9 @@
+secubox-meta (0.1.29-1~bookworm1) bookworm; urgency=medium
+
+  * Metriques : grafana retire des listes (absorbe par metrics, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 00:45:00 +0200
+
 secubox-meta (0.1.28-1~bookworm1) bookworm; urgency=medium
 
   * Service Mail : smtp-relay retire des recommandations (absorbe par mail, #2050).
