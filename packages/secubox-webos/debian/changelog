@@ -1,3 +1,9 @@
+secubox-webos (1.0.404-1~bookworm1) bookworm; urgency=medium
+
+  * La CSP du Hall autorise les images des sous-domaines de la box (img-src … $sbx_cadres_box, comme frame-src) : les pochettes de la radio et du podcaster, annoncées avec l'origine de leur propre vhost, étaient bloquées (ref #2042).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 Oct 2026 18:00:00 +0200
+
 secubox-webos (1.0.403-1~bookworm1) bookworm; urgency=medium
 
   * Le studio VoiceStudio embarqué peut demander le micro : drapeau micro_embed (le micro n'est délégué qu'au cadre embarqué des services qui le déclarent) et origine voicestudio.<domaine du Hall> dans le Permissions-Policy, comme mood. Corrige « Accès au microphone refusé » dans le studio natif (ref #2030).
