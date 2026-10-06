@@ -40,10 +40,18 @@ La mise à jour d'une box Debian 12 vers Debian 13 a été faite et validée sur
 | 421 sur tous les sites publics en navigateur | HAProxy 3.0 négocie HTTP/2 ; la réécriture d'URI utilisait `%[url]` | `%[pathq]` (corrigé dans `secubox-haproxy` 1.8.26) |
 | `systemctl is-active` échoue pendant la mise à jour | `systemd` se met à jour lui-même | Suivre un message de fin dans le journal, pas l'état de l'unité |
 | Le surfer renvoie 502 sur un `.onion` | Il forçait https | http pour les `.onion` (corrigé dans `secubox-surf` 1.0.30) |
+| Le DNS du LAN reste coupé ~4 min après un redémarrage | Unbound charge des centaines de milliers de zones et dépassait les 90 s de démarrage | Délai de démarrage de 600 s (`secubox-dns-lan` 0.1.1) |
+| Un module échoue au premier démarrage puis repart seul | Le `chmod` du socket attendait 15 s ; sous la charge du démarrage c'était trop court | Attente de 120 s ; `uvicorn` force le socket en 666, le `chmod 660` reste indispensable |
+| Un conteneur reste arrêté après un redémarrage | `lxc.service` est masqué sur certaines machines (autostart inopérant) | VoiceStudio démarre son conteneur lui-même en mode permanent (0.5.4) |
+| La radio écarte toutes les pistes (403) | Un fichier de cookies refusé par YouTube | `ytsas` retente sans cookies pour les vidéos publiques (0.2.13) |
 
 ## MOCHAbin : noyau
 
-Le noyau Debian standard ne détecte pas le port WAN (eth2) de la MOCHAbin ; la carte reste sur son noyau 6.12 construit par SecuBox (fragments de configuration dans `board/mochabin/kernel/`). La carte démarre par `extlinux`, pas par `boot.scr`.
+La MOCHAbin démarre maintenant sur le **noyau Debian standard 6.12**, avec un fragment de configuration SecuBox (`board/mochabin/kernel/config-6.12-stock-wan.fragment`) qui intègre au noyau ce dont le port WAN (eth2) a besoin : contrôleur I2C, cages SFP, PHYLINK, MVPP2, PHY Marvell, et le commutateur DSA avec son pont. La carte démarre par `extlinux`, pas par `boot.scr`, et le noyau précédent construit par SecuBox n'est plus conservé.
+
+Pourquoi le commutateur DSA doit être dans le noyau : chargé en module, il arrivait après l'ouverture de eth2 par le réseau ; le pilote réseau rebasculait alors ses tampons, rouvrait tous les ports, et le PHY de eth2 ne remontait plus jamais (aucune liaison). Intégré, il est prêt avant le démarrage des services et la liaison monte en quelques secondes. `NET_DSA` dépend aussi de `HSR` : un HSR resté en module le plafonnait à module, il est donc intégré lui aussi.
+
+Remplacer un noyau de **même version** : `/boot` est en vfat et `dpkg` n'y fait pas de lien de sauvegarde. Retirer d'abord `System.map-<version>` et `config-<version>`, puis installer, puis régénérer l'initrd.
 
 ## Suite
 
