@@ -1,3 +1,11 @@
+secubox-webfilter (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * Profil AppArmor du controleur : unbound-checkconf lit /etc/passwd et /etc/nsswitch.conf (abstraction nameservice) et ip
+    /usr/share/iproute2/. Sans cela, sous le profil, « user 'unbound' does not exist » : toute configuration etait refusee
+    (constate sur gk2 des que le chmod ne bloquait plus). Les tests ne figent plus le numero de version.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 17:10:00 +0200
+
 secubox-webfilter (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * secubox-webfilter-apply echouait chaque jour a 04:00 sur gk2 et gk3 (PermissionError sur /var/lib/secubox-webfilter-ctl) :

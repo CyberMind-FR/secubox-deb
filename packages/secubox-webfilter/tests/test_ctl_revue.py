@@ -153,3 +153,13 @@ def test_le_profil_apparmor_autorise_le_dossier_racine_lui_meme():
     profil = (Path(__file__).resolve().parents[1] / "apparmor" / "secubox-webfilter").read_text()
     bloc = profil[profil.index("/usr/sbin/secubox-webfilter-ctl {"):]
     assert "/var/lib/secubox-webfilter-ctl/ rw," in bloc
+
+
+def test_le_profil_du_controleur_laisse_unbound_checkconf_et_ip_resoudre_leurs_utilisateurs():
+    """Constaté sur gk2 : sous le profil, unbound-checkconf ne pouvait lire ni /etc/passwd ni /etc/nsswitch.conf (« user 'unbound'
+    does not exist »), et ip /usr/share/iproute2/group. Le contrôleur refusait donc toute configuration."""
+    from pathlib import Path
+    profil = (Path(__file__).resolve().parents[1] / "apparmor" / "secubox-webfilter").read_text()
+    bloc = profil[profil.index("/usr/sbin/secubox-webfilter-ctl {"):]
+    assert "#include <abstractions/nameservice>" in bloc
+    assert "/usr/share/iproute2/** r," in bloc
