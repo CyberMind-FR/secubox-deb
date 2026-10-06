@@ -1,6 +1,6 @@
 secubox-voice (0.1.9-1~bookworm1) bookworm; urgency=medium
 
-  * Le socket naît en 660 par UMask=0007 : plus de chmod après coup, dont la boucle de 15 s expirait sous la charge du démarrage et faisait échouer l'unité (ref #2018).
+  * Le chmod 660 du socket attend jusqu'à 120 s (au lieu de 15 s) et TimeoutStartSec passe à 180 s : sous la charge du démarrage la boucle de 15 s expirait et l'unité échouait au premier essai. uvicorn force le socket en 0o666, donc le chmod reste indispensable (ref #2026).
 
  -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 17:00:00 +0200
 

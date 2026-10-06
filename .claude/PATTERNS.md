@@ -339,7 +339,8 @@ WorkingDirectory=/usr/lib/secubox/<module>
 ExecStart=/usr/bin/uvicorn api.main:app \
     --uds /run/secubox/<module>.sock \
     --log-level warning
-UMask=0007            # le socket naît en 660 ; PAS de ExecStartPost chmod (course au démarrage, #2018)
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/<module>.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/<module>.sock'
+TimeoutStartSec=180   # uvicorn force le socket en 0o666 : le chmod est INDISPENSABLE (UMask n'y change rien) ; attendre 120 s, pas 15 (#2026)
 Restart=on-failure
 RestartSec=5
 

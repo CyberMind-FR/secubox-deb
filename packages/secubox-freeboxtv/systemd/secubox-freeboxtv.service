@@ -7,13 +7,14 @@ Wants=secubox-runtime.service
 [Service]
 Type=simple
 User=secubox
-UMask=0007
 Group=secubox
 WorkingDirectory=/usr/share/secubox/freeboxtv
 ExecStartPre=+/bin/rm -f /run/secubox/freeboxtv.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/freeboxtv.sock --workers 1 --log-level warning
-# Le socket naît en 660 grâce à UMask=0007 : plus de chmod après coup (course au démarrage
-# sous charge : la boucle de 15 s expirait, l'unité échouait puis redémarrait, #2018).
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/freeboxtv.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/freeboxtv.sock'
+# uvicorn force le socket en 0o666 après le bind (l'umask n'y change rien) : le chmod 660 est INDISPENSABLE ;
+# attendre jusqu'à 120 s, car sous la charge du démarrage la boucle de 15 s expirait et faisait échouer l'unité (#2026).
+TimeoutStartSec=180
 Restart=on-failure
 RestartSec=3
 # Durcissement raisonnable : le sas n'écrit que sous /run (HLS) et lit le réseau LAN.

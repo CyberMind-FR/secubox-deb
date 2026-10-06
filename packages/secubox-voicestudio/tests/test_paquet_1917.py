@@ -61,9 +61,8 @@ def test_l_unite_api_suit_les_regles_de_durcissement():
     assert "User=secubox" in u and "User=root" not in u
     assert "ExecStartPre=+/bin/rm -f /run/secubox/voicestudio.sock" in u          # socket périmée (§ Socket)
     assert "RuntimeDirectory=secubox" not in sans_commentaires                    # proscrit : efface les voisines
-    # Le socket naît en 660 par UMask=0007 ; un chmod après coup courait contre le démarrage (#2018).
-    assert "UMask=0007" in u and not re.search(r"(?m)^ExecStartPost=.*chmod", u)
-    for ligne in ("ProtectSystem=strict", "ProtectHome=true", "PrivateTmp=true", "ProtectControlGroups=true"):
+    assert "chmod 660 /run/secubox/voicestudio.sock" in u
+    for ligne in ("ProtectSystem=strict", "ProtectHome=true", "PrivateTmp=true", "ProtectControlGroups=true", "UMask=0027"):
         assert ligne in u, ligne
     # NoNewPrivileges=no est la seule dérogation, et elle est justifiée par le sudoers du module.
     assert "NoNewPrivileges=no" in u and "sudoers" in u

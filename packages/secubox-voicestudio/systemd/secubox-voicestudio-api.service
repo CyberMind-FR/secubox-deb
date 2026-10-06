@@ -16,8 +16,10 @@ Environment="PYTHONUNBUFFERED=1"
 ExecStartPre=+/bin/rm -f /run/secubox/voicestudio.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/voicestudio.sock --workers 1 --log-level warning
 # nginx (www-data, groupe secubox) doit joindre la socket.
-# Le socket naît en 660 grâce à UMask=0007 : plus de chmod après coup (course au démarrage
-# sous charge : la boucle de 15 s expirait, l'unité échouait puis redémarrait, #2018).
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/voicestudio.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/voicestudio.sock'
+# uvicorn force le socket en 0o666 après le bind (l'umask n'y change rien) : le chmod 660 est INDISPENSABLE ;
+# attendre jusqu'à 120 s, car sous la charge du démarrage la boucle de 15 s expirait et faisait échouer l'unité (#2026).
+TimeoutStartSec=180
 Restart=on-failure
 RestartSec=5
 
@@ -30,7 +32,7 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ProtectControlGroups=true
-UMask=0007
+UMask=0027
 # ATTENTION — NE PAS AJOUTER ProtectKernelTunables, RestrictSUIDSGID, LockPersonality (ni RestrictNamespaces,
 # SystemCallFilter, MemoryDenyWriteExecute…) : chacun IMPOSE implicitement NoNewPrivileges=yes via seccomp, ce
 # qui neutralise sudo malgré la ligne ci-dessus (« The "no new privileges" flag is set »). Mesuré sur gk3 en
