@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vague 3h : dpi←ndpid,mediaflow ; défauts de CI et de dpi corrigés ; déployés gk3 + gk2, publiés (ref #2050)
+dpi 1.7.x absorbe ndpid et mediaflow (dpi reste arch any : amd64 + arm64). Outil : nom des unités nommées (`<paquet>.<nom>.service` → `<nom>.service`), motif `\b` qui retirait aussi `ndpid-engine` de l'arbre, conftest et bats des composants repointés. CI : la détection « arch all » prenait un commentaire de `debian/control` pour une architecture (arm64 sauté) → expression ancrée ; suite publish et catalogue appstore (0.5.2, groupe publication) réparés, test de génération du catalogue ajouté. Défaut ancien trouvé sur gk3 : l'API dpi bouclait sur « unable to open database file » (16 620 fois depuis au moins le 5 octobre), le répertoire d'état appartenant à root ; base d'ingestion déplacée dans `/var/lib/secubox/dpi-ingest` (secubox), ancienne base migrée par le postinst (dpi 1.7.2). Pannes sans lien : peertube-backlog (délai dépassé) sur gk2.
+
 ## 2026-10-07 — Rassemblement, vague 3g : metrics←grafana ; transitoires qui remettent l'unité en route ; déployés gk3 + gk2, publiés (ref #2050)
 grafana arrêté à la mise à jour par l'ancien `prerm` et jamais relancé (gk2) : les transitoires grafana, reporter, smtp-relay, traffic et zigbee (dont l'ancien prerm arrêtait l'unité sur `upgrade`) portent maintenant un `postinst` qui la rétablit sauf si masquée ; l'outil l'écrit pour les prochaines fusions, test de garde ajouté. iot-guard était déjà un transitoire vers nac : rien à absorber (I5 sans objet). Versions : metrics 1.15.0, meta 0.1.29, profils 1.0.29.
 
