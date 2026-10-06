@@ -148,8 +148,19 @@ def _compute_menu_sync() -> dict:
     # Sort categories by order
     sorted_categories = sorted(categories.values(), key=lambda x: x["order"])
 
+    # Regroupement par thème (#2050) : les onglets du Hall se construisent sur les
+    # modules INSTALLÉS ; une entrée sans thème va dans « autre », jamais perdue.
+    themes = {}
+    for item in installed_items:
+        tid = item.get("theme") or "autre"
+        themes.setdefault(tid, {"id": tid, "items": []})["items"].append(item)
+    for th in themes.values():
+        th["items"].sort(key=lambda x: x.get("order", 999))
+    sorted_themes = sorted(themes.values(), key=lambda x: (x["id"] == "autre", x["id"]))
+
     return {
         "categories": sorted_categories,
+        "themes": sorted_themes,
         "total_installed": len(installed_items),
         "total_active": sum(1 for i in installed_items if i.get("active")),
         "cached_at": time.time(),
