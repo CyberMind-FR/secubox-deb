@@ -417,8 +417,6 @@ label: Centre opérationnel
 description: "Agrégation des alertes et son tableau web."
 requiert:
   - secubox-soc
-recommande:
-  - secubox-soc-web
 suggere:
   - secubox-soc-agent
 

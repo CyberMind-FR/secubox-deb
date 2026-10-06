@@ -211,7 +211,6 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
         "secubox-soc",
         "secubox-soc-agent",
         "secubox-soc-gateway",
-        "secubox-soc-web",
     ],
     "mail-all": [
         "secubox-mail",

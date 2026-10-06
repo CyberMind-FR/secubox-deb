@@ -297,20 +297,6 @@ jobs:
               binutils-aarch64-linux-gnu
           fi
 
-      - name: Setup Node.js (for soc-web)
-        if: matrix.package == 'secubox-soc-web'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Build React app (for soc-web)
-        if: matrix.package == 'secubox-soc-web'
-        run: |
-          cd packages/secubox-soc-web
-          npm ci --ignore-scripts || npm install --ignore-scripts
-          npm run build
-          ls -la dist/
-
       # Fronts construits (#1611) : tout paquet qui porte un .nvmrc passe par
       # scripts/construire-front.sh — le même producteur que le poste local.
       - name: Setup Node.js (fronts .nvmrc)
