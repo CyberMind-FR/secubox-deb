@@ -154,7 +154,6 @@ Depends: ${misc:Depends},
          secubox-profil-socle,
          secubox-backup,
          secubox-eye-remote,
-         secubox-mediaflow,
          secubox-metablogizer (>= 1.10.0),
          secubox-netboot
 Description: SecuBox — profil « provision » : Provisionnement, sauvegarde et deploiement

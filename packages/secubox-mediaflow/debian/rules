@@ -1,36 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_install:
-	install -d debian/secubox-mediaflow/usr/lib/secubox/mediaflow/
-	cp -r api debian/secubox-mediaflow/usr/lib/secubox/mediaflow/
-	install -d debian/secubox-mediaflow/usr/share/secubox/www
-	[ -d www ] && cp -r www/. debian/secubox-mediaflow/usr/share/secubox/www/ || true
-	install -d debian/secubox-mediaflow/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mediaflow/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
-	install -d debian/secubox-mediaflow/etc/nginx/secubox.d
-	[ -f nginx/mediaflow.conf ] && cp nginx/mediaflow.conf debian/secubox-mediaflow/etc/nginx/secubox.d/ || true
-	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
-	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
-	# elle n etait jamais lue.
-	install -d debian/secubox-mediaflow/etc/nginx/secubox-routes.d
-	[ -f nginx/mediaflow.conf ] && cp nginx/mediaflow.conf debian/secubox-mediaflow/etc/nginx/secubox-routes.d/ || true
-	# R4 cloner helper (#736): keep yt-dlp current for Discovered Media
-	install -d debian/secubox-mediaflow/usr/sbin
-	install -m 0755 sbin/secubox-yt-dlp-refresh debian/secubox-mediaflow/usr/sbin/
-
-# L'UNITE DE RAFRAICHISSEMENT N'ETAIT JAMAIS INSTALLEE (#1362). Les fichiers
-# `debian/secubox-mediaflow.secubox-yt-dlp-refresh.{service,timer}` existaient
-# et portaient le nom que debhelper attend — mais `dh_installsystemd` SANS
-# `--name` n'installe que `debian/<paquet>.service`. Toute unite supplementaire
-# demande un appel explicite.
-#
-# Consequence : le binaire /usr/sbin/secubox-yt-dlp-refresh etait livre, son
-# unite non. Sur gk2 quelqu'un avait donc recopie l'unite a la main dans
-# /etc/systemd/system, ou elle ne protegeait aucune autre installation et
-# comptait comme une orpheline.
-override_dh_installsystemd:
-	dh_installsystemd
-	dh_installsystemd --name=secubox-yt-dlp-refresh

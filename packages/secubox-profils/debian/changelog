@@ -1,3 +1,9 @@
+secubox-profils (1.0.30-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-mediaflow retire du profil (absorbe par secubox-dpi, deja liste ; #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 02:30:00 +0200
+
 secubox-profils (1.0.29-1~bookworm1) bookworm; urgency=medium
 
   * Profil : secubox-grafana retire (absorbe par secubox-metrics, #2050).

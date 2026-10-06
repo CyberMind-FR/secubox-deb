@@ -4,5 +4,4 @@ if [ "$1" = "remove" ]; then
     systemctl stop secubox-ndpid.service || true
     systemctl disable secubox-ndpid.service || true
 fi
-#DEBHELPER#
 exit 0
