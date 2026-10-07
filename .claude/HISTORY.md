@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vague 3k : tor←proxypac,macro ; déployée gk3 + gk2, publiée (ref #2050)
+tor 1.4.0 absorbe proxypac (PAC, minuterie et chemin de régénération, sudoers) et macro (assistant `macroctl`, sudoers, profil AppArmor) ; listes de fichiers comparées sur build local, aucune perte. Outil : une source `debian/secubox-<ancien>.sudoers` n'est plus réécrite comme dossier de destination. Tests proxypac repointés vers le control/rules de tor. profils 1.0.33, meta 0.1.33. proxypac, inactif sur gk2 avant, y est démarré par le postinst d'origine rejoué.
+
 ## 2026-10-07 — Rassemblement, vague 3j : routes←netdiag ; déployée gk3 + gk2, publiée (ref #2050)
 Deux unités conservées dans un seul paquet : `routes` (secubox) et `netdiag` (root, sockets bruts), le registre des unités root pointe maintenant sur routes. isp : reste de `traffic` (vague 3a) retiré. Versions : routes 1.3.0, isp 1.2.7, profils 1.0.32, meta 0.1.32.
 
