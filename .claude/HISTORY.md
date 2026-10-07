@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vague 3n : annuaire←openpgp, p2p←meshname (R5) ; déployée gk3 + gk2, publiée (ref #2050)
+annuaire 0.11.0 absorbe openpgp : son `dh_installsystemd` est restreint à ses propres unités (l'unité openpgp reste gérée par son postinst : clé et liaison AVANT le démarrage) et l'utilisateur dédié `secubox-openpgp` est conservé. p2p 1.12.0 absorbe meshname. Contrôles avant/après sur les deux nœuds : empreinte de `node.key` identique (gk3 d59bee65…, gk2 2b05e2e5…), mêmes droits, dossier openpgp intact, annuaire/openpgp/p2p actifs, wg-mesh inchangé. Tests : openpgp 23 verts (conftest repointé), p2p 184 verts, annuaire 443 verts / 15 en échec identiques avant la fusion. isp 1.2.10, profils 1.0.36, meta 0.1.36, vault 2.1.5. meshname, inactif avant, est démarré par son postinst rejoué.
+
 ## 2026-10-07 — Action live gk2 : publication du site metablogizer « all » (demande du propriétaire)
 `all.gk2.secubox.in` et son alias `all.gk2.net` répondaient 404 : `published: false` dans `site.json` depuis le 21 août, donc aucun bloc nginx (#1322). La voie officielle (API du publieur) demande un jeton admin ; la même opération a été faite en root par les fonctions du paquet : `published` mis à vrai (écriture atomique, copie avant : `/root/site-all.json.avant-publication` sur gk2), puis `regenerate_nginx_config()` (aide root `metablog-nginx` : installe, teste, recharge). Résultat : 200 sur les deux noms, `nginx -t` valide, 163 sites émis. Le vault n'a pas été touché. Alias de « 3d » et « all » non émis comme blocs séparés : « déjà pris » par le bloc principal, attendu.
 
