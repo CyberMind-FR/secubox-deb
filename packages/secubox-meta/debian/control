@@ -274,8 +274,7 @@ Depends: ${misc:Depends},
 Recommends: secubox-qos,
          secubox-ipv6guard,
          secubox-freebox
-Suggests: secubox-nettweak,
-         secubox-modem,
+Suggests: secubox-modem,
          secubox-wan-link-guard
 Description: SecuBox — service « Routage »
  Modes réseau, routes, contrôle d'accès, qualité de service.
@@ -301,8 +300,7 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-haproxy
 Recommends: secubox-cdn
-Suggests: secubox-mirror,
-         secubox-saas-relay
+Suggests: secubox-saas-relay
 Description: SecuBox — service « Exposition »
  Frontal HAProxy, hôtes virtuels, publication de services vers l'extérieur.
  .

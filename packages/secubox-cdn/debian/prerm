@@ -12,3 +12,8 @@ esac
 systemctl stop    secubox-cdn.service 2>/dev/null || true
 systemctl disable secubox-cdn.service 2>/dev/null || true
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/cdn/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "cdn : prerm de $(basename "$_s") en échec" >&2; }
+done
+exit 0

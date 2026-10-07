@@ -14,7 +14,7 @@ RACINE = Path(__file__).resolve().parents[2]
 PAQUETS_ROOT_TOLERES = {
     "aggregator", "backup", "certs", "cookies", "health",
     "interceptor", "led-heartbeat", "mail", "metrics", "netboot", "haproxy",
-    "nettweak", "profiles", "qos", "routes", "system", "threatmesh", "toolbox",
+    "profiles", "qos", "routes", "system", "threatmesh", "toolbox",
     "mqtt", "vm",
 }
 

@@ -16,4 +16,9 @@ systemctl disable secubox-qos.service 2>/dev/null || true
 for _s in /usr/lib/secubox/qos/maintscripts/*.prerm; do
   [ -f "$_s" ] && { sh "$_s" "$@" || echo "qos : prerm de $(basename "$_s") en échec" >&2; }
 done
+
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/qos/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "qos : prerm de $(basename "$_s") en échec" >&2; }
+done
 exit 0

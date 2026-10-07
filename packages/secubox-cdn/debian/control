@@ -9,7 +9,14 @@ Rules-Requires-Root: no
 
 Package: secubox-cdn
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.3), nginx
+Depends: ${misc:Depends},
+ secubox-core (>= 1.4.3),
+ nginx,
+ python3-fastapi | python3-pip,
+ python3-uvicorn | python3-pip,
+ curl
+Replaces: secubox-mirror (<< 1.2.2~)
+Breaks: secubox-mirror (<< 1.2.2~)
 Description: SecuBox CDN Cache
  Cache CDN local : économies bande passante, politiques par domaine/extension, stats hit ratio.
  .
