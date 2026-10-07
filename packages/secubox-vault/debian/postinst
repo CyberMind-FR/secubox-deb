@@ -13,6 +13,12 @@ case "$1" in
     install -d -m 0755 /var/log/secubox
     [ -e /var/log/secubox/coffre.journal ] || \
       install -o secubox-coffre -g secubox -m 0640 /dev/null /var/log/secubox/coffre.journal
+    # Un journal DÉJÀ LÀ garde le propriétaire de l'époque où le coffre tournait sous `secubox` : le service, désormais
+    # `secubox-coffre`, ne pouvait plus y écrire, donc plus s'OUVRIR (« Permission denied » à l'ouverture : constaté sur gk2 le
+    # 2026-10-07, coffre scellé après une mise à jour puis impossible à rouvrir). On corrige le propriétaire et les droits ; le
+    # contenu (chaîné) n'est jamais touché.
+    chown secubox-coffre:secubox /var/log/secubox/coffre.journal
+    chmod 0640 /var/log/secubox/coffre.journal
 
     # PAGE OPENPGP DU COFFRE, à origine séparée (#1852, P5) : pgp.<domaine>. Vhost nginx, puis exposition (HAProxy + WAF)
     # comme les autres modules à domaine propre. Idempotent ; sans nom de domaine, rien n'est écrit.
