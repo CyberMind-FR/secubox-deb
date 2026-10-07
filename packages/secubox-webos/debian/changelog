@@ -1,3 +1,9 @@
+secubox-webos (1.2.4-1~bookworm1) bookworm; urgency=high
+
+  * Hall : plus de cartes en double. Retirer une carte absente (si_present) redessinait la mosaique alors que les favoris vivent dans la bande, hors de la mosaique : l'ancien exemplaire restait en bande, un nouveau naissait dans la mosaique (gk2). Les noeuds sont maintenant retires en place (carte et ligne du rail), jamais de second rendu ; test de garde.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 23:45:00 +0200
+
 secubox-webos (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * Carte Flux YouTube : message clair quand les cookies sont perimes (reexporter cookies.txt depuis un navigateur connecte).
