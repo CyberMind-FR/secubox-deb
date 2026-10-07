@@ -22,7 +22,7 @@ APP_NOM = "SecuBox"
 HOTE_DEFAUT = "http://mafreebox.freebox.fr"
 DELAI_S = 10
 
-_CHEMIN_OK = re.compile(r"^[a-z0-9][a-z0-9_./-]{0,120}$")
+_CHEMIN_OK = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_./:-]{0,120}$")   # « : » et majuscules : identifiants de bail DHCP (adresse MAC)
 _ETATS = {"pending": "attente", "granted": "accordee", "denied": "refusee", "timeout": "expiree", "unknown": "inconnue"}
 
 

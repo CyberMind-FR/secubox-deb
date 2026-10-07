@@ -31,7 +31,7 @@ from . import client as C
 from . import magasin as M
 from . import service as S
 
-app = FastAPI(title="SecuBox Freebox", version="0.3.0")
+app = FastAPI(title="SecuBox Freebox", version="0.4.0")
 
 CHEMIN_MAGASIN = os.environ.get("SECUBOX_FREEBOX_MAGASIN", "/var/lib/secubox/freebox/app.json")
 HOTE = os.environ.get("SECUBOX_FREEBOX_HOTE", C.HOTE_DEFAUT)
@@ -110,6 +110,43 @@ def regler_pare_feu_ipv6(corps: dict):
     if corps.get("confirme") is not True or not isinstance(corps.get("actif"), bool):
         return JSONResponse({"erreur": "Confirmation explicite et valeur « actif » (vrai/faux) requises."}, status_code=400)
     return _repondre(lambda: _service.regler_pare_feu_ipv6(corps["actif"]))
+
+
+def _ip_box():
+    """Adresse de la box sur le réseau local : variable d'environnement, sinon celle que le noyau choisit pour joindre la Freebox."""
+    env = os.environ.get("SECUBOX_FREEBOX_IP_BOX")
+    if env:
+        return env
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect((HOTE.split("://")[-1].split("/")[0].split(":")[0], 80))
+        return s.getsockname()[0]
+    except OSError:
+        return ""
+    finally:
+        s.close()
+
+
+@app.get("/autoconfig", dependencies=[Depends(require_lecture)])
+def autoconfig():
+    ip = _ip_box()
+    if not ip:
+        return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
+    return _repondre(lambda: _service.autoconfig(ip))
+
+
+@app.post("/autoconfig", dependencies=[Depends(require_jwt)])
+def appliquer_autoconfig(corps: dict):
+    ids = corps.get("ids")
+    if corps.get("confirme") is not True or not isinstance(ids, list) or not ids:
+        return JSONResponse({"erreur": "Confirmation explicite et liste d'éléments requises."}, status_code=400)
+    if "dmz" in ids and corps.get("confirme_dmz") is not True:
+        return JSONResponse({"erreur": "La DMZ expose toute la machine : confirmation dédiée (confirme_dmz) requise."}, status_code=400)
+    ip = _ip_box()
+    if not ip:
+        return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
+    return _repondre(lambda: _service.appliquer_autoconfig(ids, ip, corps.get("confirme_dmz") is True))
 
 
 @app.get("/upnp", dependencies=[Depends(require_lecture)])

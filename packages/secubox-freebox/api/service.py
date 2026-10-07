@@ -177,6 +177,96 @@ class Freebox:
         etat, change = self._regler("upnpigd/config/", "enabled", actif, "upnp")
         return {"actif": etat, "change": change}
 
+    # ── autoconfiguration : état → cible recommandée, écart par écart ─────────────
+    ITEMS_AUTOCONFIG = ("pare_feu_ipv6", "dns", "ip_fixe", "dmz")
+
+    def _lire_autoconfig(self):
+        fw = (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall")
+        dns = [x for x in ((self.client.lire("dhcp/config/") or {}).get("dns") or []) if x]
+        dmz = self._lire_dmz()
+        return {"pare_feu_ipv6": fw, "dns": dns, "dmz": dmz}
+
+    def _etat_ip_fixe(self, ip_box):
+        """{"mac", "ip"} : l'adresse MAC de la box (celle que la Freebox lui connaît pour cette adresse IPv4) et l'IP de son bail statique ("" si aucun)."""
+        mac = ""
+        for h in self.client.lire("lan/browser/pub/") or []:
+            if any(x.get("addr") == ip_box and x.get("af", "ipv4") == "ipv4" for x in h.get("l3connectivities") or []):
+                mac = ((h.get("l2ident") or {}).get("id") or "").upper()
+                break
+        ip = ""
+        for b in self.client.lire("dhcp/static_lease/") or []:
+            if mac and (b.get("mac") or "").upper() == mac:
+                ip = b.get("ip") or ""
+        return {"mac": mac, "ip": ip}
+
+    def _lire_dmz(self):
+        d = self.client.lire("fw/dmz/") or {}
+        return {"enabled": bool(d.get("enabled")), "ip": d.get("ip") or ""}
+
+    def autoconfig(self, ip_box):
+        """Ce que SecuBox recommande pour la Freebox, comparé à l'état réel. Lecture seule. La DMZ est marquée sensible : elle expose TOUTE la
+        machine visée à Internet, elle ne s'applique jamais avec le reste."""
+        cur = self._lire_autoconfig()
+        fixe = self._etat_ip_fixe(ip_box)
+        items = [
+            {"id": "pare_feu_ipv6", "titre": "Pare-feu IPv6", "actuel": cur["pare_feu_ipv6"], "cible": True, "sensible": False,
+             "pourquoi": "Bloque les connexions entrantes IPv6 vers les appareils du réseau."},
+            {"id": "dns", "titre": "DNS distribué par la Freebox (DHCP)", "actuel": cur["dns"], "cible": [ip_box], "sensible": False,
+             "pourquoi": "Les appareils du réseau interrogent la box (filtrage, journal) au lieu d'un résolveur extérieur."},
+            {"id": "ip_fixe", "titre": "Adresse IP fixe de la box (bail DHCP statique)", "actuel": fixe, "cible": {"mac": fixe["mac"], "ip": ip_box}, "sensible": False,
+             "pourquoi": "La Freebox réserve toujours cette adresse à la box : DNS, DMZ et redirections continuent de la viser après un redémarrage."},
+            {"id": "dmz", "titre": "DMZ", "actuel": cur["dmz"], "cible": {"enabled": True, "ip": ip_box}, "sensible": True,
+             "pourquoi": "Envoie à la box tout le trafic IPv4 entrant qui n'a pas de redirection. Nécessaire si la box publie des services ; expose toute la machine."},
+        ]
+        for i in items:
+            i["conforme"] = i["actuel"] == i["cible"]
+        return {"items": items, "ecarts": sum(1 for i in items if not i["conforme"]), "ip_box": ip_box}
+
+    def appliquer_autoconfig(self, ids, ip_box, confirme_dmz=False):
+        """Applique les éléments demandés (pas plus), relit avant ET après, journalise. La DMZ exige `confirme_dmz`."""
+        ids = list(dict.fromkeys(ids or []))
+        if not ids or any(i not in self.ITEMS_AUTOCONFIG for i in ids):
+            raise ValueError("éléments inconnus ou absents")
+        if "dmz" in ids and not confirme_dmz:
+            raise ValueError("la DMZ demande une confirmation dédiée")
+        if not self.client.session:
+            self.client.ouvrir_session()
+        if not self.client.droits.get("settings"):
+            raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
+                                  "Paramètres → Gestion des accès → Applications.")
+        appliques = []
+        for ident in ids:
+            chemin, corps, lire, voulu = {
+                "pare_feu_ipv6": ("connection/ipv6/config/", {"ipv6_firewall": True}, lambda: (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall"), True),
+                "dns": ("dhcp/config/", {"dns": [ip_box, "", "", "", "", ""]},
+                        lambda: [x for x in ((self.client.lire("dhcp/config/") or {}).get("dns") or []) if x], [ip_box]),
+                "dmz": ("fw/dmz/", {"enabled": True, "ip": ip_box}, lambda: self._lire_dmz(), {"enabled": True, "ip": ip_box}),
+            }.get(ident) or (None, None, None, None)
+            methode = "PUT"
+            if ident == "ip_fixe":
+                avant = self._etat_ip_fixe(ip_box)
+                if not avant["mac"]:
+                    raise C.ErreurFreebox("La Freebox ne connaît pas l'adresse MAC de la box : impossible de réserver son adresse.")
+                voulu = {"mac": avant["mac"], "ip": ip_box}
+                if avant == voulu:
+                    continue
+                chemin = "dhcp/static_lease/" + (avant["mac"] if avant["ip"] else "")
+                corps = {"mac": avant["mac"], "ip": ip_box, "comment": "SecuBox"}
+                methode = "PUT" if avant["ip"] else "POST"
+                lire = lambda: self._etat_ip_fixe(ip_box)
+            else:
+                avant = lire()
+                if avant == voulu:
+                    continue
+            self.client.ecrire(methode, chemin, corps)
+            apres = lire()
+            self._cache.clear()
+            self.journal({"action": "autoconfig_" + ident, "avant": avant, "apres": apres, "voulu": voulu})
+            if apres != voulu:
+                raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement de « %s »." % ident)
+            appliques.append(ident)
+        return {"appliques": appliques}
+
     def redirections(self):
         return self._lu("redirections", lambda: N.redirections(self.client.lire("fw/redir/")))
 
