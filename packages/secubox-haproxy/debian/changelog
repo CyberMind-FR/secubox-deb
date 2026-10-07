@@ -1,3 +1,17 @@
+secubox-haproxy (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-exposure (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/exposure/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
+secubox-haproxy (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-vhost (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/vhost/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-haproxy (1.8.27-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-core >= 1.6.0, qui porte /etc/default/secubox : secubox-defaults est devenu

@@ -40,3 +40,53 @@ override_dh_auto_install:
 	    install -m 755 sbin/secubox-render-nginx-webui debian/secubox-haproxy/usr/local/bin/ || true
 	[ -f sbin/secubox-haproxy-regen-safe ] && \
 	    install -m 755 sbin/secubox-haproxy-regen-safe debian/secubox-haproxy/usr/local/bin/ || true
+	# Composant absorbé : vhost (#2050)
+	install -d debian/secubox-haproxy/usr/lib/secubox/vhost/
+	cp -r composants/vhost/api debian/secubox-haproxy/usr/lib/secubox/vhost/
+	install -d debian/secubox-haproxy/usr/share/secubox/www
+	[ -d composants/vhost/www ] && cp -r composants/vhost/www/. debian/secubox-haproxy/usr/share/secubox/www/ || true
+	install -d debian/secubox-haproxy/usr/share/secubox/menu.d
+	[ -d composants/vhost/menu.d ] && cp -r composants/vhost/menu.d/. debian/secubox-haproxy/usr/share/secubox/menu.d/ || true
+	# Control script
+	install -d debian/secubox-haproxy/usr/sbin
+	[ -d composants/vhost/sbin ] && install -m 755 composants/vhost/sbin/* debian/secubox-haproxy/usr/sbin/ || true
+	# Modular composants/vhost/nginx composants/vhost/config
+	install -d debian/secubox-haproxy/etc/nginx/secubox.d
+	[ -f composants/vhost/nginx/vhost.conf ] && cp composants/vhost/nginx/vhost.conf debian/secubox-haproxy/etc/nginx/secubox.d/ || true
+	install -D -m 755 composants/vhost/debian/postinst debian/secubox-haproxy/usr/lib/secubox/haproxy/maintscripts/vhost.postinst
+	install -D -m 755 composants/vhost/debian/prerm debian/secubox-haproxy/usr/lib/secubox/haproxy/maintscripts/vhost.prerm
+	install -D -m 644 composants/vhost/debian/secubox-vhost.service debian/secubox-haproxy/usr/lib/systemd/system/secubox-vhost.service
+	# Composant absorbé : exposure (#2050)
+	install -d $(CURDIR)/debian/secubox-haproxy/usr/lib/secubox/exposure/api
+	install -m 644 composants/exposure/api/*.py $(CURDIR)/debian/secubox-haproxy/usr/lib/secubox/exposure/api/
+	install -d $(CURDIR)/debian/secubox-haproxy/usr/share/secubox/www/exposure
+	install -m 644 composants/exposure/www/exposure/*.html $(CURDIR)/debian/secubox-haproxy/usr/share/secubox/www/exposure/
+	install -d $(CURDIR)/debian/secubox-haproxy/usr/lib/systemd/system
+	install -m 644 composants/exposure/debian/secubox-exposure.service $(CURDIR)/debian/secubox-haproxy/usr/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-haproxy/usr/share/secubox/menu.d
+	install -m 644 composants/exposure/menu.d/*.json $(CURDIR)/debian/secubox-haproxy/usr/share/secubox/menu.d/
+	# Install composants/exposure/nginx composants/exposure/config
+	install -d $(CURDIR)/debian/secubox-haproxy/etc/nginx/secubox.d
+	install -m 644 composants/exposure/nginx/exposure.conf $(CURDIR)/debian/secubox-haproxy/etc/nginx/secubox.d/exposure.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-haproxy/etc/nginx/secubox-routes.d
+	install -m 644 composants/exposure/nginx/exposure.conf $(CURDIR)/debian/secubox-haproxy/etc/nginx/secubox-routes.d/exposure.conf
+	# Install exposure snippet directory and default snippet
+	install -d debian/secubox-haproxy/etc/nginx/snippets/exposure
+	install -m 644 composants/exposure/conf/nginx-exposure-default.conf \
+	   debian/secubox-haproxy/etc/nginx/snippets/exposure/default.conf
+	# tor-enhancement-phase1 (FINAL-REVIEW packaging fix): boot-time Tor
+	# hidden-service persist reconciler (root composants/exposure/sbin script + oneshot unit).
+	# Without these, tor_reconcile_persist() never runs on boot and an
+	# emancipated .onion doesn't survive a torrc reset / fresh image flash.
+	install -d $(CURDIR)/debian/secubox-haproxy/usr/sbin
+	install -m 755 composants/exposure/sbin/secubox-exposure-tor-reconcile \
+	   $(CURDIR)/debian/secubox-haproxy/usr/sbin/secubox-exposure-tor-reconcile
+	install -m 644 composants/exposure/systemd/secubox-exposure-tor-reconcile.service \
+	   $(CURDIR)/debian/secubox-haproxy/usr/lib/systemd/system/
+	install -D -m 755 composants/exposure/debian/postinst debian/secubox-haproxy/usr/lib/secubox/haproxy/maintscripts/exposure.postinst
+	install -D -m 755 composants/exposure/debian/prerm debian/secubox-haproxy/usr/lib/secubox/haproxy/maintscripts/exposure.prerm
+	install -D -m 644 composants/exposure/debian/secubox-exposure.service debian/secubox-haproxy/usr/lib/systemd/system/secubox-exposure.service
+

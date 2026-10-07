@@ -89,6 +89,8 @@ hors-arbre:
   - secubox-macro  # transitoire → secubox-tor (#2050)
   - secubox-vortex-firewall  # transitoire → secubox-ipblock (#2050)
   - secubox-cyberfeed  # transitoire → secubox-ipblock (#2050)
+  - secubox-vhost  # transitoire → secubox-haproxy (#2050)
+  - secubox-exposure  # transitoire → secubox-haproxy (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -358,8 +360,6 @@ label: Exposition
 description: "Frontal HAProxy, hôtes virtuels, publication de services vers l'extérieur."
 requiert:
   - secubox-haproxy
-  - secubox-vhost
-  - secubox-exposure
 recommande:
   - secubox-cdn
 suggere:

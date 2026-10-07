@@ -5,8 +5,8 @@
 
 from pathlib import Path
 import sys
-ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "packages" / "secubox-vhost"))
+ROOT = Path(__file__).resolve().parents[5]
+sys.path.insert(0, str(ROOT / "packages" / "secubox-haproxy" / "composants" / "vhost"))
 from api.exposure_read import read_exposure
 
 def test_missing_is_wan(tmp_path):

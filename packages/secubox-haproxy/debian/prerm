@@ -12,3 +12,13 @@ esac
 systemctl stop    secubox-haproxy.service 2>/dev/null || true
 systemctl disable secubox-haproxy.service 2>/dev/null || true
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/haproxy/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "haproxy : prerm de $(basename "$_s") en échec" >&2; }
+done
+
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/haproxy/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "haproxy : prerm de $(basename "$_s") en échec" >&2; }
+done
+exit 0

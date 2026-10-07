@@ -14,9 +14,9 @@ import sys
 from pathlib import Path
 from fastapi.testclient import TestClient
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "common"))
-sys.path.insert(0, str(ROOT / "packages" / "secubox-vhost"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-haproxy" / "composants" / "vhost"))
 
 import api.main as m
 from api.exposure_seed import ensure_snippet as _real_ensure_snippet

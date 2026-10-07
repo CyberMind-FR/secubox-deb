@@ -1,3 +1,9 @@
+secubox-profils (1.0.35-1~bookworm1) bookworm; urgency=medium
+
+  * exposure et vhost retires du profil (absorbes par haproxy, deja liste ; #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 15:30:00 +0200
+
 secubox-profils (1.0.34-1~bookworm1) bookworm; urgency=medium
 
   * cyberfeed et vortex-firewall retires du profil (absorbes par ipblock, deja liste ; #2050).
