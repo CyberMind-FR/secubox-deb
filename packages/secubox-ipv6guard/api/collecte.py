@@ -80,7 +80,7 @@ def regrouper(voisins6, voisins4, interfaces_lan=None):
 
 # ── mDNS ─────────────────────────────────────────────────────────────────────
 _ANNONCES_TECHNIQUES = {"_device-info._tcp", "device info", "_workstation._tcp", "_sleep-proxy._udp", "_companion-link._tcp",
-                        "_rdlink._tcp", "_apple-mobdev2._tcp", "_dns-sd._udp", "_services._dns-sd._udp"}
+                        "_rdlink._tcp", "_apple-mobdev2._tcp", "_dns-sd._udp", "_services._dns-sd._udp", "_googlezone._tcp"}
 
 _SERVICES = {
     "_ipp._tcp": ("Imprimante", False), "_ipps._tcp": ("Imprimante", False), "_printer._tcp": ("Imprimante", False),
@@ -95,6 +95,8 @@ _SERVICES = {
     "_rfb._tcp": ("Bureau à distance (VNC)", True), "_telnet._tcp": ("Accès à distance (Telnet)", True),
     "_ftp._tcp": ("Transfert de fichiers (FTP)", True), "_daap._tcp": ("Bibliothèque musicale", False),
     "_mqtt._tcp": ("Objets connectés (MQTT)", True), "_homeassistant._tcp": ("Maison connectée (Home Assistant)", False),
+    "_androidtvremote2._tcp": ("Télécommande Android TV", False), "_secubox._tcp": ("Boîte SecuBox", False),
+    "_secubox._udp": ("Boîte SecuBox", False), "_fbx-api._tcp": ("Interface de la Freebox", False),
 }
 
 
@@ -110,6 +112,27 @@ def libelle_service(type_):
         return {"libelle": l, "sensible": s}
     brut = t.lstrip("_").split(".")[0] if t else "?"
     return {"libelle": f"Service « {brut} »", "sensible": False}
+
+
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+_HEXLONG = re.compile(r"^[0-9a-f]{20,}$", re.I)
+
+
+def est_identifiant(nom):
+    """Un UUID ou une longue chaîne hexadécimale n'est pas un nom : on ne l'affiche jamais comme tel."""
+    n = (nom or "").strip()
+    return bool(_UUID.match(n) or _HEXLONG.match(n))
+
+
+def _txt(champ):
+    """`"fn=Salon" "md=Modèle"` → {"fn": "Salon", "md": "Modèle"}."""
+    d = {}
+    for jeton in re.findall(r'"([^"]*)"', champ or ""):
+        if "=" in jeton:
+            k, v = jeton.split("=", 1)
+            if k and k not in d:
+                d[k] = v
+    return d
 
 
 def _decode_nom(s):
@@ -131,7 +154,8 @@ def parse_mdns(texte):
         except ValueError:
             continue
         sortie.append({"interface": champs[1], "proto": champs[2], "nom": _decode_nom(champs[3]), "type": champs[4],
-                       "hote": champs[6], "adresse": champs[7], "port": port})
+                       "hote": champs[6], "adresse": champs[7], "port": port,
+                       "txt": _txt(champs[9]) if len(champs) > 9 else {}})
     return sortie
 
 
@@ -147,21 +171,30 @@ def rattacher(appareils, mdns):
             index[ad] = a
     resultat = []
     for a in appareils:
-        resultat.append({**a, "services": [], "nom": "", "_noms": []})
+        resultat.append({**a, "services": [], "nom": "", "modele": "", "_noms": [], "_noms_usage": []})
     par_mac = {a["mac"]: a for a in resultat}
     for m in mdns:
         a = index.get(m["adresse"])
         if not a:
             continue
         cible = par_mac[a["mac"]]
+        # nom d'usage donné par l'appareil (fn=… pour Google Cast, name=… ailleurs), puis nom d'hôte lisible
+        for cle in ("fn", "name"):
+            v = (m.get("txt") or {}).get(cle, "").strip()
+            if v and not est_identifiant(v) and v not in cible["_noms_usage"]:
+                cible["_noms_usage"].append(v)
         nom = _nom_court(m["hote"])
-        if nom and nom not in cible["_noms"]:
+        if nom and not est_identifiant(nom) and nom not in cible["_noms"]:
             cible["_noms"].append(nom)
+        modele = (m.get("txt") or {}).get("md") or (m.get("txt") or {}).get("model") or (m.get("txt") or {}).get("ty") or ""
+        if modele and not cible["modele"]:
+            cible["modele"] = modele.strip()
         if est_service(m["type"]):
             cle = (m["type"], m["port"])
             if not any((s["type"], s["port"]) == cle for s in cible["services"]):
                 cible["services"].append({"type": m["type"], "port": m["port"], "nom": m["nom"], **libelle_service(m["type"])})
     for a in resultat:
-        a["nom"] = (a["_noms"][0] if a["_noms"] else "Appareil " + a["mac"][-8:])
-        del a["_noms"]
+        choix = (a["_noms_usage"] or a["_noms"] or [None])[0]
+        a["nom"] = choix or ("Appareil " + a["mac"][-8:])
+        del a["_noms"], a["_noms_usage"]
     return resultat

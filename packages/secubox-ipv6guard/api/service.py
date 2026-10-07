@@ -56,7 +56,7 @@ class Surveillance:
 
     def _mesure_mdns(self):
         try:
-            texte = self.executeur(["avahi-browse", "-a", "-r", "-t", "-p"], delai=20)
+            texte = self.executeur(["avahi-browse", "-a", "-r", "-t", "-p", "-k"], delai=20)
             valeur = collecte.parse_mdns(texte)
         except Exception:  # noqa: BLE001 — avahi absent ou muet : on garde l'ancien résultat
             valeur = None
