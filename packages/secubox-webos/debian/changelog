@@ -1,3 +1,9 @@
+secubox-webos (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Cloud » vivante : l'etat reel de Nextcloud (en marche / endormi / non installe), version, nombre de comptes, espace utilise, et « Ouvrir mon cloud » (entree /sbx/entrer). Elle etait un simple lien « Service SecuBox souverain », etat « inconnu ». Relais de lecture /adm/api/v1/nextcloud/status (GET) ; sans session la carte le dit ; absente d'une box sans Nextcloud.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 00:30:00 +0200
+
 secubox-webos (1.2.4-1~bookworm1) bookworm; urgency=high
 
   * Hall : plus de cartes en double. Retirer une carte absente (si_present) redessinait la mosaique alors que les favoris vivent dans la bande, hors de la mosaique : l'ancien exemplaire restait en bande, un nouveau naissait dans la mosaique (gk2). Les noeuds sont maintenant retires en place (carte et ligne du rail), jamais de second rendu ; test de garde.

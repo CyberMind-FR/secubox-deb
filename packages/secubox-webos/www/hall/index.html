@@ -1396,7 +1396,7 @@ const FEATURED = [
   // le Hall agrandit telle quelle.
   {id:"mon-coffre", label:"Mon coffre", icon:"🗝️", color:"#6b4a2e", carte:"/coffre/", h:380, auth:true, admin:false},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
-  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", auth:true, admin:"/nextcloud/"},
+  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/quick.html?svc=nextcloud", h:190, auth:true, admin:"/nextcloud/", si_present:"/adm/api/v1/nextcloud/status"},
   {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264, admin:"/bbs/"},
   // SBX OS P4 (#1560) : le flux des gestes de la box, filtré pour qui regarde.
   {id:"activite",   label:"Activité",   icon:"✦", color:"#6a4bb8", carte:"/cardlets/activite.html", h:280},

@@ -155,6 +155,13 @@
       chiffres:[['total','🎞️','captures'],['jobs','⚙️','tâches'],
                 ['to_peertube','📹','vers PeerTube']],
       acces:[] },
+    // CLOUD (Nextcloud) : une carte VIVANTE, plus un lien. Elle dit l'état réel du conteneur (en marche, endormi, absent), la
+    // version, le nombre de comptes et l'espace utilisé, et « Ouvrir » entre dans Nextcloud avec la session du Hall (/sbx/entrer).
+    // La lecture exige la session de la personne : sans elle, la carte le dit au lieu d'afficher des zéros.
+    nextcloud: { ic:'☁️', nom:'Cloud', hote:SBX_DOMAINE.hote('nc.gk2.secubox.in'), mod:'nextcloud',
+      couleur:'#1655a0',
+      chiffres:[['user_count','👥','comptes'],['disk_used','💾','espace utilisé']],
+      acces:[['Ouvrir mon cloud','/sbx/entrer','']] },
     depot: { ic:'📦', nom:'Dépôt', hote:SBX_DOMAINE.hote('depot.gk2.secubox.in'), mod:'droplet',
       couleur:'#3d6b4a',
       chiffres:[['sites_count','🌐','sites'],['apps_count','🧩','applications']],
@@ -228,6 +235,11 @@
 
     if (d.disk_free !== undefined) {
       el('note').textContent = octets(d.disk_free) + ' libres';
+    }
+    // Un service qui dit s'il tourne (Nextcloud) : on l'écrit, c'est l'information la plus utile d'une carte d'accès.
+    if (d.running !== undefined) {
+      var etat = d.running ? 'en marche' : (d.installed ? 'endormi — se réveille à l\u2019ouverture' : 'non installé');
+      el('note').textContent = etat + (d.running && d.version ? ' · version ' + d.version : '');
     }
     if (d.active !== undefined && Number(d.active) > 0) {
       el('barre').hidden = false;
@@ -644,9 +656,14 @@
   });
 
   function charge() {
-    fetch('/adm/api/v1/' + c.mod + '/status', { headers: { 'Accept': 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    fetch('/adm/api/v1/' + c.mod + '/status', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) {
+        // Lecture réservée à la session (Nextcloud) : on le DIT, on n'affiche ni zéro ni « injoignable ».
+        if (r.status === 401 || r.status === 403) { el('note').innerHTML = '<span class="ko">connexion requise pour voir l\u2019état</span>'; return undefined; }
+        return r.ok ? r.json() : null;
+      })
       .then(function (d) {
+        if (d === undefined) return;
         if (!d) { el('note').innerHTML = '<span class="ko">état indisponible</span>'; return; }
         pose(d);
       })
