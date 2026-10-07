@@ -91,7 +91,6 @@ label: Veille
 description: "Suivre ce qui se dit : agrégation de sources, fil d'actualité et forum local."
 modules:
   - secubox-metanews
-  - secubox-cyberfeed
   - secubox-bbs
   - secubox-socialrelay
 
