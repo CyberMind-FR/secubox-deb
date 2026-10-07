@@ -1,3 +1,10 @@
+secubox-soc (1.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « D'ou l'on frappe » : le fond n'etait qu'un quadrillage, sans continents. Fond de points (Natural Earth, domaine public) cale sur la
+    projection des bulles ; une cinquantaine de pays ajoutes a la table des coordonnees (AU, ZA, MX, AR, EG, AE, SA...).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 05:40:00 +0200
+
 secubox-soc (1.1.7-1~bookworm1) bookworm; urgency=high
 
   * Derniers bans : alerte « bans non appliqués » quand la table nft manque ou que sbxwaf ne veille plus, au lieu d'un calme trompeur (#1693).
