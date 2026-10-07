@@ -45,7 +45,6 @@ groupe: bouclier
 label: Bouclier
 description: "Voir et arrêter ce qui frappe : pare-feu applicatif, inspection de flux et bannissement."
 modules:
-  - secubox-waf
   - secubox-waf-ng
   - secubox-dpi
   - secubox-ipblock
