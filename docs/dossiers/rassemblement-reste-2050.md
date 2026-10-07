@@ -16,6 +16,8 @@ il décrit trois chantiers, ce qu'on a constaté sur la box, et une recommandati
   Fusionner les *données* n'apporterait rien ; la redondance est dans le *code* (chacun rend son fichier, lance son `checkconf` et son `reload`).
 - `vortex-dns` est actif mais son flux RPZ n'est branché à rien (aucun fichier RPZ côté Unbound) : un pipeline dormant.
 
+**Décisions du propriétaire (2026-10-08) : « go » aux recommandations ; `vortex-dns` : RETIRER. Faits : D3, D4 pour webfilter et dns-lan, retrait de vortex-dns (voir HISTORY). Reste : adoption par ad-guard TV et adblock.**
+
 **Recommandation.**
 1. **D3 : un seul moteur, Unbound.** Retirer le chemin « blocage par dnsmasq » de `dns-guard` (la détection d'anomalies reste) ; `dnsmasq` n'est plus
    recommandé par `dns-guard` ni `vortex-dns`. Gain : une surface de moins, aucun comportement perdu sur la box (dnsmasq y est arrêté).
