@@ -1,47 +1,6 @@
-<!--
-  SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
--->
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+# secubox-vortex-dns (retiré)
 
-# 🛡️ Vortex DNS
-
-DNS firewall with RPZ blocklists
-
-**Category:** DNS
-
-## Screenshot
-
-![Vortex DNS](../../docs/screenshots/vm/vortex-dns.png)
-
-## Features
-
-- Blocklists
-- RPZ
-- Threat feeds
-- DoH/DoT
-
-## Installation
-
-```bash
-# Add SecuBox repository
-curl -fsSL https://apt.secubox.in/install.sh | sudo bash
-
-# Install package
-sudo apt install secubox-vortex-dns
-```
-
-## Configuration
-
-Configuration file: `/etc/secubox/vortex-dns.toml`
-
-## API Endpoints
-
-- `GET /api/v1/vortex-dns/status` - Module status
-- `GET /api/v1/vortex-dns/health` - Health check
-
-## License
-
-LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
-See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+Paquet vide. Le pare-feu RPZ n'a jamais été branché au résolveur : le seul moteur DNS est Unbound, piloté par `secubox-ad-guard`
+(publicités, TV) et `secubox-webfilter` (catégories) via `secubox_unbound`. Retiré le 2026-10-08 (#2050, D3), à supprimer du dépôt
+un cycle après sa publication.

@@ -1,9 +1,12 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Retrait (#2050, D3) : l'ancienne version est supprimée par dpkg ; on arrête et on désactive son unité (le lien « enabled » resterait sinon
+# dangling) et on retire sa socket. Les données de /var/lib/secubox/vortex-dns (vides sur gk2) ne sont pas touchées.
 set -e
-if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-vortex-dns.service || true
-    systemctl start secubox-vortex-dns.service || true
-fi
 #DEBHELPER#
-exit 0
+if [ "$1" = configure ]; then
+    systemctl disable --now secubox-vortex-dns.service >/dev/null 2>&1 || true
+    rm -f /run/secubox/vortex-dns.sock
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl reset-failed secubox-vortex-dns.service >/dev/null 2>&1 || true
+fi

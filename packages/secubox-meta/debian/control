@@ -285,8 +285,7 @@ Description: SecuBox — service « Routage »
 Package: secubox-service-dns
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-dns,
-         secubox-vortex-dns
+         secubox-dns
 Recommends: secubox-dns-guard,
          secubox-webfilter
 Description: SecuBox — service « Résolution DNS »
