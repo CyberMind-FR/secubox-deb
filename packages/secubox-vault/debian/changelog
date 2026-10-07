@@ -1,3 +1,9 @@
+secubox-vault (2.1.6-1~bookworm1) bookworm; urgency=high
+
+  * Le journal d'audit existant est remis au compte du service (chown secubox-coffre:secubox, 0640) a chaque configure : il gardait le proprietaire de l'epoque ou le coffre tournait sous `secubox`, et le service ne pouvait plus y ecrire, donc plus s'ouvrir (Permission denied a l'ouverture). Contenu du journal jamais touche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 22:00:00 +0200
+
 secubox-vault (2.1.5-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-annuaire au lieu de secubox-openpgp (transitoire, #2050).
