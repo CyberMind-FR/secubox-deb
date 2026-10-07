@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — carte « IPv6 Guardian » du Hall (secubox-ipv6guard).
+
+  Un sujet très technique raconté pour tout le monde, en quatre temps :
+    1. Appareils joignables en IPv6   2. Services visibles   3. Connexions entrantes bloquées   4. Exceptions autorisées
+  et un verdict d'un coup d'œil. HONNÊTE : « à vérifier » tant que le pare-feu de la Freebox n'est pas lu — jamais « protégé »
+  sans l'avoir vu. LECTURE SEULE : rien n'est envoyé aux appareils. Tout texte venu du serveur passe par textContent.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPv6 Guardian</title>
+<style>
+  :root{ --fond:#101a24; --fond2:#17283a; --texte:#eaf1f8; --muted:#9db1c7; --line:rgba(255,255,255,.15); --verre:rgba(255,255,255,.07);
+         --ok:#46d38b; --attention:#ffb454; --alerte:#ff7a7a; --neutre:#8fa3ba; --accent:#5cc2ff; }
+  :root[data-theme="light"]{ color-scheme:light; --fond:#f2f6fb; --fond2:#e0e9f4; --texte:#14202f; --muted:#4a5c75; --line:rgba(20,32,47,.16);
+         --verre:rgba(255,255,255,.72); --ok:#0b7d45; --attention:#8a5a00; --alerte:#b3261e; --neutre:#55677f; --accent:#0a6aa8; }
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ color-scheme:light; --fond:#f2f6fb; --fond2:#e0e9f4; --texte:#14202f;
+         --muted:#4a5c75; --line:rgba(20,32,47,.16); --verre:rgba(255,255,255,.72); --ok:#0b7d45; --attention:#8a5a00; --alerte:#b3261e;
+         --neutre:#55677f; --accent:#0a6aa8; } }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:linear-gradient(160deg,var(--fond),var(--fond2));color:var(--texte);font:14px/1.4 "IBM Plex Sans",Inter,system-ui,sans-serif;overflow:auto}
+  .g{display:flex;flex-direction:column;gap:.55rem;padding:.55rem .65rem;min-height:100%}
+  .verdict{display:flex;gap:.65rem;align-items:flex-start;padding:.6rem .7rem;border-radius:14px;border:1px solid var(--line);background:var(--verre);padding-right:54px}
+  .verdict .pict{font-size:1.9rem;line-height:1}
+  .verdict h2{margin:0;font-size:1.02rem;line-height:1.2}
+  .verdict p{margin:.2rem 0 0;font-size:.78rem;color:var(--muted)}
+  .verdict[data-niveau="protege"],.verdict[data-niveau="sans_ipv6"]{border-color:var(--ok)}
+  .verdict[data-niveau="a_verifier"],.verdict[data-niveau="ouvert_partiellement"]{border-color:var(--attention)}
+  .verdict[data-niveau="expose"]{border-color:var(--alerte)}
+  .chaine{display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;align-items:stretch}
+  @media (max-width:430px){ .chaine{grid-template-columns:repeat(2,1fr)} }
+  .etape{position:relative;display:flex;flex-direction:column;gap:.15rem;padding:.45rem .5rem;border-radius:12px;border:1px solid var(--line);background:var(--verre);min-width:0}
+  .etape:not(:last-child)::after{content:"→";position:absolute;right:-.42rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem;z-index:1}
+  @media (max-width:430px){ .etape::after{display:none} }
+  .etape .num{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
+  .etape .tit{font-size:.7rem;font-weight:600;line-height:1.2}
+  .etape .det{font-size:.64rem;color:var(--muted);line-height:1.25}
+  .etape[data-etat="ok"] .num{color:var(--ok)}
+  .etape[data-etat="alerte"] .num{color:var(--alerte)}
+  .etape[data-etat="non_lu"]{border-style:dashed}
+  .etape[data-etat="non_lu"] .num{color:var(--neutre)}
+  .bouton{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--verre);color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer;text-align:left;padding:.3rem .65rem}
+  .bouton:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .liste{display:flex;flex-direction:column;gap:.3rem}
+  .liste[hidden]{display:none}
+  .app{padding:.4rem .55rem;border-radius:10px;border:1px solid var(--line);background:var(--verre)}
+  .app b{font-size:.8rem}
+  .badge{display:inline-block;font-size:.62rem;padding:.02rem .35rem;border-radius:999px;border:1px solid var(--line);margin-left:.3rem;color:var(--muted)}
+  .badge.pub{border-color:var(--attention);color:var(--attention)}
+  .services{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.25rem}
+  .puce{font-size:.66rem;padding:.04rem .4rem;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .puce.sens{border-color:var(--attention);color:var(--attention)}
+  .pied{font-size:.64rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.2rem .6rem}
+  .msg{padding:.8rem;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:.84rem;text-align:center}
+  @media (prefers-reduced-motion:no-preference){ .etape,.verdict{transition:border-color .2s} }
+</style>
+<div class="g" id="g">
+  <div class="verdict" id="verdict" role="status" aria-live="polite" data-niveau="">
+    <span class="pict" id="pict" aria-hidden="true">🛡️</span>
+    <div><h2 id="titre">Lecture…</h2><p id="expl"></p></div>
+  </div>
+  <div class="chaine" id="chaine" aria-label="Les quatre étapes"></div>
+  <button class="bouton" type="button" id="plus" aria-expanded="false" hidden>Voir les appareils</button>
+  <div class="liste" id="liste" hidden></div>
+  <div class="msg" id="msg" hidden></div>
+  <div class="pied" id="pied"></div>
+</div>
+<script src="../sonde.js"></script>
+<script>
+(function(){
+  'use strict';
+  var API = '/api/v1/ipv6guard/';
+  var $ = function(id){ return document.getElementById(id); };
+  var PICT = { protege:'🟢', sans_ipv6:'🟢', a_verifier:'🟠', ouvert_partiellement:'🟠', expose:'🔴' };
+  var ICONES = { appareils:'📱', services:'🧩', bloquees:'🚧', exceptions:'🔓' };
+
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  function heure(t){ try{ return new Date(t*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+
+  function chaine(etapes){
+    var c = $('chaine'); c.textContent = '';
+    etapes.forEach(function(e){
+      var b = el('div','etape'); b.dataset.etat = e.etat || 'ok';
+      b.appendChild(el('div','tit', (ICONES[e.id]||'') + ' ' + e.titre));
+      b.appendChild(el('div','num', e.valeur == null ? '—' : String(e.valeur)));
+      b.appendChild(el('div','det', e.detail || ''));
+      c.appendChild(b);
+    });
+  }
+  function appareils(liste){
+    var z = $('liste'); z.textContent = '';
+    liste.forEach(function(a){
+      var d = el('div','app');
+      var t = el('div'); t.appendChild(el('b', null, a.nom));
+      if(a.adresses_publiques && a.adresses_publiques.length){ var p = el('span','badge pub','adresse publique'); t.appendChild(p); }
+      if(a.routeur){ t.appendChild(el('span','badge','routeur')); }
+      d.appendChild(t);
+      if(a.services && a.services.length){
+        var s = el('div','services');
+        a.services.forEach(function(x){ s.appendChild(el('span','puce' + (x.sensible ? ' sens' : ''), x.libelle + (x.sensible ? ' ⚠' : ''))); });
+        d.appendChild(s);
+      }
+      z.appendChild(d);
+    });
+    var plus = $('plus'); plus.hidden = !liste.length;
+  }
+  function message(texte){ var m = $('msg'); m.hidden = !texte; m.textContent = texte || ''; }
+
+  function charge(){
+    fetch(API + 'status', {credentials:'same-origin', cache:'no-store', headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {st:r.status, d:d}; }); })
+      .then(function(x){
+        if(x.st === 401 || x.st === 403){ $('titre').textContent = 'Connexion requise'; $('expl').textContent = 'Ouvrez une session SecuBox pour voir l’état de votre réseau en IPv6.'; $('pict').textContent = '🔒'; $('chaine').textContent = ''; return; }
+        if(x.st !== 200){ $('titre').textContent = 'Indisponible'; $('expl').textContent = 'Le service ne répond pas pour le moment.'; $('pict').textContent = '⚪'; return; }
+        var v = x.d.verdict || {};
+        $('verdict').dataset.niveau = v.niveau || '';
+        $('pict').textContent = PICT[v.niveau] || '⚪';
+        $('titre').textContent = v.titre || '';
+        var expl = v.explication || '';
+        if(v.sensibles){ expl += ' ' + v.sensibles + ' service' + (v.sensibles > 1 ? 's' : '') + ' sensible' + (v.sensibles > 1 ? 's' : '') + ' (accès à distance, partage de fichiers) ' + (v.sensibles > 1 ? 'sont annoncés' : 'est annoncé') + ' sur un appareil à adresse publique.'; }
+        $('expl').textContent = expl;
+        chaine(x.d.etapes || []);
+        appareils(x.d.appareils || []);
+        message((x.d.appareils || []).length ? '' : 'Aucun appareil IPv6 vu sur le réseau pour l’instant.');
+        var m = x.d.mesure || {}, p = $('pied'); p.textContent = '';
+        p.appendChild(el('span', null, 'Lecture seule : rien n’est envoyé à vos appareils.'));
+        if(m.date) p.appendChild(el('span', null, 'Mesuré à ' + heure(m.date)));
+        if(m.mdns_en_cours) p.appendChild(el('span', null, 'Recherche des services en cours…'));
+      })
+      .catch(function(){ $('titre').textContent = 'Indisponible'; $('expl').textContent = 'Le service est injoignable.'; $('pict').textContent = '⚪'; });
+  }
+  $('plus').onclick = function(){
+    var z = $('liste'); var ouvert = z.hidden; z.hidden = !ouvert;
+    this.setAttribute('aria-expanded', ouvert ? 'true' : 'false'); this.textContent = ouvert ? 'Masquer les appareils' : 'Voir les appareils';
+  };
+  charge();
+  setInterval(charge, 60000);
+})();
+</script>

@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    getent group secubox >/dev/null || addgroup --system secubox >/dev/null
+    id -u secubox-ipv6guard >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin secubox-ipv6guard >/dev/null
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      systemctl enable secubox-ipv6guard.service >/dev/null 2>&1 || true
+      # try-restart : une mise à jour recharge le code sans démarrer ce que l'opérateur a arrêté ; un premier démarrage se fait.
+      if systemctl is-active --quiet secubox-ipv6guard.service; then
+        systemctl try-restart secubox-ipv6guard.service || true
+      else
+        systemctl start secubox-ipv6guard.service || true
+      fi
+      if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+      fi
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

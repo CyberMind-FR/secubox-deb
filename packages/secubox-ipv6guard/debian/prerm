@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-ipv6guard.service >/dev/null 2>&1 || true
+    systemctl disable secubox-ipv6guard.service >/dev/null 2>&1 || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IPv6 Guardian — API de la carte du Hall. LECTURE SEULE, SANS PRIVILÈGE : utilisateur dédié, durcissement complet.
+# `ip neigh` lit la table des voisins par NETLINK (AF_NETLINK) ; `avahi-browse` parle au démon avahi par sa socket Unix.
+# Aucune capacité, aucun accès en écriture hors /run/secubox : la box ne modifie aucun pare-feu.
+[Unit]
+Description=SecuBox IPv6 Guardian — API de la carte du Hall (appareils IPv6, services visibles)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-ipv6guard
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/ipv6guard
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède. Le préfixe « + » s'exécute en root malgré User=.
+ExecStartPre=+/bin/rm -f /run/secubox/ipv6guard.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/ipv6guard.sock --workers 1 --log-level warning
+# uvicorn force la socket en 0o666 après le bind : le chmod 660 est INDISPENSABLE (#2026).
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/ipv6guard.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/ipv6guard.sock'
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
+ReadWritePaths=/run/secubox
+
+[Install]
+WantedBy=multi-user.target

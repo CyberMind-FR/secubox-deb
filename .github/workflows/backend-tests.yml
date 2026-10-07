@@ -50,6 +50,7 @@ on:
       - 'packages/secubox-metablogizer/**'
       - 'packages/secubox-streamlit/**'
       - 'packages/secubox-appstore/**'
+      - 'packages/secubox-ipv6guard/**'
       - 'packages/secubox-health/**'
       - 'packages/secubox-c3box/**'
       - 'packages/secubox-hub/**'
@@ -124,6 +125,9 @@ jobs:
           # boucle de 60 s lançait ~290 systemctl en cinq minutes sur gk2.
           - suite: secubox-metacatalog
             chemin: packages/secubox-appstore/composants/metacatalog/tests
+          # IPv6 Guardian : collecte passive, verdict honnête, routes en lecture seule.
+          - suite: secubox-ipv6guard
+            chemin: packages/secubox-ipv6guard/tests
           # Le catalogue se génère : un groupe ne cite pas un module absorbé (#2050).
           - suite: secubox-appstore-catalogue
             chemin: packages/secubox-appstore/tests/test_catalogue_groupes_2050.py
