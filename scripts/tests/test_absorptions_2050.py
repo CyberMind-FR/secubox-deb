@@ -75,3 +75,10 @@ def test_transitoires_remettent_l_unite_en_route():
         t = postinst.read_text()
         assert f"secubox-{o}.service" in t and "masked" in t and "#DEBHELPER#" in t, o
         assert postinst.stat().st_mode & 0o111, f"{o} : postinst non exécutable"
+
+
+def test_aucun_transitoire_ne_garde_un_fichier_compat():
+    """`debian/compat` en plus de `debhelper-compat` dans control : dh refuse (« compat level specified both… »)."""
+    for ctrl in PAQ.glob("*/debian/control"):
+        if "Section: oldlibs" in ctrl.read_text():
+            assert not (ctrl.parent / "compat").exists(), ctrl

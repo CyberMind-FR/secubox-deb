@@ -1,3 +1,9 @@
+secubox-antirootkit (0.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * Transitoire : debian/compat retire (le niveau vient de debhelper-compat dans control) ; la construction echouait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 02:30:00 +0200
+
 secubox-antirootkit (0.1.7-1~bookworm1) bookworm; urgency=medium
 
   * Paquet transitoire : antirootkit est un composant de secubox-security-posture >= 2.2.0 (#2050).

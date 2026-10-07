@@ -50,7 +50,7 @@ modules:
   - secubox-waf-ng
   - secubox-dpi
   - secubox-ipblock
-  - secubox-antirootkit
+  - secubox-security-posture
 
 
 groupe: nuage

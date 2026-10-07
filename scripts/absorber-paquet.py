@@ -251,7 +251,7 @@ def absorber(absorbant: str, ancien: str, sec: bool) -> None:
     ch.write_text(f"secubox-{absorbant} ({nv_a}-1~bookworm1) bookworm; urgency=medium\n\n  * Absorbe secubox-{ancien} (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),\n    sources sous composants/{ancien}/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.\n\n -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200\n\n" + ch.read_text())
     # 6. l'ancien devient transitoire
     desc = re.search(r"(?m)^Description:\s*(.*)$", ctrl_o).group(1)
-    for f in ("secubox.yaml", "prerm", "postrm", "postinst", "conffiles", "triggers"):
+    for f in ("secubox.yaml", "prerm", "postrm", "postinst", "conffiles", "triggers", "compat"):
         if (O / "debian" / f).is_file():
             git("rm", "-q", "-f", str((O / "debian" / f).relative_to(RACINE)))
     (O / "debian/control").write_text(f"""Source: secubox-{ancien}
