@@ -8,7 +8,6 @@ Standards-Version: 4.6.2
 Package: secubox-profil-socle
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-admin,
          secubox-appstore,
          secubox-auth,
          secubox-certs,
@@ -42,7 +41,6 @@ Depends: ${misc:Depends},
          secubox-dns-guard,
          secubox-interceptor,
          secubox-ipblock,
-         secubox-ksm,
          secubox-security-posture,
          secubox-soc,
          secubox-threatmesh,

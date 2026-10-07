@@ -98,6 +98,10 @@ hors-arbre:
   - secubox-oidc  # transitoire → secubox-auth (#2050)
   - secubox-cve-triage  # transitoire → secubox-security-posture (#2050)
   - secubox-antirootkit  # transitoire → secubox-security-posture (#2050)
+  - secubox-system-hub  # transitoire → secubox-system (#2050)
+  - secubox-admin  # transitoire → secubox-system (#2050)
+  - secubox-ksm  # transitoire → secubox-system (#2050)
+  - secubox-system-tuning  # transitoire → secubox-system (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -297,12 +301,9 @@ requiert:
 recommande:
   - secubox-premier-pas         # assistant du premier démarrage + majauto (#1522)
   - secubox-health
-  - secubox-system-tuning
 suggere:
   - secubox-led-heartbeat
-  - secubox-ksm
   - secubox-console
-  - secubox-system-hub
 
 meta: secubox-service-identite
 niveau: service
@@ -321,7 +322,6 @@ niveau: service
 label: Administration
 description: "Tableau d'administration, App Store, profils, dépôt, certificats."
 requiert:
-  - secubox-admin
   - secubox-appstore
   - secubox-profiles
   - secubox-certs

@@ -9,7 +9,23 @@ Rules-Requires-Root: no
 
 Package: secubox-system
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.47~), python3-psutil
+Depends: ${misc:Depends},
+ secubox-core (>= 1.5.47~),
+ python3-psutil,
+ python3-fastapi | python3-pip,
+ systemd,
+ util-linux,
+ python3,
+ systemd-zram-generator
+Replaces: secubox-system-hub (<< 1.0.3~),
+ secubox-admin (<< 1.2.3~),
+ secubox-ksm (<< 1.2.3~),
+ secubox-system-tuning (<< 1.2.6~)
+Breaks: secubox-system-hub (<< 1.0.3~),
+ secubox-admin (<< 1.2.3~),
+ secubox-ksm (<< 1.2.3~),
+ secubox-system-tuning (<< 1.2.6~)
+Recommends: lxc
 Description: SecuBox System Hub
  Centre de contrôle système : santé, services systemd, logs journald, diagnostics, backup.
  .

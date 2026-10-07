@@ -1,3 +1,9 @@
+secubox-voicestudio (0.5.9-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-system au lieu de secubox-system-tuning (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-voicestudio (0.5.8-1~bookworm1) bookworm; urgency=medium
 
   * `appliquer` écrit les limites (mémoire, swap, poids CPU) dans le cgroup du conteneur en marche : `restart` ne relançait que le service du moteur, donc une limite modifiée n'était prise en compte qu'au prochain démarrage du conteneur (ref #2045).

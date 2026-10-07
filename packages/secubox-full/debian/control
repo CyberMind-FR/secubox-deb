@@ -40,7 +40,7 @@ Depends: ${misc:Depends},
  secubox-metablogizer (>= 1.0),
  secubox-radio,
 # Totalite du parc gk2 (working-set), hors modules propres a la carte ou au demarrage.
- secubox-admin,
+ secubox-system,
  secubox-aggregator,
  secubox-security-posture (>= 2.2.0),
  secubox-assist,

@@ -1,3 +1,9 @@
+secubox-system-tuning (1.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : system-tuning est un composant de secubox-system >= 1.7.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-system-tuning (1.2.5-1~bookworm1) bookworm; urgency=medium
 
   * Swap disque : le ZRAM n'est pas un swap disque. `secubox-tuning-apply swap` concluait « swap déjà actif » dès que le zram existait

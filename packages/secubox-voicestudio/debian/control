@@ -12,7 +12,8 @@ Architecture: amd64
 Depends: ${misc:Depends}, secubox-core (>= 1.4.0), lxc, python3,
  python3-uvicorn | python3-pip, python3-httpx | python3-pip,
  python3-python-multipart | python3-multipart | python3-pip, sudo
-Recommends: secubox-system-tuning (>= 1.2.5), secubox-profiles
+Recommends: secubox-system,
+ secubox-profiles
 Description: SecuBox — VoiceStudio, moteur vocal studio du parc (LXC natif)
  Fait tourner VoiceStudio (AGPL-3.0, poids CC-BY-NC : service SÉPARÉ, joint par
  le réseau) dans un LXC Debian dédié, sans podman ni docker. Sources amont

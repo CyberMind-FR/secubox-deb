@@ -27,7 +27,7 @@ vaut une prise de contrôle. Cible : utilisateur `secubox-<module>`, `AmbientCap
 | `haproxy` (composant `exposure` depuis #2050 ; l'unité `exposure` seule est en root) | édite `/etc/tor/torrc` et `/etc/nftables.conf` par regex, snippets nginx | assistant root étroit ; **fin des éditions par regex** (drop-ins uniquement) | haute |
 | `cookies` | capture MITM, clé de capture | utilisateur dédié, clé en lecture seule | haute |
 | `threatmesh` | nft + WireGuard ; **écoute sur `0.0.0.0:8780`** (les pairs du maillage y postent par `wg*` ; la table nft ne laisse passer que `lo` et `wg*`) | utilisateur dédié, liaison à l'adresse du maillage et à `127.0.0.1` | haute |
-| `admin`, `ksm` | mises à jour, redémarrage, sysfs KSM | assistants dédiés ; `ksm` : capacité sur `/sys/kernel/mm/ksm` | moyenne |
+| `system` (composants `admin` et `ksm` depuis #2050 ; les unités `admin` et `ksm` sont en root) | mises à jour, redémarrage, sysfs KSM | assistants dédiés ; `ksm` : capacité sur `/sys/kernel/mm/ksm` | moyenne |
 | `certs` | ACME, écriture des certificats | utilisateur dédié + accès en écriture ciblé | moyenne |
 | `mail` | pilote le LXC du courrier | assistant LXC (modèle `voicestudioctl`) | moyenne |
 | `vm`, `netboot`, `backup` (+ `cloner`, composant depuis #2050) | virtualisation, TFTP/dnsmasq, imagerie disque | privilégiés par nature : confiner (AppArmor, `ReadWritePaths`, `NoNewPrivileges` hors LXC) | moyenne |
