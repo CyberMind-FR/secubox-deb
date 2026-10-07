@@ -19,16 +19,26 @@ def test_le_hall_declare_la_carte_session_et_seulement_si_ytsas_est_la():
 
 
 def test_la_route_du_flux_est_authentifiee_en_lecture_seule_et_marque_le_relais():
-    i = VHOST.index("location ~ ^/api/v1/ytsas/flux")
+    i = VHOST.index('location ~ "^/api/v1/ytsas/flux')
     corps = VHOST[i:VHOST.index("\n    }", i)]
     assert "auth_request /__sbx_verifie_secubox;" in corps
     assert "limit_except GET { deny all; }" in corps
     assert "proxy_set_header X-Sbx-Flux      1;" in corps
     assert "[A-Za-z0-9_-]{11}" in corps                      # l'identifiant de vignette est borné dans la route elle-même
+    # nginx lit « { » comme l'ouverture d'un bloc : une expression à accolades DOIT être entre guillemets
+    # (sinon « pcre2_compile() failed: missing closing parenthesis », nginx -t échoue : constaté sur gk2)
+    assert re.search(r'location ~ "\^/api/v1/ytsas/flux[^"\n]*\{11\}[^"\n]*"\s*\{', VHOST)
+
+
+def test_toute_expression_a_accolades_d_un_location_est_entre_guillemets():
+    for m in re.finditer(r"^\s*location\s+~\*?\s+([^\n{]*?)\s*\{\s*$", VHOST, re.M):
+        motif = m.group(1)
+        if re.search(r"\{\d+(,\d*)?\}", motif):
+            assert motif.startswith('"') and motif.endswith('"'), motif
 
 
 def test_la_route_du_flux_precede_le_prefixe_ouvert_ytsas():
-    assert VHOST.index("location ~ ^/api/v1/ytsas/flux") < VHOST.index("location /api/v1/ytsas/ {")
+    assert VHOST.index('location ~ "^/api/v1/ytsas/flux') < VHOST.index("location /api/v1/ytsas/ {")
 
 
 def test_le_prefixe_ouvert_ne_pose_jamais_l_en_tete_du_flux():
