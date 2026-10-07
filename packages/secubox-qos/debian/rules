@@ -32,4 +32,22 @@ override_dh_auto_install:
 	install -D -m 755 composants/traffic/debian/postinst debian/secubox-qos/usr/lib/secubox/qos/maintscripts/traffic.postinst
 	install -D -m 755 composants/traffic/debian/prerm debian/secubox-qos/usr/lib/secubox/qos/maintscripts/traffic.prerm
 	install -D -m 644 composants/traffic/debian/secubox-traffic.service debian/secubox-qos/usr/lib/systemd/system/secubox-traffic.service
+	# Composant absorbé : nettweak (#2050)
+	install -d debian/secubox-qos/usr/lib/secubox/nettweak/
+	cp -r composants/nettweak/api debian/secubox-qos/usr/lib/secubox/nettweak/
+	install -d debian/secubox-qos/usr/share/secubox/www
+	[ -d composants/nettweak/www ] && cp -r composants/nettweak/www/. debian/secubox-qos/usr/share/secubox/www/ || true
+	install -d debian/secubox-qos/usr/share/secubox/menu.d
+	[ -d composants/nettweak/menu.d ] && cp -r composants/nettweak/menu.d/. debian/secubox-qos/usr/share/secubox/menu.d/ || true
+	# Modular composants/nettweak/nginx composants/nettweak/config
+	install -d debian/secubox-qos/etc/nginx/secubox.d
+	[ -f composants/nettweak/nginx/nettweak.conf ] && cp composants/nettweak/nginx/nettweak.conf debian/secubox-qos/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-qos/etc/nginx/secubox-routes.d
+	[ -f composants/nettweak/nginx/nettweak.conf ] && cp composants/nettweak/nginx/nettweak.conf debian/secubox-qos/etc/nginx/secubox-routes.d/ || true
+	install -D -m 755 composants/nettweak/debian/postinst debian/secubox-qos/usr/lib/secubox/qos/maintscripts/nettweak.postinst
+	install -D -m 755 composants/nettweak/debian/prerm debian/secubox-qos/usr/lib/secubox/qos/maintscripts/nettweak.prerm
+	install -D -m 644 composants/nettweak/debian/secubox-nettweak.service debian/secubox-qos/usr/lib/systemd/system/secubox-nettweak.service
 

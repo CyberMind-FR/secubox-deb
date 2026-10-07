@@ -17,3 +17,25 @@ override_dh_auto_install:
 	# secubox.d/ uniquement, elle n etait jamais lue.
 	install -d debian/secubox-cdn/etc/nginx/secubox-routes.d
 	[ -f nginx/cdn.conf ] && cp nginx/cdn.conf debian/secubox-cdn/etc/nginx/secubox-routes.d/ || true
+	# Composant absorbé : mirror (#2050)
+	install -d debian/secubox-cdn/usr/lib/secubox/mirror/
+	cp -r composants/mirror/api debian/secubox-cdn/usr/lib/secubox/mirror/
+	install -d debian/secubox-cdn/usr/share/secubox/www
+	[ -d composants/mirror/www ] && cp -r composants/mirror/www/. debian/secubox-cdn/usr/share/secubox/www/ || true
+	install -d debian/secubox-cdn/usr/share/secubox/menu.d
+	[ -d composants/mirror/menu.d ] && cp -r composants/mirror/menu.d/. debian/secubox-cdn/usr/share/secubox/menu.d/ || true
+	# Modular composants/mirror/nginx composants/mirror/config
+	install -d debian/secubox-cdn/etc/nginx/secubox.d
+	[ -f composants/mirror/nginx/mirror.conf ] && cp composants/mirror/nginx/mirror.conf debian/secubox-cdn/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-cdn/etc/nginx/secubox-routes.d
+	[ -f composants/mirror/nginx/mirror.conf ] && cp composants/mirror/nginx/mirror.conf debian/secubox-cdn/etc/nginx/secubox-routes.d/ || true
+	# Systemd service
+	install -d debian/secubox-cdn/usr/lib/systemd/system
+	cp composants/mirror/debian/secubox-mirror.service debian/secubox-cdn/usr/lib/systemd/system/
+	install -D -m 755 composants/mirror/debian/postinst debian/secubox-cdn/usr/lib/secubox/cdn/maintscripts/mirror.postinst
+	install -D -m 755 composants/mirror/debian/prerm debian/secubox-cdn/usr/lib/secubox/cdn/maintscripts/mirror.prerm
+	install -D -m 644 composants/mirror/debian/secubox-mirror.service debian/secubox-cdn/usr/lib/systemd/system/secubox-mirror.service
+

@@ -1,5 +1,5 @@
 Source: secubox-mirror
-Section: net
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
@@ -9,10 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-mirror
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), nginx, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, curl
-Description: SecuBox Mirror/CDN Cache
- Local mirror and CDN caching service for APT repositories and other content.
- Features nginx caching proxy, mirror sync status, cache statistics, and
- bandwidth optimization through edge caching.
- .
- Part of SecuBox-DEB security appliance (CyberMind.fr).
+Depends: ${misc:Depends}, secubox-cdn (>= 1.3.0)
+Description: transitional package, replaced by secubox-cdn
+ mirror is now a component of secubox-cdn. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

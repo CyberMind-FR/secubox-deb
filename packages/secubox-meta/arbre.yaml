@@ -102,6 +102,8 @@ hors-arbre:
   - secubox-admin  # transitoire → secubox-system (#2050)
   - secubox-ksm  # transitoire → secubox-system (#2050)
   - secubox-system-tuning  # transitoire → secubox-system (#2050)
+  - secubox-mirror  # transitoire → secubox-cdn (#2050)
+  - secubox-nettweak  # transitoire → secubox-qos (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -345,7 +347,6 @@ recommande:
   - secubox-ipv6guard           # IPv6 Guardian : qui est joignable en IPv6, en clair (carte du Hall)
   - secubox-freebox             # connecteur Freebox : appareils, connexion, pare-feu IPv6, redirections
 suggere:
-  - secubox-nettweak
   - secubox-modem
   - secubox-wan-link-guard      # propre au MOCHAbin
 
@@ -369,7 +370,6 @@ requiert:
 recommande:
   - secubox-cdn
 suggere:
-  - secubox-mirror
   - secubox-saas-relay
 
 meta: secubox-service-vpn

@@ -22,7 +22,7 @@ vaut une prise de contrôle. Cible : utilisateur `secubox-<module>`, `AmbientCap
 | Paquet | Pourquoi root aujourd'hui (à vérifier) | Cible | Priorité |
 |---|---|---|---|
 | `qos` (+ `traffic`, composant depuis #2050) | `tc` (qdisc root), nft | `CAP_NET_ADMIN` seule ; **un seul propriétaire du qdisc root** (conflit connu entre les deux) | haute |
-| `nettweak` | sysctl | `CAP_SYS_ADMIN` ciblée ou assistant `nettweakctl` | haute |
+| `qos` (composant `nettweak` depuis #2050 ; l’unité `nettweak` seule est en root) | sysctl | `CAP_SYS_ADMIN` ciblée ou assistant `nettweakctl` | haute |
 | `routes` (composant `netdiag` depuis #2050 ; l'unité `netdiag` seule est en root) | ping, traceroute, nmap (sockets bruts) | `CAP_NET_RAW`, utilisateur dédié | haute |
 | `haproxy` (composant `exposure` depuis #2050 ; l'unité `exposure` seule est en root) | édite `/etc/tor/torrc` et `/etc/nftables.conf` par regex, snippets nginx | assistant root étroit ; **fin des éditions par regex** (drop-ins uniquement) | haute |
 | `cookies` | capture MITM, clé de capture | utilisateur dédié, clé en lecture seule | haute |
