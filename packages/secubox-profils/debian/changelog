@@ -1,3 +1,9 @@
+secubox-profils (1.0.33-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-proxypac retire du profil (absorbe par secubox-tor, deja liste ; #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 11:00:00 +0200
+
 secubox-profils (1.0.32-1~bookworm1) bookworm; urgency=medium
 
   * secubox-netdiag retire du profil (absorbe par secubox-routes, deja liste ; #2050).
