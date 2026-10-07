@@ -1,3 +1,9 @@
+secubox-appstore (0.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Groupe bouclier : antirootkit, absorbe par security-posture (#2050), est remplace ; la generation du catalogue echouait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 02:30:00 +0200
+
 secubox-appstore (0.5.3-1~bookworm1) bookworm; urgency=medium
 
   * Groupe veille : cyberfeed, absorbe par ipblock (#2050), n'est plus cite ; la generation du catalogue echouait.
