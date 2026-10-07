@@ -281,6 +281,40 @@ def get_library_stats() -> dict:
     return stats
 
 
+# Le comptage de la photothèque (rglob + du sur tous les originaux) coûte, et /status est lu chaque minute par la carte du Hall :
+# on le mesure EN ARRIÈRE-PLAN, au plus une fois par STATS_DELAI_S, et on rend le dernier chiffre en attendant. Premier appel : des
+# zéros marqués `mesure_en_cours`, jamais un blocage.
+STATS_DELAI_S = 600
+_STATS = {"valeur": None, "date": 0.0, "en_cours": False}
+_STATS_VERROU = threading.Lock()
+_STATS_VIDE = {"total_photos": 0, "total_videos": 0, "total_albums": 0, "storage_used": "0", "import_pending": 0}
+
+
+def _mesure_stats() -> None:
+    try:
+        v = get_library_stats()
+    except Exception:  # noqa: BLE001
+        v = None
+    with _STATS_VERROU:
+        if v is not None:
+            _STATS["valeur"] = v
+        _STATS["date"] = time.time()   # même un échec attend le prochain délai : pas de boucle de recomptage
+        _STATS["en_cours"] = False
+
+
+def stats_bibliotheque() -> dict:
+    """Dernier comptage connu de la photothèque ; lance la mesure en arrière-plan si elle est périmée."""
+    with _STATS_VERROU:
+        perime = (time.time() - _STATS["date"]) > STATS_DELAI_S
+        if perime and not _STATS["en_cours"]:
+            _STATS["en_cours"] = True
+            threading.Thread(target=_mesure_stats, name="photoprism-stats", daemon=True).start()
+        valeur = _STATS["valeur"]
+    if valeur is None:
+        return {**_STATS_VIDE, "mesure_en_cours": True}
+    return {**valeur, "mesure_en_cours": False}
+
+
 def get_albums() -> List[dict]:
     """Get list of albums."""
     cfg = get_config()
@@ -332,11 +366,11 @@ async def health():
 
 
 @router.get("/status", dependencies=[Depends(require_lecture)])
-async def status():
+def status():
     """Get PhotoPrism service status (native-LXC)."""
     cfg = get_config()
     container = get_container_status()
-    lib_stats = get_library_stats()
+    lib_stats = stats_bibliotheque()
     hostname = cfg.get("public_hostname") or cfg.get("domain") or hote_box("photoprism")  # #1723
 
     return {

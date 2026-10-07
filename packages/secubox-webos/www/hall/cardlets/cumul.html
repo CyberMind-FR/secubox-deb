@@ -340,6 +340,16 @@
         { nom: 'Torrent', host: SBX_DOMAINE.hote('torrent.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=torrent') }
       ]
     },
+    // CLOUD : le nuage personnel, trois tranches VIVANTES qui tournent — Cloud (Nextcloud), Photos (PhotoPrism), Mail. Chacune est
+    // le gabarit d'accès rapide : état réel du service, chiffres, et « Ouvrir » avec la session du Hall.
+    cloud: {
+      titre: 'Cloud', icon: '☁️', embed: true,
+      couches: [
+        { nom: 'Cloud', host: SBX_DOMAINE.hote('nc.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=nextcloud') },
+        { nom: 'Photos', host: SBX_DOMAINE.hote('photoprism.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=photoprism') },
+        { nom: 'Mail', host: SBX_DOMAINE.hote('webmail.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=mail') }
+      ]
+    },
     forums: {
       titre: 'Forums', icon: '💬', embed: true,
       couches: [

@@ -48,8 +48,8 @@
     },
     {
       "id": "cloud", "ic": "☁️", "nom": "Cloud", "service": "nextcloud", "acces": "session",
-      "role": "Nextcloud, le nuage de fichiers de la box : l'état réel du conteneur (en marche ou endormi), sa version, le nombre de comptes et l'espace utilisé. Le bouton ouvre le cloud avec la session du Hall, sans mot de passe.",
-      "usage": ["Si le conteneur dort (il s'endort quand personne ne s'en sert), la carte le dit ; l'ouvrir le réveille.", "La carte demande une session pour lire l'état : sans elle, elle l'indique.", "« Ouvrir mon cloud » entre dans Nextcloud déjà connecté."],
+      "role": "Le nuage personnel, en trois tranches qui tournent : Cloud (Nextcloud : état, version, comptes, espace), Photos (PhotoPrism : photos, vidéos, albums, espace) et Mail (boîtes, espace, état du serveur et du webmail). Chaque bouton ouvre le service avec la session du Hall, sans mot de passe.",
+      "usage": ["Les puces changent de tranche ; chaque tranche dit l'état réel de son service (en marche, endormi, arrêté).", "Un service qui dort (Nextcloud s'endort quand personne ne s'en sert) est réveillé en l'ouvrant.", "La carte demande une session pour lire l'état : sans elle, elle l'indique."],
       "metriques": []
     },
     {

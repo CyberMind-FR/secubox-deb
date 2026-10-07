@@ -161,7 +161,33 @@
     nextcloud: { ic:'☁️', nom:'Cloud', hote:SBX_DOMAINE.hote('nc.gk2.secubox.in'), mod:'nextcloud',
       couleur:'#1655a0',
       chiffres:[['user_count','👥','comptes'],['disk_used','💾','espace utilisé']],
+      etat:function(d){ return d.running ? 'en marche' + (d.version ? ' · version ' + d.version : '')
+                                         : (d.installed ? 'endormi — se réveille à l\u2019ouverture' : 'non installé'); },
       acces:[['Ouvrir mon cloud','/sbx/entrer','']] },
+    // PHOTOS (PhotoPrism) : photos, vidéos, albums, espace — le comptage vient d'un cache côté module (mesuré en arrière-plan).
+    photoprism: { ic:'📷', nom:'Photos', hote:SBX_DOMAINE.hote('photoprism.gk2.secubox.in'), mod:'photoprism',
+      couleur:'#1f7a58',
+      chiffres:[['library_stats.total_photos','📷','photos'],['library_stats.total_videos','🎞️','vidéos'],
+                ['library_stats.total_albums','🗂️','albums'],['library_stats.storage_used','💾','espace']],
+      etat:function(d){
+        var ls = d.library_stats || {};
+        var base = d.http_reachable ? 'en marche' : (String(d.lxc_state || '').toUpperCase() === 'RUNNING' ? 'démarre…' : 'arrêté');
+        return base + (ls.import_pending ? ' · ' + ls.import_pending + ' à importer' : '') + (ls.mesure_en_cours ? ' · comptage en cours' : '');
+      },
+      acces:[['Ouvrir mes photos','/','']] },
+    // MAIL : boîtes, espace, et l'état des deux conteneurs (serveur, webmail) — le diagnostic utile quand « ça ne part pas ».
+    mail: { ic:'📧', nom:'Mail', hote:SBX_DOMAINE.hote('webmail.gk2.secubox.in'), mod:'mail',
+      couleur:'#c87832',
+      chiffres:[['user_count','👥','boîtes'],['storage','💾','espace']],
+      etat:function(d){
+        var c = d.components || {}, srv = c.mail_server || {}, web = c.webmail || {};
+        if (!d.installed && !srv.installed) return 'non installé';
+        if (srv.running && web.running) return 'serveur et webmail en marche';
+        if (srv.running) return 'serveur en marche · webmail arrêté';
+        if (web.running) return 'webmail en marche · serveur arrêté';
+        return 'arrêté';
+      },
+      acces:[['Ouvrir ma messagerie','/','']] },
     depot: { ic:'📦', nom:'Dépôt', hote:SBX_DOMAINE.hote('depot.gk2.secubox.in'), mod:'droplet',
       couleur:'#3d6b4a',
       chiffres:[['sites_count','🌐','sites'],['apps_count','🧩','applications']],
@@ -224,7 +250,7 @@
     t.innerHTML = '<span class="ic" style="background:' + esc(c.couleur) + '">'
       + esc(c.ic) + '</span><b>' + esc(c.nom) + '</b>'
       + c.chiffres.map(function (m) {
-          var v = d[m[0]];
+          var v = m[0].split('.').reduce(function (o, k) { return (o === undefined || o === null) ? undefined : o[k]; }, d);
           // Un chiffre absent n'est PAS un zéro : on ne l'affiche pas plutôt
           // que d'annoncer « 0 » là où le service n'a rien dit.
           if (v === undefined || v === null) return '';
@@ -236,11 +262,9 @@
     if (d.disk_free !== undefined) {
       el('note').textContent = octets(d.disk_free) + ' libres';
     }
-    // Un service qui dit s'il tourne (Nextcloud) : on l'écrit, c'est l'information la plus utile d'une carte d'accès.
-    if (d.running !== undefined) {
-      var etat = d.running ? 'en marche' : (d.installed ? 'endormi — se réveille à l\u2019ouverture' : 'non installé');
-      el('note').textContent = etat + (d.running && d.version ? ' · version ' + d.version : '');
-    }
+    // Un service qui dit lui-même s'il tourne (Nextcloud, Photos, Mail) : on l'écrit, c'est l'information la plus utile d'une
+    // carte d'accès. Chaque service dit COMMENT (fonction `etat`), car « endormi », « démarre… » ou « webmail arrêté » diffèrent.
+    if (typeof c.etat === 'function') { el('note').textContent = c.etat(d); }
     if (d.active !== undefined && Number(d.active) > 0) {
       el('barre').hidden = false;
       el('jauge').style.width = '100%';
