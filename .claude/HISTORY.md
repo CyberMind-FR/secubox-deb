@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vague 3j : routes←netdiag ; déployée gk3 + gk2, publiée (ref #2050)
+Deux unités conservées dans un seul paquet : `routes` (secubox) et `netdiag` (root, sockets bruts), le registre des unités root pointe maintenant sur routes. isp : reste de `traffic` (vague 3a) retiré. Versions : routes 1.3.0, isp 1.2.7, profils 1.0.32, meta 0.1.32.
+
 ## 2026-10-07 — Rassemblement, vague 3i : metanews←devwatch,yacy ; déployée gk3 + gk2, publiée (ref #2050)
 metanews 0.3.0 (arch any, amd64 + arm64) absorbe devwatch et yacy ; son `dh_installsystemd --name=` est complété pour yacy, devwatch active toujours la sienne dans son postinst (masquage respecté). surf reste séparé : écoute en TCP 127.0.0.1:9082, le passage en socket Unix demande de changer ses consommateurs. Versions : meta 0.1.31, full 1.4.8, profils 1.0.31.
 
