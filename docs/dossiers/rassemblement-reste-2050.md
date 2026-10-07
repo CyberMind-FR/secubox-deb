@@ -46,6 +46,11 @@ d'abord sur gk3, annonce de la coupure possible (règle « annoncer toute coupur
 3. Ordre : source → tests → un seul déploiement hors heures de pointe, avec `waf-ng` redémarré en dernier, et contrôle de `/proc/<pid>/cmdline`
    (le drop-in du leurre peut masquer un changement d'unité : voir le test de non-dérive, waf-ng 1.18.17).
 
+**Constat sur la voie de ban dupliquée (2026-10-08).** Le ban automatique de l'API Python n'existe que dans `POST /check` (garde JWT), censé être appelé par HAProxy ;
+aucun appelant dans le dépôt, aucun appel dans les journaux d'accès de gk2, et HAProxy route vers `sbxwaf` (127.0.0.1:8085). C'est du **code mort**, pas une voie concurrente
+en service. Le bouton de bannissement manuel du tableau de bord (`wafctl ban`) est légitime et reste. Suite proposée, dans une issue séparée : retirer `/check` et
+`_should_autoban`/`_check_rate_limit` de l'API Python, avec test de non-régression sur les routes du tableau de bord.
+
 **Risque** : élevé (le WAF protège tout le trafic public ; une erreur coupe ou ouvre la box). **À ne faire qu'avec l'accord explicite du propriétaire.**
 
 ## M9 — démons Go (`bbs`, `radio`, `metanews`, `socialrelay`) — **ABANDONNÉ (décision du propriétaire, 2026-10-08)**
