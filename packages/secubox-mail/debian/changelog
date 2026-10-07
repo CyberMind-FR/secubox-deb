@@ -1,3 +1,9 @@
+secubox-mail (2.14.0-1~bookworm1) bookworm; urgency=high
+
+  * mailctl webmail : remet Apache (et les nettoyages Roundcube) en marche dans le LXC webmail. Leur bac a sable systemd ne se montait plus sous AppArmor (226/NAMESPACE depuis le 2026-10-05) : webmail en 502.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 13:00:00 +0200
+
 secubox-mail (2.13.1-1~bookworm1) bookworm; urgency=medium
 
   * Unite smtp-relay : /var/log/mail.log devient optionnel (prefixe -). Le courrier tourne dans le LXC, le fichier n'existe pas sur l'hote : l'unite echouait en 226/NAMESPACE en boucle.

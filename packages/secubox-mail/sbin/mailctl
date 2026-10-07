@@ -498,6 +498,19 @@ cmd_autocrypt_sync() {
 #     symboles distincts — on peut donc voir lequel a tranche.
 #  3. le GESTE dans le webmail : le greffon markasjunk, qui poste le message au
 #     controleur avec le mot de passe deja provisionne.
+# Remet le webmail en marche : Apache (et les tâches de nettoyage Roundcube) ne démarrent pas dans le LXC sans privilèges quand
+# AppArmor refuse le montage de leur bac à sable (226/NAMESPACE, constaté sur gk2 depuis le 2026-10-05 : webmail en 502).
+cmd_webmail() {
+    local wc="$WEBMAIL_CONTAINER" svc
+    lxc_running "$wc" || { error "conteneur webmail '$wc' a l'arret"; return 1; }
+    for svc in apache2 phpsessionclean roundcube-gc roundcube-cleandb; do
+        lxc_service_sans_sandbox "$svc" "$wc" || return 1
+    done
+    lxc_attach "$wc" sh -c 'systemctl reset-failed apache2 phpsessionclean roundcube-gc roundcube-cleandb 2>/dev/null; systemctl enable --now apache2' >/dev/null 2>&1 \
+        || { error "apache2 n'a pas demarre dans '$wc'"; return 1; }
+    log "apache2 demarre dans '$wc'"
+}
+
 # Remet redis en marche dans le conteneur (surcharge du bac à sable, démarrage, puis rspamd qui le retrouve).
 cmd_redis() {
     lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
@@ -1837,6 +1850,7 @@ case "${1:-}" in
     webmail-pgp) cmd_webmail_pgp ;;
     antispam-apprentissage) cmd_antispam_apprentissage ;;
     redis)       cmd_redis ;;
+    webmail)     cmd_webmail ;;
     sync)        cmd_sync ;;
     # Help
     help|--help|-h|'') show_help ;;
