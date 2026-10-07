@@ -331,12 +331,10 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-annuaire,
          secubox-p2p
-Recommends: secubox-federation,
-         secubox-meshname
+Recommends: secubox-federation
 Suggests: secubox-mesh,
          secubox-daemon,
-         secubox-meshtastic,
-         secubox-openpgp
+         secubox-meshtastic
 Description: SecuBox — service « Maillage »
  Annuaire-miroir, pair à pair, fédération SBX.
  .

@@ -1,3 +1,9 @@
+secubox-openpgp (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : openpgp est un composant de secubox-annuaire >= 0.11.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-openpgp (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Autocrypt sortant, côté annuaire (ref #1852, P2) : `sbx-openpgp autocrypt` rend {adresse: keydata}, la clé PUBLIQUE minimale

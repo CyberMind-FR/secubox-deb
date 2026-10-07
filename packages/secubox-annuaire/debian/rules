@@ -53,6 +53,19 @@ override_dh_auto_install:
 	# Web UI (static) — Flotte / fleet metrics panel (fleet-metrics, Task 5)
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/fleet
 	install -m 644 $(CURDIR)/www/fleet/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/fleet/
+	# Composant absorbé : openpgp (#2050)
+	install -d debian/secubox-annuaire/usr/lib/secubox/openpgp/api \
+	           debian/secubox-annuaire/usr/lib/secubox/openpgp/secubox_openpgp
+	install -m 644 composants/openpgp/api/__init__.py composants/openpgp/api/main.py debian/secubox-annuaire/usr/lib/secubox/openpgp/api/
+	install -m 644 composants/openpgp/secubox_openpgp/*.py debian/secubox-annuaire/usr/lib/secubox/openpgp/secubox_openpgp/
+	install -D -m 755 composants/openpgp/sbin/sbx-openpgp debian/secubox-annuaire/usr/sbin/sbx-openpgp
+	install -D -m 644 composants/openpgp/conf/openpgp.toml debian/secubox-annuaire/etc/secubox/openpgp.toml
+	install -D -m 644 composants/openpgp/nginx/openpgpkey.conf.tpl \
+	        debian/secubox-annuaire/usr/share/secubox/openpgp/openpgpkey.conf.tpl
+	install -D -m 644 composants/openpgp/systemd/secubox-openpgp.service \
+	        debian/secubox-annuaire/lib/systemd/system/secubox-openpgp.service
+	install -D -m 755 composants/openpgp/debian/postinst debian/secubox-annuaire/usr/lib/secubox/annuaire/maintscripts/openpgp.postinst
+	install -D -m 755 composants/openpgp/debian/prerm debian/secubox-annuaire/usr/lib/secubox/annuaire/maintscripts/openpgp.prerm
 
 # Hub menu entry
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d
@@ -84,3 +97,8 @@ override_dh_auto_install:
 
 	# Runtime dir placeholder
 	install -d $(CURDIR)/debian/secubox-annuaire/run/secubox
+
+override_dh_installsystemd:
+	# L unité du composant openpgp est gérée par son postinst (clé et liaison AVANT le démarrage) : dh ne doit pas
+	# l activer. On liste donc les unités propres à annuaire (#2050).
+	dh_installsystemd secubox-annuaire.service secubox-annuaire-apply.timer secubox-annuaire-bans-apply.timer secubox-annuaire-noms.timer secubox-metrics-publish.timer

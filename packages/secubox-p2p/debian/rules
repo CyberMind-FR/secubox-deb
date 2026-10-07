@@ -84,3 +84,14 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-p2p/etc/nftables.d
 	install -m 644 $(CURDIR)/nft/secubox-p2p-ephemeral.nft \
 		$(CURDIR)/debian/secubox-p2p/etc/nftables.d/
+	# Composant absorbé : meshname (#2050)
+	install -d debian/secubox-p2p/usr/lib/secubox/meshname
+	cp -r composants/meshname/api debian/secubox-p2p/usr/lib/secubox/meshname/
+	install -d debian/secubox-p2p/usr/share/secubox/www/meshname
+	cp -r composants/meshname/www/meshname/. debian/secubox-p2p/usr/share/secubox/www/meshname/
+	install -d debian/secubox-p2p/usr/share/secubox/menu.d
+	[ -d composants/meshname/menu.d ] && cp -r composants/meshname/menu.d/. debian/secubox-p2p/usr/share/secubox/menu.d/ || true
+	install -D -m 755 composants/meshname/debian/postinst debian/secubox-p2p/usr/lib/secubox/p2p/maintscripts/meshname.postinst
+	install -D -m 755 composants/meshname/debian/prerm debian/secubox-p2p/usr/lib/secubox/p2p/maintscripts/meshname.prerm
+	install -D -m 644 composants/meshname/debian/secubox-meshname.service debian/secubox-p2p/usr/lib/systemd/system/secubox-meshname.service
+

@@ -1,16 +1,15 @@
 Source: secubox-meshname
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-meshname
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
-Description: SecuBox Meshname — noms du réseau maillé (mDNS + DNS local)
- Résolution de noms du maillage : domaine local (mesh.local par défaut)
- servi par dnsmasq, publication et découverte mDNS par Avahi, table de
- correspondances nom → adresse gérée depuis le tableau de bord.
- .
- Ne dépend d'aucun overlay : Yggdrasil a été décommissionné (#1703).
+Depends: ${misc:Depends}, secubox-p2p (>= 1.12.0)
+Description: transitional package, replaced by secubox-p2p
+ meshname is now a component of secubox-p2p. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

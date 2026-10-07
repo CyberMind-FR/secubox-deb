@@ -91,6 +91,8 @@ hors-arbre:
   - secubox-cyberfeed  # transitoire → secubox-ipblock (#2050)
   - secubox-vhost  # transitoire → secubox-haproxy (#2050)
   - secubox-exposure  # transitoire → secubox-haproxy (#2050)
+  - secubox-openpgp  # transitoire → secubox-annuaire (#2050)
+  - secubox-meshname  # transitoire → secubox-p2p (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -386,12 +388,10 @@ requiert:
   - secubox-p2p
 recommande:
   - secubox-federation
-  - secubox-meshname
 suggere:
   - secubox-mesh
   - secubox-daemon
   - secubox-meshtastic
-  - secubox-openpgp
 
 meta: secubox-service-waf
 niveau: service

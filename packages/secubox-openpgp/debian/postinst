@@ -1,123 +1,13 @@
 #!/bin/sh
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Transitoire (#2050) : l'unité secubox-openpgp.service est désormais livrée par secubox-annuaire. L'ancien prerm
+# de la version précédente l'arrête à la mise à jour ; on la rétablit une fois l'absorbant configuré.
 set -e
-
-case "$1" in
-  configure)
-    # Compte du trousseau : groupe secubox (sockets partagées), sans shell.
-    mkdir -p /var/lib/secubox/openpgp
-    if ! getent passwd secubox-openpgp >/dev/null; then
-        adduser --system --ingroup secubox --home /var/lib/secubox/openpgp \
-                --no-create-home --shell /usr/sbin/nologin secubox-openpgp >/dev/null
-    fi
-    install -d -m 0750 -o secubox-openpgp -g secubox /var/lib/secubox/openpgp
-    install -d -m 0700 -o secubox-openpgp -g secubox /var/lib/secubox/openpgp/node \
-                                                     /var/lib/secubox/openpgp/boite
-
-    # Le did de la box, PUBLIC (0644) : le démon s'identifie sans jamais lire
-    # node.key (même motif que secubox-assist).
-    if [ -r /etc/secubox/secrets/annuaire/node.key ] && [ ! -s /etc/secubox/annuaire/node.did ]; then
-        mkdir -p /etc/secubox/annuaire
-        python3 -c "
-import sys; sys.path.insert(0, '/usr/lib/secubox/annuaire')
-from annuaire.crypto import public_from_private, did_from_pubkey
-raw = bytes.fromhex(open('/etc/secubox/secrets/annuaire/node.key').read().strip())
-print(did_from_pubkey(public_from_private(raw)))
-" > /etc/secubox/annuaire/node.did 2>/dev/null || true
-        chmod 0644 /etc/secubox/annuaire/node.did 2>/dev/null || true
-    fi
-
-    # Clé de box (si elle manque) puis liaison dans l'annuaire (idempotente).
-    # Jamais au prix de l'installation : une box sans annuaire initialisé
-    # s'installe, et `sbx-openpgp init && sbx-openpgp lier` rattrape.
-    if [ -s /etc/secubox/annuaire/node.did ]; then
-        /usr/sbin/sbx-openpgp init || true
-        /usr/sbin/sbx-openpgp lier || true
-    else
-        echo "secubox-openpgp : annuaire non initialisé — plus tard : sbx-openpgp init && sbx-openpgp lier"
-    fi
-
-    if [ -d /run/systemd/system ]; then
-        systemctl daemon-reload >/dev/null 2>&1 || true
-        systemctl enable secubox-openpgp.service >/dev/null 2>&1 || true
-        systemctl restart secubox-openpgp.service >/dev/null 2>&1 || true
-    fi
-
-    # WKD (#1738) : un vhost openpgpkey.<domaine> par domaine de courriel SERVI.
-    # Le domaine vient de ce que le conteneur `mail` sert (postconf), ou de
-    # [wkd] domaines dans /etc/secubox/openpgp.toml ; aucun → aucun vhost.
-    # Idempotent ; le certificat reste un geste d'exploitation (acme.sh,
-    # webroot /usr/share/secubox/www, puis certsctl deploy --apply).
-    # DÉSACTIVÉ PAR DÉFAUT (décision #1738 : l'annuaire est servi aux box
-    # liées, pas au monde). Rien n'est déclaré sans `[wkd] actif = true`.
-    TPL=/usr/share/secubox/openpgp/openpgpkey.conf.tpl
-    DOMAINES=""
-    WKD_ACTIF=$(python3 -c "
-import tomllib
-print('1' if tomllib.load(open('/etc/secubox/openpgp.toml', 'rb')).get('wkd', {}).get('actif') is True else '0')" 2>/dev/null || echo 0)
-    if [ "$WKD_ACTIF" = "1" ]; then
-        DOMAINES=$(python3 -c "
-import tomllib
-d = tomllib.load(open('/etc/secubox/openpgp.toml', 'rb')).get('wkd', {}).get('domaines', [])
-print(' '.join(x for x in d if isinstance(x, str)))" 2>/dev/null || true)
-    fi
-    if [ "$WKD_ACTIF" = "1" ] && [ -z "$DOMAINES" ] && command -v lxc-attach >/dev/null 2>&1 && lxc-info -n mail -s 2>/dev/null | grep -q RUNNING; then
-        DOMAINES=$(lxc-attach -n mail -- postconf -h virtual_mailbox_domains 2>/dev/null | tr ',' ' ' || true)
-    fi
-    # WKD éteint : retirer le vhost qu'une 0.2.0 aurait posé (nginx seul ; la
-    # déclaration HAProxy restante ne mène plus nulle part).
-    if [ "$WKD_ACTIF" != "1" ]; then
-        for f in /etc/nginx/sites-enabled/openpgpkey.*.conf; do
-            [ -e "$f" ] || continue
-            n=$(basename "$f")
-            rm -f "$f" "/etc/nginx/sites-available/$n" "/etc/secubox/nginx-available/$n"
-            nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
-            echo "secubox-openpgp : WKD désactivé — vhost $n retiré"
-        done
-    fi
-    for DOM in $DOMAINES; do
-        case "$DOM" in *[!a-z0-9.-]*|"") continue ;; esac
-        # WKD n'a de sens que pour un domaine PUBLIC : pas de certificat pour
-        # secubox.local, localdomain, .lan… — rien n'est déclaré pour eux.
-        case "$DOM" in *.*) ;; *) continue ;; esac
-        case "$DOM" in *.local|*.lan|*.home|*.internal|*.localdomain|*.test|*.invalid|*.example) continue ;; esac
-        HOTE="openpgpkey.$DOM"
-        if [ -f "$TPL" ] && [ -d /etc/nginx/sites-enabled ]; then
-            mkdir -p /etc/secubox/nginx-available
-            sed "s/@DOMAINE@/$DOM/g" "$TPL" > "/etc/secubox/nginx-available/$HOTE.conf"
-            cp -f "/etc/secubox/nginx-available/$HOTE.conf" "/etc/nginx/sites-available/$HOTE.conf"
-            ln -sf "../sites-available/$HOTE.conf" "/etc/nginx/sites-enabled/$HOTE.conf"
-            if nginx -t >/dev/null 2>&1; then
-                systemctl reload nginx >/dev/null 2>&1 || true
-            else
-                rm -f "/etc/nginx/sites-enabled/$HOTE.conf"
-                echo "secubox-openpgp : vhost $HOTE refusé par nginx -t — non activé" >&2
-            fi
-        fi
-        if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
-            CLE=$(printf '%s' "$HOTE" | tr '.-' '__')
-            if ! grep -q "^\[vhosts\.$CLE\]" /etc/secubox/haproxy.toml 2>/dev/null; then
-                haproxyctl vhost add "$HOTE" nginx_vhosts true >/dev/null 2>&1 || true
-                haproxyctl generate >/dev/null 2>&1 || true
-                systemctl reload haproxy >/dev/null 2>&1 || true
-            fi
-        fi
-        if [ -f /etc/secubox/waf/haproxy-routes.json ]; then
-            python3 - /etc/secubox/waf/haproxy-routes.json "$HOTE" <<'PY' && systemctl is-active --quiet secubox-waf-ng && systemctl reload secubox-waf-ng >/dev/null 2>&1 || true
-import json, sys
-chemin, hote = sys.argv[1], sys.argv[2]
-d = json.load(open(chemin))
-if d.get(hote) == ["127.0.0.1", 9080]:
-    sys.exit(1)
-d[hote] = ["127.0.0.1", 9080]
-json.dump(d, open(chemin, "w"), indent=2)
-PY
-        fi
-        [ -s "/data/haproxy/certs/$HOTE.pem" ] || echo "secubox-openpgp : WKD $HOTE prêt — certificat à émettre (acme.sh --issue -d $HOTE -w /usr/share/secubox/www --keylength ec-256 ; certsctl deploy --apply)"
-    done
-    ;;
-esac
-
 #DEBHELPER#
+if [ "$1" = configure ] && [ -e /usr/lib/systemd/system/secubox-openpgp.service -o -e /lib/systemd/system/secubox-openpgp.service ]; then
+    if [ "$(systemctl is-enabled secubox-openpgp.service 2>/dev/null)" != masked ]; then
+        systemctl enable secubox-openpgp.service >/dev/null 2>&1 || true
+        systemctl start secubox-openpgp.service >/dev/null 2>&1 || true
+    fi
+fi
 exit 0
