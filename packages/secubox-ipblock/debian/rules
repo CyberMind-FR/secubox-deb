@@ -9,3 +9,31 @@ override_dh_auto_install:
 	cp -r www/ipblock/. debian/secubox-ipblock/usr/share/secubox/www/ipblock/
 	install -d debian/secubox-ipblock/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ipblock/usr/share/secubox/menu.d/ || true
+	# Composant absorbé : vortex-firewall (#2050)
+	install -d debian/secubox-ipblock/usr/lib/secubox/vortex-firewall
+	cp -r composants/vortex-firewall/api debian/secubox-ipblock/usr/lib/secubox/vortex-firewall/
+	install -d debian/secubox-ipblock/usr/share/secubox/www/vortex-firewall
+	cp -r composants/vortex-firewall/www/vortex-firewall/. debian/secubox-ipblock/usr/share/secubox/www/vortex-firewall/
+	install -d debian/secubox-ipblock/usr/share/secubox/menu.d
+	[ -d composants/vortex-firewall/menu.d ] && cp -r composants/vortex-firewall/menu.d/. debian/secubox-ipblock/usr/share/secubox/menu.d/ || true
+	install -D -m 755 composants/vortex-firewall/debian/postinst debian/secubox-ipblock/usr/lib/secubox/ipblock/maintscripts/vortex-firewall.postinst
+	install -D -m 755 composants/vortex-firewall/debian/prerm debian/secubox-ipblock/usr/lib/secubox/ipblock/maintscripts/vortex-firewall.prerm
+	install -D -m 644 composants/vortex-firewall/debian/secubox-vortex-firewall.service debian/secubox-ipblock/usr/lib/systemd/system/secubox-vortex-firewall.service
+	# Composant absorbé : cyberfeed (#2050)
+	install -d debian/secubox-ipblock/usr/lib/secubox/cyberfeed
+	cp -r composants/cyberfeed/api debian/secubox-ipblock/usr/lib/secubox/cyberfeed/
+	install -d debian/secubox-ipblock/usr/share/secubox/www/cyberfeed
+	cp -r composants/cyberfeed/www/cyberfeed/. debian/secubox-ipblock/usr/share/secubox/www/cyberfeed/
+	install -d debian/secubox-ipblock/usr/share/secubox/menu.d
+	[ -d composants/cyberfeed/menu.d ] && cp -r composants/cyberfeed/menu.d/. debian/secubox-ipblock/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-ipblock/etc/nginx/secubox.d
+	[ -d composants/cyberfeed/nginx ] && cp composants/cyberfeed/nginx/*.conf debian/secubox-ipblock/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-ipblock/etc/nginx/secubox-routes.d
+	[ -d composants/cyberfeed/nginx ] && cp composants/cyberfeed/nginx/*.conf debian/secubox-ipblock/etc/nginx/secubox-routes.d/ || true
+	install -D -m 755 composants/cyberfeed/debian/postinst debian/secubox-ipblock/usr/lib/secubox/ipblock/maintscripts/cyberfeed.postinst
+	install -D -m 755 composants/cyberfeed/debian/prerm debian/secubox-ipblock/usr/lib/secubox/ipblock/maintscripts/cyberfeed.prerm
+	install -D -m 644 composants/cyberfeed/debian/secubox-cyberfeed.service debian/secubox-ipblock/usr/lib/systemd/system/secubox-cyberfeed.service
+

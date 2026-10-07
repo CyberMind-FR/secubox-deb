@@ -1,21 +1,15 @@
 Source: secubox-cyberfeed
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-cyberfeed
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-httpx | python3-pip
-Description: SecuBox CyberFeed - Threat Intelligence Feed Aggregator
- Aggregates threat feeds from multiple sources (abuse.ch, Spamhaus, etc.)
- and provides unified blocklist management for IPs, domains, and IoCs.
- .
- Features:
-  - Multi-source threat feed aggregation
-  - IP and domain blocklist management
-  - Threat indicator (IoC) tracking
-  - Scheduled feed updates
-  - Feed health monitoring
-  - Export to nftables, unbound, dnsmasq formats
+Depends: ${misc:Depends}, secubox-ipblock (>= 1.3.0)
+Description: transitional package, replaced by secubox-ipblock
+ cyberfeed is now a component of secubox-ipblock. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

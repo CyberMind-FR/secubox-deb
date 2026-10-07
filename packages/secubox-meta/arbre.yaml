@@ -87,6 +87,8 @@ hors-arbre:
   - secubox-netdiag  # transitoire → secubox-routes (#2050)
   - secubox-proxypac  # transitoire → secubox-tor (#2050)
   - secubox-macro  # transitoire → secubox-tor (#2050)
+  - secubox-vortex-firewall  # transitoire → secubox-ipblock (#2050)
+  - secubox-cyberfeed  # transitoire → secubox-ipblock (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -400,7 +402,6 @@ requiert:
   - secubox-waf-ng
 recommande:
   - secubox-ipblock
-  - secubox-vortex-firewall
   - secubox-toolbox-ng
 
 meta: secubox-service-dpi
@@ -423,7 +424,6 @@ requiert:
   - secubox-threats
 recommande:
   - secubox-cve-triage
-  - secubox-cyberfeed
   - secubox-threatmesh
   - secubox-antirootkit
 suggere:
