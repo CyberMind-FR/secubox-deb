@@ -25,6 +25,8 @@ PartOf=secubox-actord.service
 
 [Service]
 Type=oneshot
+# actord peut mettre plusieurs minutes à ouvrir sa socket (reconstruction du graphe) : le script attend jusqu'à 15 min.
+TimeoutStartSec=960
 # SURTOUT PAS RemainAfterExit. Avec lui, l'unite restait « active » apres son
 # premier passage : le `Wants=` d'actord ne la relancait plus, et chaque
 # redemarrage d'actord recreait une socket en groupe `secubox` que plus personne

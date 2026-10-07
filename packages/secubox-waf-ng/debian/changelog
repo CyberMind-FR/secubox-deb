@@ -1,3 +1,12 @@
+secubox-waf-ng (1.18.14-1~bookworm1) bookworm; urgency=medium
+
+  * Ingestion Actor Intelligence : le script de droits de la socket n'attendait que 12 s alors qu'actord met ~4 min a ouvrir sa socket
+    (reconstruction du graphe). La socket restait au groupe `secubox`, sbxwaf ne pouvait plus y ecrire : carte Securite a 0 evenement
+    pendant pres de deux jours. Le script attend maintenant (jusqu'a 15 min) une socket reellement en ecoute (`ss -xl`), puis applique le
+    groupe ; l'unite a un TimeoutStartSec adapte (ref #1240).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 23:10:00 +0200
+
 secubox-waf-ng (1.18.13-1~bookworm1) bookworm; urgency=medium
 
   * Délai amont de sbxwaf porté de 120 s à 1 h, aligné sur le plus long délai HAProxy (studio natif de VoiceStudio 1 h, synthèse 10 min) : une génération vocale à froid (110 à 140 s, plus sous pression mémoire) répondait « 504 : timeout awaiting response headers » sur gk3. HAProxy borne toujours le trafic ordinaire à 30 s (ref #2032).
