@@ -1,3 +1,9 @@
+secubox-webos (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Tranche Photos : un PhotoPrism absent de la box (container_status not_installed) dit « non installe » et ne montre plus « 0 photos » ni « arrete ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 05:15:00 +0200
+
 secubox-webos (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Carte « Cloud » : un groupe de trois tranches vivantes (Cloud/Nextcloud, Photos/PhotoPrism, Mail) qui tournent, au lieu d'une tranche Nextcloud seule. Chaque tranche dit l'etat reel de son service (en marche, endormi, arrete), ses chiffres (comptes, photos, videos, albums, boites, espace) et ouvre le service avec la session du Hall. Gabarit d'acces rapide : cles pointees (library_stats.total_photos) et libelle d'etat par service. Relais de lecture /adm/api/v1/(photoprism|mail)/status.
