@@ -13,7 +13,8 @@ Depends: ${misc:Depends},
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,
  secubox-core (>= 1.4.0)
-Recommends: secubox-waf, openssl
+Recommends: secubox-waf-ng,
+ openssl
 Description: SecuBox Traffic Interceptor
  HTTP/HTTPS traffic interception and analysis module.
  Provides SSL/TLS inspection, request/response modification,

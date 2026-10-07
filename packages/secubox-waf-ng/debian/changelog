@@ -1,3 +1,10 @@
+secubox-waf-ng (1.19.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-waf (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/waf/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-waf-ng (1.18.21-1~bookworm1) bookworm; urgency=medium
 
   * CORRECTION : meme apostrophe non echappee dans le message « en demarrage » de la page Actor (1.18.20, non deployee) ; corrige, avec un test `node --check` de la page.

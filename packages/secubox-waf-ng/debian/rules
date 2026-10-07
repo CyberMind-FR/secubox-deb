@@ -70,6 +70,54 @@ override_dh_auto_install:
 	# sbxwaf detecte sans jamais pouvoir appliquer le ban, et rien ne le signale.
 	install -d debian/secubox-waf-ng/etc/sudoers.d
 	install -m 0440 sudoers/secubox-waf-ng debian/secubox-waf-ng/etc/sudoers.d/secubox-waf-ng
+	# Composant absorbé : waf (#2050)
+	install -D -m 0644 composants/waf/logrotate.d/secubox-waf \
+		debian/secubox-waf-ng/etc/logrotate.d/secubox-waf
+	# API backend
+	install -d debian/secubox-waf-ng/usr/lib/secubox/waf
+	cp -r composants/waf/api debian/secubox-waf-ng/usr/lib/secubox/waf/
+	# Web frontend
+	install -d debian/secubox-waf-ng/usr/share/secubox/www/waf
+	cp -r composants/waf/www/waf/. debian/secubox-waf-ng/usr/share/secubox/www/waf/
+	# Menu integration
+	install -d debian/secubox-waf-ng/usr/share/secubox/menu.d
+	[ -d composants/waf/menu.d ] && cp -r composants/waf/menu.d/. debian/secubox-waf-ng/usr/share/secubox/menu.d/ || true
+	# WAF rules and composants/waf/config
+	install -d debian/secubox-waf-ng/usr/share/secubox/waf
+	[ -d composants/waf/config ] && cp -r composants/waf/config/. debian/secubox-waf-ng/usr/share/secubox/waf/ || true
+	# #1080 phase G — profils de service par vhost, livrés en CONFFILE /etc
+	# (dpkg conserve les éditions de l'opérateur ; le fichier est possédé par le
+	# paquet, contrairement à waf-rules.json qui reste opérateur-seedé). Le
+	# daemon (sbxwaf, unité secubox-waf-ng) le lit via --vhost-profiles.
+	install -d debian/secubox-waf-ng/etc/secubox/waf
+	[ -f composants/waf/config/vhost_profiles.json ] && install -m 0644 composants/waf/config/vhost_profiles.json \
+		debian/secubox-waf-ng/etc/secubox/waf/vhost_profiles.json || true
+	# wafctl control script
+	install -d debian/secubox-waf-ng/usr/sbin
+	[ -f composants/waf/scripts/wafctl ] && install -m 755 composants/waf/scripts/wafctl debian/secubox-waf-ng/usr/sbin/ || true
+	# Mise à jour des règles livrées sans perdre les générées (#1858)
+	install -m 755 composants/waf/scripts/waf-rules-sync debian/secubox-waf-ng/usr/sbin/waf-rules-sync
+	# Sudoers : `secubox` peut purger le cache média du WAF (wafctl purge-cache).
+	# Conffile /etc/sudoers.d (0440) — permet aux tâches de contenu tournant sous
+	# `secubox` (metablog-sync) de rafraîchir le cache après une synchro git.
+	install -d debian/secubox-waf-ng/etc/sudoers.d
+	install -m 0440 composants/waf/sudoers/secubox-waf debian/secubox-waf-ng/etc/sudoers.d/secubox-waf
+	# Log directory
+	install -d debian/secubox-waf-ng/var/log/secubox/waf
+	# Modular composants/waf/nginx composants/waf/config
+	install -d debian/secubox-waf-ng/etc/nginx/secubox.d
+	[ -f composants/waf/nginx/waf.conf ] && cp composants/waf/nginx/waf.conf debian/secubox-waf-ng/etc/nginx/secubox.d/ || true
+	# #1227 : vhost dedie du tableau de bord. Depose dans sites-available ;
+	# c'est le postinst qui l'active, apres avoir seme son filtre d'exposition.
+	install -d debian/secubox-waf-ng/etc/nginx/sites-available
+	install -m 0644 composants/waf/nginx/waf-vhost.conf \
+	  debian/secubox-waf-ng/etc/nginx/sites-available/waf.gk2.secubox.in.conf
+	# Example haproxy-routes.json
+	install -d debian/secubox-waf-ng/usr/share/doc/secubox-waf/examples
+	[ -f composants/waf/config/haproxy-routes.json.example ] && cp composants/waf/config/haproxy-routes.json.example debian/secubox-waf-ng/usr/share/doc/secubox-waf/examples/ || true
+	install -D -m 755 composants/waf/debian/postinst debian/secubox-waf-ng/usr/lib/secubox/waf-ng/maintscripts/waf.postinst
+	install -D -m 755 composants/waf/debian/prerm debian/secubox-waf-ng/usr/lib/secubox/waf-ng/maintscripts/waf.prerm
+	install -D -m 644 composants/waf/debian/secubox-waf.service debian/secubox-waf-ng/usr/lib/systemd/system/secubox-waf.service
 
 override_dh_installsystemd:
 	# #896 reconcile: ship the SINGLE hardened unit (secubox-waf-ng.service,

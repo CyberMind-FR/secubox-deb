@@ -1,3 +1,9 @@
+secubox-waf (1.10.44-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : waf est un composant de secubox-waf-ng >= 1.19.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-waf (1.10.43-1~bookworm1) bookworm; urgency=medium
 
   * Page « Evolution et efficacite » : badge d'etat reel (« actif · N bans en cours », « injoignable ») a la place du « en ecoute » fige, carte du monde des origines (compacte) avec top pays, et « Efficacite par categorie » repliee par defaut avec une ligne de synthese.

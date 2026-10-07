@@ -105,6 +105,7 @@ hors-arbre:
   - secubox-mirror  # transitoire → secubox-cdn (#2050)
   - secubox-vortex-dns  # RETIRÉ (#2050, D3) : paquet vide, jamais branché au résolveur
   - secubox-nettweak  # transitoire → secubox-qos (#2050)
+  - secubox-waf  # transitoire → secubox-waf-ng (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -402,7 +403,6 @@ niveau: service
 label: Pare-feu applicatif
 description: "Moteur sbxwaf et son interface, listes de blocage, pare-feu à flux de menaces."
 requiert:
-  - secubox-waf
   - secubox-waf-ng
 recommande:
   - secubox-ipblock

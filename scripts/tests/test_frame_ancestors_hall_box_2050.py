@@ -9,7 +9,7 @@ from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[2]
 VHOSTS = [
-    "packages/secubox-waf/nginx/waf-vhost.conf",
+    "packages/secubox-waf-ng/composants/waf/nginx/waf-vhost.conf",
     "packages/secubox-waf-ng/nginx/actor.gk2.secubox.in.conf",
     "packages/secubox-metablogizer/nginx/metablogizer.vhost.conf",
     "packages/sbxos-audio-mood/nginx/sbxos-audio-mood.conf",
