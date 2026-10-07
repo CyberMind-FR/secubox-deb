@@ -1,25 +1,15 @@
 Source: secubox-waf
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
-Homepage: https://github.com/CyberMind-FR/secubox-deb
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-waf
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.40~), lxc, jq, curl
-Recommends: secubox-haproxy
-Description: SecuBox — API et interface du pare-feu applicatif (wafctl, tableau de bord)
- LA MOITIE VISIBLE DU PARE-FEU. Ce paquet ne filtre rien : il MONTRE et il
- COMMANDE. L'inspection et le bannissement sont l'affaire de secubox-waf-ng,
- qui livre le moteur Go sbxwaf.
- .
- Contenu : l'API /api/v1/waf/* (statistiques, menaces, bannissements, pays,
- detections comportementales, inventaire RGPD des temoins), le tableau de bord
- et sa vue /micro, et l'outil wafctl par lequel l'interface fait bannir.
- .
- Ne pas confondre les trois paquets du pare-feu :
-  - secubox-waf-ng    le MOTEUR Go (sbxwaf) — inspecte, decide, bannit
-  - secubox-waf       l'API et l'interface — montre et commande
-  - secubox-toolbox-ng les autres outils Go du parc, PAS le pare-feu
+Depends: ${misc:Depends}, secubox-waf-ng (>= 1.19.0)
+Description: transitional package, replaced by secubox-waf-ng
+ waf is now a component of secubox-waf-ng. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

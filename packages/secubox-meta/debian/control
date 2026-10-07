@@ -336,7 +336,6 @@ Description: SecuBox — service « Maillage »
 Package: secubox-service-waf
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-waf,
          secubox-waf-ng
 Recommends: secubox-ipblock,
          secubox-toolbox-ng

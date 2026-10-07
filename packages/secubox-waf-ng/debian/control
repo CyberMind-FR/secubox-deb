@@ -12,7 +12,10 @@ Architecture: any
 Depends: ${misc:Depends},
  secubox-core (>= 1.5.40~),
  adduser,
- apparmor
+ apparmor,
+ lxc,
+ jq,
+ curl
 # SBXWAF PREND LA PLACE DE DEUX PAQUETS DECOMMISSIONNES (#1319).
 #
 #   secubox-mitmproxy  l'inspection WAF, qui vit desormais dans sbxwaf (Go,
@@ -34,11 +37,15 @@ Conflicts: secubox-mitmproxy, secubox-crowdsec
 # qu'avec `X-Sbx-Vue: complete`, que seul l'agrégateur pose après sa garde
 # d'administration. Un agrégateur plus ancien ne le pose pas : la console
 # Renseignement recevrait la vue réduite. On exige donc l'agrégateur qui le pose.
-Breaks: secubox-aggregator (<< 0.3.3~)
-Replaces: secubox-mitmproxy, secubox-crowdsec
+Breaks: secubox-aggregator (<< 0.3.3~),
+ secubox-waf (<< 1.10.44~)
+Replaces: secubox-mitmproxy,
+ secubox-crowdsec,
+ secubox-waf (<< 1.10.44~)
+Recommends: secubox-haproxy
 Description: SecuBox-Deb — MOTEUR du pare-feu applicatif (sbxwaf, Go, natif hote)
- LE MOTEUR. Il inspecte, decide et bannit ; l'interface qui le montre est
- dans secubox-waf.
+ LE MOTEUR ET SON INTERFACE. sbxwaf inspecte, decide et bannit ; l'API Python (wafctl, tableau de bord) qui le montre est un composant
+ de ce paquet depuis 1.19.0 (#2050) : deux processus, deux comptes, deux unites.
  .
  SA SOURCE N'EST PAS ICI : elle vit dans packages/secubox-toolbox-ng/cmd/sbxwaf
  — un seul module Go pour tout le parc, un vendor/ partage. Ce paquet compile

@@ -46,7 +46,7 @@ Depends: ${misc:Depends},
          secubox-threatmesh,
          secubox-threats,
          secubox-toolbox,
-         secubox-waf,
+         secubox-waf-ng,
          secubox-health,
          secubox-wazuh
 Description: SecuBox — profil « defense » : La couche de defense : WAF, listes de blocage, garde DNS

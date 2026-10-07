@@ -19,5 +19,8 @@ case "$1" in
 esac
 
 #DEBHELPER#
-
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/waf-ng/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "waf-ng : prerm de $(basename "$_s") en échec" >&2; }
+done
 exit 0

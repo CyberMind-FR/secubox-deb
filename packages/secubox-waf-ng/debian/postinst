@@ -252,5 +252,8 @@ EXPO
 esac
 
 #DEBHELPER#
-
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/waf-ng/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "waf-ng : postinst de $(basename "$_s") en échec" >&2; }
+done
 exit 0

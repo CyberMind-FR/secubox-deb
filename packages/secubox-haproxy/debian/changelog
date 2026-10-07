@@ -1,3 +1,9 @@
+secubox-haproxy (1.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-waf-ng au lieu de secubox-waf (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-haproxy (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-exposure (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
