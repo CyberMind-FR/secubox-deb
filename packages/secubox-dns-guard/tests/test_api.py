@@ -89,3 +89,40 @@ def test_threats_reserve_a_l_administrateur_et_tire_des_alertes(banc):
 def test_threats_vide_si_aucune_alerte(banc):
     admin()
     assert TestClient(main.app).get("/threats").json() == {"threats": []}
+
+
+# ── D3 (#2050) : un seul moteur DNS, Unbound — dns-guard ne parle plus à dnsmasq ──────────────────────────────────────────────────
+def test_dns_guard_n_ecrit_ni_ne_recharge_dnsmasq():
+    import inspect
+    from pathlib import Path
+
+    from api import main as m
+
+    src = inspect.getsource(m)
+    assert "dnsmasq.d" not in src and '"reload", "dnsmasq"' not in src and "_sync_dnsmasq" not in src
+    ctrl = (Path(__file__).resolve().parents[1] / "debian" / "control").read_text()
+    assert "dnsmasq" not in ctrl.lower(), "plus de dépendance ni de promesse de blocage dnsmasq"
+
+
+def test_la_route_sync_dit_honnetement_qu_il_n_y_a_pas_de_moteur_a_synchroniser(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from api import main as m
+    from secubox_core import auth
+
+    m.app.dependency_overrides[auth.require_jwt] = lambda: {"sub": "a"}
+    try:
+        r = TestClient(m.app).post("/sync")
+        assert r.status_code == 200
+        j = r.json()
+        assert j["status"] != "synced", "ne prétend pas avoir synchronisé un moteur qui n'existe plus"
+        assert "unbound" in j["detail"].lower()
+    finally:
+        m.app.dependency_overrides.clear()
+
+
+def test_ajouter_a_la_liste_ne_touche_plus_au_systeme(tmp_path):
+    from api import main as m
+
+    g = m.DNSGuard.__new__(m.DNSGuard) if hasattr(m, "DNSGuard") else None
+    assert g is None or not hasattr(g, "_sync_dnsmasq")

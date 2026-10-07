@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 """Métriques du panneau DNS Guard (#1978) : d'après le puits DNS et les compteurs de `secubox-adguard-dnsfeed` (la source de #1963).
 
-Le blocage réel vit dans Unbound ; la liste propre à ce module (dnsmasq) n'est pas celle qui bloque sur la box. Un chiffre ABSENT est dit absent
+Le blocage réel vit dans Unbound ; la liste propre à ce module ne bloque rien par elle-même. Un chiffre ABSENT est dit absent
 (None), jamais un zéro qui laisserait croire qu'il n'y a rien. Les bases d'ad-guard sont ouvertes en lecture seule."""
 import json
 import sqlite3
