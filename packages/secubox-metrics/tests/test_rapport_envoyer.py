@@ -114,3 +114,9 @@ def test_envoyer_sans_note_pas_de_section(monkeypatch):
 
     corps = FauxSMTP.instances[-1].sent.get_body(preferencelist=("plain",)).get_content()
     assert "— Note —" not in corps
+
+
+def test_delai_smtp_couvre_le_reveil_a_froid_de_clamav():
+    """Le scan antivirus peut tenir la transaction ~120 s : un délai de 20 s coupait l'envoi alors que le courrier arrivait."""
+    from api import rapport
+    assert rapport.SMTP_DELAI_S >= 150

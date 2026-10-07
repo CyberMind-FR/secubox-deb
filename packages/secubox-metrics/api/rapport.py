@@ -43,6 +43,9 @@ _SUBST = {
 }
 
 
+SMTP_DELAI_S = 200  # > réveil à froid du LXC clamav (~120 s) ; tâche de fond, personne n'attend
+
+
 def _txt(v) -> str:
     """Rend une chaine que la police de base sait ecrire."""
     s = str(v)
@@ -620,7 +623,10 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
     msg.add_attachment(pdf, maintype="application", subtype="pdf",
                        filename=f"secubox-frequentation-{horodatage}.pdf")
 
-    with smtplib.SMTP(c["smtp_hote"], int(c["smtp_port"]), timeout=20) as s:
+    # Le scan antivirus du relais peut attendre le réveil du LXC clamav (jusqu'à ~120 s au premier message
+    # après un long repos) : la transaction SMTP reste ouverte autant de temps. 20 s coupaient l'envoi
+    # (« Connection unexpectedly closed: timed out »), alors que le courrier arrivait quand même.
+    with smtplib.SMTP(c["smtp_hote"], int(c["smtp_port"]), timeout=SMTP_DELAI_S) as s:
         user = c.get("smtp_user")
         if user:
             # Le relais interne presente souvent un certificat auto-signe : on
