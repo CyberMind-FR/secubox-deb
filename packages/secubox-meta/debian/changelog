@@ -1,3 +1,9 @@
+secubox-meta (0.1.34-1~bookworm1) bookworm; urgency=medium
+
+  * Listes de blocage : cyberfeed et vortex-firewall retires des listes (absorbes par ipblock, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 14:00:00 +0200
+
 secubox-meta (0.1.33-1~bookworm1) bookworm; urgency=medium
 
   * Tunnels : proxypac et macro retires des listes (absorbes par tor, #2050).

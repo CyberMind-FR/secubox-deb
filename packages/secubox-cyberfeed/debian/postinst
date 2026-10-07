@@ -1,26 +1,13 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Transitoire (#2050) : l'unité secubox-cyberfeed.service est désormais livrée par secubox-ipblock. L'ancien prerm
+# de la version précédente l'arrête à la mise à jour ; on la rétablit une fois l'absorbant configuré.
 set -e
-if [ "$1" = "configure" ]; then
-    # Create required directories
-    mkdir -p /etc/secubox/cyberfeed
-    mkdir -p /var/lib/secubox/cyberfeed/cache
-    chown -R secubox:secubox /var/lib/secubox/cyberfeed 2>/dev/null || true
-
-    # Install nginx config if not already installed via package
-    if [ -d /etc/nginx/secubox.d ] && [ ! -f /etc/nginx/secubox.d/cyberfeed.conf ]; then
-        cat > /etc/nginx/secubox.d/cyberfeed.conf << 'EOF'
-# /etc/nginx/secubox.d/cyberfeed.conf
-location /api/v1/cyberfeed/ {
-    proxy_pass http://unix:/run/secubox/cyberfeed.sock:/;
-    include /etc/nginx/snippets/secubox-proxy.conf;
-}
-EOF
-        nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
-    fi
-
-    systemctl daemon-reload
-    systemctl enable secubox-cyberfeed.service || true
-    systemctl start secubox-cyberfeed.service || true
-fi
 #DEBHELPER#
+if [ "$1" = configure ] && [ -e /usr/lib/systemd/system/secubox-cyberfeed.service -o -e /lib/systemd/system/secubox-cyberfeed.service ]; then
+    if [ "$(systemctl is-enabled secubox-cyberfeed.service 2>/dev/null)" != masked ]; then
+        systemctl enable secubox-cyberfeed.service >/dev/null 2>&1 || true
+        systemctl start secubox-cyberfeed.service >/dev/null 2>&1 || true
+    fi
+fi
 exit 0

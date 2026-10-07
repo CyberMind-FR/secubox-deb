@@ -1,0 +1,37 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Create required directories
+    mkdir -p /etc/secubox/vortex-firewall
+    mkdir -p /var/lib/secubox/vortex-firewall/ipsets
+    mkdir -p /etc/nftables.d
+    chown -R secubox:secubox /var/lib/secubox/vortex-firewall 2>/dev/null || true
+
+    # Install nginx config
+    if [ -d /etc/nginx/secubox.d ]; then
+        cat > /etc/nginx/secubox.d/vortex-firewall.conf << 'EOF'
+# /etc/nginx/secubox.d/vortex-firewall.conf
+location /api/v1/vortex-firewall/ {
+    proxy_pass http://unix:/run/secubox/vortex-firewall.sock:/;
+    include /etc/nginx/snippets/secubox-proxy.conf;
+}
+EOF
+        nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    fi
+
+    # Ensure the system nftables.service actually loads /etc/nftables.conf at
+    # boot. That file holds the LXC NAT (`ip saddr 10.100.0.0/24 oif lan0
+    # masquerade`) and `include "/etc/nftables.d/*.nft"`. On the board it was
+    # found masked (symlink to /dev/null), so after every reboot the kernel had
+    # no NAT and all 10.100.0.0/24 LXCs lost outbound (#150). Unmask + enable so
+    # it loads at boot.
+    # Not force-started here: a live `nft -f` flushes the ruleset and would
+    # momentarily drop live tables — boot-time loading is the fix.
+    systemctl unmask nftables.service 2>/dev/null || true
+    systemctl enable nftables.service 2>/dev/null || true
+
+    systemctl daemon-reload
+    systemctl enable secubox-vortex-firewall.service || true
+    systemctl start secubox-vortex-firewall.service || true
+fi
+exit 0

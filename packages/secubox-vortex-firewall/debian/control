@@ -1,15 +1,15 @@
 Source: secubox-vortex-firewall
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-vortex-firewall
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
-Description: SecuBox Vortex Firewall — nftables threat-feed enforcer
- Subscribes to threat feeds (Spamhaus, AbuseIPDB, FireHOL, internal
- SecuBox blocklists) and compiles them into nftables sets for
- inline drop/log enforcement. Complements secubox-vortex-dns (which
- handles DNS-layer blocking via RPZ).
+Depends: ${misc:Depends}, secubox-ipblock (>= 1.2.0)
+Description: transitional package, replaced by secubox-ipblock
+ vortex-firewall is now a component of secubox-ipblock. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

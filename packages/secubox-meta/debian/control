@@ -351,7 +351,6 @@ Depends: ${misc:Depends},
          secubox-waf,
          secubox-waf-ng
 Recommends: secubox-ipblock,
-         secubox-vortex-firewall,
          secubox-toolbox-ng
 Description: SecuBox — service « Pare-feu applicatif »
  Moteur sbxwaf et son interface, listes de blocage, pare-feu à flux de menaces.
@@ -377,7 +376,6 @@ Depends: ${misc:Depends},
          secubox-security-posture,
          secubox-threats
 Recommends: secubox-cve-triage,
-         secubox-cyberfeed,
          secubox-threatmesh,
          secubox-antirootkit
 Suggests: secubox-ad-guard,

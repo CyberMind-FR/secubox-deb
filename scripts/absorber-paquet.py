@@ -312,6 +312,12 @@ Description: transitional package, replaced by secubox-{absorbant}
                     continue
                 vus.add(cle)
                 contrainte = f" (>= {nv_a})" if mo.group(1) in ("Depends", "Pre-Depends") else ""
+                if "|" in i and n_ == f"secubox-{ancien}":
+                    # une alternative (`a | b`) : on ne remplace que la branche concernée, jamais la liste entière
+                    alts = [x.strip() for x in i.split("|")]
+                    alts = [f"secubox-{absorbant}{contrainte}" if nom_pkg(x) == f"secubox-{ancien}" else x for x in alts]
+                    neuf.append(" | ".join(dict.fromkeys(alts)))
+                    continue
                 neuf.append(f"secubox-{absorbant}{contrainte}" if n_ == f"secubox-{ancien}" else i)
             return f"{mo.group(1)}: " + ",\n ".join(neuf) + "\n"
         n = champ_re.sub(reecrire, t)

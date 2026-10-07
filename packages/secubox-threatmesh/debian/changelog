@@ -1,3 +1,9 @@
+secubox-threatmesh (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-ipblock au lieu de secubox-vortex-firewall (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-threatmesh (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Durcissement de l'unite (#2050, vague 0) : NoNewPrivileges=yes, ProtectHome,
