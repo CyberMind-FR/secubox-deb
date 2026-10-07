@@ -137,3 +137,12 @@ def test_la_box_introuvable_dans_les_hotes_n_ecrit_rien(tmp_path):
     with pytest.raises(c.ErreurFreebox):
         svc.appliquer_autoconfig(["ip_fixe"], IP)
     assert not [a for a in f.appels if a[0] in ("PUT", "POST") and "login" not in a[1]]
+
+
+def test_pas_de_sequence_d_echappement_dans_le_html_visible():
+    # « \\u2019 » écrit dans le HTML (hors script) s'affiche tel quel : l'apostrophe typographique doit être le caractère lui-même
+    import re
+    from pathlib import Path
+    html = (Path(__file__).resolve().parents[1] / "www" / "freebox" / "index.html").read_text()
+    visible = html[:html.index("<script>")]
+    assert not re.search(r"\\u[0-9a-fA-F]{4}", visible), "séquence \\uXXXX visible dans le HTML"

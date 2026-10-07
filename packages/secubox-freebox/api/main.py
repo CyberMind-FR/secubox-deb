@@ -31,7 +31,7 @@ from . import client as C
 from . import magasin as M
 from . import service as S
 
-app = FastAPI(title="SecuBox Freebox", version="0.4.0")
+app = FastAPI(title="SecuBox Freebox", version="0.4.1")
 
 CHEMIN_MAGASIN = os.environ.get("SECUBOX_FREEBOX_MAGASIN", "/var/lib/secubox/freebox/app.json")
 HOTE = os.environ.get("SECUBOX_FREEBOX_HOTE", C.HOTE_DEFAUT)
