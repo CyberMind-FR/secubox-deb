@@ -285,12 +285,14 @@
       return '<div class="bande"><span class="pl">'+p.de+'–'+p.a+'</span><span class="bar"><i style="width:'+Math.round(par[i]*100/max)+'%;background:'+p.c+'"></i></span>'
         +'<span class="nm" style="color:'+p.c+'">'+esc(p.nom)+'</span><span class="n">'+par[i]+'</span></div>';}).join('');
   }
+  // L'heure vient de l'horodatage (UTC) et s'affiche dans le fuseau du navigateur ; à défaut, l'heure texte du serveur.
+  function heureLocale(e){var ts=num(e.ts);if(!ts)return e.heure||'';try{return new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});}catch(x){return e.heure||'';}}
   function rendEven(){
     var box=el('even'),r=(APERCU&&APERCU.recents)||[];
     if(!r.length){box.innerHTML='<div class="vide">'+(ACTS.sansSession?'Ouvre une session pour voir les événements.':'Aucun événement récent.')+'</div>';return;}
     box.innerHTML='<table class="ev"><thead><tr><th>Heure</th><th>Acteur</th><th>Événement</th><th>Module</th><th>Score</th></tr></thead><tbody>'
       +r.map(function(e){var p=palier(e.score);
-        return '<tr><td>'+esc(e.heure)+'</td><td class="ac">'+esc(e.acteur||'—')+'</td><td>'+esc(e.type)+'</td><td>'+esc(e.module)+'</td><td class="sc" style="color:'+p.c+'">'+num(e.score)+'</td></tr>';}).join('')
+        return '<tr><td>'+esc(heureLocale(e))+'</td><td class="ac">'+esc(e.acteur||'—')+'</td><td>'+esc(e.type)+'</td><td>'+esc(e.module)+'</td><td class="sc" style="color:'+p.c+'">'+num(e.score)+'</td></tr>';}).join('')
       +'</tbody></table>';
   }
   function rendList(){
