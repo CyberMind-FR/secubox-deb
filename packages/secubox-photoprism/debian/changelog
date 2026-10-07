@@ -1,3 +1,9 @@
+secubox-photoprism (1.3.12-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-auth au lieu de secubox-oidc (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-photoprism (1.3.11-1~bookworm1) bookworm; urgency=low
 
   * install-lxc.sh : retrait du nettoyage de l'ancienne installation podman (#1743). Vérifié le 03/10 : aucun conteneur

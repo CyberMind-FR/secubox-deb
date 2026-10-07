@@ -1,31 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_install:
-	# API
-	install -d debian/secubox-users/usr/lib/secubox/users
-	cp -r api debian/secubox-users/usr/lib/secubox/users/
-	# CLI controller
-	install -d debian/secubox-users/usr/sbin
-	install -m 755 sbin/usersctl debian/secubox-users/usr/sbin/
-	# Comptes dans les services (#1375) : helper root + sudoers exact + réglages.
-	install -m 755 sbin/secubox-usersctl-services debian/secubox-users/usr/sbin/
-	install -D -m 0440 sudoers/secubox-users debian/secubox-users/etc/sudoers.d/secubox-users
-	install -D -m 0644 conf/users.toml debian/secubox-users/etc/secubox/users.toml
-	# Frontend
-	install -d debian/secubox-users/usr/share/secubox/www/users
-	cp -r www/users/. debian/secubox-users/usr/share/secubox/www/users/
-	# Menu
-	install -d debian/secubox-users/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-users/usr/share/secubox/menu.d/ || true
-	# Nginx config
-	install -d debian/secubox-users/etc/nginx/secubox.d
-	[ -f nginx/users.conf ] && cp nginx/users.conf debian/secubox-users/etc/nginx/secubox.d/ || true
-	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
-	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
-	# elle n etait jamais lue.
-	install -d debian/secubox-users/etc/nginx/secubox-routes.d
-	[ -f nginx/users.conf ] && cp nginx/users.conf debian/secubox-users/etc/nginx/secubox-routes.d/ || true
-	# Users data directory
-	install -d debian/secubox-users/etc/secubox

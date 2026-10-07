@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 
 # Make both `secubox_core` and the package's own api/ importable.
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "common"))
-sys.path.insert(0, str(ROOT / "packages" / "secubox-users"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-auth" / "composants" / "users"))
 
 
 @pytest.fixture

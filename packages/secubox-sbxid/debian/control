@@ -1,25 +1,15 @@
 Source: secubox-sbxid
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-sbxid
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.51~), python3, python3-fastapi, python3-uvicorn, python3-cryptography, python3-qrcode, python3-pyotp,
-         secubox-core (>= 1.5.51~), secubox-aggregator
-Replaces: secubox-acces (<< 1.7.0~)
-Breaks: secubox-acces (<< 1.7.0~)
-Recommends: secubox-webos (>= 1.0.338), secubox-users (>= 1.8.6)
-Description: SecuBox — SBX Identity Manager (identité SBX OS unifiée)
- Une identité par personne (user_uuid), prouvée par ses appareils (clé
- P-256 non exportable), des rôles qui sont des profils de capacités (jamais
- SSH, sudo ou root), des certificats à double signature (appareil + nœud),
- l'administration SBX OS et le nœud du maillage (Identity Mesh).
- .
- Servi par le Hall : https://hall.<nœud>/identite/ — l'origine où vivent
- les clés d'appareil. identity.<nœud> y redirige.
- .
- Absorbe secubox-acces (admission des appareils, défi signé, sessions) :
- mêmes chemins d'API et de pages qu'avant.
+Depends: ${misc:Depends}, secubox-auth (>= 1.3.0)
+Description: transitional package, replaced by secubox-auth
+ sbxid is now a component of secubox-auth. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

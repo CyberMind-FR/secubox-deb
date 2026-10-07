@@ -96,5 +96,4 @@ PY
     fi
     ;;
 esac
-#DEBHELPER#
 exit 0

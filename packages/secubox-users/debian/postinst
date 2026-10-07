@@ -1,74 +1,13 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Transitoire (#2050) : l'unité secubox-users.service est désormais livrée par secubox-auth. L'ancien prerm
+# de la version précédente l'arrête à la mise à jour ; on la rétablit une fois l'absorbant configuré.
 set -e
-
-case "$1" in
-    configure)
-        # Create secubox system user/group if missing (idempotent, matches sibling packages)
-        getent group secubox >/dev/null || groupadd --system secubox
-        getent passwd secubox >/dev/null || useradd --system --gid secubox \
-            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
-        install -d -o secubox -g secubox -m 755 /etc/secubox
-
-        # Run v1 → v2 migration (idempotent).
-        #
-        # NOT tolerant of failure (#945). This step rewrites the credential
-        # store; swallowing its exit code with `|| echo WARN` is how an upgrade
-        # can leave a box with no password hashes and still report success.
-        # A failure here must stop the install so the operator sees it while
-        # the pre-migrate snapshot is still fresh.
-        python3 - <<'PYEOF'
-import sys
-sys.path.insert(0, '/usr/lib/secubox/users')
-from api.migrate_v1_to_v2 import migrate
-from pathlib import Path
-migrate(Path('/etc/secubox/users.json'), auth_toml_path=Path('/etc/secubox/auth.toml'))
-PYEOF
-
-        # Seed default users (admin + <hostname>) if missing
-        HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
-        for U in admin "$HOSTNAME_SHORT"; do
-            [ -n "$U" ] || continue
-            SBX_SEED_USER="$U" python3 - <<'PYEOF' || echo "WARN: seed for $U failed"
-import json
-import os
-import sys
-from pathlib import Path
-
-username = os.environ['SBX_SEED_USER']
-p = Path('/etc/secubox/users.json')
-if not p.exists():
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"version": 2, "users": [], "groups": []}))
-doc = json.loads(p.read_text())
-if not any(u['username'] == username for u in doc['users']):
-    sys.path.insert(0, '/usr/lib/secubox/users')
-    from api.engine import Engine
-    Engine(users_path=p).create_user(username, email=None, role='admin')
-    print('seeded user:', username)
-PYEOF
-        done
-
-        # Ownership + permissions on users.json + auth.toml (Phase 7 #498).
-        # Both files are read by the aggregator (running as `secubox`) via
-        # secubox_core.user_store. Without root:secubox 0640 they're
-        # invisible to non-root services and every login returns
-        # "Identifiants incorrects" because user_store falls through to
-        # the auth.toml fallback which is then ALSO unreadable.
-        if [ -f /etc/secubox/users.json ]; then
-            chown root:secubox /etc/secubox/users.json
-            chmod 0640 /etc/secubox/users.json
-        fi
-        if [ -f /etc/secubox/auth.toml ]; then
-            chown root:secubox /etc/secubox/auth.toml
-            chmod 0640 /etc/secubox/auth.toml
-        fi
-
-        # Restart the service so it picks up the new users.json
-        systemctl daemon-reload 2>/dev/null || true
-        systemctl enable secubox-users.service 2>/dev/null || true
-        systemctl restart secubox-users.service 2>/dev/null || true
-        ;;
-esac
-
 #DEBHELPER#
+if [ "$1" = configure ] && [ -e /usr/lib/systemd/system/secubox-users.service -o -e /lib/systemd/system/secubox-users.service ]; then
+    if [ "$(systemctl is-enabled secubox-users.service 2>/dev/null)" != masked ]; then
+        systemctl enable secubox-users.service >/dev/null 2>&1 || true
+        systemctl start secubox-users.service >/dev/null 2>&1 || true
+    fi
+fi
 exit 0

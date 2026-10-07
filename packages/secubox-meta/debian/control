@@ -194,8 +194,7 @@ Depends: ${misc:Depends},
          secubox-webos,
          secubox-sbxos,
          secubox-portal,
-         secubox-hub,
-         secubox-sbxid
+         secubox-hub
 Recommends: secubox-surf,
          sbxos-audio-mood,
          secubox-ephemeride
@@ -243,11 +242,9 @@ Description: SecuBox — service « Noyau »
 Package: secubox-service-identite
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-auth,
-         secubox-users
+         secubox-auth
 Recommends: secubox-vault,
-         secubox-avatar,
-         secubox-oidc
+         secubox-avatar
 Suggests: secubox-zkp
 Description: SecuBox — service « Identité »
  Comptes, authentification, identité décentralisée, coffre de secrets.

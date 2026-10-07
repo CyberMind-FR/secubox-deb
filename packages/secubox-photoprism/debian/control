@@ -9,7 +9,7 @@ Package: secubox-photoprism
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.5.39~), python3-uvicorn | python3-pip,
  lxc, lxc-templates, nftables, openssl, python3-yaml
-Recommends: secubox-oidc
+Recommends: secubox-auth
 Description: PhotoPrism photo management for SecuBox (native LXC)
  SecuBox module for a PhotoPrism photo server installed natively (official
  build from dl.photoprism.app) inside a dedicated Debian LXC, running as its

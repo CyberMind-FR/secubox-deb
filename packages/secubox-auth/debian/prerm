@@ -12,3 +12,8 @@ esac
 systemctl stop    secubox-auth.service 2>/dev/null || true
 systemctl disable secubox-auth.service 2>/dev/null || true
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/auth/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "auth : prerm de $(basename "$_s") en échec" >&2; }
+done
+exit 0

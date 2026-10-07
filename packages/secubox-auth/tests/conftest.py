@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "common"))
 # secubox-users must be reachable for the engine/totp modules, but secubox-auth's
 # own api/ package must take priority for `from api import …` in auth tests.
 # Insert auth LAST so it lands at index 0 (highest priority).
-sys.path.insert(0, str(ROOT / "packages" / "secubox-users"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-auth" / "composants" / "users"))
 sys.path.insert(0, str(ROOT / "packages" / "secubox-auth"))
 
 

@@ -1,3 +1,9 @@
+secubox-sbxos (0.6.0~aurora15-1~bookworm1) bookworm; urgency=medium
+
+  * Recommande secubox-auth (>= 1.4.0) au lieu de secubox-users (absorbe par auth, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 19:30:00 +0200
+
 secubox-sbxos (0.6.0~aurora14-1~bookworm1) bookworm; urgency=medium
 
   * Voix réactive (#1656) : coupure 1 s après la parole, états visibles,

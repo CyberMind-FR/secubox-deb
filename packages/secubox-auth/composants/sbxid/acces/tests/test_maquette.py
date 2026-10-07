@@ -7,9 +7,9 @@
 import re
 from pathlib import Path
 
-RACINE = Path(__file__).resolve().parents[4]
+RACINE = Path(__file__).resolve().parents[6]
 DOC = RACINE / "docs" / "design" / "sbxos-identite-maquette.html"
-SERVIE = RACINE / "packages" / "secubox-sbxid" / "acces" / "www" / "acces" / "maquette.html"
+SERVIE = RACINE / "packages" / "secubox-auth" / "composants" / "sbxid" / "acces" / "www" / "acces" / "maquette.html"
 
 
 def test_les_deux_copies_sont_identiques():

@@ -1,3 +1,9 @@
+secubox-meta (0.1.37-1~bookworm1) bookworm; urgency=medium
+
+  * Identite : users, sbxid et oidc retires des listes (absorbes par auth, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 18:00:00 +0200
+
 secubox-meta (0.1.36-1~bookworm1) bookworm; urgency=medium
 
   * Maillage : openpgp et meshname retires des listes (absorbes par annuaire et p2p, #2050).

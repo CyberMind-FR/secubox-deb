@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-RACINE = Path(__file__).resolve().parents[4]
+RACINE = Path(__file__).resolve().parents[6]
 sys.path.insert(0, str(RACINE / "common"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

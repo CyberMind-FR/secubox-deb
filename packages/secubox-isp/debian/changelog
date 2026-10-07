@@ -1,3 +1,9 @@
+secubox-isp (1.2.11-1~bookworm1) bookworm; urgency=medium
+
+  * users retire, secubox-auth (>= 1.4.0) l'absorbe avec sbxid et oidc (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 18:00:00 +0200
+
 secubox-isp (1.2.10-1~bookworm1) bookworm; urgency=medium
 
   * meshname retire, secubox-p2p (>= 1.12.0) l'absorbe (#2050).
