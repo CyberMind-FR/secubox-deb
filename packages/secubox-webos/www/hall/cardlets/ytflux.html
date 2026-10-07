@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — carte « Flux YouTube » du Hall (secubox-ytsas).
+
+  Les listes que YouTube tient pour le compte de la personne — à regarder plus tard, propositions, abonnements,
+  historique — lues par YouTube SAS avec les cookies du coffre. LECTURE SEULE. Chaque vidéo : vignette (servie par la box),
+  titre, chaîne, durée ; « ▶ » ouvre YouTube, « ⬇ » l'ajoute au SAS (bibliothèque de la box).
+  Tout texte venu du serveur passe par textContent : aucune injection HTML.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flux YouTube</title>
+<style>
+  :root{ --fond:#14181f; --fond2:#1c222d; --texte:#eef1f6; --muted:#a3adbd; --line:rgba(255,255,255,.14); --verre:rgba(255,255,255,.07);
+         --accent:#ff5a4f; --ok:#46d38b; --alerte:#ffb454; --erreur:#ff7a7a; }
+  :root[data-theme="light"]{ color-scheme:light; --fond:#f4f6fa; --fond2:#e4e9f2; --texte:#16202f; --muted:#4b5a73; --line:rgba(22,32,47,.16);
+         --verre:rgba(255,255,255,.7); --accent:#c4302b; --ok:#0b7d45; --alerte:#8a5a00; --erreur:#b3261e; }
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ color-scheme:light; --fond:#f4f6fa; --fond2:#e4e9f2; --texte:#16202f;
+         --muted:#4b5a73; --line:rgba(22,32,47,.16); --verre:rgba(255,255,255,.7); --accent:#c4302b; --ok:#0b7d45; --alerte:#8a5a00; --erreur:#b3261e; } }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:linear-gradient(160deg,var(--fond),var(--fond2));color:var(--texte);font:14px/1.35 "IBM Plex Sans",Inter,system-ui,sans-serif;overflow:auto}
+  .flux{display:flex;flex-direction:column;gap:.5rem;padding:.5rem .6rem;min-height:100%}
+  .onglets{display:flex;gap:.3rem;flex-wrap:wrap;padding-right:50px}
+  .onglet{min-height:36px;padding:.2rem .7rem;border-radius:999px;border:1px solid var(--line);background:var(--verre);color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  .onglet:focus-visible,.act:focus-visible,.btn:focus-visible{outline:2px solid #5cc2ff;outline-offset:2px}
+  .etat{font-size:.74rem;color:var(--muted);display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+  .etat b{color:var(--alerte);font-weight:600}
+  .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.55rem}
+  .video{display:flex;flex-direction:column;background:var(--verre);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .vign{position:relative;aspect-ratio:16/9;background:#000}
+  .vign img{width:100%;height:100%;object-fit:cover;display:block}
+  .duree{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.78);color:#fff;font-size:.68rem;padding:0 .3rem;border-radius:4px;font-variant-numeric:tabular-nums}
+  .corps{padding:.35rem .45rem .45rem;display:flex;flex-direction:column;gap:.2rem;min-width:0}
+  .titre{font-size:.8rem;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .chaine{font-size:.7rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .actions{display:flex;gap:.3rem;margin-top:.15rem}
+  .act{flex:1;min-height:34px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center}
+  .act:hover{border-color:var(--accent)}
+  .act[disabled]{opacity:.6;cursor:default}
+  .msg{padding:.8rem;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:.84rem;text-align:center}
+  .msg.err{color:var(--erreur)}
+  .btn{min-height:36px;padding:.2rem .8rem;border-radius:8px;border:1px solid var(--line);background:var(--verre);color:var(--texte);font:inherit;cursor:pointer}
+  @media (prefers-reduced-motion:no-preference){ .video{transition:border-color .15s} .video:hover{border-color:var(--accent)} }
+</style>
+<div class="flux" id="flux">
+  <div class="onglets" role="tablist" aria-label="Flux du compte" id="onglets"></div>
+  <div class="etat" id="etat" aria-live="polite"></div>
+  <div class="grille" id="grille"></div>
+  <div class="msg" id="msg" hidden></div>
+</div>
+<script src="../sonde.js"></script>
+<script>
+(function(){
+  'use strict';
+  var API = '/api/v1/ytsas/';
+  var TYPES = [ ['envie','À regarder plus tard'], ['propositions','Proposées'], ['abonnements','Abonnements'], ['historique','Historique'] ];
+  var $ = function(id){ return document.getElementById(id); };
+  var courant = 'envie';
+  var jeton = 0;
+
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  function duree(s){
+    if(s == null || isNaN(s)) return '';
+    s = Math.round(s); var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), c = s%60;
+    var p2 = function(n){ return (n<10?'0':'')+n; };
+    return h ? h+':'+p2(m)+':'+p2(c) : m+':'+p2(c);
+  }
+  function message(texte, erreur, avecReessai){
+    var m = $('msg'); m.hidden = false; m.className = 'msg' + (erreur ? ' err' : '');
+    m.textContent = texte;
+    if(avecReessai){ var b = el('button','btn','Réessayer'); b.type = 'button'; b.style.marginLeft = '.6rem'; b.onclick = function(){ charger(courant); }; m.appendChild(b); }
+  }
+  function ajouter(btn, url){
+    btn.disabled = true; btn.textContent = '…';
+    fetch(API + 'add', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})})
+      .then(function(r){ btn.textContent = r.ok ? '✓ Au SAS' : '⚠'; if(!r.ok) btn.disabled = false; })
+      .catch(function(){ btn.textContent = '⚠'; btn.disabled = false; });
+  }
+  function carte(v){
+    var c = el('div','video');
+    var vg = el('div','vign');
+    var img = document.createElement('img'); img.loading = 'lazy'; img.alt = ''; img.src = v.vignette;
+    img.onerror = function(){ img.style.display = 'none'; };
+    vg.appendChild(img);
+    if(v.duree != null) vg.appendChild(el('span','duree',duree(v.duree)));
+    c.appendChild(vg);
+    var co = el('div','corps');
+    co.appendChild(el('div','titre',v.titre));
+    co.appendChild(el('div','chaine',v.chaine));
+    var ac = el('div','actions');
+    var lien = el('a','act','▶ YouTube'); lien.href = v.url; lien.target = '_blank'; lien.rel = 'noopener noreferrer'; lien.title = 'Ouvrir sur YouTube';
+    var sas = el('button','act','⬇ SAS'); sas.type = 'button'; sas.title = 'Ajouter à la bibliothèque de la box';
+    sas.onclick = function(){ ajouter(sas, v.url); };
+    ac.appendChild(lien); ac.appendChild(sas); co.appendChild(ac); c.appendChild(co);
+    return c;
+  }
+  function date(t){ try{ return new Date(t*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+  function charger(type){
+    courant = type; var mon = ++jeton;
+    var g = $('grille'); g.textContent = ''; $('msg').hidden = true; $('etat').textContent = 'Lecture…';
+    Array.prototype.forEach.call($('onglets').children, function(b){ b.setAttribute('aria-selected', b.dataset.type === type ? 'true' : 'false'); });
+    fetch(API + 'flux?type=' + encodeURIComponent(type) + '&limite=24', {credentials:'same-origin', cache:'no-store'})
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {st:r.status, d:d}; }); })
+      .then(function(x){
+        if(mon !== jeton) return;
+        $('etat').textContent = '';
+        if(x.st === 401 && x.d && /cookies/i.test(x.d.error||'')){ message('Dépose ton cookies.txt dans YouTube SAS (panneau Authentification) pour lire les listes de ton compte.', false); return; }
+        if(x.st === 401 || x.st === 403){ message('Connexion requise : ouvre une session SecuBox pour voir tes listes.', false); return; }
+        if(x.st === 502 || x.st === 504){ message('YouTube n’a pas répondu' + (x.d && x.d.detail ? ' (' + x.d.detail + ')' : '') + '.', true, true); return; }
+        if(x.st !== 200){ message('Flux indisponible (' + x.st + ').', true, true); return; }
+        var items = x.d.items || [];
+        if(!items.length){ message('Rien dans cette liste pour l’instant.', false); return; }
+        var et = $('etat');
+        et.appendChild(el('span', null, items.length + ' vidéos'));
+        if(x.d.date) et.appendChild(el('span', null, '· lu ' + date(x.d.date)));
+        if(x.d.perime){ et.appendChild(el('b', null, '· données anciennes (YouTube n’a pas répondu)')); }
+        items.forEach(function(v){ g.appendChild(carte(v)); });
+      })
+      .catch(function(){ if(mon !== jeton) return; $('etat').textContent = ''; message('Flux injoignable.', true, true); });
+  }
+  TYPES.forEach(function(t){
+    var b = el('button','onglet',t[1]); b.type = 'button'; b.setAttribute('role','tab'); b.dataset.type = t[0];
+    b.onclick = function(){ charger(t[0]); }; $('onglets').appendChild(b);
+  });
+  charger(courant);
+})();
+</script>

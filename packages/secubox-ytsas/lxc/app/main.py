@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from engine import AuthRequired, EngineError, Engine, PlaylistTimeout
+import flux as _flux
 from library import Library
 from ytid import video_id as _video_id, is_playlist_url as _is_playlist
 
@@ -66,6 +67,9 @@ _MIME = {
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 library = Library(DB_PATH)
 engine = Engine(DOWNLOAD_DIR, library, COOKIE_PATH, max_active=MAX_ACTIVE)
+# Flux du compte YouTube (à regarder plus tard, propositions, abonnements, historique) : lecture seule, avec les cookies du
+# coffre. Le moteur reçoit le chemin des cookies À CHAQUE appel (un dépôt de cookies prend effet sans redémarrage).
+flux_moteur = _flux.Flux(DOWNLOAD_DIR, COOKIE_PATH, ttl=int(os.environ.get("YTSAS_FLUX_TTL", "900")))
 
 app = FastAPI(title="secubox-ytsas")
 
@@ -478,6 +482,48 @@ async def playlist(url: str, limite: int = 50):
         return JSONResponse({"error": "playlist vide ou illisible", "detail": str(e)},
                             status_code=404)
     return {"count": len(morceaux), "items": morceaux}
+
+
+# ----------------------------------------------------------------------- flux
+# Ces listes sont celles d'UNE PERSONNE : le Hall ne les relaie qu'APRÈS avoir vérifié la session (auth_request) et pose
+# alors X-Sbx-Flux. Sans cet en-tête (accès direct au conteneur, autre vhost), on refuse : défense en profondeur.
+def _flux_refuse(request: Request):
+    if request.headers.get("x-sbx-flux") != "1":
+        return JSONResponse({"error": "accès refusé"}, status_code=403)
+    return None
+
+
+@app.get(API + "/flux")
+async def flux_liste(request: Request, type: str = "abonnements", limite: int = 24):
+    refus = _flux_refuse(request)
+    if refus:
+        return refus
+    if type not in _flux.TYPES:
+        return JSONResponse({"error": "type inconnu", "types": sorted(_flux.TYPES)}, status_code=400)
+    # le chemin des cookies n'est transmis que s'ils existent : sans eux, 401 net, jamais un échec yt-dlp opaque
+    flux_moteur.cookie_path = COOKIE_PATH if engine._has_cookies() else None
+    try:
+        return await flux_moteur.lister(type, limite)
+    except _flux.AuthRequise:
+        return JSONResponse({"error": "auth requise — dépose tes cookies (panneau Authentification)"}, status_code=401)
+    except _flux.ErreurYoutube as e:
+        if engine._has_cookies():
+            engine.cookies_stale = True
+        return JSONResponse({"error": "YouTube n'a pas rendu ce flux", "detail": str(e)}, status_code=502)
+
+
+@app.get(API + "/flux/vignette/{vid}")
+def flux_vignette(vid: str, request: Request):
+    refus = _flux_refuse(request)
+    if refus:
+        return refus
+    if not _flux.id_valide(vid):
+        return JSONResponse({"error": "identifiant invalide"}, status_code=400)
+    r = flux_moteur.vignette(vid)
+    if not r:
+        return JSONResponse({"error": "vignette indisponible"}, status_code=404)
+    octets, mime = r
+    return Response(octets, media_type=mime, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.get(API + "/status")

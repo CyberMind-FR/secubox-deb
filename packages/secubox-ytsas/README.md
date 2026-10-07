@@ -33,3 +33,12 @@ Socket Unix : `/run/secubox/aggregator.sock`.
 ## Tests
 
 4 fichier(s) de test. Lancer : `python3 -m pytest packages/secubox-ytsas`.
+
+## Flux du compte YouTube (0.4.0)
+
+`GET /api/v1/ytsas/flux?type=envie|propositions|abonnements|historique&limite=24` : les listes que YouTube tient pour le compte dont
+les cookies sont dans le coffre (`/var/lib/secubox/ytsas/cookies.txt`). **Lecture seule**, une requête à plat (`yt-dlp --flat-playlist`),
+rien n'est téléchargé ni modifié. Cache 15 min (`YTSAS_FLUX_TTL`), un appel à la fois par flux, repli sur la dernière lecture si YouTube
+refuse (`perime: true`). `GET /api/v1/ytsas/flux/vignette/<id>` sert la vignette par la box (hôtes ytimg / ggpht seulement).
+Sans cookies : 401. Ces routes exigent l'en-tête `X-Sbx-Flux: 1`, posé uniquement par le Hall après `auth_request` ; elles sont
+refusées en accès direct. Carte du Hall : `secubox-webos` « Flux YouTube ».
