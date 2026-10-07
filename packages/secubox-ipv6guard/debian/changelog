@@ -1,3 +1,10 @@
+secubox-ipv6guard (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Pare-feu actif mais exceptions illisibles (l'API de la Freebox ne les publie pas) : le texte dit que le pare-feu bloque par defaut et
+    renvoie vers Freebox OS pour les exceptions, au lieu d'un « a verifier » generique. Jamais « protege » sans certitude.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 22:10:00 +0200
+
 secubox-ipv6guard (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2 : le verdict lit le pare-feu IPv6 de la Freebox par la socket de secubox-freebox, en relayant les identifiants de l'appelant

@@ -38,7 +38,7 @@ def test_tout_echec_rend_none_donc_a_verifier():
 
 def test_pare_feu_actif_mais_exceptions_illisibles_ne_dit_pas_protege():
     v = V.verdict(PUBLIC, {"pare_feu_actif": True, "exceptions": [], "exceptions_lues": False})
-    assert v["niveau"] == "a_verifier" and "exceptions" in v["explication"]
+    assert v["niveau"] == "a_verifier" and "exceptions" in v["explication"] and "bloque par défaut" in v["explication"]
 
 
 def test_exceptions_lues_vides_reste_protege():

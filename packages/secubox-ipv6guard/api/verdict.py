@@ -46,9 +46,10 @@ def verdict(appareils, freebox):
     exc = freebox.get("exceptions") or []
     if not exc and freebox.get("exceptions_lues") is False:
         # pare-feu actif mais liste des exceptions illisible : on ne peut pas affirmer « protégé »
-        return {**base, "niveau": "a_verifier", "titre": "À vérifier",
-                "explication": "Le pare-feu de la Freebox est actif, mais la liste de ses exceptions n'a pas pu être lue : "
-                               "impossible d'affirmer que rien n'est ouvert vers Internet."}
+        return {**base, "niveau": "a_verifier", "titre": "Pare-feu actif, à confirmer",
+                "explication": "Le pare-feu de la Freebox est actif : il bloque par défaut les connexions venant d'Internet. "
+                               "SecuBox ne peut pas lire la liste de ses exceptions : vérifiez-la dans Freebox OS (Pare-feu, IPv6) "
+                               "pour savoir si quelque chose est ouvert volontairement."}
     if exc:
         k = len(exc)
         return {**base, "niveau": "ouvert_partiellement", "titre": f"{k} ouverture{'s' if k > 1 else ''} volontaire{'s' if k > 1 else ''}",
