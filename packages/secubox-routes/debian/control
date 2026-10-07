@@ -9,7 +9,19 @@ Rules-Requires-Root: no
 
 Package: secubox-routes
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2
+Depends: ${misc:Depends},
+ secubox-core (>= 1.0),
+ iproute2,
+ iputils-ping,
+ traceroute,
+ bind9-dnsutils | dnsutils,
+ whois,
+ mtr-tiny,
+ nmap,
+ net-tools
+Recommends: iperf3
+Replaces: secubox-netdiag (<< 1.3.2~)
+Breaks: secubox-netdiag (<< 1.3.2~)
 Description: SecuBox Routes - Routing table viewer and manager
  SecuBox module for viewing and managing routing tables,
  policy routing rules, and ARP/NDP neighbors.

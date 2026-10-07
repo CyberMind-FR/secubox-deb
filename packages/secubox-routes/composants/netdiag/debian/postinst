@@ -7,16 +7,11 @@ case "$1" in
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
+    install -d -o secubox -g secubox -m 750 /var/cache/secubox/netdiag
     systemctl daemon-reload
-    systemctl enable secubox-routes.service
-    systemctl start  secubox-routes.service || true
+    systemctl enable secubox-netdiag.service
+    systemctl start  secubox-netdiag.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac
-#DEBHELPER#
-# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
-for _s in /usr/lib/secubox/routes/maintscripts/*.postinst; do
-  [ -f "$_s" ] && { sh "$_s" "$@" || echo "routes : postinst de $(basename "$_s") en échec" >&2; }
-done
-exit 0

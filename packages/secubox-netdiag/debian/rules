@@ -1,20 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_install:
-	install -D -m 0755 sbin/secubox-dhcp-probe debian/secubox-netdiag/usr/sbin/secubox-dhcp-probe
-	install -d debian/secubox-netdiag/usr/lib/secubox/netdiag/
-	cp -r api debian/secubox-netdiag/usr/lib/secubox/netdiag/
-	install -d debian/secubox-netdiag/usr/share/secubox/www
-	[ -d www ] && cp -r www/. debian/secubox-netdiag/usr/share/secubox/www/ || true
-	install -d debian/secubox-netdiag/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-netdiag/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
-	install -d debian/secubox-netdiag/etc/nginx/secubox.d
-	[ -f nginx/netdiag.conf ] && cp nginx/netdiag.conf debian/secubox-netdiag/etc/nginx/secubox.d/ || true
-	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
-	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
-	# elle n etait jamais lue.
-	install -d debian/secubox-netdiag/etc/nginx/secubox-routes.d
-	[ -f nginx/netdiag.conf ] && cp nginx/netdiag.conf debian/secubox-netdiag/etc/nginx/secubox-routes.d/ || true

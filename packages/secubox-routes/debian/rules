@@ -17,3 +17,23 @@ override_dh_auto_install:
 	# elle n etait jamais lue.
 	install -d debian/secubox-routes/etc/nginx/secubox-routes.d
 	[ -f nginx/routes.conf ] && cp nginx/routes.conf debian/secubox-routes/etc/nginx/secubox-routes.d/ || true
+	# Composant absorbé : netdiag (#2050)
+	install -D -m 0755 composants/netdiag/sbin/secubox-dhcp-probe debian/secubox-routes/usr/sbin/secubox-dhcp-probe
+	install -d debian/secubox-routes/usr/lib/secubox/netdiag/
+	cp -r composants/netdiag/api debian/secubox-routes/usr/lib/secubox/netdiag/
+	install -d debian/secubox-routes/usr/share/secubox/www
+	[ -d composants/netdiag/www ] && cp -r composants/netdiag/www/. debian/secubox-routes/usr/share/secubox/www/ || true
+	install -d debian/secubox-routes/usr/share/secubox/menu.d
+	[ -d composants/netdiag/menu.d ] && cp -r composants/netdiag/menu.d/. debian/secubox-routes/usr/share/secubox/menu.d/ || true
+	# Modular composants/netdiag/nginx composants/netdiag/config
+	install -d debian/secubox-routes/etc/nginx/secubox.d
+	[ -f composants/netdiag/nginx/netdiag.conf ] && cp composants/netdiag/nginx/netdiag.conf debian/secubox-routes/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-routes/etc/nginx/secubox-routes.d
+	[ -f composants/netdiag/nginx/netdiag.conf ] && cp composants/netdiag/nginx/netdiag.conf debian/secubox-routes/etc/nginx/secubox-routes.d/ || true
+	install -D -m 755 composants/netdiag/debian/postinst debian/secubox-routes/usr/lib/secubox/routes/maintscripts/netdiag.postinst
+	install -D -m 755 composants/netdiag/debian/prerm debian/secubox-routes/usr/lib/secubox/routes/maintscripts/netdiag.prerm
+	install -D -m 644 composants/netdiag/debian/secubox-netdiag.service debian/secubox-routes/usr/lib/systemd/system/secubox-netdiag.service
+
