@@ -95,6 +95,25 @@ function boutonDevalider(p) {
   });
 }
 
+// « MOINS SOUVENT » : le contraire du coeur. Le titre reste a l'antenne mais le tirage le favorise beaucoup moins ; un second clic le
+// remet a son rang. Geste de sysop (il change ce que tout le monde entend).
+function boutonBas(p) {
+  var bas = !!p.bas;
+  return bouton(bas ? '↑ Rang normal' : '↓ Moins souvent', bas ? 'good' : '', function () {
+    api('/pistes/' + p.id + '/bas', { method: 'POST', body: JSON.stringify({ bas: !bas }) }).then(function (r) {
+      toast(r.code === 200 ? (bas ? 'Remise à son rang normal.' : 'Poussée vers le bas : elle passera nettement moins souvent.')
+                           : (r.corps.error || 'Refusé'));
+      rafraichir();
+    });
+  });
+}
+
+function pourcent(proba) {
+  var x = Number(proba) * 100;
+  if (!isFinite(x) || x <= 0) return '0 %';
+  return (x < 1 ? x.toFixed(1) : String(Math.round(x))) + ' %';
+}
+
 function enteteLot(titre, n) {
   var d = document.createElement('div');
   d.className = 'row';
@@ -168,7 +187,10 @@ function rendPlaylist(pistes, enCours) {
              : (p.en_cache ? tag(p.id === enCours ? 'en lecture' : 'prête',
                                  p.id === enCours ? 'c' : 'g')
                            : tag('récupération…', 'o'));
-    z.appendChild(ligne(p, [etat, boutonDevalider(p), boutonSupprimer(p)]));
+    var cartes = [etat];
+    if (p.en_cache && !p.ecarte) cartes.push(tag('tirage ' + pourcent(p.proba), p.bas ? 'o' : ''));
+    if (p.bas) cartes.push(tag('↓ moins souvent', 'o'));
+    z.appendChild(ligne(p, cartes.concat([boutonBas(p), boutonDevalider(p), boutonSupprimer(p)])));
   });
 }
 
@@ -211,7 +233,6 @@ function rafraichir() {
 
       rendPropositions(props);
       rendPlaylist(pistes, enCours);
-      rendProbas(pistes, enCours);
       rendEcartes(pistes);
     })
     .catch(function () { toast('API injoignable'); });

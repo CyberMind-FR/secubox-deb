@@ -703,6 +703,10 @@ type vuePiste struct {
 	Ecarte   bool   `json:"ecarte,omitempty"`
 	Raison   string `json:"raison,omitempty"`
 	Aime     bool   `json:"aime"`
+	// Bas : poussee vers le bas par le sysop (« moins souvent »).
+	Bas bool `json:"bas"`
+	// Proba : part de tirage de cette piste a l'instant (0..1) ; renseignee par /playlist seulement, 0 sinon.
+	Proba float64 `json:"proba,omitempty"`
 	// LES COEURS SONT PUBLICS : on voit qui a aime. Un coeur anonyme se
 	// compte, un coeur signe se discute.
 	Aimeurs []store.Aimeur `json:"aimeurs,omitempty"`
@@ -721,7 +725,7 @@ func (s *Serveur) vue(p store.Piste, v Visiteur) vuePiste {
 		Aimeurs: aimeurs,
 		Coeurs:  p.Coeurs, Source: p.Source, Etat: p.Etat, Motif: p.Motif,
 		Lot: p.Lot, LotTitre: p.LotTitre,
-		EnCache: p.EnCache(), Ecarte: p.Indisponible, Raison: p.Raison, Aime: aime}
+		EnCache: p.EnCache(), Ecarte: p.Indisponible, Raison: p.Raison, Aime: aime, Bas: p.Bas}
 }
 
 // actuel : ce qui passe, et ce qui s'est dit. UNE SEULE REQUETE.
@@ -770,9 +774,12 @@ func (s *Serveur) playlist(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusInternalServerError, "lecture impossible")
 		return
 	}
+	proba := s.probabilites()
 	out := make([]vuePiste, 0, len(l))
 	for _, p := range l {
-		out = append(out, s.vue(p, v))
+		vp := s.vue(p, v)
+		vp.Proba = proba[p.ID]
+		out = append(out, vp)
 	}
 	// À VENIR : la file FIGÉE du programmateur — ce qui va vraiment passer, dans
 	// l'ordre (et non l'ordre d'ajout deviné côté client). PASSÉ : le journal
@@ -788,6 +795,29 @@ func (s *Serveur) playlist(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rendJSON(w, http.StatusOK, map[string]any{"pistes": out, "avenir": avenir, "passe": passe})
+}
+
+// probabilites : la part de tirage de chaque piste jouable, a l'instant (somme = 1). Meme formule que le tirage, reglages compris : c'est ce
+// qui permet de VOIR l'effet de « moins souvent », du repos d'une piste qui vient de passer, des coeurs. Rend une table vide si rien n'est jouable.
+func (s *Serveur) probabilites() map[int64]float64 {
+	pt, _, err := s.st.PourTirage()
+	if err != nil {
+		return nil
+	}
+	now := s.Now()
+	poids, somme := map[int64]float64{}, 0.0
+	for _, p := range pt {
+		w := tirage.Poids(p, s.reg, now)
+		poids[p.ID] = w
+		somme += w
+	}
+	if somme <= 0 {
+		return nil
+	}
+	for id, w := range poids {
+		poids[id] = w / somme
+	}
+	return poids
 }
 
 // propositions : GET la file (tous les membres), POST une proposition.
@@ -951,6 +981,8 @@ func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {
 		s.supprime(w, r, id)
 	case "devalider":
 		s.devalide(w, r, id)
+	case "bas":
+		s.pousseBas(w, r, id)
 	default:
 		erreur(w, http.StatusNotFound, "geste inconnu")
 	}
@@ -1017,6 +1049,38 @@ func (s *Serveur) devalide(w http.ResponseWriter, r *http.Request, id int64) {
 	// plus dans la playlist mais jouerait encore, ce qui est le pire des deux
 	// mondes.
 	s.prog.Oublie(id)
+	p, _ := s.st.ParID(id)
+	rendJSON(w, http.StatusOK, map[string]any{"piste": s.vue(p, v)})
+}
+
+// pousseBas : « moins souvent ». RESERVE AU SYSOP, reversible, et sans rien retirer.
+//
+// LE CONTRAIRE D'UN COEUR, mais pas d'un refus : la piste reste validee, reste a l'antenne, garde ses coeurs ; le tirage lui applique
+// seulement un facteur faible (tirage.FacteurBasDefaut). On ne l'oublie PAS du programmateur : la piste en cours finit, et la file deja
+// tiree n'est pas rejouee — l'effet vaut pour les tirages a venir. Corps : {"bas": true|false}, un booleen explicite (jamais un defaut).
+func (s *Serveur) pousseBas(w http.ResponseWriter, r *http.Request, id int64) {
+	v, ok := s.sysopSeul(w, r)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		erreur(w, http.StatusMethodNotAllowed, "methode refusee")
+		return
+	}
+	var corps struct {
+		Bas *bool `json:"bas"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256)).Decode(&corps); err != nil || corps.Bas == nil {
+		erreur(w, http.StatusBadRequest, "un booleen « bas » explicite est requis")
+		return
+	}
+	if err := s.st.PoseBas(id, *corps.Bas); errors.Is(err, store.ErrPisteInconnue) {
+		erreur(w, http.StatusNotFound, "piste inconnue")
+		return
+	} else if err != nil {
+		erreur(w, http.StatusInternalServerError, "geste impossible")
+		return
+	}
 	p, _ := s.st.ParID(id)
 	rendJSON(w, http.StatusOK, map[string]any{"piste": s.vue(p, v)})
 }
