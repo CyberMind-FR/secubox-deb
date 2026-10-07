@@ -18,7 +18,7 @@ y dorment, par mois) — ne le lire que sur demande.
       de ports (écriture, confirmée et journalisée). Consommateurs : IPv6 Guardian (étapes « bloquées » et « exceptions », noms), NAC, exposition.
       Étend le mode « SecuBox esclave, non routeur » aux possibilités de l'API Freebox. Dossier : `docs/dossiers/ipv6-guardian.md` (phase 2).
 - [ ] **Cast / diffusion** : diffuser un média du Hall (bibliothèque YouTube SAS, radio, diffusion du Hall) vers les appareils Google Cast détectés par
-      IPv6 Guardian (Freebox Player POP, Chromecast, TV Android…) ; « viewpoint » à préciser (viewer du Hall ? point de vue / écran cible ?).
+      IPv6 Guardian (Freebox Player POP, Chromecast, TV Android…) ; « viewpoint » (précisé le 2026-10-07 : « node view surf ») = la vue d'un nœud du maillage, affichée par secubox-surf (relais par-origine) ; à diffuser vers un écran Cast. Conception à écrire d'abord : source = page surf d'un nœud, cible = appareil Cast détecté.
       Contraintes : URL de média joignable par l'appareil (HTTP LAN), pas de contournement de DRM.
 
 ## 2026-10-02 — backlog noté (analyse 25/09 → 02/10), à corriger dans l'ordre
