@@ -52,6 +52,7 @@ on:
       - 'packages/secubox-appstore/**'
       - 'packages/secubox-ipv6guard/**'
       - 'packages/secubox-freebox/**'
+      - 'packages/secubox-soc/**'
       - 'packages/secubox-health/**'
       - 'packages/secubox-c3box/**'
       - 'packages/secubox-hub/**'
@@ -132,6 +133,9 @@ jobs:
           # Connecteur Freebox : client, normalisation, jeton jamais renvoyé.
           - suite: secubox-freebox
             chemin: packages/secubox-freebox/tests
+          # Panneau SOC : la carte des origines a un vrai fond de continents.
+          - suite: secubox-soc
+            chemin: packages/secubox-soc/tests
           # Le catalogue se génère : un groupe ne cite pas un module absorbé (#2050).
           - suite: secubox-appstore-catalogue
             chemin: packages/secubox-appstore/tests/test_catalogue_groupes_2050.py
