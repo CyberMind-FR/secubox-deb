@@ -260,6 +260,19 @@
     {nom:'Très critique',  de:91, a:100, c:'var(--b4)'}
   ];
   function palier(p){p=num(p);for(var i=PALIERS.length-1;i>=0;i--){if(p>=PALIERS[i].de)return PALIERS[i];}return PALIERS[0];}
+  // SCORE DE MENACE — le MÊME que la page d'administration (waf-ng/www/actor/index.html). La `priority` brute de l'API plafonne à ~45 sur cette box et ne
+  // sépare rien (tout « observé ») ; ce score lit ce qu'un acteur FAIT : revenir après sanction, changer d'adresse, s'étendre sur plusieurs pays, insister.
+  function score(a){
+    var v=a.vec||{},s=a.src||{};
+    var ips=Math.max(1,num(s.ips)||1),pays=Math.max(1,num(s.countries)||1),bans=num(a.bans),n=0;
+    n+=Math.min(30,Math.log2(ips)*10);              // évasion par rotation d'adresse
+    n+=Math.min(15,(pays-1)*5);                     // infrastructure répartie
+    n+=Math.min(25,bans*8);                         // revient après sanction
+    n+=Math.min(15,num(v.continuity)*0.15);         // insiste dans le temps
+    n+=Math.min(10,num(v.persistence)*0.2);         // s'accroche
+    n+=Math.min(5,num(v.automation)*0.05);          // outillage
+    return Math.round(Math.min(100,n));
+  }
   var VECLBL={knowledge:["🧠","connaiss."],continuity:["🔗","continuité"],intent:["🎯","intention"],
     automation:["🤖","automat."],severity:["⚠️","gravité"],persistence:["📌","persist."],confidence:["✔️","confiance"]};
   var VECORD=["knowledge","continuity","intent","automation","severity","persistence","confidence"];
@@ -299,8 +312,8 @@
   function rendVue(){
     if(ACTS.sansSession){return;}
     var crit=0,susp=0,obs=0,par=PALIERS.map(function(){return 0;});
-    ACTS.forEach(function(a){var p=num(a.priority);
-      if(p>=76)crit++;else if(p>=51)susp++;else obs++;
+    ACTS.forEach(function(a){var p=score(a);
+      if(p>=70)crit++;else if(p>=45)susp++;else obs++;
       for(var i=PALIERS.length-1;i>=0;i--){if(p>=PALIERS[i].de){par[i]++;break;}}});
     el('t-crit').textContent=crit;el('t-susp').textContent=susp;el('t-obs').textContent=obs;
     var max=Math.max.apply(null,par.concat([1]));
@@ -322,10 +335,10 @@
     var box=el('list');
     if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur observe le trafic (shadow).</div>';return;}
     box.innerHTML='';
-    ACTS.slice(0,12).forEach(function(a){
-      var p=palier(a.priority),src=a.src||{};
+    ACTS.slice().sort(function(x,y){return score(y)-score(x);}).slice(0,12).forEach(function(a){
+      var p=palier(score(a)),src=a.src||{};
       var d=document.createElement('div');d.className='actor'+(a.id===CUR?' on':'');
-      d.innerHTML='<div class="ring" style="--v:'+num(a.priority)+';--c:'+p.c+'">'+num(a.priority)+'</div>'
+      d.innerHTML='<div class="ring" style="--v:'+score(a)+';--c:'+p.c+'">'+score(a)+'</div>'
         +'<div class="nm2"><b>'+esc(a.id)+'</b><div class="tg">'+(a.tags||[]).map(function(t){return '<span class="tag '+esc(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')
         +'<span class="cnt">'+num(src.ips)+' IP · '+num(src.countries)+' pays'+(num(a.bans)?' · '+num(a.bans)+' bans':'')+'</span></div></div>'
         +'<span class="badge" style="background:'+p.c+'">'+esc(p.nom)+'</span>';
@@ -345,9 +358,9 @@
   function rendProfile(){
     var a=ACTS.filter(function(x){return x.id===CUR;})[0],z=el('profile');
     if(!a){z.innerHTML='<div class="vide">Sélectionne un acteur (couche Acteurs).</div>';return;}
-    var v=a.vec||{},p=palier(a.priority),src=a.src||{};
+    var v=a.vec||{},p=palier(score(a)),src=a.src||{};
     var tete='<div class="fh"><b>'+esc(a.id)+'</b><span class="badge" style="background:'+p.c+'">'+esc(p.nom)+'</span>'
-      +'<span class="sc">Score <b style="color:'+p.c+'">'+num(a.priority)+'</b></span></div>'
+      +'<span class="sc">Score <b style="color:'+p.c+'">'+score(a)+'</b></span></div>'
       +'<div class="onglets">'+[['vue','Vue'],['tech','Techniques'],['rep','Réponse']].map(function(o){
         return '<button type="button" data-o="'+o[0]+'" class="'+(ONGLET===o[0]?'on':'')+'">'+o[1]+'</button>';}).join('')+'</div>';
     var corps='';
