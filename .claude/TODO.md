@@ -12,6 +12,15 @@ y dorment, par mois) — ne le lire que sur demande.
 
 ---
 
+## 2026-10-08 — idées du propriétaire, à concevoir (design d'abord)
+- [ ] **Connecteur Freebox** (`secubox-freebox` + panneau d'administration) : autorisation unique de l'API Freebox (validation sur la Freebox),
+      puis, dans l'ordre : appareils du réseau (noms, adresses), pare-feu IPv6 et redirections (lecture), état de la connexion, redirections
+      de ports (écriture, confirmée et journalisée). Consommateurs : IPv6 Guardian (étapes « bloquées » et « exceptions », noms), NAC, exposition.
+      Étend le mode « SecuBox esclave, non routeur » aux possibilités de l'API Freebox. Dossier : `docs/dossiers/ipv6-guardian.md` (phase 2).
+- [ ] **Cast / diffusion** : diffuser un média du Hall (bibliothèque YouTube SAS, radio, diffusion du Hall) vers les appareils Google Cast détectés par
+      IPv6 Guardian (Freebox Player POP, Chromecast, TV Android…) ; « viewpoint » à préciser (viewer du Hall ? point de vue / écran cible ?).
+      Contraintes : URL de média joignable par l'appareil (HTTP LAN), pas de contournement de DRM.
+
 ## 2026-10-02 — backlog noté (analyse 25/09 → 02/10), à corriger dans l'ordre
 
 ### 🔴 Sécurité
