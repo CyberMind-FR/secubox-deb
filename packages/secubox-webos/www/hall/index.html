@@ -1396,7 +1396,7 @@ const FEATURED = [
   // le Hall agrandit telle quelle.
   {id:"mon-coffre", label:"Mon coffre", icon:"🗝️", color:"#6b4a2e", carte:"/coffre/", h:380, auth:true, admin:false},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
-  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/quick.html?svc=nextcloud", h:190, auth:true, admin:"/nextcloud/", si_present:"/adm/api/v1/nextcloud/status"},
+  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:214, auth:true, admin:"/nextcloud/", si_present:"/adm/api/v1/nextcloud/status"},
   {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264, admin:"/bbs/"},
   // SBX OS P4 (#1560) : le flux des gestes de la box, filtré pour qui regarde.
   {id:"activite",   label:"Activité",   icon:"✦", color:"#6a4bb8", carte:"/cardlets/activite.html", h:280},
@@ -1419,7 +1419,7 @@ const FEATURED = [
   // peut rien faire.
   {id:"zigbee",     label:"Zigbee",    icon:"💡", color:"#c8791f", url:"zigbee.gk2.secubox.in", carte:"/cardlets/zigbee.html", h:250, lan:true, auth:true},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", auth:true},
-  {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", auth:true},
+  {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", carte:"/cardlets/quick.html?svc=photoprism", h:190, auth:true, si_present:"/adm/api/v1/photoprism/status"},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:300, admin:false},
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:236},
   // Freebox TV (#1238) : grille des chaînes + lecteur HLS (sas ffmpeg RTSP→HLS
@@ -1481,7 +1481,7 @@ const FEATURED = [
   // origine : la session SBX OS signe ; sinon pseudo de visiteur). Pas de vhost :
   // /mega = la même page agrandie. Le chat de la radio y est centralisé.
   {id:"messagerie", label:"Messagerie", icon:"💬", color:"#0784a8", carte:"/messagerie/", h:340, admin:false},
-  {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", auth:true},
+  {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/quick.html?svc=mail", h:190, auth:true, si_present:"/adm/api/v1/mail/status"},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:174},
   // DevWatch (#1370) : suivi de dev GitHub amont. Pas de vhost dédié — le service
