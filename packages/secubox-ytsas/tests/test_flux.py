@@ -206,3 +206,21 @@ def test_route_vignette_refuse_un_identifiant_douteux_et_exige_l_en_tete(monkeyp
     c = _client(monkeypatch, tmp_path)
     assert c.get(f"/api/v1/ytsas/flux/vignette/{ID1}").status_code == 403
     assert c.get("/api/v1/ytsas/flux/vignette/..%2Fetc", headers={"X-Sbx-Flux": "1"}).status_code in (400, 404)
+
+
+# ── cookies refusés par YouTube ──────────────────────────────────────────────
+def test_un_refus_de_connexion_est_distingue_d_une_panne(tmp_path):
+    for msg in ("ERROR: [youtube:history] Login details are needed to download this content. Use --cookies-from-browser or --cookies",
+                "Sign in to confirm you're not a bot"):
+        assert flux._REFUS_COOKIES.search(msg), msg
+    assert not flux._REFUS_COOKIES.search("HTTP Error 429: Too Many Requests")
+
+
+def test_la_route_repond_401_cookies_perimes_et_non_502(monkeypatch, tmp_path):
+    async def refus(argv):
+        raise flux.CookiesRefuses("Login details are needed")
+    c = _client(monkeypatch, tmp_path, execut=refus)
+    r = c.get("/api/v1/ytsas/flux?type=historique", headers={"X-Sbx-Flux": "1"})
+    assert r.status_code == 401
+    j = r.json()
+    assert j["cookies_perimes"] is True and "cookies" in j["error"] and "Login details" not in json.dumps(j)

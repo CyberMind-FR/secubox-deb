@@ -111,6 +111,7 @@
       .then(function(x){
         if(mon !== jeton) return;
         $('etat').textContent = '';
+        if(x.st === 401 && x.d && x.d.cookies_perimes){ message('YouTube ne reconnaît plus ton compte : tes cookies sont périmés (ou exportés d\u2019un navigateur non connecté). Réexporte cookies.txt depuis un navigateur connecté à YouTube, puis dépose-le dans YouTube SAS (panneau Authentification).', false); return; }
         if(x.st === 401 && x.d && /cookies/i.test(x.d.error||'')){ message('Dépose ton cookies.txt dans YouTube SAS (panneau Authentification) pour lire les listes de ton compte.', false); return; }
         if(x.st === 401 || x.st === 403){ message('Connexion requise : ouvre une session SecuBox pour voir tes listes.', false); return; }
         if(x.st === 502 || x.st === 504){ message('YouTube n’a pas répondu' + (x.d && x.d.detail ? ' (' + x.d.detail + ')' : '') + '.', true, true); return; }

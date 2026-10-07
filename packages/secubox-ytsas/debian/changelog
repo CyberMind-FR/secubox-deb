@@ -1,3 +1,9 @@
+secubox-ytsas (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Flux YouTube : un refus de connexion de YouTube (Login details are needed, Sign in…) repond 401 « cookies perimes » au lieu d'un 502 « YouTube n'a pas repondu ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 23:15:00 +0200
+
 secubox-ytsas (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Flux du compte YouTube : /api/v1/ytsas/flux?type=envie|propositions|abonnements|historique (a regarder plus tard, propositions, abonnements, historique) lu avec les cookies du coffre, lecture seule, cache de 15 min, repli sur la derniere lecture si YouTube refuse ; vignettes servies par la box (/flux/vignette/<id>). Routes reservees : refus sans l'en-tete X-Sbx-Flux pose par le Hall apres verification de la session.
