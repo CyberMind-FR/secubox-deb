@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vague 3l : ipblock←vortex-firewall,cyberfeed (S3) ; déployée gk3 + gk2, publiée (ref #2050)
+Packaging seul : les tables nft restent distinctes (une table unique = L, déconseillé avant la bêta). ipblock 1.3.0 ; threatmesh 1.0.4 (dépendance `ipblock | toolbox`, alternative conservée). Outil : une alternative de dépendance (`a | b`) n'est plus remplacée en bloc, seule la branche concernée change. isp 1.2.8, lite 1.3.6, profils 1.0.34, meta 0.1.34. ipblock et cyberfeed, inactifs avant, sont démarrés par leurs postinst rejoués (API de tableau de bord, aucune règle nft chargée).
+
 ## 2026-10-07 — Courrier : rapport WAF (421 / timed out) et webmail en 502 ; metrics 1.15.1, mail 2.14.0 déployés gk2, publiés
 Rapport WAF : le scan antivirus attend le réveil à froid du LXC `clamav` (jusqu'à ~120 s, `rspamd_task_timeout`), le job coupait à 20 s (« Connection unexpectedly closed: timed out ») alors que le courrier arrivait : délai de 200 s (metrics 1.15.1). Politique du scan inchangée (décision du propriétaire : rien ne passe sans scan). Webmail 502 : apache2 en 226/NAMESPACE dans le LXC roundcube depuis le 5 octobre (AppArmor refuse le montage du bac à sable systemd) → `mailctl webmail` (mail 2.14.0) pose la surcharge et démarre Apache ; webmail.gk2 répond 200. `mail.gk2.secubox.in` répond 421 par conception : le vhost du courrier est `email.gk2.secubox.in`.
 
