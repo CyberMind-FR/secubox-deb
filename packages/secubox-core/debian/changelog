@@ -1,3 +1,9 @@
+secubox-core (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-lxc-sans-sandbox <conteneur> <service>... : remet en marche un service dont le bac a sable systemd ne se monte plus dans un LXC sans privileges (226/NAMESPACE depuis le 2026-10-05 : redis de PeerTube et du courrier, apache2 du webmail). Surcharge posee DANS le conteneur, rien sur l'hote ; noms valides strictement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 21:30:00 +0200
+
 secubox-core (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-defaults (#2050, N1) : /etc/default/secubox (conffile, repris tel quel) et
