@@ -148,7 +148,8 @@ def test_checkconf_timeout_restaure(cfg, monkeypatch):
 
     def boum(*a, **k):
         raise subprocess.TimeoutExpired("unbound-checkconf", 60)
-    monkeypatch.setattr(appliquer.subprocess, "run", boum)
+    import secubox_unbound
+    monkeypatch.setattr(secubox_unbound.subprocess, "run", boum)     # la commande vit désormais dans la bibliothèque commune
     cfg2 = dict(cfg, lan={"interface": "192.168.1.201", "acces": ["192.168.0.0/16"]})
     s = appliquer.Systeme()
     s.audit = lambda a, d="": None
@@ -253,10 +254,12 @@ def test_audit_inaccessible_previent_sur_stderr(tmp_path, monkeypatch, capsys):
 
 
 def test_binaires_en_chemin_absolu_sans_variable_d_environnement():
-    for c in (appliquer.CHECKCONF, appliquer.CONTROL, appliquer.NETWORKCTL, appliquer.SYSTEMCTL):
-        assert c.startswith("/")
     import inspect
-    assert "os.environ" not in inspect.getsource(appliquer)
+
+    import secubox_unbound
+    for c in (secubox_unbound.CHECKCONF, secubox_unbound.CONTROL, secubox_unbound.SYSTEMCTL, appliquer.NETWORKCTL):
+        assert c.startswith("/")
+    assert "os.environ" not in inspect.getsource(appliquer) and "os.environ" not in inspect.getsource(secubox_unbound)
 
 
 def test_dossiers_crees_en_0755_et_tous_retires_au_retour_arriere(cfg, tmp_path):

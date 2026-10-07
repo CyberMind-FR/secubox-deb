@@ -11,6 +11,10 @@ override_dh_auto_install:
 	install -d debian/secubox-core/usr/lib/python3/dist-packages/
 	cp -r ../../common/secubox_core \
 	      debian/secubox-core/usr/lib/python3/dist-packages/
+	# secubox_unbound (D4, #2050) : bibliotheque stdlib de pose des vues Unbound, SEPAREE de secubox_core dont le __init__ tire FastAPI et la config
+	# (les assistants root sous AppArmor ne doivent pas les charger).
+	cp -r ../../common/secubox_unbound \
+	      debian/secubox-core/usr/lib/python3/dist-packages/
 
 	# Noms STABLES des liaisons serie USB. Partage, parce que le probleme l'est :
 	# ttyUSB0/ttyACM0 sont attribues dans l'ordre d'enumeration, et un conteneur

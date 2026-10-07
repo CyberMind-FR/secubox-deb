@@ -4,22 +4,17 @@ Unbound n'est rechargé que si la configuration EFFECTIVE (lignes hors commentai
 commentaires ne coupe jamais le DNS. Un seul `generate` à la fois (verrou), et jamais de fichier laissé à moitié posé."""
 import contextlib
 import fcntl
-import json
 import os
-import subprocess
-import sys
-import tempfile
-import time
 from pathlib import Path
+
+import secubox_unbound as _unbound          # D4 (#2050) : commande, écriture atomique, checkconf, reload, redémarrage, audit — un seul code
+from secubox_unbound import commande as _commande
 
 from . import rendu
 
 AUDIT = Path("/var/log/secubox/audit.log")
 VERROU = Path("/run/lock/secubox-dns-lan.lock")
-CHECKCONF = "/usr/sbin/unbound-checkconf"                    # chemins absolus : outil root, jamais de PATH ni de variable d'environnement
-CONTROL = "/usr/sbin/unbound-control"
 NETWORKCTL = "/usr/bin/networkctl"
-SYSTEMCTL = "/usr/bin/systemctl"
 NOMS_UNBOUND_GERES = (rendu.F_LAN, rendu.F_IPV6, rendu.F_VUE, rendu.F_HOTES)
 
 
@@ -35,44 +30,16 @@ def _lignes(texte: str | None, debut: str) -> set[str]:
     return {x for x in effectives(texte or "") if x.startswith(debut)}
 
 
-def _commande(args: list[str], delai: int) -> tuple[bool, str]:
-    try:
-        r = subprocess.run(args, capture_output=True, text=True, timeout=delai, check=False)
-    except subprocess.TimeoutExpired:
-        return False, f"{Path(args[0]).name} : délai de {delai} s dépassé"
-    except OSError as e:
-        return False, f"{Path(args[0]).name} : {e}"
-    return r.returncode == 0, (r.stdout + r.stderr).strip()[-300:]
-
-
-class Systeme:
-    """Les effets de bord réels ; les tests injectent un faux."""
-
-    def verifier_unbound(self) -> tuple[bool, str]:
-        return _commande([CHECKCONF], 60)
-
-    def recharger_unbound(self) -> None:
-        ok, sortie = _commande([CONTROL, "reload"], 120)
-        if not ok:
-            raise ErreurApplication("unbound-control reload a échoué : " + sortie)
-
-    def redemarrer_unbound(self) -> None:
-        ok, sortie = _commande([SYSTEMCTL, "restart", "unbound"], 120)
-        if not ok:
-            raise ErreurApplication("redémarrage d'unbound refusé : " + sortie)
+class Systeme(_unbound.SystemeUnboundRedemarrable):
+    """Les effets de bord réels ; les tests injectent un faux. checkconf, reload, redémarrage et audit viennent de secubox_unbound."""
+    MODULE = "dns-lan"
+    ERREUR = ErreurApplication
+    AUDIT = AUDIT
 
     def recharger_reseau(self) -> None:
         ok, sortie = _commande([NETWORKCTL, "reload"], 60)
         if not ok:
             raise ErreurApplication("networkctl reload a échoué : " + sortie)
-
-    def audit(self, action: str, detail: str = "") -> None:
-        try:
-            with open(AUDIT, "a", encoding="utf-8") as f:                       # ajout seul
-                f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "dns-lan",
-                                    "action": action, "detail": detail[:300]}, ensure_ascii=False) + "\n")
-        except OSError as e:                                                    # ne bloque pas l'opération, mais ne se tait pas
-            print(f"secubox-dns-lan : audit non écrit ({action}) : {e}", file=sys.stderr)
 
 
 @contextlib.contextmanager
@@ -96,35 +63,8 @@ def _lire(chemin: Path) -> str | None:
         return None
 
 
-def _fsync_dossier(d: Path) -> None:
-    try:
-        fd = os.open(d, os.O_RDONLY)
-    except OSError:
-        return
-    try:
-        os.fsync(fd)
-    except OSError:
-        pass
-    finally:
-        os.close(fd)
-
-
 def _ecrire_atomique(chemin: Path, texte: str) -> None:
-    if chemin.is_symlink():
-        raise ErreurApplication(f"{chemin} est un lien symbolique : refusé")
-    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".dns-lan-")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(texte)
-            f.flush()
-            os.fchmod(f.fileno(), 0o644)
-            os.fsync(f.fileno())
-        os.replace(tmp, chemin)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
-        raise
-    _fsync_dossier(chemin.parent)
+    _unbound.ecrire_atomique(chemin, texte, 0o644, prefixe=".dns-lan-", erreur=ErreurApplication)
 
 
 def _est_unbound(chemin: str, cfg: dict) -> bool:

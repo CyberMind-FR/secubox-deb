@@ -1,3 +1,9 @@
+secubox-dns (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Composant dns-lan : les gestes sur Unbound viennent de secubox_unbound (secubox-core >= 1.7.0) au lieu d'une copie locale (D4, #2050). Comportement inchange.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 13:00:00 +0200
+
 secubox-dns (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-dns-lan (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
