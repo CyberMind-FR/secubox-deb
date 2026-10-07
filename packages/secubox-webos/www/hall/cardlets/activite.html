@@ -79,6 +79,10 @@ function cible(a){
   if (m) return { sbx: "surf", url: `https://${BBS}/${m[1]}/${m[2]}` };
   if (a.kind === "radio_live" && /^https?:\/\/[^\s"<>]+$/i.test(String(ctx.url || "")))
     return { sbx: "voir", url: String(ctx.url) };
+  // Une vidéo de la bibliothèque YouTube SAS diffusée au Hall est un chemin RELATIF du Hall (/api/v1/ytsas/stream/<id>) : il
+  // s'ouvre dans le viewer, sur l'origine du Hall. Liste fermée : ce seul chemin, jamais un autre relatif.
+  if (a.kind === "radio_live" && /^\/api\/v1\/ytsas\/stream\/[A-Za-z0-9_.-]{1,64}$/.test(String(ctx.url || "")))
+    return { sbx: "voir", url: location.origin + String(ctx.url) };
   return null;
 }
 function ligne(a){
