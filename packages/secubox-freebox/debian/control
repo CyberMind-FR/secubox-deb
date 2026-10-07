@@ -1,0 +1,17 @@
+Source: secubox-freebox
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-freebox
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, adduser, secubox-core (>= 1.6.0)
+Recommends: secubox-webos, secubox-ipv6guard
+Description: SecuBox Freebox — connecteur de l'API Freebox OS
+ Relie la box à la Freebox : appareils du réseau, état de la connexion, pare-feu IPv6 et redirections de ports.
+ L'autorisation se valide physiquement sur la Freebox ; le jeton d'application ne quitte jamais la box
+ (0600, jamais renvoyé par une route ni écrit dans un journal). Lecture seule en v0.1.

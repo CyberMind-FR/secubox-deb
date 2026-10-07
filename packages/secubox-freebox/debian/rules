@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-freebox/usr/lib/secubox/freebox/api
+	install -m 644 api/*.py debian/secubox-freebox/usr/lib/secubox/freebox/api/
+	install -d debian/secubox-freebox/usr/share/secubox/www
+	cp -r www/. debian/secubox-freebox/usr/share/secubox/www/
+	install -d debian/secubox-freebox/usr/share/secubox/menu.d
+	cp -r menu.d/. debian/secubox-freebox/usr/share/secubox/menu.d/
+	install -d debian/secubox-freebox/etc/nginx/secubox-routes.d
+	install -m 644 nginx/freebox.conf debian/secubox-freebox/etc/nginx/secubox-routes.d/freebox.conf
+	install -d debian/secubox-freebox/lib/systemd/system
+	install -m 644 systemd/secubox-freebox.service debian/secubox-freebox/lib/systemd/system/
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start

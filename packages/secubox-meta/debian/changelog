@@ -1,3 +1,9 @@
+secubox-meta (0.1.40-1~bookworm1) bookworm; urgency=medium
+
+  * Routage : secubox-freebox (connecteur Freebox) recommande.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 20:10:00 +0200
+
 secubox-meta (0.1.39-1~bookworm1) bookworm; urgency=medium
 
   * Routage : secubox-ipv6guard (IPv6 Guardian) recommande.
