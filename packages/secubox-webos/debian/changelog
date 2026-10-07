@@ -1,3 +1,9 @@
+secubox-webos (1.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * Bulle des diffusions du parc : plus de survol du logo, ouverture par un clic, fermeture seule apres 4 s sauf pointeur dans la bulle (clic ailleurs ou Echap ferment). La couche Renseignement du groupe Securite montre desormais la carte Actor complete (carte du monde, evenements, fiche) au lieu d'une copie reduite ; l'apercu n'est demande qu'une fois par minute.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 05:00:00 +0200
+
 secubox-webos (1.5.5-1~bookworm1) bookworm; urgency=medium
 
   * Carte Renseignement : l'heure des derniers evenements s'affiche dans le fuseau du navigateur (elle etait en UTC, 2 h de decalage).

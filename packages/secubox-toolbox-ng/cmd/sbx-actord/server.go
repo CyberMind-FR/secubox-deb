@@ -47,6 +47,12 @@ type Server struct {
 	cleVueOnce sync.Once
 	cleVue     []byte
 
+	// Aperçu de la vue d'ensemble, gardé quelques dizaines de secondes (overview.go).
+	apercuMu  sync.Mutex
+	apercuVal Apercu
+	apercuAt  time.Time
+	apercuOK  bool
+
 	ingested   atomic.Uint64 // enveloppes persistées
 	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation
 	dropped    atomic.Uint64 // rejetées faute de place (backpressure, jamais bloquant)

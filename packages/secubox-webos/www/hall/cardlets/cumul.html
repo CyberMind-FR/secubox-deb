@@ -286,37 +286,8 @@
     };
   }
 
-  // ── COUCHE 4 : RENSEIGNEMENT — Actor Intelligence / TPI inverse (#1240) ─────
-  // Lit l'API read-only de sbx-actord (SHADOW) via le relais /api/v1/actor/ :
-  // acteurs corrélés AU-DELÀ de l'IP, campagnes, posture. Rien n'est appliqué
-  // (observe). On dit « continuité de campagne probable », jamais « même personne »
-  // (RFC-0007) — l'ASN/pays sont du routage, pas une identité.
-  function coucheActeurs(corps) {
-    // La liste des acteurs demande une session ; sans elle, les compteurs seuls
-    // (un 401 fermerait tout « actor » dans sonde.js, compteurs compris).
-    var acteurs = jget('/api/v1/acces/session/etat').then(function (e) {
-      return e && e.session ? jget('/api/v1/actor/actors') : null;
-    });
-    return Promise.all([jget('/api/v1/actor/stats'), acteurs]).then(function (r) {
-      var s = r[0], acts = r[1] || [];
-      if (!s) { corps.innerHTML = '<div class="vide">Renseignement acteurs injoignable.</div>'; return; }
-      var top = acts.slice(0, 3).map(function (a) {
-        var pin = a.priority >= 80 ? '🔴' : a.priority >= 50 ? '🟠' : '🔵';
-        return '<div class="ipr"><span>' + pin + '</span>'
-          + '<span class="ipa">' + esc(a.id) + '</span>'
-          + '<span class="ipc">prio ' + a.priority + ' · ' + a.src.ips + ' IP · cont ' + a.vec.continuity + '</span></div>';
-      }).join('');
-      corps.innerHTML =
-        '<div class="kpis">'
-        + kpi(s.actors, 'acteurs', s.actors > 0)
-        + kpi(s.campaigns, 'campagnes', s.campaigns > 0)
-        + kpi(s.events_24h, 'événements / j')
-        + kpi(s.blocked_24h, 'bloqués', s.blocked_24h > 0)
-        + '</div>'
-        + '<div class="sous">TPI inverse · shadow (observe) · continuité probable, pas d\'attribution</div>'
-        + (top ? '<div class="iplist">' + top + '</div>' : '<div class="vide">Aucun acteur corrélé pour l\'instant.</div>');
-    });
-  }
+  // ── COUCHE 4 : RENSEIGNEMENT — la carte Actor Intelligence elle-même (cardlets/actor.html), pas une copie réduite : vue d'ensemble avec carte
+  // du monde, événements, acteurs, fiche, réponse graduée. Même source de vérité, une seule à maintenir.
 
   // ── COMPOSITION DES GROUPES ───────────────────────────────────────────────
   var GROUPES = {
@@ -326,7 +297,7 @@
         { nom: 'Pare-feu', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: couchePosture },
         { nom: 'Qui frappe ?', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheQuiFrappe },
         { nom: 'Analyse', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheAnalyse },
-        { nom: 'Renseignement', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheActeurs }
+        { nom: 'Renseignement', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheEmbed('/cardlets/actor.html') }
       ]
     },
     // GROUPES « embed » : la couche EST la carte réelle du service, avec SON
