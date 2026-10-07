@@ -68,7 +68,7 @@ Depends: ${misc:Depends},
  secubox-threatmesh,
  secubox-threats,
  secubox-toolbox,
- secubox-yacy
+ secubox-metanews (>= 0.3.0)
 Recommends: wireguard-tools
 Description: SecuBox Full — socle ISP + applications working (catalogue all.gk2)
  Métapaquet showcase : le socle secubox-isp PLUS les applications

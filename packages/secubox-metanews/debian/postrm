@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+#DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/metanews/maintscripts/*.postrm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "metanews : postrm de $(basename "$_s") en échec" >&2; }
+done
+exit 0

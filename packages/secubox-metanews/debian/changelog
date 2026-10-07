@@ -1,3 +1,17 @@
+secubox-metanews (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-yacy (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/yacy/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
+secubox-metanews (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-devwatch (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
+    sources sous composants/devwatch/. Replaces/Breaks sur l'ancien paquet, devenu transitoire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:00:00 +0200
+
 secubox-metanews (0.1.51-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-webos au lieu de secubox-sbxui (transitoire, #2050).

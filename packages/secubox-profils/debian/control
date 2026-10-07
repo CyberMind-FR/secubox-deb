@@ -106,7 +106,7 @@ Depends: ${misc:Depends},
          secubox-vortex-dns,
          secubox-webmail,
          secubox-wireguard,
-         secubox-yacy
+         secubox-metanews (>= 0.3.0)
 Description: SecuBox — profil « reseau » : Reseau, federation et services heberges
  Les services que la boite rend au LAN et au fedivers : DNS, annuaire,
  conteneurs applicatifs, maillage.

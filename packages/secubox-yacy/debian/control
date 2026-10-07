@@ -1,35 +1,15 @@
 Source: secubox-yacy
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-yacy
 Architecture: all
-Depends: ${misc:Depends},
-         secubox-core (>= 1.5.39~),
-         secubox-haproxy,
-         lxc,
-         lxc-templates,
-         debootstrap,
-         python3-uvicorn,
-         python3-fastapi,
-         python3-toml,
-         openssl,
-         curl,
-         jq
-Description: SecuBox YaCy — peer-to-peer search engine
- Hosts YaCy in a Debian LXC at 10.100.0.80 on br-lxc with a sovereign,
- decentralised search index that does not depend on any third-party
- search provider. Peer-to-peer discovery, configurable crawl profiles,
- user-managed blacklist.
- .
- The host-side FastAPI control plane runs on /run/secubox/yacy.sock and
- is exposed by nginx at /api/v1/yacy/. The native YaCy admin UI is
- iframe-embedded under /yacy/ (proxy_pass to the LXC).
- .
- yacyctl exposes the canonical SecuBox three-fold introspection plus
- peer/index/query/blacklist/crawler nouns matching the SEARCH layer of
- the CTL grammar (sister to OPS MONITORING / healthctl / grafanactl).
+Depends: ${misc:Depends}, secubox-metanews (>= 0.3.0)
+Description: transitional package, replaced by secubox-metanews
+ yacy is now a component of secubox-metanews. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

@@ -14,6 +14,16 @@ case "$1" in
     ;;
 esac
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/metanews/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "metanews : postinst de $(basename "$_s") en échec" >&2; }
+done
+
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/metanews/maintscripts/*.postinst; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "metanews : postinst de $(basename "$_s") en échec" >&2; }
+done
+
 
 # ── Le vhost public : le PAQUET fait foi (#1727, motif de la radio #1430) ──
 # Il était livré dans nginx-available sans jamais être installé : gk2 servait
@@ -38,5 +48,4 @@ if [ "$1" = configure ] && [ -f /etc/secubox/nginx-available/metanews.conf ] && 
     fi
   fi
 fi
-
 exit 0

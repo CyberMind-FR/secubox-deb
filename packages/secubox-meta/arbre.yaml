@@ -82,6 +82,8 @@ hors-arbre:
   - secubox-grafana  # transitoire → secubox-metrics (#2050)
   - secubox-ndpid  # transitoire → secubox-dpi (#2050)
   - secubox-mediaflow  # transitoire → secubox-dpi (#2050)
+  - secubox-devwatch  # transitoire → secubox-metanews (#2050)
+  - secubox-yacy  # transitoire → secubox-metanews (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -253,7 +255,6 @@ requiert:
   - secubox-sbxid
 recommande:
   - secubox-surf
-  - secubox-devwatch
   - sbxos-audio-mood            # « Mood » du Hall (#1577, #1587) ; amd64/arm64
   - secubox-ephemeride         # cardlet « Éphéméride » du Hall (date, soleil, lune, saint, météo)
 suggere:
@@ -577,7 +578,6 @@ description: "Radar d'actualité multi-sources."
 requiert:
   - secubox-metanews
 suggere:
-  - secubox-yacy
 
 meta: secubox-service-domotique
 niveau: service
