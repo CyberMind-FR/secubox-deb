@@ -56,3 +56,7 @@ def test_la_fiche_a_ses_trois_onglets_et_une_courbe_24h():
 def test_l_aperçu_n_est_demande_qu_avec_une_session():
     # comme la liste des acteurs : jamais à vide, sonde.js fermerait la carte
     assert "sessionOk()" in HTML and HTML.index("sessionOk()") < HTML.index("/api/v1/actor/overview")
+
+
+def test_les_heures_des_evenements_sont_en_heure_locale():
+    assert "function heureLocale(" in HTML and "toLocaleTimeString" in HTML and "esc(heureLocale(e))" in HTML
