@@ -1,24 +1,17 @@
 Source: secubox-vortex-dns
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-vortex-dns
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
-Recommends: unbound, dnsmasq
-Description: SecuBox Vortex DNS — recursive firewall with RPZ + threat feeds
- Recursive DNS firewall: aggregates threat-feed blocklists into RPZ
- zones and pushes them to unbound (preferred) or dnsmasq. Inline
- blocking happens before resolution, so policy-violating lookups
- never leave the box.
- .
- Distinct from sibling packages in the DNS cluster:
-  - secubox-dns-guard — post-resolution anomaly detection
-    (dnsmasq-only).
-  - secubox-ad-guard — ad/tracker-specific lookups with per-device
-    stats.
-  - secubox-dns — authoritative BIND zone manager (publishing).
-  - secubox-dns-provider — external registrar API.
+Depends: ${misc:Depends}
+Description: retired package, nothing replaces it
+ vortex-dns (RPZ firewall) was never wired to the resolver: the only DNS
+ engine is Unbound, driven by secubox-ad-guard and secubox-webfilter. This
+ empty package removes the old files and service on upgrade; it can be
+ removed once nothing depends on it.

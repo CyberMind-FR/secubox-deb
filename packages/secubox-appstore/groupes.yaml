@@ -35,7 +35,6 @@ modules:
   - secubox-isp
   - secubox-dns
   - secubox-dns-guard
-  - secubox-vortex-dns
   - secubox-netmodes
   - secubox-qos
   - secubox-nac

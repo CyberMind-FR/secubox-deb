@@ -103,6 +103,7 @@ hors-arbre:
   - secubox-ksm  # transitoire → secubox-system (#2050)
   - secubox-system-tuning  # transitoire → secubox-system (#2050)
   - secubox-mirror  # transitoire → secubox-cdn (#2050)
+  - secubox-vortex-dns  # RETIRÉ (#2050, D3) : paquet vide, jamais branché au résolveur
   - secubox-nettweak  # transitoire → secubox-qos (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
@@ -356,7 +357,6 @@ label: Résolution DNS
 description: "Zones faisant autorité, résolveur récursif pare-feu, garde DNS."
 requiert:
   - secubox-dns
-  - secubox-vortex-dns
 recommande:
   - secubox-dns-guard
   - secubox-webfilter

@@ -1,3 +1,9 @@
+secubox-meta (0.1.41-1~bookworm1) bookworm; urgency=medium
+
+  * vortex-dns declare hors-arbre : retire (#2050, D3).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 15:00:00 +0200
+
 secubox-meta (0.1.40-1~bookworm1) bookworm; urgency=medium
 
   * Routage : secubox-freebox (connecteur Freebox) recommande.

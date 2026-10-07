@@ -1,3 +1,9 @@
+secubox-hub (1.9.39-1~bookworm1) bookworm; urgency=medium
+
+  * vortex-dns retire (#2050, D3) : routes nginx /vortex-dns/ et /api/v1/vortex-dns/ et lien du module inconnu supprimes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 15:00:00 +0200
+
 secubox-hub (1.9.38-1~bookworm1) bookworm; urgency=medium
 
   * Le menu expose aussi « themes » : les modules installes regroupes par la cle theme des menu.d
