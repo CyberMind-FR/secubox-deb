@@ -1,3 +1,10 @@
+secubox-freebox (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau : des apostrophes s'affichaient « \\u2019 » dans les textes d'introduction des onglets Redirections (UPnP) et Auto-config ; le caractere
+    est ecrit directement dans le HTML. Un test interdit desormais les sequences d'echappement dans le HTML visible.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 10:00:00 +0200
+
 secubox-freebox (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Autoconfiguration : GET /autoconfig compare l'etat de la Freebox a la configuration recommandee (pare-feu IPv6, DNS distribue par le DHCP vers la
