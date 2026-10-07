@@ -1,3 +1,9 @@
+secubox-core (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_unbound : ecrire_verifier (ecrit et verifie SANS recharger : l'appelant decide), retirer_vue (supprime, verifie, recharge, remet la vue si refus), creation du dossier manquant. Pour ad-guard (D4, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 16:00:00 +0200
+
 secubox-core (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * secubox_unbound : bibliotheque commune (stdlib, sans effet de bord a l'import) qui pose une vue Unbound, la verifie (checkconf), recharge et revient en arriere octet pour octet ; ecriture atomique qui refuse les liens symboliques ; redemarrage reserve a une sous-classe. Remplace les deux copies de webfilter-ctl et dns-lan (D4, #2050).

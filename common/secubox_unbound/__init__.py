@@ -68,6 +68,7 @@ def ecrire_atomique(chemin: Path | str, texte: str, mode: int = 0o644, prefixe: 
     chemin = Path(chemin)
     if chemin.is_symlink():
         raise erreur(f"{chemin} est un lien symbolique : refusé")
+    chemin.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=prefixe)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -119,6 +120,40 @@ class SystemeUnboundRedemarrable(SystemeUnbound):
             raise self.ERREUR("redémarrage d'unbound refusé : " + sortie)
 
 
+def _restaurer(chemin: Path, ancien: bytes | None) -> None:
+    if ancien is None:
+        chemin.unlink(missing_ok=True)
+    else:
+        tmp = chemin.parent / (".sbx-restaure-" + chemin.name)
+        tmp.write_bytes(ancien)
+        os.replace(tmp, chemin)
+
+
+def _lire_octets(chemin: Path) -> bytes | None:
+    try:
+        return chemin.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def ecrire_verifier(chemin: Path | str, texte: str, systeme: SystemeUnbound | None = None, mode: int = 0o644) -> str:
+    """Pose `texte` dans `chemin` et VÉRIFIE la configuration, SANS recharger : l'appelant décide du rechargement (ad-guard TV applique certaines
+    règles à chaud, sans recharger). Si la vérification refuse, remet l'ancien contenu octet pour octet et lève ERREUR.
+
+    Rend « inchange » (fichier identique, rien n'est écrit ni vérifié) ou « ecrit »."""
+    s = systeme or SystemeUnbound()
+    chemin = Path(chemin)
+    ancien = _lire_octets(chemin)
+    if ancien is not None and ancien == texte.encode("utf-8"):
+        return "inchange"
+    ecrire_atomique(chemin, texte, mode, erreur=s.ERREUR)
+    ok, sortie = s.verifier_unbound()
+    if not ok:
+        _restaurer(chemin, ancien)
+        raise s.ERREUR("unbound-checkconf refuse la configuration : " + sortie)
+    return "ecrit"
+
+
 def poser_vue(chemin: Path | str, texte: str, systeme: SystemeUnbound | None = None, mode: int = 0o644) -> str:
     """Pose `texte` dans `chemin`, vérifie la configuration, recharge Unbound ; au moindre échec, remet l'ancien contenu OCTET POUR OCTET.
 
@@ -126,31 +161,37 @@ def poser_vue(chemin: Path | str, texte: str, systeme: SystemeUnbound | None = N
     ERREUR du système) sur un échec, après restauration."""
     s = systeme or SystemeUnbound()
     chemin = Path(chemin)
-    try:
-        ancien = chemin.read_bytes()
-    except FileNotFoundError:
-        ancien = None
-    if ancien is not None and ancien == texte.encode("utf-8"):
+    ancien = _lire_octets(chemin)
+    if ecrire_verifier(chemin, texte, s, mode) == "inchange":
         return "inchange"
-
-    def restaurer() -> None:
-        if ancien is None:
-            chemin.unlink(missing_ok=True)
-        else:
-            tmp = chemin.parent / (".sbx-restaure-" + chemin.name)
-            tmp.write_bytes(ancien)
-            os.replace(tmp, chemin)
-
-    ecrire_atomique(chemin, texte, mode)
-    ok, sortie = s.verifier_unbound()
-    if not ok:
-        restaurer()
-        raise s.ERREUR("unbound-checkconf refuse la configuration : " + sortie)
     try:
         s.recharger_unbound()
     except BaseException:
-        restaurer()
+        _restaurer(chemin, ancien)
         with contextlib.suppress(Exception):
             s.recharger_unbound()          # Unbound garde la NOUVELLE vue en mémoire tant qu'on ne lui a pas fait relire l'ancienne
         raise
     return "applique"
+
+
+def retirer_vue(chemin: Path | str, systeme: SystemeUnbound | None = None) -> str:
+    """Supprime une vue, vérifie la configuration restante, recharge. Si la vérification refuse, la vue est remise. « absent » si elle n'existait pas
+    (aucun rechargement)."""
+    s = systeme or SystemeUnbound()
+    chemin = Path(chemin)
+    ancien = _lire_octets(chemin)
+    if ancien is None:
+        return "absent"
+    chemin.unlink()
+    ok, sortie = s.verifier_unbound()
+    if not ok:
+        _restaurer(chemin, ancien)
+        raise s.ERREUR("unbound-checkconf refuse la configuration : " + sortie)
+    try:
+        s.recharger_unbound()
+    except BaseException:
+        _restaurer(chemin, ancien)
+        with contextlib.suppress(Exception):
+            s.recharger_unbound()
+        raise
+    return "retire"

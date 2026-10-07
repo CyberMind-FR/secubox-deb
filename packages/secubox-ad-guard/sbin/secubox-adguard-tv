@@ -35,6 +35,7 @@ for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])
     if _p not in sys.path:
         sys.path.insert(0, _p)
 from api import dnstv, dnstv_regles  # noqa: E402
+import secubox_unbound as _unbound  # noqa: E402   # D4 (#2050) : pose, vérification, rechargement — un seul code pour toutes les vues Unbound
 
 CHECKCONF = os.environ.get("SECUBOX_ADGUARD_TV_CHECKCONF", "unbound-checkconf")
 CONTROL = os.environ.get("SECUBOX_ADGUARD_TV_CONTROL", "unbound-control")
@@ -182,29 +183,34 @@ def lire_instantane() -> dict | None:
     return brut
 
 
+class Systeme(_unbound.SystemeUnbound):
+    """Les effets de bord sur Unbound. Les chemins des outils restent réglables par l'environnement (tests, bancs) ; ni redémarrage ni repli."""
+    MODULE = "ad-guard-tv"
+    ERREUR = RuntimeError
+
+    def verifier_unbound(self):
+        return _unbound.commande([CHECKCONF], 120)
+
+    def recharger_unbound(self):
+        ok, sortie = _unbound.commande([CONTROL, "reload"], 120)
+        if not ok:
+            raise self.ERREUR("unbound-control reload a échoué : " + sortie[:200])
+
+
 def ecrire_verifier(contenu: str) -> None:
     """Écrit le drop-in puis le VÉRIFIE ; en cas de refus, remet l'ancien et s'arrête (comportement du POC conservé)."""
-    cible = dnstv.CONF_UNBOUND
-    ancien = cible.read_bytes() if cible.is_file() else None
-    cible.parent.mkdir(parents=True, exist_ok=True)
-    tmp = cible.with_suffix(".tmp")
-    tmp.write_text(contenu, encoding="utf-8")
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, cible)
-    r = subprocess.run([CHECKCONF], capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        if ancien is None:
-            cible.unlink(missing_ok=True)
-        else:
-            cible.write_bytes(ancien)
-        audit("apply-refuse", (r.stdout + r.stderr).strip()[:200])
+    try:
+        _unbound.ecrire_verifier(dnstv.CONF_UNBOUND, contenu, Systeme())
+    except RuntimeError as e:
+        audit("apply-refuse", str(e)[:200])
         raise SystemExit("unbound-checkconf refuse la configuration — version précédente remise")
 
 
 def recharger() -> None:
-    r = subprocess.run([CONTROL, "reload"], capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        raise SystemExit("unbound-control reload a échoué : " + (r.stderr or r.stdout).strip()[:200])
+    try:
+        Systeme().recharger_unbound()
+    except RuntimeError as e:
+        raise SystemExit(str(e))
 
 
 def etats_regles() -> dict:

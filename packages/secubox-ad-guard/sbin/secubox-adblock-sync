@@ -29,10 +29,12 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
+
+# D4 (#2050) : pose, vérification, rechargement et retour arrière — la bibliothèque commune, pas une copie de plus.
+import secubox_unbound as _unbound
 
 # ── Locate the shared filter-list resource (secubox-toolbox package) ──────
 for _p in ("/usr/lib/secubox/toolbox", "/usr/lib/python3/dist-packages",
@@ -116,28 +118,18 @@ def _render(domains: list) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _checkconf() -> tuple:
-    try:
-        r = subprocess.run(["unbound-checkconf", str(UNBOUND_CONF)],
-                           capture_output=True, text=True, timeout=60)
-        return r.returncode == 0, (r.stderr or r.stdout).strip()
-    except Exception as e:
-        return False, str(e)
+class Systeme(_unbound.SystemeUnbound):
+    """Effets de bord sur Unbound. Vérification de /etc/unbound/unbound.conf (qui inclut le drop-in), rechargement par le canal de contrôle ;
+    AUCUN repli par redémarrage : l'ancien repli pouvait couper la résolution de tout le réseau sur un échec de rechargement."""
+    MODULE = "adblock-sync"
+    ERREUR = RuntimeError
+
+    def verifier_unbound(self):
+        return _unbound.commande(["unbound-checkconf", str(UNBOUND_CONF)], 60)
 
 
-def _reload() -> bool:
-    # Prefer the lightweight control channel; fall back to systemd.
-    for cmd in (["unbound-control", "reload"], ["systemctl", "reload", "unbound"],
-                ["systemctl", "restart", "unbound"]):
-        try:
-            if subprocess.run(cmd, capture_output=True, timeout=60).returncode == 0:
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def do_sync(force: bool = False) -> dict:
+def do_sync(force: bool = False, systeme=None) -> dict:
+    s = systeme or Systeme()
     stats = F.compile_lists(force=force)
     domains = []
     if F.OUT_DNS.exists():
@@ -147,35 +139,33 @@ def do_sync(force: bool = False) -> dict:
         _write_status(st)
         return st
 
-    # Render + validate before swapping in (atomic, rollback on bad config).
-    prev = DROPIN.read_text() if DROPIN.exists() else None
-    DROPIN.parent.mkdir(parents=True, exist_ok=True)
-    DROPIN.write_text(_render(domains))
-    ok, msg = _checkconf()
-    if not ok:
-        if prev is not None:
-            DROPIN.write_text(prev)
-        else:
-            DROPIN.unlink(missing_ok=True)
-        st = {"ok": False, "error": f"unbound-checkconf failed: {msg}", "blocked": len(domains)}
+    # Pose atomique, vérification, rechargement ; au moindre échec l'ancienne vue est remise octet pour octet (et rechargée).
+    try:
+        etat = _unbound.poser_vue(DROPIN, _render(domains), s)
+    except RuntimeError as e:
+        st = {"ok": False, "error": str(e), "blocked": len(domains)}
         _write_status(st)
         return st
 
-    reloaded = _reload()
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text("1\n")
     st = {"ok": True, "enabled": True, "blocked": len(domains),
-          "ip_allowlist": len(_ip_allowlist()), "reloaded": reloaded, "compile": stats}
+          "ip_allowlist": len(_ip_allowlist()), "reloaded": etat == "applique", "compile": stats}
     _write_status(st)
     return st
 
 
-def do_disable() -> dict:
-    DROPIN.unlink(missing_ok=True)
-    STATE.write_text("0\n") if STATE.parent.exists() else None
-    ok, msg = _checkconf()
-    reloaded = _reload() if ok else False
-    st = {"ok": ok, "enabled": False, "reloaded": reloaded, "error": None if ok else msg}
+def do_disable(systeme=None) -> dict:
+    s = systeme or Systeme()
+    try:
+        etat = _unbound.retirer_vue(DROPIN, s)
+    except RuntimeError as e:
+        st = {"ok": False, "enabled": False, "reloaded": False, "error": str(e)}
+        _write_status(st)
+        return st
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text("0\n")
+    st = {"ok": True, "enabled": False, "reloaded": etat == "retire", "error": None}
     _write_status(st)
     return st
 

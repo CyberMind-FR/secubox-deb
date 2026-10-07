@@ -174,3 +174,50 @@ def test_fsync_dossier_ne_leve_pas(tmp_path):
 def test_le_paquet_core_installe_la_bibliotheque():
     rules = (Path(__file__).resolve().parents[1] / "debian" / "rules").read_text()
     assert "common/secubox_unbound" in rules
+
+
+# ── ecrire_verifier (écrit + vérifie, SANS recharger) et retirer_vue : les gestes dont ad-guard a besoin ────────────────────────────────
+def test_ecrire_verifier_pose_et_verifie_sans_recharger(tmp_path):
+    f, s = tmp_path / "v.conf", Faux()
+    assert U.ecrire_verifier(f, "a\n", s) == "ecrit"
+    assert f.read_text() == "a\n" and s.appels == ["verifier"], "le rechargement est décidé par l'appelant (règles à chaud)"
+
+
+def test_ecrire_verifier_identique_ne_fait_rien(tmp_path):
+    f, s = tmp_path / "v.conf", Faux()
+    f.write_text("a\n")
+    assert U.ecrire_verifier(f, "a\n", s) == "inchange" and s.appels == []
+
+
+def test_ecrire_verifier_refuse_restaure(tmp_path):
+    f, s = tmp_path / "v.conf", Faux(verif=(False, "mauvais"))
+    f.write_bytes(b"ancien\n")
+    with pytest.raises(U.ErreurUnbound, match="mauvais"):
+        U.ecrire_verifier(f, "x\n", s)
+    assert f.read_bytes() == b"ancien\n"
+
+
+def test_retirer_vue_supprime_verifie_et_recharge(tmp_path):
+    f, s = tmp_path / "v.conf", Faux()
+    f.write_text("a\n")
+    assert U.retirer_vue(f, s) == "retire"
+    assert not f.exists() and s.appels == ["verifier", "recharger"]
+
+
+def test_retirer_une_vue_absente_ne_recharge_rien(tmp_path):
+    s = Faux()
+    assert U.retirer_vue(tmp_path / "absente.conf", s) == "absent" and s.appels == []
+
+
+def test_retirer_vue_dont_la_verification_echoue_remet_la_vue(tmp_path):
+    f, s = tmp_path / "v.conf", Faux(verif=(False, "non"))
+    f.write_bytes(b"gardee\n")
+    with pytest.raises(U.ErreurUnbound):
+        U.retirer_vue(f, s)
+    assert f.read_bytes() == b"gardee\n" and s.appels == ["verifier"]
+
+
+def test_ecriture_atomique_cree_le_dossier_manquant(tmp_path):
+    f = tmp_path / "nouveau" / "dossier" / "v.conf"
+    U.ecrire_atomique(f, "x\n")
+    assert f.read_text() == "x\n"

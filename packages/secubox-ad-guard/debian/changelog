@@ -1,3 +1,9 @@
+secubox-ad-guard (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * D4 (#2050) : les deux ecrivains Unbound d'ad-guard (adblock-sync et adguard-tv) utilisent secubox_unbound (secubox-core >= 1.7.1). adblock-sync : ecriture ATOMIQUE (elle ne l'etait pas), retour arriere octet pour octet et rechargement de l'ancienne vue, et SUPPRESSION du repli « restart unbound » qui pouvait couper la resolution du reseau sur un echec de reload. Memes tests, 7 nouveaux.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 16:00:00 +0200
+
 secubox-ad-guard (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * Un domaine confirme par l'administrateur sur plusieurs autres appareils entre a l'ESSAI (24 h, reversible) quand l'essai
