@@ -17,15 +17,31 @@ PKG_ROOT = Path(__file__).resolve().parent.parent
 DEBIAN = PKG_ROOT / "debian"
 
 
+# #2050 : antirootkit est un composant de secubox-security-posture. control et rules sont ceux de l'absorbeur ; le changelog et
+# compat restent à l'ancien paquet (devenu transitoire) ; postinst/prerm/postrm et les unités restent dans le composant.
+ABSORBEUR = PKG_ROOT.parents[1]
+TRANSITOIRE = ABSORBEUR.parent / "secubox-antirootkit"
+
+
 def _read(relpath: str) -> str:
-    return (PKG_ROOT / relpath).read_text()
+    base = PKG_ROOT
+    if relpath in ("debian/control", "debian/rules"):
+        base = ABSORBEUR
+    elif relpath in ("debian/changelog", "debian/compat"):
+        base = TRANSITOIRE
+    return (base / relpath).read_text()
+
+
+def _champ(control: str, nom: str) -> str:
+    """Valeur complète d'un champ de control, lignes de continuation comprises."""
+    m = re.search(rf"(?ms)^{nom}:(.*?)(?=^\S|\Z)", control)
+    return " ".join(m.group(1).split()) if m else ""
 
 
 def test_control_depends_and_recommends():
-    control = _read("debian/control")
-    m = re.search(r"^Depends:\s*(.+)$", control, re.MULTILINE)
-    assert m, "control has no Depends field"
-    depends = m.group(1)
+    control = _read("debian/control")        # celui de l'absorbeur (#2050)
+    depends = _champ(control, "Depends")
+    assert depends, "control has no Depends field"
     assert "auditd" in depends
     assert "debsums" in depends
     # The jail path shells out to `sudo -n` and the anti-escape containment
@@ -33,18 +49,19 @@ def test_control_depends_and_recommends():
     assert "sudo" in depends
     assert "nftables" in depends
 
-    m = re.search(r"^Recommends:\s*(.+)$", control, re.MULTILINE)
-    assert m, "control has no Recommends field"
-    assert "aide" in m.group(1)
+    recommends = _champ(control, "Recommends")
+    assert recommends, "control has no Recommends field"
+    assert "aide" in recommends
 
 
 def test_control_package_metadata():
-    control = _read("debian/control")
-    assert "Source: secubox-antirootkit" in control
-    assert "Package: secubox-antirootkit" in control
-    assert "Architecture: all" in control
-    assert "Standards-Version: 4.6.2" in control
-    assert "Section: admin" in control
+    # antirootkit est devenu un composant de secubox-security-posture : l'absorbeur le remplace, l'ancien paquet est transitoire
+    absorbeur = _read("debian/control")
+    assert "Replaces:" in absorbeur and "secubox-antirootkit (<<" in absorbeur and "Breaks:" in absorbeur
+    assert "Architecture: all" in absorbeur and "Standards-Version: 4.6.2" in absorbeur
+    transitoire = (TRANSITOIRE / "debian" / "control").read_text()
+    assert "Source: secubox-antirootkit" in transitoire and "Package: secubox-antirootkit" in transitoire
+    assert "Section: oldlibs" in transitoire
 
 
 def test_postinst_creates_module_dir_without_chowning_shared_parent():
@@ -87,14 +104,12 @@ def test_postinst_loads_nft_and_audit_rules():
     assert "augenrules" in postinst
 
 
-def test_postinst_has_debhelper_token():
-    postinst = _read("debian/postinst")
-    assert "#DEBHELPER#" in postinst
-
-
-def test_prerm_postrm_have_debhelper_token():
-    assert "#DEBHELPER#" in _read("debian/prerm")
-    assert "#DEBHELPER#" in _read("debian/postrm")
+def test_les_scripts_du_composant_sont_rejoues_par_l_absorbeur():
+    # le composant ne porte plus #DEBHELPER# (ses scripts sont rejoués en `sh`) ; l'absorbeur le porte et les rejoue
+    for s in ("postinst", "prerm", "postrm"):
+        assert (PKG_ROOT / "debian" / s).is_file(), s
+        assert f"maintscripts/*.{s}" in (ABSORBEUR / "debian" / s).read_text(), s
+        assert "#DEBHELPER#" in (ABSORBEUR / "debian" / s).read_text(), s
 
 
 def test_rules_installs_nft_sudoers_and_audit_files():

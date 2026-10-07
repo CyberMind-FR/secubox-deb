@@ -127,6 +127,9 @@ def traduire_rules(rules: str, ancien: str, absorbant: str, tops: set[str] | Non
         # debian/secubox-<ancien>/ devient celui de l'absorbant
         l = re.sub(rf"(?<![\w/.\-])debian/secubox-{re.escape(ancien)}\.", f"composants/{ancien}/debian/secubox-{ancien}.", ligne)
         l = re.sub(rf"debian/secubox-{re.escape(ancien)}(?=/|\s|$)", f"debian/secubox-{absorbant}", l)
+        # `$(CURDIR)/sbin/x` : la source reste devant `$(CURDIR)/`, que le motif ci-dessous (qui refuse un `/` devant) manquerait
+        l = re.sub(rf"\$\(CURDIR\)/((?!debian/)(?:{dirs})(?:/[^\s'\"]*)?)(?=[\s'\"]|$)",
+                   lambda mo: f"$(CURDIR)/composants/{ancien}/" + mo.group(1), l)
         l = re.sub(rf"(?<![\w/.\-])((?!debian/secubox-)(?:{dirs})(?:/[^\s'\"]*)?)(?=[\s'\"]|$)",
                    lambda mo: f"composants/{ancien}/" + mo.group(1), l)
         sortie.append(l)

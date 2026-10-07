@@ -368,9 +368,7 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-security-posture,
          secubox-threats
-Recommends: secubox-cve-triage,
-         secubox-threatmesh,
-         secubox-antirootkit
+Recommends: secubox-threatmesh
 Suggests: secubox-ad-guard,
          secubox-cookies,
          secubox-toolbox

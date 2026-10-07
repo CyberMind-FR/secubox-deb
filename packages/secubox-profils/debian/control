@@ -39,8 +39,6 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-profil-socle,
          secubox-ad-guard,
-         secubox-antirootkit,
-         secubox-cve-triage,
          secubox-dns-guard,
          secubox-interceptor,
          secubox-ipblock,
