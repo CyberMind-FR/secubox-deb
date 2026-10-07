@@ -31,3 +31,81 @@ override_dh_auto_install:
 	# nginx route drop-in (own socket — not aggregator-served)
 	install -d $(DESTDIR)/etc/nginx/secubox-routes.d
 	cp nginx/security-posture.conf $(DESTDIR)/etc/nginx/secubox-routes.d/
+	# Composant absorbé : cve-triage (#2050)
+	install -d debian/secubox-security-posture/usr/lib/secubox/cve-triage
+	cp -r composants/cve-triage/api debian/secubox-security-posture/usr/lib/secubox/cve-triage/
+	install -d debian/secubox-security-posture/usr/share/secubox/www/cve-triage
+	cp -r composants/cve-triage/www/cve-triage/. debian/secubox-security-posture/usr/share/secubox/www/cve-triage/
+	install -d debian/secubox-security-posture/usr/share/secubox/menu.d
+	[ -d composants/cve-triage/menu.d ] && cp -r composants/cve-triage/menu.d/. debian/secubox-security-posture/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-security-posture/usr/sbin
+	install -m 0755 composants/cve-triage/sbin/secubox-cvectl debian/secubox-security-posture/usr/sbin/
+	install -d debian/secubox-security-posture/usr/lib/secubox/cve-triage/nuclei-subset
+	cp -r composants/cve-triage/nuclei-subset/. debian/secubox-security-posture/usr/lib/secubox/cve-triage/nuclei-subset/
+	# sudoers: the panel (User=secubox in the aggregator) delegates the
+	# root-only generate flow to secubox-cvectl via exact-command sudo grants.
+	install -d debian/secubox-security-posture/etc/sudoers.d
+	install -m 0440 composants/cve-triage/sudoers.d/secubox-cve-triage debian/secubox-security-posture/etc/sudoers.d/secubox-cve-triage
+	install -D -m 755 composants/cve-triage/debian/postinst debian/secubox-security-posture/usr/lib/secubox/security-posture/maintscripts/cve-triage.postinst
+	install -D -m 755 composants/cve-triage/debian/prerm debian/secubox-security-posture/usr/lib/secubox/security-posture/maintscripts/cve-triage.prerm
+	install -D -m 644 composants/cve-triage/debian/secubox-cve-triage.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-triage.service
+	# Composant absorbé : antirootkit (#2050)
+	# Install API module (as composants/antirootkit/api/ subdirectory for uvicorn api.main:app)
+	install -d $(CURDIR)/debian/secubox-security-posture/usr/lib/secubox/antirootkit/api
+	cp -r $(CURDIR)/composants/antirootkit/api/*.py $(CURDIR)/debian/secubox-security-posture/usr/lib/secubox/antirootkit/api/
+	# Install root-only ctl (jail/nft-load/quarantine-prep)
+	install -d $(CURDIR)/debian/secubox-security-posture/usr/sbin
+	install -m 755 $(CURDIR)/composants/antirootkit/sbin/secubox-antirootkitctl $(CURDIR)/debian/secubox-security-posture/usr/sbin/
+	# Install composants/antirootkit/nft anti-escape table (path matches the ctl's nft-load verb)
+	install -d $(CURDIR)/debian/secubox-security-posture/usr/share/secubox-antirootkit
+	install -m 644 $(CURDIR)/composants/antirootkit/nft/secubox-antiescape.nft \
+		$(CURDIR)/debian/secubox-security-posture/usr/share/secubox-antirootkit/
+	# Install composants/antirootkit/systemd units. NOTE: composants/antirootkit/debian/secubox-antirootkit.service is
+	# auto-installed by dh_installsystemd (it is named composants/antirootkit/debian/<pkg>.service) to
+	# /usr/lib/systemd/system — do NOT also install it manually to
+	# /lib/systemd/system: on merged-usr (bookworm) those aliased paths collide
+	# and dpkg fails ("unable to open .service.dpkg-new"). Only the two units
+	# under composants/antirootkit/systemd/ (not <pkg>.service-named) need a manual install here.
+	# The untrusted slice is top-level (NOT nested under system.slice).
+	install -d $(CURDIR)/debian/secubox-security-posture/usr/lib/systemd/system
+	install -m 644 $(CURDIR)/composants/antirootkit/systemd/sbx-antirootkitd.service \
+		$(CURDIR)/debian/secubox-security-posture/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/composants/antirootkit/systemd/sbx-untrusted.slice \
+		$(CURDIR)/debian/secubox-security-posture/usr/lib/systemd/system/
+	# Install scoped composants/antirootkit/sudoers (secubox-antirootkit -> secubox-antirootkitctl,
+	# exact verbs only)
+	install -d $(CURDIR)/debian/secubox-security-posture/etc/sudoers.d
+	install -m 440 $(CURDIR)/composants/antirootkit/sudoers/secubox-antirootkit \
+		$(CURDIR)/debian/secubox-security-posture/etc/sudoers.d/
+	# Install auditd targeted watches (low volume, key sbx_exec)
+	install -d $(CURDIR)/debian/secubox-security-posture/etc/audit/rules.d
+	install -m 640 $(CURDIR)/composants/antirootkit/conf/99-sbx-procwatch.rules \
+		$(CURDIR)/debian/secubox-security-posture/etc/audit/rules.d/
+	# Install module composants/antirootkit/config (allowlist + IOC seed)
+	install -d $(CURDIR)/debian/secubox-security-posture/etc/secubox
+	install -m 644 $(CURDIR)/composants/antirootkit/conf/antirootkit.toml \
+		$(CURDIR)/debian/secubox-security-posture/etc/secubox/antirootkit.toml
+	# Install composants/antirootkit/nginx route into secubox-routes.d — the dir the hub's webui.conf
+	# actually `include`s inside the admin server block. /etc/nginx/secubox.d
+	# is NOT included by the admin vhost, so a route dropped there is inert
+	# (panel returns nothing). The route holds server-context `location`
+	# blocks (API -> dedicated /run/secubox/antirootkit.sock, + composants/antirootkit/static panel).
+	install -d $(CURDIR)/debian/secubox-security-posture/etc/nginx/secubox-routes.d
+	install -m 644 $(CURDIR)/composants/antirootkit/nginx/antirootkit.conf \
+		$(CURDIR)/debian/secubox-security-posture/etc/nginx/secubox-routes.d/
+	# Install web panel
+	install -d $(CURDIR)/debian/secubox-security-posture/usr/share/secubox/www/antirootkit
+	cp -r $(CURDIR)/composants/antirootkit/www/antirootkit/* \
+		$(CURDIR)/debian/secubox-security-posture/usr/share/secubox/www/antirootkit/
+	# Install dashboard menu entry
+	install -d $(CURDIR)/debian/secubox-security-posture/usr/share/secubox/menu.d
+	install -m 644 $(CURDIR)/composants/antirootkit/menu.d/595-antirootkit.json \
+		$(CURDIR)/debian/secubox-security-posture/usr/share/secubox/menu.d/
+	# Create runtime directory placeholder (tmpfiles.d/systemd own it live;
+	# see the "never chown /run/secubox" rule)
+	install -d $(CURDIR)/debian/secubox-security-posture/run/secubox
+	install -D -m 755 composants/antirootkit/debian/postinst debian/secubox-security-posture/usr/lib/secubox/security-posture/maintscripts/antirootkit.postinst
+	install -D -m 755 composants/antirootkit/debian/prerm debian/secubox-security-posture/usr/lib/secubox/security-posture/maintscripts/antirootkit.prerm
+	install -D -m 755 composants/antirootkit/debian/postrm debian/secubox-security-posture/usr/lib/secubox/security-posture/maintscripts/antirootkit.postrm
+	install -D -m 644 composants/antirootkit/debian/secubox-antirootkit.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-antirootkit.service
+

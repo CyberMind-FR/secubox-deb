@@ -42,7 +42,7 @@ Depends: ${misc:Depends},
 # Totalite du parc gk2 (working-set), hors modules propres a la carte ou au demarrage.
  secubox-admin,
  secubox-aggregator,
- secubox-antirootkit,
+ secubox-security-posture (>= 2.2.0),
  secubox-assist,
  secubox-console,
  secubox-interceptor,
