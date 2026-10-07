@@ -6,4 +6,3 @@ case "$1" in
     systemctl disable secubox-netdiag.service 2>/dev/null || true
     ;;
 esac
-#DEBHELPER#

@@ -12,3 +12,8 @@ esac
 systemctl stop    secubox-routes.service 2>/dev/null || true
 systemctl disable secubox-routes.service 2>/dev/null || true
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/routes/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "routes : prerm de $(basename "$_s") en échec" >&2; }
+done
+exit 0

@@ -84,6 +84,7 @@ hors-arbre:
   - secubox-mediaflow  # transitoire → secubox-dpi (#2050)
   - secubox-devwatch  # transitoire → secubox-metanews (#2050)
   - secubox-yacy  # transitoire → secubox-metanews (#2050)
+  - secubox-netdiag  # transitoire → secubox-routes (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -331,7 +332,6 @@ requiert:
   - secubox-nac
 recommande:
   - secubox-qos
-  - secubox-netdiag
 suggere:
   - secubox-nettweak
   - secubox-modem
