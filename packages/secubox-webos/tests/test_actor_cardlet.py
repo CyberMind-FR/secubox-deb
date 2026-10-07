@@ -72,3 +72,7 @@ def test_mode_compact_quand_la_carte_est_embarquee():
     for regle in (".emb .h .tt small", ".emb .sec-t", ".emb .tile", ".emb .carte svg"):
         assert regle in HTML, regle
     assert "white-space:nowrap" in HTML.split(".h .tt b")[1].split("}")[0], "le titre ne passe pas sur deux lignes"
+
+
+def test_les_blocs_d_une_couche_ne_retrecissent_pas():
+    assert ".slice>*{flex:0 0 auto}" in HTML
