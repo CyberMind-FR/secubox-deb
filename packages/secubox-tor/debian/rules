@@ -35,3 +35,38 @@ override_dh_auto_install:
 	# after boot (wg-toolbox); torctl already sets it live per-iface at
 	# `transparent on` time, this dropin covers ifaces recreated later.
 	install -D -m 644 debian/secubox-tor-route-localnet.sysctl debian/secubox-tor/etc/sysctl.d/60-secubox-route-localnet.conf
+	# Composant absorbé : proxypac (#2050)
+	install -d debian/secubox-tor/usr/lib/secubox/proxypac
+	cp -r composants/proxypac/proxypac composants/proxypac/api debian/secubox-tor/usr/lib/secubox/proxypac/
+	install -D -m 755 composants/proxypac/sbin/proxypac-gen debian/secubox-tor/usr/sbin/proxypac-gen
+	install -d debian/secubox-tor/etc/nginx/secubox.d
+	cp composants/proxypac/nginx/proxypac.conf debian/secubox-tor/etc/nginx/secubox.d/
+	install -d debian/secubox-tor/etc/nginx/sites-available
+	cp composants/proxypac/nginx/wpad-vhost.conf debian/secubox-tor/etc/nginx/sites-available/
+	install -d debian/secubox-tor/usr/lib/systemd/system
+	cp composants/proxypac/systemd/secubox-proxypac.service composants/proxypac/systemd/secubox-proxypac-gen.service composants/proxypac/systemd/secubox-proxypac-gen.path composants/proxypac/systemd/secubox-proxypac-gen.timer debian/secubox-tor/usr/lib/systemd/system/
+	install -d debian/secubox-tor/etc/secubox/proxypac/rules.d
+	cp composants/proxypac/conf/rules.d/*.rules debian/secubox-tor/etc/secubox/proxypac/rules.d/
+	install -d debian/secubox-tor/usr/share/secubox/www
+	cp -r composants/proxypac/www/. debian/secubox-tor/usr/share/secubox/www/
+	install -d debian/secubox-tor/usr/share/secubox/menu.d
+	cp composants/proxypac/menu.d/*.json debian/secubox-tor/usr/share/secubox/menu.d/
+	install -D -m 644 composants/proxypac/conf/proxypac.toml debian/secubox-tor/etc/secubox/proxypac/proxypac.toml
+	install -D -m 755 composants/proxypac/sbin/proxypac-wpad debian/secubox-tor/usr/sbin/proxypac-wpad
+	install -D -m 440 composants/proxypac/debian/secubox-proxypac.sudoers debian/secubox-tor/etc/sudoers.d/secubox-proxypac
+	install -D -m 755 composants/proxypac/debian/postinst debian/secubox-tor/usr/lib/secubox/tor/maintscripts/proxypac.postinst
+	install -D -m 755 composants/proxypac/debian/prerm debian/secubox-tor/usr/lib/secubox/tor/maintscripts/proxypac.prerm
+	# Composant absorbé : macro (#2050)
+	install -d $(CURDIR)/debian/secubox-tor/usr/sbin
+	install -m 755 composants/macro/sbin/secubox-macroctl $(CURDIR)/debian/secubox-tor/usr/sbin/
+	install -d $(CURDIR)/debian/secubox-tor/usr/lib/secubox/macro/macros.d
+	install -m 755 composants/macro/macros.d/tor-exit $(CURDIR)/debian/secubox-tor/usr/lib/secubox/macro/macros.d/
+	install -d $(CURDIR)/debian/secubox-tor/etc/sudoers.d
+	install -m 440 composants/macro/sudoers.d/secubox-macro $(CURDIR)/debian/secubox-tor/etc/sudoers.d/
+	install -d $(CURDIR)/debian/secubox-tor/etc/apparmor.d
+	install -m 644 composants/macro/apparmor/secubox-macroctl $(CURDIR)/debian/secubox-tor/etc/apparmor.d/
+	install -d $(CURDIR)/debian/secubox-tor/usr/share/secubox/macro
+	install -m 644 composants/macro/conf/secubox-macro-tor-exit.conf.example $(CURDIR)/debian/secubox-tor/usr/share/secubox/macro/
+	install -D -m 755 composants/macro/debian/postinst debian/secubox-tor/usr/lib/secubox/tor/maintscripts/macro.postinst
+	install -D -m 755 composants/macro/debian/prerm debian/secubox-tor/usr/lib/secubox/tor/maintscripts/macro.prerm
+

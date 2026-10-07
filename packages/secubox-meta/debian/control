@@ -309,7 +309,6 @@ Depends: ${misc:Depends},
          secubox-exposure
 Recommends: secubox-cdn
 Suggests: secubox-mirror,
-         secubox-proxypac,
          secubox-saas-relay
 Description: SecuBox — service « Exposition »
  Frontal HAProxy, hôtes virtuels, publication de services vers l'extérieur.
@@ -322,8 +321,7 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-wireguard
 Recommends: secubox-tor
-Suggests: secubox-reality,
-         secubox-macro
+Suggests: secubox-reality
 Description: SecuBox — service « Tunnels »
  WireGuard, sortie Reality, Tor.
  .

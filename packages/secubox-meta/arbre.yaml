@@ -85,6 +85,8 @@ hors-arbre:
   - secubox-devwatch  # transitoire → secubox-metanews (#2050)
   - secubox-yacy  # transitoire → secubox-metanews (#2050)
   - secubox-netdiag  # transitoire → secubox-routes (#2050)
+  - secubox-proxypac  # transitoire → secubox-tor (#2050)
+  - secubox-macro  # transitoire → secubox-tor (#2050)
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
@@ -360,7 +362,6 @@ recommande:
   - secubox-cdn
 suggere:
   - secubox-mirror
-  - secubox-proxypac
   - secubox-saas-relay
 
 meta: secubox-service-vpn
@@ -373,7 +374,6 @@ recommande:
   - secubox-tor
 suggere:
   - secubox-reality
-  - secubox-macro
 
 meta: secubox-service-mesh
 niveau: service

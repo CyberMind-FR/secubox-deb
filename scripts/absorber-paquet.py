@@ -123,7 +123,10 @@ def traduire_rules(rules: str, ancien: str, absorbant: str, tops: set[str] | Non
     for ligne in m.group(1).split("\n"):
         if not ligne.strip():
             continue
-        l = ligne.replace(f"debian/secubox-{ancien}", f"debian/secubox-{absorbant}")
+        # une SOURCE debian/secubox-<ancien>.<ext> (sudoers, install...) suit le composant ; l'arbre de destination
+        # debian/secubox-<ancien>/ devient celui de l'absorbant
+        l = re.sub(rf"(?<![\w/.\-])debian/secubox-{re.escape(ancien)}\.", f"composants/{ancien}/debian/secubox-{ancien}.", ligne)
+        l = re.sub(rf"debian/secubox-{re.escape(ancien)}(?=/|\s|$)", f"debian/secubox-{absorbant}", l)
         l = re.sub(rf"(?<![\w/.\-])((?!debian/secubox-)(?:{dirs})(?:/[^\s'\"]*)?)(?=[\s'\"]|$)",
                    lambda mo: f"composants/{ancien}/" + mo.group(1), l)
         sortie.append(l)
