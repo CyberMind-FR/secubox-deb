@@ -1,3 +1,11 @@
+secubox-ipv6guard (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2 : le verdict lit le pare-feu IPv6 de la Freebox par la socket de secubox-freebox, en relayant les identifiants de l'appelant
+    (aucune elevation de droit). Pare-feu desactive = « reseau expose » ; actif mais exceptions illisibles = « a verifier », jamais
+    « protege » sans certitude. Tout echec de lecture retombe sur « a verifier ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 21:00:00 +0200
+
 secubox-ipv6guard (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Noms lisibles : le nom d'usage annonce par l'appareil (fn=…, name=… du TXT mDNS) passe avant un nom d'hote ; un UUID n'est jamais un nom ; le modele (md=…) est conserve. avahi-browse est appele avec -k (sans traduction des types, qui devenaient « Web Site »…). Services de la maison nommes (Android TV, SecuBox, Freebox).

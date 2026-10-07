@@ -44,6 +44,11 @@ def verdict(appareils, freebox):
                 "explication": (f"Le pare-feu IPv6 de la Freebox est désactivé et {sujet} une adresse publique : "
                                 "tout ce que " + ("cet appareil propose" if n == 1 else "ces appareils proposent") + " peut être atteint depuis Internet.")}
     exc = freebox.get("exceptions") or []
+    if not exc and freebox.get("exceptions_lues") is False:
+        # pare-feu actif mais liste des exceptions illisible : on ne peut pas affirmer « protégé »
+        return {**base, "niveau": "a_verifier", "titre": "À vérifier",
+                "explication": "Le pare-feu de la Freebox est actif, mais la liste de ses exceptions n'a pas pu être lue : "
+                               "impossible d'affirmer que rien n'est ouvert vers Internet."}
     if exc:
         k = len(exc)
         return {**base, "niveau": "ouvert_partiellement", "titre": f"{k} ouverture{'s' if k > 1 else ''} volontaire{'s' if k > 1 else ''}",

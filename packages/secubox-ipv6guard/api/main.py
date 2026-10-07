@@ -13,20 +13,20 @@ aucun pare-feu. Aucune adresse MAC complète dans les réponses.
 """
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 
 from secubox_core.auth import require_lecture
 
-from . import service
+from . import freebox, service
 
-app = FastAPI(title="SecuBox IPv6 Guardian", version="0.1.0")
+app = FastAPI(title="SecuBox IPv6 Guardian", version="0.2.0")
 
 _surveillance = service.Surveillance()
 
 
-def _freebox():
-    """Phase 2 : lecture du pare-feu IPv6 de la Freebox. Pas encore connectée : None (le verdict dit « à vérifier »)."""
-    return None
+def _freebox(request):
+    """Pare-feu IPv6 de la Freebox, lu par secubox-freebox avec les identifiants de l'appelant ; None = inconnu (« à vérifier »)."""
+    return freebox.lire_pare_feu(dict(request.headers))
 
 
 @app.get("/health")
@@ -35,11 +35,11 @@ async def health():
 
 
 @app.get("/status", dependencies=[Depends(require_lecture)])
-def status():
+def status(request: Request):
     # `def` : FastAPI le passe au pool de threads (la lecture lance `ip`).
-    return _surveillance.lecture(freebox=_freebox())
+    return _surveillance.lecture(freebox=_freebox(request))
 
 
 @app.get("/appareils", dependencies=[Depends(require_lecture)])
-def appareils():
-    return {"appareils": _surveillance.lecture(freebox=_freebox())["appareils"]}
+def appareils(request: Request):
+    return {"appareils": _surveillance.lecture(freebox=_freebox(request))["appareils"]}
