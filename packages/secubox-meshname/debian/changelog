@@ -1,3 +1,9 @@
+secubox-meshname (1.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : meshname est un composant de secubox-p2p >= 1.12.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-meshname (1.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Description : noms du réseau maillé (dnsmasq + mDNS/Avahi) — elle annonçait un résolveur de l'overlay Yggdrasil que le code n'a jamais été (#1703).

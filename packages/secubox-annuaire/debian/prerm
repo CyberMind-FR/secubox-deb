@@ -10,4 +10,8 @@ case "$1" in
         ;;
 esac
 #DEBHELPER#
+# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
+for _s in /usr/lib/secubox/annuaire/maintscripts/*.prerm; do
+  [ -f "$_s" ] && { sh "$_s" "$@" || echo "annuaire : prerm de $(basename "$_s") en échec" >&2; }
+done
 exit 0

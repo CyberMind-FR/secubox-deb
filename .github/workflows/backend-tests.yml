@@ -42,7 +42,7 @@ on:
       - 'packages/secubox-haproxy/tests/test_frontal_1841.py'
       - 'packages/secubox-vault/**'
       - 'packages/secubox-auth/**'
-      - 'packages/secubox-openpgp/**'
+      - 'packages/secubox-annuaire/**'
       - 'packages/secubox-aggregator/**'
       - 'image/firstboot.sh'
       - 'scripts/tests/test_firstboot_frontal_1845.py'
@@ -153,7 +153,7 @@ jobs:
             chemin: packages/secubox-auth/tests
           # OpenPGP de box (#1736) et annuaire des clés personnelles (#1738), vrai GnuPG.
           - suite: secubox-openpgp
-            chemin: packages/secubox-openpgp/tests
+            chemin: packages/secubox-annuaire/composants/openpgp/tests
           # Relais de l'agrégateur réservé aux admins réels (actor, radio, vault).
           - suite: secubox-aggregator-relais
             chemin: packages/secubox-aggregator/tests/test_socket_dedie_admin.py

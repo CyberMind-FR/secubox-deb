@@ -1,9 +1,13 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Transitoire (#2050) : l'unité secubox-meshname.service est désormais livrée par secubox-p2p. L'ancien prerm
+# de la version précédente l'arrête à la mise à jour ; on la rétablit une fois l'absorbant configuré.
 set -e
-if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-meshname.service || true
-    systemctl start secubox-meshname.service || true
-fi
 #DEBHELPER#
+if [ "$1" = configure ] && [ -e /usr/lib/systemd/system/secubox-meshname.service -o -e /lib/systemd/system/secubox-meshname.service ]; then
+    if [ "$(systemctl is-enabled secubox-meshname.service 2>/dev/null)" != masked ]; then
+        systemctl enable secubox-meshname.service >/dev/null 2>&1 || true
+        systemctl start secubox-meshname.service >/dev/null 2>&1 || true
+    fi
+fi
 exit 0

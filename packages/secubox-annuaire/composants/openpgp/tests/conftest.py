@@ -7,5 +7,5 @@ from pathlib import Path
 
 ICI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ICI))
-sys.path.insert(0, str(ICI.parent / "secubox-annuaire"))
-sys.path.insert(0, str(ICI.parents[1] / "common"))
+sys.path.insert(0, str(ICI.parents[1]))  # secubox-annuaire, l absorbeur (#2050)
+sys.path.insert(0, str(ICI.parents[3] / "common"))
