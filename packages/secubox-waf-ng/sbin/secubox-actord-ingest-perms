@@ -20,25 +20,32 @@ set -u
 SOCKET="${1:-/run/secubox/actord.sock}"
 GROUPE="${2:-actord-ingest}"
 
-# LA SOCKET QU'ON CORRIGE N'EST PAS FORCEMENT LA BONNE. Lancee juste apres
-# actord (Type=simple : systemd rend la main des le fork), cette unite voit
-# encore l'ANCIENNE socket — actord reconstruit son graphe avant d'ouvrir la
-# nouvelle, ce qui prend quelques secondes. Un script qui corrige puis verifie
-# deux fois en une seconde corrige donc un inode condamne, et repart satisfait.
+# LA SOCKET QU'ON CORRIGE N'EST PAS FORCEMENT LA BONNE, ET ELLE PEUT ARRIVER TRÈS TARD. actord reconstruit son graphe avant d'ouvrir la
+# nouvelle socket : quelques secondes d'ordinaire, ~4 MINUTES quand la base est grosse (incident 2026-10-05 : fenêtre fixe de 12 s dépassée,
+# socket restée au groupe `secubox`, ingestion muette près de deux jours). Un fichier de socket n'est pas une socket en écoute : l'ancienne
+# socket d'un run précédent existe encore sans personne derrière.
 #
-# On applique donc EN CONTINU pendant une fenetre qui couvre largement le
-# demarrage d'actord, sans sortie anticipee. Le cout est nul : l'unite est un
-# oneshot qui ne retient personne — actord tourne deja, sbxwaf aussi.
-FENETRE=24          # 24 x 0,5 s = 12 s
+# On ATTEND donc, jusqu'à ATTENTE secondes, qu'un processus écoute vraiment sur ce chemin (`ss -xl`), puis on applique pendant une courte
+# fenêtre de stabilisation. Le coût est nul : l'unité est un oneshot qui ne retient personne.
+ATTENTE=900         # 900 s : bien au-delà d'une reconstruction lente
+STABILISATION=12    # 12 x 0,5 s une fois la socket en écoute
 pose=0
 i=0
-while [ "$i" -lt "$FENETRE" ]; do
+while [ "$i" -lt $((ATTENTE * 2)) ]; do
+    if [ -S "$SOCKET" ] && ss -xlH 2>/dev/null | grep -qF -- "$SOCKET"; then
+        break
+    fi
+    i=$((i + 1))
+    sleep 0.5
+done
+j=0
+while [ "$j" -lt "$STABILISATION" ]; do
     if [ -S "$SOCKET" ]; then
         chgrp "$GROUPE" "$SOCKET" 2>/dev/null
         chmod 0660 "$SOCKET" 2>/dev/null
         [ "$(stat -c %G "$SOCKET" 2>/dev/null)" = "$GROUPE" ] && pose=1
     fi
-    i=$((i + 1))
+    j=$((j + 1))
     sleep 0.5
 done
 
@@ -49,6 +56,6 @@ fi
 
 # On n'échoue PAS : une ingestion muette vaut mieux qu'un service bloqué. Mais on
 # le DIT, pour que ça ne redevienne jamais un échec silencieux.
-echo "socket $SOCKET : groupe $GROUPE NON posé après 20 s — l'ingestion Actor" \
+echo "socket $SOCKET : groupe $GROUPE NON posé après l'attente — l'ingestion Actor" \
      "Intelligence restera muette (sbxwaf ne pourra pas écrire)" >&2
 exit 0
