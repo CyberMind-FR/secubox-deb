@@ -135,6 +135,33 @@
   .box .big{font-size:1.2rem;font-weight:800;font-family:"JetBrains Mono",ui-monospace,monospace;margin-top:2px}
   .note{font-size:.58rem;color:var(--faint);line-height:1.4} .note b{color:var(--muted)}
   .vide{color:var(--faint);font-size:.72rem;padding:12px;text-align:center;border:1px dashed var(--line);border-radius:9px}
+  /* CARTE DU MONDE en points (Natural Earth, domaine public, rééchantillonnée à 3°) + bulles par pays d'origine. */
+  .carte{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:4px;display:flex;gap:6px;min-height:0}
+  .carte svg{flex:1 1 62%;min-width:0;height:auto;display:block}
+  .carte .terre{fill:color-mix(in srgb,var(--muted) 38%,transparent)}
+  .carte .bulle{fill:color-mix(in srgb,var(--b3) 70%,transparent);stroke:var(--b3);stroke-width:.3}
+  .pays{flex:0 0 34%;display:flex;flex-direction:column;gap:2px;font-size:.66rem;min-width:0}
+  .pays h4{margin:0 0 2px;font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .pays div{display:flex;align-items:center;gap:5px;white-space:nowrap}
+  .pays div b{margin-left:auto;font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .pays .fl{font-size:.9rem}
+  /* DERNIERS ÉVÉNEMENTS — tableau façon maquette. */
+  table.ev{width:100%;border-collapse:collapse;font-size:.66rem}
+  table.ev th{font-size:.52rem;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);text-align:left;padding:3px 4px;border-bottom:1px solid var(--line-2)}
+  table.ev td{padding:4px;border-bottom:1px dashed var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+  table.ev td.sc{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:800;text-align:right}
+  table.ev td.ac{font-family:ui-monospace,monospace;color:var(--cyan)}
+  /* FICHE — onglets Vue / Techniques / Réponse, courbe d'activité 24 h. */
+  .onglets{display:flex;gap:2px;border-bottom:1px solid var(--line)}
+  .onglets button{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--faint);font:inherit;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 2px;cursor:pointer}
+  .onglets button.on{color:var(--cyan);border-bottom-color:var(--cyan)}
+  .actv{width:100%;height:54px;display:block;background:var(--soft);border:1px solid var(--line);border-radius:8px}
+  .actv .aire{fill:color-mix(in srgb,var(--b3) 35%,transparent);stroke:var(--b3);stroke-width:.8;vector-effect:non-scaling-stroke}
+  .actv-axe{display:flex;justify-content:space-between;font-size:.5rem;color:var(--faint);font-family:"JetBrains Mono",ui-monospace,monospace}
+  .techs{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .tech{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:5px 7px;font-size:.66rem;min-width:0}
+  .tech .ti2{font-size:1rem} .tech b{margin-left:auto;font-family:"JetBrains Mono",ui-monospace,monospace}
+  .tech span.nm3{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #slbar{flex:0 0 auto}
 </style>
 
@@ -151,6 +178,8 @@
           <div class="tile susp"><span class="ti">⚠️</span><div><div class="tv" id="t-susp">—</div><div class="tl">acteurs<br>suspects</div></div></div>
           <div class="tile obs"><span class="ti">👁️</span><div><div class="tv" id="t-obs">—</div><div class="tl">acteurs<br>observés</div></div></div>
         </div>
+        <div class="carte"><svg id="carte" viewBox="0 0 120 60" role="img" aria-label="Pays d'origine des événements"></svg>
+          <div class="pays" id="pays"></div></div>
         <div class="kpis">
           <div class="kpi cy"><div class="v" id="k-actors">—</div><div class="l">acteurs</div></div>
           <div class="kpi gr"><div class="v" id="k-camp">—</div><div class="l">campagnes</div></div>
@@ -161,16 +190,20 @@
         <div class="bandes" id="bandes"></div>
       </div>
     </div>
+    <div class="dsec" id="d-even">
+      <div class="sec-t"><span class="nb">3</span>Derniers événements</div>
+      <div class="slice" id="even"></div>
+    </div>
     <div class="dsec" id="d-acteurs">
-      <div class="sec-t"><span class="nb">3</span>Acteurs corrélés</div>
+      <div class="sec-t"><span class="nb">4</span>Acteurs corrélés</div>
       <div class="slice" id="list"></div>
     </div>
     <div class="dsec" id="d-profil">
-      <div class="sec-t"><span class="nb">4</span>Fiche d'un acteur</div>
+      <div class="sec-t"><span class="nb">5</span>Fiche d'un acteur</div>
       <div class="slice" id="profile"><div class="vide">Sélectionne un acteur (couche Acteurs).</div></div>
     </div>
     <div class="dsec" id="d-defense">
-      <div class="sec-t"><span class="nb">5</span>Réponse graduée — réversible</div>
+      <div class="sec-t"><span class="nb">6</span>Réponse graduée — réversible</div>
       <div class="slice">
         <div class="crans" id="crans"></div>
         <div class="twocol">
@@ -192,7 +225,7 @@
   var el=function(id){return document.getElementById(id);};
   function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
   function num(x){x=Number(x);return isFinite(x)?x:0;}
-  function acteursSiSession(){return jget('/api/v1/acces/session/etat').then(function(s){return s&&s.session?jget('/api/v1/actor/actors'):null;});}
+  function sessionOk(){return jget('/api/v1/acces/session/etat').then(function(s){return !!(s&&s.session);});}
   function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
 
   // Échelle de score (maquette §6) ramenée à la priorité 0..100 d'actord.
@@ -209,7 +242,12 @@
   var VECORD=["knowledge","continuity","intent","automation","severity","persistence","confidence"];
   var CRANS=[["👁️","Observer","Collecte d'informations"],["⏳","Delay","Ralentir la connexion"],["🛡️","Challenge","Vérification (ex. CAPTCHA)"],
              ["🐌","Tarpit","Leurrer et consommer du temps"],["⛔","Deny","Blocage (pare-feu / WAF)"],["☣️","Quarantine","Isolement renforcé"]];
-  var ACTS=[],CUR=null;
+  // Fond de carte : Natural Earth (domaine public) en points de 3°, codé en séries alternées terre/mer, une ligne par bande de latitude.
+  var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|01,64,9,2,8,1,35|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|1120|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+  // Centre approximatif des pays (lat, lon) pour placer les bulles.
+  var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+  var ACTS=[],CUR=null,APERCU=null,ONGLET='vue';
+  function drapeau(c){c=String(c||'');if(!/^[A-Za-z]{2}$/.test(c))return '🌐';return String.fromCodePoint(0x1F1E6+c.toUpperCase().charCodeAt(0)-65,0x1F1E6+c.toUpperCase().charCodeAt(1)-65);}
 
   function rendKPIs(s){
     el('k-actors').textContent = s.actors!=null?s.actors:'—';
@@ -220,9 +258,23 @@
     el('honey').textContent = (s.honey_active!=null?s.honey_active:'—');
     el('glob').textContent  = (s.global!=null?s.global+' /100':'—');
   }
-  // Tuiles + échelle : calculées sur les acteurs visibles ; sans session, on dit « session requise » plutôt que d'inventer.
+  function rendCarte(){
+    var svg=el('carte'),h='',lignes=TERRE.split('|');
+    lignes.forEach(function(l,j){
+      var cur=l.charAt(0)==='1',runs=l.slice(1).split(','),x=0;
+      runs.forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)h+='<circle class="terre" cx="'+(x+i+.5)+'" cy="'+(j+.5)+'" r=".42"/>';}x+=n;cur=!cur;});
+    });
+    var pays=(APERCU&&APERCU.top_pays)||[],max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+    pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
+      var x=(c[1]+180)/3,y=(90-c[0])/3,r=1.2+2.6*Math.sqrt(num(p.n)/max);
+      h+='<circle class="bulle" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+r.toFixed(1)+'"><title>'+esc(p.code)+' : '+num(p.n)+'</title></circle>';});
+    svg.innerHTML=h;
+    el('pays').innerHTML='<h4>Top pays</h4>'+(pays.length?pays.slice(0,5).map(function(p){
+      return '<div><span class="fl">'+drapeau(p.code)+'</span>'+esc(String(p.code).toUpperCase())+'<b>'+num(p.n)+'</b></div>';}).join('')
+      :'<div style="color:var(--faint)">pas encore de pays</div>');
+  }
   function rendVue(){
-    if(ACTS===null||!ACTS.length&&ACTS.sansSession){return;}
+    if(ACTS.sansSession){return;}
     var crit=0,susp=0,obs=0,par=PALIERS.map(function(){return 0;});
     ACTS.forEach(function(a){var p=num(a.priority);
       if(p>=76)crit++;else if(p>=51)susp++;else obs++;
@@ -232,6 +284,14 @@
     el('bandes').innerHTML=PALIERS.map(function(p,i){
       return '<div class="bande"><span class="pl">'+p.de+'–'+p.a+'</span><span class="bar"><i style="width:'+Math.round(par[i]*100/max)+'%;background:'+p.c+'"></i></span>'
         +'<span class="nm" style="color:'+p.c+'">'+esc(p.nom)+'</span><span class="n">'+par[i]+'</span></div>';}).join('');
+  }
+  function rendEven(){
+    var box=el('even'),r=(APERCU&&APERCU.recents)||[];
+    if(!r.length){box.innerHTML='<div class="vide">'+(ACTS.sansSession?'Ouvre une session pour voir les événements.':'Aucun événement récent.')+'</div>';return;}
+    box.innerHTML='<table class="ev"><thead><tr><th>Heure</th><th>Acteur</th><th>Événement</th><th>Module</th><th>Score</th></tr></thead><tbody>'
+      +r.map(function(e){var p=palier(e.score);
+        return '<tr><td>'+esc(e.heure)+'</td><td class="ac">'+esc(e.acteur||'—')+'</td><td>'+esc(e.type)+'</td><td>'+esc(e.module)+'</td><td class="sc" style="color:'+p.c+'">'+num(e.score)+'</td></tr>';}).join('')
+      +'</tbody></table>';
   }
   function rendList(){
     var box=el('list');
@@ -248,23 +308,44 @@
       box.appendChild(d);
     });
   }
-  function rendProfile(){
-    var a=ACTS.filter(function(x){return x.id===CUR;})[0];
-    if(!a){el('profile').innerHTML='<div class="vide">Sélectionne un acteur (couche Acteurs).</div>';return;}
-    var v=a.vec||{},p=palier(a.priority),src=a.src||{};
-    var bars=VECORD.map(function(k){
-      var val=num(v[k]),hot=(k==="automation"||k==="intent"||k==="severity")&&val>=70,L=VECLBL[k];
-      return '<div class="row'+(hot?' hot':'')+'"><span class="e">'+L[0]+'</span><span class="nm">'+L[1]+'</span>'
-        +'<span class="bar"><i style="width:'+val+'%"></i></span><span class="n">'+val+'</span></div>';
-    }).join('');
-    var h=(a.hyp&&a.hyp[0])?'<div class="hyp"><span class="p">'+(num(a.hyp[0][1])*100).toFixed(0)+'%</span> '+esc(a.hyp[0][0])+'</div>':'';
-    el('profile').innerHTML='<div class="fh"><b>'+esc(a.id)+'</b><span class="badge" style="background:'+p.c+'">'+esc(p.nom)+'</span>'
-      +'<span class="sc">Score <b style="color:'+p.c+'">'+num(a.priority)+'</b></span></div>'
-      +'<div class="faits"><div><span>Première détection</span><b>'+esc(a.first)+'</b></div><div><span>Dernière activité</span><b>'+esc(a.last)+'</b></div>'
-      +'<div><span>Adresses IP</span><b>'+num(src.ips)+'</b></div><div><span>Pays</span><b>'+num(src.countries)+'</b></div>'
-      +'<div><span>Cibles visées</span><b>'+num(a.nb_cibles)+'</b></div><div><span>Sanctions</span><b>'+num(a.bans)+'</b></div></div>'
-      +h+bars;
+  function courbe(h){
+    h=(h||[]).map(num);if(h.length!==24)return '<div class="vide">Pas d’activité sur 24 h.</div>';
+    var m=Math.max.apply(null,h.concat([1])),pts=h.map(function(v,i){return (i*100/23).toFixed(1)+','+(30-v*28/m).toFixed(1);}).join(' ');
+    return '<svg class="actv" viewBox="0 0 100 30" preserveAspectRatio="none" role="img" aria-label="Activité sur 24 heures"><polygon class="aire" points="0,30 '+pts+' 100,30"/></svg>'
+      +'<div class="actv-axe"><span>−24 h</span><span>−12 h</span><span>maintenant</span></div>';
   }
+  function iconeTech(n){n=String(n).toLowerCase();
+    if(/sql|inject|xss/.test(n))return '🛡️';if(/scan|probe|recon/.test(n))return '🔎';if(/ssh|auth|brute|login/.test(n))return '🔑';
+    if(/lfi|path|travers|file/.test(n))return '📁';if(/honey/.test(n))return '🍯';if(/outil|agent|ua/.test(n))return '🕵️';return '🔹';}
+  function rendProfile(){
+    var a=ACTS.filter(function(x){return x.id===CUR;})[0],z=el('profile');
+    if(!a){z.innerHTML='<div class="vide">Sélectionne un acteur (couche Acteurs).</div>';return;}
+    var v=a.vec||{},p=palier(a.priority),src=a.src||{};
+    var tete='<div class="fh"><b>'+esc(a.id)+'</b><span class="badge" style="background:'+p.c+'">'+esc(p.nom)+'</span>'
+      +'<span class="sc">Score <b style="color:'+p.c+'">'+num(a.priority)+'</b></span></div>'
+      +'<div class="onglets">'+[['vue','Vue'],['tech','Techniques'],['rep','Réponse']].map(function(o){
+        return '<button type="button" data-o="'+o[0]+'" class="'+(ONGLET===o[0]?'on':'')+'">'+o[1]+'</button>';}).join('')+'</div>';
+    var corps='';
+    if(ONGLET==='vue'){
+      var bars=VECORD.map(function(k){var val=num(v[k]),hot=(k==="automation"||k==="intent"||k==="severity")&&val>=70,L=VECLBL[k];
+        return '<div class="row'+(hot?' hot':'')+'"><span class="e">'+L[0]+'</span><span class="nm">'+L[1]+'</span><span class="bar"><i style="width:'+val+'%"></i></span><span class="n">'+val+'</span></div>';}).join('');
+      var hy=(a.hyp&&a.hyp[0])?'<div class="hyp"><span class="p">'+(num(a.hyp[0][1])*100).toFixed(0)+'%</span> '+esc(a.hyp[0][0])+'</div>':'';
+      corps='<div class="faits"><div><span>Première détection</span><b>'+esc(a.first)+'</b></div><div><span>Dernière activité</span><b>'+esc(a.last)+'</b></div>'
+        +'<div><span>Adresses IP</span><b>'+num(src.ips)+'</b></div><div><span>Pays</span><b>'+num(src.countries)+'</b></div>'
+        +'<div><span>Cibles visées</span><b>'+num(a.nb_cibles)+'</b></div><div><span>Sanctions</span><b>'+num(a.bans)+'</b></div></div>'
+        +'<div class="sec-t" style="margin-top:4px">Activité (24 h)</div>'+courbe(APERCU&&APERCU.activite_acteurs&&APERCU.activite_acteurs[a.id])+hy+bars;
+    }else if(ONGLET==='tech'){
+      var tl=(APERCU&&APERCU.techniques&&APERCU.techniques[a.id])||[];
+      corps='<div class="sec-t" style="margin-top:4px">Techniques observées</div>'+(tl.length?'<div class="techs">'+tl.map(function(x){
+        return '<div class="tech"><span class="ti2">'+iconeTech(x.nom)+'</span><span class="nm3">'+esc(x.nom)+'</span><b>'+num(x.n)+'</b></div>';}).join('')+'</div>'
+        :'<div class="vide">Pas de technique relevée dans les derniers événements.</div>');
+    }else{
+      corps='<div class="sec-t" style="margin-top:4px">Réponse</div><div class="faits"><div><span>Mode</span><b>shadow · propose</b></div><div><span>Sanctions déjà posées</span><b>'+num(a.bans)+'</b></div></div>'
+        +'<div class="note">Les blocages viennent du WAF (ban temporaire par adresse). Le ban automatique piloté par ce moteur n’agit que sur des adresses déjà sanctionnées au moins deux fois, avec un plafond horaire.</div>';
+    }
+    z.innerHTML=tete+corps;
+  }
+  el('profile').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-o]');if(!b)return;ONGLET=b.getAttribute('data-o');rendProfile();});
   function rendCrans(){
     el('crans').innerHTML=CRANS.map(function(c,i){
       return '<div class="cran'+(i===0?' on':'')+'"><span class="ci">'+c[0]+'</span><div><b>'+esc(c[1])+'</b><small>'+esc(c[2])+'</small></div>'
@@ -273,17 +354,17 @@
 
   function tick(){
     if(document.hidden) return;
-    // La liste des acteurs demande une session ; sans elle, les compteurs seuls. On ne l'appelle pas à vide : sonde.js fermerait tout « actor ».
-    Promise.all([jget('/api/v1/actor/stats'),acteursSiSession()]).then(function(r){
+    // Liste des acteurs et aperçu demandent une session ; sans elle, les compteurs seuls. On ne les appelle pas à vide : sonde.js fermerait tout « actor ».
+    Promise.all([jget('/api/v1/actor/stats'),sessionOk().then(function(ok){return ok?Promise.all([jget('/api/v1/actor/actors'),jget('/api/v1/actor/overview')]):null;})]).then(function(r){
       if(!r[0]){el('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
       rendKPIs(r[0]);
-      if(r[1]===null){ACTS=[];ACTS.sansSession=true;
+      if(r[1]===null){ACTS=[];ACTS.sansSession=true;APERCU=null;
         el('bandes').innerHTML='<div class="vide">Ouvre une session pour voir le détail des acteurs.</div>';
         ['t-crit','t-susp','t-obs'].forEach(function(i){el(i).textContent='—';});
-      }else{ACTS=r[1];}
+      }else{ACTS=r[1][0]||[];APERCU=r[1][1];}
       if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;
       if(!CUR&&ACTS.length)CUR=ACTS[0].id;
-      rendVue();rendList();rendProfile();
+      rendCarte();rendVue();rendEven();rendList();rendProfile();
     });
   }
   rendCrans();tick();
@@ -291,11 +372,11 @@
   document.addEventListener('visibilitychange',function(){if(!document.hidden)tick();});
 
   // ── SLICER partagé (SBXSliceBar « double bullet », stylé par slicebar.css) ────
-  var slices=[el('d-vue'),el('d-acteurs'),el('d-profil'),el('d-defense')];
+  var slices=[el('d-vue'),el('d-even'),el('d-acteurs'),el('d-profil'),el('d-defense')];
   function montre(i){for(var k=0;k<slices.length;k++)slices[k].classList.toggle('actif',k===i);}
   if(window.SBXSliceBar){
     SBXSliceBar(el('slbar'),{autoMs:9000,onShow:montre,
-      slices:[{label:'🧭 Vue d’ensemble'},{label:'🎭 Acteurs'},{label:'🕵️ Fiche'},{label:'🛡️ Réponse'}]});
+      slices:[{label:'🧭 Vue d’ensemble'},{label:'📜 Événements'},{label:'🎭 Acteurs'},{label:'🕵️ Fiche'},{label:'🛡️ Réponse'}]});
   }else{ montre(0); }
 
   // Thème dark/light : suit ?theme= (Hall) puis postMessage — comme les autres cardlets.
