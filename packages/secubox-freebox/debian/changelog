@@ -1,3 +1,10 @@
+secubox-freebox (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * UPnP : GET /upnp (etat + ports ouverts automatiquement par les appareils) et POST /upnp (administrateur, confirmation explicite, droit
+    « settings », relecture, audit), section dans le panneau. Le reglage des booleens est factorise (pare-feu IPv6 et UPnP).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 22:40:00 +0200
+
 secubox-freebox (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Ecriture : POST /pare-feu/ipv6 (administrateur, confirmation explicite) active ou desactive le pare-feu IPv6 de la Freebox. Droit

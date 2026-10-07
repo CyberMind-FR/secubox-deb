@@ -101,3 +101,13 @@ def exceptions_ipv6(liste):
                        "appareil": r.get("ip") or r.get("lan_ip") or "", "port_debut": debut, "port_fin": fin,
                        "commentaire": r.get("comment") or "", "sensible": est_sensible(debut, fin)})
     return sortie
+
+
+def upnp(config, redirections):
+    """État de l'UPnP (les appareils du réseau peuvent ouvrir des ports tout seuls) et ports ouverts ainsi."""
+    cfg = config if isinstance(config, dict) else {}
+    out = []
+    for r in redirections if isinstance(redirections, list) else []:
+        out.append({"protocole": r.get("proto", ""), "port_externe": r.get("ext_port"), "port_local": r.get("int_port"),
+                    "appareil_ip": r.get("int_ip", ""), "description": r.get("desc", "")})
+    return {"actif": bool(cfg.get("enabled")), "version": cfg.get("version"), "redirections": out}

@@ -31,7 +31,7 @@ from . import client as C
 from . import magasin as M
 from . import service as S
 
-app = FastAPI(title="SecuBox Freebox", version="0.2.0")
+app = FastAPI(title="SecuBox Freebox", version="0.3.0")
 
 CHEMIN_MAGASIN = os.environ.get("SECUBOX_FREEBOX_MAGASIN", "/var/lib/secubox/freebox/app.json")
 HOTE = os.environ.get("SECUBOX_FREEBOX_HOTE", C.HOTE_DEFAUT)
@@ -110,6 +110,18 @@ def regler_pare_feu_ipv6(corps: dict):
     if corps.get("confirme") is not True or not isinstance(corps.get("actif"), bool):
         return JSONResponse({"erreur": "Confirmation explicite et valeur « actif » (vrai/faux) requises."}, status_code=400)
     return _repondre(lambda: _service.regler_pare_feu_ipv6(corps["actif"]))
+
+
+@app.get("/upnp", dependencies=[Depends(require_lecture)])
+def upnp():
+    return _repondre(_service.upnp)
+
+
+@app.post("/upnp", dependencies=[Depends(require_jwt)])
+def regler_upnp(corps: dict):
+    if corps.get("confirme") is not True or not isinstance(corps.get("actif"), bool):
+        return JSONResponse({"erreur": "Confirmation explicite et valeur « actif » (vrai/faux) requises."}, status_code=400)
+    return _repondre(lambda: _service.regler_upnp(corps["actif"]))
 
 
 @app.post("/revoquer", dependencies=[Depends(require_jwt)])
