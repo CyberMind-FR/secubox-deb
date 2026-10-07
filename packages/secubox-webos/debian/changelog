@@ -1,3 +1,11 @@
+secubox-webos (1.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Renseignement (Actor Intelligence) refaite façon infographie : quatre couches (vue d'ensemble avec tuiles critiques/suspects/observes
+    et echelle de score a cinq paliers, acteurs, fiche d'acteur, reponse graduee en six crans), couleurs par palier, themes clair et sombre.
+    Donnees reelles uniquement ; sans session, aucun chiffre invente. Hauteur de la carte 360 -> 420.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 00:30:00 +0200
+
 secubox-webos (1.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Carte IPv6 Guardian : hauteur portee de 340 a 540 px, les etapes « connexions bloquees » et « exceptions » etaient coupees.
