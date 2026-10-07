@@ -14,9 +14,9 @@ import asyncio
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "common"))
-sys.path.insert(0, str(ROOT / "packages" / "secubox-exposure"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-haproxy" / "composants" / "exposure"))
 
 import api.main as m
 

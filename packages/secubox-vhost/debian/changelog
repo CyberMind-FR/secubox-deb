@@ -1,3 +1,9 @@
+secubox-vhost (1.6.5-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : vhost est un composant de secubox-haproxy >= 1.9.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-vhost (1.6.4-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

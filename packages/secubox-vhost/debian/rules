@@ -1,17 +1,3 @@
 #!/usr/bin/make -f
 %:
 	dh $@
-
-override_dh_auto_install:
-	install -d debian/secubox-vhost/usr/lib/secubox/vhost/
-	cp -r api debian/secubox-vhost/usr/lib/secubox/vhost/
-	install -d debian/secubox-vhost/usr/share/secubox/www
-	[ -d www ] && cp -r www/. debian/secubox-vhost/usr/share/secubox/www/ || true
-	install -d debian/secubox-vhost/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-vhost/usr/share/secubox/menu.d/ || true
-	# Control script
-	install -d debian/secubox-vhost/usr/sbin
-	[ -d sbin ] && install -m 755 sbin/* debian/secubox-vhost/usr/sbin/ || true
-	# Modular nginx config
-	install -d debian/secubox-vhost/etc/nginx/secubox.d
-	[ -f nginx/vhost.conf ] && cp nginx/vhost.conf debian/secubox-vhost/etc/nginx/secubox.d/ || true

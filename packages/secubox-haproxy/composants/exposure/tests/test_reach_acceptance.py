@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 import ipaddress
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "common"))
-sys.path.insert(0, str(ROOT / "packages" / "secubox-exposure"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-haproxy" / "composants" / "exposure"))
 
 from api.reach import reach_snippet
 

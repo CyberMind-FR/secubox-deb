@@ -304,9 +304,7 @@ Description: SecuBox — service « Résolution DNS »
 Package: secubox-service-exposition
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-haproxy,
-         secubox-vhost,
-         secubox-exposure
+         secubox-haproxy
 Recommends: secubox-cdn
 Suggests: secubox-mirror,
          secubox-saas-relay

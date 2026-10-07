@@ -1,38 +1,3 @@
 #!/usr/bin/make -f
-
 %:
 	dh $@
-
-override_dh_auto_install:
-	install -d $(CURDIR)/debian/secubox-exposure/usr/lib/secubox/exposure/api
-	install -m 644 api/*.py $(CURDIR)/debian/secubox-exposure/usr/lib/secubox/exposure/api/
-	install -d $(CURDIR)/debian/secubox-exposure/usr/share/secubox/www/exposure
-	install -m 644 www/exposure/*.html $(CURDIR)/debian/secubox-exposure/usr/share/secubox/www/exposure/
-	install -d $(CURDIR)/debian/secubox-exposure/usr/lib/systemd/system
-	install -m 644 debian/secubox-exposure.service $(CURDIR)/debian/secubox-exposure/usr/lib/systemd/system/
-	install -d $(CURDIR)/debian/secubox-exposure/usr/share/secubox/menu.d
-	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-exposure/usr/share/secubox/menu.d/
-
-	# Install nginx config
-	install -d $(CURDIR)/debian/secubox-exposure/etc/nginx/secubox.d
-	install -m 644 nginx/exposure.conf $(CURDIR)/debian/secubox-exposure/etc/nginx/secubox.d/exposure.conf
-	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
-	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
-	# elle n etait jamais lue.
-	install -d $(CURDIR)/debian/secubox-exposure/etc/nginx/secubox-routes.d
-	install -m 644 nginx/exposure.conf $(CURDIR)/debian/secubox-exposure/etc/nginx/secubox-routes.d/exposure.conf
-
-	# Install exposure snippet directory and default snippet
-	install -d debian/secubox-exposure/etc/nginx/snippets/exposure
-	install -m 644 conf/nginx-exposure-default.conf \
-	   debian/secubox-exposure/etc/nginx/snippets/exposure/default.conf
-
-	# tor-enhancement-phase1 (FINAL-REVIEW packaging fix): boot-time Tor
-	# hidden-service persist reconciler (root sbin script + oneshot unit).
-	# Without these, tor_reconcile_persist() never runs on boot and an
-	# emancipated .onion doesn't survive a torrc reset / fresh image flash.
-	install -d $(CURDIR)/debian/secubox-exposure/usr/sbin
-	install -m 755 sbin/secubox-exposure-tor-reconcile \
-	   $(CURDIR)/debian/secubox-exposure/usr/sbin/secubox-exposure-tor-reconcile
-	install -m 644 systemd/secubox-exposure-tor-reconcile.service \
-	   $(CURDIR)/debian/secubox-exposure/usr/lib/systemd/system/

@@ -7,9 +7,9 @@ import importlib.util
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "common"))
-sys.path.insert(0, str(ROOT / "packages" / "secubox-vhost"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-haproxy" / "composants" / "vhost"))
 
 from api.exposure_seed import ensure_snippet, _LAN_BLOCK
 
@@ -17,7 +17,7 @@ from api.exposure_seed import ensure_snippet, _LAN_BLOCK
 # by dotted path would collide with the already-imported secubox-vhost `api`
 # namespace. Load it standalone by file path instead, under a distinct module
 # name, to prove byte-for-byte equivalence without a naming collision.
-_reach_path = ROOT / "packages" / "secubox-exposure" / "api" / "reach.py"
+_reach_path = ROOT / "packages" / "secubox-haproxy" / "composants" / "exposure" / "api" / "reach.py"
 _spec = importlib.util.spec_from_file_location("exposure_reach_standalone", _reach_path)
 _reach_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_reach_mod)

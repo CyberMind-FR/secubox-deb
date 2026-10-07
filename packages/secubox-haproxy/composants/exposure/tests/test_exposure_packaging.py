@@ -13,7 +13,7 @@ def test_default_snippet_is_lan():
     assert "10.10.0.0/24" not in s   # mesh off by default
 
 def test_rules_installs_snippet_dir_and_default():
-    r = (ROOT / "debian" / "rules").read_text()
+    r = (ROOT.parents[1] / "debian" / "rules").read_text()
     assert "snippets/exposure" in r
     assert "nginx-exposure-default.conf" in r
 
@@ -21,7 +21,7 @@ def test_rules_installs_snippet_dir_and_default():
 def test_rules_installs_tor_reconcile_persist_unit():
     """FINAL-REVIEW packaging fix: without shipping the sbin script + unit,
     tor_reconcile_persist() never runs on boot and persist-on-boot is inert."""
-    r = (ROOT / "debian" / "rules").read_text()
+    r = (ROOT.parents[1] / "debian" / "rules").read_text()
     assert "secubox-exposure-tor-reconcile" in r
     assert "usr/sbin" in r
     assert "usr/lib/systemd/system" in r

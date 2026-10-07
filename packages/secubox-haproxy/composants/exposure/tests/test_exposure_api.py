@@ -6,8 +6,8 @@
 import sys
 from pathlib import Path
 from fastapi.testclient import TestClient
-ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "common")); sys.path.insert(0, str(ROOT / "packages" / "secubox-exposure"))
+ROOT = Path(__file__).resolve().parents[5]
+sys.path.insert(0, str(ROOT / "common")); sys.path.insert(0, str(ROOT / "packages" / "secubox-haproxy" / "composants" / "exposure"))
 
 def _client(tmp_path, monkeypatch, reload_ok=True):
     import api.reach as r
