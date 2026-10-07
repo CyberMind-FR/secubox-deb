@@ -40,3 +40,18 @@ def test_pas_de_donnees_inventees():
 
 def test_moteur_absent_ou_en_demarrage_est_dit_clairement():
     assert "en démarrage ou injoignable" in HTML and "nouvel essai automatique" in HTML
+
+
+def test_les_scripts_de_la_page_sont_du_javascript_valide():
+    # une apostrophe non échappée dans une chaîne casserait tout le script sans qu'aucun test de contenu ne le voie
+    import re
+    import shutil
+    import subprocess
+    import tempfile
+    if shutil.which("node") is None:
+        return
+    for i, js in enumerate(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", HTML, re.S)):
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
+            f.write(js)
+        r = subprocess.run(["node", "--check", f.name], capture_output=True, text=True)
+        assert r.returncode == 0, f"script {i + 1} : {r.stderr.strip().splitlines()[-1] if r.stderr else 'erreur'}"

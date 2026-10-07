@@ -1,3 +1,9 @@
+secubox-webos (1.5.8-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTION : le message « en demarrage » de la carte Actor (1.5.7, non deploye) contenait une apostrophe non echappee dans une chaine JavaScript et cassait tout le script de la carte ; corrige. Un test execute desormais `node --check` sur tous les scripts en ligne du Hall et de ses cartes. Carte Actor : mode compact quand elle est embarquee (?embed=1) : le groupe Securite n'offre que ~240 px, l'en-tete passe sur une ligne, plus de sous-titre ni de titres de section, tuiles et carte resserrees.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 11:00:00 +0200
+
 secubox-webos (1.5.7-1~bookworm1) bookworm; urgency=medium
 
   * Actor Intelligence : quand le moteur ne repond pas, le message dit qu'il demarre peut-etre (reconstruction du graphe apres une mise a jour, jusqu'a quelques minutes) et qu'un nouvel essai est automatique, au lieu d'un « injoignable » sec.

@@ -48,7 +48,7 @@
     background:linear-gradient(90deg,var(--b0),var(--b1),var(--b2),var(--b3),var(--b4))}
   .h .ic{font-size:1.25rem}
   .h .tt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
-  .h .tt b{font-size:.98rem;letter-spacing:.03em;text-transform:uppercase;font-weight:800}
+  .h .tt b{font-size:.98rem;letter-spacing:.03em;text-transform:uppercase;font-weight:800;white-space:nowrap}
   .h .tt small{font-size:.6rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .h .mode{margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:.54rem;
     letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);font-weight:700;
@@ -66,6 +66,8 @@
     background:var(--cyan);color:var(--fond);font-size:.62rem;font-weight:800}
   .slice{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;overflow-y:auto;scrollbar-width:none}
   .slice::-webkit-scrollbar{display:none}
+  /* Les blocs gardent leur hauteur et la couche défile : sans cela, ils rétrécissent et se chevauchent dans un cadre bas. */
+  .slice>*{flex:0 0 auto}
   /* VUE D'ENSEMBLE — trois tuiles colorées (critiques / suspects / observés). */
   .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
   .tile{border-radius:10px;padding:7px 8px;border:1px solid var(--line);display:flex;align-items:center;gap:7px;min-width:0}
@@ -162,6 +164,27 @@
   .tech{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:5px 7px;font-size:.66rem;min-width:0}
   .tech .ti2{font-size:1rem} .tech b{margin-left:auto;font-family:"JetBrains Mono",ui-monospace,monospace}
   .tech span.nm3{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* MODE COMPACT (carte embarquée, ?embed=1) : le groupe Sécurité n'offre que ~240 px de haut. Un titre sur une ligne, pas de sous-titre ni de
+     titres de section, tuiles et carte resserrées ; le reste du contenu reste atteignable en faisant défiler la couche. */
+  .emb .mw{padding:.3rem .45rem;gap:.25rem}
+  .emb .h{padding-bottom:4px;gap:6px}
+  .emb .h .ic{font-size:1rem}
+  .emb .h .tt b{font-size:.78rem}
+  .emb .h .tt small{display:none}
+  .emb .h .mode{font-size:.46rem;padding:1px 6px}
+  .emb .sec-t{display:none}
+  .emb .tile{padding:4px 6px;gap:5px}
+  .emb .tile .ti{font-size:.85rem}
+  .emb .tile .tv{font-size:1.05rem}
+  .emb .tile .tl{font-size:.44rem}
+  .emb .carte{padding:2px}
+  .emb .carte svg{max-height:78px}
+  .emb .pays h4{display:none}
+  .emb .pays{font-size:.6rem}
+  .emb .kpi{padding:3px 6px}
+  .emb .kpi .v{font-size:.8rem}
+  .emb .actor{padding:3px 6px}
+  .emb .ring{width:28px;height:28px;font-size:.58rem}
   #slbar{flex:0 0 auto}
 </style>
 
@@ -361,7 +384,7 @@
     if(document.hidden) return;
     // Liste des acteurs et aperçu demandent une session ; sans elle, les compteurs seuls. On ne les appelle pas à vide : sonde.js fermerait tout « actor ».
     Promise.all([jget('/api/v1/actor/stats'),sessionOk().then(function(ok){return ok?Promise.all([jget('/api/v1/actor/actors'),aperçu()]):null;})]).then(function(r){
-      if(!r[0]){el('list').innerHTML='<div class="vide">Moteur Actor Intelligence en démarrage ou injoignable — il reconstruit son graphe après une mise à jour (jusqu'à quelques minutes) ; nouvel essai automatique.</div>';return;}
+      if(!r[0]){el('list').innerHTML='<div class="vide">Moteur Actor Intelligence en démarrage ou injoignable — il reconstruit son graphe après une mise à jour (jusqu’à quelques minutes) ; nouvel essai automatique.</div>';return;}
       rendKPIs(r[0]);
       if(r[1]===null){ACTS=[];ACTS.sansSession=true;APERCU=null;
         el('bandes').innerHTML='<div class="vide">Ouvre une session pour voir le détail des acteurs.</div>';
@@ -383,6 +406,9 @@
     SBXSliceBar(el('slbar'),{autoMs:9000,onShow:montre,
       slices:[{label:'🧭 Vue d’ensemble'},{label:'📜 Événements'},{label:'🎭 Acteurs'},{label:'🕵️ Fiche'},{label:'🛡️ Réponse'}]});
   }else{ montre(0); }
+
+  // Embarquée (?embed=1) : mode compact.
+  (function(){ try{ if(new URLSearchParams(location.search).get('embed')) document.documentElement.classList.add('emb'); }catch(e){} })();
 
   // Thème dark/light : suit ?theme= (Hall) puis postMessage — comme les autres cardlets.
   (function(){ var t=new URLSearchParams(location.search).get('theme');
