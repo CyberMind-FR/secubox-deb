@@ -67,3 +67,7 @@ def test_la_page_est_un_javascript_valide(tmp_path):
 def test_fiche_d_aide_presente():
     f = next(c for c in AIDE["cartes"] if c["id"] == "ipv6guard")
     assert f["service"] == "ipv6guard" and f["acces"] == "session" and f["usage"] and f["role"]
+
+
+def test_le_modele_de_l_appareil_est_affiche():
+    assert "a.modele" in CARTE and "badge" in CARTE

@@ -99,6 +99,7 @@
     liste.forEach(function(a){
       var d = el('div','app');
       var t = el('div'); t.appendChild(el('b', null, a.nom));
+      if(a.modele){ t.appendChild(el('span','badge',a.modele)); }
       if(a.adresses_publiques && a.adresses_publiques.length){ var p = el('span','badge pub','adresse publique'); t.appendChild(p); }
       if(a.routeur){ t.appendChild(el('span','badge','routeur')); }
       d.appendChild(t);

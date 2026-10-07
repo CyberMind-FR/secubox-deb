@@ -1,3 +1,9 @@
+secubox-webos (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Carte IPv6 Guardian : le modele de l'appareil est affiche a cote de son nom.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 10:30:00 +0200
+
 secubox-webos (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Carte « IPv6 Guardian » du Hall : qui est joignable en IPv6, raconte en quatre temps (appareils joignables, services visibles, connexions entrantes bloquees, exceptions autorisees) avec un verdict honnete (« a verifier » tant que le pare-feu de la Freebox n'est pas lu). Routes /api/v1/ipv6guard/(status|appareils) authentifiees (auth_request), GET seulement ; /health publique ; carte dynamique (absente d'une box sans le module).

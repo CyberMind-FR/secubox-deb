@@ -1,3 +1,9 @@
+secubox-ipv6guard (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Noms lisibles : le nom d'usage annonce par l'appareil (fn=…, name=… du TXT mDNS) passe avant un nom d'hote ; un UUID n'est jamais un nom ; le modele (md=…) est conserve. avahi-browse est appele avec -k (sans traduction des types, qui devenaient « Web Site »…). Services de la maison nommes (Android TV, SecuBox, Freebox).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 10:30:00 +0200
+
 secubox-ipv6guard (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Nouveau module : IPv6 Guardian, phase 1. Lit, sans rien envoyer aux appareils, la table des voisins IPv6/IPv4 et les annonces

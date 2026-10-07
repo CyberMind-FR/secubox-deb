@@ -132,3 +132,47 @@ def test_aucune_adresse_mac_complete_n_est_utilisee_comme_nom():
     appareils = c.regrouper(c.parse_voisins(NEIGH6), c.parse_voisins(NEIGH4), interfaces_lan={"eth2"})
     for a in c.rattacher(appareils, []):
         assert a["mac"] not in a["nom"]
+
+
+# ── noms d'usage et modèles (TXT mDNS) ───────────────────────────────────────
+CAST = (r'=;eth2;IPv6;Freebox-Player-POP-29d0;_googlecast._tcp;local;29d0732c-b54f-566f-f341-916aa38461e0.local;'
+        r'2a01:e0a:dec:c4e0:807f:8513:79d:bb;8009;"rs=" "fn=Pièce à vivre" "md=Freebox Player POP" "ve=05"' + "\n")
+NEIGH6_CAST = "2a01:e0a:dec:c4e0:807f:8513:79d:bb dev eth2 lladdr 38:07:16:93:4e:95 REACHABLE\n"
+
+
+def test_le_txt_mdns_est_lu_en_dictionnaire():
+    m = c.parse_mdns(CAST)[0]
+    assert m["txt"]["fn"] == "Pièce à vivre" and m["txt"]["md"] == "Freebox Player POP"
+
+
+def test_le_nom_d_usage_passe_avant_un_nom_d_hote_illisible():
+    appareils = c.regrouper(c.parse_voisins(NEIGH6_CAST), [], interfaces_lan={"eth2"})
+    a = c.rattacher(appareils, c.parse_mdns(CAST))[0]
+    assert a["nom"] == "Pièce à vivre" and a["modele"] == "Freebox Player POP"
+
+
+def test_un_identifiant_uuid_n_est_jamais_un_nom():
+    sans_fn = CAST.replace('"fn=Pièce à vivre" ', "")
+    appareils = c.regrouper(c.parse_voisins(NEIGH6_CAST), [], interfaces_lan={"eth2"})
+    a = c.rattacher(appareils, c.parse_mdns(sans_fn))[0]
+    assert "29d0732c" not in a["nom"] and a["nom"].startswith("Appareil")
+    assert c.est_identifiant("29d0732c-b54f-566f-f341-916aa38461e0") and not c.est_identifiant("Salon-TV")
+
+
+def test_les_services_de_la_maison_ont_un_nom_clair():
+    assert c.libelle_service("_androidtvremote2._tcp")["libelle"] == "Télécommande Android TV"
+    assert c.libelle_service("_secubox._tcp")["libelle"] == "Boîte SecuBox"
+    assert c.libelle_service("_fbx-api._tcp")["libelle"] == "Interface de la Freebox"
+    assert not c.est_service("_googlezone._tcp")
+
+
+def test_avahi_est_appele_sans_traduction_des_types():
+    from api import service
+    appels = []
+    def faux(argv, delai=5):
+        appels.append(list(argv))
+        return ""
+    g = service.Surveillance(faux, ttl_mdns=300)
+    g._mesure_mdns()
+    avahi = next(a for a in appels if a[0] == "avahi-browse")
+    assert "-k" in avahi
