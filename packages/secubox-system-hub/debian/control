@@ -1,5 +1,5 @@
 Source: secubox-system-hub
-Section: net
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
@@ -9,8 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-system-hub
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-psutil
-Description: SecuBox System Hub Dashboard
- System control center: health, systemd services, journald logs, diagnostics.
- .
- Debian bookworm port of luci-app-system-hub (SecuBox OpenWrt / CyberMind.fr).
+Depends: ${misc:Depends}, secubox-system (>= 1.4.0)
+Description: transitional package, replaced by secubox-system
+ system-hub is now a component of secubox-system. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

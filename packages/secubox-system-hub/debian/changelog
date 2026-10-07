@@ -1,3 +1,9 @@
+secubox-system-hub (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitoire : system-hub est un composant de secubox-system >= 1.4.0 (#2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:01:00 +0200
+
 secubox-system-hub (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * secubox-identity retiré de la liste des services surveillés (#1840).

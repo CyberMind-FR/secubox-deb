@@ -9,5 +9,4 @@ set -e
 #   systemctl daemon-reload
 #   <restart LXC containers to drop runtime caps>
 
-#DEBHELPER#
 exit 0

@@ -6,4 +6,3 @@ case "$1" in
     systemctl disable secubox-admin.service || true
     ;;
 esac
-#DEBHELPER#

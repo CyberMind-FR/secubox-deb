@@ -12,3 +12,56 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-system/etc/nginx/secubox.d
 	[ -f nginx/system.conf ] && cp nginx/system.conf debian/secubox-system/etc/nginx/secubox.d/ || true
+	# Composant absorbé : system-hub (#2050)
+	install -d $(CURDIR)/debian/secubox-system/usr/share/secubox/system-hub/api
+	install -d $(CURDIR)/debian/secubox-system/usr/share/secubox/system-hub/static
+	install -d $(CURDIR)/debian/secubox-system/usr/share/secubox/system-hub/templates
+	cp -r composants/system-hub/api/* $(CURDIR)/debian/secubox-system/usr/share/secubox/system-hub/api/ || true
+	cp -r composants/system-hub/static/* $(CURDIR)/debian/secubox-system/usr/share/secubox/system-hub/static/ || true
+	cp -r composants/system-hub/templates/* $(CURDIR)/debian/secubox-system/usr/share/secubox/system-hub/templates/ || true
+	# Composant absorbé : admin (#2050)
+	install -d debian/secubox-system/usr/lib/secubox/admin/
+	cp -r composants/admin/api debian/secubox-system/usr/lib/secubox/admin/
+	install -d debian/secubox-system/usr/share/secubox/www
+	[ -d composants/admin/www ] && cp -r composants/admin/www/. debian/secubox-system/usr/share/secubox/www/ || true
+	install -d debian/secubox-system/usr/share/secubox/menu.d
+	[ -d composants/admin/menu.d ] && cp -r composants/admin/menu.d/. debian/secubox-system/usr/share/secubox/menu.d/ || true
+	# Modular composants/admin/nginx composants/admin/config
+	install -d debian/secubox-system/etc/nginx/secubox.d
+	[ -f composants/admin/nginx/admin.conf ] && cp composants/admin/nginx/admin.conf debian/secubox-system/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul
+	# repertoire que le vhost principal inclut (#989). Livree dans
+	# secubox.d/ uniquement, elle n etait jamais lue.
+	install -d debian/secubox-system/etc/nginx/secubox-routes.d
+	[ -f composants/admin/nginx/admin.conf ] && cp composants/admin/nginx/admin.conf debian/secubox-system/etc/nginx/secubox-routes.d/ || true
+	install -D -m 755 composants/admin/debian/postinst debian/secubox-system/usr/lib/secubox/system/maintscripts/admin.postinst
+	install -D -m 755 composants/admin/debian/prerm debian/secubox-system/usr/lib/secubox/system/maintscripts/admin.prerm
+	install -D -m 644 composants/admin/debian/secubox-admin.service debian/secubox-system/usr/lib/systemd/system/secubox-admin.service
+	# Composant absorbé : ksm (#2050)
+	install -d debian/secubox-system/usr/lib/secubox/ksm/
+	cp -r composants/ksm/api debian/secubox-system/usr/lib/secubox/ksm/
+	install -d debian/secubox-system/usr/share/secubox/www
+	[ -d composants/ksm/www ] && cp -r composants/ksm/www/. debian/secubox-system/usr/share/secubox/www/ || true
+	install -d debian/secubox-system/usr/share/secubox/menu.d
+	[ -d composants/ksm/menu.d ] && cp -r composants/ksm/menu.d/. debian/secubox-system/usr/share/secubox/menu.d/ || true
+	# Modular composants/ksm/nginx composants/ksm/config
+	install -d debian/secubox-system/etc/nginx/secubox.d
+	[ -f composants/ksm/nginx/ksm.conf ] && cp composants/ksm/nginx/ksm.conf debian/secubox-system/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-system/etc/nginx/secubox-routes.d
+	[ -f composants/ksm/nginx/ksm.conf ] && cp composants/ksm/nginx/ksm.conf debian/secubox-system/etc/nginx/secubox-routes.d/ || true
+	install -D -m 755 composants/ksm/debian/postinst debian/secubox-system/usr/lib/secubox/system/maintscripts/ksm.postinst
+	install -D -m 755 composants/ksm/debian/prerm debian/secubox-system/usr/lib/secubox/system/maintscripts/ksm.prerm
+	install -D -m 644 composants/ksm/debian/secubox-ksm.service debian/secubox-system/usr/lib/systemd/system/secubox-ksm.service
+	# Composant absorbé : system-tuning (#2050)
+	install -d debian/secubox-system/usr/sbin
+	install -m 755 composants/system-tuning/sbin/secubox-tuning-apply debian/secubox-system/usr/sbin/
+	install -d debian/secubox-system/etc/secubox/tuning
+	install -m 644 composants/system-tuning/etc/secubox/tuning/config.toml debian/secubox-system/etc/secubox/tuning/
+	install -m 644 composants/system-tuning/etc/secubox/tuning/lxc-memory-high.toml debian/secubox-system/etc/secubox/tuning/
+	install -m 644 composants/system-tuning/etc/secubox/tuning/lxc-cpu.toml debian/secubox-system/etc/secubox/tuning/
+	install -D -m 755 composants/system-tuning/debian/postinst debian/secubox-system/usr/lib/secubox/system/maintscripts/system-tuning.postinst
+	install -D -m 755 composants/system-tuning/debian/prerm debian/secubox-system/usr/lib/secubox/system/maintscripts/system-tuning.prerm
+

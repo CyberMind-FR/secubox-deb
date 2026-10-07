@@ -227,12 +227,9 @@ Depends: ${misc:Depends},
          secubox-system,
          secubox-hardening
 Recommends: secubox-premier-pas,
-         secubox-health,
-         secubox-system-tuning
+         secubox-health
 Suggests: secubox-led-heartbeat,
-         secubox-ksm,
-         secubox-console,
-         secubox-system-hub
+         secubox-console
 Description: SecuBox — service « Noyau »
  Bibliothèque centrale, passerelle d'API, hôte de groupe, santé.
  .
@@ -255,7 +252,6 @@ Description: SecuBox — service « Identité »
 Package: secubox-service-administration
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-admin,
          secubox-appstore,
          secubox-profiles,
          secubox-certs
