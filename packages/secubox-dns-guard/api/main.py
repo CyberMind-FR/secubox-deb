@@ -12,7 +12,7 @@ Features:
 - High query rate anomaly detection
 - Malicious domain lookup
 - Automatic blocklist generation
-- dnsmasq integration for blocking
+- liste propre au module (le blocage réel vit dans Unbound : ad-guard, webfilter ; D3, #2050)
 """
 import os
 import sys
@@ -54,10 +54,8 @@ AD_GUARD_DB = Path("/var/lib/secubox/ad-guard/dnstv/dnstv.db")
 PUITS_STATUS = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
 FENETRE = "aujourd'hui (UTC)"
 
-# dnsmasq blocklist integration
-DNSMASQ_BLOCKLIST = Path("/etc/dnsmasq.d/secubox-blocklist.conf")
 
-app = FastAPI(title="SecuBox DNS Guard", version="1.0.0")
+app = FastAPI(title="SecuBox DNS Guard", version="1.3.0")
 logger = logging.getLogger("secubox.dns-guard")
 
 
@@ -452,7 +450,6 @@ class DnsGuard:
         if immediate:
             self.blocklist.add(domain.lower())
             self._save_blocklist()
-            self._sync_dnsmasq()
         else:
             self.pending[domain.lower()] = entry
             self._save_pending()
@@ -468,7 +465,6 @@ class DnsGuard:
 
         self._save_blocklist()
         self._save_pending()
-        self._sync_dnsmasq()
 
         return True
 
@@ -480,27 +476,8 @@ class DnsGuard:
 
         self.blocklist.discard(domain)
         self._save_blocklist()
-        self._sync_dnsmasq()
 
         return True
-
-    def _sync_dnsmasq(self):
-        """Sync blocklist to dnsmasq configuration."""
-        try:
-            with open(DNSMASQ_BLOCKLIST, "w") as f:
-                f.write("# SecuBox DNS Guard Blocklist\n")
-                f.write(f"# Generated: {datetime.utcnow().isoformat()}\n")
-                for domain in sorted(self.blocklist):
-                    f.write(f"address=/{domain}/0.0.0.0\n")
-
-            # Reload dnsmasq
-            subprocess.run(
-                ["systemctl", "reload", "dnsmasq"],
-                capture_output=True,
-                timeout=10
-            )
-        except Exception as e:
-            logger.warning(f"Failed to sync dnsmasq: {e}")
 
     def is_blocked(self, domain: str) -> bool:
         """Check if domain is blocked (whitelist takes precedence)."""
@@ -707,10 +684,11 @@ async def reject_pending(domain: str):
 
 
 @app.post("/sync", dependencies=[Depends(require_jwt)])
-async def sync_dnsmasq():
-    """Force sync blocklist to dnsmasq."""
-    guard._sync_dnsmasq()
-    return {"status": "synced"}
+async def sync_blocklist():
+    """Historique : poussait la liste vers dnsmasq. Un seul moteur DNS vit sur la box, Unbound (D3, #2050) ; la liste de ce module reste le
+    résultat de la détection d'anomalies, consultable, mais ne bloque rien par elle-même."""
+    return {"status": "aucun_moteur",
+            "detail": "La liste de dns-guard n'est plus poussée vers dnsmasq : le blocage réel vit dans Unbound (ad-guard, webfilter)."}
 
 
 @app.get("/check/{domain}", dependencies=[Depends(require_lecture)])

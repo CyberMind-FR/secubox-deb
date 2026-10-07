@@ -9,12 +9,12 @@ Package: secubox-dns-guard
 Architecture: all
 Depends: ${misc:Depends},
  secubox-core (>= 1.4.0)
-Recommends: dnsmasq
 Replaces: secubox-network-anomaly (<< 1.1.4~)
 Breaks: secubox-network-anomaly (<< 1.1.4~)
-Description: SecuBox DNS Guard — anomaly detection + dnsmasq blocking
- Watches recursive DNS resolution for anomalous patterns and pushes
- blocklists to dnsmasq via /etc/dnsmasq.d/secubox-blocklist.conf.
+Description: SecuBox DNS Guard — détection d'anomalies DNS
+ Watches recursive DNS resolution for anomalous patterns and keeps the
+ resulting list of suspicious domains. It does not block by itself: the
+ only DNS engine is Unbound, driven by ad-guard and webfilter.
  .
  Distinct from sibling packages in the DNS cluster:
   - secubox-vortex-dns — full recursive DNS firewall with RPZ

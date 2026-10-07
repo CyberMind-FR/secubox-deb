@@ -1,3 +1,11 @@
+secubox-dns-guard (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * D3 (#2050) : un seul moteur DNS, Unbound. Le module n'ecrit plus /etc/dnsmasq.d ni ne recharge dnsmasq (le service tourne sous `secubox` : l'ecriture
+    echouait deja en silence, et dnsmasq est arrete sur la box). POST /sync repond honnetement « aucun_moteur » au lieu de « synced ». Plus de
+    Recommends: dnsmasq. La detection d'anomalies et la liste du module sont inchangees.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 14:00:00 +0200
+
 secubox-dns-guard (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-network-anomaly (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
