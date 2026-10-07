@@ -7,9 +7,9 @@ HTML = (Path(__file__).resolve().parents[1] / "www" / "hall" / "cardlets" / "act
 
 
 def test_les_quatre_couches_de_la_maquette():
-    for ident in ("d-vue", "d-acteurs", "d-profil", "d-defense"):
+    for ident in ("d-vue", "d-even", "d-acteurs", "d-profil", "d-defense"):
         assert f'id="{ident}"' in HTML
-    assert HTML.count("{label:'") == 4
+    assert HTML.count("{label:'") == 5
 
 
 def test_echelle_de_score_a_cinq_paliers_et_trois_tuiles():
@@ -39,3 +39,20 @@ def test_les_valeurs_serveur_sont_echappees_avant_innerhtml():
 
 def test_sans_session_on_ne_montre_pas_de_chiffres_inventes():
     assert "Ouvre une session pour voir le détail des acteurs." in HTML
+
+
+def test_carte_du_monde_top_pays_et_derniers_evenements():
+    assert 'id="carte"' in HTML and "Top pays" in HTML and "Derniers événements" in HTML
+    assert "/api/v1/actor/overview" in HTML
+    # le fond de carte (Natural Earth, domaine public) est embarqué : aucune ressource externe
+    assert "http://" not in HTML and "https://" not in HTML.replace("https://secubox.in", "")
+
+
+def test_la_fiche_a_ses_trois_onglets_et_une_courbe_24h():
+    for o in ("data-o=", "Techniques", "Réponse", "Activité (24 h)", "activite_acteurs"):
+        assert o in HTML
+
+
+def test_l_aperçu_n_est_demande_qu_avec_une_session():
+    # comme la liste des acteurs : jamais à vide, sonde.js fermerait la carte
+    assert "sessionOk()" in HTML and HTML.index("sessionOk()") < HTML.index("/api/v1/actor/overview")

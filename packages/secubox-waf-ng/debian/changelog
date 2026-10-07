@@ -1,3 +1,9 @@
+secubox-waf-ng (1.18.16-1~bookworm1) bookworm; urgency=medium
+
+  * actord : nouvelle route /overview (aussi en vue reduite) : top pays, derniers evenements rattaches aux acteurs, activite sur 24 h globale et par acteur, techniques par acteur. Compteurs et noms de regles seulement : jamais d'adresse IP, de cible ni de chemin.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 01:10:00 +0200
+
 secubox-waf-ng (1.18.15-1~bookworm1) bookworm; urgency=medium
 
   * Ban automatique pilote par Actor Intelligence (RFC-0013 §8, phase 2). actord publie, pour les seuls acteurs ranges DENY/QUARANTINE par son

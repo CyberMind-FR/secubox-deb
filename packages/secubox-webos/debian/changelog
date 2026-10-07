@@ -1,3 +1,9 @@
+secubox-webos (1.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Renseignement : se rapproche des panneaux 7 et 8 de la maquette. Carte du monde en points (Natural Earth, domaine public) avec bulles par pays d'origine, top pays avec drapeaux, tableau des derniers evenements, fiche d'acteur a trois onglets (Vue avec courbe d'activite 24 h, Techniques observees, Reponse). Cinq couches. L'apercu n'est demande qu'avec une session ; le relais du Hall l'autorise (session exigee).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 01:10:00 +0200
+
 secubox-webos (1.5.3-1~bookworm1) bookworm; urgency=medium
 
   * Carte Renseignement (Actor Intelligence) refaite façon infographie : quatre couches (vue d'ensemble avec tuiles critiques/suspects/observes
