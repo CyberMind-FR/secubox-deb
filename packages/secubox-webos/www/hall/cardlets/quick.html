@@ -169,7 +169,9 @@
       couleur:'#1f7a58',
       chiffres:[['library_stats.total_photos','📷','photos'],['library_stats.total_videos','🎞️','vidéos'],
                 ['library_stats.total_albums','🗂️','albums'],['library_stats.storage_used','💾','espace']],
+      absent:function(d){ return d.container_status === 'not_installed'; },
       etat:function(d){
+        if (d.container_status === 'not_installed') return 'non installé';
         var ls = d.library_stats || {};
         var base = d.http_reachable ? 'en marche' : (String(d.lxc_state || '').toUpperCase() === 'RUNNING' ? 'démarre…' : 'arrêté');
         return base + (ls.import_pending ? ' · ' + ls.import_pending + ' à importer' : '') + (ls.mesure_en_cours ? ' · comptage en cours' : '');
@@ -249,7 +251,7 @@
     // faire diverger l'ordre des chiffres du contenu qu'ils annoncent.
     t.innerHTML = '<span class="ic" style="background:' + esc(c.couleur) + '">'
       + esc(c.ic) + '</span><b>' + esc(c.nom) + '</b>'
-      + c.chiffres.map(function (m) {
+      + ((c.absent && c.absent(d)) ? [] : c.chiffres).map(function (m) {
           var v = m[0].split('.').reduce(function (o, k) { return (o === undefined || o === null) ? undefined : o[k]; }, d);
           // Un chiffre absent n'est PAS un zéro : on ne l'affiche pas plutôt
           // que d'annoncer « 0 » là où le service n'a rien dit.

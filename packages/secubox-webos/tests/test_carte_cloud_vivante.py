@@ -65,3 +65,9 @@ def test_le_relais_de_lecture_inclut_les_trois_services_en_get_seulement():
 def test_l_aide_decrit_les_trois_tranches():
     f = next(c for c in AIDE["cartes"] if c["id"] == "cloud")
     assert all(mot in f["role"] for mot in ("Cloud", "Photos", "Mail")) and f["acces"] == "session"
+
+
+def test_un_service_absent_de_la_box_ne_montre_ni_zeros_ni_arrete():
+    assert "d.container_status === 'not_installed'" in QUICK
+    assert "return 'non installé';" in QUICK
+    assert "(c.absent && c.absent(d)) ? [] : c.chiffres" in QUICK
