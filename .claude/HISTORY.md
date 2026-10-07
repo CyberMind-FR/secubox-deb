@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Rassemblement, vague 3m : haproxy←vhost,exposure (R1) ; déployée gk3 + gk2, publiée (ref #2050)
+haproxy 1.10.0 absorbe vhost et exposure : contenus comparés sur build local (aucune perte), chaque unité gérée une fois, deux unités conservées (exposure reste en root, le registre des unités root pointe sur haproxy). Frontal vérifié avant/après sur les deux boxes : hall, admin et webmail inchangés, `haproxy -c` identique. Tests des composants repointés (exposure 74 verts) ; la suite vhost ne se collecte pas sans /etc/secubox/secubox.conf lisible (déjà le cas avant). isp 1.2.9, profils 1.0.35, meta 0.1.35.
+
 ## 2026-10-07 — Rassemblement, vague 3l : ipblock←vortex-firewall,cyberfeed (S3) ; déployée gk3 + gk2, publiée (ref #2050)
 Packaging seul : les tables nft restent distinctes (une table unique = L, déconseillé avant la bêta). ipblock 1.3.0 ; threatmesh 1.0.4 (dépendance `ipblock | toolbox`, alternative conservée). Outil : une alternative de dépendance (`a | b`) n'est plus remplacée en bloc, seule la branche concernée change. isp 1.2.8, lite 1.3.6, profils 1.0.34, meta 0.1.34. ipblock et cyberfeed, inactifs avant, sont démarrés par leurs postinst rejoués (API de tableau de bord, aucune règle nft chargée).
 
