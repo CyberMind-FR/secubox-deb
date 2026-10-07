@@ -343,6 +343,7 @@ requiert:
 recommande:
   - secubox-qos
   - secubox-ipv6guard           # IPv6 Guardian : qui est joignable en IPv6, en clair (carte du Hall)
+  - secubox-freebox             # connecteur Freebox : appareils, connexion, pare-feu IPv6, redirections
 suggere:
   - secubox-nettweak
   - secubox-modem

@@ -1,0 +1,10 @@
+{
+  "id": "freebox",
+  "name": "Freebox",
+  "category": "root",
+  "icon": "🛰️",
+  "path": "/freebox/",
+  "order": 908,
+  "description": "Connecteur Freebox : appareils, connexion, pare-feu IPv6, redirections",
+  "theme": "reseau"
+}
