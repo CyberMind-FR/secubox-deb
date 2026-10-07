@@ -155,7 +155,7 @@ Le harnais mesurait ; `surf/serveur.py` **relaie**. Test réel sur la box :
 
 Le serveur lit l'hôte cible dans son propre `Host`, va le chercher (direct ou
 Tor), réécrit HTML/CSS et en-têtes, coupe les pisteurs à la source, et sert
-sous l'origine proxy. Il tourne en `secubox-surf.service` sur `127.0.0.1:9082`,
+sous l'origine proxy. Il tourne en `secubox-surf.service` sur `/run/secubox/surf.sock` (socket Unix),
 **hors de la chaîne d'inspection**.
 
 ### C'EST EN LIGNE — `https://surf-www-lemonde-fr.gk2.secubox.in/`
@@ -178,8 +178,8 @@ Le montage, pour mémoire :
    ligne de commentaire terminale protège `waf_bypass`, sans quoi surf repartait
    vers l'inspection.*
 3. `sites-available/surf.conf` : `server_name ~^surf-.+\.gk2\.secubox\.in$`
-   sur `:9080` → `127.0.0.1:9082`, `Host` transmis tel quel.
-4. `secubox-surf.service` (uvicorn, `127.0.0.1:9082`), hors inspection.
+   sur `:9080` → le socket `/run/secubox/surf.sock`, `Host` transmis tel quel.
+4. `secubox-surf.service` (uvicorn, `/run/secubox/surf.sock` (socket Unix)), hors inspection.
 
 Reste : empaqueter `secubox-surf` proprement (service + unit + nginx +
 enregistrement du vhost), aujourd'hui posé à la main sur la box.
@@ -217,7 +217,7 @@ Validé en dry-run. Reste, pour la démo publique :
 
 1. un `[vhosts.surf_poc]` `domain = "surf-*"`, `waf_bypass = true`, dans
    `haproxy.toml`, et régénération ;
-2. un `server` nginx `surf-*.gk2.secubox.in` → `127.0.0.1:9082` ;
+2. un `server` nginx `surf-*.gk2.secubox.in` → le socket `/run/secubox/surf.sock` ;
 3. le paquet `secubox-surf` (service + unit), aujourd'hui lancé à la main.
 
 L'URL sera alors `https://surf-www-lemonde-fr.gk2.secubox.in/`, et le même

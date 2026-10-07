@@ -9,14 +9,20 @@ Type=exec
 # adresse locale). L'unite figeait celui de gk2 (son adresse LAN) : sur gk3 le surfer serait sorti par le Tor d'une
 # autre box (#2039). Un reglage propre a une machine se pose dans un drop-in.
 WorkingDirectory=/usr/lib/secubox/surf
-ExecStart=/usr/local/bin/uvicorn surf.serveur:app --host 127.0.0.1 --port 9082
+# Socket Unix, jamais un port TCP (#2050). /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède ; « + » = en root malgré
+# un éventuel User=. uvicorn crée la socket en 0666 après le bind : le chmod 660 est INDISPENSABLE.
+Group=secubox
+ExecStartPre=+/bin/rm -f /run/secubox/surf.sock
+ExecStart=/usr/local/bin/uvicorn surf.serveur:app --uds /run/secubox/surf.sock
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/surf.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/surf.sock'
+TimeoutStartSec=180
 Restart=on-failure
 RestartSec=3
 # POC : durci a minima, mais isole. Il ne lit rien de la box, il relaie
 # l'externe — d'ou pas d'acces au systeme de fichiers en ecriture.
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/secubox/surf
+ReadWritePaths=/var/lib/secubox/surf /run/secubox
 StateDirectory=secubox/surf
 ProtectHome=true
 PrivateTmp=true

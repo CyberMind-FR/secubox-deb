@@ -1,3 +1,9 @@
+secubox-surf (1.0.32-1~bookworm1) bookworm; urgency=medium
+
+  * Socket Unix /run/secubox/surf.sock a la place du port TCP 127.0.0.1:9082 (regle du projet, #2050) : socket retiree a la main avant le demarrage (ExecStartPre=+), chmod 660 apres le bind, Group=secubox, ReadWritePaths /run/secubox. Le vhost nginx vise le socket ; la mise a jour redemarre le service avant de recharger nginx.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 12:00:00 +0200
+
 secubox-surf (1.0.31-1~bookworm1) bookworm; urgency=high
 
   * python3-socksio devient une dépendance ferme : « python3-socksio | python3-pip » était satisfaite par pip, donc socksio n'était pas installé sur gk3 et tout .onion répondait HTTP 500 (« Using SOCKS proxy, but the 'socksio' package is not installed »). L'unité ne fige plus l'adresse Tor de gk2 : chaque box détecte son propre SOCKS (ref #2039).
