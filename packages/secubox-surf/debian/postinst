@@ -10,6 +10,12 @@ if [ "$1" = "configure" ]; then
     if [ -f /etc/nginx/sites-available/surf.conf ]; then
         ln -sf ../sites-available/surf.conf /etc/nginx/sites-enabled/surf.conf
     fi
+    # SOCKET UNIX (#2050) : le service doit tourner sur sa nouvelle socket AVANT que nginx ne la vise, sinon l'ancien processus (TCP 9082) reste
+    # en place et le vhost rend 502. try-restart : une mise à jour recharge sans démarrer un service que l'opérateur a arrêté.
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl try-restart secubox-surf.service || true
+    fi
     if [ -x /usr/sbin/nginx ] && nginx -t 2>/dev/null; then
         systemctl reload nginx || true
     fi

@@ -1,3 +1,9 @@
+secubox-mesh (2.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * Socket Unix /run/secubox/mesh.sock a la place du port TCP 127.0.0.1:8743 (regle du projet, #2050) : meme patron que les autres modules (retrait de la socket perimee, chmod 660, Group=secubox).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 12:00:00 +0200
+
 secubox-mesh (2.0.7-1~bookworm1) bookworm; urgency=medium
 
   * Breaks + Replaces: secubox-yggdrasil — l'ancien module (même chemins : /usr/lib/secubox/mesh/api, www/mesh, mesh.sock) est décommissionné ; il bloquait chaque nuit la mise à jour de ce paquet sur gk3 (#1703).
