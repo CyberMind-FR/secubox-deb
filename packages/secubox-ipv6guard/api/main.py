@@ -19,7 +19,7 @@ from secubox_core.auth import require_lecture
 
 from . import freebox, service
 
-app = FastAPI(title="SecuBox IPv6 Guardian", version="0.2.0")
+app = FastAPI(title="SecuBox IPv6 Guardian", version="0.2.1")
 
 _surveillance = service.Surveillance()
 
