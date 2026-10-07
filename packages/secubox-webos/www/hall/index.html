@@ -1728,7 +1728,14 @@ function compactHTML(s){
 // et du rail au lieu d'afficher « absent ». Toute autre réponse (200, 401, 403…) = présent. En cas d'échec de la sonde
 // (réseau), on garde la carte : on ne retire jamais sur un doute.
 var ABSENTS = new Set();
-var DERNIER_RENDU = null;
+// ON NE REDESSINE PAS LE HALL pour retirer une carte : les favoris vivent dans la BANDE, hors de la mosaïque, et un second rendu
+// en recréait un exemplaire dans la mosaïque pendant que l'ancien restait en bande (cartes en double sur gk2). On retire donc les
+// nœuds en place — carte (mosaïque ou bande) et ligne du rail ; les rendus suivants filtrent déjà par ABSENTS.
+function retireCartes(ids){
+  ids.forEach(id=>{
+    document.querySelectorAll('.fcard[data-embed="'+id+'"], [data-open="'+id+'"]').forEach(n=>n.remove());
+  });
+}
 function sondePresence(){
   const cibles = FEATURED.filter(f=>f.si_present);
   if(!cibles.length) return;
@@ -1736,13 +1743,12 @@ function sondePresence(){
     .then(r=>{ if(r.status===404||r.status===502||r.status===503) return f.id; return null; })
     .catch(()=>null)))
   .then(ids=>{
-    const avant = ABSENTS.size;
-    ids.forEach(id=>{ if(id) ABSENTS.add(id); });
-    if(ABSENTS.size!==avant && DERNIER_RENDU) render(DERNIER_RENDU.data, DERNIER_RENDU.src);
+    const nouveaux = ids.filter(id=>id && !ABSENTS.has(id));
+    nouveaux.forEach(id=>ABSENTS.add(id));
+    if(nouveaux.length) retireCartes(nouveaux);
   });
 }
 function render(data,src){
-  DERNIER_RENDU = {data:data, src:src};
   const svc=data.services||[]; const byId={}; svc.forEach(s=>byId[s.id]=s); _reg=byId; window._reg=byId;
   // sidebar featured
   const rail=document.getElementById('railfeat'); let rh='';

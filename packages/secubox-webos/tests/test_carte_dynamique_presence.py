@@ -22,4 +22,11 @@ def test_seul_un_refus_net_retire_la_carte():
     sonde = HALL[HALL.index("function sondePresence()"):HALL.index("function render(data,src)")]
     assert "r.status===404||r.status===502||r.status===503" in sonde
     assert ".catch(()=>null)" in sonde          # un échec réseau ne retire jamais une carte
-    assert "render(DERNIER_RENDU.data" in sonde   # la mosaïque est redessinée quand une carte disparaît
+    # JAMAIS de second rendu : les favoris (bande) en créaient un doublon dans la mosaïque
+    assert "render(" not in sonde and "DERNIER_RENDU" not in HALL
+    assert "retireCartes(nouveaux)" in sonde
+
+
+def test_les_noeuds_sont_retires_en_place_carte_et_ligne_du_rail():
+    corps = HALL[HALL.index("function retireCartes(ids)"):HALL.index("function sondePresence()")]
+    assert ".fcard[data-embed=" in corps and "[data-open=" in corps and ".remove()" in corps
