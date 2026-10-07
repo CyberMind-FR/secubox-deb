@@ -17,7 +17,7 @@ y dorment, par mois) — ne le lire que sur demande.
       puis, dans l'ordre : appareils du réseau (noms, adresses), pare-feu IPv6 et redirections (lecture), état de la connexion, redirections
       de ports (écriture, confirmée et journalisée). Consommateurs : IPv6 Guardian (étapes « bloquées » et « exceptions », noms), NAC, exposition.
       Étend le mode « SecuBox esclave, non routeur » aux possibilités de l'API Freebox. Dossier : `docs/dossiers/ipv6-guardian.md` (phase 2).
-- [ ] **#2050 reste** : voir `docs/dossiers/rassemblement-reste-2050.md` (D3/D4 DNS : un moteur Unbound + bibliothèque commune ; S7 waf←waf-ng en paquets seulement, voie de ban dupliquée à part ; M9 un seul vendor Go, ~580 Mo dupliqués). **Décisions du propriétaire requises** avant tout code.
+- [ ] **#2050 reste** : voir `docs/dossiers/rassemblement-reste-2050.md` (D3/D4 DNS : un moteur Unbound + bibliothèque commune ; S7 waf←waf-ng en paquets seulement, voie de ban dupliquée à part ; M9 ABANDONNÉ (vendors radio/metanews identiques, socialrelay différent ; git déduplique déjà)). **Décisions du propriétaire requises** avant tout code.
 - [ ] **Freebox : autoconfiguration depuis le panneau** (demande du 2026-10-08) : « autoconfig freebox, dns, fwipv6, dmz… depuis freebox webui ». Panneau `/freebox/`
       onglet « Configuration automatique » : lire l'état, montrer ce que SecuBox recommande (pare-feu IPv6 actif, DNS DHCP de la Freebox → la box, redirections
       utiles, DMZ **seulement sur demande explicite** car elle expose toute la machine), prévisualiser le changement (dry-run), appliquer avec confirmation,

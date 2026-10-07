@@ -48,19 +48,17 @@ d'abord sur gk3, annonce de la coupure possible (règle « annoncer toute coupur
 
 **Risque** : élevé (le WAF protège tout le trafic public ; une erreur coupe ou ouvre la box). **À ne faire qu'avec l'accord explicite du propriétaire.**
 
-## M9 — démons Go (`bbs`, `radio`, `metanews`, `socialrelay`)
+## M9 — démons Go (`bbs`, `radio`, `metanews`, `socialrelay`) — **ABANDONNÉ (décision du propriétaire, 2026-10-08)**
 
-**Constaté :**
-- Chaque démon a son propre `go.mod` et son propre dossier `vendor/` : **`radio`, `metanews` et `socialrelay` ont un `vendor/` de 192 Mo identique
-  (aucune différence), `bbs` de 29 Mo** — environ **580 Mo dupliqués dans le dépôt**, et autant à compiler et à relire.
+**Faits vérifiés (corrigeant une première lecture trop optimiste) :**
+- `radio` et `metanews` ont des `vendor/` strictement identiques (même `modules.txt`, mêmes `go.mod` et `go.sum`, 1 569 fichiers communs).
+- `socialrelay` NE l'est PAS : Go 1.25 là où les autres sont en 1.22, `golang.org/x/sys` v0.47.0 contre v0.19.0, `x/net` et `go-qrcode` en plus. `bbs` a son propre arbre (29 Mo).
+- Le dépôt git stocke une seule fois les fichiers identiques (objets dédupliqués, 1,9 Go compressé) : les « 580 Mo dupliqués » sont dans la copie de travail et les checkouts de CI, pas dans le dépôt.
+- Unifier demandait de monter `radio` et `metanews` aux versions de `socialrelay` (donc Go 1.25) : changement de build de deux services en production.
 
-**Recommandation.**
-1. Un seul module Go (`secubox-go`) avec un seul `vendor/` partagé et quatre binaires, **quatre comptes et quatre unités conservés** (aucune fusion de processus).
-2. Les quatre paquets restent distincts à l'installation (un `.deb` par démon) mais sont construits depuis une seule source : gain principal = dépôt,
-   CI, mises à jour de dépendances.
-3. Déploiement démon par démon, en commençant par le moins critique (`socialrelay`, puis `metanews`, `radio`, `bbs`).
-
-**Risque** : moyen (aucun changement d'exécution, mais toute la chaîne de build change).
+**Décision : abandon.** Gain faible (copie de travail, cohérence des mises à jour de dépendances), risque réel (build et déploiement de démons actifs). À rouvrir seulement
+si une montée de dépendance de sécurité oblige à toucher les quatre vendors en même temps ; le partage du `vendor/` entre `radio` et `metanews` par un lien reste possible
+(≈ 192 Mo de copie de travail) sans changer aucune dépendance.
 
 ## Hors cycle
 - Retirer les 52 paquets transitoires et générer les méta-paquets (vague 5) : un cycle après leur publication.
