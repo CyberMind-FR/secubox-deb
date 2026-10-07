@@ -60,3 +60,7 @@ def test_l_aperçu_n_est_demande_qu_avec_une_session():
 
 def test_les_heures_des_evenements_sont_en_heure_locale():
     assert "function heureLocale(" in HTML and "toLocaleTimeString" in HTML and "esc(heureLocale(e))" in HTML
+
+
+def test_moteur_absent_ou_en_demarrage_est_dit_clairement():
+    assert "en démarrage ou injoignable" in HTML and "nouvel essai automatique" in HTML
