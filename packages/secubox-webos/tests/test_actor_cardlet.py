@@ -76,3 +76,21 @@ def test_mode_compact_quand_la_carte_est_embarquee():
 
 def test_les_blocs_d_une_couche_ne_retrecissent_pas():
     assert ".slice>*{flex:0 0 auto}" in HTML
+
+
+# ── Même score que la page admin (un seul barème) ───────────────────────────────────────────────────────────────────────────────────
+def test_la_carte_utilise_le_score_de_la_page_admin_pas_la_priorite_brute():
+    # la `priority` de l'API plafonne à ~45 sur cette box : elle ne sépare rien (0 critique, 0 suspect, tout « observé »). La page admin calcule un score
+    # (adresses, pays, bans, continuité) ; la carte du Hall doit raconter la même chose.
+    assert "function score(" in HTML
+    for terme in ("Math.log2(", "s.countries", "num(a.bans)", "v.continuity", "v.persistence", "v.automation"):
+        assert terme in HTML, terme
+    assert "num(a.priority)" not in HTML, "plus aucun usage de la priorité brute pour classer"
+
+
+def test_les_memes_seuils_que_la_page_admin():
+    page = (Path(__file__).resolve().parents[2] / "secubox-waf-ng" / "www" / "actor" / "index.html")
+    if page.exists():
+        src = page.read_text()
+        assert "n>=70" in src and "n>=45" in src
+    assert "p>=70" in HTML and "p>=45" in HTML, "tuiles critiques ≥ 70, suspects ≥ 45 (comme palierScore de la page admin)"
