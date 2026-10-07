@@ -1,3 +1,11 @@
+secubox-waf-ng (1.18.19-1~bookworm1) bookworm; urgency=medium
+
+  * Page Actor Intelligence (admin.gk2/actor/, actor.gk2) refaite avec les vues de la maquette : tuiles acteurs critiques/suspects/observes
+    (meme bareme que le score de la page), carte du monde en points avec top pays, derniers evenements rattaches aux acteurs (heure locale),
+    et dans la fiche la courbe d'activite sur 24 h et les techniques observees. L'apercu n'est relu qu'une fois par minute.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 06:30:00 +0200
+
 secubox-waf-ng (1.18.18-1~bookworm1) bookworm; urgency=medium
 
   * actord : l'apercu (/overview) relit 5000 evenements, ~1,7 s sur une box chargee ; il est desormais garde 30 s (un seul calcul a la fois).
