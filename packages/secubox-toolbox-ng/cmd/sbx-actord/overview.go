@@ -22,6 +22,7 @@ const (
 	apercuRecents     = 8
 	apercuPays        = 8
 	apercuTechniques  = 4
+	apercuTTL         = 30 * time.Second // relire 5000 événements coûte ~1,7 s sur une box chargée : jamais à chaque appel
 )
 
 type PaysN struct {
@@ -135,6 +136,13 @@ func apercu(evs []envelope.Envelope, acteurs []*graph.Actor, now int64) Apercu {
 }
 
 func (s *Server) handleApercu(w http.ResponseWriter, _ *http.Request) {
+	// Un seul calcul à la fois (les autres attendent le résultat) et un résultat gardé apercuTTL.
+	s.apercuMu.Lock()
+	defer s.apercuMu.Unlock()
+	if s.apercuOK && time.Since(s.apercuAt) < apercuTTL {
+		writeJSON(w, s.apercuVal)
+		return
+	}
 	evs, err := s.store.Recent(apercuEchantillon)
 	if err != nil {
 		http.Error(w, "aperçu indisponible", http.StatusInternalServerError)
@@ -143,5 +151,6 @@ func (s *Server) handleApercu(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	acteurs := s.graph.Actors()
 	s.mu.Unlock()
-	writeJSON(w, apercu(evs, acteurs, time.Now().Unix()))
+	s.apercuVal, s.apercuAt, s.apercuOK = apercu(evs, acteurs, time.Now().Unix()), time.Now(), true
+	writeJSON(w, s.apercuVal)
 }

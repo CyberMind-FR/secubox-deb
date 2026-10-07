@@ -300,6 +300,25 @@
   .duo .apres { font-size: .7rem; color: var(--faint); margin: .6rem 0 0; text-wrap: pretty; }
   .detections { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
 
+
+  /* Carte du monde (Natural Earth, domaine public, points de 3°) : compacte, à côté du top des pays. */
+  .carte-monde { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; align-items: center; }
+  .carte-monde svg { width: 100%; height: auto; max-height: 170px; display: block; }
+  .carte-monde .terre { fill: color-mix(in srgb, var(--muted) 40%, transparent); }
+  .carte-monde .bulle { fill: color-mix(in srgb, var(--red) 65%, transparent); stroke: var(--red); stroke-width: .3; }
+  .pays-top { display: flex; flex-direction: column; gap: 3px; font-size: .78rem; min-width: 0; }
+  .pays-top div { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .pays-top b { margin-left: auto; font-variant-numeric: tabular-nums; }
+  details.replie { padding: 0; }
+  details.replie > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 18px; }
+  details.replie > summary::-webkit-details-marker { display: none; }
+  details.replie > summary h2 { margin: 0; font-size: .95rem; }
+  details.replie > summary .resume { margin-left: auto; color: var(--muted); font-size: .76rem; }
+  details.replie > summary::after { content: "▾"; color: var(--faint); }
+  details.replie[open] > summary::after { content: "▴"; }
+  details.replie > .contenu { padding: 0 18px 16px; }
+  @media (max-width: 640px) { .carte-monde { grid-template-columns: 1fr; } }
+
   @media (max-width: 640px) {
     .grille { padding: 18px 14px 56px; gap: 14px; }
     .card { padding: 16px 15px 14px; border-radius: 14px; }
@@ -320,7 +339,7 @@
     <div class="moteur">
       <span class="path"><span class="o">moteur Go ·</span> <span class="r">inspection HTTP</span></span>
     </div>
-    <span class="live"><span class="dot"></span>en écoute</span>
+    <span class="live" id="live"><span class="dot"></span><span id="liveTxt">lecture…</span></span>
     <span class="spacer"></span>
     <span class="maj mono" id="maj">relevé…</span>
   </header>
@@ -334,6 +353,15 @@
   <div class="tuiles" id="tuiles"><div class="tuile"><span class="muted">chargement…</span></div></div>
 
   <section class="card">
+    <div class="sec-h"><span class="k">Journal · origines</span><div class="rule"></div><span class="ic">🌍</span></div>
+    <h2>D'où viennent les attaques</h2>
+    <div class="carte-monde">
+      <svg id="carteMonde" viewBox="0 0 120 60" role="img" aria-label="Pays d'origine des adresses les plus actives"></svg>
+      <div class="pays-top" id="paysTop"><span class="muted">chargement…</span></div>
+    </div>
+  </section>
+
+  <section class="card">
     <div class="sec-h"><span class="k">Journal · 30 jours</span><div class="rule"></div><span class="ic">📈</span></div>
     <h2>Évolution journalière par catégorie</h2>
     <p class="h2sous">Chaque barre est une journée ; les couleurs sont les catégories. Une journée qui gonfle d'un seul bloc est une campagne, pas une hausse de fond.</p>
@@ -341,9 +369,9 @@
     <div class="legende" id="evolutionLegende"></div>
   </section>
 
-  <section class="card">
-    <div class="sec-h"><span class="k">Journal · décisions</span><div class="rule"></div><span class="ic">🎚️</span></div>
-    <h2>Efficacité par catégorie</h2>
+  <details class="card replie" id="efficaciteDetails">
+    <summary><span class="ic">🎚️</span><h2>Efficacité par catégorie</h2><span class="resume" id="efficaciteResume">…</span></summary>
+    <div class="contenu">
     <p class="h2sous">Écarté contre simplement observé. Refuser sans bannir compte comme écarter : on ne bannit pas Googlebot, on lui ferme la porte. Une catégorie qui détecte beaucoup et n'agit jamais n'est pas une protection, c'est un compteur.</p>
     <div id="efficacite"><span class="muted">chargement…</span></div>
     <div class="legende">
@@ -352,7 +380,8 @@
       <span><i style="background:var(--orange)"></i>averti</span>
       <span><i style="background:var(--muted)"></i>observé seulement</span>
     </div>
-  </section>
+    </div>
+  </details>
 
   <section class="card">
     <div class="sec-h"><span class="k">Journal · sources</span><div class="rule"></div><span class="ic">🎯</span></div>
@@ -605,11 +634,67 @@
       '<span><i style="background:' + teinte(k) + '"></i>' + catEmoji(k) + ' ' + esc(k) + '</span>').join('');
   }
 
+
+  // ── Badge d'état : ce que le moteur fait réellement, pas un libellé figé ───────
+  function etatMoteur(stats, bans) {
+    const el = document.getElementById('liveTxt'), pastille = document.getElementById('live');
+    if (!el) return;
+    if (!stats) { el.textContent = 'injoignable'; if (pastille) pastille.classList.add('ko'); return; }
+    if (pastille) pastille.classList.remove('ko');
+    const n = ((bans && bans.bans) || []).length;
+    el.textContent = n ? 'actif · ' + nb(n) + ' ban' + (n > 1 ? 's' : '') + ' en cours' : 'actif · protège';
+  }
+
+  // ── Carte du monde ─────────────────────────────────────────────────────────
+  const TERRE = "0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|01,64,9,2,8,1,35|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|1120|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+  const CENTRE = {AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+
+  // Somme des sondes par pays à partir des adresses les plus actives (les seules dont le pays est connu).
+  function carteMonde(ips, pays) {
+    const svg = document.getElementById('carteMonde'), liste = document.getElementById('paysTop');
+    if (!svg || !liste) return;
+    const parPays = {};
+    Object.entries(ips || {}).forEach(function (kv) {
+      const c = ((pays || {})[kv[0]] || '').toUpperCase();
+      if (c && c !== 'LOCAL') parPays[c] = (parPays[c] || 0) + (Number(kv[1]) || 0);
+    });
+    const top = Object.entries(parPays).sort(function (a, b) { return b[1] - a[1]; });
+    let h = '';
+    TERRE.split('|').forEach(function (l, j) {
+      let cur = l.charAt(0) === '1', x = 0;
+      l.slice(1).split(',').forEach(function (n) {
+        n = +n;
+        if (cur) for (let i = 0; i < n; i++) h += '<circle class="terre" cx="' + (x + i + .5) + '" cy="' + (j + .5) + '" r=".42"/>';
+        x += n; cur = !cur;
+      });
+    });
+    const max = top.length ? top[0][1] : 1;
+    top.forEach(function (kv) {
+      const c = CENTRE[kv[0]]; if (!c) return;
+      h += '<circle class="bulle" cx="' + ((c[1] + 180) / 3).toFixed(1) + '" cy="' + ((90 - c[0]) / 3).toFixed(1)
+        + '" r="' + (1.2 + 2.6 * Math.sqrt(kv[1] / max)).toFixed(1) + '"><title>' + esc(kv[0]) + ' : ' + nb(kv[1]) + '</title></circle>';
+    });
+    svg.innerHTML = h;
+    liste.innerHTML = top.length ? top.slice(0, 6).map(function (kv) {
+      return '<div><span>' + drapeau(kv[0]) + '</span>' + esc(kv[0]) + '<b>' + nb(kv[1]) + '</b></div>';
+    }).join('') : '<span class="muted">pays inconnus</span>';
+  }
+
   // ── Efficacité : part bloquée, part avertie, part seulement observée ──────
   function efficacite(parCat) {
     const cible = document.getElementById('efficacite');
     const lignes = Object.entries(parCat || {});
     if (!lignes.length) { cible.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
+    // Synthèse affichée repliée : part écartée (banni + refusé) sur l'ensemble, et la catégorie qui détecte le plus sans agir.
+    let tot = 0, ecart = 0, pire = null;
+    lignes.forEach(function (kv) {
+      const a = kv[1] || {}, t = (a.banned || 0) + (a.robot || 0) + (a.warning || 0) + (a.detect || 0);
+      tot += t; ecart += (a.banned || 0) + (a.robot || 0);
+      const passif = (a.detect || 0) + (a.warning || 0);
+      if (t >= 20 && (!pire || passif > pire[1])) pire = [kv[0], passif];
+    });
+    const rs = document.getElementById('efficaciteResume');
+    if (rs) rs.textContent = tot ? Math.round(ecart / tot * 100) + ' % écarté' + (pire && pire[1] ? ' · surtout observé : ' + pire[0] : '') : 'aucune donnée';
     cible.innerHTML = lignes.map(function (kv) {
       const cat = kv[0], a = kv[1] || {};
       // REFUSER N'EST PAS OBSERVER. L'anti-robots répond 403 sans bannir —
@@ -771,7 +856,9 @@
     const [stats, hist, bans, detec, camps] = await Promise.all([
       api('/stats'), api('/history'), api('/bans'), api('/detections'), api('/campaigns')
     ]);
+    etatMoteur(stats, bans);
     if (stats) {
+      carteMonde(stats.top_ips, stats.top_ips_countries);
       efficacite(stats.efficacite);
       attaquants(stats.top_ips, stats.top_ips_countries,
                  (camps && camps.campagnes) || [], bans);

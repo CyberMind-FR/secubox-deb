@@ -7,8 +7,10 @@ package main
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
@@ -89,5 +91,35 @@ func TestApercuActiviteParActeur(t *testing.T) {
 	}
 	if _, ok := a.ActiviteActeurs[""]; ok {
 		t.Fatal("pas de compartiment pour les événements sans acteur")
+	}
+}
+
+// L'aperçu relit des milliers d'événements : il est mis en cache quelques dizaines de secondes (la carte du Hall l'appelle toutes les minutes
+// depuis plusieurs navigateurs, sur une box déjà chargée).
+func TestApercuEstMisEnCache(t *testing.T) {
+	s := serveur(t)
+	appel := func() Apercu {
+		w := httptest.NewRecorder()
+		s.handleApercu(w, httptest.NewRequest("GET", "/overview", nil))
+		var a Apercu
+		if err := json.Unmarshal(w.Body.Bytes(), &a); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	if err := s.store.Ingest(&envelope.Envelope{EventID: "e1", Timestamp: time.Now().Unix(), Sensor: "waf", SrcIP: "203.0.113.1", Severity: 10}); err != nil {
+		t.Fatal(err)
+	}
+	a1 := appel()
+	if err := s.store.Ingest(&envelope.Envelope{EventID: "e2", Timestamp: time.Now().Unix(), Sensor: "waf", SrcIP: "203.0.113.2", Severity: 10}); err != nil {
+		t.Fatal(err)
+	}
+	a2 := appel()
+	if a1.Echantillon != 1 || a2.Echantillon != 1 {
+		t.Fatalf("le second appel doit servir le cache : %d puis %d événements", a1.Echantillon, a2.Echantillon)
+	}
+	s.apercuAt = time.Now().Add(-2 * apercuTTL) // cache périmé
+	if a3 := appel(); a3.Echantillon != 2 {
+		t.Fatalf("après péremption, l'aperçu doit être recalculé : %d", a3.Echantillon)
 	}
 }

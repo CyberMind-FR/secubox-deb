@@ -127,14 +127,14 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 @keyframes logohalo{0%{transform:scale(1);opacity:.55}100%{transform:scale(2);opacity:0}}
 @media(prefers-reduced-motion:reduce){.logo-notif,.logo-notif::after{animation:none}}
 /* ── #1360d · Menu des DIFFUSIONS au survol du logo ──────────────────────────
-   Survoler le logo (à gauche) déroule un menu qui ne montre QUE les diffusions
-   du parc — un clic rouvre le flux. Reste ouvert tant qu'on est sur le logo ou
-   sur le menu. */
+   Un CLIC sur le logo (à gauche) ouvre une bulle qui ne montre QUE les diffusions
+   du parc — un clic sur une ligne rouvre le flux. PLUS DE SURVOL : la bulle se
+   referme seule après quelques secondes, sauf si le pointeur est dedans. */
 .logo-diff{position:absolute;top:calc(100% + 6px);left:0;z-index:60;width:min(320px,86vw);
   background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--coral);
   border-radius:12px;box-shadow:var(--lift);padding:8px;
   opacity:0;visibility:hidden;transform:translateY(-5px);transition:.16s;pointer-events:none}
-.logo-wrap:hover .logo-diff,.logo-diff:hover,.logo-diff.on{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+.logo-diff.on{opacity:1;visibility:visible;transform:none;pointer-events:auto}
 /* Pont invisible qui couvre l'espace entre le logo et le popup : le curseur ne
    « tombe » pas dans le vide en descendant vers le menu. */
 .logo-diff::before{content:"";position:absolute;left:0;right:0;top:-8px;height:8px}
@@ -5385,18 +5385,27 @@ const CARDLET_ICONES = {
     var logoN=document.getElementById('logo-notif');
     if(logoN) logoN.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation();
       if(whoBloc){ try{ whoBloc.click(); }catch(_){} } });
-    // Le popup des diffusions RESTE ouvert un court instant après qu'on a quitté
-    // le logo, le temps de descendre dedans et de cliquer une diffusion (#1360d).
-    // Sans ce délai, il se refermait dès qu'on lâchait le survol du logo.
+    // La bulle des diffusions s'ouvre par un CLIC sur le logo (plus par survol : elle gênait au passage du curseur) et se referme seule après
+    // quelques secondes, SAUF tant que le pointeur est dans la bulle. Un clic ailleurs ou Échap la ferme ; un clic avec modificateur
+    // (nouvel onglet) garde son sens de lien.
     var logoWrap=document.querySelector('.logo-wrap'), logoDiff=document.getElementById('logo-diff');
-    if(logoWrap && logoDiff){
-      var hideT=null;
-      function montreLD(){ if(hideT){ clearTimeout(hideT); hideT=null; } logoDiff.classList.add('on'); }
-      function cacheLD(){ if(hideT) clearTimeout(hideT); hideT=setTimeout(function(){ logoDiff.classList.remove('on'); hideT=null; }, 900); }
-      logoWrap.addEventListener('mouseenter', montreLD);
-      logoWrap.addEventListener('mouseleave', cacheLD);
-      logoDiff.addEventListener('mouseenter', montreLD);
-      logoDiff.addEventListener('mouseleave', cacheLD);
+    var logoLien=logoWrap && logoWrap.querySelector('a.logo');
+    if(logoWrap && logoDiff && logoLien){
+      var hideT=null, DELAI_LD=4000;
+      function stopLD(){ if(hideT){ clearTimeout(hideT); hideT=null; } }
+      function armeLD(ms){ stopLD(); hideT=setTimeout(fermeLD, ms); }
+      function ouvreLD(){ logoDiff.classList.add('on'); armeLD(DELAI_LD); }
+      function fermeLD(){ stopLD(); logoDiff.classList.remove('on'); }
+      logoLien.addEventListener('click', function(e){
+        if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0) return;
+        e.preventDefault();
+        if(logoDiff.classList.contains('on')) fermeLD(); else ouvreLD();
+      });
+      logoDiff.addEventListener('mouseenter', stopLD);                       // pointeur dans la bulle : elle reste
+      logoDiff.addEventListener('mouseleave', function(){ armeLD(1200); });  // il en sort : fermeture rapide
+      logoDiff.addEventListener('click', function(e){ if(e.target.closest && e.target.closest('button')) armeLD(300); });
+      document.addEventListener('click', function(e){ if(!logoWrap.contains(e.target)) fermeLD(); });
+      document.addEventListener('keydown', function(e){ if(e.key==='Escape') fermeLD(); });
     }
 
     function verifie(){
