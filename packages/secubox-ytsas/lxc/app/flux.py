@@ -47,6 +47,14 @@ class ErreurYoutube(Exception):
     """yt-dlp ou YouTube a refusé / limité / répondu à côté."""
 
 
+class CookiesRefuses(ErreurYoutube):
+    """YouTube dit que le compte n'est pas connecté : cookies périmés, ou exportés sans session."""
+
+
+# « Login details are needed… », « Sign in to confirm… », « use --cookies… » : le compte n'est pas reconnu.
+_REFUS_COOKIES = re.compile(r"login details are needed|sign in|use --cookies|--cookies-from-browser|not a bot|cookies", re.I)
+
+
 def borne(limite):
     try:
         n = int(limite)
@@ -115,7 +123,7 @@ async def executer_ytdlp(argv):
     texte = out.decode("utf-8", "replace")
     if not texte.strip():
         detail = (err.decode("utf-8", "replace").strip().splitlines() or ["flux vide"])[-1][:200]
-        raise ErreurYoutube(detail)
+        raise (CookiesRefuses if _REFUS_COOKIES.search(detail) else ErreurYoutube)(detail)
     return texte
 
 

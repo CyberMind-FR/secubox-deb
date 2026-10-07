@@ -61,7 +61,7 @@ def test_la_page_ne_parle_qu_a_son_origine_et_ouvre_youtube_sans_opener():
 def test_les_quatre_onglets_et_les_etats_honnetes():
     for t in ("envie", "propositions", "abonnements", "historique"):
         assert f"['{t}'," in CARTE
-    for etat in ("cookies", "Connexion requise", "données anciennes", "Réessayer"):
+    for etat in ("cookies", "Connexion requise", "données anciennes", "Réessayer", "cookies_perimes", "périmés"):
         assert etat in CARTE
 
 

@@ -506,9 +506,13 @@ async def flux_liste(request: Request, type: str = "abonnements", limite: int = 
         return await flux_moteur.lister(type, limite)
     except _flux.AuthRequise:
         return JSONResponse({"error": "auth requise — dépose tes cookies (panneau Authentification)"}, status_code=401)
-    except _flux.ErreurYoutube as e:
+    except _flux.CookiesRefuses:
+        # le compte n'est pas reconnu : cookies périmés (ou exportés d'un navigateur non connecté). On le DIT, sans écho du détail.
         if engine._has_cookies():
             engine.cookies_stale = True
+        return JSONResponse({"error": "cookies périmés ou sans compte connecté — ré-exporte ton cookies.txt depuis un navigateur "
+                                       "connecté à YouTube (panneau Authentification)", "cookies_perimes": True}, status_code=401)
+    except _flux.ErreurYoutube as e:
         return JSONResponse({"error": "YouTube n'a pas rendu ce flux", "detail": str(e)}, status_code=502)
 
 
