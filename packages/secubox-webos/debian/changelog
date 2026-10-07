@@ -1,3 +1,9 @@
+secubox-webos (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Cartes dynamiques du Hall : une carte portant `si_present` (route de l'API du module) disparait de la mosaique et du rail quand le module est absent de la box (404/502/503). VoiceStudio et Voix n'affichent plus « absent » sur gk2 ; un echec reseau ne retire jamais une carte.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 19:00:00 +0200
+
 secubox-webos (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-sbxui (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

@@ -1435,8 +1435,8 @@ const FEATURED = [
   //    /api/v1/voicestudio/usager/. `auth:true` (les routes exigent une personne) ; `micro_audio:true` (la dictée ; jamais
   //    d'écoute d'elle-même : il faut un clic) ; `admin:false` : pas de ⚙️ pour un usager. Absente d'une box sans le module :
   //    les cartes le DISENT (502 → « pas installé sur cette box »).
-  {id:"voicestudio", label:"VoiceStudio", icon:"🎙️", color:"#c87832", url:"voicestudio.gk2.secubox.in", carte:"/cardlets/voicestudio-admin.html", h:160, auth:true, admin:"/voicestudio/", micro_embed:true},
-  {id:"voix",        label:"Voix",        icon:"🗣️", color:"#c87832", carte:"/cardlets/voicestudio.html", h:300, auth:true, micro_audio:true, admin:false},
+  {id:"voicestudio", label:"VoiceStudio", icon:"🎙️", color:"#c87832", url:"voicestudio.gk2.secubox.in", carte:"/cardlets/voicestudio-admin.html", h:160, auth:true, admin:"/voicestudio/", micro_embed:true, si_present:"/api/v1/voicestudio/status"},
+  {id:"voix",        label:"Voix",        icon:"🗣️", color:"#c87832", carte:"/cardlets/voicestudio.html", h:300, auth:true, micro_audio:true, admin:false, si_present:"/api/v1/voicestudio/status"},
   {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360, admin:false},
   // ÉPHÉMÉRIDE (secubox-ephemeride) : la date, l'heure du fuseau de la box, le soleil, la Lune, le saint du jour, la météo et une
   // note d'observation. Cardlet locale (pas de vhost), lecture gardée (`auth:true`), pas de ⚙️ d'administration (`admin:false`) :
@@ -1719,7 +1719,26 @@ function compactHTML(s){
     +'<div class="cd">'+esc(s.description||'')+'</div></article>';
 }
 
+// CARTE DYNAMIQUE : une carte qui porte `si_present` (une route de l'API du module) n'est montrée que si le module
+// existe sur CETTE box. 404 / 502 / 503 = module absent (ni panne ni droit manquant) : la carte disparaît de la mosaïque
+// et du rail au lieu d'afficher « absent ». Toute autre réponse (200, 401, 403…) = présent. En cas d'échec de la sonde
+// (réseau), on garde la carte : on ne retire jamais sur un doute.
+var ABSENTS = new Set();
+var DERNIER_RENDU = null;
+function sondePresence(){
+  const cibles = FEATURED.filter(f=>f.si_present);
+  if(!cibles.length) return;
+  Promise.all(cibles.map(f=>fetch(f.si_present,{cache:'no-store',credentials:'same-origin'})
+    .then(r=>{ if(r.status===404||r.status===502||r.status===503) return f.id; return null; })
+    .catch(()=>null)))
+  .then(ids=>{
+    const avant = ABSENTS.size;
+    ids.forEach(id=>{ if(id) ABSENTS.add(id); });
+    if(ABSENTS.size!==avant && DERNIER_RENDU) render(DERNIER_RENDU.data, DERNIER_RENDU.src);
+  });
+}
 function render(data,src){
+  DERNIER_RENDU = {data:data, src:src};
   const svc=data.services||[]; const byId={}; svc.forEach(s=>byId[s.id]=s); _reg=byId; window._reg=byId;
   // sidebar featured
   const rail=document.getElementById('railfeat'); let rh='';
@@ -1741,7 +1760,7 @@ function render(data,src){
     .sort((a,b)=>String(a.label||'').localeCompare(String(b.label||''),'fr',{sensitivity:'base'}));
   // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
   // La nav propre au service descend dans le panneau contextuel (.ctx).
-  FEATURED_ALPHA.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
+  FEATURED_ALPHA.filter(f=>!ABSENTS.has(f.id)).forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
     // UNE CARTE VIVANTE N'A PAS D'ONGLET (#1268). Les entrees sans `url`
     // (DPI, Freebox TV, Tirage, Surf & Viewer) fabriquaient un bouton ⧉ vers
     // « https://undefined/ » : rowHTML ne pose le bouton que si `tab` est vrai,
@@ -1755,7 +1774,7 @@ function render(data,src){
   const fg=document.getElementById('featgrid'); let fh='';
   // L'ordre PAR DEFAUT met les cartes les plus abouties en tête ; l'ordre
   // choisi par l'opérateur est réappliqué juste après par rangeCardlets().
-  FEATURED_ORDONNE.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
+  FEATURED_ORDONNE.filter(f=>!ABSENTS.has(f.id)).forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // curation ; sauf module absent de cette box (si_present)
   fg.innerHTML=fh;
   // #1266 : le compteur n-feat n'existe plus (titre retire) — garde defensif.
   const nfeat=document.getElementById('n-feat'); if(nfeat) nfeat.textContent=FEATURED.length+' services';
@@ -2375,6 +2394,7 @@ if(q){
 })();
 
 // chargement
+sondePresence();
 render(MOCK,'Registre indisponible — <b>aperçu maquette</b>. Le Hall se remplit du registre réel dès activation.');
 fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   .then(r=>r.ok?r.json():Promise.reject(r.status))
