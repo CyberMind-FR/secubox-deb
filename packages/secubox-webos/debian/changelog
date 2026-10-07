@@ -1,3 +1,9 @@
+secubox-webos (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Activite : une diffusion de la bibliotheque YouTube SAS (chemin relatif /api/v1/ytsas/stream/<id>) devient un lien qui s'ouvre dans le viewer, sur l'origine du Hall ; liste fermee, aucun autre chemin relatif n'est un lien.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 22:30:00 +0200
+
 secubox-webos (1.2.1-1~bookworm1) bookworm; urgency=high
 
   * Route du flux YouTube : l'expression du location etait sans guillemets, or nginx lit « { » comme l'ouverture d'un bloc (pcre2_compile() failed, nginx -t en echec). Entre guillemets ; test de garde sur toute expression a accolades.
