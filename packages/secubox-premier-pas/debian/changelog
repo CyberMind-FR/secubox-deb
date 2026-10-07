@@ -1,3 +1,9 @@
+secubox-premier-pas (0.4.10-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-auth au lieu de secubox-users (transitoire, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200
+
 secubox-premier-pas (0.4.9-1~bookworm1) bookworm; urgency=medium
 
   * lanceur du kiosque : ouvre la console locale (hall.localhost:9078) quand le Hall y répond, sinon le port ordinaire (#1695).

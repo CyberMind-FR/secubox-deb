@@ -66,6 +66,7 @@ def _bootstrap_users_api_package() -> str:
     candidates = [
         Path("/usr/lib/secubox/users/api"),
         Path(__file__).resolve().parents[3] / "packages" / "secubox-users" / "api",
+        Path(__file__).resolve().parents[3] / "packages" / "secubox-auth" / "composants" / "users" / "api",
     ]
     pkg_root = next((p for p in candidates if (p / "engine.py").exists()), None)
     if pkg_root is None:

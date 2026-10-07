@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-sbxos
 Architecture: all
 Depends: ${misc:Depends}
-Recommends: secubox-webos, secubox-users (>= 1.6.4)
+Recommends: secubox-webos, secubox-auth (>= 1.4.0)
 Description: SBX OS — the Hall as an installable PWA
  The Hall that fits in a pocket. A Progressive Web App that reproduces the
  SecuBox Hall on any phone, tablet or desktop: a checkerboard of cardlets, each

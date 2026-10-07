@@ -17,8 +17,22 @@ Depends: ${misc:Depends},
  python3-argon2,
  python3-pyotp,
  python3-jwt,
- secubox-core (>= 1.5.47~), secubox-annuaire (>= 0.10.11~),
- secubox-users (>= 1.4)
+ secubox-core (>= 1.5.47~),
+ secubox-annuaire (>= 0.10.11~),
+ python3-qrcode,
+ python3-jsonschema,
+ python3-tomli | python3 (>= 3.11),
+ jq,
+ python3,
+ python3-cryptography,
+ secubox-aggregator
+Replaces: secubox-users (<< 1.8.18~),
+ secubox-sbxid (<< 0.4.20~),
+ secubox-oidc (<< 0.1.3~)
+Breaks: secubox-users (<< 1.8.18~),
+ secubox-sbxid (<< 0.4.20~),
+ secubox-oidc (<< 0.1.3~)
+Recommends: secubox-webos (>= 1.0.338)
 Description: SecuBox Auth Guardian
  Authentification avancée : OAuth2 (Google/GitHub), vouchers, sessions, portail splash.
  .

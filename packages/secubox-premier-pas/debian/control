@@ -8,7 +8,9 @@ Standards-Version: 4.6.2
 Package: secubox-premier-pas
 Architecture: all
 Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core, systemd-timesyncd | time-daemon
-Recommends: secubox-users, secubox-profiles, secubox-p2p
+Recommends: secubox-auth,
+ secubox-profiles,
+ secubox-p2p
 Description: SecuBox Premier Pas — first-boot wizard engine and silent profile
  One engine, one profile (profil.toml), four faces: kiosk, console, master
  panel and silent. premier-pasctl validates a profile step by step (name,

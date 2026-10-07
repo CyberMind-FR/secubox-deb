@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
-USERSCTL = ROOT / "packages" / "secubox-users" / "sbin" / "usersctl"
+ROOT = Path(__file__).resolve().parents[5]
+USERSCTL = ROOT / "packages" / "secubox-auth" / "composants" / "users" / "sbin" / "usersctl"
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def env(tmp_path: Path):
     return {
         "PATH": os.environ["PATH"],
         "USERS_FILE": str(users),
-        "PYTHONPATH": str(ROOT / "common") + ":" + str(ROOT / "packages" / "secubox-users"),
+        "PYTHONPATH": str(ROOT / "common") + ":" + str(ROOT / "packages" / "secubox-auth" / "composants" / "users"),
     }
 
 

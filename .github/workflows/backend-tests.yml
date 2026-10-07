@@ -32,7 +32,7 @@ on:
       - 'common/secubox_core/**'
       - 'packages/secubox-core/**'
       - 'packages/secubox-webos/**'
-      - 'packages/secubox-sbxid/**'
+      - 'packages/secubox-auth/**'
       - 'packages/secubox-zia/**'
       - 'packages/secubox-bbs/**'
       - 'packages/secubox-toolbox-ng/**'
@@ -105,7 +105,7 @@ jobs:
           - suite: secubox-webos
             chemin: packages/secubox-webos/tests
           - suite: secubox-sbxid
-            chemin: packages/secubox-sbxid/tests
+            chemin: packages/secubox-auth/composants/sbxid/tests
           - suite: secubox-zia
             chemin: packages/secubox-zia/tests
           # Garde admin des verbes qui changent les certificats (#1749) :

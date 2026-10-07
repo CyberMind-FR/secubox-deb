@@ -17,9 +17,9 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "common"))
-sys.path.insert(0, str(ROOT / "packages" / "secubox-users"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-auth" / "composants" / "users"))
 
 import api.main as m  # noqa: E402
 from api import engine as E  # noqa: E402

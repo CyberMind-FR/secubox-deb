@@ -14,8 +14,8 @@ import pytest
 
 from api import engine
 
-ROOT = Path(__file__).resolve().parents[3]
-USERSCTL = ROOT / "packages" / "secubox-users" / "sbin" / "usersctl"
+ROOT = Path(__file__).resolve().parents[5]
+USERSCTL = ROOT / "packages" / "secubox-auth" / "composants" / "users" / "sbin" / "usersctl"
 
 VOLATILE = {"created", "last_login", "enrolled_at", "used_at"}
 
@@ -41,7 +41,7 @@ def _fresh_state(tmp_path: Path) -> Path:
 def _run_cli(state_path: Path, *args: str) -> None:
     env = os.environ.copy()
     env["USERS_FILE"] = str(state_path)
-    env["PYTHONPATH"] = str(ROOT / "common") + ":" + str(ROOT / "packages" / "secubox-users")
+    env["PYTHONPATH"] = str(ROOT / "common") + ":" + str(ROOT / "packages" / "secubox-auth" / "composants" / "users")
     r = subprocess.run([sys.executable, str(USERSCTL), *args], env=env, capture_output=True, text=True)
     assert r.returncode == 0, f"usersctl {args} failed: {r.stderr}"
 
@@ -101,7 +101,7 @@ def test_parity_clear_password_after_set(tmp_path: Path, monkeypatch):
     pw = "StrongPass!42xyz"
     env = os.environ.copy()
     env["USERS_FILE"] = str(via_cli)
-    env["PYTHONPATH"] = str(ROOT / "common") + ":" + str(ROOT / "packages" / "secubox-users")
+    env["PYTHONPATH"] = str(ROOT / "common") + ":" + str(ROOT / "packages" / "secubox-auth" / "composants" / "users")
     proc = subprocess.run(
         [sys.executable, str(USERSCTL), "set-password", "alice"],
         env=env, input=f"{pw}\n{pw}\n", capture_output=True, text=True,

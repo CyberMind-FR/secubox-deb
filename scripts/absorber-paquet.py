@@ -323,9 +323,19 @@ Description: transitional package, replaced by secubox-{absorbant}
         n = champ_re.sub(reecrire, t)
         if change:
             # un paquet qui a déjà l'absorbant dans un AUTRE champ de dépendance garde les deux : valide, sans doublon dans un champ
-            ctrl.write_text(n)
             ch = ctrl.parent / "changelog"
             m2 = re.match(r"(\S+) \((\d+)\.(\d+)\.(\d+)-", ch.read_text())
+            if m2 is None:
+                # version « 0.6.0~aurora14 » : on monte le compteur aurora, la ligne de livraison est conservée
+                ma = re.match(r"(\S+) \((\d+\.\d+\.\d+~aurora)(\d+)-", ch.read_text())
+                if ma is None:
+                    print(f"À FAIRE À LA MAIN (changelog hors gabarit) : {nom}")
+                    continue
+                ctrl.write_text(n)
+                ch.write_text(f"{ma.group(1)} ({ma.group(2)}{int(ma.group(3)) + 1}-1~bookworm1) bookworm; urgency=medium\n\n  * Depend de secubox-{absorbant} au lieu de secubox-{ancien} (transitoire, #2050).\n\n -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200\n\n" + ch.read_text())
+                print("dépendance mise à jour (aurora) :", nom)
+                continue
+            ctrl.write_text(n)
             nv = f"{m2.group(2)}.{m2.group(3)}.{int(m2.group(4)) + 1}"
             ch.write_text(f"{m2.group(1)} ({nv}-1~bookworm1) bookworm; urgency=medium\n\n  * Depend de secubox-{absorbant} au lieu de secubox-{ancien} (transitoire, #2050).\n\n -- Gérald Kerma <devel@cybermind.fr>  Tue, 06 Oct 2026 20:02:00 +0200\n\n" + ch.read_text())
             print("dépendance mise à jour :", nom, nv)

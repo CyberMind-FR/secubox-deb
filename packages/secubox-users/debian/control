@@ -1,30 +1,15 @@
 Source: secubox-users
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-users
 Architecture: all
-Depends: ${misc:Depends},
- ${python3:Depends},
- python3-fastapi,
- python3-uvicorn,
- python3-argon2,
- python3-pyotp,
- python3-qrcode,
- python3-jsonschema,
- python3-tomli | python3 (>= 3.11),
- secubox-core (>= 1.5.47~),
- jq
-Description: SecuBox Users — local account manager (Argon2id + TOTP + RBAC)
- Unified user-account management for SecuBox: account create/disable/
- enable, password reset (Argon2id hashes), TOTP enrollment with backup
- codes, session management, and role-based access control.
- .
- Distinct from sibling packages in the identity stack:
-  - secubox-auth — JWT auth guardian / session middleware (consumes
-    secubox-users state).
-  - secubox-portal — web login portal.
-  - secubox-avatar — profile image + display-name manager.
+Depends: ${misc:Depends}, secubox-auth (>= 1.2.0)
+Description: transitional package, replaced by secubox-auth
+ users is now a component of secubox-auth. This empty package only pulls
+ it in; it can be removed once nothing depends on it.

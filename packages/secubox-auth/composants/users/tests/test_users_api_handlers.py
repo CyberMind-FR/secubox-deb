@@ -18,9 +18,9 @@ from pathlib import Path
 import pytest
 
 # Ensure both secubox_core stub and api/ are importable (mirrors conftest.py)
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "common"))
-sys.path.insert(0, str(ROOT / "packages" / "secubox-users"))
+sys.path.insert(0, str(ROOT / "packages" / "secubox-auth" / "composants" / "users"))
 
 
 # ---------------------------------------------------------------------------

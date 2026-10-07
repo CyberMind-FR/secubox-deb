@@ -22,7 +22,6 @@ Depends: ${misc:Depends},
          secubox-repo,
          secubox-routes,
          secubox-system,
-         secubox-users,
          secubox-vault,
          secubox-vm,
          secubox-zkp

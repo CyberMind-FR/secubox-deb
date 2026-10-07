@@ -9,19 +9,19 @@ Homepage: https://cybermind.fr/secubox
 Package: secubox-lyrion
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.5.39~),
-         secubox-users (>= 1.0),
-         secubox-haproxy,
-         lxc,
-         lxc-templates,
-         debootstrap,
-         python3-uvicorn,
-         python3-fastapi,
-         python3-toml,
-         python3-yaml,
-         openssl,
-         curl,
-         jq
+ secubox-core (>= 1.5.39~),
+ secubox-auth (>= 1.2.0),
+ secubox-haproxy,
+ lxc,
+ lxc-templates,
+ debootstrap,
+ python3-uvicorn,
+ python3-fastapi,
+ python3-toml,
+ python3-yaml,
+ openssl,
+ curl,
+ jq
 Description: SecuBox Lyrion — Music server (HOSTING layer)
  Hosts Lyrion in a Debian bookworm LXC at 10.100.0.100 on br-lxc.
  File-backend identity provider reading /etc/secubox/users.json (the same

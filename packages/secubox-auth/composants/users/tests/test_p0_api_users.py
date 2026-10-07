@@ -14,7 +14,7 @@ import pytest
 
 import secubox_core.config as _conf
 _conf._CONF_PATHS[:] = [p for p in _conf._CONF_PATHS if os.access(p, os.R_OK)] or \
-    [Path(__file__).resolve().parents[3] / "secubox.conf.example"]
+    [Path(__file__).resolve().parents[5] / "secubox.conf.example"]
 
 main = pytest.importorskip("api.main")
 from secubox_core.auth import require_jwt  # noqa: E402
