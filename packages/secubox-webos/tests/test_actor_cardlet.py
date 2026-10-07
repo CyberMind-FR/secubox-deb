@@ -64,3 +64,11 @@ def test_les_heures_des_evenements_sont_en_heure_locale():
 
 def test_moteur_absent_ou_en_demarrage_est_dit_clairement():
     assert "en démarrage ou injoignable" in HTML and "nouvel essai automatique" in HTML
+
+
+def test_mode_compact_quand_la_carte_est_embarquee():
+    # le groupe Sécurité n'offre que ~240 px : en-tête sur une ligne, pas de titres de section, tuiles et carte resserrées
+    assert "embed" in HTML and "classList.add('emb')" in HTML
+    for regle in (".emb .h .tt small", ".emb .sec-t", ".emb .tile", ".emb .carte svg"):
+        assert regle in HTML, regle
+    assert "white-space:nowrap" in HTML.split(".h .tt b")[1].split("}")[0], "le titre ne passe pas sur deux lignes"
