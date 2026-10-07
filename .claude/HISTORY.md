@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Courrier : rapport WAF (421 / timed out) et webmail en 502 ; metrics 1.15.1, mail 2.14.0 déployés gk2, publiés
+Rapport WAF : le scan antivirus attend le réveil à froid du LXC `clamav` (jusqu'à ~120 s, `rspamd_task_timeout`), le job coupait à 20 s (« Connection unexpectedly closed: timed out ») alors que le courrier arrivait : délai de 200 s (metrics 1.15.1). Politique du scan inchangée (décision du propriétaire : rien ne passe sans scan). Webmail 502 : apache2 en 226/NAMESPACE dans le LXC roundcube depuis le 5 octobre (AppArmor refuse le montage du bac à sable systemd) → `mailctl webmail` (mail 2.14.0) pose la surcharge et démarre Apache ; webmail.gk2 répond 200. `mail.gk2.secubox.in` répond 421 par conception : le vhost du courrier est `email.gk2.secubox.in`.
+
 ## 2026-10-07 — Rassemblement, vague 3k : tor←proxypac,macro ; déployée gk3 + gk2, publiée (ref #2050)
 tor 1.4.0 absorbe proxypac (PAC, minuterie et chemin de régénération, sudoers) et macro (assistant `macroctl`, sudoers, profil AppArmor) ; listes de fichiers comparées sur build local, aucune perte. Outil : une source `debian/secubox-<ancien>.sudoers` n'est plus réécrite comme dossier de destination. Tests proxypac repointés vers le control/rules de tor. profils 1.0.33, meta 0.1.33. proxypac, inactif sur gk2 avant, y est démarré par le postinst d'origine rejoué.
 
