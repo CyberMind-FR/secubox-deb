@@ -1,3 +1,9 @@
+secubox-appstore (0.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Groupe veille : cyberfeed, absorbe par ipblock (#2050), n'est plus cite ; la generation du catalogue echouait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 22:45:00 +0200
+
 secubox-appstore (0.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Groupe publication : droplet, absorbe par metablogizer (#2050), n'est plus cite ; test de generation du catalogue ajoute (la construction echouait).
