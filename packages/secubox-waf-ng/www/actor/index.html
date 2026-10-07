@@ -611,7 +611,7 @@ function blocActivite(id){
 function tick(){
   Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns'),aperçu()]).then(function(r){
     CAMPS=r[2]||[];
-    if(!r[0]){$('kpis').innerHTML='';$('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
+    if(!r[0]){$('kpis').innerHTML='';$('list').innerHTML='<div class="vide">Moteur Actor Intelligence en démarrage ou injoignable — il reconstruit son graphe après une mise à jour (jusqu'à quelques minutes) ; nouvel essai automatique.</div>';return;}
     rendKPIs(r[0]);ACTS=r[1]||[];
     if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;
     if(!CUR&&ACTS.length)CUR=ACTS[0].id;

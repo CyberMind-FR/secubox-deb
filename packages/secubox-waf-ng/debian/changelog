@@ -1,3 +1,9 @@
+secubox-waf-ng (1.18.20-1~bookworm1) bookworm; urgency=medium
+
+  * Actor Intelligence : quand le moteur ne repond pas, le message dit qu'il demarre peut-etre (reconstruction du graphe apres une mise a jour, jusqu'a quelques minutes) et qu'un nouvel essai est automatique, au lieu d'un « injoignable » sec.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 07:00:00 +0200
+
 secubox-waf-ng (1.18.19-1~bookworm1) bookworm; urgency=medium
 
   * Page Actor Intelligence (admin.gk2/actor/, actor.gk2) refaite avec les vues de la maquette : tuiles acteurs critiques/suspects/observes

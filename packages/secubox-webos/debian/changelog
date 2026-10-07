@@ -1,3 +1,9 @@
+secubox-webos (1.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * Actor Intelligence : quand le moteur ne repond pas, le message dit qu'il demarre peut-etre (reconstruction du graphe apres une mise a jour, jusqu'a quelques minutes) et qu'un nouvel essai est automatique, au lieu d'un « injoignable » sec.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 07:00:00 +0200
+
 secubox-webos (1.5.6-1~bookworm1) bookworm; urgency=medium
 
   * Bulle des diffusions du parc : plus de survol du logo, ouverture par un clic, fermeture seule apres 4 s sauf pointeur dans la bulle (clic ailleurs ou Echap ferment). La couche Renseignement du groupe Securite montre desormais la carte Actor complete (carte du monde, evenements, fiche) au lieu d'une copie reduite ; l'apercu n'est demande qu'une fois par minute.

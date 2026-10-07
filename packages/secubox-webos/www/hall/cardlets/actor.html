@@ -361,7 +361,7 @@
     if(document.hidden) return;
     // Liste des acteurs et aperçu demandent une session ; sans elle, les compteurs seuls. On ne les appelle pas à vide : sonde.js fermerait tout « actor ».
     Promise.all([jget('/api/v1/actor/stats'),sessionOk().then(function(ok){return ok?Promise.all([jget('/api/v1/actor/actors'),aperçu()]):null;})]).then(function(r){
-      if(!r[0]){el('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
+      if(!r[0]){el('list').innerHTML='<div class="vide">Moteur Actor Intelligence en démarrage ou injoignable — il reconstruit son graphe après une mise à jour (jusqu'à quelques minutes) ; nouvel essai automatique.</div>';return;}
       rendKPIs(r[0]);
       if(r[1]===null){ACTS=[];ACTS.sansSession=true;APERCU=null;
         el('bandes').innerHTML='<div class="vide">Ouvre une session pour voir le détail des acteurs.</div>';

@@ -36,3 +36,7 @@ def test_valeurs_serveur_echappees_et_aucune_ressource_externe():
 
 def test_pas_de_donnees_inventees():
     assert "Math.random" not in HTML
+
+
+def test_moteur_absent_ou_en_demarrage_est_dit_clairement():
+    assert "en démarrage ou injoignable" in HTML and "nouvel essai automatique" in HTML
