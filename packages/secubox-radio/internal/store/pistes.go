@@ -29,6 +29,8 @@ type Piste struct {
 	LotTitre     string
 	Coeurs       int
 	JoueeLe      int64 // 0 = jamais
+	// Bas : poussee vers le bas par le sysop (« moins souvent »). Le titre reste a l'antenne, le tirage le favorise beaucoup moins.
+	Bas bool
 	// ContentID : l'identifiant du ContentObject BBS ouvert a la validation
 	// (#1166 B2). Vide = pas encore ouvert (proposition non validee, ou appel
 	// au BBS pas encore reussi) — jamais une erreur en soi.
@@ -92,17 +94,18 @@ SELECT p.id, p.source, p.titre, p.auteur, p.duree_ms,
        p.indisponible, p.raison, p.etat, p.motif, p.lot, p.lot_titre,
        (SELECT COUNT(*) FROM coeurs c WHERE c.piste_id = p.id) AS coeurs,
        COALESCE((SELECT MAX(l.debut_le) FROM lectures l WHERE l.piste_id = p.id), 0) AS jouee_le,
-       p.content_id
+       p.content_id, p.bas
   FROM pistes p `
 
 func (s *Store) scan(r interface{ Scan(...any) error }) (Piste, error) {
 	var p Piste
-	var indispo int
+	var indispo, bas int
 	err := r.Scan(&p.ID, &p.Source, &p.Titre, &p.Auteur, &p.DureeMS,
 		&p.AjoutePar, &p.AjouteLe, &p.Fichier, &p.Mime, &p.Octets,
 		&indispo, &p.Raison, &p.Etat, &p.Motif, &p.Lot, &p.LotTitre, &p.Coeurs, &p.JoueeLe,
-		&p.ContentID)
+		&p.ContentID, &bas)
 	p.Indisponible = indispo == 1
+	p.Bas = bas == 1
 	return p, err
 }
 
@@ -187,6 +190,7 @@ func (s *Store) PourTirage() ([]tirage.Piste, []Piste, error) {
 			AjouteLe:     time.Unix(p.AjouteLe, 0),
 			Coeurs:       p.Coeurs,
 			Indisponible: p.Indisponible || !p.EnCache(),
+			Bas:          p.Bas,
 		}
 		if p.JoueeLe > 0 {
 			t.JoueeLe = time.Unix(p.JoueeLe, 0)
@@ -194,6 +198,23 @@ func (s *Store) PourTirage() ([]tirage.Piste, []Piste, error) {
 		out = append(out, t)
 	}
 	return out, pistes, nil
+}
+
+// PoseBas pousse une piste vers le bas (bas=true) ou la remet a son rang ordinaire (bas=false). Idempotent ; ErrPisteInconnue si elle n'existe pas.
+// Geste de sysop : il engage ce que TOUS les auditeurs entendent, contrairement au coeur.
+func (s *Store) PoseBas(id int64, bas bool) error {
+	v := 0
+	if bas {
+		v = 1
+	}
+	res, err := s.db.Exec(`UPDATE pistes SET bas = ? WHERE id = ?`, v, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrPisteInconnue
+	}
+	return nil
 }
 
 // PoseCoeur : idempotent. Aimer deux fois n'est pas une erreur, c'est un

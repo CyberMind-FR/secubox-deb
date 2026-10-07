@@ -1,3 +1,13 @@
+secubox-radio (0.1.78-1~bookworm1) bookworm; urgency=medium
+
+  * « Moins souvent » : le contraire du coeur. Le sysop peut pousser un titre vers le bas (POST /pistes/{id}/bas, {"bas": true|false}) : il
+    reste a l'antenne, garde ses coeurs, mais le tirage lui applique un facteur faible (x0,08, jamais zero). Reversible, reserve au sysop,
+    bouton dans le panneau. La playlist dit maintenant la probabilite de tirage de chaque titre, pour voir l'effet.
+  * Panneau d'administration : un appel a rendProbas(), fonction qui n'existait nulle part, interrompait le rafraichissement avant la liste
+    des titres ecartes ; supprime, et un test empeche qu'une telle fonction manquante revienne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 03:00:00 +0200
+
 secubox-radio (0.1.77-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-webos au lieu de secubox-sbxui (transitoire, #2050).

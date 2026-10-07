@@ -663,3 +663,92 @@ func TestDevaliderLaPisteEnCoursLaSortDeLAntenne(t *testing.T) {
 		t.Error("l'antenne ne dit pas le silence alors qu'il n'y a plus rien de valide")
 	}
 }
+
+// ── « MOINS SOUVENT » ───────────────────────────────────────────────────────
+//
+// Pousser un titre vers le bas : geste de sysop (il change ce que TOUS les auditeurs entendent), réversible, qui ne retire rien de l'antenne.
+func TestPousserVersLeBasEstReserveAuSysopEtReversible(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	chemin := "/api/v1/radio/pistes/" + itoa(p.ID) + "/bas"
+
+	if w := appel(s, "POST", chemin, membre, map[string]any{"bas": true}, true); w.Code != http.StatusForbidden {
+		t.Errorf("un membre a poussé un titre vers le bas : %d", w.Code)
+	}
+	if q, _ := st.ParID(p.ID); q.Bas {
+		t.Fatal("le refus n'a pas empêché la poussée")
+	}
+	w := appel(s, "POST", chemin, sysop, map[string]any{"bas": true}, true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("poussée refusée : %d %s", w.Code, w.Body)
+	}
+	if !strings.Contains(w.Body.String(), `"bas":true`) {
+		t.Errorf("la réponse ne dit pas que le titre est poussé vers le bas : %s", w.Body)
+	}
+	if q, _ := st.ParID(p.ID); !q.Bas {
+		t.Fatal("poussée non retenue")
+	}
+	if w := appel(s, "POST", chemin, sysop, map[string]any{"bas": false}, true); w.Code != http.StatusOK {
+		t.Fatalf("remise au rang refusée : %d", w.Code)
+	}
+	if q, _ := st.ParID(p.ID); q.Bas {
+		t.Fatal("remise au rang non retenue")
+	}
+}
+
+func TestPousserVersLeBasExigeUnBooleenExplicite(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	chemin := "/api/v1/radio/pistes/" + itoa(p.ID) + "/bas"
+	for _, corps := range []any{nil, map[string]any{}, map[string]any{"bas": "oui"}} {
+		if w := appel(s, "POST", chemin, sysop, corps, true); w.Code != http.StatusBadRequest {
+			t.Errorf("corps %v : %d, attendu 400", corps, w.Code)
+		}
+	}
+	if w := appel(s, "POST", "/api/v1/radio/pistes/99999/bas", sysop, map[string]any{"bas": true}, true); w.Code != http.StatusNotFound {
+		t.Errorf("piste inconnue : %d", w.Code)
+	}
+}
+
+func TestUnTitrePousseVersLeBasResteALAntenne(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/bas", sysop, map[string]any{"bas": true}, true)
+	if q, _ := st.ParID(p.ID); q.Etat == store.EtatPropose || q.Etat == store.EtatRefuse {
+		t.Errorf("pousser vers le bas ne doit pas changer l'état de validation : %q", q.Etat)
+	}
+}
+
+// LA PLAYLIST DIT LA PROBABILITÉ DE TIRAGE de chaque titre : c'est ce qui montre à l'administrateur ce que « moins souvent » change.
+func TestLaPlaylistDitLaProbabiliteDeTirageEtLaPousseeVersLeBasLaBaisse(t *testing.T) {
+	s, st := banc(t)
+	a, _, _ := st.Ajoute("https://youtu.be/A", "A", 1, t0)
+	b, _, _ := st.Ajoute("https://youtu.be/B", "B", 1, t0)
+	_ = st.PoseCache(a.ID, "/a", "video/mp4", 0, 180000, "A", "")
+	_ = st.PoseCache(b.ID, "/b", "video/mp4", 0, 180000, "B", "")
+
+	proba := func() map[int64]float64 {
+		w := appel(s, "GET", "/api/v1/radio/playlist", membre, nil, false)
+		var d struct {
+			Pistes []vuePiste `json:"pistes"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &d); err != nil {
+			t.Fatal(err)
+		}
+		m := map[int64]float64{}
+		for _, p := range d.Pistes {
+			m[p.ID] = p.Proba
+		}
+		return m
+	}
+	avant := proba()
+	somme := avant[a.ID] + avant[b.ID]
+	if somme < 0.99 || somme > 1.01 {
+		t.Fatalf("les probabilités doivent sommer à 1, obtenu %.3f (%v)", somme, avant)
+	}
+	appel(s, "POST", "/api/v1/radio/pistes/"+itoa(b.ID)+"/bas", sysop, map[string]any{"bas": true}, true)
+	apres := proba()
+	if apres[b.ID] >= avant[b.ID]/3 {
+		t.Fatalf("pousser B vers le bas aurait dû baisser nettement sa probabilité : %.3f -> %.3f", avant[b.ID], apres[b.ID])
+	}
+}

@@ -241,3 +241,56 @@ func TestUneListeVideNeFaitPasPaniquer(t *testing.T) {
 		t.Errorf("programme non vide sur une liste vide")
 	}
 }
+
+// ── « MOINS SOUVENT » : le contraire du coeur ────────────────────────────────
+//
+// Un titre poussé vers le bas reste dans la radio (jamais supprimé, jamais à zéro) mais passe beaucoup plus rarement.
+func TestUnePistePousseeVersLeBasPasseBeaucoupMoinsSouvent(t *testing.T) {
+	r := Defaut()
+	normal := piste(1, t0.Add(-90*24*time.Hour), time.Time{}, 0)
+	bas := normal
+	bas.ID, bas.Bas = 2, true
+	if rapport := Poids(bas, r, t0) / Poids(normal, r, t0); rapport > 0.12 {
+		t.Fatalf("poussée vers le bas : poids ×%.3f, attendu au plus ×0,12", rapport)
+	}
+}
+
+func TestPousseeVersLeBasNeFaitJamaisDisparaitre(t *testing.T) {
+	r := Defaut()
+	p := piste(1, t0.Add(-365*24*time.Hour), t0.Add(-time.Minute), 0)
+	p.Bas = true
+	if w := Poids(p, r, t0); w < PoidsMin {
+		t.Fatalf("le plancher %.0e doit tenir, poids %.2e", PoidsMin, w)
+	}
+}
+
+func TestDesReglagesSansCurseurBasUtilisentLeDefaut(t *testing.T) {
+	r := Reglages{Nouveaute: 1, Repos: 0} // un Reglages construit sans le curseur : le geste doit quand même agir
+	p := piste(1, t0, time.Time{}, 0)
+	b := p
+	b.Bas = true
+	if Poids(b, r, t0) >= Poids(p, r, t0) {
+		t.Fatal("sans curseur Bas, le geste n'a eu aucun effet")
+	}
+}
+
+func TestSurLongueDureeLeTitrePousseVersLeBasPasseRarement(t *testing.T) {
+	r := Defaut()
+	pistes := []Piste{piste(1, t0.Add(-90*24*time.Hour), time.Time{}, 0), piste(2, t0.Add(-90*24*time.Hour), time.Time{}, 0), piste(3, t0.Add(-90*24*time.Hour), time.Time{}, 0)}
+	pistes[2].Bas = true
+	alea := rand.New(rand.NewSource(42))
+	n3 := 0
+	const tirages = 6000
+	for i := 0; i < tirages; i++ {
+		p, err := Suivante(pistes, r, t0, alea)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.ID == 3 {
+			n3++
+		}
+	}
+	if part := float64(n3) / tirages; part > 0.06 || n3 == 0 {
+		t.Fatalf("le titre poussé vers le bas passe %.1f %% du temps (attendu 0 < part ≤ 6 %%, un tiers sans le geste)", part*100)
+	}
+}

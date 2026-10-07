@@ -7,7 +7,7 @@
 //
 // TROIS FACTEURS SE MULTIPLIENT, et chacun repond a un defaut precis :
 //
-//	poids = 1 × nouveaute(age) × aime(coeurs) × repos(derniere lecture)
+//	poids = 1 × nouveaute(age) × aime(coeurs) × repos(derniere lecture) × bas(pousse vers le bas)
 //
 // Le produit, et non la somme : un facteur nul doit pouvoir annuler le tirage
 // d'une piste (c'est le role du repos), ce qu'une somme ne permet pas.
@@ -33,6 +33,9 @@ type Piste struct {
 	// supprimee — elle peut redevenir disponible, et un titre qui disparait
 	// sans trace fait chercher la panne ailleurs.
 	Indisponible bool
+	// Bas : poussee vers le bas par le sysop (« moins souvent »). Le titre reste dans la radio mais passe nettement plus rarement ; le
+	// contraire d'un coeur, sans la suppression ni le refus.
+	Bas bool
 }
 
 // Reglages : les trois curseurs du panneau.
@@ -51,7 +54,12 @@ type Reglages struct {
 	// tirage pondere FAVORISE la repetition, puisque ce qui a un poids fort sort
 	// souvent et revient donc vite.
 	Repos time.Duration
+	// Bas : facteur d'un titre pousse vers le bas (0 < Bas <= 1). Hors de cet intervalle (curseur absent), FacteurBasDefaut.
+	Bas float64
 }
+
+// FacteurBasDefaut : un titre pousse vers le bas passe environ douze fois moins souvent. Jamais zero : le plancher PoidsMin tient.
+const FacteurBasDefaut = 0.08
 
 // Defaut : des reglages qui donnent une radio ecoutable sans rien regler.
 func Defaut() Reglages {
@@ -60,6 +68,7 @@ func Defaut() Reglages {
 		DemiVieNouveaute: 7 * 24 * time.Hour,
 		Coeurs:           0.45,
 		Repos:            2 * time.Hour,
+		Bas:              FacteurBasDefaut,
 	}
 }
 
@@ -80,7 +89,8 @@ func Poids(p Piste, r Reglages, maintenant time.Time) float64 {
 	return math.Max(PoidsMin,
 		facteurNouveaute(p, r, maintenant)*
 			facteurCoeurs(p, r)*
-			facteurRepos(p, r, maintenant))
+			facteurRepos(p, r, maintenant)*
+			facteurBas(p, r))
 }
 
 // facteurNouveaute decroit CONTINUMENT vers 1.
@@ -98,6 +108,17 @@ func facteurNouveaute(p Piste, r Reglages, maintenant time.Time) float64 {
 	}
 	// Decroissance exponentielle de (Nouveaute-1) vers 0.
 	return 1 + (r.Nouveaute-1)*math.Exp2(-float64(age)/float64(r.DemiVieNouveaute))
+}
+
+// facteurBas : 1 pour une piste ordinaire ; le curseur (ou son defaut) pour une piste poussee vers le bas.
+func facteurBas(p Piste, r Reglages) float64 {
+	if !p.Bas {
+		return 1
+	}
+	if r.Bas <= 0 || r.Bas > 1 {
+		return FacteurBasDefaut
+	}
+	return r.Bas
 }
 
 func facteurCoeurs(p Piste, r Reglages) float64 {
