@@ -197,7 +197,6 @@ Depends: ${misc:Depends},
          secubox-hub,
          secubox-sbxid
 Recommends: secubox-surf,
-         secubox-devwatch,
          sbxos-audio-mood,
          secubox-ephemeride
 Suggests: secubox-ui-manager
@@ -568,7 +567,6 @@ Package: secubox-service-actualites
 Architecture: all
 Depends: ${misc:Depends},
          secubox-metanews
-Suggests: secubox-yacy
 Description: SecuBox — service « Actualité »
  Radar d'actualité multi-sources.
  .

@@ -37,6 +37,56 @@ override_dh_auto_install:
 	  debian/secubox-metanews/etc/secubox/nginx-available/metanews.conf
 	install -D -m 0644 menu.d/28-metanews.json \
 	  debian/secubox-metanews/usr/share/secubox/menu.d/28-metanews.json
+	# Composant absorbé : devwatch (#2050)
+	# API files (service WorkingDirectory = /usr/share/secubox/devwatch)
+	install -d debian/secubox-metanews/usr/share/secubox/devwatch/
+	cp -r composants/devwatch/api debian/secubox-metanews/usr/share/secubox/devwatch/
+	# Static composants/devwatch/www files (vhost dashboard + Hall cardlet + admin)
+	install -d debian/secubox-metanews/usr/share/secubox/www
+	[ -d composants/devwatch/www ] && cp -r composants/devwatch/www/. debian/secubox-metanews/usr/share/secubox/www/ || true
+	# Menu definitions (Système registry)
+	install -d debian/secubox-metanews/usr/share/secubox/menu.d
+	[ -d composants/devwatch/menu.d ] && cp -r composants/devwatch/menu.d/. debian/secubox-metanews/usr/share/secubox/menu.d/ || true
+	# Config template (installed by postinst on first install only)
+	[ -f composants/devwatch/conf/devwatch.toml ] && cp composants/devwatch/conf/devwatch.toml debian/secubox-metanews/usr/share/secubox/devwatch/ || true
+	# composants/devwatch/nginx route — ship to the ACTIVE include (secubox-routes.d) AND legacy secubox.d
+	install -d debian/secubox-metanews/etc/nginx/secubox-routes.d
+	install -d debian/secubox-metanews/etc/nginx/secubox.d
+	[ -f composants/devwatch/nginx/devwatch.conf ] && cp composants/devwatch/nginx/devwatch.conf debian/secubox-metanews/etc/nginx/secubox-routes.d/ || true
+	[ -f composants/devwatch/nginx/devwatch.conf ] && cp composants/devwatch/nginx/devwatch.conf debian/secubox-metanews/etc/nginx/secubox.d/ || true
+	# Systemd unit
+	install -d debian/secubox-metanews/usr/lib/systemd/system
+	cp composants/devwatch/systemd/secubox-devwatch.service debian/secubox-metanews/usr/lib/systemd/system/
+	install -D -m 755 composants/devwatch/debian/postinst debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/devwatch.postinst
+	install -D -m 755 composants/devwatch/debian/prerm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/devwatch.prerm
+	# Composant absorbé : yacy (#2050)
+	install -d debian/secubox-metanews/usr/lib/secubox/yacy
+	cp -r composants/yacy/api debian/secubox-metanews/usr/lib/secubox/yacy/
+	install -d debian/secubox-metanews/usr/sbin
+	install -m 755 composants/yacy/sbin/yacyctl debian/secubox-metanews/usr/sbin/yacyctl
+	install -d debian/secubox-metanews/usr/share/secubox/www
+	[ -d composants/yacy/www ] && cp -r composants/yacy/www/. debian/secubox-metanews/usr/share/secubox/www/ || true
+	install -d debian/secubox-metanews/usr/share/secubox/menu.d
+	[ -d composants/yacy/menu.d ] && cp -r composants/yacy/menu.d/. debian/secubox-metanews/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-metanews/etc/nginx/secubox.d
+	[ -f composants/yacy/nginx/yacy.conf ] && cp composants/yacy/nginx/yacy.conf debian/secubox-metanews/etc/nginx/secubox.d/ || true && (install -d debian/secubox-metanews/etc/nginx/secubox-routes.d && cp composants/yacy/nginx/yacy.conf debian/secubox-metanews/etc/nginx/secubox-routes.d/)
+	# Public vhost yacy.gk2.secubox.in — shipped to sites-available (operator opts in via ln -s)
+	install -d debian/secubox-metanews/etc/nginx/sites-available
+	[ -f composants/yacy/nginx/yacy-vhost.conf ] && cp composants/yacy/nginx/yacy-vhost.conf debian/secubox-metanews/etc/nginx/sites-available/yacy.conf || true
+	install -d debian/secubox-metanews/etc/secubox
+	[ -f composants/yacy/conf/yacy.toml.example ] && cp composants/yacy/conf/yacy.toml.example debian/secubox-metanews/etc/secubox/yacy.toml.example || true
+	install -d debian/secubox-metanews/usr/share/secubox/lib/yacy
+	[ -d composants/yacy/lib/yacy ] && cp -r composants/yacy/lib/yacy/. debian/secubox-metanews/usr/share/secubox/lib/yacy/ || true
+	# sudoers: let the secubox-run FastAPI restart the in-container daemon
+	# (yacyctl reload → lxc-attach needs root). Sibling: secubox-streamlit.
+	install -d debian/secubox-metanews/etc/sudoers.d
+	[ -f composants/yacy/sudoers.d/secubox-yacy ] && install -m 440 composants/yacy/sudoers.d/secubox-yacy debian/secubox-metanews/etc/sudoers.d/ || true
+	install -D -m 755 composants/yacy/debian/postinst debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/yacy.postinst
+	install -D -m 755 composants/yacy/debian/prerm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/yacy.prerm
+	install -D -m 755 composants/yacy/debian/postrm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/yacy.postrm
+	install -D -m 644 composants/yacy/debian/secubox-yacy.service debian/secubox-metanews/usr/lib/systemd/system/secubox-yacy.service
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-metanews
+	# Composant yacy (#2050) : son unité garde la gestion dh ; devwatch active la sienne dans son postinst (masquage respecté).
+	dh_installsystemd --name=secubox-yacy
