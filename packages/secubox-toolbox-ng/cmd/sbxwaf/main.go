@@ -1200,6 +1200,12 @@ func main() {
 		"sliding window for escalate-mode categories (a slow scanner needs a long window)")
 	escalateThreshold := flag.Int("escalate-threshold", 3,
 		"probes within the escalate window before an IP is banned")
+	actorBanMode := flag.String("actor-ban", "off", "ban automatique piloté par Actor Intelligence : off | propose (n'applique rien, écrit les candidats) | auto")
+	actorProps := flag.String("actor-propositions", "/run/secubox/actord-propositions.json", "fichier de propositions publié par sbx-actord")
+	actorBanEtat := flag.String("actor-ban-etat", "/var/lib/secubox/waf/actor-ban-etat.json", "état du ban automatique (candidats, décisions, plafond) pour le panneau")
+	actorBanMin := flag.Int("actor-ban-min", 2, "sanctions LOCALES de ce WAF (hors bans automatiques) requises dans la fenêtre avant un ban automatique")
+	actorBanMaxHeure := flag.Int("actor-ban-max-heure", 20, "coupe-circuit : bans automatiques maximum par heure glissante")
+	actorBanProtegees := flag.String("actor-ban-protegees", "", "adresses/plages (CIDR, virgules) jamais bannies automatiquement, en plus du privé/local (box, Freebox, mesh)")
 	flag.Parse()
 
 	// #1070 phase D — mode corrélation hors-ligne : on lit le journal, on affiche
@@ -1367,6 +1373,16 @@ func main() {
 			// (un `flush set` vide l'ensemble sans toucher la chaîne). Le retrait
 			// à l'échéance reste assuré par le timeout nft du noyau.
 			go nb.Veiller(30*time.Second, 2*time.Minute)
+			// Ban automatique piloté par Actor Intelligence : garde-fous dans actorban.go. « off » par défaut ; « propose » n'applique rien.
+			if *actorBanMode == "propose" || *actorBanMode == "auto" {
+				ab := NewActorBan(*actorProps, *actorBanMode, store, nb)
+				ab.etat = *actorBanEtat
+				ab.minBans = *actorBanMin
+				ab.maxParHeure = *actorBanMaxHeure
+				ab.protegees = parseCIDRs(*actorBanProtegees)
+				go ab.Veiller(time.Minute)
+				log.Printf("sbxwaf: actor-ban mode=%s (min=%d sanctions locales, plafond=%d/h, source=%s)", *actorBanMode, *actorBanMin, *actorBanMaxHeure, *actorProps)
+			}
 			// SIGHUP : `systemctl reload secubox-waf-ng`, propagé depuis
 			// nftables.service (ReloadPropagatedFrom) — réparation immédiate au
 			// lieu d'attendre la veille. Revérifié 3 s plus tard : l'ordre entre

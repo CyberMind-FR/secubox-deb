@@ -133,8 +133,12 @@ ExecStart=/usr/sbin/sbxwaf \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
   --media-cache-dir /var/cache/secubox/waf/media \
   --vhost-profiles /etc/secubox/waf/vhost_profiles.json \
-  --nft-ban
+  --nft-ban \
+  --actor-ban propose \
+  --actor-ban-protegees 82.67.100.75/32,2a01:e0a:dec:c4e0::/60
 
+# BAN PILOTÉ PAR ACTOR INTELLIGENCE : `propose` n'applique RIEN (il écrit /var/lib/secubox/waf/actor-ban-etat.json). Passer à `auto` une
+# fois les candidats jugés justes ; garde-fous dans cmd/sbxwaf/actorban.go (2 sanctions locales, plafond 20/h, jamais d'adresse privée/protégée).
 # BAN AUTONOME (#1218) : le WAF pose ses propres drops via --nft-ban (set nft
 # `inet secubox waf_ban{,6}`, persistant, retrait differe par le timeout nft).
 # Aucune source de blocage externe n'est plus interrogee sur le chemin de ban.

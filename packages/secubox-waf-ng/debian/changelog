@@ -1,3 +1,13 @@
+secubox-waf-ng (1.18.15-1~bookworm1) bookworm; urgency=medium
+
+  * Ban automatique pilote par Actor Intelligence (RFC-0013 §8, phase 2). actord publie, pour les seuls acteurs ranges DENY/QUARANTINE par son
+    moteur de reponse, la liste de leurs adresses (/run/secubox/actord-propositions.json, route /proposals hors vue reduite). sbxwaf les relit
+    (--actor-ban off|propose|auto) et n'applique que ce que ses garde-fous laissent passer : au moins 2 sanctions LOCALES dans les 24 h (les
+    bans automatiques ne comptent pas), jamais d'adresse privee/protegee, coupe-circuit de 20 bans par heure, fichier perime ignore, chaque ban
+    journalise (« actor:ACT-n »). Livre en mode `propose` : rien n'est applique, l'etat des candidats est ecrit dans actor-ban-etat.json.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 23:50:00 +0200
+
 secubox-waf-ng (1.18.14-1~bookworm1) bookworm; urgency=medium
 
   * Ingestion Actor Intelligence : le script de droits de la socket n'attendait que 12 s alors qu'actord met ~4 min a ouvrir sa socket
