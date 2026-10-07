@@ -35,7 +35,8 @@ ExecStart=/usr/sbin/sbx-actord --shadow \
   --db /var/lib/secubox/actor/actord.db \
   --ledger /var/lib/secubox/actor/evidence.db \
   --ingest-socket /run/secubox/actord.sock \
-  --api-socket /run/secubox/actor.sock
+  --api-socket /run/secubox/actor.sock \
+  --propositions /run/secubox/actord-propositions.json
 # INGESTION : la socket /run/secubox/actord.sock doit appartenir au groupe
 # `actord-ingest` pour que sbxwaf puisse y ecrire. Le durcissement de cette
 # unite (CapabilityBoundingSet= vide) interdit tout chgrp ici, meme en root :

@@ -215,6 +215,7 @@ func (s *Server) apiMux() *http.ServeMux {
 		mux.HandleFunc("GET "+p+"/actors", route(s.handleActors))
 		mux.HandleFunc("GET "+p+"/actors/{id}", route(s.handleActor))
 		mux.HandleFunc("GET "+p+"/campaigns", route(s.handleCampaigns))
+		mux.HandleFunc("GET "+p+"/proposals", route(horsVueReduite(s.handlePropositions))) // adresses : jamais dans la vue réduite
 		mux.HandleFunc("GET "+p+"/evidence/{id}", route(horsVueReduite(s.handleEvidence)))
 		mux.HandleFunc("POST "+p+"/feedback/{id}", route(horsVueReduite(s.handleFeedback)))
 	}
