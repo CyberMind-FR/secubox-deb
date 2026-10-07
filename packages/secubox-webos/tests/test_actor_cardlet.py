@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+"""Carte Actor Intelligence façon infographie : données réelles seulement, échelle de score, échappement, pas de valeur inventée."""
+from pathlib import Path
+
+HTML = (Path(__file__).resolve().parents[1] / "www" / "hall" / "cardlets" / "actor.html").read_text()
+
+
+def test_les_quatre_couches_de_la_maquette():
+    for ident in ("d-vue", "d-acteurs", "d-profil", "d-defense"):
+        assert f'id="{ident}"' in HTML
+    assert HTML.count("{label:'") == 4
+
+
+def test_echelle_de_score_a_cinq_paliers_et_trois_tuiles():
+    for nom in ("Faible risque", "À surveiller", "Suspect", "Probable attaque", "Très critique"):
+        assert nom in HTML
+    for tuile in ("t-crit", "t-susp", "t-obs"):
+        assert f'id="{tuile}"' in HTML
+
+
+def test_six_crans_de_reponse_gradues():
+    for c in ("Observer", "Delay", "Challenge", "Tarpit", "Deny", "Quarantine"):
+        assert f'"{c}"' in HTML
+
+
+def test_donnees_reelles_seulement_et_sonde_chargee():
+    assert 'src="../sonde.js"' in HTML
+    assert "/api/v1/actor/stats" in HTML and "/api/v1/actor/actors" in HTML
+    assert "Math.random" not in HTML
+
+
+def test_les_valeurs_serveur_sont_echappees_avant_innerhtml():
+    # un identifiant ou une heure ne doivent jamais entrer bruts dans le HTML construit
+    assert "'+a.id+'" not in HTML and "'+a.first+'" not in HTML and "'+a.last+'" not in HTML
+    assert "esc(a.id)" in HTML and "esc(a.first)" in HTML and "esc(a.last)" in HTML
+    assert "function esc(" in HTML and "function num(" in HTML and "&#39;" in HTML
+
+
+def test_sans_session_on_ne_montre_pas_de_chiffres_inventes():
+    assert "Ouvre une session pour voir le détail des acteurs." in HTML
