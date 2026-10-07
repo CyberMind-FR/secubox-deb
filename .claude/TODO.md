@@ -17,6 +17,13 @@ y dorment, par mois) — ne le lire que sur demande.
       puis, dans l'ordre : appareils du réseau (noms, adresses), pare-feu IPv6 et redirections (lecture), état de la connexion, redirections
       de ports (écriture, confirmée et journalisée). Consommateurs : IPv6 Guardian (étapes « bloquées » et « exceptions », noms), NAC, exposition.
       Étend le mode « SecuBox esclave, non routeur » aux possibilités de l'API Freebox. Dossier : `docs/dossiers/ipv6-guardian.md` (phase 2).
+- [ ] **Freebox : autoconfiguration depuis le panneau** (demande du 2026-10-08) : « autoconfig freebox, dns, fwipv6, dmz… depuis freebox webui ». Panneau `/freebox/`
+      onglet « Configuration automatique » : lire l'état, montrer ce que SecuBox recommande (pare-feu IPv6 actif, DNS DHCP de la Freebox → la box, redirections
+      utiles, DMZ **seulement sur demande explicite** car elle expose toute la machine), prévisualiser le changement (dry-run), appliquer avec confirmation,
+      audit et retour arrière. Prérequis : droit « settings ». À concevoir : chemins API DNS/DMZ de la Freebox v9 (à explorer en lecture d'abord).
+- [ ] **Rapport complet après le rassemblement** (demande du 2026-10-08) : une fois #2050 terminé (paquets et modules), produire un rapport complet pour le propriétaire :
+      avant/après (nombre de paquets, méta-paquets, unités, comptes root), carte des modules, ce qui reste séparé et pourquoi, risques, déploiements, dette
+      (transitoires à retirer, tests rouges préexistants), prochaines étapes. À publier en page (artefact) + `docs/dossiers/`.
 - [ ] **Cast / diffusion** : diffuser un média du Hall (bibliothèque YouTube SAS, radio, diffusion du Hall) vers les appareils Google Cast détectés par
       IPv6 Guardian (Freebox Player POP, Chromecast, TV Android…) ; « viewpoint » (précisé le 2026-10-07 : « node view surf ») = la vue d'un nœud du maillage, affichée par secubox-surf (relais par-origine) ; à diffuser vers un écran Cast. Conception à écrire d'abord : source = page surf d'un nœud, cible = appareil Cast détecté.
       Contraintes : URL de média joignable par l'appareil (HTTP LAN), pas de contournement de DRM.
