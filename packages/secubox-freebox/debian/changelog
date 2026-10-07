@@ -1,3 +1,11 @@
+secubox-freebox (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Ecriture : POST /pare-feu/ipv6 (administrateur, confirmation explicite) active ou desactive le pare-feu IPv6 de la Freebox. Droit
+    « settings » exige, etat relu avant et apres, rien n'est ecrit si l'etat voulu est deja la, entree dans le journal d'audit, bouton
+    dans le panneau. Redirections de ports : encore en lecture.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 21:45:00 +0200
+
 secubox-freebox (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Nouveau module : connecteur Freebox, v0.1 en lecture. Autorisation validee sur la Freebox (jeton d'application garde en 0600, jamais

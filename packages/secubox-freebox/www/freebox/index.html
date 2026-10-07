@@ -87,7 +87,7 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
   </div>
   <div class="tab-content active" id="t-appareils"><div class="card"><div class="note" id="n-appareils"></div><div class="rows" id="l-appareils"></div></div></div>
   <div class="tab-content" id="t-connexion"><div class="card"><div class="grid" id="g-connexion"></div></div></div>
-  <div class="tab-content" id="t-pare-feu"><div class="card"><div class="grid" id="g-pf"></div><p class="note" id="n-pf"></p><div class="rows" id="l-pf"></div></div></div>
+  <div class="tab-content" id="t-pare-feu"><div class="card"><div class="grid" id="g-pf"></div><div id="a-pf" style="margin:.6rem 0"></div><p class="note" id="n-pf"></p><div class="rows" id="l-pf"></div></div></div>
   <div class="tab-content" id="t-redirections"><div class="card"><p class="note">Redirections de ports IPv4 configurées sur la Freebox. ⚠ signale une ouverture vers Internet d'un service sensible (accès à distance, partage de fichiers, base de données).</p><div class="rows" id="l-redir"></div></div></div>
 </main>
 <div class="toast" id="toast"></div>
@@ -153,6 +153,15 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
     if (!confirm('Oublier l’autorisation de SecuBox ?\nIl faudra revalider sur la Freebox pour se reconnecter.')) return;
     api('revoquer', {method:'POST'}).then(function(x){ if (enregistre(x)){ toast(x.d.message || 'Autorisation oubliée'); charger(); } });
   }
+  function reglePareFeu(actif){
+    var q = actif ? 'Activer le pare-feu IPv6 de la Freebox ?\n\nLes connexions qui arrivent d\u2019Internet vers vos appareils en IPv6 seront bloquées. Un service que vous exposez volontairement en IPv6 (serveur, jeu, visio) devra être autorisé à part.'
+                  : 'Désactiver le pare-feu IPv6 de la Freebox ?\n\nTous vos appareils ayant une adresse IPv6 publique redeviennent joignables depuis Internet.';
+    if (!confirm(q)) return;
+    api('pare-feu/ipv6', {method:'POST', body:JSON.stringify({actif:actif, confirme:true}), headers:{'Content-Type':'application/json'}}).then(function(x){
+      if (x.st === 403 && x.d && x.d.droit_manquant){ erreur(x.d.erreur); return; }
+      if (enregistre(x)){ toast(actif ? 'Pare-feu IPv6 activé' : 'Pare-feu IPv6 désactivé'); chargeOnglet('pare-feu'); chargeOnglet('connexion'); }
+    });
+  }
   function charger(){ api('status').then(function(x){ if (x.st === 200) rendEtat(x.d); else if (x.st === 401 || x.st === 403) erreur('🔒 Connexion requise'); else erreur('Freebox : erreur ' + x.st); }); }
 
   // ── onglets ────────────────────────────────────────────────────────────────
@@ -181,6 +190,12 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
       if (!enregistre(x)) return; var p = x.d, g = $('g-pf'); g.textContent = '';
       var d = document.createElement('div'); d.className = 'stat-card ' + (p.pare_feu_actif === false ? 'red' : 'green');
       d.innerHTML = '<div class="value">' + (p.pare_feu_actif == null ? '—' : (p.pare_feu_actif ? 'Actif' : 'Désactivé')) + '</div><div class="label">Pare-feu IPv6</div>'; g.appendChild(d);
+      var az = $('a-pf'); az.textContent = '';
+      if (p.pare_feu_actif !== null && p.pare_feu_actif !== undefined){
+        var b = document.createElement('button'); b.className = 'btn ' + (p.pare_feu_actif ? 'danger' : 'primary');
+        b.textContent = p.pare_feu_actif ? 'Désactiver le pare-feu IPv6' : '🛡️ Activer le pare-feu IPv6';
+        b.onclick = function(){ reglePareFeu(!p.pare_feu_actif); }; az.appendChild(b);
+      }
       $('n-pf').textContent = p.exceptions_lues ? (p.exceptions.length + ' exception(s) autorisée(s).') : 'Les exceptions IPv6 ne sont pas lisibles avec cette version de la Freebox ou ces droits.';
       liste('l-pf', p.exceptions || [], function(r, e){ r.className = 'row ' + (e.sensible ? 'warn' : 'on'); r.innerHTML = '<span class="nom">' + esc(e.appareil) + '</span><span class="badge">' + esc(e.protocole) + '</span><span class="meta">ports ' + esc(e.port_debut) + (e.port_fin !== e.port_debut ? '–' + esc(e.port_fin) : '') + (e.sensible ? ' ⚠' : '') + ' · ' + esc(e.commentaire) + '</span>'; });
     });

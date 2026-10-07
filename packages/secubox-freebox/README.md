@@ -8,4 +8,4 @@ Connecteur de l'API Freebox OS (v0.1, lecture). Conception : `docs/dossiers/conn
 - **Lecture** (`require_lecture`) : `/status`, `/appareils`, `/connexion`, `/pare-feu`, `/redirections`, `/autoriser/etat`.
 - **Admin** (`require_jwt`) : `/autoriser`, `/revoquer`, `/explorer` (liste blanche de chemins).
 - Panneau : `/freebox/` (menu Réseau). Socket `/run/secubox/freebox.sock`, utilisateur `secubox-freebox`, sans capacité.
-- Écriture (redirections de ports) : v0.2, avec confirmation explicite et journal d'audit.
+- Écriture : `POST /pare-feu/ipv6` {actif, confirme:true} (admin, droit « settings », relecture, audit). Redirections de ports : à venir.
