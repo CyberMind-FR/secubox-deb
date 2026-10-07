@@ -140,25 +140,42 @@ class Freebox:
             except OSError:
                 continue
 
-    def regler_pare_feu_ipv6(self, actif):
-        """Active ou désactive le pare-feu IPv6 de la Freebox. Droit « settings » exigé ; relit avant ET après ; journalise ; n'écrit rien si
-        l'état voulu est déjà là. L'écriture invalide le cache."""
+    def _regler(self, chemin, cle, actif, action):
+        """Écriture d'un réglage booléen : droit « settings » exigé, relu avant ET après, journalisé, rien d'écrit si déjà dans l'état voulu."""
         if not self.client.session:
             self.client.ouvrir_session()
         if not self.client.droits.get("settings"):
             raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
                                   "Paramètres → Gestion des accès → Applications.")
         actif = bool(actif)
-        avant = (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall")
+        avant = (self.client.lire(chemin) or {}).get(cle)
         if avant is actif:
-            return {"pare_feu_actif": actif, "change": False}
-        self.client.ecrire("PUT", "connection/ipv6/config/", {"ipv6_firewall": actif})
-        apres = (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall")
+            return actif, False
+        self.client.ecrire("PUT", chemin, {cle: actif})
+        apres = (self.client.lire(chemin) or {}).get(cle)
         self._cache.clear()
-        self.journal({"action": "pare_feu_ipv6", "avant": avant, "apres": apres, "voulu": actif})
+        self.journal({"action": action, "avant": avant, "apres": apres, "voulu": actif})
         if apres is not actif:
-            raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement : le pare-feu IPv6 n'a pas changé d'état.")
-        return {"pare_feu_actif": apres, "change": True}
+            raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement : le réglage n'a pas changé d'état.")
+        return apres, True
+
+    def regler_pare_feu_ipv6(self, actif):
+        etat, change = self._regler("connection/ipv6/config/", "ipv6_firewall", actif, "pare_feu_ipv6")
+        return {"pare_feu_actif": etat, "change": change}
+
+    def upnp(self):
+        def produire():
+            cfg = self.client.lire("upnpigd/config/")
+            try:
+                red = self.client.lire("upnpigd/redir/")
+            except C.ErreurFreebox:
+                red = None
+            return N.upnp(cfg, red)
+        return self._lu("upnp", produire)
+
+    def regler_upnp(self, actif):
+        etat, change = self._regler("upnpigd/config/", "enabled", actif, "upnp")
+        return {"actif": etat, "change": change}
 
     def redirections(self):
         return self._lu("redirections", lambda: N.redirections(self.client.lire("fw/redir/")))

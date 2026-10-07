@@ -88,7 +88,8 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
   <div class="tab-content active" id="t-appareils"><div class="card"><div class="note" id="n-appareils"></div><div class="rows" id="l-appareils"></div></div></div>
   <div class="tab-content" id="t-connexion"><div class="card"><div class="grid" id="g-connexion"></div></div></div>
   <div class="tab-content" id="t-pare-feu"><div class="card"><div class="grid" id="g-pf"></div><div id="a-pf" style="margin:.6rem 0"></div><p class="note" id="n-pf"></p><div class="rows" id="l-pf"></div></div></div>
-  <div class="tab-content" id="t-redirections"><div class="card"><p class="note">Redirections de ports IPv4 configurées sur la Freebox. ⚠ signale une ouverture vers Internet d'un service sensible (accès à distance, partage de fichiers, base de données).</p><div class="rows" id="l-redir"></div></div></div>
+  <div class="tab-content" id="t-redirections"><div class="card"><p class="note">Redirections de ports IPv4 configurées sur la Freebox. ⚠ signale une ouverture vers Internet d'un service sensible (accès à distance, partage de fichiers, base de données).</p><div class="rows" id="l-redir"></div></div>
+    <div class="card"><h3>UPnP</h3><p class="note">L\u2019UPnP laisse les appareils du réseau ouvrir eux-mêmes des ports vers Internet, sans que vous le sachiez.</p><div id="a-upnp" style="margin:.5rem 0"></div><div class="rows" id="l-upnp"></div></div></div>
 </main>
 <div class="toast" id="toast"></div>
 <script>
@@ -153,6 +154,13 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
     if (!confirm('Oublier l’autorisation de SecuBox ?\nIl faudra revalider sur la Freebox pour se reconnecter.')) return;
     api('revoquer', {method:'POST'}).then(function(x){ if (enregistre(x)){ toast(x.d.message || 'Autorisation oubliée'); charger(); } });
   }
+  function reglage(quoi, actif, question){
+    if (!confirm(question)) return;
+    api(quoi, {method:'POST', body:JSON.stringify({actif:actif, confirme:true}), headers:{'Content-Type':'application/json'}}).then(function(x){
+      if (x.st === 403 && x.d && x.d.droit_manquant){ erreur(x.d.erreur); return; }
+      if (enregistre(x)){ toast('Réglage appliqué'); chargeOnglet('redirections'); }
+    });
+  }
   function reglePareFeu(actif){
     var q = actif ? 'Activer le pare-feu IPv6 de la Freebox ?\n\nLes connexions qui arrivent d\u2019Internet vers vos appareils en IPv6 seront bloquées. Un service que vous exposez volontairement en IPv6 (serveur, jeu, visio) devra être autorisé à part.'
                   : 'Désactiver le pare-feu IPv6 de la Freebox ?\n\nTous vos appareils ayant une adresse IPv6 publique redeviennent joignables depuis Internet.';
@@ -198,6 +206,14 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
       }
       $('n-pf').textContent = p.exceptions_lues ? (p.exceptions.length + ' exception(s) autorisée(s).') : 'Les exceptions IPv6 ne sont pas lisibles avec cette version de la Freebox ou ces droits.';
       liste('l-pf', p.exceptions || [], function(r, e){ r.className = 'row ' + (e.sensible ? 'warn' : 'on'); r.innerHTML = '<span class="nom">' + esc(e.appareil) + '</span><span class="badge">' + esc(e.protocole) + '</span><span class="meta">ports ' + esc(e.port_debut) + (e.port_fin !== e.port_debut ? '–' + esc(e.port_fin) : '') + (e.sensible ? ' ⚠' : '') + ' · ' + esc(e.commentaire) + '</span>'; });
+    });
+    if (nom === 'redirections') api('upnp').then(function(x){
+      if (!enregistre(x)) return; var u = x.d, az = $('a-upnp'); az.textContent = '';
+      var b = document.createElement('button'); b.className = 'btn ' + (u.actif ? 'danger' : 'primary'); b.textContent = u.actif ? 'Désactiver l\u2019UPnP' : 'Activer l\u2019UPnP';
+      b.onclick = function(){ reglage('upnp', !u.actif, u.actif ? 'Désactiver l\u2019UPnP ?\n\nLes appareils (consoles, visio, partage) ne pourront plus ouvrir de ports tout seuls ; ceux qui en dépendent pourront perdre des fonctions.' : 'Activer l\u2019UPnP ?\n\nLes appareils du réseau pourront ouvrir des ports vers Internet sans demander.', 'chargeUpnp'); };
+      az.appendChild(b); var s = document.createElement('span'); s.className = 'note'; s.style.marginLeft = '.6rem'; s.textContent = u.actif ? 'UPnP actif' : 'UPnP désactivé'; az.appendChild(s);
+      liste('l-upnp', u.redirections || [], function(r, i){ r.className = 'row warn'; r.innerHTML = '<span class="nom">' + esc(i.description || i.appareil_ip) + '</span><span class="badge">' + esc(i.protocole) + '</span><span class="meta">:' + esc(i.port_externe) + ' → ' + esc(i.appareil_ip) + ':' + esc(i.port_local) + '</span>'; });
+      if (!(u.redirections || []).length){ var n = document.createElement('div'); n.className = 'note'; n.textContent = 'Aucun port ouvert par UPnP en ce moment.'; $('l-upnp').appendChild(n); }
     });
     if (nom === 'redirections') api('redirections').then(function(x){
       if (!enregistre(x)) return;

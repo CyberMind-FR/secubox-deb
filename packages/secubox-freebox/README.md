@@ -9,3 +9,4 @@ Connecteur de l'API Freebox OS (v0.1, lecture). Conception : `docs/dossiers/conn
 - **Admin** (`require_jwt`) : `/autoriser`, `/revoquer`, `/explorer` (liste blanche de chemins).
 - Panneau : `/freebox/` (menu Réseau). Socket `/run/secubox/freebox.sock`, utilisateur `secubox-freebox`, sans capacité.
 - Écriture : `POST /pare-feu/ipv6` {actif, confirme:true} (admin, droit « settings », relecture, audit). Redirections de ports : à venir.
+- UPnP : `GET /upnp` (état + ports ouverts par les appareils), `POST /upnp` {actif, confirme:true} (admin, droit « settings », audit).
