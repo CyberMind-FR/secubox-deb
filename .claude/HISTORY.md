@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-07 — Action live gk2 : publication du site metablogizer « all » (demande du propriétaire)
+`all.gk2.secubox.in` et son alias `all.gk2.net` répondaient 404 : `published: false` dans `site.json` depuis le 21 août, donc aucun bloc nginx (#1322). La voie officielle (API du publieur) demande un jeton admin ; la même opération a été faite en root par les fonctions du paquet : `published` mis à vrai (écriture atomique, copie avant : `/root/site-all.json.avant-publication` sur gk2), puis `regenerate_nginx_config()` (aide root `metablog-nginx` : installe, teste, recharge). Résultat : 200 sur les deux noms, `nginx -t` valide, 163 sites émis. Le vault n'a pas été touché. Alias de « 3d » et « all » non émis comme blocs séparés : « déjà pris » par le bloc principal, attendu.
+
 ## 2026-10-07 — Rassemblement, vague 3m : haproxy←vhost,exposure (R1) ; déployée gk3 + gk2, publiée (ref #2050)
 haproxy 1.10.0 absorbe vhost et exposure : contenus comparés sur build local (aucune perte), chaque unité gérée une fois, deux unités conservées (exposure reste en root, le registre des unités root pointe sur haproxy). Frontal vérifié avant/après sur les deux boxes : hall, admin et webmail inchangés, `haproxy -c` identique. Tests des composants repointés (exposure 74 verts) ; la suite vhost ne se collecte pas sans /etc/secubox/secubox.conf lisible (déjà le cas avant). isp 1.2.9, profils 1.0.35, meta 0.1.35.
 
