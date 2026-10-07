@@ -84,12 +84,18 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
     <button class="tab" role="tab" data-tab="connexion">🌐 Connexion</button>
     <button class="tab" role="tab" data-tab="pare-feu">🛡️ Pare-feu IPv6</button>
     <button class="tab" role="tab" data-tab="redirections">🔓 Redirections</button>
+    <button class="tab" role="tab" data-tab="autoconfig">⚙️ Auto-config</button>
   </div>
   <div class="tab-content active" id="t-appareils"><div class="card"><div class="note" id="n-appareils"></div><div class="rows" id="l-appareils"></div></div></div>
   <div class="tab-content" id="t-connexion"><div class="card"><div class="grid" id="g-connexion"></div></div></div>
   <div class="tab-content" id="t-pare-feu"><div class="card"><div class="grid" id="g-pf"></div><div id="a-pf" style="margin:.6rem 0"></div><p class="note" id="n-pf"></p><div class="rows" id="l-pf"></div></div></div>
   <div class="tab-content" id="t-redirections"><div class="card"><p class="note">Redirections de ports IPv4 configurées sur la Freebox. ⚠ signale une ouverture vers Internet d'un service sensible (accès à distance, partage de fichiers, base de données).</p><div class="rows" id="l-redir"></div></div>
     <div class="card"><h3>UPnP</h3><p class="note">L\u2019UPnP laisse les appareils du réseau ouvrir eux-mêmes des ports vers Internet, sans que vous le sachiez.</p><div id="a-upnp" style="margin:.5rem 0"></div><div class="rows" id="l-upnp"></div></div></div>
+  <div class="tab-content" id="t-autoconfig"><div class="card">
+    <p class="note">Ce que SecuBox recommande pour la Freebox, comparé à l\u2019état réel. Chaque réglage s\u2019applique séparément, après confirmation ; l\u2019état est relu avant et après, et l\u2019action est journalisée.</p>
+    <div class="rows" id="l-auto"></div>
+    <div id="a-auto" style="margin-top:.8rem;display:flex;gap:.5rem;flex-wrap:wrap"></div>
+  </div></div>
 </main>
 <div class="toast" id="toast"></div>
 <script>
@@ -161,6 +167,18 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
       if (enregistre(x)){ toast('Réglage appliqué'); chargeOnglet('redirections'); }
     });
   }
+  function appliqueAuto(cible){
+    var liste = Array.isArray(cible) ? cible : [cible], sensible = liste.some(function(i){ return i.sensible; });
+    var q = 'Appliquer à la Freebox :\n\n' + liste.map(function(i){ return '• ' + i.titre; }).join('\n') + '\n\nL\u2019état est relu avant et après, et l\u2019action est journalisée.';
+    if (sensible) q += '\n\n⚠ La DMZ envoie à la box TOUT le trafic entrant sans redirection : toute la machine est exposée à Internet. Confirmer encore ?';
+    if (!confirm(q)) return;
+    var corps = { ids: liste.map(function(i){ return i.id; }), confirme: true };
+    if (sensible) corps.confirme_dmz = true;
+    api('autoconfig', {method:'POST', body:JSON.stringify(corps), headers:{'Content-Type':'application/json'}}).then(function(x){
+      if (x.st === 403 && x.d && x.d.droit_manquant){ erreur(x.d.erreur); return; }
+      if (enregistre(x)){ toast((x.d.appliques || []).length ? 'Appliqué : ' + x.d.appliques.join(', ') : 'Rien à changer'); chargeOnglet('autoconfig'); }
+    });
+  }
   function reglePareFeu(actif){
     var q = actif ? 'Activer le pare-feu IPv6 de la Freebox ?\n\nLes connexions qui arrivent d\u2019Internet vers vos appareils en IPv6 seront bloquées. Un service que vous exposez volontairement en IPv6 (serveur, jeu, visio) devra être autorisé à part.'
                   : 'Désactiver le pare-feu IPv6 de la Freebox ?\n\nTous vos appareils ayant une adresse IPv6 publique redeviennent joignables depuis Internet.';
@@ -206,6 +224,28 @@ body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier P
       }
       $('n-pf').textContent = p.exceptions_lues ? (p.exceptions.length + ' exception(s) autorisée(s).') : 'Les exceptions IPv6 ne sont pas lisibles avec cette version de la Freebox ou ces droits.';
       liste('l-pf', p.exceptions || [], function(r, e){ r.className = 'row ' + (e.sensible ? 'warn' : 'on'); r.innerHTML = '<span class="nom">' + esc(e.appareil) + '</span><span class="badge">' + esc(e.protocole) + '</span><span class="meta">ports ' + esc(e.port_debut) + (e.port_fin !== e.port_debut ? '–' + esc(e.port_fin) : '') + (e.sensible ? ' ⚠' : '') + ' · ' + esc(e.commentaire) + '</span>'; });
+    });
+    if (nom === 'autoconfig') api('autoconfig').then(function(x){
+      if (!enregistre(x)) return;
+      var d = x.d, z = $('l-auto'), az = $('a-auto'); z.textContent = ''; az.textContent = '';
+      function txt(v){ if (v === true) return 'activé'; if (v === false) return 'désactivé'; if (v === null || v === undefined) return '—';
+        if (Array.isArray(v)) return v.length ? v.join(', ') : 'aucun'; if (typeof v === 'object' && v.mac !== undefined) return (v.mac || 'MAC inconnue') + (v.ip ? ' → ' + v.ip : ' (pas de bail)'); if (typeof v === 'object') return (v.enabled ? 'activée' : 'désactivée') + (v.ip ? ' → ' + v.ip : ''); return String(v); }
+      (d.items || []).forEach(function(i){
+        var r = document.createElement('div'); r.className = 'row ' + (i.conforme ? 'on' : (i.sensible ? 'warn' : 'off'));
+        r.innerHTML = '<span class="nom">' + esc(i.titre) + '</span><span class="badge ' + (i.conforme ? 'ok' : 'pub') + '">' + (i.conforme ? 'conforme' : 'écart') + '</span>'
+          + '<span class="meta">actuel : ' + esc(txt(i.actuel)) + ' · cible : ' + esc(txt(i.cible)) + '<br>' + esc(i.pourquoi) + '</span>';
+        if (!i.conforme){
+          var b = document.createElement('button'); b.className = 'btn ' + (i.sensible ? 'danger' : 'primary'); b.textContent = i.sensible ? 'Appliquer (sensible)' : 'Appliquer';
+          b.onclick = function(){ appliqueAuto(i); }; r.appendChild(b);
+        }
+        z.appendChild(r);
+      });
+      var libres = (d.items || []).filter(function(i){ return !i.conforme && !i.sensible; });
+      if (libres.length > 1){
+        var b = document.createElement('button'); b.className = 'btn primary'; b.textContent = 'Appliquer les écarts non sensibles (' + libres.length + ')';
+        b.onclick = function(){ appliqueAuto(libres); }; az.appendChild(b);
+      }
+      if (!d.ecarts){ var n = document.createElement('div'); n.className = 'note'; n.textContent = 'Tout est conforme à la configuration recommandée.'; az.appendChild(n); }
     });
     if (nom === 'redirections') api('upnp').then(function(x){
       if (!enregistre(x)) return; var u = x.d, az = $('a-upnp'); az.textContent = '';
