@@ -1,3 +1,9 @@
+secubox-webfilter (0.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * Les gestes sur Unbound (commande, ecriture atomique, checkconf, reload, audit) viennent de secubox_unbound (secubox-core >= 1.7.0) ; le controleur n'a toujours PAS la capacite de redemarrer Unbound (le test le verifie sur le comportement).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 13:00:00 +0200
+
 secubox-webfilter (0.2.3-1~bookworm1) bookworm; urgency=medium
 
   * Profil AppArmor du controleur : unbound-checkconf lit /etc/passwd et /etc/nsswitch.conf (abstraction nameservice) et ip

@@ -4,16 +4,16 @@
 `config.json` est écrit par un compte non root : lu avec O_NOFOLLOW, plafonné, validé comme une entrée hostile. Un fichier généré identique à
 l'existant ne déclenche AUCUN rechargement ; un contrôle ou un rechargement qui échoue restaure l'ancien fichier octet pour octet."""
 import argparse
-import contextlib
 import fcntl
 import json
 import os
 import pwd
-import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
+
+import secubox_unbound as _unbound          # D4 (#2050) : commande, écriture atomique, checkconf, reload, audit — un seul code
+from secubox_unbound import ecrire_atomique as _ecrire_atomique_commun
 
 from . import catalogue, etatsur, feed, generation, profils, voisins, zones
 
@@ -23,8 +23,6 @@ DROPIN = "/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf"
 CATALOGUE = "/etc/secubox/webfilter.toml"
 AUDIT = Path("/var/log/secubox/audit.log")
 ADGUARD = Path("/etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf")
-CHECKCONF = "/usr/sbin/unbound-checkconf"
-CONTROL = "/usr/sbin/unbound-control"
 MAX_CONFIG = 1024 * 1024
 BUDGET_OCTETS = 256 * 1024 * 1024                                  # total des listes lues pour UNE application
 
@@ -33,26 +31,11 @@ class ErreurCtl(RuntimeError):
     pass
 
 
-def _commande(args, delai):
-    try:
-        r = subprocess.run(args, capture_output=True, text=True, timeout=delai, check=False)
-    except subprocess.TimeoutExpired:
-        return False, f"{Path(args[0]).name} : délai de {delai} s dépassé"
-    except OSError as e:
-        return False, f"{Path(args[0]).name} : {e}"
-    return r.returncode == 0, (r.stdout + r.stderr).strip()[-300:]
-
-
-class Systeme:
-    """Les effets de bord réels ; les tests injectent un faux."""
-
-    def verifier_unbound(self):
-        return _commande([CHECKCONF], 60)
-
-    def recharger_unbound(self):
-        ok, sortie = _commande([CONTROL, "reload"], 120)
-        if not ok:
-            raise ErreurCtl("unbound-control reload a échoué : " + sortie)
+class Systeme(_unbound.SystemeUnbound):
+    """Les effets de bord réels ; les tests injectent un faux. Les gestes sur Unbound (checkconf, reload, audit) viennent de secubox_unbound."""
+    MODULE = "webfilter-ctl"
+    ERREUR = ErreurCtl
+    AUDIT = AUDIT
 
     def uid_service(self):
         """UID du compte du service : le dossier d'état doit lui appartenir (jamais un autre compte du groupe partagé). None s'il n'existe pas."""
@@ -73,28 +56,9 @@ class Systeme:
     def adresses_box(self) -> set:
         return feed.adresses_locales()
 
-    def audit(self, action: str, detail: str = "") -> None:
-        try:
-            with open(AUDIT, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "webfilter-ctl", "action": action,
-                                    "detail": detail[:300]}, ensure_ascii=False) + "\n")
-        except OSError as e:
-            print(f"secubox-webfilter-ctl : audit non écrit ({action}) : {e}", file=sys.stderr)
-
 
 def _ecrire_atomique(chemin: Path, texte: str, mode: int = 0o644) -> None:
-    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".wf-")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(texte)
-            f.flush()
-            os.fchmod(f.fileno(), mode)
-            os.fsync(f.fileno())
-        os.replace(tmp, chemin)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
-        raise
+    _ecrire_atomique_commun(chemin, texte, mode, prefixe=".wf-")
 
 
 def _restaurer(dropin: Path, actuel) -> list:

@@ -107,8 +107,12 @@ def test_la_synchronisation_ne_recharge_jamais_unbound():
 
 
 def test_le_controleur_ne_redemarre_jamais_unbound():
+    # la propriété se lit maintenant sur le comportement : le contrôleur n'a PAS la capacité de redémarrer (elle vit dans une sous-classe de
+    # secubox_unbound que seul dns-lan utilise), et son source ne parle ni de restart ni de systemctl
+    from webfilter import ctl
     src = lire("webfilter/ctl.py")
-    assert '"restart"' not in src and "systemctl" not in src and '"reload"' in src
+    assert '"restart"' not in src and "systemctl" not in src
+    assert hasattr(ctl.Systeme, "recharger_unbound") and not hasattr(ctl.Systeme, "redemarrer_unbound")
 
 
 def test_l_api_n_utilise_ni_sudo_ni_la_levee_de_no_new_privileges():

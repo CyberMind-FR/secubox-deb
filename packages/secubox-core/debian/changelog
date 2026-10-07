@@ -1,3 +1,9 @@
+secubox-core (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_unbound : bibliotheque commune (stdlib, sans effet de bord a l'import) qui pose une vue Unbound, la verifie (checkconf), recharge et revient en arriere octet pour octet ; ecriture atomique qui refuse les liens symboliques ; redemarrage reserve a une sous-classe. Remplace les deux copies de webfilter-ctl et dns-lan (D4, #2050).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 13:00:00 +0200
+
 secubox-core (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-lxc-sans-sandbox <conteneur> <service>... : remet en marche un service dont le bac a sable systemd ne se monte plus dans un LXC sans privileges (226/NAMESPACE depuis le 2026-10-05 : redis de PeerTube et du courrier, apache2 du webmail). Surcharge posee DANS le conteneur, rien sur l'hote ; noms valides strictement.
