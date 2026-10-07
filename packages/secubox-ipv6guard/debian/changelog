@@ -1,0 +1,9 @@
+secubox-ipv6guard (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Nouveau module : IPv6 Guardian, phase 1. Lit, sans rien envoyer aux appareils, la table des voisins IPv6/IPv4 et les annonces
+    mDNS, regroupe par appareil (jamais d'adresse MAC complète dans les réponses) et raconte le réseau en quatre temps : appareils
+    joignables, services visibles, connexions entrantes bloquées, exceptions autorisées. Verdict honnête : « à vérifier » tant que
+    le pare-feu de la Freebox n'est pas lu (phase 2). Lecture seule, utilisateur dédié, durcissement complet, sans capacité.
+    Conception : docs/dossiers/ipv6-guardian.md.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 08:00:00 +0200

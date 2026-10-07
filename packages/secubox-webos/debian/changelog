@@ -1,3 +1,9 @@
+secubox-webos (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « IPv6 Guardian » du Hall : qui est joignable en IPv6, raconte en quatre temps (appareils joignables, services visibles, connexions entrantes bloquees, exceptions autorisees) avec un verdict honnete (« a verifier » tant que le pare-feu de la Freebox n'est pas lu). Routes /api/v1/ipv6guard/(status|appareils) authentifiees (auth_request), GET seulement ; /health publique ; carte dynamique (absente d'une box sans le module).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 09:00:00 +0200
+
 secubox-webos (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Tranche Photos : un PhotoPrism absent de la box (container_status not_installed) dit « non installe » et ne montre plus « 0 photos » ni « arrete ».

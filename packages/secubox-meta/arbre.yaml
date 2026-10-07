@@ -342,6 +342,7 @@ requiert:
   - secubox-nac
 recommande:
   - secubox-qos
+  - secubox-ipv6guard           # IPv6 Guardian : qui est joignable en IPv6, en clair (carte du Hall)
 suggere:
   - secubox-nettweak
   - secubox-modem

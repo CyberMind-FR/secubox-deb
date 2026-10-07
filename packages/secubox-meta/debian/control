@@ -275,7 +275,8 @@ Depends: ${misc:Depends},
          secubox-netmodes,
          secubox-routes,
          secubox-nac
-Recommends: secubox-qos
+Recommends: secubox-qos,
+         secubox-ipv6guard
 Suggests: secubox-nettweak,
          secubox-modem,
          secubox-wan-link-guard

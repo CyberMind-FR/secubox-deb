@@ -1,0 +1,18 @@
+Source: secubox-ipv6guard
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-ipv6guard
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, adduser, iproute2, avahi-utils, secubox-core (>= 1.6.0)
+Recommends: secubox-webos, avahi-daemon
+Description: SecuBox IPv6 Guardian — qui est joignable en IPv6, en clair
+ Lit, sans rien envoyer aux appareils, ce que la box voit du réseau local (voisins IPv6, annonces mDNS)
+ et le raconte en quatre temps pour tout le monde : appareils joignables, services visibles, connexions
+ entrantes bloquées, exceptions autorisées. Le verdict ne dit « protégé » qu'après lecture du pare-feu
+ de la Freebox ; sinon « à vérifier ». Lecture seule, utilisateur dédié, sans privilège.
