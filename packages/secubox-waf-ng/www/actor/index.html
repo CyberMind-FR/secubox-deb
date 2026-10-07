@@ -106,6 +106,35 @@
     #retour:hover{border-color:var(--cyan)}
   }
 
+
+  /* Vue d'ensemble façon maquette : tuiles, carte du monde (Natural Earth, points de 3°), derniers événements. */
+  .tuiles3{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem}
+  .tuile3{border-radius:10px;padding:.7rem .9rem;border:1px solid var(--border);display:flex;align-items:center;gap:.7rem}
+  .tuile3 .ti{font-size:1.5rem} .tuile3 .tv{font-size:1.7rem;font-weight:700;line-height:1;text-shadow:0 0 10px currentColor}
+  .tuile3 .tl{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .tuile3.crit{background:rgba(255,68,102,.12);border-color:rgba(255,68,102,.45);color:var(--red)}
+  .tuile3.susp{background:rgba(255,153,68,.12);border-color:rgba(255,153,68,.45);color:var(--orange)}
+  .tuile3.obs{background:rgba(68,136,255,.12);border-color:rgba(68,136,255,.4);color:var(--blue)}
+  .vue2{display:grid;grid-template-columns:1.25fr 1fr;gap:1rem;align-items:start}
+  @media(max-width:980px){.vue2{grid-template-columns:1fr}.tuiles3{grid-template-columns:1fr}}
+  .carte-monde{display:grid;grid-template-columns:minmax(0,1fr) 140px;gap:12px;align-items:center}
+  .carte-monde svg{width:100%;height:auto;display:block}
+  .carte-monde .terre{fill:rgba(140,155,175,.38)}
+  .carte-monde .bulle{fill:rgba(255,68,102,.62);stroke:var(--red);stroke-width:.3}
+  .pays-top{display:flex;flex-direction:column;gap:3px;font-size:.78rem;min-width:0}
+  .pays-top div{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .pays-top b{margin-left:auto;font-variant-numeric:tabular-nums}
+  @media(max-width:640px){.carte-monde{grid-template-columns:1fr}}
+  table.ev{width:100%;border-collapse:collapse;font-size:.74rem}
+  table.ev th{font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);text-align:left;padding:4px 6px;border-bottom:1px solid var(--border2)}
+  table.ev td{padding:5px 6px;border-bottom:1px dashed var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  table.ev td.ac{color:var(--cyan)} table.ev td.sc{font-weight:700;text-align:right}
+  .actv{width:100%;height:64px;display:block;background:var(--bg-soft);border:1px solid var(--border);border-radius:8px}
+  .actv .aire{fill:rgba(255,68,102,.3);stroke:var(--red);stroke-width:.8;vector-effect:non-scaling-stroke}
+  .actv-axe{display:flex;justify-content:space-between;font-size:.55rem;color:var(--dim)}
+  .techs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px}
+  .tech{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg-soft);padding:6px 8px;font-size:.72rem;min-width:0}
+  .tech b{margin-left:auto}
   .card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
   .card h2{font-size:.7rem;color:var(--cyan);letter-spacing:.14em;text-transform:uppercase;margin:0 0 .7rem;display:flex;align-items:center;gap:7px}
   .card h2 .rt{margin-left:auto;color:var(--dim);font-size:.62rem}
@@ -238,6 +267,18 @@
   </div>
 
   <div class="grid" id="kpis"></div>
+
+  <div class="tuiles3" id="tuiles"></div>
+  <div class="vue2">
+    <div class="card">
+      <h2>🌍 D'où viennent les événements <span class="rt">derniers 5 000</span></h2>
+      <div class="carte-monde"><svg id="carteMonde" viewBox="0 0 120 60" role="img" aria-label="Pays d'origine des événements"></svg><div class="pays-top" id="paysTop"></div></div>
+    </div>
+    <div class="card">
+      <h2>📜 Derniers événements <span class="rt">rattachés aux acteurs</span></h2>
+      <div id="even"><div class="vide">chargement…</div></div>
+    </div>
+  </div>
 
   <div class="cols" id="cols">
     <div id="colListe">
@@ -509,17 +550,72 @@ function rendProfile(){
     +'<div class="facts"><div class="fact"><div class="l">Sources</div><div class="v">'+a.src.ips+' IP · '+a.src.asns+' ASN · '+a.src.countries+' pays</div></div>'
     +'<div class="fact"><div class="l">Vu</div><div class="v">'+esc(a.first)+' → '+esc(a.last)+'</div></div></div>'
     +(a.targets&&a.targets.length?'<div class="fact"><div class="l">Services ciblés</div><div class="v">'+a.targets.map(function(t){return '<span class="chip">'+esc(t)+'</span>';}).join('')+'</div></div>':'')
+    +blocActivite(a.id)
     +(hyp?'<div style="margin-top:.6rem;font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Hypothèses concurrentes</div>'+hyp:'');
   $('pver').textContent='algo v1 · poids v1';
 }
+var APERCU=null, APERCU_LE=0;
+var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|01,64,9,2,8,1,35|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|1120|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+function num(x){x=Number(x);return isFinite(x)?x:0;}
+function drapeau(c){c=String(c||'');if(!/^[A-Za-z]{2}$/.test(c))return '🌐';c=c.toUpperCase();return String.fromCodePoint(0x1F1E6+c.charCodeAt(0)-65,0x1F1E6+c.charCodeAt(1)-65);}
+// L'aperçu (carte, événements, activité, techniques) coûte au serveur : une relecture par minute suffit.
+function aperçu(){
+  if(APERCU&&Date.now()-APERCU_LE<55000)return Promise.resolve(APERCU);
+  return jget('/api/v1/actor/overview').then(function(a){if(a){APERCU_LE=Date.now();APERCU=a;}return APERCU;});
+}
+// Tuiles critiques / suspects / observés : MÊME barème que score()/palierScore() (70 et 45), jamais un second.
+function rendTuiles(){
+  var c=0,s=0,o=0;
+  ACTS.forEach(function(a){var n=score(a);if(n>=70)c++;else if(n>=45)s++;else o++;});
+  $('tuiles').innerHTML='<div class="tuile3 crit"><span class="ti">🚨</span><div><div class="tv">'+c+'</div><div class="tl">acteurs critiques</div></div></div>'
+    +'<div class="tuile3 susp"><span class="ti">⚠️</span><div><div class="tv">'+s+'</div><div class="tl">acteurs suspects</div></div></div>'
+    +'<div class="tuile3 obs"><span class="ti">👁️</span><div><div class="tv">'+o+'</div><div class="tl">acteurs observés</div></div></div>';
+}
+function carteMonde(){
+  var svg=$('carteMonde'),liste=$('paysTop'),pays=(APERCU&&APERCU.top_pays)||[],h='';
+  TERRE.split('|').forEach(function(l,j){
+    var cur=l.charAt(0)==='1',x=0;
+    l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)h+='<circle class="terre" cx="'+(x+i+.5)+'" cy="'+(j+.5)+'" r=".42"/>';}x+=n;cur=!cur;});
+  });
+  var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+  pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
+    h+='<circle class="bulle" cx="'+((c[1]+180)/3).toFixed(1)+'" cy="'+((90-c[0])/3).toFixed(1)+'" r="'+(1.2+2.6*Math.sqrt(num(p.n)/max)).toFixed(1)+'"><title>'+esc(p.code)+' : '+num(p.n)+'</title></circle>';});
+  svg.innerHTML=h;
+  liste.innerHTML=pays.length?pays.slice(0,6).map(function(p){return '<div><span>'+drapeau(p.code)+'</span>'+esc(String(p.code).toUpperCase())+'<b>'+num(p.n)+'</b></div>';}).join(''):'<span class="vide">pas encore de pays</span>';
+}
+// L'heure vient de l'horodatage (UTC) et s'affiche dans le fuseau du navigateur.
+function heureLocale(e){var ts=num(e.ts);if(!ts)return e.heure||'';try{return new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});}catch(x){return e.heure||'';}}
+function rendEven(){
+  var r=(APERCU&&APERCU.recents)||[];
+  if(!r.length){$('even').innerHTML='<div class="vide">Aucun événement récent.</div>';return;}
+  $('even').innerHTML='<table class="ev"><thead><tr><th>Heure</th><th>Acteur</th><th>Événement</th><th>Module</th><th>Score</th></tr></thead><tbody>'
+    +r.map(function(e){var p=palierScore(num(e.score));
+      return '<tr><td>'+esc(heureLocale(e))+'</td><td class="ac">'+esc(e.acteur||'—')+'</td><td>'+esc(e.type)+'</td><td>'+esc(e.module)+'</td><td class="sc" style="color:'+p[0]+'">'+num(e.score)+'</td></tr>';}).join('')+'</tbody></table>';
+}
+function courbe(h){
+  h=(h||[]).map(num);if(h.length!==24)return '<div class="vide">Pas d’activité sur 24 h.</div>';
+  var m=Math.max.apply(null,h.concat([1])),pts=h.map(function(v,i){return (i*100/23).toFixed(1)+','+(30-v*28/m).toFixed(1);}).join(' ');
+  return '<svg class="actv" viewBox="0 0 100 30" preserveAspectRatio="none" role="img" aria-label="Activité sur 24 heures"><polygon class="aire" points="0,30 '+pts+' 100,30"/></svg><div class="actv-axe"><span>−24 h</span><span>−12 h</span><span>maintenant</span></div>';
+}
+function iconeTech(n){n=String(n).toLowerCase();
+  if(/sql|inject|xss/.test(n))return '🛡️';if(/scan|probe|recon/.test(n))return '🔎';if(/ssh|auth|brute|login/.test(n))return '🔑';
+  if(/lfi|path|travers|file/.test(n))return '📁';if(/honey/.test(n))return '🍯';if(/outil|agent|ua/.test(n))return '🕵️';return '🔹';}
+function blocActivite(id){
+  var tl=(APERCU&&APERCU.techniques&&APERCU.techniques[id])||[];
+  return '<div style="margin-top:.7rem;font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Activité · 24 h</div>'+courbe(APERCU&&APERCU.activite_acteurs&&APERCU.activite_acteurs[id])
+    +'<div style="margin:.7rem 0 .3rem;font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Techniques observées</div>'
+    +(tl.length?'<div class="techs">'+tl.map(function(x){return '<div class="tech"><span>'+iconeTech(x.nom)+'</span><span>'+esc(x.nom)+'</span><b>'+num(x.n)+'</b></div>';}).join('')+'</div>'
+      :'<div class="vide">Aucune technique relevée dans les derniers événements.</div>');
+}
 function tick(){
-  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns')]).then(function(r){
+  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns'),aperçu()]).then(function(r){
     CAMPS=r[2]||[];
     if(!r[0]){$('kpis').innerHTML='';$('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
     rendKPIs(r[0]);ACTS=r[1]||[];
     if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;
     if(!CUR&&ACTS.length)CUR=ACTS[0].id;
-    rendList();rendProfile();
+    rendTuiles();carteMonde();rendEven();rendList();rendProfile();
   });
 }
 rendFlow();tick();setInterval(function(){if(!document.hidden)tick();},15000);
