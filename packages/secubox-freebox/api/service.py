@@ -9,6 +9,8 @@ CyberMind — https://cybermind.fr
 États en langage clair (non configuré, en attente de validation sur la Freebox, autorisé, injoignable…), droits obtenus et manquants,
 lectures avec un cache court (la Freebox n'est pas faite pour être interrogée en boucle). Aucune réponse ne contient le jeton.
 """
+import json
+import os
 import socket
 import time
 
@@ -33,6 +35,7 @@ class Freebox:
         self.nom_appareil = nom_appareil or socket.gethostname()
         self.ttl = ttl
         self._cache = {}
+        self.journal = self._journal_fichier      # remplaçable (tests) ; jamais de jeton dans une entrée
 
     # ── état ─────────────────────────────────────────────────────────────────
     def statut(self):
@@ -125,6 +128,37 @@ class Freebox:
                     break
             return {"pare_feu_actif": actif, "exceptions": exceptions, "exceptions_lues": lues}
         return self._lu("pare_feu", produire)
+
+    # ── écriture : pare-feu IPv6 ─────────────────────────────────────────────
+    def _journal_fichier(self, entree):
+        ligne = json.dumps({"ts": int(self.horloge()), "module": "freebox", **entree}, ensure_ascii=False)
+        for chemin in ("/var/log/secubox/audit.log", os.path.join(os.path.dirname(self.magasin.chemin), "audit.log")):
+            try:
+                with open(chemin, "a") as f:
+                    f.write(ligne + "\n")
+                return
+            except OSError:
+                continue
+
+    def regler_pare_feu_ipv6(self, actif):
+        """Active ou désactive le pare-feu IPv6 de la Freebox. Droit « settings » exigé ; relit avant ET après ; journalise ; n'écrit rien si
+        l'état voulu est déjà là. L'écriture invalide le cache."""
+        if not self.client.session:
+            self.client.ouvrir_session()
+        if not self.client.droits.get("settings"):
+            raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
+                                  "Paramètres → Gestion des accès → Applications.")
+        actif = bool(actif)
+        avant = (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall")
+        if avant is actif:
+            return {"pare_feu_actif": actif, "change": False}
+        self.client.ecrire("PUT", "connection/ipv6/config/", {"ipv6_firewall": actif})
+        apres = (self.client.lire("connection/ipv6/config/") or {}).get("ipv6_firewall")
+        self._cache.clear()
+        self.journal({"action": "pare_feu_ipv6", "avant": avant, "apres": apres, "voulu": actif})
+        if apres is not actif:
+            raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement : le pare-feu IPv6 n'a pas changé d'état.")
+        return {"pare_feu_actif": apres, "change": True}
 
     def redirections(self):
         return self._lu("redirections", lambda: N.redirections(self.client.lire("fw/redir/")))
