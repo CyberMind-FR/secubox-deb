@@ -1,3 +1,9 @@
+secubox-webos (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * Carte IPv6 Guardian : hauteur portee de 340 a 540 px, les etapes « connexions bloquees » et « exceptions » etaient coupees.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 21:20:00 +0200
+
 secubox-webos (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Carte IPv6 Guardian : le modele de l'appareil est affiche a cote de son nom.
