@@ -1,3 +1,9 @@
+secubox-ytsas (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Flux du compte YouTube : /api/v1/ytsas/flux?type=envie|propositions|abonnements|historique (a regarder plus tard, propositions, abonnements, historique) lu avec les cookies du coffre, lecture seule, cache de 15 min, repli sur la derniere lecture si YouTube refuse ; vignettes servies par la box (/flux/vignette/<id>). Routes reservees : refus sans l'en-tete X-Sbx-Flux pose par le Hall apres verification de la session.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 07 Oct 2026 20:00:00 +0200
+
 secubox-ytsas (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-torrent (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

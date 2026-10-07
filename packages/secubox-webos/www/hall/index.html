@@ -1436,6 +1436,10 @@ const FEATURED = [
   //    d'écoute d'elle-même : il faut un clic) ; `admin:false` : pas de ⚙️ pour un usager. Absente d'une box sans le module :
   //    les cartes le DISENT (502 → « pas installé sur cette box »).
   {id:"voicestudio", label:"VoiceStudio", icon:"🎙️", color:"#c87832", url:"voicestudio.gk2.secubox.in", carte:"/cardlets/voicestudio-admin.html", h:160, auth:true, admin:"/voicestudio/", micro_embed:true, si_present:"/api/v1/voicestudio/status"},
+  // FLUX YOUTUBE : les listes du compte (à regarder plus tard, propositions, abonnements, historique), lues par YouTube SAS avec
+  // les cookies du coffre. `auth:true` : données d'une personne, relayées par le Hall APRÈS vérification de la session.
+  // `si_present` : la carte n'existe que sur une box où YouTube SAS est installé.
+  {id:"ytflux", label:"Flux YouTube", icon:"🎞️", color:"#c4302b", carte:"/cardlets/ytflux.html", h:380, auth:true, admin:false, si_present:"/api/v1/ytsas/status"},
   {id:"voix",        label:"Voix",        icon:"🗣️", color:"#c87832", carte:"/cardlets/voicestudio.html", h:300, auth:true, micro_audio:true, admin:false, si_present:"/api/v1/voicestudio/status"},
   {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360, admin:false},
   // ÉPHÉMÉRIDE (secubox-ephemeride) : la date, l'heure du fuseau de la box, le soleil, la Lune, le saint du jour, la météo et une

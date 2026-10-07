@@ -275,6 +275,7 @@
       "metriques": [
         {"libelle": "diffusions récentes au parc", "url": "/api/v1/webos/public/broadcasts", "compte": "recents"}
       ]
-    }
+    },
+    {"id": "ytflux", "ic": "🎞️", "nom": "Flux YouTube", "service": "ytsas", "acces": "session", "role": "Les listes que YouTube tient pour ton compte : à regarder plus tard, propositions, abonnements et historique, avec leurs vignettes. YouTube SAS les lit avec tes cookies ; rien n'est modifié dans ton compte.", "usage": ["Choisis un onglet : À regarder plus tard, Proposées, Abonnements ou Historique.", "« ▶ YouTube » ouvre la vidéo sur YouTube ; « ⬇ SAS » l'ajoute à la bibliothèque de la box.", "Les vignettes passent par la box : ton navigateur ne contacte pas Google à chaque affichage.", "Si la carte demande des cookies, dépose ton cookies.txt dans YouTube SAS (panneau Authentification). Il expire : réimporte-le au besoin."], "limites": "Les listes d'accueil changent selon YouTube. Si YouTube limite les requêtes, la carte garde la dernière lecture et le dit."}
   ]
 }
