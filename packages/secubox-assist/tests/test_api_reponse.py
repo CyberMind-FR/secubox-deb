@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """#1711 : une demande d'un autre nœud est visible, attribuée, et on y répond
 en un geste — jamais à sa propre demande, jamais à une demande échue."""
 import os

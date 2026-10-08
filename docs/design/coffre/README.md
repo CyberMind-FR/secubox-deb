@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Le Coffre — idée et conception
 
 > Issue #1364 · **P1–P5, P7 et P8 livrées** (P6 attend l'annuaire des clés, #1738) (#1367 : P1 MK, serrures, compartiments, `coffrectl`, journal chaîné ; P2 session de signature apt ; P3 niveau 0 `systemd-creds` ; P4 clés d'appareil, ouverture hors LAN, carte du Hall ; P5 compartiments des personnes, clé OpenPGP personnelle ; P7 Nextcloud mesuré, copie des secrets d'instance ; P8 recouvrement par le maillage) · maquette : [`maquette.html`](maquette.html)

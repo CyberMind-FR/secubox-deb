@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Audit — SBXOS Community Refactor (phase 1 : l'existant)
 
 > #1509 · 2026-09-27 · mission : [PROMPT-COMMUNITY-REFACTOR.md](PROMPT-COMMUNITY-REFACTOR.md)

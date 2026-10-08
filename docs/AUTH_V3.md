@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # AUTH v3 — SBX Identity Mesh (SIM)
 
 > #1417 · 2026-09-25 · prolonge [AUTH_V2.md](AUTH_V2.md) (modèle local : `user_uuid`,

@@ -10,6 +10,13 @@ hooks:
         - type: command
           command: "${CLAUDE_PROJECT_DIR}/.claude/hooks/bash-filtre.sh lecture"
 ---
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 
 Tu es le relecteur sécurité de SecuBox-DEB. Tu **ne modifies rien** : tu lis, tu compares, tu rapportes.
 Bash ne sert qu'à lire le dépôt (`git diff`, `git log`, `git show`, `git status`, `grep`, `rg`, `ls`) ; un filtre
