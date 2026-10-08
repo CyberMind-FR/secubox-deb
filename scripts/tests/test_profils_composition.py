@@ -36,7 +36,7 @@ PROTECTIONS = {f"secubox-{m}" for m in (
     "waf-ng", "ipblock", "toolbox-ng", "toolbox", "dpi", "ndpid-engine", "interceptor",
     "security-posture", "threats", "threatmesh", "ad-guard", "webfilter", "dns-guard",
     "cookies", "soc", "soc-agent", "nac", "ipv6guard", "wan-link-guard", "hardening",
-    "wireguard", "vault", "backup", "haproxy", "dns")}
+    "wireguard", "vault", "backup", "haproxy", "dns", "routes", "qos", "freebox", "certs", "tor")}
 HEBERGEMENT = {f"secubox-{m}" for m in (
     "mail", "matrix", "jitsi", "nextcloud", "photoprism", "gitea", "metablogizer", "bbs",
     "billets", "socialrelay", "metanews", "messagerie", "cdn", "saas-relay")}
