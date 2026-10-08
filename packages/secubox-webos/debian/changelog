@@ -1,3 +1,9 @@
+secubox-webos (1.5.12-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Actor : meme correctif de la bande « terre » a -15 degres sur la carte du monde (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 08:00:00 +0200
+
 secubox-webos (1.5.11-1~bookworm1) bookworm; urgency=medium
 
   * Carte Actor embarquee : plus de second slicer (celui de la couche Renseignement suffit, c'etait un « double cardlet ») ; le titre s'abrege au lieu d'etre ecrase par le badge SHADOW (#2146).
