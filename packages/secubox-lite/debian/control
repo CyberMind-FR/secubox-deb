@@ -50,10 +50,15 @@ Depends: ${misc:Depends},
  secubox-threatmesh,
  secubox-cookies,
  secubox-soc,
- secubox-soc-agent
+ secubox-soc-agent,
+ secubox-routes (>= 1.3.0),
+ secubox-qos (>= 1.0),
+ secubox-freebox,
+ secubox-certs (>= 1.0),
+ secubox-tor (>= 1.0)
 Recommends: wireguard-tools, secubox-sentinelle-gsm
 Description: SecuBox Lite — tous les modules de protection
- Profil de PROTECTION : pare-feu nftables, WAF (sbxwaf), DPI, interception
+ Profil de PROTECTION : routage, QoS, certificats, Tor, Freebox, pare-feu nftables, WAF (sbxwaf), DPI, interception
  MITM (sbxmitm), filtrage DNS (ad-guard, webfilter, dns-guard), detection
  (menaces, anti-rootkit, posture), controle d'acces reseau, VPN WireGuard,
  coffre et sauvegarde, avec le SOC. Aucun service heberge : ni courrier, ni

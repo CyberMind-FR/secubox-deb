@@ -24,7 +24,7 @@ Deux notions se croisent et se confondent facilement :
 
 Les profils s'emboîtent : **isp = lite + opérateur + hébergement**, **full = isp + tout le contenu du Hall**. Un module n'est que dans UN profil (test `scripts/tests/test_profils_composition.py`).
 
-| | **secubox-lite** 1.4.0 | **secubox-isp** 1.3.0 | **secubox-full** 1.5.0 |
+| | **secubox-lite** 1.5.0 | **secubox-isp** 1.3.1 | **secubox-full** 1.5.0 |
 |---|---|---|---|
 | Rôle | Tous les modules de protection | lite + réseau d'opérateur + tous les modules d'hébergement | isp + tout le contenu du Hall |
 | Hébergement | aucun | courrier, Matrix, visio, fichiers, photos, Git, sites, BBS, billets, actualités | idem isp |
@@ -50,15 +50,16 @@ Chaque profil contient celui du dessous : **full ⊃ isp ⊃ lite**. La liste ex
 
 | Profil | Fonction | Modules |
 |---|---|---|
-| **lite** | Pare-feu et accès | `ipblock`, `nac`, `ipv6guard`, `wan-link-guard`, `wireguard`, `netmodes`, `hardening` |
+| **lite** | Routage et exposition | `routes`, `qos`, `freebox`, `certs`, `tor` |
+| | Pare-feu et accès | `ipblock`, `nac`, `ipv6guard`, `wan-link-guard`, `wireguard`, `netmodes`, `hardening` |
 | | Protection web | `waf-ng` (sbxwaf), `haproxy` |
 | | Analyse et interception | `dpi`, `ndpid-engine`, `interceptor`, `toolbox`, `toolbox-ng` (sbxmitm) |
 | | Filtrage DNS | `dns`, `dns-guard`, `ad-guard`, `webfilter` |
 | | Détection | `threats`, `threatmesh`, `security-posture`, `cookies`, `soc`, `soc-agent` |
 | | Secrets et reprise | `vault`, `backup`, `config-advisor`, `auth`, `annuaire` |
 | | Base et supervision | `core`, `aggregator`, `system`, `premier-pas`, `health`, `profiles`, `appstore`, `hub`, `portal` |
-| **isp** | Réseau d'opérateur | `routes`, `modem`, `qos`, `freebox`, `certs`, `metrics` |
-| | Exposition et maillage | `cdn`, `saas-relay`, `tor`, `reality`, `mesh`, `p2p`, `federation` |
+| **isp** | Réseau d'opérateur | `modem`, `metrics` |
+| | Exposition et maillage | `cdn`, `saas-relay`, `reality`, `mesh`, `p2p`, `federation` |
 | | Courrier et échanges | `mail`, `matrix`, `jitsi`, `socialrelay`, `messagerie` |
 | | Fichiers et code | `nextcloud`, `photoprism`, `gitea` |
 | | Sites et publication | `metablogizer`, `bbs`, `billets`, `metanews` |

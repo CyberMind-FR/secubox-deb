@@ -10,15 +10,10 @@ Rules-Requires-Root: no
 Package: secubox-isp
 Architecture: all
 Depends: ${misc:Depends},
- secubox-lite (>= 1.4.0),
- secubox-certs (>= 1.0),
- secubox-routes (>= 1.3.0),
- secubox-qos (>= 1.0),
+ secubox-lite (>= 1.5.0),
  secubox-modem (>= 1.0),
- secubox-freebox,
  secubox-cdn,
  secubox-saas-relay,
- secubox-tor (>= 1.0),
  secubox-reality,
  secubox-p2p (>= 1.12.0),
  secubox-federation,
@@ -39,7 +34,7 @@ Depends: ${misc:Depends},
 Recommends: wireguard-tools
 Description: SecuBox ISP — protection + operateur + hebergement
  Herite de secubox-lite (toutes les protections) et ajoute le reseau
- d'operateur (routage, QoS, modem, exposition, Tor, maillage) et tous les
+ d'operateur (modem, exposition, Reality, maillage) et tous les
  modules d'hebergement : courrier, messagerie Matrix, visioconference,
  fichiers (Nextcloud), photos, Git (Gitea), sites (metablogizer), BBS,
  billets, actualites. Les medias, la domotique, l'IA et le Hall sont dans
