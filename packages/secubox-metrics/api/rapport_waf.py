@@ -153,8 +153,8 @@ def _cases_overview(ov: dict) -> list:
         return []
     charge = str(ov.get("load", "")).split()
     cases = [("Disponibilite", _duree(ov.get("uptime"))),
-             ("CPU", f"{ov.get('cpu_pct', 0)} %"),
-             ("Memoire", f"{ov.get('mem_pct', 0)} %"),
+             ("CPU", f"{float(ov.get('cpu_pct') or 0):.0f} %"),
+             ("Memoire", f"{float(ov.get('mem_pct') or 0):.0f} %"),
              ("Charge", charge[0] if charge else "-")]
     if "mem_used_kb" in ov and "mem_total_kb" in ov:
         cases.append(("RAM", f"{ov['mem_used_kb'] / 1048576:.1f} / {ov['mem_total_kb'] / 1048576:.1f} Go"))

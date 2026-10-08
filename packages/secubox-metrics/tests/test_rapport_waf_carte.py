@@ -85,3 +85,9 @@ def test_aucune_ligne_de_la_carte_n_est_entierement_terre():
     en travers du Pacifique et de l'Atlantique, sur la carte du Hall comme sur celle du PDF."""
     for j, ligne in enumerate(carte_monde.TERRE.split("|")):
         assert not (ligne[0] == "1" and ligne[1:] == "120"), f"ligne {j} entierement terre"
+
+
+def test_le_cpu_est_arrondi_dans_les_tuiles():
+    """Le cache des metrics donne un flottant : « 51.242164282554 % » debordait de la tuile."""
+    t = dict(rw._cases_overview({"uptime": 60, "cpu_pct": 51.242164282554, "mem_pct": 96.6, "load": "1 1 1"}))
+    assert t["CPU"] == "51 %" and t["Memoire"] == "97 %"

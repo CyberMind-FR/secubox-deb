@@ -1,3 +1,9 @@
+secubox-metrics (1.16.1-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport WAF : le CPU et la memoire de la vue d'ensemble sont arrondis (« 51.242164282554 % » debordait de la tuile) (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 09:00:00 +0200
+
 secubox-metrics (1.16.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport WAF quotidien (PDF) : carte du monde en points (la meme que la page WAF du Hall, une bulle par pays vu par le WAF) et vue d'ensemble des metrics de la box (disponibilite, CPU, memoire, charge, RAM, connexions) lue dans le cache du module. Le titre de section ne reste plus seul en bas de page (#2146).
