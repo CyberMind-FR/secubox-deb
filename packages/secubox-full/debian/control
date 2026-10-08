@@ -10,71 +10,33 @@ Rules-Requires-Root: no
 Package: secubox-full
 Architecture: all
 Depends: ${misc:Depends},
-# MOTEUR DPI, tire explicitement. C'est lui qui fournit /usr/sbin/nDPId et
-# nDPIsrvd (nDPI 6.x statique) ; sans lui le tableau de bord tourne au-dessus
-# de la libndpi 4.2 de Debian, sans son moteur — constate sur la VM trixie.
-# Il n'arrivait par aucun chemin : le tableau de bord ne le cite qu'en
-# Recommends, et la construction installe avec --no-install-recommends.
-# (Ne JAMAIS citer un nom de paquet en prose dans un bloc Depends : le
-#  verificateur lit tout le bloc et le prendrait pour une dependance.)
- secubox-ndpid-engine,
-# Gestion d'energie du parc : profilectl derive les manifestes de cycle
-# de vie, le sleeper endort les modules inactifs. Sans ce paquet, une
-# image neuve garde TOUT allume — sur un rpi400 (4 Go) la machine se
-# fige (#1308). Aucun profil ne le tirait, pas meme lite, que sa petite
-# cible rend pourtant le plus demandeur.
- secubox-profiles,
- secubox-isp (>= 1.2.0),
- secubox-bbs,
- secubox-billets,
- secubox-nextcloud (>= 1.0),
- secubox-gitea (>= 1.0),
- secubox-jellyfin (>= 1.0),
- secubox-lyrion (>= 1.0),
- secubox-peertube (>= 1.0),
- secubox-podcaster (>= 1.0),
- secubox-ytsas (>= 0.3.0),
- secubox-webmail (>= 1.0),
- secubox-mail (>= 1.0),
- secubox-zigbee (>= 1.0),
- secubox-metablogizer (>= 1.0),
- secubox-radio,
-# Totalite du parc gk2 (working-set), hors modules propres a la carte ou au demarrage.
- secubox-system,
- secubox-aggregator,
- secubox-security-posture (>= 2.2.0),
+ secubox-isp (>= 1.3.0),
+ secubox-webos,
+ secubox-sbxos,
+ secubox-surf,
+ sbxos-audio-mood,
+ secubox-ephemeride,
+ secubox-avatar,
+ secubox-repo,
  secubox-assist,
  secubox-console,
- secubox-interceptor,
- secubox-matrix,
- secubox-jitsi,
- secubox-localrecall,
+ secubox-zia,
+ secubox-voice,
+ secubox-radio,
+ secubox-podcaster (>= 1.0),
+ secubox-peertube (>= 1.0),
+ secubox-jellyfin (>= 1.0),
+ secubox-ytsas (>= 0.3.0),
  secubox-media,
- secubox-appstore,
- secubox-cdn,
+ secubox-lyrion (>= 1.0),
  secubox-mqtt,
- secubox-dpi (>= 1.7.0),
- secubox-qos,
- secubox-dns-guard,
- secubox-photoprism,
  secubox-picobrew,
- secubox-reality,
- secubox-metrics (>= 1.14.0),
- secubox-saas-relay,
- secubox-sentinelle-gsm,
- secubox-soc,
- secubox-streamforge,
- secubox-streamlit,
- secubox-threatmesh,
- secubox-threats,
- secubox-toolbox,
- secubox-metanews (>= 0.3.0)
-Recommends: wireguard-tools
-Description: SecuBox Full — socle ISP + applications working (catalogue all.gk2)
- Métapaquet showcase : le socle secubox-isp PLUS les applications
- effectivement en service et listées sur all.gk2.secubox.in — BBS, billets,
- Nextcloud, Gitea, Jellyfin, Lyrion, PeerTube, Podcaster, torrent, webmail,
- mail, ytsas, Zigbee, metablogizer, publish, radio.
- .
- Profil PROPRE : les modules non finis / désactivés / hors catalogue ne sont
- PAS inclus ; ils restent installables à la demande depuis apt.secubox.in.
+ secubox-ai-gateway,
+ secubox-streamlit
+Recommends: wireguard-tools, secubox-voicestudio
+Description: SecuBox Full — isp + tout le contenu du Hall
+ Le profil secubox-isp PLUS tout ce que le Hall presente : le Hall lui-meme
+ (webos, sbxos), l'assistant (zia, voice, voicestudio), les medias (radio,
+ podcaster, PeerTube, Jellyfin, ytsas, Lyrion), la domotique (MQTT,
+ picobrew), l'IA (ai-gateway, streamlit), les depots et l'assistance.
+ Le materiel specifique (ecrans, capteurs) reste a la demande.

@@ -545,8 +545,7 @@ requiert:
 recommande:
   - secubox-jellyfin
   - secubox-ytsas
-suggere:
-  - secubox-media
+  - secubox-media   # carte « Freebox TV » du Hall (#2146)
 
 meta: secubox-service-musique
 niveau: service
