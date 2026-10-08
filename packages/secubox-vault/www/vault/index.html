@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
     <style>
+  [hidden]{display:none!important}   /* un `display:flex` d'auteur ne doit pas annuler `hidden` (#2146) */
   .main-content { margin-left: 200px; padding: 2rem; max-width: 1100px; }
   @media (max-width: 800px) { .main-content { margin-left: 0; padding: 1rem; } }
   h1 { font-family: 'Courier Prime', monospace; color: var(--cyan, #00d4ff); margin: 0 0 .25rem; }
