@@ -1,3 +1,9 @@
+secubox-soc-agent (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * L'unite systemd etait livree deux fois (lib/ par debian/rules, usr/lib/ par dh_installsystemd) : sur Debian 13 (usrmerge) dpkg echouait au depaquetage (« unable to open ... .dpkg-new »). secubox-lite depend de ce paquet : l'image ne pouvait pas se construire. Installee une seule fois (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 16:00:00 +0200
+
 secubox-soc-agent (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-health au lieu de secubox-watchdog (transitoire, #2050).
