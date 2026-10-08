@@ -32,9 +32,15 @@ def _live_sockets(sock_dir: str = "/run/secubox") -> frozenset:
         return frozenset()
 
 
-def _recompute() -> None:
-    """Read menu/health/exposure sources and refresh `_cache` in place."""
+def _recompute() -> bool:
+    """Read menu/health/exposure sources and refresh `_cache` in place.
+
+    Rend False, SANS toucher au registre, quand le menu du hub est absent ou
+    vide : un registre vidé fait retomber le Hall sur sa maquette.
+    """
     menu = registry.load_menu_cache()
+    if not menu.get("categories"):
+        return False
     health = systemd_batch()
     expo = registry.load_exposure_cache()
     svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets())
@@ -45,12 +51,15 @@ def _recompute() -> None:
         _CACHE_FILE.write_text(json.dumps(_cache))
     except Exception:
         pass
+    return True
 
 
 async def _refresh_loop() -> None:
     while True:
         try:
-            _recompute()
+            if not _recompute():
+                # Menu absent : on réveille le hub (hors boucle d'événements).
+                await asyncio.to_thread(registry.reveille_hub)
         except Exception:
             pass
         await asyncio.sleep(15)

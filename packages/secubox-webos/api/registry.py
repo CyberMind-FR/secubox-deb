@@ -3,7 +3,9 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox-Deb :: WebOS — normalize_services : composition du registre normalisé (P1)."""
+import http.client
 import json
+import socket
 from pathlib import Path
 from typing import List, Optional
 from api.models import Service, ServiceUrls, ServiceRouting, ServiceHealth, ServiceAuth
@@ -62,3 +64,35 @@ def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None
                 active=bool(item.get("active", True)),
             ))
     return out
+
+
+class _ConnexionUnix(http.client.HTTPConnection):
+    """HTTP sur un socket unix (stdlib : le Hall n'a pas besoin de httpx ici)."""
+
+    def __init__(self, chemin: str, timeout: float = 3.0):
+        super().__init__("localhost", timeout=timeout)
+        self._chemin = chemin
+
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self._chemin)
+
+
+def reveille_hub(socket_agregateur: str = "/run/secubox/aggregator.sock") -> bool:
+    """Réveille le rafraîchisseur du hub, qui réécrit menu.json.
+
+    Le hub servi par l'agrégateur ne reçoit ni startup ni lifespan : son
+    rafraîchissement ne démarre qu'à la première requête de statut (public).
+    Sans cet appel, un menu.json supprimé par un postinst n'est jamais réécrit.
+    """
+    try:
+        c = _ConnexionUnix(socket_agregateur, timeout=3.0)
+        try:
+            c.request("GET", "/api/v1/hub/status")
+            c.getresponse().read()
+        finally:
+            c.close()
+        return True
+    except Exception:
+        return False
