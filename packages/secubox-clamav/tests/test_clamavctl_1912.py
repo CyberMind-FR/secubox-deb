@@ -192,3 +192,68 @@ def test_le_sommeil_memorise_la_base(monkeypatch):
     c.endormir(run=lxc)
     d = json.loads(c.ETAT.read_text())
     assert d["dernier_etat"] == "STOPPED" and d["base"]["ages"] == {"daily": 0.2, "main": 1.0}
+
+
+# ── LE BLOC RÉSEAU EN DOUBLE FAIT AVORTER lxc-start, ET LA BOÎTE S'ÉCROULE ────
+# install-lxc.sh AJOUTAIT un bloc lxc.net.0 au bloc que le modèle de création pose déjà : deux
+# `lxc.net.0.type`, lxc-start finissait « ABORTING ». Chaque connexion à 3310 (rspamd) relançait
+# `clamavctl wake` : 37 échecs en 3 minutes sur gk2, lxc-start + apparmor_parser à chaque fois,
+# sur une box déjà en swap. On répare la config au réveil, et on ne retente pas à l'aveugle.
+DOUBLE = """lxc.include = /usr/share/lxc/config/common.conf
+lxc.rootfs.path = dir:/data/lxc/clamav/rootfs
+lxc.net.0.type = veth
+lxc.net.0.link = br-lxc
+lxc.net.0.flags = up
+lxc.net.0.type = veth
+lxc.net.0.link = br-lxc
+lxc.net.0.flags = up
+lxc.net.0.veth.pair = veth-clamav0
+lxc.net.0.ipv4.address = 10.100.0.220/24
+lxc.net.0.ipv4.gateway = 10.100.0.1
+lxc.start.auto = 0
+"""
+
+
+def test_un_bloc_reseau_en_double_est_reduit_a_un_seul(tmp_path):
+    (tmp_path / "clamav").mkdir()
+    cfg = tmp_path / "clamav" / "config"
+    cfg.write_text(DOUBLE)
+    assert c.reparer_config(str(tmp_path), "clamav") is True
+    lignes = cfg.read_text().splitlines()
+    assert sum(1 for l in lignes if l.startswith("lxc.net.0.type")) == 1
+    assert "lxc.net.0.veth.pair = veth-clamav0" in lignes
+    assert "lxc.net.0.ipv4.address = 10.100.0.220/24" in lignes
+    assert "lxc.start.auto = 0" in lignes and "lxc.rootfs.path = dir:/data/lxc/clamav/rootfs" in lignes
+    assert c.reparer_config(str(tmp_path), "clamav") is False      # idempotent
+
+
+def test_une_config_saine_n_est_pas_touchee(tmp_path):
+    (tmp_path / "clamav").mkdir()
+    cfg = tmp_path / "clamav" / "config"
+    cfg.write_text("lxc.net.0.type = veth\nlxc.net.0.link = br-lxc\n")
+    avant = cfg.stat().st_mtime_ns
+    assert c.reparer_config(str(tmp_path), "clamav") is False
+    assert cfg.stat().st_mtime_ns == avant
+
+
+def test_apres_un_echec_de_demarrage_on_ne_retente_pas_tout_de_suite(tmp_path, monkeypatch):
+    monkeypatch.setattr(c, "ETAT", tmp_path / "etat.json")
+    monkeypatch.setattr(c, "CHEMIN", str(tmp_path))
+    lxc = LxcFaux("STOPPED")
+    appels = []
+
+    def run(cmd, **kw):
+        appels.append(cmd[0])
+        if cmd[0] == "lxc-start":
+            return Rep(1, "", "ABORTING")
+        return lxc(cmd, **kw)
+    assert c.reveiller(delai=1, run=run, ping_fn=lambda: False) is False
+    assert appels.count("lxc-start") == 1
+    assert c.reveiller(delai=1, run=run, ping_fn=lambda: False) is False
+    assert appels.count("lxc-start") == 1, "second essai immédiat : la boucle de 37 échecs en 3 minutes"
+
+
+def test_l_installation_remplace_le_bloc_reseau_du_modele_au_lieu_d_en_ajouter_un():
+    src = (PKG / "lxc" / "install-lxc.sh").read_text()
+    assert "sed -i '/^lxc\\.net\\.0\\./d'" in src
+    assert src.index("sed -i '/^lxc\\.net\\.0\\./d'") < src.index("lxc.net.0.type = veth")

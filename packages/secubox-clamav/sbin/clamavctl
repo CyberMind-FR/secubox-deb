@@ -38,6 +38,7 @@ ETAT = Path(os.environ.get("SECUBOX_CLAMAV_ETAT", "/var/lib/secubox/clamav/etat.
 INSTALL = os.environ.get("SECUBOX_CLAMAV_INSTALL", "/usr/lib/secubox/clamav/install-lxc.sh")
 DELAI_REVEIL = int(os.environ.get("SECUBOX_CLAMAV_DELAI", "240"))      # démarrage à froid, base comprise
 BASE_PERIMEE_JOURS = 10
+DELAI_RETENTE = int(os.environ.get("SECUBOX_CLAMAV_RETENTE", "60"))     # pas de nouveau lxc-start avant (s)
 
 
 def etat_lxc(run=subprocess.run) -> str:
@@ -70,6 +71,44 @@ def _ecrit(cle: str, valeur) -> None:
         pass
 
 
+def reparer_config(chemin: str = CHEMIN, nom: str = NOM) -> bool:
+    """Ramène la config LXC à UN SEUL bloc `lxc.net.0.*` (le dernier gagne). Rend True si elle a changé.
+
+    L'installation AJOUTAIT son bloc à celui du modèle de création : deux `lxc.net.0.type`, et
+    lxc-start finit « ABORTING » (cf. #1912, vu sur gk2)."""
+    cfg = Path(chemin) / nom / "config"
+    try:
+        lignes = cfg.read_text().splitlines()
+    except OSError:
+        return False
+    if sum(1 for l in lignes if l.startswith("lxc.net.0.type")) <= 1:
+        return False
+    cles: dict = {}
+    for l in lignes:
+        if l.startswith("lxc.net.0."):
+            cles[l.split("=", 1)[0].strip()] = l
+    sortie, pose = [], False
+    for l in lignes:
+        if l.startswith("lxc.net.0."):
+            if not pose:
+                sortie.extend(cles.values())
+                pose = True
+            continue
+        sortie.append(l)
+    tmp = cfg.with_name("config.tmp")
+    tmp.write_text("\n".join(sortie) + "\n")
+    os.chmod(tmp, cfg.stat().st_mode & 0o7777)
+    os.replace(tmp, cfg)
+    return True
+
+
+def _echec_recent(maintenant=time.time) -> bool:
+    try:
+        return maintenant() - float(json.loads(ETAT.read_text()).get("dernier_echec", 0)) < DELAI_RETENTE
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def reveiller(delai: int = DELAI_REVEIL, run=subprocess.run, ping_fn=None, dormir=time.sleep,
               maintenant=time.monotonic) -> bool:
     """Démarre le LXC s'il dort et attend que clamd réponde. Rend True si clamd répond."""
@@ -80,8 +119,14 @@ def reveiller(delai: int = DELAI_REVEIL, run=subprocess.run, ping_fn=None, dormi
         print("clamavctl : LXC absent — clamavctl install", file=sys.stderr)
         return False
     if etat_lxc(run) != "RUNNING":
+        if _echec_recent():
+            print("clamavctl : démarrage échoué il y a moins de %d s, pas de nouvel essai" % DELAI_RETENTE, file=sys.stderr)
+            return False
+        if reparer_config():
+            print("clamavctl : config LXC réparée (bloc lxc.net.0 en double)", file=sys.stderr)
         r = run(["lxc-start", "-P", CHEMIN, "-n", NOM, "-d"], capture_output=True, text=True)
         if r.returncode != 0:
+            _ecrit("dernier_echec", time.time())
             print("clamavctl : lxc-start a échoué : " + (r.stderr or "")[:200], file=sys.stderr)
             return False
         _ecrit("reveil", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))

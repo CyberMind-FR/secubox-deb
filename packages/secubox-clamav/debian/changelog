@@ -1,3 +1,9 @@
+secubox-clamav (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Le bloc reseau lxc.net.0 etait AJOUTE a celui du modele de creation : deux lxc.net.0.type, lxc-start finissait ABORTING et chaque connexion a 3310 (rspamd) relancait « clamavctl wake » — 37 echecs en 3 minutes sur gk2, avec apparmor_parser et lxc-start a chaque fois, sur une box deja en swap. L'installation remplace desormais le bloc ; « wake » repare une config deja en double (dernier bloc gagnant, idempotent) et ne retente pas un demarrage echoue avant 60 s (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 23:00:00 +0200
+
 secubox-clamav (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * État sans privilège (#1912) : le contrôle de santé tourne sous « secubox », qui ne voit pas le conteneur (lxc-info rend « ABSENT », rootfs illisible) et aurait levé une fausse alerte. La partie root mémorise le dernier état et l'âge de la base (au réveil, au sommeil, à la mise à jour) ; la lecture sans privilège rend ce cache, vieilli du temps écoulé, avec source=cache. README du paquet.
