@@ -10,14 +10,36 @@
 set -eu
 IP="${LYRION_IP:-10.100.0.100}"; PORT="${LYRION_PORT:-9000}"
 LMS="${LYRION_LMS_UNIT:-lyrionmusicserver}"
+ETAT="${LYRION_ETAT:-/var/lib/secubox/lyrion}"
+GRACE="${LYRION_GRACE:-600}"      # s : LMS est muet pendant son démarrage et son scan
+PLAFOND="${LYRION_PLAFOND:-3}"    # relances max par heure
 state=$(lxc-info -n lyrion -s 2>/dev/null | awk '{print $2}')
 [ "$state" = "RUNNING" ] || exit 0
 # Deux essais espacés : évite un faux positif pendant un GC/scan bref.
 i=1
 while [ "$i" -le 2 ]; do
-  if curl -fsS -o /dev/null --max-time 4 "http://$IP:$PORT/" 2>/dev/null; then exit 0; fi
+  if curl -fsS -o /dev/null --max-time 10 "http://$IP:$PORT/" 2>/dev/null; then exit 0; fi
   sleep 5; i=$((i+1))
 done
+# NE PAS RELANCER EN BOUCLE. Relancer LMS relance son scan de médiathèque, pendant lequel
+# :9000 reste muet (surtout sur une box en swap) : le watchdog relançait donc LMS toutes les
+# 2 min (141 fois en 3 h sur gk2), et le scan permanent saturait le CPU et le disque.
+now=$(date +%s)
+mkdir -p "$ETAT" 2>/dev/null || true
+f="$ETAT/restarts"
+recents=$(awk -v n="$now" 'n-$1 < 3600 {print $1}' "$f" 2>/dev/null || true)
+dernier=$(printf '%s\n' "$recents" | awk 'NF && $1>m {m=$1} END{print m+0}')
+nb=$(printf '%s\n' "$recents" | awk 'NF' | wc -l)
+if [ "$dernier" -gt 0 ] && [ $((now - dernier)) -lt "$GRACE" ]; then
+  echo "LMS muet mais relancé il y a moins de ${GRACE}s — délai de grâce, pas de relance"; exit 0
+fi
+if pgrep -f squeezeboxserver-scanner >/dev/null 2>&1; then
+  echo "LMS muet pendant un scan de médiathèque — pas de relance"; exit 0
+fi
+if [ "$nb" -ge "$PLAFOND" ]; then
+  echo "LMS muet, déjà $nb relances dans l'heure — plafond atteint, pas de relance (à regarder à la main)"; exit 0
+fi
+printf '%s\n%s\n' "$recents" "$now" | awk 'NF' > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f" || true
 echo "LMS muet sur $IP:$PORT alors que la LXC tourne — restart $LMS"
 if ! lxc-attach -n lyrion -- systemctl restart "$LMS" 2>/dev/null; then
   echo "restart unit échoué — restart conteneur lyrion"
