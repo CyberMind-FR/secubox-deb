@@ -141,3 +141,32 @@ wireguard
 yacy
 ytsas
 zigbee
+# --- AJOUT MANUEL 2026-10-09 (#2146) : modules des profils lite / isp / full refondus. Chacun est INSTALLE sur gk2 ET gk3 (dpkg) ;
+# le snapshot du 2026-08-21 ne les voyait pas (modules apparus depuis, ou endormis par le sleeper). Les sept images de la release
+# alpha.10 ont echoue ici (verify-profile.sh). NE PAS regenerer a l'aveugle (voir plus haut). ---
+ai-gateway
+annuaire
+appstore
+avatar
+backup
+cdn
+config-advisor
+cookies
+dns-guard
+ephemeride
+federation
+freebox
+health
+ipv6guard
+messagerie
+metanews
+metrics
+premier-pas
+sbxos
+socialrelay
+surf
+vault
+voice
+wan-link-guard
+webos
+zia

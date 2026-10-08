@@ -1,3 +1,9 @@
+secubox-lite (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-soc-agent retire du profil : il pousse vers une passerelle SOC decommissionnee et accepte des commandes a distance, il n'a rien a faire dans un profil par defaut (#2146). Il reste installable a la demande.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 17:00:00 +0200
+
 secubox-lite (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * routes, qos, freebox, certs, tor rejoignent lite (#2146).
