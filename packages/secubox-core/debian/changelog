@@ -1,3 +1,9 @@
+secubox-core (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-waf-route : un domaine vide (domaine de la box inconnu au moment du postinst, quinze paquets l'appellent avec $(secubox-domaine x) || true) dit « domaine vide », renvoie vers secubox-domaine et precise que la route existante est conservee, au lieu de « domaine invalide : » suivi de rien (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 12:00:00 +0200
+
 secubox-core (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox_unbound : ecrire_verifier (ecrit et verifie SANS recharger : l'appelant decide), retirer_vue (supprime, verifie, recharge, remet la vue si refus), creation du dossier manquant. Pour ad-guard (D4, #2050).

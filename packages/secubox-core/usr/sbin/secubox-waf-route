@@ -74,6 +74,11 @@ def main(argv: list[str]) -> int:
         print("usage: secubox-waf-route <domaine> <port>", file=sys.stderr)
         return 2
     domaine, brut = argv[1], argv[2]
+    if not domaine:
+        # Appel type `secubox-waf-route "$(secubox-domaine <x>)" <port> || true` : le domaine de la box était inconnu.
+        print("secubox-waf-route: domaine vide (domaine de la box inconnu ? voir `secubox-domaine`) — "
+              "route non posée, la route existante est conservée", file=sys.stderr)
+        return 2
     if not NOM.match(domaine):
         print(f"secubox-waf-route: domaine invalide : {domaine}", file=sys.stderr)
         return 2
