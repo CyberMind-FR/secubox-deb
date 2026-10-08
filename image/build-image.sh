@@ -1698,7 +1698,9 @@ esac
 # un second noyau. DATA est un point de montage VIDE a la construction : il
 # grandit a l'execution, et sur les machines du parc /data est de toute facon
 # un volume separe.
-if (( IMG_MIB < 6144 )); then
+# Seuil porte de 6144 a 8192 MiB (#2146) : l'image ESPRESSObin (carte uSD « 8 Go », 7168 MiB) gardait ESP 1024 + DATA 1536 et il
+# ne restait que 4230 MiB de ROOT pour un profil lite de 5010 MiB.
+if (( IMG_MIB < 8192 )); then
   ESP_MIB=256
   DATA_MIB=512
   log "Image petite (${IMG_MIB} MiB) — parts reduites : ESP ${ESP_MIB}, DATA ${DATA_MIB}"
