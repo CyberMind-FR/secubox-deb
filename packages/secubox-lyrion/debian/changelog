@@ -1,3 +1,9 @@
+secubox-lyrion (1.6.20-1~bookworm1) bookworm; urgency=medium
+
+  * Watchdog LMS : plus de relance en boucle. Il relancait LMS toutes les 2 min des que :9000 etait muet (141 fois en 3 h sur gk2) ; or chaque relance relance le scan de la mediatheque, pendant lequel :9000 reste muet : la boucle s'entretenait et saturait CPU et disque. Delai de grace de 600 s apres une relance, pas de relance pendant un scan (squeezeboxserver-scanner), plafond de 3 relances par heure, sonde a 10 s au lieu de 4 (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 23:30:00 +0200
+
 secubox-lyrion (1.6.18-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-auth au lieu de secubox-users (transitoire, #2050).
