@@ -21,3 +21,13 @@ def test_chaque_page_force_l_attribut_hidden():
     for p in PAGES:
         t = p.read_text(encoding="utf-8")
         assert "[hidden]{display:none!important}" in t.replace(" ", ""), f"{p.name} : [hidden] n'est pas forcé"
+
+
+def test_mon_coffre_se_remet_a_jour_apres_la_reconnexion():
+    """La page ne lisait l'état du Coffre qu'UNE fois, au chargement : après la reconnexion qui l'ouvre, le cadre du Hall
+    restait sur « scellé » jusqu'à un rechargement. Elle relit l'état tant qu'elle n'est pas ouverte, et au retour sur l'onglet."""
+    t = (RACINE / "secubox-vault" / "www" / "coffre" / "index.html").read_text(encoding="utf-8")
+    assert "async function rafraichit()" in t
+    assert "setInterval(rafraichit" in t and "visibilitychange" in t
+    corps = t.split("async function rafraichit()")[1].split("\n  }\n")[0]
+    assert "if (OUV" in corps, "une fois ouvert, plus de relecture (le geste de la personne n'est pas interrompu)"
