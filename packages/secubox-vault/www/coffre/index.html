@@ -432,6 +432,21 @@
     catch (err) { msg(err.message); }
   });
 
+  // Relit l'état du Coffre tant que la page n'est pas ouverte : la reconnexion qui l'ouvre se fait dans un autre
+  // onglet, et le cadre du Hall restait sur « scellé ». Une fois ouvert (OUV), plus de relecture : on n'interrompt
+  // pas ce que la personne est en train de faire.
+  async function rafraichit() {
+    if (OUV || document.hidden) return;
+    try {
+      const n = await api('');
+      const avant = ETAT ? [ETAT.initialise, ETAT.ouvert, ETAT.session, (ETAT.serrures || []).length] : null;
+      const apres = [n.initialise, n.ouvert, n.session, (n.serrures || []).length];
+      if (!avant || JSON.stringify(avant) !== JSON.stringify(apres)) await charge();
+    } catch (err) { /* injoignable : le prochain passage réessaie */ }
+  }
+  setInterval(rafraichit, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) rafraichit(); });
+
   charge();
 })();
 </script>

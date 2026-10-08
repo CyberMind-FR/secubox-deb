@@ -22,18 +22,9 @@
       ]
     },
     {
-      "id": "coffre", "ic": "🔐", "nom": "Coffre", "service": "vault", "acces": "session",
-      "role": "L'état du Coffre de la box (secubox-vault 2.0) : scellé ou ouvert, combien de secrets et de serrures, journal intègre ou non. Lisible par les seuls administrateurs ; la carte ne montre jamais une valeur.",
-      "usage": ["Agrandie, la carte ouvre la console du Coffre : ouvrir (phrase, code de secours ou clé d'appareil), sceller, enrôler une clé FIDO.", "Hors du LAN, l'ouverture demande un code TOTP et la box envoie une alerte par courriel."],
-      "metriques": [
-        {"libelle": "secrets", "url": "/api/v1/vault/etat", "somme": "compartiments[].secrets", "session": true},
-        {"libelle": "serrures", "url": "/api/v1/vault/etat", "compte": "serrures", "session": true}
-      ]
-    },
-    {
-      "id": "mon-coffre", "ic": "🗝️", "nom": "Mon coffre", "service": "vault", "acces": "session",
-      "role": "Votre compartiment dans le Coffre de la box : des secrets à vous (clé OpenPGP, codes, notes), ouverts par VOTRE serrure — une phrase ou une clé d'appareil. Un administrateur, même Coffre ouvert, n'y lit rien.",
-      "usage": ["La première fois : créer sa serrure. Ensuite : l'ouvrir, ranger, voir, retirer ; la serrure n'est tenue que par l'onglet et s'oublie après cinq minutes sans geste.", "Le compartiment n'est lisible que lorsque le Coffre de la box est ouvert par un administrateur."],
+      "id": "mon-coffre", "ic": "🔐", "nom": "Coffre", "service": "vault", "acces": "session",
+      "role": "Votre compartiment dans le Coffre de la box : des secrets à vous (clé OpenPGP, codes, notes), ouverts par VOTRE serrure — votre connexion, une phrase ou une clé d'appareil. Le badge dit l'état du Coffre de la box (scellé ou ouvert) ; un administrateur, même Coffre ouvert, n'y lit rien.",
+      "usage": ["La première fois : créer sa serrure. Ensuite : l'ouvrir, ranger, voir, retirer ; la serrure n'est tenue que par l'onglet et s'oublie après cinq minutes sans geste.", "Le compartiment n'est lisible que lorsque le Coffre de la box est ouvert par un administrateur.", "Le ⚙️ ouvre la console du Coffre (administrateurs) : ouvrir, sceller, compteurs, journal, clés d'appareil."],
       "metriques": [
         {"libelle": "mes secrets", "url": "/api/v1/vault/moi", "chemin": "secrets", "session": true}
       ]

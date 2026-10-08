@@ -1,3 +1,9 @@
+secubox-vault (2.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * « Mon coffre » relit l'etat du Coffre toutes les 15 s tant qu'il n'est pas ouvert, et au retour sur l'onglet : apres la reconnexion qui l'ouvre, le cadre du Hall restait sur « scelle » jusqu'a un rechargement (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 14:00:00 +0200
+
 secubox-vault (2.1.7-1~bookworm1) bookworm; urgency=medium
 
   * Les pages du Coffre honorent l'attribut `hidden` : `section{display:flex}` et `.kpis{display:flex}` l'emportaient sur la regle du navigateur, une section masquee restait AFFICHEE. Dans « Mon coffre » ouvert, le formulaire « Creer ma serrure » (masque) passait devant le contenu du compartiment et, dans le cadre de 380 px du Hall, on ne voyait que lui ; la carte « Coffre » montrait ses compteurs a « – » quand elle devait les cacher (#2146).
