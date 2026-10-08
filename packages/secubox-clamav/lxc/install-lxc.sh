@@ -32,6 +32,9 @@ if [ ! -f "$SENTINEL" ]; then
     printf 'lxc.idmap = u 0 %s 65536\nlxc.idmap = g 0 %s 65536\n' "$LXC_ROOT_UID" "$LXC_ROOT_UID" \
       >> "$LXC_PATH/$LXC_NAME/config"
   fi
+  # Le modèle de création pose déjà un bloc lxc.net.0 : on le REMPLACE, jamais on n'en ajoute un
+  # second (deux `lxc.net.0.type` font avorter lxc-start).
+  sed -i '/^lxc\.net\.0\./d' "$LXC_PATH/$LXC_NAME/config"
   cat >> "$LXC_PATH/$LXC_NAME/config" <<CFG
 lxc.net.0.type = veth
 lxc.net.0.link = $LXC_BRIDGE
