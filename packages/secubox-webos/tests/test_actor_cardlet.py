@@ -94,3 +94,12 @@ def test_les_memes_seuils_que_la_page_admin():
         src = page.read_text()
         assert "n>=70" in src and "n>=45" in src
     assert "p>=70" in HTML and "p>=45" in HTML, "tuiles critiques ≥ 70, suspects ≥ 45 (comme palierScore de la page admin)"
+
+
+def test_embarquee_la_carte_n_a_pas_de_second_slicer():
+    """Dans la couche Renseignement, le slicer de la couche (points + hôte) est déjà là :
+    le slicer interne en faisait un DOUBLE (« double cardlet »), et le badge SHADOW
+    écrasait le titre. Embarquée, la carte reste sur la vue d'ensemble."""
+    assert ".emb #slbar{display:none}" in HTML
+    assert "classList.contains('emb')" in HTML.split("SBXSliceBar(el('slbar')")[0].split("function montre")[1]
+    assert ".emb .h .tt{min-width:0" in HTML and "text-overflow:ellipsis" in HTML.split(".emb .h .tt{")[1].split("}")[0]
