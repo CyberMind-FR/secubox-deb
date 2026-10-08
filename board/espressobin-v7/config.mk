@@ -62,3 +62,7 @@ SWAP_SIZE=512M
 # clairement si l'espace utilisé n'y tient pas (4 Go : lite oui, isp peut-être
 # non). 7168M < 7,4 Gio utiles d'une carte « 8 Go ».
 IMG_SIZE="7168M"
+
+# Image compressee en xz : le .img.gz de lite pese 2,07 Gio, au-dela des 2 Gio d'un fichier de release GitHub (#2146).
+# Se flashe avec `xzcat <image>.img.xz | dd of=/dev/mmcblk0 bs=4M status=progress`.
+IMG_COMPRESS=xz
