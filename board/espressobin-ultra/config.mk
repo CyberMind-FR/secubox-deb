@@ -47,3 +47,7 @@ SWAP_SIZE=512M
 
 # Image size: 4G for 8GB eMMC (ESPRESSObin Ultra has 8GB eMMC)
 IMG_SIZE="4G"
+
+# Image compressee en xz : le .img.gz de lite pese 2,07 Gio, au-dela des 2 Gio d'un fichier de release GitHub (#2146).
+# Se flashe avec `xzcat <image>.img.xz | dd of=/dev/mmcblk0 bs=4M status=progress`.
+IMG_COMPRESS=xz

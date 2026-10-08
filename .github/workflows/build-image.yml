@@ -295,7 +295,8 @@ jobs:
       - name: Generate checksums
         run: |
           cd output/
-          sha256sum *.img.gz > SHA256SUMS 2>/dev/null || echo "No images found" > SHA256SUMS
+          shopt -s nullglob
+          sha256sum *.img.gz *.img.xz > SHA256SUMS 2>/dev/null || echo "No images found" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Upload image artifact
@@ -304,6 +305,7 @@ jobs:
           name: secubox-${{ matrix.profile }}-${{ matrix.board }}-${{ env.DEBIAN_SUITE }}
           path: |
             output/*.img.gz
+            output/*.img.xz
             output/SHA256SUMS
           if-no-files-found: error
           retention-days: 30
@@ -344,9 +346,10 @@ jobs:
         run: |
           # Contrepartie du `!cancelled()` ci-dessus. Une matrice entierement
           # en echec ne doit pas produire une release vide sans bruit.
-          n=$(ls images/*.img.gz 2>/dev/null | wc -l)
+          shopt -s nullglob
+          n=$(ls images/*.img.gz images/*.img.xz 2>/dev/null | wc -l)
           echo "images recuperees : $n"
-          ls -lh images/*.img.gz 2>/dev/null || true
+          ls -lh images/*.img.gz images/*.img.xz 2>/dev/null || true
           if [ "$n" -eq 0 ]; then
             echo "::error::aucune image construite — la matrice a entierement echoue"
             exit 1
@@ -361,7 +364,8 @@ jobs:
           # Remove individual SHA256SUMS files
           rm -f SHA256SUMS
           # Generate combined checksums
-          sha256sum *.img.gz 2>/dev/null | sort > SHA256SUMS || echo "No images" > SHA256SUMS
+          shopt -s nullglob
+          sha256sum *.img.gz *.img.xz 2>/dev/null | sort > SHA256SUMS || echo "No images" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Sign checksums
@@ -380,7 +384,7 @@ jobs:
           VERSION="${{ github.ref_name }}"
           if gh release view "$VERSION" &>/dev/null; then
             echo "Release $VERSION exists, deleting duplicate assets..."
-            for file in images/*.img.gz images/SHA256SUMS images/SHA256SUMS.gpg image/create-qemu-arm64-vm.sh image/create-vbox-vm.sh; do
+            for file in images/*.img.gz images/*.img.xz images/SHA256SUMS images/SHA256SUMS.gpg image/create-qemu-arm64-vm.sh image/create-vbox-vm.sh; do
               [ -f "$file" ] || continue
               name=$(basename "$file")
               gh release delete-asset "$VERSION" "$name" --yes 2>/dev/null || true
@@ -394,6 +398,7 @@ jobs:
         with:
           files: |
             images/*.img.gz
+            images/*.img.xz
             images/SHA256SUMS
             images/SHA256SUMS.gpg
             image/create-qemu-arm64-vm.sh

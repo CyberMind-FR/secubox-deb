@@ -2023,8 +2023,15 @@ fi
 # gzip -9 mono-thread sur une image de 8 Go faisait dépasser le délai du job
 # CI (#1131e). pigz produit un .gz strictement compatible.
 log "  Compression..."
-if command -v pigz >/dev/null 2>&1; then pigz -9 -f "${IMG_FILE}"; else gzip -9 -f "${IMG_FILE}"; fi
-IMG_GZ="${IMG_FILE}.gz"
+# IMG_COMPRESS=xz (carte ESPRESSObin) : un fichier de release GitHub ne peut dépasser 2 Gio, et le .img.gz de lite en pesait 2,07 (#2146).
+IMG_COMPRESS="${IMG_COMPRESS:-gz}"
+if [[ "${IMG_COMPRESS}" == "xz" ]]; then
+  xz -T0 -6 -f "${IMG_FILE}"
+  IMG_GZ="${IMG_FILE}.xz"
+else
+  if command -v pigz >/dev/null 2>&1; then pigz -9 -f "${IMG_FILE}"; else gzip -9 -f "${IMG_FILE}"; fi
+  IMG_GZ="${IMG_FILE}.gz"
+fi
 sha256sum "${IMG_GZ}" > "${IMG_GZ}.sha256"
 
 ok "Livrable : ${IMG_GZ} ($(du -sh "${IMG_GZ}" | cut -f1))"
@@ -2048,6 +2055,6 @@ elif [[ "${BOARD}" == "vm-arm64" ]]; then
   echo -e "      -nographic"
   echo -e "  QCOW2      : ${QCOW2_FILE}"
 else
-  echo -e "  Flasher : zcat ${IMG_GZ} | dd of=/dev/mmcblk0 bs=4M status=progress"
+  echo -e "  Flasher : $([[ "${IMG_COMPRESS}" == "xz" ]] && echo xzcat || echo zcat) ${IMG_GZ} | dd of=/dev/mmcblk0 bs=4M status=progress"
 fi
 echo -e "${GOLD}${BOLD}════════════════════════════════════════════${NC}"
