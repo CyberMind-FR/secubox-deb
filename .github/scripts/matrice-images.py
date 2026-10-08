@@ -73,7 +73,14 @@ PROFIL_DEFAUT = "full"
 #: `secubox-full-mochabin-<suite>.img.gz` pèse 2,6 Go : un fichier de release GitHub ne peut dépasser 2 Gio, et
 #: l'étape « Create GitHub Release » échouait (alpha 9). La release ne porte donc que lite et isp pour cette
 #: carte ; `full` reste constructible à la main (workflow_dispatch / build-image.sh --profile full).
-PROFILS_PUBLIES = {"mochabin": ["lite", "isp"]}
+PROFILS_PUBLIES = {
+    "mochabin": ["lite", "isp"],
+    # ESPRESSObin (Armada 3720, 1 a 2 Go, swap 512 Mo) : lite seul. Depuis la refonte des profils (#2146), `isp` porte
+    # tout l'hebergement (courrier, Matrix, Nextcloud, photos, Git…) et vise 8 Go : l'y construire par defaut comme
+    # « socle de comparaison » donnerait une image qui cale au demarrage.
+    "espressobin-v7": ["lite"],
+    "espressobin-ultra": ["lite"],
+}
 
 _RE_PROFIL = re.compile(r"^\s*SECUBOX_PROFILE\s*=\s*(\S+)", re.M)
 
