@@ -10,53 +10,37 @@ Rules-Requires-Root: no
 Package: secubox-isp
 Architecture: all
 Depends: ${misc:Depends},
-# Gestion d'energie du parc : profilectl derive les manifestes de cycle
-# de vie, le sleeper endort les modules inactifs. Sans ce paquet, une
-# image neuve garde TOUT allume — sur un rpi400 (4 Go) la machine se
-# fige (#1308). Aucun profil ne le tirait, pas meme lite, que sa petite
-# cible rend pourtant le plus demandeur.
- secubox-profiles,
- secubox-lite (>= 1.3.0),
- secubox-core (>= 1.0),
- secubox-hub (>= 1.0),
- secubox-portal (>= 1.0),
- secubox-system (>= 1.0),
- secubox-auth (>= 1.4.0),
- secubox-netmodes (>= 1.0),
- secubox-nac (>= 1.0),
- secubox-wireguard (>= 1.0),
- secubox-dns (>= 1.0),
- secubox-vortex-dns (>= 1.0),
- secubox-modem (>= 1.0),
- secubox-routes (>= 1.3.0),
- secubox-waf-ng (>= 1.0),
- secubox-haproxy (>= 1.10.0),
- secubox-ipblock (>= 1.3.0),
- secubox-hardening (>= 1.0),
+ secubox-lite (>= 1.4.0),
  secubox-certs (>= 1.0),
+ secubox-routes (>= 1.3.0),
  secubox-qos (>= 1.0),
- secubox-dpi (>= 1.7.0),
-# Le module de tableau de bord au-dessus de netdata a ete DECOMMISSIONNE
-# (#1294) : netdata lui-meme a ete retire de Debian 13. Le nom du paquet
-# est deliberement absent de ce commentaire — verify-profile.sh lit les
-# dependances par un grep brut sur le champ Depends, commentaires
-# compris, et le citer ici le ferait passer pour une dependance vivante.
- secubox-health,
+ secubox-modem (>= 1.0),
+ secubox-freebox,
+ secubox-cdn,
+ secubox-saas-relay,
  secubox-tor (>= 1.0),
- secubox-mesh (>= 1.0),
+ secubox-reality,
  secubox-p2p (>= 1.12.0),
- secubox-security-posture (>= 2.2.0),
- secubox-ad-guard (>= 1.6.2),
- secubox-webfilter (>= 0.2.1),
- secubox-metablogizer (>= 1.10.0)
-Recommends: secubox-cdn, wireguard-tools
-Description: SecuBox ISP — couche protégée avec hébergement simple
- Hérite de secubox-lite (protections : WAF, DPI, MITM, filtrage DNS) et ajoute le
- routage, l'exposition et un hébergement simple et limité (metablogizer, publish).
- Métapaquet du socle SecuBox pour un routeur/passerelle FAI : réseau, pare-feu
- (nftables, WAF, vortex-firewall, HAProxy), DNS, WireGuard, contrôle d'accès
- réseau, DPI, QoS, exposition (Tor), supervision et durcissement.
- .
- Profil PROPRE : aucune application lourde (PeerTube, Matrix, Jellyfin, cloud…).
- Ces modules s'installent à la demande depuis apt.secubox.in, ou via le profil
+ secubox-federation,
+ secubox-mesh (>= 1.0),
+ secubox-metrics (>= 1.14.0),
+ secubox-mail (>= 1.0),
+ secubox-matrix,
+ secubox-socialrelay,
+ secubox-billets,
+ secubox-jitsi,
+ secubox-nextcloud (>= 1.0),
+ secubox-photoprism,
+ secubox-gitea (>= 1.0),
+ secubox-metablogizer (>= 1.0),
+ secubox-bbs,
+ secubox-messagerie,
+ secubox-metanews (>= 0.3.0)
+Recommends: wireguard-tools
+Description: SecuBox ISP — protection + operateur + hebergement
+ Herite de secubox-lite (toutes les protections) et ajoute le reseau
+ d'operateur (routage, QoS, modem, exposition, Tor, maillage) et tous les
+ modules d'hebergement : courrier, messagerie Matrix, visioconference,
+ fichiers (Nextcloud), photos, Git (Gitea), sites (metablogizer), BBS,
+ billets, actualites. Les medias, la domotique, l'IA et le Hall sont dans
  secubox-full.

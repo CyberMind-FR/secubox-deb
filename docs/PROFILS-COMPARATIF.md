@@ -22,15 +22,16 @@ Deux notions se croisent et se confondent facilement :
 
 ## 2. Méta-paquets (ce qui est installé)
 
-Les profils s'emboîtent : **isp = lite + hébergement simple**, **full = isp + tout le parc gk2**.
+Les profils s'emboîtent : **isp = lite + opérateur + hébergement**, **full = isp + tout le contenu du Hall**. Un module n'est que dans UN profil (test `scripts/tests/test_profils_composition.py`).
 
-| | **secubox-lite** 1.3.0 | **secubox-isp** 1.2.0 | **secubox-full** 1.4.0 |
+| | **secubox-lite** 1.4.0 | **secubox-isp** 1.3.0 | **secubox-full** 1.5.0 |
 |---|---|---|---|
-| Rôle | Protections uniquement | Couche protégée, hébergement simple et limité | Totalité du parc actuel (comme gk2) |
-| Protections | Pare-feu nftables, WAF (`sbxwaf`, HAProxy), DPI, MITM (`sbxmitm`), ad-guard, webfilter, menaces, anti-rootkit, mac-guard, contrôle d'accès (NAC), WireGuard, durcissement | Celles de lite | Celles de lite |
-| Réseau / FAI | DNS | + routage, QoS, certificats, exposition, Tor, maillage, supervision | idem isp |
-| Hébergement | aucun | simple : metablogizer, publish | complet : Nextcloud, Gitea, Jellyfin, PeerTube, courrier, radio, BBS, billets, Zigbee, IA, voix… |
-| Niveau adapté | lite (2 Go) | standard (4 Go) | pro (8 Go) |
+| Rôle | Tous les modules de protection | lite + réseau d'opérateur + tous les modules d'hébergement | isp + tout le contenu du Hall |
+| Hébergement | aucun | courrier, Matrix, visio, fichiers, photos, Git, sites, BBS, billets, actualités | idem isp |
+| Hall et médias | non | non | le Hall, l'assistant, radio, vidéo, musique, domotique, IA |
+| Niveau adapté | 4 Go conseillés (≈ 2,1 Go de services mesurés sur gk3) | 8 Go (hébergement actif) | 8 Go et plus |
+
+Hors profil, à installer à la demande : écrans (`c3box`, `eye-remote`), capteurs (`rbs-sensor`, `meshtastic`, `led-heartbeat`), `zkp`, `clamav`, `netboot`, `vm`, `ui-manager`, `zia-llm`, `voice-moteur`. `secubox-sentinelle-gsm` (arm64) et `secubox-voicestudio` (amd64) sont en Recommends : un Depends les rendrait non installables sur l'autre architecture.
 
 ## 3. Coût mémoire des deux modules DNS (mesures du 2026-10-04)
 
@@ -45,26 +46,26 @@ Conséquence pour **lite (2 Go)** : avec le WAF, le DPI et le MITM en plus, ad-g
 
 ## 4. Modules liés à chaque profil
 
-Chaque profil contient celui du dessous : **full ⊃ isp ⊃ lite**.
+Chaque profil contient celui du dessous : **full ⊃ isp ⊃ lite**. La liste exacte est dans `packages/secubox-<profil>/debian/control` ; l'arbre de référence est `packages/secubox-meta/arbre.yaml`.
 
 | Profil | Fonction | Modules |
 |---|---|---|
-| **lite** (28) | Pare-feu et accès | `vortex-firewall`, `ipblock`, `nac`, `mac-guard`, `wireguard`, `netmodes`, `hardening` |
-| | Protection web | `waf`, `waf-ng` (sbxwaf), `haproxy` |
-| | Analyse et interception | `dpi`, `ndpid-engine`, `toolbox`, `toolbox-ng` (sbxmitm) |
-| | Filtrage DNS | `dns`, `ad-guard`, `webfilter` |
-| | Détection | `threats`, `antirootkit`, `security-posture` |
-| | Base et supervision | `core`, `hub`, `portal`, `system`, `auth`, `profiles`, `watchdog`, `health-doctor` |
-| **isp** (+19) | Réseau d'opérateur | `routes`, `modem`, `qos`, `traffic`, `netdiag`, `mediaflow`, `vortex-dns`, `dns-provider` |
-| | Accès et exposition | `certs`, `exposure`, `vhost`, `users`, `defaults`, `tor` |
-| | Maillage | `mesh`, `meshname`, `p2p` |
-| | Hébergement simple | `metablogizer`, `publish` |
-| **full** (+44) | Cloud et collaboration | `nextcloud`, `gitea`, `webmail`, `mail`, `jitsi`, `jabber`, `matrix` |
-| | Médias | `jellyfin`, `lyrion`, `photoprism`, `peertube`, `podcaster`, `radio`, `torrent`, `ytsas`, `media` |
-| | Édition et réseaux sociaux | `bbs`, `billets`, `streamforge`, `streamlit`, `saas-relay` |
-| | Domotique et terrain | `zigbee`, `mqtt`, `picobrew`, `sentinelle-gsm` |
-| | Sécurité avancée | `soc`, `threatmesh`, `network-anomaly`, `interceptor`, `reality`, `reporter` |
-| | Exploitation | `admin`, `aggregator`, `console`, `metacatalog`, `mirror`, `nettweak`, `assist`, `droplet`, `localrecall`, `turn`, `yacy`, `ndpid` |
+| **lite** | Pare-feu et accès | `ipblock`, `nac`, `ipv6guard`, `wan-link-guard`, `wireguard`, `netmodes`, `hardening` |
+| | Protection web | `waf-ng` (sbxwaf), `haproxy` |
+| | Analyse et interception | `dpi`, `ndpid-engine`, `interceptor`, `toolbox`, `toolbox-ng` (sbxmitm) |
+| | Filtrage DNS | `dns`, `dns-guard`, `ad-guard`, `webfilter` |
+| | Détection | `threats`, `threatmesh`, `security-posture`, `cookies`, `soc`, `soc-agent` |
+| | Secrets et reprise | `vault`, `backup`, `config-advisor`, `auth`, `annuaire` |
+| | Base et supervision | `core`, `aggregator`, `system`, `premier-pas`, `health`, `profiles`, `appstore`, `hub`, `portal` |
+| **isp** | Réseau d'opérateur | `routes`, `modem`, `qos`, `freebox`, `certs`, `metrics` |
+| | Exposition et maillage | `cdn`, `saas-relay`, `tor`, `reality`, `mesh`, `p2p`, `federation` |
+| | Courrier et échanges | `mail`, `matrix`, `jitsi`, `socialrelay`, `messagerie` |
+| | Fichiers et code | `nextcloud`, `photoprism`, `gitea` |
+| | Sites et publication | `metablogizer`, `bbs`, `billets`, `metanews` |
+| **full** | Le Hall | `webos`, `sbxos`, `surf`, `ephemeride`, `sbxos-audio-mood`, `console`, `assist`, `repo`, `avatar` |
+| | Assistant | `zia`, `voice`, `voicestudio` (amd64) |
+| | Médias | `radio`, `podcaster`, `peertube`, `jellyfin`, `ytsas`, `media`, `lyrion` |
+| | Domotique et IA | `mqtt`, `picobrew`, `ai-gateway`, `streamlit` |
 
 ## 5. Prompt pour ChatGPT image (infographie à partager)
 

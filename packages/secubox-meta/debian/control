@@ -504,8 +504,8 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-peertube
 Recommends: secubox-jellyfin,
-         secubox-ytsas
-Suggests: secubox-media
+         secubox-ytsas,
+         secubox-media
 Description: SecuBox — service « Vidéo »
  PeerTube, Jellyfin, flux Freebox TV, torrent et SAS web.
  .

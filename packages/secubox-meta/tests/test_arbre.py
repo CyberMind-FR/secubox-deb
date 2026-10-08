@@ -78,11 +78,12 @@ HALL = os.path.join(RACINE, "..", "secubox-webos", "www", "hall", "index.html")
 
 # Entrée du Hall → paquet qui la sert, quand le nom ne suffit pas.
 PAQUET_DE = {
-    "securite": "secubox-waf", "acteurs": "secubox-waf-ng",
-    "contenu": "secubox-droplet", "depot": "secubox-droplet",
+    "securite": "secubox-waf-ng", "acteurs": "secubox-waf-ng",
+    "contenu": "secubox-metablogizer", "depot": "secubox-metablogizer",
+    "devwatch": "secubox-metanews", "freeboxtv": "secubox-media", "torrent": "secubox-ytsas", "ytflux": "secubox-ytsas",
     "cloud": "secubox-nextcloud", "nextcloud-super": "secubox-nextcloud",
     "forums": "secubox-bbs",
-    "activite": "secubox-sbxid", "comptes": "secubox-sbxid", "acces": "secubox-sbxid",
+    "activite": "secubox-auth", "comptes": "secubox-auth", "acces": "secubox-auth",
     "sbxos": "secubox-sbxos", "surfviewer": "secubox-webos", "mood": "sbxos-audio-mood",
     # Le Coffre : la carte d'admin (/vault/) et « Mon coffre » (/coffre/) sont deux pages du MÊME
     # paquet, secubox-vault ; le défaut « secubox-<id> » désignait des paquets qui n'existent pas.
