@@ -1,3 +1,9 @@
+secubox-vault (2.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * Les pages du Coffre honorent l'attribut `hidden` : `section{display:flex}` et `.kpis{display:flex}` l'emportaient sur la regle du navigateur, une section masquee restait AFFICHEE. Dans « Mon coffre » ouvert, le formulaire « Creer ma serrure » (masque) passait devant le contenu du compartiment et, dans le cadre de 380 px du Hall, on ne voyait que lui ; la carte « Coffre » montrait ses compteurs a « – » quand elle devait les cacher (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 13:00:00 +0200
+
 secubox-vault (2.1.6-1~bookworm1) bookworm; urgency=high
 
   * Le journal d'audit existant est remis au compte du service (chown secubox-coffre:secubox, 0640) a chaque configure : il gardait le proprietaire de l'epoque ou le coffre tournait sous `secubox`, et le service ne pouvait plus y ecrire, donc plus s'ouvrir (Permission denied a l'ouverture). Contenu du journal jamais touche.

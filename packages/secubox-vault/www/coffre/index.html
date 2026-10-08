@@ -20,6 +20,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mon coffre</title>
 <style>
+  [hidden]{display:none!important}   /* un `display:flex` d'auteur ne doit pas annuler `hidden` (#2146) */
   :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
          --soft:#f5f7fc; --cyan:#0784a8; --up:#0f9d54; --hot:#d64545; --warn:#c87832; --grape:#6e40c9; }
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ color-scheme:dark;
