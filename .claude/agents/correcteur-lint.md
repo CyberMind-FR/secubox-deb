@@ -10,6 +10,13 @@ hooks:
         - type: command
           command: "${CLAUDE_PROJECT_DIR}/.claude/hooks/bash-filtre.sh lint"
 ---
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 
 Tu fais des corrections **mécaniques** de lint dans SecuBox-DEB. Rien d'autre.
 

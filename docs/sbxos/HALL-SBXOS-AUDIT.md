@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SBXOS Hall — audit, design system, plan d'intégration
 
 *État au 2026-09-29 (#1676). Réponse aux phases A, B et C du prompt « SBXOS Hall — implementation prompt ». Règle : on étend l'existant, on ne construit pas une seconde architecture.*

@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # secubox-clamav — antivirus à la demande dans un LXC dédié (#1912)
 
 clamd avec `main.cvd` + `daily.cvd` demande ~1 Go de mémoire. Le conteneur `mail` est limité à

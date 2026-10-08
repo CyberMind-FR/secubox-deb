@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Fédération SBX v2 (GK2)
 
 > Épopée #1388 · phase 1 livrée : #1389 (`secubox-federation` 0.1.0, déployé sur gk2)

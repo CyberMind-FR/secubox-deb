@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 ## 🟢 P2P — Roadmap post-DHT/Federation/Master-link (#774 · PR #775)
 
 > Socle livré & live sur le mesh 3 nœuds (voir HISTORY 2026-07-02 +
