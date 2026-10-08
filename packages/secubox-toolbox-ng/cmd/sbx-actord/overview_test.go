@@ -118,8 +118,52 @@ func TestApercuEstMisEnCache(t *testing.T) {
 	if a1.Echantillon != 1 || a2.Echantillon != 1 {
 		t.Fatalf("le second appel doit servir le cache : %d puis %d événements", a1.Echantillon, a2.Echantillon)
 	}
-	s.apercuAt = time.Now().Add(-2 * apercuTTL) // cache périmé
-	if a3 := appel(); a3.Echantillon != 2 {
-		t.Fatalf("après péremption, l'aperçu doit être recalculé : %d", a3.Echantillon)
+	s.apercuT.perime()
+	if a3 := appel(); a3.Echantillon != 1 {
+		t.Fatalf("périmé, l'aperçu courant doit être servi tel quel (double tampon) : %d", a3.Echantillon)
 	}
+	attendre(t, func() bool { return appel().Echantillon == 2 }, "le nouvel aperçu n'a jamais été publié")
+}
+
+// /stats relit et décode TOUTES les 24 dernières heures d'événements à chaque appel : la carte du Hall, la page d'administration et
+// la couche Renseignement l'appellent toutes en parallèle. Sur gk2 (RAM saturée) cela relisait le disque à 23 Mo/s en continu et
+// faisait expirer l'API. Même règle que l'aperçu : un calcul à la fois, gardé quelques dizaines de secondes.
+func TestStatsEstMisEnCache(t *testing.T) {
+	s := serveur(t)
+	appel := func() float64 {
+		w := httptest.NewRecorder()
+		s.handleStats(w, httptest.NewRequest("GET", "/stats", nil))
+		var m map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+			t.Fatal(err)
+		}
+		return m["events_24h"].(float64)
+	}
+	if err := s.store.Ingest(&envelope.Envelope{EventID: "s1", Timestamp: time.Now().Unix(), Sensor: "waf", SrcIP: "203.0.113.1", Severity: 10}); err != nil {
+		t.Fatal(err)
+	}
+	n1 := appel()
+	if err := s.store.Ingest(&envelope.Envelope{EventID: "s2", Timestamp: time.Now().Unix(), Sensor: "waf", SrcIP: "203.0.113.2", Severity: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if n2 := appel(); n1 != 1 || n2 != 1 {
+		t.Fatalf("le second appel doit servir le cache : %v puis %v événements", n1, n2)
+	}
+	s.statsT.perime()
+	if n3 := appel(); n3 != 1 {
+		t.Fatalf("périmées, les stats courantes doivent être servies telles quelles (double tampon) : %v", n3)
+	}
+	attendre(t, func() bool { return appel() == 2 }, "les nouvelles stats n'ont jamais été publiées")
+}
+
+// attendre sonde une condition que le renouvellement en arrière-plan doit finir par rendre vraie.
+func attendre(t *testing.T, ok func() bool, msg string) {
+	t.Helper()
+	for i := 0; i < 300; i++ {
+		if ok() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal(msg)
 }
