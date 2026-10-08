@@ -35,6 +35,7 @@
 <script src="../sonde.js"></script>
 <script src="../slicebar.js"></script>
 <style>
+  [hidden]{display:none!important}   /* un `display:block|grid` d'auteur ne doit pas annuler `hidden` (#2146) */
   :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
           --accent:#3d6b4a; --cyan:#0784a8; --chaud:#c8791f; }
   @media (prefers-color-scheme: dark) {

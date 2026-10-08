@@ -1,3 +1,9 @@
+secubox-webos (1.5.15-1~bookworm1) bookworm; urgency=medium
+
+  * Carte metablog : #une et #une-sans, masques par `hidden`, restaient AFFICHES (un display:block / display:grid d'auteur l'emporte sur la regle du navigateur) ; [hidden] force. Constate en passant TOUTES les cartes du Hall dans Chromium (etats vide et 404) : les autres cartes, et la page principale, n'ont aucun element masque affiche (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 15:00:00 +0200
+
 secubox-webos (1.5.14-1~bookworm1) bookworm; urgency=medium
 
   * Une seule carte « Coffre » dans le Hall : la carte d'etat « Coffre » doublonnait « Mon coffre » (meme etat scelle/ouvert, deux cartes pour un administrateur). Reste la page du compartiment, dont le badge dit l'etat du Coffre de la box ; la console (compteurs, journal, serrures) est derriere le ⚙️. Aide mise a jour (#2146).
