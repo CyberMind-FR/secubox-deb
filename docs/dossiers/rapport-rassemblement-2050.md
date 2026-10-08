@@ -114,8 +114,11 @@ fichiers identiques (1,9 Go compressé) : la duplication est dans la copie de tr
 
 ## 4. Déploiements et vérifications
 
-- Les vagues 0 à 3p ont été déployées **gk3 puis gk2**. N2, 3r, S7, D3/D4, `surf`, `mesh` et le retrait de `vortex-dns` l'ont été **sur gk2 seulement**.
-- **gk3 est injoignable depuis ce poste** (l'alias ne se résout pas) : **gk3 est donc en retard** sur ces lots. Tous les `.deb` sont publiés dans `apt.secubox.in`.
+- Les vagues 0 à 3p ont été déployées **gk3 puis gk2**. N2, 3r, S7, D3/D4, `surf`, `mesh` et le retrait de `vortex-dns` l'ont d'abord été sur gk2.
+- **gk3 rattrapé le 2026-10-08** (adresse 192.168.1.9 ; l'alias `gk3` ne se résout pas depuis ce poste), par groupes avec relevé avant/après : `core`, N2, 3r, DNS (dns, dns-guard,
+  vortex-dns, webfilter, ad-guard), Hall (hub, appstore, webos, soc, ipv6guard), `surf`/`mesh`/`mail`, WAF (`waf-ng` + `waf`, construits pour amd64), `radio`, puis les 48 méta-paquets.
+  Aucun `secubox-vault` (2.1.6 inchangé). Restent volontairement non installés sur gk3 : `secubox-haproxy` 1.10.1 et `secubox-interceptor` 1.1.2 (ne changent que des dépendances ;
+  l'installation de haproxy recharge le frontal TLS). Tous les `.deb` sont publiés dans `apt.secubox.in` (arm64 et amd64).
 - Chaque déploiement sur gk2 a eu un relevé avant/après (unités, `/health`, ou comportement du service concerné). Les vérifications couvrent le **chemin nominal** ; les chemins
   d'échec (configuration Unbound refusée, rechargement raté) ne sont couverts que par les tests unitaires, pas essayés sur la box.
 
@@ -134,7 +137,7 @@ fichiers identiques (1,9 Go compressé) : la duplication est dans la copie de tr
 
 ## 6. Dette et risques restants
 
-1. **gk3 en retard** (§4) : à mettre à jour dès que l'accès est rétabli ; sans cela deux boxes diffèrent.
+1. ~~gk3 en retard~~ : rattrapé le 2026-10-08 (§4), sauf `haproxy` et `interceptor` (volontairement) ; `ksm`, `dns-guard` et `mesh` y ont été remis à l'état d'avant (arrêtés et désactivés).
 2. **61 paquets transitoires** à retirer un cycle après publication (aucun gain visible de `.deb` avant).
 3. **Tests rouges préexistants** (non causés par ce chantier, constatés identiques avant/après) : 7 dans `scripts/tests` (`profils_composition` ×2, `sockets_chmod` ×3,
    `verifie_relais_hall` ×2), `secubox-meta::test_sbxos_pose_tout_le_hall`, 15 dans `annuaire`, tests de génération de `haproxy`, `test_stats_cache` du composant `waf` (importe une classe
@@ -152,7 +155,7 @@ fichiers identiques (1,9 Go compressé) : la duplication est dans la copie de tr
 
 ## 8. Prochaines étapes proposées (dans l'ordre)
 
-1. Rétablir l'accès à gk3 et y déployer les lots manquants, dans l'ordre N2 → 3r → S7 → D3/D4 → `surf`/`mesh` (hors `secubox-vault`).
+1. Installer `haproxy` 1.10.1 et `interceptor` 1.1.2 sur gk3 quand un rechargement du frontal TLS est acceptable.
 2. Décider du sort de `secubox-ksm` et `secubox-metacatalog` (actifs depuis les installations) : garder ou remettre à l'arrêt.
 3. Ouvrir l'issue « retirer `POST /check` du WAF Python » et celle des tests rouges préexistants (priorité : en-têtes de licence, `profils_composition`, `sockets_chmod`).
 4. Un cycle de publication, puis retirer les 61 transitoires et passer à la vague 5.
