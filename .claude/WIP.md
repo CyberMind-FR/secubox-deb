@@ -6,7 +6,7 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-10-02.* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-10-09.* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
@@ -17,24 +17,15 @@ real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à 
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
-## 🔄 Chantier en cours — #1917 VoiceStudio : livré et déployé sur gk3, reste la validation connectée
+## 🔄 Chantier en cours — release v3.0.0-alpha.10 : profils corrigés, essai sur ESPRESSObin (#2146)
 
-- **Livré et vérifié (hors session connectée)** : `secubox-voicestudio` 0.3.2 sur gk3 — LXC natif, API, console d'administration
-  `/voicestudio/`, page d'usager `/voicestudio/usager.html`, **interface native du studio** sur
-  `https://voicestudio.gk3.secubox.in/` (construite dans le LXC avec bun épinglé ; administrateurs seulement : `auth_request` →
-  `/gate`, clé posée par nginx ; 401 sur tous les chemins sans administrateur). Hall (`secubox-webos` 1.0.399, gk2 + gk3) :
-  deux entrées « VoiceStudio » (état ; agrandie = interface native ; ⚙️ = console) et « Voix » (dire, dicter).
-- **Relais du maillage** : gk2 relaie `voicestudio.gk3.secubox.in` → `10.10.0.5:9080` (outil officiel
-  `secubox-relais-maillage relayer …`, posé à la main car le minuteur horaire n'avait pas encore pris le nom).
-- **Mémoire (2026-10-03)** : la synthèse vocale chargeait un modèle de ≈ 3,6 Go ; le tueur de mémoire global abattait le moteur (swap plein) et le
-  frontal public coupait à 30 s (« HTTP 504 »). Corrigé et DÉPLOYÉ : swap disque 8 Go sur /srv/secubox (system-tuning 1.2.5), mise en sommeil des
-  autres conteneurs endormables avant une synthèse (voicestudio 0.4.3), modèle rendu après 60 s, délais 300 s / 330 s / 10 min (HAProxy 1.8.24 sur
-  gk2, webos 1.0.401). Essai réel : 109 s à froid, 0 OOM. **À savoir** : le grand modèle prend 110-140 s sur gk3 ; « Dire » sans voix nommée passe désormais par la voix rapide Piper (0.5.0, < 1 s).
-- **Reste à valider par une personne connectée en administrateur** (je n'ai pas d'identifiants web) : (1) `/voicestudio/` ;
-  (2) `https://voicestudio.gk3.secubox.in/` — l'interface native chargée avec la session (assistant de première
-  utilisation, voix, doublage ; le moteur migré a peut-être déjà ses préférences) ; (3) la carte « Voix » du Hall (dire, dicter
-  au micro) ; (4) l'agrandissement de la carte « VoiceStudio » dans le Hall (cadre sur le domaine du studio). Puis fermer
-  #1917 et #1743 (`closes #…` dans `HISTORY.md` + `scripts/sync-issues.sh --apply`).
+- **Préparé** : refonte des profils livrée (lite = protection, isp = + opérateur et hébergement, full = + le Hall), matrice des images (ESPRESSObin = lite seul), dossier
+  `docs/dossiers/release-alpha10-espressobin.md` (conditions, déclenchement, protocole d'essai). **Le tag n'est pas posé** : décision du propriétaire.
+- **Bloqué** : `reprepro export` sur gk2 demande la passphrase de la clé de signature (agent GPG à déverrouiller) ; `secubox-metrics` 1.17.0 et les correctifs de carte
+  (`soc` 1.1.9, `webos` 1.5.12, `waf-ng` 1.19.2) attendent dans le pool.
+- **Surveillance** : gk2 a eu 4,2 Go de mémoire noyau non récupérable (boucle ClamAV, hypothèse) ; reboot du 2026-10-08, depuis `secubox-metrics` relève la mémoire toutes les 5 min.
+  ClamAV est mis de côté sur gk2 (réactivation : voir l'issue #2146).
+- **#2050** : vagues 0 et 2-3 faites ; reste l'outillage (vague 1) et le retrait des transitoires (vague 5, un cycle après publication). **#1917** : validation en navigateur par le propriétaire.
 
 ## ⏸️ Suspendu
 
