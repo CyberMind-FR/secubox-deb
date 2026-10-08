@@ -1,3 +1,9 @@
+secubox-metrics (1.17.0-1~bookworm1) bookworm; urgency=medium
+
+  * Historique de la memoire de la box : un releve toutes les 5 minutes (timer secubox-metrics-memoire, 7 jours en JSON-lignes) de la memoire noyau non recuperable, de la memoire disponible et du swap, route GET /api/v1/metrics/memory/history, alerte au journal sur seuil (part de la RAM) et sur croissance soutenue du noyau (> 50 Mo/h). Sur gk2, 4,2 Go de memoire noyau s'etaient accumules sans aucun historique pour dire quand ni a quelle vitesse (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 10:00:00 +0200
+
 secubox-metrics (1.16.1-1~bookworm1) bookworm; urgency=medium
 
   * Rapport WAF : le CPU et la memoire de la vue d'ensemble sont arrondis (« 51.242164282554 % » debordait de la tuile) (#2146).
