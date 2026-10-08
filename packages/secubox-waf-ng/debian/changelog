@@ -1,3 +1,9 @@
+secubox-waf-ng (1.19.2-1~bookworm1) bookworm; urgency=medium
+
+  * Page Actor et tableau WAF : meme correctif de la bande « terre » a -15 degres sur la carte du monde (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 08:00:00 +0200
+
 secubox-waf-ng (1.19.1-1~bookworm1) bookworm; urgency=medium
 
   * sbx-actord : /stats et /overview en DOUBLE TAMPON (tampon.go). /stats relisait et decodait 24 h d'evenements a CHAQUE appel (carte du Hall, page admin, couche Renseignement en parallele) : sur gk2 (RAM saturee) 23 Mo/s de lectures disque en continu, 45 Go lus en 13 h, API qui n'a plus repondu pendant plus de 200 s (carte Actor vide, « donnees anciennes »). On sert desormais le dernier instantane complet tout de suite, le recalcul se fait en arriere-plan, un seul a la fois ; une erreur ne remplace pas l'instantane valide (#2146).

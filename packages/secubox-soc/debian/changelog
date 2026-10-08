@@ -1,3 +1,9 @@
+secubox-soc (1.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * Carte du monde : la ligne -15 degres etait entierement « terre » (defaut du generateur), une bande de points d'un bord a l'autre ; corrigee (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 08:00:00 +0200
+
 secubox-soc (1.1.8-1~bookworm1) bookworm; urgency=medium
 
   * Carte « D'ou l'on frappe » : le fond n'etait qu'un quadrillage, sans continents. Fond de points (Natural Earth, domaine public) cale sur la

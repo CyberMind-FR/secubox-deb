@@ -20,6 +20,7 @@ rester testable sans matplotlib ni SMTP.
 from __future__ import annotations
 
 import io
+import json
 import sys
 from collections import Counter
 import tomllib
@@ -32,6 +33,8 @@ if _ici not in sys.path:
     sys.path.insert(0, _ici)
 
 CONF = Path("/etc/secubox/metrics.toml")
+# Le cache que le service secubox-metrics ecrit toutes les 30 s (vue d'ensemble de la box).
+CACHE_METRICS = Path("/var/cache/secubox/metrics-cache.json")
 
 # AUCUN DESTINATAIRE PAR DÉFAUT (#1497). Le défaut « gk2@secubox.in » faisait
 # qu'une box NEUVE expédiait son rapport WAF à la boîte de gk2. Un rapport
@@ -128,6 +131,59 @@ def _histo_menaces(hist: dict, jours: int) -> bytes:
 # et des IP, la ou le Hall montre efficacite, surfaces, origines, comptes vises,
 # leurres touches, cibles internes. On lui donne les memes sections, depuis le
 # meme cache de comptage (`_lire_waf_stats`).
+
+def _lire_overview(chemin: Path = CACHE_METRICS) -> dict:
+    """La vue d'ensemble des metrics (CPU, memoire, charge, services) depuis le cache du module ; {} si absent."""
+    try:
+        d = json.loads(Path(chemin).read_text()).get("overview")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def _duree(s) -> str:
+    s = int(s or 0)
+    j, h = divmod(s, 86400)[0], divmod(s % 86400, 3600)[0]
+    return f"{j} j {h} h" if j else f"{h} h {divmod(s % 3600, 60)[0]} min"
+
+
+def _cases_overview(ov: dict) -> list:
+    """Tuiles de la vue d'ensemble, comme celles du Hall. Rien si le cache est vide."""
+    if not ov:
+        return []
+    charge = str(ov.get("load", "")).split()
+    cases = [("Disponibilite", _duree(ov.get("uptime"))),
+             ("CPU", f"{ov.get('cpu_pct', 0)} %"),
+             ("Memoire", f"{ov.get('mem_pct', 0)} %"),
+             ("Charge", charge[0] if charge else "-")]
+    if "mem_used_kb" in ov and "mem_total_kb" in ov:
+        cases.append(("RAM", f"{ov['mem_used_kb'] / 1048576:.1f} / {ov['mem_total_kb'] / 1048576:.1f} Go"))
+    if "total_tcp" in ov:
+        cases.append(("Connexions", f"{ov['total_tcp']:,}".replace(",", " ")))
+    return cases
+
+
+def _carte_monde(pays: dict) -> bytes:
+    """Carte du monde en points (la meme que la page WAF du Hall), une bulle par pays vu par le WAF."""
+    import carte_monde as cm
+    import rapport as R
+    fig, ax = R.plt.subplots(figsize=(7.6, 3.9))
+    pts = cm.points_terre()
+    ax.scatter([x for x, _ in pts], [y for _, y in pts], s=3.2, c="#c9d3dc", linewidths=0)
+    bulles = cm.bulles(pays or {})
+    if bulles:
+        ax.scatter([b[1] for b in bulles], [b[2] for b in bulles], s=[(b[3] * 6.2) ** 2 for b in bulles],
+                   c="#ff4466", alpha=.55, edgecolors="#c4243f", linewidths=.6)
+        for code, x, y, r in bulles[:6]:
+            ax.annotate(code, (x, y), ha="center", va="center", fontsize=6, color="#1a2430", fontweight="bold")
+    else:
+        ax.text(60, 30, "aucun pays identifie", ha="center", va="center", fontsize=9, color="#6e7d8c")
+    ax.set_xlim(0, 120)
+    ax.set_ylim(60, 0)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    return R._png(fig)
+
 
 def _tuiles_waf(pdf, R, cases) -> None:
     """Bandeau de chiffres cles, en teinte menace (rouge pale)."""
@@ -233,6 +289,12 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
         ("Comptes vises", str(len(_wstats.get("comptes_vises", {}) or {}))),
     ])
 
+    # VUE D'ENSEMBLE DES METRICS : l'etat de la box au moment du rapport, comme le bandeau du Hall.
+    _cases = _cases_overview(_lire_overview())
+    if _cases:
+        R._titre(pdf, "Vue d'ensemble de la box")
+        _tuiles_waf(pdf, R, _cases)
+
     if hist.get("jours"):
         R._titre(pdf, "Menaces bloquees par jour (par categorie)")
         pdf.image(io.BytesIO(_histo_menaces(hist, jours)), w=190)
@@ -287,7 +349,10 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
     if _pays_waf:
         _pays_waf = {k: v for k, v in _pays_waf.items() if k not in ("LAN", "??", "")}
     if _pays_waf:
+        R._garde(pdf, 110)      # le titre ne reste pas seul en bas de page, la carte sur la suivante
         R._titre(pdf, "Origine des requetes vues par le WAF")
+        pdf.image(io.BytesIO(_carte_monde(_pays_waf)), w=190)
+        pdf.ln(2)
         pdf.image(io.BytesIO(R._camembert(_pays_waf, "Requetes par pays (WAF)")), w=92)
         pdf.ln(2)
 
