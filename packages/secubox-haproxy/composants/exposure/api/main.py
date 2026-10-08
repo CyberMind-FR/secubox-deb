@@ -53,6 +53,9 @@ app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 # Configuration
 TOR_DATA = Path("/var/lib/tor/hidden_services")
 TOR_CONFIG = Path("/etc/tor/torrc")
+# Un fichier par service onion, dans le répertoire que le torrc de Debian inclut (`%include /etc/tor/torrc.d/*.conf`).
+# Le torrc lui-même n'est plus réécrit (#2050) ; les services posés avant ce changement y restent lisibles.
+TOR_DROPIN_DIR = Path("/etc/tor/torrc.d")
 CONFIG_FILE = Path("/etc/secubox/exposure.json")
 DATA_DIR = Path("/var/lib/secubox/exposure")
 HISTORY_FILE = DATA_DIR / "history.json"
@@ -545,6 +548,55 @@ def scan_services() -> list:
     return sorted(services, key=lambda x: x["port"])
 
 
+def _hs_dropin(name: str) -> Path:
+    return TOR_DROPIN_DIR / f"70-secubox-hs-{name}.conf"
+
+
+def _hs_ecrit_dropin(name: str, hs_dir: Path, onion_port: int, local_port: int) -> None:
+    """Écrit le fichier du service, atomiquement (un fichier par service : rien à relire ni à réécrire d'autre)."""
+    f = _hs_dropin(name)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_name(f.name + ".tmp")
+    tmp.write_text(f"# SecuBox — service onion {name} (#2050)\n"
+                   f"HiddenServiceDir {hs_dir}\n"
+                   f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n")
+    tmp.replace(f)
+
+
+def _hs_stanza_texte(name: str, hs_dir: Path) -> str:
+    """Texte du service : son fichier, sinon l'ancien bloc du torrc ; '' si absent."""
+    for src in (_hs_dropin(name), TOR_CONFIG):
+        try:
+            texte = src.read_text()
+        except OSError:
+            continue
+        if src == TOR_CONFIG:
+            blocs = _hs_blocs_torrc(texte)
+            return next((b for d, b in blocs if d == str(hs_dir)), "")
+        return texte
+    return ""
+
+
+def _hs_blocs_torrc(texte: str) -> list:
+    """[(HiddenServiceDir, texte du bloc)] : un bloc commence à sa ligne HiddenServiceDir (et son éventuel
+    commentaire « # Hidden service: » juste avant) et court jusqu'à la ligne suivante qui n'est pas HiddenService*."""
+    lignes = texte.splitlines(keepends=True)
+    out, i = [], 0
+    while i < len(lignes):
+        if lignes[i].startswith("HiddenServiceDir "):
+            deb = i
+            if deb > 0 and lignes[deb - 1].startswith("# Hidden service:"):
+                deb -= 1
+            fin = i + 1
+            while fin < len(lignes) and lignes[fin].startswith("HiddenService"):
+                fin += 1
+            out.append((lignes[i].split(None, 1)[1].strip(), "".join(lignes[deb:fin]), deb, fin))
+            i = fin
+        else:
+            i += 1
+    return [(d, b) for d, b, _, _ in out]
+
+
 def get_tor_services() -> list:
     """Get Tor hidden services.
 
@@ -577,14 +629,11 @@ def get_tor_services() -> list:
         port = "80"
         backend = "127.0.0.1:80"
 
-        if TOR_CONFIG.exists():
-            torrc = TOR_CONFIG.read_text()
-            # Look for HiddenServiceDir followed by HiddenServicePort
-            pattern = rf'HiddenServiceDir\s+{re.escape(str(dir_path))}\s*\n\s*HiddenServicePort\s+(\d+)\s+(.+)'
-            match = re.search(pattern, torrc)
-            if match:
-                port = match.group(1)
-                backend = match.group(2)
+        stanza = _hs_stanza_texte(svc_name, dir_path)
+        match = re.search(r'HiddenServicePort\s+(\d+)\s+(\S+)', stanza)
+        if match:
+            port = match.group(1)
+            backend = match.group(2)
 
         if onion:
             services.append({
@@ -688,18 +737,8 @@ def _tor_add_sync(name: str, local_port: int, onion_port: int) -> dict:
     the caller's responsibility (tor_add's 400, _apply_tor's `not hs.exists()`)."""
     hs_dir = TOR_DATA / name
 
-    # Add to torrc
-    if TOR_CONFIG.exists():
-        torrc = TOR_CONFIG.read_text()
-    else:
-        torrc = ""
-
-    torrc += f"\n# Hidden service: {name}\n"
-    torrc += f"HiddenServiceDir {hs_dir}\n"
-    torrc += f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n"
-
-    TOR_CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    TOR_CONFIG.write_text(torrc)
+    # Un fichier par service dans torrc.d (le torrc de Debian n'est plus réécrit, #2050).
+    _hs_ecrit_dropin(name, hs_dir, onion_port, local_port)
 
     # Reload Tor
     run_cmd(["systemctl", "reload", "tor"])
@@ -729,13 +768,19 @@ def _tor_remove_sync(name: str) -> dict:
     Does not check hs existence; that's the caller's responsibility."""
     hs_dir = TOR_DATA / name
 
-    # Remove from torrc
+    # Son fichier de torrc.d, puis l'ancien bloc du torrc s'il y en a un (ligne à ligne : jamais d'autre service).
+    try:
+        _hs_dropin(name).unlink()
+    except FileNotFoundError:
+        pass
     if TOR_CONFIG.exists():
-        torrc = TOR_CONFIG.read_text()
-        # Remove the hidden service config block
-        pattern = rf'# Hidden service: {re.escape(name)}\n.*?HiddenServiceDir {re.escape(str(hs_dir))}\n.*?HiddenServicePort [^\n]+\n'
-        torrc = re.sub(pattern, '', torrc, flags=re.DOTALL)
-        TOR_CONFIG.write_text(torrc)
+        texte = TOR_CONFIG.read_text()
+        lignes = texte.splitlines(keepends=True)
+        for d, bloc in _hs_blocs_torrc(texte):
+            if d == str(hs_dir):
+                texte = "".join(lignes).replace(bloc, "", 1)
+                TOR_CONFIG.write_text(texte)
+                break
 
     # Remove directory
     import shutil
@@ -788,11 +833,9 @@ def _torrc_has_stanza(name: str) -> bool:
     key dir under TOR_DATA survives, the stanza is gone but the HS dir check
     alone would report "already provisioned" — leaving the .onion dark with
     no repair path. Never raises."""
-    if not TOR_CONFIG.exists():
-        return False
     try:
         hs_dir = TOR_DATA / name
-        return f"HiddenServiceDir {hs_dir}" in TOR_CONFIG.read_text()
+        return _hs_dropin(name).exists() or bool(_hs_stanza_texte(name, hs_dir))
     except OSError:
         return False
 

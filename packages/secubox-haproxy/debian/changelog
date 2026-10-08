@@ -1,3 +1,9 @@
+secubox-haproxy (1.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * Composant exposure : les services onion vivent dans /etc/tor/torrc.d/70-secubox-hs-<nom>.conf (un fichier par service, ecriture atomique) au lieu d'etre ajoutes au torrc de Debian et retires par une expression reguliere `.*?` en DOTALL. Les services deja poses dans le torrc restent lus ; retirer un ancien bloc se fait ligne a ligne et n'emporte plus un autre service (#2050, ecrivains concurrents de torrc).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 11:00:00 +0200
+
 secubox-haproxy (1.10.1-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-waf-ng au lieu de secubox-waf (transitoire, #2050).
