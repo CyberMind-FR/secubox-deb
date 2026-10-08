@@ -30,12 +30,12 @@ HORS_PROFIL = {
     "secubox-c3box", "secubox-daemon-c3box", "secubox-eye-remote", "secubox-rbs-sensor",
     "secubox-led-heartbeat", "secubox-meshtastic", "secubox-daemon", "secubox-ui-manager",
     "secubox-voice-moteur", "secubox-zia-llm", "secubox-zkp", "secubox-clamav",
-    "secubox-netboot", "secubox-vm",
+    "secubox-netboot", "secubox-vm", "secubox-soc-agent",
 }
 PROTECTIONS = {f"secubox-{m}" for m in (
     "waf-ng", "ipblock", "toolbox-ng", "toolbox", "dpi", "ndpid-engine", "interceptor",
     "security-posture", "threats", "threatmesh", "ad-guard", "webfilter", "dns-guard",
-    "cookies", "soc", "soc-agent", "nac", "ipv6guard", "wan-link-guard", "hardening",
+    "cookies", "soc", "nac", "ipv6guard", "wan-link-guard", "hardening",
     "wireguard", "vault", "backup", "haproxy", "dns", "routes", "qos", "freebox", "certs", "tor")}
 HEBERGEMENT = {f"secubox-{m}" for m in (
     "mail", "matrix", "jitsi", "nextcloud", "photoprism", "gitea", "metablogizer", "bbs",
