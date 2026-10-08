@@ -19,8 +19,8 @@ override_dh_auto_install:
 	echo "from .api.main import app" > $(CURDIR)/debian/secubox-soc-agent/usr/lib/python3/dist-packages/secubox_soc_agent/__init__.py
 
 	# Install systemd service
-	install -d $(CURDIR)/debian/secubox-soc-agent/lib/systemd/system
-	install -m 644 $(CURDIR)/debian/secubox-soc-agent.service $(CURDIR)/debian/secubox-soc-agent/lib/systemd/system/
+	# L'unite est posee par dh_installsystemd (usr/lib/systemd/system) : l'installer aussi a la main sous lib/ la livrait DEUX FOIS,
+	# et dpkg echouait au depaquetage sur Debian 13 (usrmerge, #2146).
 
 	# Create data directories
 	install -d $(CURDIR)/debian/secubox-soc-agent/var/lib/secubox/soc-agent
