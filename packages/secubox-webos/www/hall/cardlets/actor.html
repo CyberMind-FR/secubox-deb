@@ -172,6 +172,8 @@
   .emb .h .tt b{font-size:.78rem}
   .emb .h .tt small{display:none}
   .emb .h .mode{font-size:.46rem;padding:1px 6px}
+  .emb .h .tt{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis}
+  .emb #slbar{display:none}
   .emb .sec-t{display:none}
   .emb .tile{padding:4px 6px;gap:5px}
   .emb .tile .ti{font-size:.85rem}
@@ -415,7 +417,10 @@
   // ── SLICER partagé (SBXSliceBar « double bullet », stylé par slicebar.css) ────
   var slices=[el('d-vue'),el('d-even'),el('d-acteurs'),el('d-profil'),el('d-defense')];
   function montre(i){for(var k=0;k<slices.length;k++)slices[k].classList.toggle('actif',k===i);}
-  if(window.SBXSliceBar){
+  // Embarquée : la couche porte déjà son slicer ; on reste sur la vue d'ensemble.
+  var embarquee=document.documentElement.classList.contains('emb')||/[?&]embed=/.test(location.search);
+  if(embarquee){ montre(0); }
+  else if(window.SBXSliceBar){
     SBXSliceBar(el('slbar'),{autoMs:9000,onShow:montre,
       slices:[{label:'🧭 Vue d’ensemble'},{label:'📜 Événements'},{label:'🎭 Acteurs'},{label:'🕵️ Fiche'},{label:'🛡️ Réponse'}]});
   }else{ montre(0); }
