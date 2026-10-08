@@ -114,3 +114,42 @@ def test_no_socket_keeps_degraded():
     svcs = {s.id: s for s in normalize_services(_MENU_SOCK, health, None,
                                                 sockets=frozenset())}
     assert svcs["dpi"].health.state == "degraded"
+
+
+# ── LE REGISTRE NE SE VIDE PAS QUAND LE MENU DU HUB MANQUE ──────────────────
+# Un `rm -f /var/cache/secubox/menu.json` (postinst d'appstore, d'annuaire) sans
+# que personne n'appelle le hub pour le réécrire laissait le registre VIDE : le
+# Hall retombait sur sa maquette (8 services) et un « jeton perdu » en avait
+# l'air. Vu sur gk3 après le rassemblement #2050.
+import api.main as main_mod
+
+
+def test_un_menu_absent_ne_vide_pas_le_registre(monkeypatch, tmp_path):
+    main_mod._cache["services"] = [{"id": "waf"}]
+    monkeypatch.setattr(main_mod, "_CACHE_FILE", tmp_path / "services.json")
+    monkeypatch.setattr(main_mod.registry, "load_menu_cache", lambda *a, **k: {"categories": []})
+    assert main_mod._recompute() is False
+    assert main_mod._cache["services"] == [{"id": "waf"}]
+    assert not (tmp_path / "services.json").exists()
+
+
+def test_un_menu_present_remplace_le_registre(monkeypatch, tmp_path):
+    main_mod._cache["services"] = []
+    monkeypatch.setattr(main_mod, "_CACHE_FILE", tmp_path / "services.json")
+    monkeypatch.setattr(main_mod.registry, "load_menu_cache", lambda *a, **k: MENU)
+    monkeypatch.setattr(main_mod, "systemd_batch", lambda *a, **k: HEALTH)
+    assert main_mod._recompute() is True
+    assert {s["id"] for s in main_mod._cache["services"]} == {"waf", "radio"}
+
+
+def test_le_reveil_du_hub_interroge_son_statut_public(monkeypatch):
+    appels = []
+
+    class Faux:
+        def __init__(self, chemin, timeout=0): appels.append(chemin)
+        def request(self, methode, url): appels.append((methode, url))
+        def getresponse(self): return type("R", (), {"status": 200, "read": lambda s: b""})()
+        def close(self): pass
+    monkeypatch.setattr(main_mod.registry, "_ConnexionUnix", Faux)
+    assert main_mod.registry.reveille_hub("/run/secubox/aggregator.sock") is True
+    assert ("GET", "/api/v1/hub/status") in appels

@@ -1,3 +1,9 @@
+secubox-webos (1.5.10-1~bookworm1) bookworm; urgency=medium
+
+  * Le registre ne se vide plus quand menu.json manque (postinst d'appstore/annuaire) : le Hall retombait sur sa maquette de 8 services. Le menu absent laisse le registre intact et reveille le hub (GET /api/v1/hub/status sur l'agregateur), seul moyen de lui faire reecrire menu.json (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 08 Oct 2026 20:00:00 +0200
+
 secubox-webos (1.5.9-1~bookworm1) bookworm; urgency=medium
 
   * Carte Actor : les tuiles « critiques / suspects / observes », la bague de score et les badges utilisent le MEME score que la page d'administration
