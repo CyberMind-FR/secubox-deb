@@ -47,11 +47,11 @@ type Server struct {
 	cleVueOnce sync.Once
 	cleVue     []byte
 
-	// Aperçu de la vue d'ensemble, gardé quelques dizaines de secondes (overview.go).
-	apercuMu  sync.Mutex
-	apercuVal Apercu
-	apercuAt  time.Time
-	apercuOK  bool
+	// Aperçu de la vue d'ensemble, en double tampon (overview.go).
+	apercuT tampon[Apercu]
+
+	// Stats des 24 dernières heures, en double tampon (handleStats).
+	statsT tampon[store.Stats]
 
 	ingested   atomic.Uint64 // enveloppes persistées
 	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation
@@ -229,8 +229,16 @@ func (s *Server) apiMux() *http.ServeMux {
 	return mux
 }
 
+// statsTTL : relire et décoder 24 h d'événements coûte cher sur une box chargée ; jamais sur le chemin d'une requête.
+const statsTTL = 30 * time.Second
+
+// statsCache rend le dernier instantané des stats (double tampon, voir tampon.go).
+func (s *Server) statsCache() (store.Stats, error) {
+	return s.statsT.lire(statsTTL, func() (store.Stats, error) { return s.store.Stats(time.Now().Unix()) })
+}
+
 func (s *Server) handleStats(w http.ResponseWriter, _ *http.Request) {
-	st, err := s.store.Stats(time.Now().Unix())
+	st, err := s.statsCache()
 	if err != nil {
 		http.Error(w, "stats indisponibles", http.StatusInternalServerError)
 		return
