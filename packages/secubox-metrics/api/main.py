@@ -56,6 +56,7 @@ from visitor_origin import VisitorOriginAggregator
 from live_hosts import LiveHostsAggregator
 from cert_status import CertStatusAggregator
 from cookie_audit import CookieAuditAggregator
+import memoire
 
 try:
     from secubox_core.config import (
@@ -626,6 +627,12 @@ def get_waf_campaigns(auth: None = Depends(require_jwt)):
         c["exemple_sequence"] = c.get("exemple_sequence", [])[:12]
         c["nb_attaquants"] = len(c.get("attaquants", []))
     return {"attaquants": data.get("attaquants", 0), "campagnes": camps}
+
+
+@app.get("/api/v1/metrics/memory/history", dependencies=[Depends(require_lecture)])
+def get_memory_history(heures: float = 24):
+    """Historique de la memoire de la box (releve toutes les 5 min, 7 jours) : serie, alertes, croissance du noyau."""
+    return memoire.vue(heures)
 
 
 @app.get("/api/v1/metrics/waf_stats")

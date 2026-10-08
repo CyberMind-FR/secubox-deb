@@ -53,6 +53,8 @@ if [ "$1" = "configure" ]; then
         systemctl enable --now secubox-metrics-rapport.timer || true
         systemctl enable --now secubox-metrics-rapport-quotidien.timer || true
         systemctl enable --now secubox-metrics-rapport-waf.timer || true
+        # #2146 — releve de la memoire toutes les 5 min (historique + alerte de fuite noyau).
+        systemctl enable --now secubox-metrics-memoire.timer || true
     fi
 
     # Route /api/v1/cookie-audit/ (secubox-routes.d) : recharger nginx, mais

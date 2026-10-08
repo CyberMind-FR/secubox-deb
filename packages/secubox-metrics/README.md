@@ -89,6 +89,17 @@ ASN database refresh (#194): `secubox-geoipupdate.timer` runs
 MaxMind licence at `/etc/secubox/secrets/maxmind.conf` it uses MaxMind;
 otherwise it falls back to the free DB-IP ASN lite database (no signup).
 
+## Endpoint — historique de la memoire (#2146)
+
+| Methode | Route | Garde | Role |
+|---|---|---|---|
+| GET | `/api/v1/metrics/memory/history?heures=24` | `require_lecture` | serie des releves (5 min, 7 jours max), alertes, croissance de la memoire noyau en Mo/h |
+
+Un timer (`secubox-metrics-memoire.timer`, 5 min) ecrit `/var/lib/secubox/metrics/memoire.jsonl`. Il surveille la memoire
+**noyau non recuperable** (`SUnreclaim`) — c'est elle qui avait atteint 4,2 Go sur gk2 sans que rien ne le releve — la
+memoire disponible et le swap, en part de la RAM, et signale une croissance soutenue du noyau avant le seuil. Les alertes
+(`ALERTE memoire : ...`) vont au journal du service.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
