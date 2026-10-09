@@ -1,3 +1,9 @@
+secubox-autoload (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * WebUI d'administration (#2191) : www/autoload/index.html (charte hybrid-dark, menu Auto-Load dans la categorie boot). Trois onglets : box en provisioning (statut, progression en % et etape par box, six compteurs), jetons et abonnements (formulaire client, profil Lite/ISP/Full, duree de l'abonnement en mois, validite du jeton, lot ; le jeton n'est montre qu'UNE fois dans une fenetre dediee avec copie ; revocation, suspension et reactivation avec confirmation), pre-rapports (liste, detail des paquets, refus pendant le delai de grace). Les valeurs du serveur sont echappees, aucun gestionnaire en ligne, jeton d'administration lu dans sbx_token, erreurs persistantes jusqu'a leur fermeture, derniere reponse conservee quand la relecture echoue, masquage de la coquille quand la page est encadree par le Hall, responsive. 11 tests dans un vrai navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 16:00:00 +0200
+
 secubox-autoload (0.3.8-1~bookworm1) bookworm; urgency=medium
 
   * La lecture du panel (boxes, jetons, pre-rapports) passe de require_lecture a require_jwt : elle donne l'identite des clients et leurs pre-rapports, et ne doit pas s'ouvrir en « mode tableau de bord » depuis le LAN (constate sur gk2 : GET /boxes repondait sans jeton).

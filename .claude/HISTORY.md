@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Auto-Load : WebUI d'administration (ref #2191)
+
+secubox-autoload 0.4.0 : page `/autoload/` (hybrid-dark) avec box en provisioning (statut, progression), génération du jeton (valeur montrée une seule fois) avec durée d'abonnement et profil, révocation/suspension/réactivation confirmées, pré-rapports (détail, refus). 11 tests navigateur. Les « modules inclus » du schéma de principe restent à porter.
+
 ## 2026-10-10 — Auto-Load : service d'enrôlement et panel côté infrastructure (ref #2190, ref #2182)
 
 secubox-autoload 0.3.0 : deux applications (publique sur socket Unix : POST /enrol à preuve de jeton + administration ; tunnel sur 10.64.0.1:8470 : progression, pré-rapport, refus ; identité = adresse source dans WireGuard), registre étendu (jeton `gk2_`, échéance et formule d'abonnement, statut et progression des box, pré-rapports), unités durcies application du tunnel par sudoers à argv exact (aucune nouvelle unité root), AppArmor enforce, nginx, nftables. À déployer sur gk2 ; la redirection udp/51830 de la Freebox est à faire à la main. Suite : #2191 (WebUI), #2192 (rapport final), #2193 (banc de bout en bout) ; #2186 (netboot) attend le matériel.

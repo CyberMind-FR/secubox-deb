@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Auto-Load</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<script>
+// Encadré par le Hall : on masque la coquille, jamais le contenu (WEBUI-PANEL-GUIDELINES §9). Posé avant le premier rendu.
+(function () { var e; try { e = window.top !== window.self; } catch (x) { e = true; } if (e) document.documentElement.classList.add('sbx-embed'); })();
+</script>
+<style>
+:root{--p31-dim:#6b7b8b;--bg-dark:#0d1117;--bg-card:rgba(30,40,55,.8);--bg-row:rgba(20,30,45,.6);--border:rgba(100,150,200,.2);--text:#e8e6d9;
+ --cyan:#00d4ff;--red:#ff4466;--orange:#ff9944;--yellow:#ffcc00;--green:#00dd44;--blue:#4488ff;--purple:#a371f7}
+:root.sbx-embed .sidebar,:root.sbx-embed .global-menu-bar,:root.sbx-embed .global-status-bar{display:none!important}
+:root.sbx-embed .main{margin-left:0!important}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier Prime',monospace;background:var(--bg-dark);color:var(--text);display:flex;min-height:100vh}
+.sidebar{width:220px;position:fixed;height:100vh;overflow-y:auto}
+.main{flex:1;margin-left:220px;padding:1.5rem;padding-top:60px;min-width:0}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
+.header h1{font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
+.header .sub{font-size:.75rem;color:var(--p31-dim)}
+.btn{padding:.4rem .8rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;font:inherit;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.3)}
+.btn.primary{background:rgba(0,212,255,.15);border-color:var(--cyan);color:var(--cyan)}
+.btn.danger{background:rgba(255,68,102,.12);border-color:var(--red);color:var(--red)}
+.btn.good{background:rgba(0,221,68,.12);border-color:var(--green);color:var(--green)}
+.btn.sm{padding:.2rem .5rem;font-size:.68rem}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-group{display:flex;gap:.5rem;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1rem}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.6rem;text-align:center;backdrop-filter:blur(5px)}
+.stat-card .value{font-size:1.4rem;font-weight:700;text-shadow:0 0 10px currentColor;font-variant-numeric:tabular-nums}
+.stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;text-transform:uppercase;margin-top:.2rem}
+.stat-card.cyan .value{color:var(--cyan)}.stat-card.green .value{color:var(--green)}.stat-card.orange .value{color:var(--orange)}.stat-card.blue .value{color:var(--blue)}.stat-card.red .value{color:var(--red)}.stat-card.purple .value{color:var(--purple)}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+.card h3{color:var(--cyan);font-size:.95rem;margin-bottom:.7rem}
+.tabs{display:flex;gap:.25rem;border-bottom:1px solid var(--border);margin-bottom:1rem;flex-wrap:wrap}
+.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--p31-dim);cursor:pointer;font:inherit;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;padding:.55rem .9rem}
+.tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab-content{display:none}.tab-content.active{display:block}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{color:var(--p31-dim);font-weight:400;text-transform:uppercase;letter-spacing:.07em;font-size:.65rem;text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--border)}
+td{padding:.5rem .6rem;border-bottom:1px solid rgba(100,150,200,.08);vertical-align:middle}
+tr:hover td{background:rgba(0,212,255,.05)}
+td.num{font-variant-numeric:tabular-nums}
+.nom{color:var(--cyan)}.dim{color:var(--p31-dim);font-size:.72rem}
+.pill{display:inline-block;padding:.1rem .55rem;border-radius:99px;font-size:.68rem;border:1px solid currentColor}
+.pill.attente{color:var(--orange)}.pill.preparation{color:var(--blue)}.pill.cours{color:var(--cyan)}.pill.termine{color:var(--green)}.pill.revoque{color:var(--red)}.pill.actif{color:var(--green)}.pill.suspendu,.pill.echu{color:var(--orange)}
+.barre{height:8px;background:rgba(100,150,200,.15);border-radius:4px;overflow:hidden;min-width:90px}
+.barre>i{display:block;height:100%;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+.barre>i.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;align-items:end}
+label{display:block;font-size:.62rem;color:var(--p31-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.25rem}
+input,select{width:100%;background:var(--bg-row);border:1px solid var(--border);border-radius:6px;color:var(--text);font:inherit;font-size:.82rem;padding:.45rem .6rem}
+input:focus,select:focus{outline:1px solid var(--cyan);border-color:var(--cyan)}
+.vide{color:var(--p31-dim);font-size:.82rem;padding:1rem;text-align:center}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:50;padding:1rem}
+.modal.show{display:flex}
+.modal-content{background:#101826;border:1px solid var(--cyan);border-radius:10px;padding:1.2rem;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 0 24px rgba(0,212,255,.25)}
+.jeton{display:flex;gap:.5rem;align-items:center;background:var(--bg-row);border:1px solid var(--cyan);border-radius:6px;padding:.6rem;margin:.7rem 0;word-break:break-all;color:var(--cyan)}
+.alerte{color:var(--orange);font-size:.75rem;margin:.4rem 0}
+ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
+.toast{position:fixed;right:1rem;bottom:1rem;background:var(--cyan);color:#001018;border-radius:6px;padding:.6rem .9rem;font-size:.8rem;display:none;z-index:60;max-width:90vw}
+.toast.show{display:block}
+.erreur{position:fixed;left:50%;transform:translateX(-50%);bottom:1rem;background:rgba(255,68,102,.95);color:#fff;border-radius:6px;padding:.6rem 2.2rem .6rem .9rem;font-size:.8rem;display:none;z-index:61;max-width:90vw}
+.erreur.show{display:block}.erreur button{position:absolute;right:.5rem;top:.3rem;background:none;border:0;color:#fff;cursor:pointer;font-size:1rem}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:var(--p31-dim);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--cyan)}
+@media (max-width:768px){.main{margin-left:0;padding:1rem;padding-top:60px}.sidebar{display:none}.hide-sm{display:none}ul.liste{columns:1}}
+</style>
+</head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+<main class="main">
+  <header class="header">
+    <div><h1>🛰️ Auto-Load</h1><div class="sub" id="subline">Provisionnement réseau des box clientes</div></div>
+    <div class="btn-group"><button class="btn" data-act="rafraichir">↻ Actualiser</button></div>
+  </header>
+
+  <div class="grid" id="stats"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="boxes">📦 Box en provisioning</button>
+    <button class="tab" data-tab="jetons">🎟️ Jetons &amp; abonnements</button>
+    <button class="tab" data-tab="prerapports">📝 Pré-rapports <span id="nbpre"></span></button>
+  </div>
+
+  <section id="boxes" class="tab-content active">
+    <div class="card"><div class="tbl-wrap"><table>
+      <thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th class="hide-sm">Étape</th><th class="hide-sm">Mise à jour</th></tr></thead>
+      <tbody id="lignesBoxes"></tbody></table></div><div class="vide" id="videBoxes" hidden>Aucune box pour l'instant. Générez un jeton dans « Jetons &amp; abonnements » et remettez-le au client.</div></div>
+  </section>
+
+  <section id="jetons" class="tab-content">
+    <div class="card">
+      <h3>🔑 Gestion des jetons clients &amp; abonnements</h3>
+      <form class="form" id="formJeton" autocomplete="off">
+        <div><label for="fClient">Client</label><input id="fClient" required maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="boulangerie-dupont"></div>
+        <div><label for="fProfil">Profil</label><select id="fProfil"><option value="lite">Lite — protection</option><option value="isp">ISP — protection + hébergement</option><option value="full">Full — tout le Hall</option></select></div>
+        <div><label for="fMois">Durée de l'abonnement</label><select id="fMois"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option></select></div>
+        <div><label for="fValidite">Validité du jeton avant usage</label><select id="fValidite"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90" selected>90 jours</option><option value="365">365 jours</option></select></div>
+        <div><label for="fLot">Lot (facultatif)</label><input id="fLot" maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="lot-2026-10"></div>
+        <div><button class="btn primary" type="submit" id="btnGenerer">➕ Générer le jeton</button></div>
+      </form>
+      <p class="dim" style="margin-top:.6rem">Le jeton est affiché <b>une seule fois</b>. Il est à usage unique : la première box qui le présente en devient l'identité.</p>
+    </div>
+    <div class="card"><h3>🎟️ Jetons</h3><div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th>Client</th><th>Profil</th><th class="hide-sm">Lot</th><th>État</th><th>Abonnement</th><th class="hide-sm">Échéance</th><th></th></tr></thead>
+      <tbody id="lignesJetons"></tbody></table></div><div class="vide" id="videJetons" hidden>Aucun jeton émis.</div></div>
+  </section>
+
+  <section id="prerapports" class="tab-content">
+    <div class="card"><div class="tbl-wrap"><table>
+      <thead><tr><th>Reçu</th><th>Client</th><th>Profil</th><th>Mode</th><th class="num">Paquets</th><th>Décision</th><th></th></tr></thead>
+      <tbody id="lignesPre"></tbody></table></div><div class="vide" id="videPre" hidden>Aucun pré-rapport reçu.</div></div>
+  </section>
+</main>
+
+<div class="modal" id="modalJeton"><div class="modal-content">
+  <h3 style="color:var(--cyan)">🔑 Jeton généré</h3>
+  <p class="dim" id="mjClient"></p>
+  <div class="jeton"><span id="mjValeur"></span><button class="btn sm" data-act="copier">📋 Copier</button></div>
+  <p class="alerte">⚠️ Ce jeton ne sera plus jamais affiché. Notez-le ou copiez-le maintenant.</p>
+  <div class="btn-group"><button class="btn primary" data-act="fermer-modal">J'ai noté le jeton</button></div>
+</div></div>
+<div class="modal" id="modalPre"><div class="modal-content" id="detailPre"></div></div>
+
+<div class="toast" id="toast" role="status"></div>
+<div class="erreur" id="erreur" role="alert"><span id="erreurTexte"></span><button data-act="fermer-erreur" aria-label="Fermer">✕</button></div>
+
+<script>
+(function () {
+  'use strict';
+  var API = '/api/v1/autoload';
+  var ETATS = {'en attente': 'attente', 'préparation': 'preparation', 'en cours': 'cours', 'terminé': 'termine', 'révoqué': 'revoque'};
+  var PROFILS = {lite: 'Lite', isp: 'ISP', full: 'Full'};
+  var CACHE = {boxes: [], jetons: [], pre: []};        // dernière réponse conservée : réaffichée pendant la relecture (double cache, §7)
+  var tt = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
+  function num(x) { x = Number(x); return isFinite(x) ? x : 0; }
+  function heure(ts) { if (!ts) return '—'; var d = new Date(num(ts) * 1000); return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}); }
+  function jour(ts) { return ts ? new Date(num(ts) * 1000).toLocaleDateString('fr-FR') : '—'; }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.className = 'toast show'; clearTimeout(tt); tt = setTimeout(function () { t.className = 'toast'; }, 3000); }
+  function errorToast(m) { $('erreurTexte').textContent = m; $('erreur').className = 'erreur show'; }       // persistant : se ferme au clic
+
+  function api(chemin, methode, corps) {
+    var jeton = ''; try { jeton = localStorage.getItem('sbx_token') || ''; } catch (e) { jeton = ''; }
+    var opts = {method: methode || 'GET', headers: {'Accept': 'application/json'}};
+    if (jeton) opts.headers['Authorization'] = 'Bearer ' + jeton;
+    if (corps !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(corps); }
+    return fetch(API + chemin, opts).then(function (r) {
+      return r.text().then(function (t) {
+        var d = null; try { d = t ? JSON.parse(t) : null; } catch (e) { d = null; }
+        if (r.status === 401) { toast('🔒 Connexion requise'); return {ok: false, status: 401, data: d}; }
+        return {ok: r.ok, status: r.status, data: d};
+      });
+    }).catch(function () { return {ok: false, status: 0, data: null}; });
+  }
+  function detail(r, repli) { return (r.data && typeof r.data.detail === 'string') ? r.data.detail : repli; }
+
+  function rendStats() {
+    var c = {attente: 0, preparation: 0, cours: 0, termine: 0, revoque: 0};
+    CACHE.boxes.forEach(function (b) { var k = ETATS[b.statut]; if (k) c[k]++; });
+    var aValider = CACHE.pre.filter(function (p) { return !p.refuse; }).length;
+    function carte(cl, v, l) { return '<div class="stat-card ' + cl + '"><div class="value">' + num(v) + '</div><div class="label">' + l + '</div></div>'; }
+    $('stats').innerHTML = carte('orange', c.attente, '⏳ en attente') + carte('blue', c.preparation, '🔧 préparation') + carte('cyan', c.cours, '⚙️ en cours')
+      + carte('green', c.termine, '💚 terminées') + carte('red', c.revoque, '⛔ révoquées') + carte('purple', aValider, '📝 pré-rapports');
+    $('subline').textContent = CACHE.boxes.length + ' box · ' + CACHE.jetons.length + ' jeton' + (CACHE.jetons.length > 1 ? 's' : '');
+    $('nbpre').textContent = aValider ? '(' + aValider + ')' : '';
+  }
+  function rendBoxes() {
+    $('videBoxes').hidden = CACHE.boxes.length > 0;
+    $('lignesBoxes').innerHTML = CACHE.boxes.map(function (b) {
+      var k = ETATS[b.statut] || 'attente', pct = Math.max(0, Math.min(100, num(b.progression)));
+      return '<tr><td><span class="nom">' + esc(b.client) + '</span><div class="dim">' + esc(b.serie || '') + (b.lot ? ' · ' + esc(b.lot) : '') + '</div></td>'
+        + '<td>' + esc(PROFILS[b.profil] || b.profil) + '</td><td><span class="pill ' + k + '">' + esc(b.statut) + '</span></td>'
+        + '<td><div class="barre" title="' + pct + ' %"><i class="' + (k === 'termine' ? 'ok' : '') + '" style="width:' + pct + '%"></i></div><div class="dim num">' + pct + ' %</div></td>'
+        + '<td class="hide-sm dim">' + esc(b.etape || '—') + '</td><td class="hide-sm dim">' + heure(b.maj_le) + '</td></tr>';
+    }).join('');
+  }
+  function rendJetons() {
+    $('videJetons').hidden = CACHE.jetons.length > 0;
+    $('lignesJetons').innerHTML = CACHE.jetons.map(function (j) {
+      var k = ETATS[j.etat === 'emis' ? 'en attente' : j.etat === 'reclame' ? 'terminé' : 'révoqué'] || 'attente';
+      var etat = j.etat === 'emis' ? 'émis' : j.etat === 'reclame' ? 'réclamé' : 'révoqué';
+      var ab = esc(j.abonnement), actions = '';
+      if (j.etat !== 'revoque') actions += '<button class="btn sm danger" data-act="revoquer" data-id="' + num(j.id) + '" data-client="' + esc(j.client) + '">⛔ Révoquer</button> ';
+      actions += j.abonnement === 'actif'
+        ? '<button class="btn sm" data-act="suspendre" data-client="' + esc(j.client) + '">⏸ Suspendre</button>'
+        : '<button class="btn sm good" data-act="reactiver" data-client="' + esc(j.client) + '">▶ Réactiver</button>';
+      return '<tr><td class="num">' + num(j.id) + '</td><td><span class="nom">' + esc(j.client) + '</span></td><td>' + esc(PROFILS[j.profil] || j.profil) + '</td>'
+        + '<td class="hide-sm dim">' + esc(j.lot || '—') + '</td><td><span class="pill ' + k + '">' + etat + '</span></td>'
+        + '<td><span class="pill ' + ab + '">' + ab + '</span><div class="dim">' + esc(j.formule || '') + '</div></td>'
+        + '<td class="hide-sm dim">' + jour(j.abonnement_expire_le) + '</td><td>' + actions + '</td></tr>';
+    }).join('');
+  }
+  function rendPre() {
+    $('videPre').hidden = CACHE.pre.length > 0;
+    $('lignesPre').innerHTML = CACHE.pre.map(function (p) {
+      var dec = p.refuse ? '<span class="pill revoque">refusé</span>' : '<span class="pill actif">en attente</span>';
+      return '<tr><td class="dim">' + heure(p.recu_le) + '</td><td><span class="nom">' + esc(p.client) + '</span></td><td>' + esc(PROFILS[p.profil] || p.profil) + '</td>'
+        + '<td>' + esc(p.mode) + '</td><td class="num">' + num(p.paquets) + '</td><td>' + dec + '</td>'
+        + '<td><button class="btn sm" data-act="voir-pre" data-id="' + esc(p.empreinte) + '">🔍 Voir</button> '
+        + (p.refuse ? '' : '<button class="btn sm danger" data-act="refuser-pre" data-id="' + esc(p.empreinte) + '">✋ Refuser</button>') + '</td></tr>';
+    }).join('');
+  }
+  function tout() { rendStats(); rendBoxes(); rendJetons(); rendPre(); }
+
+  function rafraichir() {
+    return Promise.all([api('/boxes'), api('/jetons'), api('/prerapports')]).then(function (r) {
+      if (r[0].ok && Array.isArray(r[0].data)) CACHE.boxes = r[0].data;
+      if (r[1].ok && Array.isArray(r[1].data)) CACHE.jetons = r[1].data;
+      if (r[2].ok && Array.isArray(r[2].data)) CACHE.pre = r[2].data;
+      if (!r[0].ok && r[0].status !== 401) errorToast('Lecture impossible (' + (r[0].status || 'réseau') + ') : ' + detail(r[0], 'service indisponible'));
+      tout();
+    });
+  }
+
+  function generer(ev) {
+    ev.preventDefault();
+    var client = $('fClient').value.trim(), profil = $('fProfil').value, mois = num($('fMois').value), lot = $('fLot').value.trim();
+    var b = $('btnGenerer'); b.disabled = true;
+    var corps = {client: client, profil: profil, duree_jours: num($('fValidite').value)}; if (lot) corps.lot = lot;
+    api('/jetons', 'POST', corps).then(function (r) {
+      if (!r.ok) { b.disabled = false; if (r.status !== 401) errorToast('Jeton non généré : ' + detail(r, 'refusé')); return; }
+      var jeton = r.data;
+      return api('/clients/' + encodeURIComponent(client) + '/abonnement', 'POST', {statut: 'actif', mois: mois, formule: profil + '_' + mois + 'm'}).then(function (a) {
+        b.disabled = false;
+        if (!a.ok) errorToast('Jeton généré, mais l\'abonnement n\'a pas été posé : ' + detail(a, 'refusé') + ' — réglez-le dans la liste.');
+        $('mjClient').textContent = client + ' · ' + (PROFILS[profil] || profil) + ' · ' + mois + ' mois';
+        $('mjValeur').textContent = jeton.valeur;
+        $('modalJeton').className = 'modal show';
+        $('formJeton').reset();
+        rafraichir();
+      });
+    });
+  }
+  function copier() {
+    var v = $('mjValeur').textContent;
+    function repli() { var r = document.createRange(); r.selectNodeContents($('mjValeur')); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); toast('Sélectionné : copiez avec Ctrl+C'); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(function () { toast('📋 Copié'); }, repli); else repli();
+  }
+  function action(el) {
+    var act = el.getAttribute('data-act'), id = el.getAttribute('data-id'), client = el.getAttribute('data-client');
+    if (act === 'rafraichir') { rafraichir(); toast('↻ Actualisé'); }
+    else if (act === 'copier') copier();
+    else if (act === 'fermer-modal') $('modalJeton').className = 'modal';
+    else if (act === 'fermer-erreur') $('erreur').className = 'erreur';
+    else if (act === 'revoquer') {
+      if (!confirm('Révoquer ce jeton ?\nSi la box l\'a déjà utilisé, son tunnel est retiré et elle ne reçoit plus de nouvelle livraison.')) return;
+      api('/jetons/' + num(id) + '/revoquer', 'POST', {motif: 'révoqué depuis le panneau'}).then(function (r) {
+        if (r.ok) { toast(r.data && r.data.tunnel_applique === false ? '⚠️ Révoqué, tunnel à resynchroniser' : '⛔ Jeton révoqué'); rafraichir(); } else if (r.status !== 401) errorToast('Révocation refusée : ' + detail(r, 'erreur'));
+      });
+    } else if (act === 'suspendre' || act === 'reactiver') {
+      var statut = act === 'suspendre' ? 'suspendu' : 'actif';
+      if (act === 'suspendre' && !confirm('Suspendre l\'abonnement de « ' + client + ' » ?\nPlus de nouvelle livraison ni d\'admission ; la box garde ses fonctions locales.')) return;
+      api('/clients/' + encodeURIComponent(client) + '/abonnement', 'POST', act === 'reactiver' ? {statut: statut, mois: 12} : {statut: statut}).then(function (r) {
+        if (r.ok) { toast(act === 'suspendre' ? '⏸ Abonnement suspendu' : '▶ Abonnement réactivé (12 mois)'); rafraichir(); } else if (r.status !== 401) errorToast('Abonnement non modifié : ' + detail(r, 'erreur'));
+      });
+    } else if (act === 'voir-pre') {
+      api('/prerapports/' + encodeURIComponent(id)).then(function (r) {
+        if (!r.ok) { if (r.status !== 401) errorToast('Pré-rapport illisible : ' + detail(r, 'erreur')); return; }
+        var p = r.data || {}, rs = p.reseau || {};
+        $('detailPre').innerHTML = '<h3 style="color:var(--cyan)">📝 Pré-rapport — ' + esc(p.box) + '</h3>'
+          + '<p class="dim">Profil ' + esc(PROFILS[p.profil] || p.profil) + ' · mode ' + esc(p.mode) + ' · réseau ' + esc(rs.mode) + ' ' + esc(rs.domaine) + '</p>'
+          + '<p class="dim">Comptes créés : ' + esc((p.comptes || []).join(', ')) + ' · secrets : ' + esc((p.secrets || []).join(', ') || 'aucun') + ' (jamais leur valeur)</p>'
+          + '<h3 style="margin-top:.8rem;color:var(--cyan)">📦 ' + (p.paquets || []).length + ' paquets</h3><ul class="liste">' + (p.paquets || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>'
+          + '<p class="dim">Empreinte ' + esc(String(id).slice(0, 16)) + '…</p><div class="btn-group" style="margin-top:.8rem"><button class="btn" data-act="fermer-pre">Fermer</button></div>';
+        $('modalPre').className = 'modal show';
+      });
+    } else if (act === 'fermer-pre') $('modalPre').className = 'modal';
+    else if (act === 'refuser-pre') {
+      if (!confirm('Refuser ce pré-rapport ?\nLa box n\'installera rien tant qu\'un nouveau pré-rapport n\'aura pas été accepté.')) return;
+      api('/prerapports/' + encodeURIComponent(id) + '/refuser', 'POST', {motif: 'refusé depuis le panneau'}).then(function (r) {
+        if (r.ok) { toast('✋ Pré-rapport refusé'); rafraichir(); } else if (r.status !== 401) errorToast('Refus impossible : ' + detail(r, 'erreur'));
+      });
+    }
+  }
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target.closest('[data-tab]');
+    if (t) {
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.remove('active'); });
+      Array.prototype.forEach.call(document.querySelectorAll('.tab-content'), function (x) { x.classList.remove('active'); });
+      t.classList.add('active'); $(t.getAttribute('data-tab')).classList.add('active'); return;
+    }
+    var a = ev.target.closest('[data-act]'); if (a) { action(a); return; }
+    if (ev.target.classList.contains('modal')) ev.target.className = 'modal';                           // clic sur le fond : ferme
+  });
+  $('formJeton').addEventListener('submit', generer);
+  rafraichir();
+  setInterval(function () { if (!document.hidden) rafraichir(); }, 15000);
+}());
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "id": "autoload",
+  "name": "Auto-Load",
+  "category": "boot",
+  "icon": "🛰️",
+  "path": "/autoload/",
+  "order": 906,
+  "description": "Provisionnement réseau : jetons clients, box en cours, abonnements, pré-rapports",
+  "theme": "socle"
+}
