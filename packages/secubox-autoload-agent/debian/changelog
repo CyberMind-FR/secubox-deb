@@ -1,3 +1,10 @@
+secubox-autoload-agent (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Moteur de provisioning (#2187, parent #2182) : autoload_agent/moteur.py. Parcours : fichier de reponses signe, cle WireGuard, enrolement, tunnel, plan (simulation apt du meta-paquet secubox-lite, -isp ou -full), VALIDATION, installation, application (premier-pasctl puis profilectl). Chaque etape est idempotente et notee dans l'etat (0600) : apres une coupure ou un echec le parcours reprend a la premiere etape non faite, sans rejouer l'enrolement (le jeton est a usage unique) ; un parcours termine ne refait rien. La validation est un point d'injection (#2188) : SANS valideur explicite le defaut REFUSE, rien n'est installe. Rien venant du reseau n'est execute : reponse du tunnel validee avant ecriture, noms de paquets de la simulation filtres, fichier du jeton refuse s'il est lisible par d'autres comptes, commandes en listes d'arguments avec delai.
+  * Depend de secubox-premier-pas >= 0.5.0. Bibliotheque seulement tant que le point d'enrolement HTTPS n'existe pas (#2190).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 05:00:00 +0200
+
 secubox-autoload-agent (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Tunnel WireGuard cote box (#2189, parent #2182, D7) : autoload_agent/tunnel.py. La cle est generee SUR LA BOX (jamais dans l'image), en 0600, ne passe jamais en argument ni dans la configuration (wg set private-key <fichier>) ; une cle existante n'est jamais remplacee. Configuration SORTANTE seulement (pas de ListenPort, pas de route par defaut : AllowedIPs = le hub /32). Toute reponse de l'infrastructure est validee avant d'ecrire un fichier (nom d'hote epingle, plage 10.64.0.0/16, cles WireGuard, aucun retour a la ligne) ; si l'activation echoue la configuration posee est retiree.
