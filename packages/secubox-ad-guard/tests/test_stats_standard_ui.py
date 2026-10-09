@@ -40,6 +40,7 @@ def _page(navigateur, stats=STATS, appr=APPRENTISSAGE_ILLISIBLE):
     p.route("http://sbx.test/api/v1/ad-guard/**", api)
     p.route("http://sbx.test/", lambda r: r.fulfill(status=200, content_type="text/html", body=PAGE.read_text(encoding="utf-8")))
     p.goto("http://sbx.test/")
+    p.evaluate("document.getElementById('avance').open = true")                  # contenu d'origine sous « Avancé » (#2174)
     return ctx, p, erreurs
 
 

@@ -107,6 +107,28 @@
             .main { margin-left: 0; padding: 1rem; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
         }
+
+        /* Page simplifiée (#2174) : l'essentiel d'abord, le reste sous « Avancé » */
+        .simple { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; max-width: 46rem; }
+        .sp-etat { display: flex; gap: .8rem; align-items: center; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
+        .sp-pastille { width: 12px; height: 12px; border-radius: 50%; background: var(--primary); flex: none; }
+        .sp-pastille.ko { background: var(--danger); }
+        .sp-app { display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; align-items: center; padding: .9rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
+        .sp-app .sous, .sp-sig small { color: var(--text-dim); font-size: .8rem; }
+        .sp-app .ligne { grid-column: 1 / -1; font-size: .82rem; }
+        .sp-sig { display: grid; grid-template-columns: 1fr auto; gap: .2rem .8rem; align-items: center; padding: .6rem 0; border-top: 1px solid var(--border); }
+        .sp-sig code { overflow-wrap: anywhere; min-width: 0; }
+        .sp-sig .act { grid-row: 1 / 3; grid-column: 2; display: flex; gap: .4rem; flex-wrap: wrap; }
+        .sp-sw { position: relative; width: 52px; height: 30px; flex: none; }
+        .sp-sw input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
+        .sp-sw span { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: background .15s; }
+        .sp-sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--bg-dark); transition: transform .15s; }
+        .sp-sw input:checked + span { background: var(--primary); }
+        .sp-sw input:checked + span::after { transform: translateX(22px); }
+        .sp-sw input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+        #sp-toast { position: sticky; bottom: 1rem; padding: .6rem 1rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--primary); }
+        #sp-toast.ko { border-color: var(--danger); color: var(--danger); }
+        #avance > summary { cursor: pointer; font-weight: 600; padding: .8rem 0; }
     </style>
 </head>
 <body>
@@ -118,6 +140,19 @@
             <span class="badge version">v1.2.0</span>
         </div>
 
+        <div class="simple" id="simple">
+            <div class="sp-etat" role="status"><span class="sp-pastille" id="sp-pastille"></span>
+                <div><div id="sp-titre"><b>Chargement…</b></div><small id="sp-sous" style="color:var(--text-dim);"></small></div></div>
+            <section aria-label="Appareils"><h2 style="font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);">Mes appareils</h2>
+                <div id="sp-appareils" style="display:flex;flex-direction:column;gap:.6rem;"></div></section>
+            <section class="card" aria-labelledby="sp-h-pub"><h2 id="sp-h-pub">Une pub passe encore ?</h2>
+                <p style="color:var(--text-dim);font-size:.85rem;margin:.3rem 0;">Adresses interrogées par vos appareils dans la dernière heure qui ressemblent à de la publicité sans être bloquées.</p>
+                <div id="sp-sigs"></div>
+                <p id="sp-vide" style="color:var(--text-dim);font-size:.85rem;" hidden>Rien de suspect pour l'instant. Si la pub est insérée dans la vidéo elle-même, le filtrage par noms ne peut pas l'enlever.</p></section>
+            <div id="sp-toast" role="status" hidden></div>
+        </div>
+
+        <details id="avance"><summary>Avancé</summary>
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-icon">📋</div>
@@ -368,6 +403,7 @@
                 <div id="tv-path" style="margin-top:.6rem;"></div>
             </div>
         </div>
+        </details>
     </div>
 
     <script src="/shared/sidebar.js"></script>
@@ -866,7 +902,7 @@
         async function tvRetirer(ip) { await api('/adblock-tv/clients/' + encodeURIComponent(ip), 'DELETE'); tvRender(); }
         async function tvAddClient() {
             const ip = document.getElementById('tv-new-ip').value.trim(), nom = document.getElementById('tv-new-nom').value.trim();
-            if (ip) { await api('/adblock-tv/clients', 'POST', { ip: ip, nom: nom, mode: 'observe' }); document.getElementById('tv-new-ip').value = ''; tvRender(); }
+            if (ip) { await api('/adblock-tv/clients', 'POST', { ip: ip, nom: nom, mode: 'auto' }); document.getElementById('tv-new-ip').value = ''; tvRender(); }
         }
         async function tvAddDomaine() {
             const d = document.getElementById('tv-new-domaine').value.trim();
@@ -880,6 +916,56 @@
             if (!r) { z.textContent = 'Réponse illisible.'; return; }
             z.textContent = (r.recue ? '✅ ' : '❌ ') + r.lecture + (r.recue ? ' — client ' + r.evenements[0].client + ', décision ' + r.evenements[0].decision : '');
         }
+
+        // ── page simplifiée (#2174) ──
+        let spTt;
+        function spDit(msg, ko) { const t = document.getElementById('sp-toast'); t.textContent = msg; t.className = ko ? 'ko' : ''; t.hidden = false; clearTimeout(spTt); spTt = setTimeout(() => { t.hidden = true; }, 6000); }
+        async function spRender() {
+            const j = await api('/adblock-tv/simple');
+            if (!j || !Array.isArray(j.appareils)) { document.getElementById('sp-titre').textContent = 'Données indisponibles'; document.getElementById('sp-pastille').className = 'sp-pastille ko'; return; }
+            document.getElementById('sp-pastille').className = 'sp-pastille' + (j.protegees && j.actif ? '' : ' ko');
+            document.getElementById('sp-titre').innerHTML = '<b></b>';
+            document.getElementById('sp-titre').firstChild.textContent = !j.actif ? 'Filtrage arrêté' : (j.protegees ? 'Protection active sur ' + j.protegees + ' appareil' + (j.protegees > 1 ? 's' : '') : 'Aucun appareil protégé');
+            document.getElementById('sp-sous').textContent = Number(j.bloques_24h).toLocaleString() + ' pubs et traceurs bloqués ces dernières 24 h';
+            const zone = document.getElementById('sp-appareils'); zone.textContent = '';
+            j.appareils.forEach(a => {
+                const d = document.createElement('div'); d.className = 'sp-app';
+                const b = document.createElement('b'); b.textContent = a.nom;
+                const sw = document.createElement('label'); sw.className = 'sp-sw';
+                const i = document.createElement('input'); i.type = 'checkbox'; i.checked = a.protege; i.setAttribute('aria-label', 'Anti-pub sur ' + a.nom);
+                i.addEventListener('change', () => spBascule(a.nom, i));
+                sw.append(i, document.createElement('span'));
+                const sous = document.createElement('div'); sous.className = 'sous'; sous.textContent = a.adresses + ' adresse' + (a.adresses > 1 ? 's' : '') + ' suivie' + (a.adresses > 1 ? 's' : '');
+                const l = document.createElement('div'); l.className = 'ligne'; l.textContent = (a.protege ? 'Protégée' : 'Non protégée') + (a.blocages_jour ? ' · ' + a.blocages_jour + ' blocages aujourd\u2019hui' : '');
+                d.append(b, sw, sous, l); zone.append(d);
+            });
+        }
+        async function spBascule(nom, input) {
+            input.disabled = true;
+            const r = await api('/adblock-tv/simple/appareils/' + encodeURIComponent(nom) + '/protection', 'POST', { actif: input.checked });
+            if (!r || r.detail) { spDit('Le changement n\u2019a pas été appliqué' + (r && r.detail ? ' : ' + r.detail : '') + '.', true); }
+            else if (!r.verifie) { spDit('Appliqué mais non vérifié : ' + r.ecart + '. Réessayez dans une minute.', true); }
+            else { spDit(r.protege ? 'Anti-pub activé sur ' + nom + '. Vérifié : ses requêtes passent par le filtre.' : 'Anti-pub désactivé sur ' + nom + '.'); }
+            await spRender(); spSuspects();
+        }
+        async function spSuspects() {
+            const j = await api('/adblock-tv/simple/suspects?minutes=60');
+            const zone = document.getElementById('sp-sigs'); zone.textContent = '';
+            const liste = (j && j.suspects) || [];
+            document.getElementById('sp-vide').hidden = liste.length > 0;
+            liste.forEach(x => {
+                const d = document.createElement('div'); d.className = 'sp-sig';
+                const c = document.createElement('code'); c.textContent = x.domaine;
+                const s = document.createElement('small'); s.textContent = x.appareil + ' \u00b7 ' + x.requetes + ' requête' + (x.requetes > 1 ? 's' : '') + ' \u00b7 ' + x.motif;
+                const act = document.createElement('div'); act.className = 'act';
+                const bl = document.createElement('button'); bl.className = 'btn'; bl.textContent = 'Bloquer';
+                bl.onclick = async () => { const r = await api('/adblock-tv/custom', 'POST', { domaine: x.domaine }); spDit(r && !r.detail ? 'Bloqué et appliqué. Relancez la lecture pour voir l\u2019effet.' : 'Blocage non appliqué.', !(r && !r.detail)); spSuspects(); };
+                const lg = document.createElement('button'); lg.className = 'btn'; lg.textContent = 'C\u2019est légitime';
+                lg.onclick = async () => { await api('/adblock-tv/simple/suspects/legitime', 'POST', { domaine: x.domaine }); spDit('Noté comme légitime, il ne sera plus proposé.'); spSuspects(); };
+                act.append(bl, lg); d.append(c, s, act); zone.append(d);
+            });
+        }
+        spRender(); spSuspects(); setInterval(spRender, 60000);
 
         fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender(); dnsBoxRender(); detRender();
         setInterval(fetchStats, 30000);

@@ -135,3 +135,16 @@ Modèle Pydantic : `AutoEssaiIn{actif}`. L'état gagne `auto_essai` (faux par d�
 
 Limite connue du module existant : l'exemption d'un client par une vue Unbound **vide** (allowlist d'IP de `secubox-adblock-sync`) ne fonctionne pas ;
 une vue doit contenir une zone transparente (`local-zone: "." transparent`). Voir l'audit, §5.
+
+### Panneau simplifié (1.8.0, #2174)
+
+La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil avec un interrupteur « Anti-pub » (mode `auto` en interne, `off` à l'arrêt), et la liste « Une pub passe encore ? ». Les anciens onglets (Overview, Devices, Blocklist, Delayed, DNS AdBlock TV) et les modes observe, block, off sont sous « Avancé ». Un appareil déclaré sans mode est en `auto` par défaut.
+
+| Route | Garde | Rôle |
+|---|---|---|
+| `GET /adblock-tv/simple` | `require_lecture` | cartes par appareil (adresses regroupées), protégés, blocages 24 h |
+| `POST /adblock-tv/simple/appareils/{nom}/protection` | `require_jwt` | `{"actif": bool}` ; applique puis relit le drop-in Unbound ; réponse `verifie` / `ecart` |
+| `GET /adblock-tv/simple/suspects?minutes=60` | `require_lecture` | noms servis qui ressemblent à une pub (mot entier dans un libellé), hors bloqués et jugés légitimes |
+| `POST /adblock-tv/simple/suspects/legitime` | `require_jwt` | `{"domaine": ...}` ; mémorisé dans `suspects-ignores.json` (500 au plus) |
+
+« Bloquer » réutilise `POST /adblock-tv/custom`. La vérification compare, pour chaque adresse de l'appareil, la vue Unbound attendue (`sbx-tv-auto-<slug>`, ou aucune pour `off`) à celle du drop-in.

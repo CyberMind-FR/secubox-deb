@@ -1,3 +1,11 @@
+secubox-ad-guard (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau simplifie (#2174) : une page avec l'etat en une phrase, une carte par appareil et un interrupteur anti-pub (mode auto en interne). Apres chaque bascule le filtre Unbound est relu et le panneau dit si le changement est bien applique, ou ce qui diverge (un changement perdu ne passe plus sous silence). Liste « une pub passe encore ? » : noms servis qui ressemblent a de la pub, avec Bloquer / C'est legitime. Les anciens onglets et les modes observe, block, off passent sous « Avance ».
+  * Nouvelles routes : GET /adblock-tv/simple, POST /adblock-tv/simple/appareils/{nom}/protection, GET /adblock-tv/simple/suspects, POST /adblock-tv/simple/suspects/legitime.
+  * Un appareil declare sans mode est en auto par defaut (API et panneau).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 23:00:00 +0200
+
 secubox-ad-guard (1.7.4-1~bookworm1) bookworm; urgency=medium
 
   * Suivi des adresses : le seuil d'eviction passe de retrait_jours (7 j) a 6 heures. Une TV change d'IPv6 de confidentialite environ chaque jour : les trois anciennes avaient ete vues il y a 1 a 4 jours, donc DANS la fenetre de 7 jours, et la version 1.7.3 n'evincait rien (la TV banc restait hors de sa vue, replay Free sans fin). Une IPv6 non vue depuis 6 h et plus ancienne que la nouvelle cede sa place ; jamais l'IPv4, jamais une adresse recente (#2146).
