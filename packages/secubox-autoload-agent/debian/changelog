@@ -1,0 +1,5 @@
+secubox-autoload-agent (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Tunnel WireGuard cote box (#2189, parent #2182, D7) : autoload_agent/tunnel.py. La cle est generee SUR LA BOX (jamais dans l'image), en 0600, ne passe jamais en argument ni dans la configuration (wg set private-key <fichier>) ; une cle existante n'est jamais remplacee. Configuration SORTANTE seulement (pas de ListenPort, pas de route par defaut : AllowedIPs = le hub /32). Toute reponse de l'infrastructure est validee avant d'ecrire un fichier (nom d'hote epingle, plage 10.64.0.0/16, cles WireGuard, aucun retour a la ligne) ; si l'activation echoue la configuration posee est retiree.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 03:00:00 +0200

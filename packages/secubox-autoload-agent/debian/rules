@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-autoload-agent/usr/lib/secubox/autoload-agent/autoload_agent
+	install -m 644 autoload_agent/*.py debian/secubox-autoload-agent/usr/lib/secubox/autoload-agent/autoload_agent/
+
+override_dh_auto_test:
+	true

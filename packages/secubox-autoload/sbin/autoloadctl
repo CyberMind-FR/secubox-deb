@@ -10,10 +10,13 @@
   autoloadctl lister [--etat E] [--client C] [--lot L] [--json]
   autoloadctl revoquer (--id N | --lot L) --motif M
   autoloadctl abonnement --client C --statut actif|suspendu|revoque
+  autoloadctl tunnel-init                  crée la clé du hub (0600) et affiche sa clé publique
+  autoloadctl tunnel-sync                  régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf)
 """
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -23,7 +26,7 @@ _ici = Path(__file__).resolve().parents[1]
 if (_ici / "autoload").is_dir():
     sys.path.insert(0, str(_ici))
 
-from autoload import jetons as J  # noqa: E402
+from autoload import jetons as J, tunnel as T  # noqa: E402
 
 
 def main(argv=None):
@@ -53,9 +56,12 @@ def main(argv=None):
     ab = sub.add_parser("abonnement")
     ab.add_argument("--client", required=True)
     ab.add_argument("--statut", required=True)
+    sub.add_parser("tunnel-init")
+    sub.add_parser("tunnel-sync")
     a = ap.parse_args(argv)
 
     reg = J.Registre(Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
+    pairs = T.Pairs(reg.db)
     try:
         if a.cmd == "emettre":
             em = reg.emettre(a.client, a.profil, lot=a.lot, serie=a.serie, duree_s=a.duree_jours * 86400)
@@ -74,11 +80,30 @@ def main(argv=None):
         elif a.cmd == "revoquer":
             if a.id is not None:
                 cle = reg.revoquer(a.id, a.motif)
-                print("révoqué" + (f" ; clé WireGuard à retirer du tunnel : {cle}" if cle else ""))
+                retire = pairs.retirer(cle)
+                print("révoqué" + (" ; pair retiré (lancer tunnel-sync pour l'appliquer)" if retire else ""))
             else:
                 print(f"{reg.revoquer_lot(a.lot, a.motif)} jeton(s) révoqué(s)")
+        elif a.cmd == "tunnel-init":
+            cle = Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT))
+            if cle.exists():
+                print("clé du hub déjà présente (inchangée)", file=sys.stderr)
+            else:
+                cle.parent.mkdir(parents=True, exist_ok=True)
+                g = subprocess.run(["wg", "genkey"], capture_output=True, text=True, timeout=30, check=True)
+                fd = os.open(cle, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(g.stdout.strip() + "\n")
+            pub = subprocess.run(["wg", "pubkey"], input=cle.read_text().strip() + "\n", capture_output=True, text=True, timeout=30, check=True)
+            print(pub.stdout.strip())
+        elif a.cmd == "tunnel-sync":
+            n = T.synchroniser(pairs, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)))
+            print(f"{n} pair(s) appliqué(s)")
         elif a.cmd == "abonnement":
             print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client")
+    except T.TunnelErreur as err:
+        print(f"tunnel : {err}", file=sys.stderr)
+        return 1
     except ValueError as err:
         print(f"refusé : {err}", file=sys.stderr)
         return 2

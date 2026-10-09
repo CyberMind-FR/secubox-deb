@@ -36,6 +36,7 @@
 # construction, pas l'installation.
 
 hors-arbre:
+  - secubox-autoload-agent    # côté box cliente, posé par le provisionnement (#2182)
   - secubox-autoload          # côté infrastructure (admin.gk2.secubox.in), jamais sur une box cliente (#2182)
   - secubox-soc-gateway       # décommissionné (console de flotte jamais déployée)
   - gabriel-mood              # transitionnel → sbxos-audio-mood (#1587)
