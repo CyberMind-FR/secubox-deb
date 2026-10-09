@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Auto-Load : service d'enrôlement et panel côté infrastructure (ref #2190, ref #2182)
+
+secubox-autoload 0.3.0 : deux applications (publique sur socket Unix : POST /enrol à preuve de jeton + administration ; tunnel sur 10.64.0.1:8470 : progression, pré-rapport, refus ; identité = adresse source dans WireGuard), registre étendu (jeton `gk2_`, échéance et formule d'abonnement, statut et progression des box, pré-rapports), unités durcies dont une unité root pour `wg syncconf`, AppArmor enforce, nginx, nftables. À déployer sur gk2 ; la redirection udp/51830 de la Freebox est à faire à la main. Suite : #2191 (WebUI), #2192 (rapport final), #2193 (banc de bout en bout) ; #2186 (netboot) attend le matériel.
+
 ## 2026-10-10 — actord : les robots connus sont classés à part (ref #2201)
 
 meta-externalagent (2 743 adresses, 65 pays) était l'acteur critique n°1 alors qu'il ne fait que parcourir git.gk2. toolbox-ng 0.5.9 / waf-ng 1.19.3 : un accès de robot annoncé refusé par la politique du vhost (étiquette unique `robots`, sévérité basse, non bloqué, famille nommée) ne crée plus d'acteur ; il est compté par famille (`GET /robots`, champ `robots` de l'aperçu) et la page Actor affiche une tuile dédiée. Dès qu'un robot sort de ce rôle, ses événements redeviennent ordinaires. À déployer : redémarrage de `secubox-actord` (puis page waf-ng).

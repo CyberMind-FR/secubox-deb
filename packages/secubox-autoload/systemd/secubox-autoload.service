@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-autoload (#2190) — enrôlement et panel du provisionnement Auto-Load.
+# Un utilisateur À LUI : il ne lit que ses propres jetons ; le tunnel est appliqué par une unité root séparée (secubox-autoload-sync).
+[Unit]
+Description=SecuBox Auto-Load — enrôlement et panel (#2190)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-autoload
+Group=secubox-autoload
+SupplementaryGroups=secubox
+WorkingDirectory=/usr/lib/secubox/autoload
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=SECUBOX_AUTOLOAD_AUDIT=/var/log/secubox/autoload-audit.log
+# En root (« + ») : une socket périmée d'un autre utilisateur dans /run/secubox (sticky) ne se retire pas autrement.
+ExecStartPre=+/bin/rm -f /run/secubox/autoload.sock
+ExecStart=/usr/sbin/secubox-autoload-api
+Restart=on-failure
+RestartSec=3
+UMask=0027
+LimitCORE=0
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload-audit.log /run/secubox
+
+[Install]
+WantedBy=multi-user.target

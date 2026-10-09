@@ -46,7 +46,7 @@ def audit(reg):
 
 def test_emission_donne_une_valeur_de_128_bits_et_ne_la_garde_pas(reg, tmp_path):
     e = reg.emettre("client-042", "lite", lot="lot-1")
-    assert len(e.valeur) == 32 and int(e.valeur, 16) >= 0
+    assert len(e.valeur) == 36 and e.valeur.startswith("gk2_") and int(e.valeur[4:], 16) >= 0         # préfixe reconnaissable (détection de fuite)
     brut = (tmp_path / "var" / "jetons.db").read_bytes()
     assert e.valeur.encode() not in brut                                # seule l'empreinte est stockée
     assert e.expire_le == T0 + J.DUREE_DEFAUT_S
@@ -114,7 +114,7 @@ def test_refus_uniforme_inconnu_expire_deja_pris_revoque(reg):
     reg.revoquer(e3.id, "x")
     reg.h.t += 10
     messages = set()
-    for v in (e1.valeur, e2.valeur, e3.valeur, "0" * 32, "pas-un-jeton", "", "é" * 40):
+    for v in (e1.valeur, e2.valeur, e3.valeur, "0" * 32, "gk2_" + "0" * 32, "pas-un-jeton", "", "é" * 40):
         with pytest.raises(J.JetonRefuse) as ex:
             reg.reclamer(v, CLE_B)
         messages.add(str(ex.value))
@@ -127,7 +127,7 @@ def test_l_audit_dit_la_vraie_raison_sans_jamais_ecrire_la_valeur(reg):
     with pytest.raises(J.JetonRefuse):
         reg.reclamer(e.valeur, CLE_B)
     with pytest.raises(J.JetonRefuse):
-        reg.reclamer("f" * 32, CLE_B)
+        reg.reclamer("gk2_" + "f" * 32, CLE_B)
     lignes = audit(reg)
     actions = [l["action"] for l in lignes]
     assert actions == ["jeton-emis", "jeton-reclame", "jeton-refus", "jeton-refus"]
@@ -220,7 +220,7 @@ def test_cli_emettre_lister_revoquer(tmp_path):
     def run(*a):
         return subprocess.run([sys.executable, ctl, *a], capture_output=True, text=True, env=env)
     e = run("emettre", "--client", "client-042", "--profil", "lite", "--lot", "l1")
-    assert e.returncode == 0 and len(e.stdout.strip().splitlines()[-1]) == 32
+    assert e.returncode == 0 and len(e.stdout.strip().splitlines()[-1]) == 36
     valeur = e.stdout.strip().splitlines()[-1]
     liste = run("lister", "--json")
     assert json.loads(liste.stdout)[0]["etat"] == "emis" and valeur not in liste.stdout

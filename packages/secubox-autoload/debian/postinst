@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    getent group secubox-autoload >/dev/null || addgroup --system secubox-autoload
+    id secubox-autoload >/dev/null 2>&1 || adduser --system --ingroup secubox-autoload --no-create-home \
+        --home /var/lib/secubox/autoload --shell /usr/sbin/nologin secubox-autoload
+    # Le groupe secubox : la socket lui appartient (nginx la traverse) et la lecture des sessions d'authentification en dépend.
+    getent group secubox >/dev/null && adduser secubox-autoload secubox >/dev/null 2>&1 || true
+    install -d -o secubox-autoload -g secubox-autoload -m 0750 /var/lib/secubox/autoload
+    [ -e /var/log/secubox/autoload-audit.log ] || install -m 0640 -o secubox-autoload -g secubox /dev/null /var/log/secubox/autoload-audit.log
+
+    # AppArmor : profil ENFORCE, chargé seulement si le noyau le permet.
+    if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+        apparmor_parser -r /etc/apparmor.d/secubox-autoload-api >/dev/null 2>&1 \
+            || echo "secubox-autoload : profil AppArmor non chargé" >&2
+    fi
+
+    # La clé du hub est créée UNE fois, sur l'infrastructure ; elle n'est jamais remplacée.
+    if [ ! -f /var/lib/secubox/autoload/hub.pub ]; then
+        /usr/sbin/autoloadctl tunnel-init >/dev/null 2>&1 || echo "secubox-autoload : clé du hub non créée (tunnel-init)" >&2
+    fi
+
+    # Pare-feu : udp/51830 et tcp/8470 depuis wg-autoload seulement, sans doublon à la réinstallation.
+    if command -v nft >/dev/null 2>&1 && nft list chain inet filter input >/dev/null 2>&1; then
+        nft list chain inet filter input 2>/dev/null | grep -q "secubox autoload hub" || nft -f /etc/nftables.d/zz-secubox-autoload.nft 2>/dev/null || true
+    fi
+
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable --now secubox-autoload-sync.path >/dev/null 2>&1 || true
+    if [ -f /var/lib/secubox/autoload/hub.pub ]; then
+        systemctl enable secubox-autoload.service >/dev/null 2>&1 || true
+        # try-restart : une mise à jour ne démarre pas un service que l'exploitant a arrêté.
+        systemctl is-active --quiet secubox-autoload.service && systemctl try-restart secubox-autoload.service || systemctl start secubox-autoload.service || true
+    fi
+    # nginx : on ne recharge que si la configuration passe le test.
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+fi
+#DEBHELPER#
+exit 0

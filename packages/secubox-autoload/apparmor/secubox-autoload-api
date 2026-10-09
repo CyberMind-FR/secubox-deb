@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de secubox-autoload-api (#2190) : socket Unix + écoute TCP du tunnel. Tout ce qui n'est pas listé est refusé.
+# Posé dans /etc/apparmor.d/secubox-autoload-api, chargé par le postinst.
+
+#include <tunables/global>
+
+/usr/sbin/secubox-autoload-api {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/sbin/secubox-autoload-api r,
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/autoload/** r,
+  /usr/lib/secubox/ r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Configuration et authentification : fichiers nommés, jamais /etc/secubox/** (le dossier des secrets reste interdit).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/users.json r,
+  /etc/secubox/auth.toml r,
+  deny /etc/secubox/secrets/** r,
+  # Registre des sessions : sans lui, toute garde d'API voit un registre vide et refuse (401 partout, #942).
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/sessions.json r,
+  /var/log/secubox/delegation.log w,
+
+  # Données du module : base des jetons, clé publique du hub, demande et accusé de synchronisation.
+  /var/lib/secubox/autoload/ r,
+  /var/lib/secubox/autoload/** rwk,
+  /var/log/secubox/autoload-audit.log w,
+
+  /run/secubox/ r,
+  /run/secubox/autoload.sock rwk,
+
+  network unix stream,
+  network inet stream,
+  /proc/sys/net/core/somaxconn r,
+}

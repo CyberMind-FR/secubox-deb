@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-autoload-api — le service Auto-Load (#2190) : deux écouteurs dans un seul processus.
+
+  /run/secubox/autoload.sock   public + administration (derrière nginx), 0660, groupe secubox
+  10.64.0.1:8470 (TCP)         routes de box, UNIQUEMENT dans le tunnel WireGuard ; IP_FREEBIND : l'écoute démarre même si wg-autoload n'est pas encore monté
+
+La socket Unix est créée avec un umask 0007 : uvicorn ne la chmod donc jamais en 0666 (#2026).
+"""
+import asyncio
+import grp
+import os
+import socket
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/autoload")
+import uvicorn  # noqa: E402
+
+from api.asgi import construire  # noqa: E402
+
+SOCK = "/run/secubox/autoload.sock"
+HUB = ("10.64.0.1", 8470)
+IP_FREEBIND = 15
+
+
+def socket_unix() -> socket.socket:
+    os.umask(0o007)
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.bind(SOCK)
+    os.chmod(SOCK, 0o660)
+    try:
+        os.chown(SOCK, -1, grp.getgrnam("secubox").gr_gid)
+    except (KeyError, OSError) as e:
+        print(f"autoload: groupe secubox non appliqué à la socket : {e}", file=sys.stderr)
+    s.listen(128)
+    s.setblocking(False)
+    return s
+
+
+def socket_tunnel() -> socket.socket:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.setsockopt(socket.SOL_IP, IP_FREEBIND, 1)
+    s.bind(HUB)
+    s.listen(128)
+    s.setblocking(False)
+    return s
+
+
+async def main() -> None:
+    publique, tunnel = construire()
+    options = dict(access_log=False, log_level="warning", lifespan="off")
+    srv_pub = uvicorn.Server(uvicorn.Config(publique, **options))
+    srv_tun = uvicorn.Server(uvicorn.Config(tunnel, **options))
+    await asyncio.gather(srv_pub.serve(sockets=[socket_unix()]), srv_tun.serve(sockets=[socket_tunnel()]))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

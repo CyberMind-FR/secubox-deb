@@ -1,0 +1,8 @@
+/var/log/secubox/autoload-audit.log {
+    weekly
+    rotate 52
+    compress
+    missingok
+    notifempty
+    create 0640 secubox-autoload secubox
+}

@@ -21,6 +21,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -149,3 +150,37 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
             if d.returncode != 0:
                 raise TunnelErreur("tunnel non monté : " + (d.stderr or s.stderr or "").strip()[:200])
     return len(actifs)
+
+
+DOSSIER_DEFAUT = Path("/var/lib/secubox/autoload")
+
+
+def demander_sync(dossier: Path = DOSSIER_DEFAUT, attente_s: float = 15.0, horloge: Callable[[], float] = time.monotonic,
+                  dormir: Callable[[float], None] = time.sleep) -> None:
+    """Le service d'enrôlement n'est PAS root : il dépose `sync.demande` (un jeton d'identification), l'unité `.path` lance `autoloadctl tunnel-sync` en root,
+    qui recopie ce jeton dans `sync.fait`. On attend cet accusé : la box ne doit pas se voir répondre avant que son pair existe."""
+    dossier = Path(dossier)
+    marque = uuid.uuid4().hex
+    tmp = dossier / f".sync-{marque}"
+    tmp.write_text(marque, encoding="ascii")
+    os.replace(tmp, dossier / "sync.demande")
+    fin = horloge() + attente_s
+    while horloge() < fin:
+        try:
+            if (dossier / "sync.fait").read_text(encoding="ascii").strip() == marque:
+                return
+        except OSError:
+            pass
+        dormir(0.25)
+    raise TunnelErreur("le tunnel n'a pas été appliqué à temps")
+
+
+def accuser_sync(dossier: Path = DOSSIER_DEFAUT) -> None:
+    """Côté root, après un `tunnel-sync` réussi : rend à la demande en attente son accusé."""
+    dossier = Path(dossier)
+    try:
+        marque = (dossier / "sync.demande").read_text(encoding="ascii").strip()
+    except OSError:
+        return
+    if re.fullmatch(r"[0-9a-f]{32}", marque):
+        _ecrit_prive(dossier / "sync.fait", marque)
