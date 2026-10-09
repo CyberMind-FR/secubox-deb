@@ -24,9 +24,9 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles
+    from . import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles
+    from api import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 CTL = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
@@ -76,7 +76,7 @@ class EtatIn(BaseModel):
 class ClientIn(BaseModel):
     ip: str = Field(min_length=2, max_length=45)
     nom: str = Field(default="", max_length=40)
-    mode: str = "observe"
+    mode: str = "auto"                               # auto par défaut (#2174) : un appareil déclaré est protégé sans autre geste
 
 
 class ModeIn(BaseModel):
@@ -766,3 +766,91 @@ def refus_appareil(nom: str, minutes: int = 60):
         x["autorise"] = x["domaine"] in autorises
     return {"nom": nom, "minutes": minutes, "refus": refus}
 
+
+
+# ── panneau simplifié (#2174) : une carte par appareil, un interrupteur, une liste « ça ressemble à une pub » ─────────────────
+class ProtectionIn(BaseModel):
+    actif: bool
+
+
+class SuspectIn(BaseModel):
+    domaine: str = Field(min_length=3, max_length=253)
+
+
+def _ignores_path():
+    return dnstv.DOSSIER_ETAT / "suspects-ignores.json"
+
+
+def _ignores() -> set:
+    try:
+        return {d for d in json.loads(_ignores_path().read_text(encoding="utf-8")) if isinstance(d, str)}
+    except (OSError, ValueError):
+        return set()
+
+
+@router.get("/simple", dependencies=[Depends(require_lecture)])
+def simple():
+    """Tout ce que la page simplifiée affiche, en un appel."""
+    etat = _etat()
+    m = _magasin()
+    depuis = int(time.time()) - 86400
+    bloques = {}
+    for e in m.recents(None, depuis, 1000):
+        if e["decision"] == "BLOCKED":
+            bloques[e["client"]] = bloques.get(e["client"], 0) + 1
+    vus = {x["client"]: x["derniere_vue"] for x in m.par_client()}
+    cartes = dnstv_simple.appareils(etat, bloques, vus)
+    return {"actif": etat["actif"], "appareils": cartes, "protegees": sum(1 for c in cartes if c["protege"]),
+            "bloques_24h": sum(bloques.values()), "dropin_present": dnstv.CONF_UNBOUND.is_file()}
+
+
+@router.post("/simple/appareils/{nom}/protection", dependencies=[Depends(require_jwt)])
+def basculer_protection(nom: str, corps: ProtectionIn):
+    """Interrupteur : toutes les adresses de l'appareil passent en auto (ou off), puis le filtre est relu pour VÉRIFIER l'application."""
+    with _verrou():
+        etat, ancien = _etat_et_copie()
+        cs = _clients_du_nom(etat, nom)
+        for c in cs:
+            c["mode"] = "auto" if corps.actif else "off"
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        try:
+            application = _ctl("apply")
+        except HTTPException:
+            dnstv.ecrire_etat(ancien)
+            raise
+        try:
+            dropin = dnstv.CONF_UNBOUND.read_text(encoding="utf-8")
+        except OSError:
+            dropin = ""
+        ecart = dnstv_simple.verifier_application(etat, nom, dropin)
+        return {"nom": nom, "protege": corps.actif, "verifie": ecart is None, "ecart": ecart, "application": application}
+
+
+@router.get("/simple/suspects", dependencies=[Depends(require_lecture)])
+def suspects_pub(minutes: int = 60):
+    """Noms encore servis qui ressemblent à de la pub (motif lisible), hors ceux déjà bloqués ou jugés légitimes."""
+    if not 1 <= minutes <= 1440:
+        raise HTTPException(422, "minutes : entre 1 et 1440")
+    etat = _etat()
+    noms = {c["ip"]: c["nom"] for c in etat["clients"] if c["mode"] != "off"}
+    evts = _magasin().recents(list(noms), int(time.time()) - minutes * 60, 1000)
+    p = _perso_path()
+    deja = set(dnstv.lire_liste(p)[0]) if p.is_file() else set()
+    return {"minutes": minutes, "suspects": dnstv_simple.suspects(evts, noms, _ignores(), deja | set(_table()))}
+
+
+@router.post("/simple/suspects/legitime", dependencies=[Depends(require_jwt)])
+def suspect_legitime(corps: SuspectIn):
+    d = dnstv.valider_domaine(corps.domaine)
+    if not d:
+        raise HTTPException(422, "nom de domaine invalide")
+    with _verrou():
+        liste = sorted(_ignores() | {d})[-500:]
+        dnstv.DOSSIER_ETAT.mkdir(parents=True, exist_ok=True)
+        tmp = _ignores_path().with_suffix(".tmp")
+        tmp.write_text(json.dumps(liste), encoding="utf-8")
+        os.replace(tmp, _ignores_path())
+    return {"domaine": d, "ignores": len(liste)}

@@ -55,6 +55,12 @@ def _page(navigateur, appels, etat):
             r = etat.get("auto_reglage", {})
         elif chemin == "/adblock-tv/custom":
             r = {"domaines": ["mon-tracker.example"]}
+        elif chemin == "/adblock-tv/simple":
+            r = etat.get("simple", {"actif": True, "protegees": 0, "bloques_24h": 0, "appareils": []})
+        elif chemin == "/adblock-tv/simple/suspects":
+            r = etat.get("suspects", {"suspects": []})
+        elif chemin.startswith("/adblock-tv/simple/appareils/"):
+            r = etat.get("bascule", {"verifie": True, "protege": True})
         elif chemin == "/adblock-tv/sonde":
             r = {"nom": "tabc123.sbx-dnspath.invalid"}
         elif chemin == "/adblock-tv/path-test":
@@ -69,6 +75,8 @@ def _page(navigateur, appels, etat):
     p.route("http://sbx.test/shared/**", lambda r: r.fulfill(status=200, content_type="application/javascript", body=""))
     p.route("http://sbx.test/", lambda r: r.fulfill(status=200, content_type="text/html", body=PAGE.read_text(encoding="utf-8")))
     p.goto("http://sbx.test/")
+    if not etat.get("avance_ferme"):
+        p.evaluate("document.getElementById('avance').open = true")                  # les onglets d'origine vivent sous « Avancé » (#2174)
     return ctx, p, erreurs
 
 
@@ -149,6 +157,7 @@ def test_visualisation_flux_sources_services_et_serie_sans_executer_de_html(navi
     p.route("http://sbx.test/shared/**", lambda r: r.fulfill(status=200, content_type="application/javascript", body=""))
     p.route("http://sbx.test/", lambda r: r.fulfill(status=200, content_type="text/html", body=PAGE.read_text(encoding="utf-8")))
     p.goto("http://sbx.test/")
+    p.evaluate("document.getElementById('avance').open = true")
     p.click("button[data-tab=adblocktv]")
     p.wait_for_selector("#tv-live tr td")
     assert "FreeWheel" in p.inner_text("#tv-live") and "BLOCKED" in p.inner_text("#tv-live") and "publicite" in p.inner_text("#tv-live")
@@ -463,4 +472,38 @@ def test_autorisations_texte_piege_inoffensif_et_api_en_erreur(navigateur):
     p.locator("#det-appareils tr", has_text="TV banc").first.locator("button.det-autorisations").click()
     p.wait_for_selector("#det-appareils .det-detail")
     assert "aucun refus" in p.inner_text("#det-appareils .det-detail").lower() and not erreurs                  # réponse vide : message, pas d'exception
+    ctx.close()
+
+
+def test_page_simplifiee_interrupteur_verifie_et_suspects(navigateur):
+    appels = []
+    etat = {"actif": True, "clients": [],
+            "simple": {"actif": True, "protegees": 1, "bloques_24h": 1842, "appareils": [
+                {"nom": "TV banc", "adresses": 4, "protege": True, "blocages_jour": 312},
+                {"nom": "Chromecast <b>x</b>", "adresses": 1, "protege": False, "blocages_jour": 0}]},
+            "suspects": {"suspects": [{"appareil": "TV banc", "domaine": "ads.tvchaine.example", "requetes": 6, "motif": "contient « ads »"}]}}
+    ctx, p, erreurs = _page(navigateur, appels, etat)
+    p.wait_for_selector(".sp-app")
+    assert "Protection active sur 1 appareil" in p.inner_text("#sp-titre") and "1" in p.inner_text("#sp-sous")
+    assert p.locator(".sp-app").count() == 2 and p.locator("#sp-appareils b b").count() == 0          # le nom est du texte, jamais du HTML
+    assert "ads.tvchaine.example" in p.inner_text("#sp-sigs")
+    p.locator(".sp-app").nth(1).locator("label.sp-sw").click()
+    p.wait_for_selector("#sp-toast:not([hidden])")
+    assert ("POST", "/adblock-tv/simple/appareils/Chromecast%20%3Cb%3Ex%3C%2Fb%3E/protection", {"actif": True}) in appels
+    assert "Vérifié" in p.inner_text("#sp-toast")
+    p.click("#sp-sigs button:has-text('légitime')")
+    assert any(a[1] == "/adblock-tv/simple/suspects/legitime" and a[2] == {"domaine": "ads.tvchaine.example"} for a in appels)
+    assert not erreurs
+    ctx.close()
+
+
+def test_page_simplifiee_dit_quand_le_changement_n_est_pas_verifie(navigateur):
+    appels = []
+    etat = {"actif": True, "clients": [], "bascule": {"verifie": False, "ecart": "l'adresse 192.168.1.95 n'est pas au bon état dans le filtre"},
+            "simple": {"actif": True, "protegees": 0, "bloques_24h": 0, "appareils": [{"nom": "TV banc", "adresses": 1, "protege": False, "blocages_jour": 0}]}}
+    ctx, p, erreurs = _page(navigateur, appels, etat)
+    p.wait_for_selector(".sp-app")
+    p.locator("label.sp-sw").click()
+    p.wait_for_selector("#sp-toast.ko")
+    assert "non vérifié" in p.inner_text("#sp-toast") and "192.168.1.95" in p.inner_text("#sp-toast")
     ctx.close()
