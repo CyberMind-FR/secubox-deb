@@ -1,3 +1,9 @@
+secubox-autoload (0.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le journal d'audit par defaut est /var/log/secubox/autoload-audit.log (le service n'est pas le compte secubox, il a son propre journal) : autoloadctl lance en root puis abaisse vers secubox-autoload tentait d'ecrire /var/log/secubox/audit.log et echouait (constate sur gk2).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 12:30:00 +0200
+
 secubox-autoload (0.3.3-1~bookworm1) bookworm; urgency=medium
 
   * Revocation d'un LOT : retire aussi les pairs WireGuard des box deja reclamees (Registre.revoquer_lot_cles ; autoloadctl revoquer --lot ; POST /lots/{lot}/revoquer, require_jwt). Avant, seule la revocation d'un jeton retirait son pair. 1 test.

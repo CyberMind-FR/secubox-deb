@@ -58,7 +58,7 @@ Pare-feu : `udp/51830` en entrée et `tcp/8470` depuis `wg-autoload` seulement (
 
 ## Audit
 
-Chaque émission, réclamation, refus (avec la raison), révocation et changement d'abonnement est ajouté à `/var/log/secubox/audit.log` (JSON, module `autoload`). **Jamais la valeur d'un jeton.**
+Chaque émission, réclamation, refus (avec la raison), révocation et changement d'abonnement est ajouté à `/var/log/secubox/autoload-audit.log` (JSON, module `autoload`, logrotate hebdomadaire sur 52 semaines). **Jamais la valeur d'un jeton.**
 
 ## Commandes (root)
 

@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 DB_DEFAUT = Path("/var/lib/secubox/autoload/jetons.db")
-AUDIT_DEFAUT = Path("/var/log/secubox/audit.log")
+AUDIT_DEFAUT = Path("/var/log/secubox/autoload-audit.log")                 # le service n'est pas le compte « secubox » : il a son propre journal (logrotate)
 DUREE_DEFAUT_S = 90 * 86400
 DUREE_MAX_S = 365 * 86400
 ABONNEMENTS = ("actif", "suspendu", "revoque")
