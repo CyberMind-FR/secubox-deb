@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""autoloadctl — jetons clients du provisionnement Auto-Load (#2185). Réservé à root sur l'infrastructure.
+
+  autoloadctl emettre --client C --profil P [--lot L] [--serie S] [--duree-jours N]   imprime le jeton UNE fois
+  autoloadctl preenregistrer --serie S --client C --profil P [--lot L]
+  autoloadctl lister [--etat E] [--client C] [--lot L] [--json]
+  autoloadctl revoquer (--id N | --lot L) --motif M
+  autoloadctl abonnement --client C --statut actif|suspendu|revoque
+"""
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/autoload")
+_ici = Path(__file__).resolve().parents[1]
+if (_ici / "autoload").is_dir():
+    sys.path.insert(0, str(_ici))
+
+from autoload import jetons as J  # noqa: E402
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="autoloadctl", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    e = sub.add_parser("emettre")
+    e.add_argument("--client", required=True)
+    e.add_argument("--profil", required=True)
+    e.add_argument("--lot")
+    e.add_argument("--serie")
+    e.add_argument("--duree-jours", type=int, default=J.DUREE_DEFAUT_S // 86400)
+    p = sub.add_parser("preenregistrer")
+    p.add_argument("--serie", required=True)
+    p.add_argument("--client", required=True)
+    p.add_argument("--profil", required=True)
+    p.add_argument("--lot")
+    li = sub.add_parser("lister")
+    li.add_argument("--etat")
+    li.add_argument("--client")
+    li.add_argument("--lot")
+    li.add_argument("--json", action="store_true")
+    r = sub.add_parser("revoquer")
+    g = r.add_mutually_exclusive_group(required=True)
+    g.add_argument("--id", type=int)
+    g.add_argument("--lot")
+    r.add_argument("--motif", required=True)
+    ab = sub.add_parser("abonnement")
+    ab.add_argument("--client", required=True)
+    ab.add_argument("--statut", required=True)
+    a = ap.parse_args(argv)
+
+    reg = J.Registre(Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
+    try:
+        if a.cmd == "emettre":
+            em = reg.emettre(a.client, a.profil, lot=a.lot, serie=a.serie, duree_s=a.duree_jours * 86400)
+            print(f"jeton {em.id}, expire le {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(em.expire_le))} — la valeur ne sera plus affichée :", file=sys.stderr)
+            print(em.valeur)
+        elif a.cmd == "preenregistrer":
+            reg.preenregistrer(a.serie, a.client, a.profil, lot=a.lot)
+            print("série préenregistrée")
+        elif a.cmd == "lister":
+            lignes = reg.lister(a.etat, a.client, a.lot)
+            if a.json:
+                print(json.dumps(lignes, ensure_ascii=False, indent=1))
+            else:
+                for x in lignes:
+                    print(f"{x['id']:>5}  {x['etat']:<8} {x['abonnement']:<8} {x['client']:<20} {x['profil']:<8} {x['lot'] or '-'}")
+        elif a.cmd == "revoquer":
+            if a.id is not None:
+                cle = reg.revoquer(a.id, a.motif)
+                print("révoqué" + (f" ; clé WireGuard à retirer du tunnel : {cle}" if cle else ""))
+            else:
+                print(f"{reg.revoquer_lot(a.lot, a.motif)} jeton(s) révoqué(s)")
+        elif a.cmd == "abonnement":
+            print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client")
+    except ValueError as err:
+        print(f"refusé : {err}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
