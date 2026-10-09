@@ -103,7 +103,7 @@ un `local-zone-override` par adresse exempte l'appareil de CE nom, sans toucher 
 ### Suivi des IPv6 de confidentialité et plafond (1.7.3, #2146)
 
 Le suivi rattache à un appareil (par sa MAC) ses nouvelles adresses vues par le DNS, dans la limite de 4 adresses par appareil. Quand le plafond est atteint, une **IPv6 qui n'a plus été vue
-depuis `retrait_jours` (7 par défaut)** cède sa place à la nouvelle, même si elle avait été déclarée : sans cela, les IPv6 de confidentialité périmées occupaient les quatre places pour toujours, la TV
+depuis 6 heures**, et plus ancienne que la nouvelle, lui cède sa place, même si elle avait été déclarée : sans cela, les IPv6 de confidentialité périmées occupaient les quatre places pour toujours, la TV
 sortait de sa vue au premier changement d'adresse et perdait ses exemptions (cas réel : replay Free qui tournait sans fin, `imasdk.googleapis.com` bloqué). Jamais l'IPv4, jamais une adresse encore vue.
 
 ### Ajout automatique, puits complet et agrégation (1.5.0, #1959)

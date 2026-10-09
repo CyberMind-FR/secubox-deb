@@ -27,6 +27,7 @@ except ImportError:                                  # lancé hors paquet
 FICHIER_SUIVI = "suivi-ajout.json"
 SUIVI_VIERGE = {"ajouts": [], "dernier_changement": 0}
 AJOUTS_MAX = 50
+IPV6_CEDE_APRES_S = 6 * 3600           # une IPv6 non vue depuis ce delai cede sa place a une adresse plus recente (#2146)
 ADRESSES_MAX_PAR_APPAREIL = 4          # une TV a une IPv4 et quelques IPv6 ; au-delà ce sont des entrées mortes du noyau ou une forgerie (revue #1959)
 
 
@@ -116,12 +117,14 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
             continue
         mes = [c for c in clients if c.get("mac") == mac]
         if len(mes) >= ADRESSES_MAX_PAR_APPAREIL:
-            # PLAFOND ATTEINT : une IPv6 qui n'a plus ete vue depuis `retrait_jours` cede sa place (#2146). Sans cela, les IPv6 de confidentialite
-            # declarees puis perimees occupaient les quatre places pour toujours et la TV sortait de sa vue au premier changement d'adresse
-            # (replay sans fin sur gk2 : imasdk.googleapis.com bloque). Jamais l'IPv4, jamais une adresse encore vue, une seule place liberee.
+            # PLAFOND ATTEINT : une IPv6 non vue depuis IPV6_CEDE_APRES_S, et plus ANCIENNE que la candidate, lui cede sa place (#2146). Une TV change
+            # d'IPv6 de confidentialite environ chaque jour : les anciennes, declarees puis perimees, occupaient les quatre places (meme dans la fenetre de
+            # `retrait_jours`), la TV sortait de sa vue au premier changement d'adresse et perdait l'exemption imasdk.googleapis.com (replay Free sans
+            # fin sur gk2, meme en mode observe). Jamais l'IPv4, jamais une adresse recente, une seule place liberee par adresse nouvelle.
             def derniere_vue(c):
                 return max(vues.get(c["ip"], 0), c.get("ajoute", 0))
-            perimees6 = [c for c in mes if ":" in c["ip"] and derniere_vue(c) < fenetre]
+            limite = min(maintenant - IPV6_CEDE_APRES_S, vues.get(a, 0))
+            perimees6 = [c for c in mes if ":" in c["ip"] and derniere_vue(c) < limite]
             if not perimees6:
                 continue
             ancienne = min(perimees6, key=derniere_vue)
