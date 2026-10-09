@@ -30,7 +30,7 @@ BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 # ── Defaults ──────────────────────────────────────────────────────
 BOARD="mochabin"
 SUITE="trixie"
-IMG_SIZE="4G"           # USB image size
+IMG_SIZE="8G"           # USB image size (4G ne contenait pas le systeme, ~4,4 Go : rsync « No space left on device », alpha.10)
 OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
 APT_SECUBOX="https://apt.secubox.in"
@@ -62,7 +62,7 @@ Build a bootable live USB image for MOCHAbin (Armada 7040) with:
 OPTIONS:
     --suite SUITE       Debian suite (default: trixie)
     --out DIR           Output directory (default: ./output)
-    --size SIZE         USB image size (default: 4G)
+    --size SIZE         USB image size (default: 8G)
     --embed-image PATH  Embed eMMC image for flashing (optional)
     --local-cache       Use local APT cache (apt-cacher-ng)
     --no-slipstream     Don't include local .deb packages

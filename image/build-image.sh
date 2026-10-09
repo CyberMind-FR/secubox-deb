@@ -1700,7 +1700,8 @@ esac
 # un volume separe.
 # Seuil porte de 6144 a 8192 MiB (#2146) : l'image ESPRESSObin (carte uSD « 8 Go », 7168 MiB) gardait ESP 1024 + DATA 1536 et il
 # ne restait que 4230 MiB de ROOT pour un profil lite de 5010 MiB.
-if (( IMG_MIB < 8192 )); then
+# Jusqu'a 8192 MiB inclus pour lite et isp : l'isp de la MOCHAbin (8G) a besoin de 5824 MiB pour 5184 utilisables sur ROOT (alpha.10).
+if (( IMG_MIB < 8192 )) || { (( IMG_MIB == 8192 )) && [[ "${PROFILE_TAG}" != "full" ]]; }; then
   ESP_MIB=256
   DATA_MIB=512
   log "Image petite (${IMG_MIB} MiB) — parts reduites : ESP ${ESP_MIB}, DATA ${DATA_MIB}"
