@@ -42,9 +42,9 @@ var AvailablePackages = []string{
 	"secubox-nac",
 	"secubox-auth",
 	"secubox-qos",
-	"secubox-mediaflow",
+	"secubox-waf-ng",
 	"secubox-cdn",
-	"secubox-vhost",
+	"secubox-haproxy",
 	"secubox-system",
 }
 

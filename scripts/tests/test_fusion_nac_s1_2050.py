@@ -14,15 +14,9 @@ def _control(p):
     return (PAQ / p / "debian/control").read_text()
 
 
-def test_les_trois_paquets_sont_transitoires_et_vides():
+def test_les_trois_paquets_sont_retires_du_depot():
     for s in SHIMS:
-        c = _control(f"secubox-{s}")
-        assert re.search(r"(?m)^Section: oldlibs\s*$", c), s
-        assert re.search(r"(?m)^Depends:.*secubox-nac \(>= 3\.2\.0\)", c), s
-        for d in ("api", "menu.d", "systemd", "nginx", "www"):
-            assert not (PAQ / f"secubox-{s}" / d).exists(), f"{s}/{d} doit disparaitre"
-        rules = (PAQ / f"secubox-{s}/debian/rules").read_text()
-        assert "usr/lib/secubox" not in rules, s
+        assert not (PAQ / f"secubox-{s}").exists(), f"secubox-{s} : transitoire à retirer (publié dans alpha.10)"
 
 
 def test_nac_porte_les_redirections_et_casse_les_anciens():
@@ -59,16 +53,3 @@ def test_arbre_les_met_hors_arbre():
         assert f"  - secubox-{s}" not in apres, f"{s} encore dans l'arbre"
 
 
-def test_postinst_des_anciens_retire_unite_et_conf_sans_rien_demarrer():
-    for s in SHIMS:
-        post = (PAQ / f"secubox-{s}/debian/postinst").read_text()
-        assert "systemctl restart" not in post and "systemctl enable" not in post, s
-        assert f"secubox-{s}.service" in post and "daemon-reload" in post, s
-
-
-def test_mac_guard_retire_ses_conffiles_nginx_obsoletes():
-    """dpkg ne supprime pas un conffile devenu obsolète : sans rm_conffile, l'ancienne conf reste et
-    nginx refuse la configuration (location en double avec nac-legacy.conf), constaté sur gk3."""
-    m = (PAQ / "secubox-mac-guard/debian/secubox-mac-guard.maintscript").read_text()
-    assert "rm_conffile /etc/nginx/secubox.d/mac-guard.conf 1.2.3~" in m
-    assert "rm_conffile /etc/nginx/secubox-routes.d/mac-guard.conf 1.2.3~" in m

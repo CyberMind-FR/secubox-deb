@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-09 — Vague 5 (#2050) : retrait des 60 paquets transitoires (ref #2050, ref #2146)
+
+Les 60 répertoires `packages/secubox-*` dont la section est `oldlibs` (publiés un cycle dans alpha.10) sont retirés des sources ; `gabriel-mood` (source mixte `sbxos-audio-mood`) est conservé. Références réparées : liste « hors-arbre » de `arbre.yaml`, profil `secubox-profils` 1.0.42, liste `AvailablePackages` du CLI Go, `profiles/tier-standard.yaml`, source de `scripts/sync-sbxui.sh`, chemins des unités devwatch/freeboxtv dans `test_sockets_chmod_2026.py`. Tests de transition (transitoire vide, postinst du transitoire) remplacés par « le répertoire n'existe plus ». Les absorbants gardent `Replaces`/`Breaks`. Une box encore sur l'ancien module doit d'abord passer par alpha.10.
+
 ## 2026-10-09 — Dépôt apt : clé de signature déjà déverrouillée par l'unité du niveau 0 : closes #2007 (ref #1366)
 
 La demande de #2007 (charger la phrase de la clé au démarrage) est couverte depuis 2026-10-03 par `secubox-depot-deverrouille.service` (#1366, phrase aléatoire systemd-creds, aucune phrase humaine). Constaté et utilisé le 2026-10-09 : `systemctl restart secubox-depot-deverrouille.service` rétablit la signature, `reprepro export` re-signe les huit suites, ad-guard 1.8.0, acces 1.7.1, oidc 0.1.3, sbxid 0.4.20 et users 1.8.18 publiés dans trixie. Ne JAMAIS préparer la clé à la main (`gpg-preset-passphrase`) : une valeur fausse écrase la bonne en cache.
