@@ -112,8 +112,22 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
             candidates.append((vues[a], a, mac))
     for _, a, mac in sorted(candidates, reverse=True):
         modele = auto[mac]
-        if len(clients) >= 32 or len([c for c in clients if c.get("mac") == mac]) >= ADRESSES_MAX_PAR_APPAREIL:
+        if len(clients) >= 32:
             continue
+        mes = [c for c in clients if c.get("mac") == mac]
+        if len(mes) >= ADRESSES_MAX_PAR_APPAREIL:
+            # PLAFOND ATTEINT : une IPv6 qui n'a plus ete vue depuis `retrait_jours` cede sa place (#2146). Sans cela, les IPv6 de confidentialite
+            # declarees puis perimees occupaient les quatre places pour toujours et la TV sortait de sa vue au premier changement d'adresse
+            # (replay sans fin sur gk2 : imasdk.googleapis.com bloque). Jamais l'IPv4, jamais une adresse encore vue, une seule place liberee.
+            def derniere_vue(c):
+                return max(vues.get(c["ip"], 0), c.get("ajoute", 0))
+            perimees6 = [c for c in mes if ":" in c["ip"] and derniere_vue(c) < fenetre]
+            if not perimees6:
+                continue
+            ancienne = min(perimees6, key=derniere_vue)
+            clients.remove(ancienne)
+            ips.discard(ancienne["ip"])
+            changements.append({"type": "adresse-", "nom": ancienne["nom"], "detail": ancienne["ip"]})
         entree = {k: v for k, v in modele.items() if k not in ("ip", "ajoute", "preuve")}
         entree.update(ip=a, ajoute=maintenant)
         if modele.get("origine", "admin") == "admin":

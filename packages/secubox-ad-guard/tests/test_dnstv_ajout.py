@@ -145,3 +145,51 @@ def test_reglage_a_les_seuils_de_depart():
     assert (r.max_par_jour, r.delai_s, r.retrait_jours, r.min_declencheurs, r.min_services, r.min_appareils_agreg) == (3, 3600, 7, 5, 2, 2)
     with pytest.raises(TypeError):
         M.Reglage(inconnu=1)
+
+
+# ── LA TV « BANC » : QUATRE ADRESSES, TROIS IPv6 MORTES, ET LES DEUX NOUVELLES REFUSÉES (#2146) ───────────────────────────────────────
+# Constaté sur gk2 : l'appareil déclaré portait son IPv4 et trois IPv6 de confidentialité périmées (jamais retirées, car « déclarées »).
+# Le plafond de 4 adresses par appareil refusait donc les deux IPv6 actuelles : la TV sortait de sa vue, perdait l'exemption
+# `imasdk.googleapis.com` et le replay tournait sans fin. Une IPv6 qui n'a plus été vue depuis `retrait_jours` cède sa place.
+MAC_BANC = "38:07:16:93:4e:95"
+ANCIENNES = ["2a01:e0a:dec:c4e0:c147:c3cf:6dd7:3429", "2a01:e0a:dec:c4e0:8564:1c:9725:d96", "2a01:e0a:dec:c4e0:807f:8513:79d:bb"]
+NEUVES = ["2a01:e0a:dec:c4e0:d4a3:3d76:2172:ad84", "2a01:e0a:dec:c4e0:e524:e367:2958:be37"]
+
+
+def tv_banc():
+    clients = [{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto", "mac": MAC_BANC}] + \
+              [{"ip": a, "nom": "TV banc", "mode": "auto", "mac": MAC_BANC} for a in ANCIENNES]
+    return monde(clients=clients)
+
+
+def test_les_ipv6_perimees_cedent_leur_place_aux_adresses_actuelles():
+    etat, regles, suivi = tv_banc()
+    maintenant = T0 + 10 * 86400
+    vues = {"192.168.1.95": maintenant, NEUVES[0]: maintenant, NEUVES[1]: maintenant - 60, **{a: T0 for a in ANCIENNES}}
+    voisins = {"192.168.1.95": MAC_BANC, **{a: MAC_BANC for a in NEUVES}}
+    res = lancer(etat, regles, suivi, det=[], voisins=voisins, vues=vues, maintenant=maintenant)
+    ips = {c["ip"] for c in etat["clients"]}
+    assert set(NEUVES) <= ips and "192.168.1.95" in ips, "les deux IPv6 actuelles sont rattachées"
+    assert len([c for c in etat["clients"] if c["mac"] == MAC_BANC]) <= A.ADRESSES_MAX_PAR_APPAREIL
+    assert {c["type"] for c in res["changements"]} == {"adresse+", "adresse-"}
+    assert all(c["nom"] == "TV banc" for c in etat["clients"])
+
+
+def test_une_ipv6_encore_vue_n_est_jamais_evincee_et_l_ipv4_non_plus():
+    etat, regles, suivi = tv_banc()
+    maintenant = T0 + 10 * 86400
+    vues = {"192.168.1.95": T0, **{a: maintenant - 3600 for a in ANCIENNES}, NEUVES[0]: maintenant}   # tout est récent, sauf l'IPv4
+    voisins = {"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC}
+    lancer(etat, regles, suivi, det=[], voisins=voisins, vues=vues, maintenant=maintenant)
+    ips = {c["ip"] for c in etat["clients"]}
+    assert "192.168.1.95" in ips and set(ANCIENNES) <= ips, "ni l'IPv4 ni une IPv6 récente ne sont retirées"
+    assert NEUVES[0] not in ips, "plafond respecté : rien à évincer, donc rien d'ajouté"
+
+
+def test_l_eviction_ne_touche_pas_les_autres_appareils():
+    autre = {"ip": "2a01:e0a:dec:c4e0:1:2:3:4", "nom": "TV salon", "mode": "auto", "mac": "38:07:16:94:fb:5b"}
+    etat, regles, suivi = monde(clients=[*tv_banc()[0]["clients"], autre])
+    maintenant = T0 + 10 * 86400
+    lancer(etat, regles, suivi, det=[], voisins={"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC},
+           vues={"192.168.1.95": maintenant, NEUVES[0]: maintenant}, maintenant=maintenant)
+    assert autre["ip"] in {c["ip"] for c in etat["clients"]}
