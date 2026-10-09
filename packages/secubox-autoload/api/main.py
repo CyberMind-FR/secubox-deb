@@ -247,6 +247,21 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
                 applique = False
         return {"revoque": True, "tunnel_applique": applique}
 
+    @r.post("/lots/{lot}/revoquer", dependencies=[Depends(require_jwt)])
+    def revoquer_lot(lot: str, corps: MotifIn):
+        try:
+            cles = reg.revoquer_lot_cles(lot, corps.motif)
+        except ValueError as err:
+            raise HTTPException(422, str(err)) from None
+        retires = sum(1 for c in cles if pairs.retirer(c))
+        applique = True
+        if retires:
+            try:
+                appliquer()
+            except T.TunnelErreur:
+                applique = False
+        return {"revoque": True, "pairs_retires": retires, "tunnel_applique": applique}
+
     @r.post("/clients/{client}/abonnement", dependencies=[Depends(require_jwt)])
     def abonnement(client: str, corps: AbonnementIn):
         try:

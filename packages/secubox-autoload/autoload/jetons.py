@@ -288,13 +288,21 @@ class Registre:
         self._audit("jeton-revoque", f"id={ident} motif={motif}")
         return r["cle_pub"]
 
-    def revoquer_lot(self, lot: str, motif: str) -> int:
+    def revoquer_lot_cles(self, lot: str, motif: str) -> List[str]:
+        """Révoque tout un lot ; rend les clés publiques des box DÉJÀ réclamées, à retirer du tunnel."""
         lot = _nom("lot", lot)
         motif = str(motif)[:200]
         with self._cx() as cx:
+            cles = [r["cle_pub"] for r in cx.execute("SELECT cle_pub FROM jetons WHERE lot=? AND etat='reclame' AND cle_pub IS NOT NULL", (lot,))]
             n = cx.execute("UPDATE jetons SET etat='revoque', revoque_le=?, motif=? WHERE lot=? AND etat!='revoque'", (self._maintenant(), motif, lot)).rowcount
         self._audit("lot-revoque", f"lot={lot} jetons={n} motif={motif}")
-        return n
+        return cles
+
+    def revoquer_lot(self, lot: str, motif: str) -> int:
+        with self._cx() as cx:
+            avant = cx.execute("SELECT COUNT(*) FROM jetons WHERE lot=? AND etat!='revoque'", (_nom("lot", lot),)).fetchone()[0]
+        self.revoquer_lot_cles(lot, motif)
+        return avant
 
     def fixer_abonnement(self, client: str, statut: str, expire_le: Optional[int] = None, formule: Optional[str] = None) -> int:
         client = _nom("client", client)

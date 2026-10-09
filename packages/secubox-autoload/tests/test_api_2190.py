@@ -164,6 +164,17 @@ def test_revocation_retire_le_pair_et_applique(m):
     assert m.c.post(P + "/jetons/999/revoquer", json={"motif": "x"}).status_code == 404
 
 
+def test_revocation_d_un_lot_retire_les_pairs_reclames(m):
+    e1, e2 = m.reg.emettre("c1", "lite", lot="lot-1"), m.reg.emettre("c2", "lite", lot="lot-1")
+    enrol(m, e1.valeur, cle=CLE_A)
+    n = m.syncs
+    r = m.c.post(P + "/lots/lot-1/revoquer", json={"motif": "lot défectueux"})
+    assert r.status_code == 200 and r.json() == {"revoque": True, "pairs_retires": 1, "tunnel_applique": True} and m.syncs == n + 1
+    assert m.pairs.actifs() == [] and {b["statut"] for b in m.c.get(P + "/boxes").json()} == {"révoqué"}
+    assert enrol(m, e2.valeur, cle=CLE_B).status_code == 403                    # le jeton non réclamé du lot est révoqué aussi
+    assert m.c.post(P + "/lots/Mal Forme/revoquer", json={"motif": "x"}).status_code in (404, 422)
+
+
 def test_abonnement_avec_duree_et_formule(m):
     e = m.reg.emettre("c1", "lite")
     enrol(m, e.valeur)

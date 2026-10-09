@@ -109,7 +109,9 @@ def main(argv=None):
                 retire = pairs.retirer(cle)
                 print("révoqué" + (" ; pair retiré (lancer tunnel-sync pour l'appliquer)" if retire else ""))
             else:
-                print(f"{reg.revoquer_lot(a.lot, a.motif)} jeton(s) révoqué(s)")
+                cles = reg.revoquer_lot_cles(a.lot, a.motif)
+                retires = sum(1 for c in cles if pairs.retirer(c))
+                print(f"lot révoqué ; {retires} pair(s) retiré(s)" + (" (lancer tunnel-sync pour l'appliquer)" if retires else ""))
         elif a.cmd == "tunnel-init":
             cle = Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT))
             if cle.exists():

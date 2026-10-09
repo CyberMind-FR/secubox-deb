@@ -46,6 +46,7 @@ Deux applications dans un processus (`/usr/sbin/secubox-autoload-api`), utilisat
 | `POST /jetons` | `require_jwt` | `{client, profil, lot?, serie?, duree_jours}` → la valeur `gk2_…`, montrée **une seule fois** |
 | `POST /jetons/{id}/revoquer` | `require_jwt` | révoque, retire le pair du tunnel et l'applique |
 | `POST /clients/{client}/abonnement` | `require_jwt` | `{statut, mois?, formule?}` (échéance calendaire) |
+| `POST /lots/{lot}/revoquer` | `require_jwt` | révoque tout un lot (jetons non réclamés et box déjà réclamées, dont les pairs sont retirés) |
 | `POST /series` | `require_jwt` | préenregistre un numéro de série |
 | `POST /prerapports/{empreinte}/refuser` | `require_jwt` | refuse un pré-rapport pendant le délai de grâce |
 

@@ -1,3 +1,10 @@
+secubox-autoload (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * Revocation d'un LOT : retire aussi les pairs WireGuard des box deja reclamees (Registre.revoquer_lot_cles ; autoloadctl revoquer --lot ; POST /lots/{lot}/revoquer, require_jwt). Avant, seule la revocation d'un jeton retirait son pair. 1 test.
+  * Essai de bout en bout sur gk2 : emission, POST /enrol par la socket, reponse avec le gabarit de tunnel, pair 10.64.0.x applique au hub (wg-autoload, cle privee conservee), refus uniforme d'une autre cle.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 12:00:00 +0200
+
 secubox-autoload (0.3.2-1~bookworm1) bookworm; urgency=medium
 
   * L'assistant root (autoloadctl tunnel-sync, appele par sudo depuis le service) lit la base des pairs en LECTURE SEULE (Pairs(lecture_seule=True)) : il ne cree ni ne modifie la base du service. Dans le bac a sable du service, root sans CAP_DAC_READ_SEARCH ne pouvait pas lire une base 0600 d'un autre proprietaire (constate sur gk2) : la capacite est ajoutee au CapabilityBoundingSet, et elle seule en lecture. L'echec de tunnel garde la FIN du message dans l'audit.
