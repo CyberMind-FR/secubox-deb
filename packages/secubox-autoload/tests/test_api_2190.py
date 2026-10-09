@@ -34,7 +34,6 @@ class Monde:
         self.syncs, self.echec_sync = 0, False
         self.app = A.creer_app(self.reg, self.pairs, HUB, self.appliquer, horloge=self.h)
         self.app.dependency_overrides[auth.require_jwt] = lambda: {"sub": "admin"}
-        self.app.dependency_overrides[auth.require_lecture] = lambda: {"sub": "admin"}
         self.c = TestClient(self.app)
         self.app_tunnel = A.creer_app(self.reg, self.pairs, HUB, self.appliquer, horloge=self.h, portee="tunnel")
 
@@ -132,6 +131,8 @@ def test_les_routes_d_ecriture_exigent_un_administrateur(tmp_path):
     m = Monde(tmp_path)
     m.app.dependency_overrides.clear()                                    # plus de contournement : le vrai garde répond
     e = m.reg.emettre("c1", "lite")
+    for chemin in ("/boxes", "/jetons", "/prerapports", "/prerapports/" + "0" * 64):
+        assert m.c.get(P + chemin).status_code in (401, 403), chemin                      # même la lecture : l'identité des clients n'est pas publique
     for methode, chemin, corps in [("post", "/jetons", {"client": "c1", "profil": "lite"}), ("post", f"/jetons/{e.id}/revoquer", {"motif": "x"}),
                                    ("post", "/clients/c1/abonnement", {"statut": "actif"}), ("post", "/series", {"serie": "SBX-0001", "client": "c1", "profil": "lite"}),
                                    ("post", "/prerapports/" + "0" * 64 + "/refuser", {"motif": "x"})]:

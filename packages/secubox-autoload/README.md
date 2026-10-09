@@ -42,7 +42,7 @@ Deux applications dans un processus (`/usr/sbin/secubox-autoload-api`), utilisat
 |---|---|---|
 | `POST /enrol` | **le jeton est la preuve** (publique assumée) | `{jeton|serie, cle_pub}` → `{client, profil, lot, tunnel}` ; refus uniforme 403 ; 10 essais refusés par 10 min et par source (429) ; la même clé peut rejouer après une coupure |
 | `GET /health` | sonde | `{ok}` |
-| `GET /boxes`, `/jetons`, `/prerapports`, `/prerapports/{empreinte}` | `require_lecture` | suivi : statut (en attente, préparation, en cours, terminé, révoqué) et progression en %, jamais la valeur d'un jeton |
+| `GET /boxes`, `/jetons`, `/prerapports`, `/prerapports/{empreinte}` | `require_jwt` (même la lecture : identité des clients) | suivi : statut (en attente, préparation, en cours, terminé, révoqué) et progression en %, jamais la valeur d'un jeton |
 | `POST /jetons` | `require_jwt` | `{client, profil, lot?, serie?, duree_jours}` → la valeur `gk2_…`, montrée **une seule fois** |
 | `POST /jetons/{id}/revoquer` | `require_jwt` | révoque, retire le pair du tunnel et l'applique |
 | `POST /clients/{client}/abonnement` | `require_jwt` | `{statut, mois?, formule?}` (échéance calendaire) |

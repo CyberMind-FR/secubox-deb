@@ -10,7 +10,7 @@ Deux applications, trois preuves :
 
   portée « public » (socket Unix ; l'agrégateur relaie /api/v1/autoload/… en retirant le préfixe, derrière HAProxy → sbxwaf → nginx)
     PUBLIQUE, preuve = le jeton     POST /enrol   (la seule route sans garde : le jeton à usage unique EST la preuve, refus uniforme, essais limités)
-    ADMIN, preuve = administrateur  lecture : require_lecture ; écriture : require_jwt (émission, révocation, abonnement, refus de pré-rapport)
+    ADMIN, preuve = administrateur  lecture ET écriture : require_jwt (l'identité des clients et leurs pré-rapports ne se lisent pas en « mode tableau de bord LAN »)
 
   portée « tunnel » (TCP 10.64.0.1:8470, UNIQUEMENT à l'intérieur de WireGuard)
     BOX, preuve = l'adresse du tunnel   POST /progression, POST /prerapport, GET /prerapport/{empreinte}/refus
@@ -29,7 +29,7 @@ from typing import Callable, Dict, List, Literal, Optional
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from secubox_core.auth import require_jwt, require_lecture
+from secubox_core.auth import require_jwt
 
 from autoload import jetons as J, tunnel as T
 
@@ -195,19 +195,19 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
         return {"client": rec.client, "profil": rec.profil, "lot": rec.lot, "tunnel": T.gabarit_box(adresse, cle_hub_pub)}
 
     # ── administration : lecture ──────────────────────────────────────────────────────────────────────────────
-    @r.get("/boxes", dependencies=[Depends(require_lecture)])
+    @r.get("/boxes", dependencies=[Depends(require_jwt)])
     def boxes():
         return reg.boxes()
 
-    @r.get("/jetons", dependencies=[Depends(require_lecture)])
+    @r.get("/jetons", dependencies=[Depends(require_jwt)])
     def jetons():
         return [{k: v for k, v in x.items() if k != "cle_pub"} for x in reg.lister()]            # jamais la valeur, jamais l'empreinte, pas la clé
 
-    @r.get("/prerapports", dependencies=[Depends(require_lecture)])
+    @r.get("/prerapports", dependencies=[Depends(require_jwt)])
     def prerapports():
         return reg.prerapports()
 
-    @r.get("/prerapports/{empreinte}", dependencies=[Depends(require_lecture)])
+    @r.get("/prerapports/{empreinte}", dependencies=[Depends(require_jwt)])
     def un_prerapport(empreinte: str):
         pre = reg.prerapport(empreinte[:64])
         if pre is None:
