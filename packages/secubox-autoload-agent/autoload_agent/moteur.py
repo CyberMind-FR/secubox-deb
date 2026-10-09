@@ -27,7 +27,7 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 try:
     from premier_pas import provision as V
@@ -99,8 +99,12 @@ def _refus_par_defaut(plan: Plan) -> bool:
 
 
 class Moteur:
-    def __init__(self, cfg: Config, executeur=subprocess.run, enroleur: Optional[Callable] = None, valideur: Callable[[Plan], bool] = _refus_par_defaut):
-        self.cfg, self.executeur, self.enroleur, self.valideur = cfg, executeur, enroleur, valideur
+    def __init__(self, cfg: Config, executeur=subprocess.run, enroleur: Optional[Callable] = None, valideur: Optional[Callable[[Plan], bool]] = None,
+                 rapporteur: Optional[Callable[[str, int, int, bool], None]] = None, fabrique_valideur: Optional[Callable[[Dict], Callable[[Plan], bool]]] = None):
+        """`valideur` explicite prime ; sinon `fabrique_valideur(reponses)` en construit un d'après le mode du fichier de réponses ; sinon on REFUSE.
+        `rapporteur(etape, faites, total, termine)` remonte la progression (best-effort : une panne ne l'arrête jamais)."""
+        self.cfg, self.executeur, self.enroleur = cfg, executeur, enroleur
+        self.valideur, self.rapporteur, self.fabrique_valideur = valideur, rapporteur, fabrique_valideur
         self._ex = None                                                      # examen des réponses, gardé entre étapes d'un même passage
         self._cle_pub = None
 
@@ -157,6 +161,8 @@ class Moteur:
             rep = self.enroleur(jeton, None, self._cle_pub, infra)
         except EnrolementRefuse as e:
             raise EtapeEchec("enrolement", str(e)) from e
+        except (OSError, ValueError) as e:                                            # infrastructure injoignable ou réponse invalide : le parcours reprendra ici
+            raise EtapeEchec("enrolement", f"infrastructure indisponible ({type(e).__name__})") from e
         etat["enrolement"] = {"client": str(rep.get("client", ""))[:40], "profil": str(rep.get("profil", ""))[:40], "tunnel": rep.get("tunnel")}
 
     def _tunnel(self, etat: dict):
@@ -194,6 +200,14 @@ class Moteur:
             if r.returncode != 0:
                 raise EtapeEchec("application", f"{argv[0]} a échoué : " + (r.stderr or "").strip()[:200])
 
+    def _rapporte(self, etape: str, faites: int, termine: bool) -> None:
+        if self.rapporteur is None:
+            return
+        try:
+            self.rapporteur(etape, faites, len(ETAPES), termine)
+        except (OSError, ValueError):
+            pass                                                                    # le tunnel n'est pas toujours monté : la progression est un confort, pas une condition
+
     # ── boucle ───────────────────────────────────────────────────────────────────────────────────────────────
     def run(self) -> Resultat:
         etat = self._etat()
@@ -219,13 +233,15 @@ class Moteur:
                 elif etape == "plan":
                     plan = self._plan(etat)
                 elif etape == "validation":
-                    if not self.valideur(plan):
+                    valideur = self.valideur or (self.fabrique_valideur(self._ex.profil) if self.fabrique_valideur else _refus_par_defaut)
+                    if not valideur(plan):
                         raise EtapeEchec("validation", "plan non validé : rien n'est installé")
                 elif etape == "installation":
                     self._installation(etat)
                 elif etape == "application":
                     self._application(etat)
                 self._note(etat, etape)
+                self._rapporte(etape, len(etat["faites"]), False)
         except EtapeEchec as e:
             etat["erreur"] = {"etape": e.etape, "detail": e.detail}
             _ecrit_prive(self.cfg.etat, json.dumps(etat, ensure_ascii=False, indent=1))
@@ -233,6 +249,7 @@ class Moteur:
         etat.pop("erreur", None)
         etat["fait"] = True
         _ecrit_prive(self.cfg.etat, json.dumps(etat, ensure_ascii=False, indent=1))
+        self._rapporte("application", len(ETAPES), True)
         _ecrit_prive(self.cfg.rapport, json.dumps({"client": etat["enrolement"]["client"], "profil": etat["plan"]["profil"], "paquets": etat["plan"]["paquets"],
                                                    "tunnel": {"adresse": etat["enrolement"]["tunnel"]["adresse"]}}, ensure_ascii=False, indent=1))
         return Resultat(True)

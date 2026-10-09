@@ -1,0 +1,91 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""autoload-agentctl — le provisionnement Auto-Load côté box (#2187). Réservé à root (installe des paquets).
+
+  autoload-agentctl run [--reponses F] [--signature S] [--trousseau K]   lance (ou reprend) le parcours ; mode d'après le fichier signé
+  autoload-agentctl confirmer EMPREINTE                                  mode one-shot : confirme CE pré-rapport (son empreinte)
+  autoload-agentctl etat                                                 où en est le parcours (sans secret)
+
+Le fichier de réponses doit être SIGNÉ (clé « SecuBox Provisioning » du trousseau) : sans signature valide, rien ne démarre.
+"""
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/autoload-agent")
+sys.path.insert(0, "/usr/lib/secubox/premier-pas")
+_ici = Path(__file__).resolve().parents[1]
+if (_ici / "autoload_agent").is_dir():
+    sys.path.insert(0, str(_ici))
+    sys.path.insert(0, str(_ici.parent / "secubox-premier-pas"))
+
+from autoload_agent import client as C, moteur as M, validation as VA  # noqa: E402
+
+DOSSIER = Path(os.environ.get("SECUBOX_AUTOLOAD_AGENT_DOSSIER", "/var/lib/secubox/autoload-agent"))
+REPONSES = "/boot/secubox/autoload/reponses.toml"
+TROUSSEAU = "/usr/share/secubox/autoload/provisioning.gpg"
+_EMPREINTE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _lire_confirmation():
+    try:
+        return (DOSSIER / "confirmation").read_text(encoding="ascii").strip()
+    except OSError:
+        return None
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="autoload-agentctl", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("run")
+    r.add_argument("--reponses", default=REPONSES)
+    r.add_argument("--signature")
+    r.add_argument("--trousseau", default=TROUSSEAU)
+    c = sub.add_parser("confirmer")
+    c.add_argument("empreinte")
+    sub.add_parser("etat")
+    a = ap.parse_args(argv)
+
+    if a.cmd == "etat":
+        try:
+            etat = json.loads((DOSSIER / "etat.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            etat = {"faites": []}
+        etat.pop("enrolement", None)                                      # le gabarit du tunnel n'a rien à faire dans un affichage
+        print(json.dumps(etat, ensure_ascii=False, indent=1))
+        return 0
+    if os.geteuid() != 0:
+        print("autoload-agentctl : réservé à root", file=sys.stderr)
+        return 2
+    if a.cmd == "confirmer":
+        if not _EMPREINTE.match(a.empreinte):
+            print("empreinte : 64 caractères hexadécimaux", file=sys.stderr)
+            return 2
+        DOSSIER.mkdir(parents=True, exist_ok=True)
+        (DOSSIER / "confirmation").write_text(a.empreinte + "\n", encoding="ascii")
+        os.chmod(DOSSIER / "confirmation", 0o600)
+        print("confirmation enregistrée")
+        return 0
+
+    signature = Path(a.signature) if a.signature else Path(a.reponses + ".sig")
+    cfg = M.Config(reponses=Path(a.reponses), signature=signature, trousseau=Path(a.trousseau), etat=DOSSIER / "etat.json", rapport=DOSSIER / "rapport.json")
+    infra = C.ClientInfra()
+
+    def fabrique(rep):
+        return VA.pour_mode(rep["provision"]["mode"], rep, dossier=DOSSIER, publier=infra.publier, refuse=infra.refuse, lire_confirmation=_lire_confirmation)
+    res = M.Moteur(cfg, enroleur=infra.enroler, fabrique_valideur=fabrique, rapporteur=infra.progression).run()
+    if res.ok:
+        print("provisionnement terminé")
+        return 0
+    print(f"arrêt à « {res.etape} » : {res.detail}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
