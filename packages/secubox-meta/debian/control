@@ -579,7 +579,8 @@ Package: secubox-service-provision
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-netboot
-Suggests: secubox-vm
+Suggests: secubox-vm,
+         secubox-autoload
 Description: SecuBox — service « Provision »
  Clonage, amorçage réseau, déploiement, anneaux de release, VM.
  .
