@@ -266,7 +266,7 @@ jobs:
       # temps ; produire des binaires de la mauvaise architecture couterait
       # bien davantage (#1308).
       - name: Setup QEMU (build arm64 natif emule)
-        if: matrix.arch == 'arm64' && matrix.package == 'secubox-ndpid-engine'
+        if: matrix.arch == 'arm64' && (matrix.package == 'secubox-ndpid-engine' || matrix.package == 'secubox-voice-moteur')
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -382,7 +382,8 @@ jobs:
           # chaine, et cmake compile nDPI pour la bonne architecture. Le .deb
           # tombe dans packages/, ou « Collect artifacts » le ramasse comme les
           # autres.
-          NATIF_ARM64="secubox-ndpid-engine"
+          # secubox-voice-moteur (#2020) : compile whisper-cli (g++, cmake) ; la voie croisee `-a arm64` echouait sur « Unmet build dependencies: g++ ».
+          NATIF_ARM64="secubox-ndpid-engine secubox-voice-moteur"
           besoin_natif=0
           case " $NATIF_ARM64 " in *" ${{ matrix.package }} "*) besoin_natif=1 ;; esac
 
@@ -415,7 +416,7 @@ jobs:
                 apt-get install -y -qq --no-install-recommends \
                   build-essential dpkg-dev debhelper devscripts fakeroot \
                   cmake pkg-config libpcap-dev git ca-certificates \
-                  wget unzip util-linux autoconf automake libtool
+                  wget unzip util-linux autoconf automake libtool curl python3
                 dpkg-buildpackage -us -uc -b'
           else
             dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
