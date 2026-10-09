@@ -189,7 +189,8 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
             raise HTTPException(503, "service indisponible") from None
         try:
             appliquer()
-        except T.TunnelErreur:
+        except T.TunnelErreur as e:
+            reg._audit("tunnel-echec", f"client={rec.client} : {e}")                  # la raison reste côté serveur ; la box ne reçoit que « indisponible »
             raise HTTPException(503, "service indisponible") from None                # le jeton reste réclamé : la même box peut rejouer
         return {"client": rec.client, "profil": rec.profil, "lot": rec.lot, "tunnel": T.gabarit_box(adresse, cle_hub_pub)}
 

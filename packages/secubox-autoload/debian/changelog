@@ -1,3 +1,10 @@
+secubox-autoload (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * tunnel : `wg syncconf` effaçait la clé privée du hub (constaté sur gk2 : sans PrivateKey dans la configuration appliquée, syncconf éteint la clé de l'interface, PostUp ne s'exécutant qu'à la montée). La clé est ajoutée au seul fichier passé à syncconf (0600, dossier privé, supprimé ensuite), jamais à la configuration posée ni en argument. 3 tests.
+  * enrôlement : un échec de synchronisation est écrit à l'audit (tunnel-echec) avec sa raison ; la box ne reçoit toujours que « service indisponible ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 11:00:00 +0200
+
 secubox-autoload (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Service d'enrolement et panel (#2190, parent #2182) : api/main.py, deux applications. PUBLIQUE (socket Unix /run/secubox/autoload.sock derriere nginx) : POST /enrol (preuve = le jeton a usage unique, refus uniforme, 10 essais par fenetre de 10 minutes et par source, reprise d'une reclamation par la meme cle apres une coupure) et l'administration (lecture require_lecture ; emission, revocation, abonnement avec duree et formule, series, refus de pre-rapport sous require_jwt ; la valeur d'un jeton n'est montree qu'a l'emission). TUNNEL (TCP 10.64.0.1:8470, IP_FREEBIND, uniquement dans WireGuard) : progression, pre-rapport, sondage du refus ; l'identite est l'adresse SOURCE de la connexion (WireGuard ne laisse passer d'un pair que sa propre adresse), jamais un en-tete ; ces routes n'existent pas dans l'application publique.

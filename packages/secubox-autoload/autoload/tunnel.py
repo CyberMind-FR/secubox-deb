@@ -125,9 +125,24 @@ def _ecrit_prive(chemin: Path, texte: str) -> None:
         raise
 
 
+def _avec_cle(strip: str, cle_hub: Path) -> str:
+    """`wg syncconf` applique la configuration TELLE QUELLE : sans PrivateKey il ÉTEINT la clé de l'interface (constaté sur gk2 : le tunnel perdait sa clé à
+    la première synchronisation, PostUp ne s'exécutant qu'à la montée). La clé est donc ajoutée au seul fichier passé à syncconf (0600, dossier privé,
+    supprimé ensuite) ; elle n'est jamais dans la configuration posée ni en argument de commande."""
+    cle = Path(cle_hub).read_text(encoding="ascii").strip()
+    lignes = strip.splitlines()
+    for i, l in enumerate(lignes):
+        if l.strip() == "[Interface]":
+            lignes.insert(i + 1, f"PrivateKey = {cle}")
+            return "\n".join(lignes) + "\n"
+    raise TunnelErreur("configuration sans section [Interface]")
+
+
 def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB_DEFAUT, executeur=subprocess.run) -> int:
     """Valide la configuration (wg-quick strip), la pose atomiquement, puis `wg syncconf` : aucun pair existant n'est coupé."""
     conf = Path(conf)
+    if not Path(cle_hub).is_file():
+        raise TunnelErreur("clé du hub absente (autoloadctl tunnel-init)")
     conf.parent.mkdir(parents=True, exist_ok=True)
     actifs = pairs.actifs()
     texte = rendre_hub(actifs, cle_hub)
@@ -140,7 +155,7 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
         if r.returncode != 0:
             raise TunnelErreur("configuration refusée par wg-quick : " + (r.stderr or "").strip()[:200])
         nu = Path(tmpd) / "strip.conf"
-        nu.write_text(r.stdout, encoding="utf-8")
+        nu.write_text(_avec_cle(r.stdout, cle_hub), encoding="utf-8")
         nu.chmod(0o600)
         _ecrit_prive(conf, texte)
         s = executeur(["wg", "syncconf", INTERFACE, str(nu)], capture_output=True, text=True, timeout=TIMEOUT_S)

@@ -96,6 +96,13 @@ def test_gabarit_remis_a_la_box(pairs):
     assert g == {"endpoint": f"{T.INFRA}:{T.PORT_UDP}", "serveur_cle_pub": HUB_CLE, "adresse": "10.64.0.2/32", "hub": "10.64.0.1/32"}
 
 
+def cle_hub(tmp_path):
+    k = tmp_path / "hub.key"
+    k.write_text("PRIVEE-DU-HUB-" + "k" * 29 + "=\n")
+    k.chmod(0o600)
+    return k
+
+
 def test_synchronisation_ecrit_la_conf_en_0600_et_appelle_wg(pairs, tmp_path):
     pairs.attribuer(CLE_A)
     appels = []
@@ -104,12 +111,40 @@ def test_synchronisation_ecrit_la_conf_en_0600_et_appelle_wg(pairs, tmp_path):
         appels.append(argv)
 
         class R:
-            returncode, stdout, stderr = 0, "", ""
+            returncode, stdout, stderr = 0, "[Interface]\nListenPort = 51830\n\n[Peer]\nPublicKey = x\n", ""
         return R()
     conf = tmp_path / "wg" / "wg-autoload.conf"
-    T.synchroniser(pairs, conf, Path("/etc/secubox/secrets/h.key"), executeur=executeur)
+    T.synchroniser(pairs, conf, cle_hub(tmp_path), executeur=executeur)
     assert stat.S_IMODE(conf.stat().st_mode) == 0o600 and f"PublicKey = {CLE_A}" in conf.read_text()
+    assert "PRIVEE-DU-HUB" not in conf.read_text()                                     # la clé n'est JAMAIS dans la configuration posée
     assert appels and all(isinstance(a, list) for a in appels) and any("syncconf" in a for a in appels)
+
+
+def test_syncconf_recoit_la_cle_privee_sinon_wg_la_retire_de_l_interface(pairs, tmp_path):
+    """Constaté sur gk2 : `wg syncconf` avec une configuration SANS PrivateKey efface la clé de l'interface (PostUp ne la repose pas)."""
+    pairs.attribuer(CLE_A)
+    vu = {}
+
+    def executeur(argv, **kw):
+        if "syncconf" in argv:
+            texte = Path(argv[-1]).read_text()                                           # le fichier existe encore à cet instant
+            vu["texte"], vu["argv"], vu["mode"] = texte, " ".join(argv), stat.S_IMODE(Path(argv[-1]).stat().st_mode)
+
+        class R:
+            returncode, stdout, stderr = 0, "[Interface]\nListenPort = 51830\n\n[Peer]\nPublicKey = x\n", ""
+        return R()
+    T.synchroniser(pairs, tmp_path / "wg.conf", cle_hub(tmp_path), executeur=executeur)
+    assert "PrivateKey = PRIVEE-DU-HUB-" in vu["texte"] and vu["texte"].index("PrivateKey") < vu["texte"].index("[Peer]")
+    assert "PRIVEE-DU-HUB" not in vu["argv"] and vu["mode"] == 0o600                    # jamais en argument, fichier privé
+    assert not list(tmp_path.glob("sbx-wg-*"))                                          # et le dossier temporaire est retiré
+
+
+def test_cle_du_hub_absente_refusee_sans_toucher_la_conf(pairs, tmp_path):
+    conf = tmp_path / "wg.conf"
+    conf.write_text("ANCIENNE")
+    with pytest.raises(T.TunnelErreur, match="clé"):
+        T.synchroniser(pairs, conf, tmp_path / "absente.key", executeur=lambda a, **k: None)
+    assert conf.read_text() == "ANCIENNE"
 
 
 def test_synchronisation_qui_echoue_laisse_l_ancienne_conf(pairs, tmp_path):
@@ -122,7 +157,7 @@ def test_synchronisation_qui_echoue_laisse_l_ancienne_conf(pairs, tmp_path):
             returncode, stdout, stderr = 1, "", "boom"
         return R()
     with pytest.raises(T.TunnelErreur):
-        T.synchroniser(pairs, conf, Path("/etc/secubox/secrets/h.key"), executeur=echec)
+        T.synchroniser(pairs, conf, cle_hub(tmp_path), executeur=echec)
     assert conf.read_text() == "ANCIENNE"
 
 
