@@ -2,12 +2,12 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""L'image ESPRESSObin ne charge plus le pilote DSA au démarrage (#2146).
+"""L'image ESPRESSObin ne charge plus le pilote DSA au démarrage, par prudence (#2146).
 
-Premier démarrage réel de l'image lite sur une ESPRESSObin v7 (console série, USB, U-Boot 2021.01) : le noyau et systemd démarrent,
-`mv88e6xxx-load.service` charge le pilote du commutateur, puis `systemd-networkd` fige les deux cœurs (« hard LOCKUP on cpu 1 »,
-« soft lockup - CPU#0 stuck for 56s! [systemd-network] »). Le chargement différé ne contourne donc pas la boucle du pilote sur le
-noyau Debian 6.12. Par défaut le service reste installé mais désactivé (opt-in : DSA_LOAD=1) et `eth0` prend l'adresse en DHCP."""
+ATTENTION, ce test ne dit PAS que le pilote cause le gel observé au premier démarrage réel (ESPRESSObin v7, U-Boot 2021.01, USB) : un
+deuxième essai avec `systemd.mask=mv88e6xxx-load.service` fige les deux cœurs de la même façon (« hard LOCKUP on cpu 0 », « soft lockup -
+CPU#1 stuck for 52s! [khugepaged] », juste après auditd). Le pilote reste donc hors du chemin critique du premier essai, `eth0` prend
+l'adresse en DHCP, et la cause du gel se cherche ailleurs. Opt-in : DSA_LOAD=1."""
 import re
 from pathlib import Path
 

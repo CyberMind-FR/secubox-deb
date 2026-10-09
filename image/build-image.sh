@@ -1116,9 +1116,10 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 SERVICE
-  # OPT-IN (#2146) : charge apres le demarrage, le pilote fige quand meme les deux coeurs sur le noyau Debian 6.12 (premier demarrage
-  # reel sur ESPRESSObin v7 : « hard LOCKUP on cpu 1 », « soft lockup - CPU#0 stuck for 56s! [systemd-network] »). Installe mais
-  # desactive : `systemctl enable --now mv88e6xxx-load` ou DSA_LOAD=1 a la construction.
+  # OPT-IN (#2146), par PRUDENCE. Le 1er demarrage reel sur ESPRESSObin v7 a fige les deux coeurs (« hard LOCKUP », « soft lockup »)
+  # juste apres le chargement de ce pilote... mais un 2e essai, pilote bloque (systemd.mask=mv88e6xxx-load), fige de la meme facon : le
+  # pilote n'est PAS la cause du gel (cause encore inconnue, voir #2146). Installe mais desactive : `systemctl enable --now mv88e6xxx-load`
+  # ou DSA_LOAD=1 a la construction.
   DSA_LOAD="${DSA_LOAD:-0}"
   if [[ "${DSA_LOAD}" == "1" ]]; then
     chroot "${ROOTFS}" systemctl enable mv88e6xxx-load.service 2>/dev/null || true
