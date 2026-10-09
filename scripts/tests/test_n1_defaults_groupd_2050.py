@@ -61,9 +61,7 @@ def test_plus_aucun_paquet_ne_depend_des_anciens():
                 raise AssertionError(f"{ctrl} : {ligne.strip()}")
 
 
-def test_arbre_les_met_hors_arbre():
+def test_arbre_ne_les_garde_plus():
     arbre = (PAQ / "secubox-meta/arbre.yaml").read_text()
-    avant, _, apres = arbre.partition("# ═══ RACINES")
     for s in ANCIENS:
-        assert re.search(rf"secubox-{s}\b", avant), s
-        assert not re.search(rf"(?m)^\s+- secubox-{s}\b", apres), s
+        assert not re.search(rf"(?m)^\s+- secubox-{s}\b", arbre), s

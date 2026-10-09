@@ -21,9 +21,7 @@ def test_le_paquet_est_retire_du_depot():
 def test_plus_dans_le_catalogue_ni_dans_l_arbre_des_meta_paquets():
     assert "secubox-vortex-dns" not in (RACINE / "packages" / "secubox-appstore" / "groupes.yaml").read_text()
     arbre = (RACINE / "packages" / "secubox-meta" / "arbre.yaml").read_text()
-    avant, _, hors = arbre.partition("\nhors-arbre:")
-    assert not re.search(r"^\s*-\s*secubox-vortex-dns\b", avant, re.M), "plus dans l'arbre des fonctions"
-    assert re.search(r"^\s*-\s*secubox-vortex-dns\b", hors, re.M), "déclaré hors-arbre (retiré) : sinon le générateur échoue"
+    assert not re.search(r"^\s*-\s*secubox-vortex-dns\b", arbre, re.M), "plus dans l'arbre, ni dans hors-arbre (paquet retiré du dépôt)"
 
 
 def test_le_hub_ne_route_plus_vortex_dns():

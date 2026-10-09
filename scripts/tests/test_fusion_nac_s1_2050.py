@@ -45,11 +45,10 @@ def test_plus_aucun_paquet_ne_depend_des_anciens():
                 raise AssertionError(f"{ctrl} : {ligne.strip()}")
 
 
-def test_arbre_les_met_hors_arbre():
+def test_arbre_ne_les_garde_plus():
+    """Le transitoire est retiré : ni dans l'arbre, ni dans « hors-arbre » (le générateur refuserait un nom inconnu du dépôt)."""
     arbre = (PAQ / "secubox-meta/arbre.yaml").read_text()
-    avant, _, apres = arbre.partition("# ═══ RACINES")
     for s in SHIMS:
-        assert f"secubox-{s} " in avant or f"secubox-{s}\n" in avant, f"{s} hors-arbre"
-        assert f"  - secubox-{s}" not in apres, f"{s} encore dans l'arbre"
+        assert not re.search(rf"(?m)^\s+- secubox-{s}\b", arbre), f"{s} encore dans l'arbre"
 
 
