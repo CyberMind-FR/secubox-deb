@@ -9,7 +9,7 @@
 
 Provisionnement réseau « Auto-Load », **côté box cliente**. Parent #2182, cadrage `docs/dossiers/provisionnement-auto-load.md`. Le côté infrastructure est `secubox-autoload`.
 
-**État (0.2.0) :** le tunnel sortant (#2189) et le moteur de provisioning (#2187). C'est une bibliothèque tant que le point d'enrôlement HTTPS n'existe pas (#2190) ; la validation (#2188) et le rapport (#2192) viennent ensuite.
+**État (0.3.0) :** le tunnel sortant (#2189), le moteur de provisioning (#2187) et la validation (#2188). C'est une bibliothèque tant que le point d'enrôlement HTTPS n'existe pas (#2190) ; le rapport final (#2192) vient ensuite.
 
 ## Tunnel (`autoload_agent/tunnel.py`)
 
@@ -28,6 +28,14 @@ Provisionnement réseau « Auto-Load », **côté box cliente**. Parent #2182, c
 - **Rien du réseau n'est exécuté** : réponse du tunnel validée avant écriture, noms de paquets filtrés, fichier du jeton refusé s'il est lisible par d'autres comptes, commandes en listes d'arguments avec délai.
 - **Application** : `premier-pasctl appliquer` (réseau, comptes) puis `secubox-profilectl apply <profil> --yes` (4R, audit).
 - Rapport (sans secret) : `/var/lib/secubox/autoload-agent/rapport.json`.
+
+## Validation (`autoload_agent/validation.py`, #2188)
+
+Le moteur remet son plan à un valideur. Le **pré-rapport** dit ce qui va arriver (profil, paquets, réseau, comptes créés) et seulement **qu'il y a** des secrets, jamais leur valeur ni le nom de leur fichier ; il est écrit en 0600 et identifié par son empreinte SHA-256.
+
+- **Auto (zero-touch)** : le pré-rapport est publié à l'infrastructure, puis un **délai de grâce** (`[provision].grace_min`, 15 minutes par défaut, 0 à 1440) pendant lequel l'opérateur peut refuser. **Fermé par défaut** : pré-rapport non publiable, ou refus non consultable = on n'applique pas.
+- **Manuel (one-shot)** : applique seulement si l'opérateur confirme l'**empreinte de ce pré-rapport** ; la confirmation d'un autre plan ne vaut rien ; sans confirmation avant l'échéance, refus.
+- `pour_mode(mode, …)` choisit le valideur selon `[provision].mode`.
 
 ## Tests
 

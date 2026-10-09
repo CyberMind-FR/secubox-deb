@@ -1,3 +1,9 @@
+secubox-autoload-agent (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Validation (#2188, parent #2182, D6) : autoload_agent/validation.py. Le pre-rapport dit ce qui va arriver (profil, paquets, reseau, comptes crees, et seulement QU'il y a des secrets, jamais leur valeur ni le nom de leur fichier), ecrit en 0600 et identifie par une empreinte SHA-256. Valideur AUTO (zero-touch) : publication du pre-rapport puis delai de grace (15 minutes par defaut, 0 a 1440) pendant lequel l'operateur peut refuser ; FERME PAR DEFAUT (pre-rapport non publiable, ou refus non consultable : on n'applique pas). Valideur MANUEL (one-shot) : applique seulement si l'operateur confirme l'empreinte de CE pre-rapport, sinon refus a l'echeance. pour_mode() choisit selon [provision].mode.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 06:00:00 +0200
+
 secubox-autoload-agent (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Moteur de provisioning (#2187, parent #2182) : autoload_agent/moteur.py. Parcours : fichier de reponses signe, cle WireGuard, enrolement, tunnel, plan (simulation apt du meta-paquet secubox-lite, -isp ou -full), VALIDATION, installation, application (premier-pasctl puis profilectl). Chaque etape est idempotente et notee dans l'etat (0600) : apres une coupure ou un echec le parcours reprend a la premiere etape non faite, sans rejouer l'enrolement (le jeton est a usage unique) ; un parcours termine ne refait rien. La validation est un point d'injection (#2188) : SANS valideur explicite le defaut REFUSE, rien n'est installe. Rien venant du reseau n'est execute : reponse du tunnel validee avant ecriture, noms de paquets de la simulation filtres, fichier du jeton refuse s'il est lisible par d'autres comptes, commandes en listes d'arguments avec delai.
