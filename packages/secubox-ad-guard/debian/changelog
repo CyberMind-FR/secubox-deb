@@ -1,3 +1,9 @@
+secubox-ad-guard (1.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * Suivi des adresses : le seuil d'eviction passe de retrait_jours (7 j) a 6 heures. Une TV change d'IPv6 de confidentialite environ chaque jour : les trois anciennes avaient ete vues il y a 1 a 4 jours, donc DANS la fenetre de 7 jours, et la version 1.7.3 n'evincait rien (la TV banc restait hors de sa vue, replay Free sans fin). Une IPv6 non vue depuis 6 h et plus ancienne que la nouvelle cede sa place ; jamais l'IPv4, jamais une adresse recente (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 21:00:00 +0200
+
 secubox-ad-guard (1.7.3-1~bookworm1) bookworm; urgency=medium
 
   * Suivi des adresses d'un appareil : quand le plafond de 4 adresses est atteint, une IPv6 non vue depuis retrait_jours cede sa place a la nouvelle. Sur gk2, la TV « banc » portait son IPv4 et trois IPv6 de confidentialite perimees (declarees, donc jamais retirees) : ses deux IPv6 actuelles etaient refusees, la TV sortait de sa vue, perdait l'exemption imasdk.googleapis.com et le replay Free tournait sans fin, meme en mode observe. Jamais l'IPv4, jamais une adresse encore vue (#2146).

@@ -193,3 +193,24 @@ def test_l_eviction_ne_touche_pas_les_autres_appareils():
     lancer(etat, regles, suivi, det=[], voisins={"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC},
            vues={"192.168.1.95": maintenant, NEUVES[0]: maintenant}, maintenant=maintenant)
     assert autre["ip"] in {c["ip"] for c in etat["clients"]}
+
+
+def test_une_ipv6_vue_il_y_a_trois_jours_cede_sa_place_meme_dans_la_fenetre_de_retrait():
+    """Cas réel de gk2 : la TV change d'IPv6 environ chaque jour. Les trois anciennes avaient été vues il y a 1 à 4 jours, donc DANS les 7 jours de
+    `retrait_jours` : rien n'était évincé et les adresses actuelles restaient refusées. Une IPv6 non vue depuis 6 h cède sa place à une plus récente."""
+    etat, regles, suivi = tv_banc()
+    maintenant = T0 + 10 * 86400
+    vues = {"192.168.1.95": maintenant, NEUVES[0]: maintenant, **{a: maintenant - (i + 1) * 86400 for i, a in enumerate(ANCIENNES)}}
+    lancer(etat, regles, suivi, det=[], voisins={"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC}, vues=vues, maintenant=maintenant)
+    ips = {c["ip"] for c in etat["clients"]}
+    assert NEUVES[0] in ips and "192.168.1.95" in ips
+    assert ANCIENNES[2] not in ips, "la plus ancienne (vue il y a 3 jours) est celle qui part"
+    assert set(ANCIENNES[:2]) <= ips
+
+
+def test_une_adresse_n_en_evince_pas_une_plus_recente_qu_elle():
+    etat, regles, suivi = tv_banc()
+    maintenant = T0 + 10 * 86400
+    vues = {"192.168.1.95": maintenant, NEUVES[0]: maintenant - 20 * 3600, **{a: maintenant - 8 * 3600 for a in ANCIENNES}}
+    lancer(etat, regles, suivi, det=[], voisins={"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC}, vues=vues, maintenant=maintenant)
+    assert NEUVES[0] not in {c["ip"] for c in etat["clients"]}, "la candidate est plus ancienne que les trois adresses en place"
