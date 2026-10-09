@@ -12,6 +12,9 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-10 — Auto-Load : WebUI d'administration (ref #2191)
 
 secubox-autoload 0.4.0 : page `/autoload/` (hybrid-dark) avec box en provisioning (statut, progression), génération du jeton (valeur montrée une seule fois) avec durée d'abonnement et profil, révocation/suspension/réactivation confirmées, pré-rapports (détail, refus). 11 tests navigateur. Les « modules inclus » du schéma de principe restent à porter.
+## 2026-10-10 — Auto-Load : banc de bout en bout sans matériel (ref #2193)
+
+Huit scénarios réunissent moteur, client, service d'enrôlement (public et tunnel), jetons, fichier signé (vrai gpg) et vraies clés WireGuard (`packages/secubox-autoload/tests/test_banc_2193.py`). Restent hors banc : l'essai sur matériel (#2186, netboot), le démarrage automatique au boot (une unité root : à décider), la redirection udp/51830 de la Freebox, la WebUI (#2191) et le rapport final (#2192).
 
 ## 2026-10-10 — Auto-Load : service d'enrôlement et panel côté infrastructure (ref #2190, ref #2182)
 
