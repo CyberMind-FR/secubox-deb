@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.5.8-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : l'auto-test de sante de health-doctor n'est plus une menace (#2200). Reconnu aux deux signes (adresse dans 198.51.100.0/24 ET User-Agent SecuBox-WAF-SelfTest/ ; l'adresse vient de la chaine de mandataires de confiance, pas d'un en-tete libre), il est ecrit dans waf-selftest.log et ni dans waf-threats.log ni vers sbx-actord : il ne gonfle plus les statistiques ni les scores d'acteurs (572 des 5 073 evenements « banned » en 24 h). Le ban nftables de l'auto-test reste. Un attaquant qui copie le User-Agent depuis une autre adresse reste une menace. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 08:00:00 +0200
+
 secubox-toolbox-ng (0.5.7-1~bookworm1) bookworm; urgency=medium
 
   * sbx-sentinel : hasStrongSignal restauré (#828) — « rare » seul ne fait plus

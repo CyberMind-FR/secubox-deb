@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -192,6 +194,27 @@ type logEntry struct {
 // Record appends one JSON line to the threat log for the given ThreatRecord.
 // On any I/O error the error is printed to stderr — the request is never
 // interrupted by a log write failure (best-effort, mirrors Python except clause).
+// L'AUTO-TEST DE SANTÉ N'EST PAS UNE MENACE (#2200). health-doctor envoie depuis 127.0.0.1 une requête LFI avec l'adresse simulée 198.51.100.77
+// (TEST-NET-2, jamais routée) pour vérifier que la chaîne de détection et de ban répond. Journalisé comme une menace, il gonflait les statistiques
+// (572 des 5 073 « banned » en 24 h) et les scores d'acteurs. Il est reconnu aux DEUX signes — adresse dans 198.51.100.0/24 ET User-Agent
+// `SecuBox-WAF-SelfTest/` — puis écrit dans waf-selftest.log, jamais dans waf-threats.log ni vers actord. L'adresse vient de la chaîne de mandataires de
+// confiance (clientIP), pas d'un en-tête libre : un attaquant externe ne peut pas s'y faire passer, et un attaquant qui copie le User-Agent d'une autre
+// adresse reste une menace. Le ban nftables de l'auto-test n'est pas touché : il vérifie la chaîne de bannissement.
+const prefixeUAAutoTest = "SecuBox-WAF-SelfTest/"
+
+var reseauAutoTest = func() *net.IPNet {
+	_, n, _ := net.ParseCIDR("198.51.100.0/24")
+	return n
+}()
+
+func estAutoTest(ip, ua string) bool {
+	if !strings.HasPrefix(ua, prefixeUAAutoTest) {
+		return false
+	}
+	a := net.ParseIP(ip)
+	return a != nil && reseauAutoTest.Contains(a)
+}
+
 func (l *ThreatLog) Record(rec ThreatRecord) {
 	// LE TRAFIC INTERNE N'EST PAS UN ATTAQUANT (#1131am). Un health check, le
 	// watchdog, l'agrégateur, le fetch des métriques de la bannière depuis
@@ -225,6 +248,13 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		MarqueRevenue: rec.MarqueRevenue,
 	}
 
+	if estAutoTest(rec.ClientIP, rec.UA) {
+		if data, err := json.Marshal(entry); err == nil {
+			l.ajouter(filepath.Join(filepath.Dir(l.path), "waf-selftest.log"), append(data, '\n'))
+		}
+		return
+	}
+
 	// LECTURE « NEGATIVE SPACE » (#1240, P0-A). On ÉTIQUETTE l'événement selon
 	// qu'il s'agit d'une sonde de reconnaissance (appât connu / sonde haute
 	// valeur) plutôt que d'une charge utile ou d'une 404 quelconque. Pure
@@ -255,18 +285,23 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 	// Append newline to produce NDJSON (one object per line).
 	data = append(data, '\n')
 
+	l.ajouter(l.path, data)
+}
+
+// ajouter écrit une ligne en ajout seul (jamais de troncature), lisible par le groupe secubox.
+func (l *ThreatLog) ajouter(chemin string, data []byte) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	// O_APPEND|O_CREATE, 0640 — never truncate, readable by secubox group.
-	f, err := os.OpenFile(l.path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0640)
+	f, err := os.OpenFile(chemin, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0640)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "sbxwaf/threatlog: open %s: %v\n", l.path, err)
+		fmt.Fprintf(os.Stderr, "sbxwaf/threatlog: open %s: %v\n", chemin, err)
 		return
 	}
 	defer f.Close()
 
 	if _, err := f.Write(data); err != nil {
-		fmt.Fprintf(os.Stderr, "sbxwaf/threatlog: write %s: %v\n", l.path, err)
+		fmt.Fprintf(os.Stderr, "sbxwaf/threatlog: write %s: %v\n", chemin, err)
 	}
 }

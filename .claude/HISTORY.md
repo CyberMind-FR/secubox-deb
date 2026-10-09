@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — WAF : l'auto-test sort des statistiques et des scores (ref #2200, ref #2201, ref #2202)
+
+Constat sur gk2 : actord est en shadow (aucun ban par la détection d'acteurs) ; les bans viennent de sbxwaf (nftables, 4 h) et tiennent (28 adresses réelles bannies en 24 h, aucune revue pendant son ban). L'auto-test de health-doctor (198.51.100.77) gonflait les chiffres : 572 des 5 073 « banned ». toolbox-ng 0.5.8 : il va dans `waf-selftest.log`, ni dans `waf-threats.log` ni vers actord. À déployer : sbxwaf redémarre (reload = restart). Suite : #2201 (robots connus classés à part), #2202 (étude de l'application des propositions d'actord).
+
 ## 2026-10-09 — Fermeture de #2146 (profils) et de #2050 (suite en #2180) : closes #2146, closes #2050
 
 #2146 : profils lite/isp/full livrés, release alpha.10 publiée, paquets de profils 1.0.42 dans l'index trixie ; l'essai ESPRESSObin est suivi en #2177. #2050 : vagues 0, 2, 3, 4 faites, 60 transitoires retirés des sources (PR #2179) et de l'index apt trixie, profils 1.0.42 publiés avant le retrait. Le reste (outillage vague 1, écrivains concurrents, méta-paquets en vues, code mort /check, WireGuard/Reality, surf encore en root) est repris dans #2180.
