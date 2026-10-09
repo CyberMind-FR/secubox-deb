@@ -36,7 +36,7 @@ Provisionnement réseau « Auto-Load », **côté infrastructure** (`admin.gk2.s
 
 Deux applications dans un processus (`/usr/sbin/secubox-autoload-api`), utilisateur dédié `secubox-autoload`, unité durcie, profil AppArmor enforce.
 
-**Publique** (socket `/run/secubox/autoload.sock`, derrière nginx sur `admin.gk2.secubox.in`, préfixe `/api/v1/autoload`) :
+**Publique** (socket `/run/secubox/autoload.sock`). Les routes sont **à la racine** : l'agrégateur relaie `/api/v1/autoload/…` vers la socket en retirant le préfixe (convention de la plateforme ; aucune configuration nginx propre au module). Les chemins ci-dessous sont ceux du service ; publiquement, ajouter `/api/v1/autoload` :
 
 | Route | Garde | Rôle |
 |---|---|---|

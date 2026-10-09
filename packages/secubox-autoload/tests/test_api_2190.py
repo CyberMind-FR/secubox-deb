@@ -15,7 +15,7 @@ from api import main as A
 CLE_A, CLE_B = "A" * 43 + "=", "B" * 43 + "="
 HUB = "H" * 43 + "="
 T0 = 1_800_000_000
-P = "/api/v1/autoload"
+P = ""                          # routes à la racine : l'agrégateur sert /api/v1/autoload/… en retirant le préfixe
 
 
 class Horloge:

@@ -1,3 +1,9 @@
+secubox-autoload (0.3.7-1~bookworm1) bookworm; urgency=medium
+
+  * Routes a la RACINE du service, comme les autres modules : l'agregateur relaie /api/v1/autoload/... vers /run/secubox/autoload.sock en retirant le prefixe (cause du 404 constate sur gk2 : la requete passait par l'agregateur, qui envoyait /boxes avec Host: localhost a un service qui attendait /api/v1/autoload/boxes). Le fichier nginx du module (secubox.d/autoload.conf) est supprime (rm_conffile) : l'agregateur suffit, sans configuration propre.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 14:00:00 +0200
+
 secubox-autoload (0.3.6-1~bookworm1) bookworm; urgency=medium
 
   * nginx : location ^~ /api/v1/autoload/ (au lieu d'une location a prefixe simple). Sur gk2, une location par expression reguliere plus generale supplantait la notre et envoyait la requete a l'agregateur, qui la relayait au service avec le prefixe retire et Host: localhost (404 par le vhost admin alors que la socket repondait 200). ^~ empeche cette supplantation.

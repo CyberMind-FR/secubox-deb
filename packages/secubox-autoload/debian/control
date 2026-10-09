@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-autoload
 Architecture: all
 Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core, wireguard-tools, nftables, adduser
-Recommends: nginx, apparmor
+Recommends: apparmor
 Description: SecuBox — provisionnement réseau Auto-Load, côté infrastructure
  Jetons clients (un par box, à usage unique, stockés sous forme d'empreinte),
  statut d'abonnement avec échéance, révocation, préenregistrement par numéro de

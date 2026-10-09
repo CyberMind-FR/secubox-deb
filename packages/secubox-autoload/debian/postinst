@@ -31,10 +31,6 @@ if [ "$1" = "configure" ]; then
         # try-restart : une mise à jour ne démarre pas un service que l'exploitant a arrêté.
         systemctl is-active --quiet secubox-autoload.service && systemctl try-restart secubox-autoload.service || systemctl start secubox-autoload.service || true
     fi
-    # nginx : on ne recharge que si la configuration passe le test.
-    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
-        systemctl reload nginx >/dev/null 2>&1 || true
-    fi
 fi
 #DEBHELPER#
 exit 0

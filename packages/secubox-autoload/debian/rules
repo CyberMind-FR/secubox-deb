@@ -11,7 +11,6 @@ override_dh_auto_install:
 	install -d debian/secubox-autoload/usr/lib/systemd/system
 	install -m 644 systemd/secubox-autoload.service debian/secubox-autoload/usr/lib/systemd/system/
 	install -D -m 0440 sudoers.d/secubox-autoload debian/secubox-autoload/etc/sudoers.d/secubox-autoload
-	install -D -m 644 nginx/autoload.conf debian/secubox-autoload/etc/nginx/secubox.d/autoload.conf
 	install -D -m 644 nft/zz-secubox-autoload.nft debian/secubox-autoload/etc/nftables.d/zz-secubox-autoload.nft
 	install -D -m 644 logrotate.d/secubox-autoload debian/secubox-autoload/etc/logrotate.d/secubox-autoload
 	install -D -m 644 apparmor/secubox-autoload-api debian/secubox-autoload/etc/apparmor.d/secubox-autoload-api

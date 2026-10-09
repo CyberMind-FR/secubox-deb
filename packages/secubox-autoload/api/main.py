@@ -8,7 +8,7 @@ SecuBox-Deb :: autoload :: le SERVICE d'enrôlement et le PANEL (#2190, parent #
 
 Deux applications, trois preuves :
 
-  portée « public » (socket Unix, derrière HAProxy → sbxwaf → nginx)
+  portée « public » (socket Unix ; l'agrégateur relaie /api/v1/autoload/… en retirant le préfixe, derrière HAProxy → sbxwaf → nginx)
     PUBLIQUE, preuve = le jeton     POST /enrol   (la seule route sans garde : le jeton à usage unique EST la preuve, refus uniforme, essais limités)
     ADMIN, preuve = administrateur  lecture : require_lecture ; écriture : require_jwt (émission, révocation, abonnement, refus de pré-rapport)
 
@@ -33,7 +33,7 @@ from secubox_core.auth import require_jwt, require_lecture
 
 from autoload import jetons as J, tunnel as T
 
-PREFIXE = "/api/v1/autoload"
+PREFIXE = ""          # les routes sont à la racine : l'agrégateur sert /api/v1/autoload/… en retirant le préfixe (convention de la plateforme)
 CORPS_MAX = 128 * 1024
 ESSAIS_MAX = 10
 FENETRE_S = 600
