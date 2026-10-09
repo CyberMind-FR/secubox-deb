@@ -1,3 +1,9 @@
+secubox-ad-guard (1.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * Suivi des adresses d'un appareil : quand le plafond de 4 adresses est atteint, une IPv6 non vue depuis retrait_jours cede sa place a la nouvelle. Sur gk2, la TV « banc » portait son IPv4 et trois IPv6 de confidentialite perimees (declarees, donc jamais retirees) : ses deux IPv6 actuelles etaient refusees, la TV sortait de sa vue, perdait l'exemption imasdk.googleapis.com et le replay Free tournait sans fin, meme en mode observe. Jamais l'IPv4, jamais une adresse encore vue (#2146).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 20:00:00 +0200
+
 secubox-ad-guard (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * D4 (#2050) : les deux ecrivains Unbound d'ad-guard (adblock-sync et adguard-tv) utilisent secubox_unbound (secubox-core >= 1.7.1). adblock-sync : ecriture ATOMIQUE (elle ne l'etait pas), retour arriere octet pour octet et rechargement de l'ancienne vue, et SUPPRESSION du repli « restart unbound » qui pouvait couper la resolution du reseau sur un echec de reload. Memes tests, 7 nouveaux.
