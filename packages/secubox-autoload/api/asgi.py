@@ -6,8 +6,20 @@
 import os
 from pathlib import Path
 
-from autoload import jetons as J, tunnel as T
+from autoload import jetons as J, rapport as R, tunnel as T
 from api.main import creer_app
+
+
+def _courrier():
+    """Le courrier du rapport final : actif seulement si /etc/secubox/autoload.toml porte [rapport] smtp_hote, smtp_port, expediteur."""
+    import tomllib  # noqa: PLC0415
+    try:
+        with open(os.environ.get("SECUBOX_AUTOLOAD_CONFIG", "/etc/secubox/autoload.toml"), "rb") as f:
+            c = tomllib.load(f).get("rapport", {})
+        hote, port, exp = str(c["smtp_hote"]), int(c["smtp_port"]), str(c["expediteur"])
+    except (OSError, KeyError, ValueError, TypeError):
+        return None
+    return lambda rap, email: R.envoyer(rap, email, hote, port, exp)
 
 
 def construire():
@@ -17,5 +29,6 @@ def construire():
     pairs = T.Pairs(dossier / "jetons.db")
 
     appliquer = T.appliquer_par_sudo
-    return (creer_app(reg, pairs, cle_hub_pub, appliquer, portee="public"),
-            creer_app(reg, pairs, cle_hub_pub, appliquer, portee="tunnel"))
+    courrier = _courrier()
+    return (creer_app(reg, pairs, cle_hub_pub, appliquer, portee="public", courrier=courrier),
+            creer_app(reg, pairs, cle_hub_pub, appliquer, portee="tunnel", courrier=courrier))

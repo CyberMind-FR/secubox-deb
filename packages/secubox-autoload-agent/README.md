@@ -9,7 +9,7 @@
 
 Provisionnement réseau « Auto-Load », **côté box cliente**. Parent #2182, cadrage `docs/dossiers/provisionnement-auto-load.md`. Le côté infrastructure est `secubox-autoload`.
 
-**État (0.4.0) :** le tunnel sortant (#2189), le moteur de provisioning (#2187), la validation (#2188) et le client de l'infrastructure ; `autoload-agentctl` lance le parcours à la main (atelier, one-shot). Le démarrage automatique (zero-touch) demande une unité root et reste à décider (#2193) ; le rapport final (#2192) vient ensuite.
+**État (0.5.0) :** le tunnel sortant (#2189), le moteur de provisioning (#2187), la validation (#2188) et le client de l'infrastructure ; `autoload-agentctl` lance le parcours à la main (atelier, one-shot). Le démarrage automatique (zero-touch) demande une unité root et reste à décider (#2193) ; le rapport final (#2192) est livré.
 
 ## Tunnel (`autoload_agent/tunnel.py`)
 
@@ -42,6 +42,10 @@ Le moteur remet son plan à un valideur. Le **pré-rapport** dit ce qui va arriv
 - `autoload_agent/client.py` : enrôlement HTTPS (**certificat et nom d'hôte vérifiés**, nom de domaine seulement, redirections jamais suivies, réponses bornées) ; dans le tunnel, vers le hub `10.64.0.1:8470` et lui seul : pré-rapport, progression, sondage du refus. Un refus (403, 429) est un `EnrolementRefuse` ; une panne est une `OSError` réessayable : le parcours reprend.
 - `autoload-agentctl run [--reponses F] [--signature S] [--trousseau K]` (root) lance ou reprend le parcours ; `confirmer EMPREINTE` confirme CE pré-rapport en mode one-shot ; `etat` affiche l'avancement sans secret.
 - Le fichier de réponses (`/boot/secubox/autoload/reponses.toml`) doit être signé ; le trousseau est `/usr/share/secubox/autoload/provisioning.gpg` (clé publique « SecuBox Provisioning », posée par l'image).
+
+## Rapport final (0.5.0, #2192)
+
+À la fin du parcours, `autoload_agent/rapport.py` construit un rapport **sans secret** (client, profil, paquets, domaine, comptes par nom, adresse de tunnel, début, fin, étapes), l'écrit sur la box (`/var/lib/secubox/autoload-agent/rapport.json`), l'affiche à l'écran (`/run/issue.d/50-secubox-autoload.issue`, lu par agetty au prochain affichage de connexion) et le diffuse à l'infrastructure, qui l'envoie par courrier au client si son contact est renseigné. Une diffusion en panne n'arrête jamais le parcours. `autoload-agentctl rapport` affiche le dernier rapport.
 
 ## Tests
 

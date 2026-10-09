@@ -24,6 +24,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -100,11 +101,13 @@ def _refus_par_defaut(plan: Plan) -> bool:
 
 class Moteur:
     def __init__(self, cfg: Config, executeur=subprocess.run, enroleur: Optional[Callable] = None, valideur: Optional[Callable[[Plan], bool]] = None,
-                 rapporteur: Optional[Callable[[str, int, int, bool], None]] = None, fabrique_valideur: Optional[Callable[[Dict], Callable[[Plan], bool]]] = None):
+                 rapporteur: Optional[Callable[[str, int, int, bool], None]] = None, fabrique_valideur: Optional[Callable[[Dict], Callable[[Plan], bool]]] = None,
+                 diffuseur: Optional[Callable[[Dict], None]] = None, horloge: Callable[[], float] = time.time):
         """`valideur` explicite prime ; sinon `fabrique_valideur(reponses)` en construit un d'après le mode du fichier de réponses ; sinon on REFUSE.
         `rapporteur(etape, faites, total, termine)` remonte la progression (best-effort : une panne ne l'arrête jamais)."""
         self.cfg, self.executeur, self.enroleur = cfg, executeur, enroleur
         self.valideur, self.rapporteur, self.fabrique_valideur = valideur, rapporteur, fabrique_valideur
+        self.diffuseur, self._horloge = diffuseur, horloge
         self._ex = None                                                      # examen des réponses, gardé entre étapes d'un même passage
         self._cle_pub = None
 
@@ -213,6 +216,7 @@ class Moteur:
         etat = self._etat()
         if etat.get("fait"):
             return Resultat(True)
+        etat.setdefault("debut", int(self._horloge()))
         try:
             self._reponses()                                                 # toujours relu : le fichier peut avoir changé entre deux passages
             if "reponses" not in etat.setdefault("faites", []):
@@ -250,6 +254,13 @@ class Moteur:
         etat["fait"] = True
         _ecrit_prive(self.cfg.etat, json.dumps(etat, ensure_ascii=False, indent=1))
         self._rapporte("application", len(ETAPES), True)
-        _ecrit_prive(self.cfg.rapport, json.dumps({"client": etat["enrolement"]["client"], "profil": etat["plan"]["profil"], "paquets": etat["plan"]["paquets"],
-                                                   "tunnel": {"adresse": etat["enrolement"]["tunnel"]["adresse"]}}, ensure_ascii=False, indent=1))
+        rap = {"client": etat["enrolement"]["client"], "profil": etat["plan"]["profil"], "paquets": etat["plan"]["paquets"], "domaine": self._ex.profil["reseau"].get("domaine", ""),
+               "comptes": ["admin"], "tunnel_adresse": etat["enrolement"]["tunnel"]["adresse"], "debut": etat["debut"], "fin": max(etat["debut"], int(self._horloge())),
+               "etapes": list(ETAPES)}
+        _ecrit_prive(self.cfg.rapport, json.dumps(rap, ensure_ascii=False, indent=1))
+        if self.diffuseur is not None:
+            try:
+                self.diffuseur(rap)
+            except (OSError, ValueError):
+                pass                                                                # le rapport reste sur la box ; l'infrastructure l'aura au prochain essai
         return Resultat(True)

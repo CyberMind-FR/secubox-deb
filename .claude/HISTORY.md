@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Auto-Load : rapport final, écran et courrier (ref #2192)
+
+secubox-autoload 0.5.0 / autoload-agent 0.5.0 : rapport sans secret construit par la box (écran + diffusion par le tunnel), validé strictement et conservé par l'infrastructure, envoyé par courrier au client si son contact est renseigné (adresse validée contre l'injection d'en-tête, relais configurable dans /etc/secubox/autoload.toml, panne SMTP sans effet sur la box). WebUI : courriel du client et onglet Rapports. Reste à faire côté exploitant : poser /etc/secubox/autoload.toml sur gk2 pour activer le courrier.
+
 ## 2026-10-10 — Auto-Load : WebUI d'administration (ref #2191)
 
 secubox-autoload 0.4.0 : page `/autoload/` (hybrid-dark) avec box en provisioning (statut, progression), génération du jeton (valeur montrée une seule fois) avec durée d'abonnement et profil, révocation/suspension/réactivation confirmées, pré-rapports (détail, refus). 11 tests navigateur. Les « modules inclus » du schéma de principe restent à porter.

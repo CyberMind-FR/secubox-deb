@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# /etc/secubox/autoload.toml — courrier du rapport final (#2192). Sans ce fichier, aucun courrier ne part (le rapport reste conservé et consultable).
+# Les valeurs sont celles du relais de la box (même que le rapport quotidien du WAF) ; le service n'écrit jamais de secret dans ce fichier.
+[rapport]
+smtp_hote  = "10.100.0.10"
+smtp_port  = 25
+expediteur = "autoload@secubox.in"

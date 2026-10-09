@@ -216,7 +216,7 @@ def test_l_etat_est_prive_et_ne_contient_aucun_secret(monde):
 def test_le_rapport_liste_ce_qui_a_ete_fait(monde):
     moteur(monde).run()
     rap = json.loads(monde.cfg.rapport.read_text())
-    assert rap["client"] == "client-042" and rap["profil"] == "lite" and "secubox-ad-guard" in rap["paquets"] and rap["tunnel"]["adresse"] == "10.64.0.2/32"
+    assert rap["client"] == "client-042" and rap["profil"] == "lite" and "secubox-ad-guard" in rap["paquets"] and rap["tunnel_adresse"] == "10.64.0.2/32"
 
 
 # ── intégration avec le client (#2187, #2188, #2189) ─────────────────────────────────────────────────────

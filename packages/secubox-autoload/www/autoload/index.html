@@ -94,6 +94,7 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
     <button class="tab active" data-tab="boxes">📦 Box en provisioning</button>
     <button class="tab" data-tab="jetons">🎟️ Jetons &amp; abonnements</button>
     <button class="tab" data-tab="prerapports">📝 Pré-rapports <span id="nbpre"></span></button>
+    <button class="tab" data-tab="rapports">📄 Rapports</button>
   </div>
 
   <section id="boxes" class="tab-content active">
@@ -110,6 +111,7 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
         <div><label for="fProfil">Profil</label><select id="fProfil"><option value="lite">Lite — protection</option><option value="isp">ISP — protection + hébergement</option><option value="full">Full — tout le Hall</option></select></div>
         <div><label for="fMois">Durée de l'abonnement</label><select id="fMois"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option></select></div>
         <div><label for="fValidite">Validité du jeton avant usage</label><select id="fValidite"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90" selected>90 jours</option><option value="365">365 jours</option></select></div>
+        <div><label for="fEmail">Courriel du client (rapport final)</label><input id="fEmail" type="email" maxlength="254" placeholder="gerant@exemple.fr"></div>
         <div><label for="fLot">Lot (facultatif)</label><input id="fLot" maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="lot-2026-10"></div>
         <div><button class="btn primary" type="submit" id="btnGenerer">➕ Générer le jeton</button></div>
       </form>
@@ -124,6 +126,11 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
     <div class="card"><div class="tbl-wrap"><table>
       <thead><tr><th>Reçu</th><th>Client</th><th>Profil</th><th>Mode</th><th class="num">Paquets</th><th>Décision</th><th></th></tr></thead>
       <tbody id="lignesPre"></tbody></table></div><div class="vide" id="videPre" hidden>Aucun pré-rapport reçu.</div></div>
+  </section>
+  <section id="rapports" class="tab-content">
+    <div class="card"><div class="tbl-wrap"><table>
+      <thead><tr><th>Reçu</th><th>Client</th><th>Profil</th><th class="num">Paquets</th><th>Courrier</th><th></th></tr></thead>
+      <tbody id="lignesRap"></tbody></table></div><div class="vide" id="videRap" hidden>Aucun rapport final reçu. Une box l'envoie quand sa mise en service est terminée ; il part par courrier au client si son courriel est renseigné.</div></div>
   </section>
 </main>
 
@@ -145,7 +152,7 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
   var API = '/api/v1/autoload';
   var ETATS = {'en attente': 'attente', 'préparation': 'preparation', 'en cours': 'cours', 'terminé': 'termine', 'révoqué': 'revoque'};
   var PROFILS = {lite: 'Lite', isp: 'ISP', full: 'Full'};
-  var CACHE = {boxes: [], jetons: [], pre: []};        // dernière réponse conservée : réaffichée pendant la relecture (double cache, §7)
+  var CACHE = {boxes: [], jetons: [], pre: [], rap: []};        // dernière réponse conservée : réaffichée pendant la relecture (double cache, §7)
   var tt = null;
 
   function $(id) { return document.getElementById(id); }
@@ -217,13 +224,22 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
         + (p.refuse ? '' : '<button class="btn sm danger" data-act="refuser-pre" data-id="' + esc(p.empreinte) + '">✋ Refuser</button>') + '</td></tr>';
     }).join('');
   }
-  function tout() { rendStats(); rendBoxes(); rendJetons(); rendPre(); }
+  function rendRap() {
+    $('videRap').hidden = CACHE.rap.length > 0;
+    $('lignesRap').innerHTML = CACHE.rap.map(function (r) {
+      return '<tr><td class="dim">' + heure(r.recu_le) + '</td><td><span class="nom">' + esc(r.client) + '</span></td><td>' + esc(PROFILS[r.profil] || r.profil) + '</td>'
+        + '<td class="num">' + num(r.paquets) + '</td><td>' + (r.envoye ? '<span class="pill actif">✉️ envoyé</span>' : '<span class="dim">—</span>') + '</td>'
+        + '<td><button class="btn sm" data-act="voir-rap" data-id="' + num(r.id) + '">🔍 Voir</button></td></tr>';
+    }).join('');
+  }
+  function tout() { rendStats(); rendBoxes(); rendJetons(); rendPre(); rendRap(); }
 
   function rafraichir() {
-    return Promise.all([api('/boxes'), api('/jetons'), api('/prerapports')]).then(function (r) {
+    return Promise.all([api('/boxes'), api('/jetons'), api('/prerapports'), api('/rapports')]).then(function (r) {
       if (r[0].ok && Array.isArray(r[0].data)) CACHE.boxes = r[0].data;
       if (r[1].ok && Array.isArray(r[1].data)) CACHE.jetons = r[1].data;
       if (r[2].ok && Array.isArray(r[2].data)) CACHE.pre = r[2].data;
+      if (r[3].ok && Array.isArray(r[3].data)) CACHE.rap = r[3].data;
       if (!r[0].ok && r[0].status !== 401) errorToast('Lecture impossible (' + (r[0].status || 'réseau') + ') : ' + detail(r[0], 'service indisponible'));
       tout();
     });
@@ -237,9 +253,13 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
     api('/jetons', 'POST', corps).then(function (r) {
       if (!r.ok) { b.disabled = false; if (r.status !== 401) errorToast('Jeton non généré : ' + detail(r, 'refusé')); return; }
       var jeton = r.data;
+      var email = $('fEmail').value.trim();
       return api('/clients/' + encodeURIComponent(client) + '/abonnement', 'POST', {statut: 'actif', mois: mois, formule: profil + '_' + mois + 'm'}).then(function (a) {
-        b.disabled = false;
         if (!a.ok) errorToast('Jeton généré, mais l\'abonnement n\'a pas été posé : ' + detail(a, 'refusé') + ' — réglez-le dans la liste.');
+        return email ? api('/clients/' + encodeURIComponent(client) + '/contact', 'POST', {email: email}) : {ok: true};
+      }).then(function (c) {
+        b.disabled = false;
+        if (!c.ok) errorToast('Jeton généré, mais le courriel n\'a pas été enregistré : ' + detail(c, 'refusé'));
         $('mjClient').textContent = client + ' · ' + (PROFILS[profil] || profil) + ' · ' + mois + ' mois';
         $('mjValeur').textContent = jeton.valeur;
         $('modalJeton').className = 'modal show';
@@ -279,6 +299,16 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
           + '<p class="dim">Comptes créés : ' + esc((p.comptes || []).join(', ')) + ' · secrets : ' + esc((p.secrets || []).join(', ') || 'aucun') + ' (jamais leur valeur)</p>'
           + '<h3 style="margin-top:.8rem;color:var(--cyan)">📦 ' + (p.paquets || []).length + ' paquets</h3><ul class="liste">' + (p.paquets || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>'
           + '<p class="dim">Empreinte ' + esc(String(id).slice(0, 16)) + '…</p><div class="btn-group" style="margin-top:.8rem"><button class="btn" data-act="fermer-pre">Fermer</button></div>';
+        $('modalPre').className = 'modal show';
+      });
+    } else if (act === 'voir-rap') {
+      api('/rapports/' + num(id)).then(function (r) {
+        if (!r.ok) { if (r.status !== 401) errorToast('Rapport illisible : ' + detail(r, 'erreur')); return; }
+        var p = r.data || {}, mn = Math.max(1, Math.round((num(p.fin) - num(p.debut)) / 60));
+        $('detailPre').innerHTML = '<h3 style="color:var(--cyan)">📄 Rapport final — ' + esc(p.client) + '</h3>'
+          + '<p class="dim">Profil ' + esc(PROFILS[p.profil] || p.profil) + ' · ' + esc(p.domaine) + ' · ' + mn + ' min · comptes : ' + esc((p.comptes || []).join(', ')) + '</p>'
+          + '<h3 style="margin-top:.8rem;color:var(--cyan)">📦 ' + (p.paquets || []).length + ' paquets</h3><ul class="liste">' + (p.paquets || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>'
+          + '<div class="btn-group" style="margin-top:.8rem"><button class="btn" data-act="fermer-pre">Fermer</button></div>';
         $('modalPre').className = 'modal show';
       });
     } else if (act === 'fermer-pre') $('modalPre').className = 'modal';
