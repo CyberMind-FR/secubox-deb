@@ -72,6 +72,10 @@ Chaque émission, réclamation, refus (avec la raison), révocation et changemen
 
 Données : `/var/lib/secubox/autoload/jetons.db` (0600, dossier 0750). Variables : `SECUBOX_AUTOLOAD_DB`, `SECUBOX_AUTOLOAD_AUDIT` (tests).
 
+## Banc de bout en bout sans matériel (#2193)
+
+`tests/test_banc_2193.py` fait tourner **ensemble** le vrai moteur de l'agent, le vrai client HTTP, le vrai service d'enrôlement (applications publique et tunnel), de vrais jetons, un fichier de réponses signé avec un vrai gpg et de vraies clés WireGuard ; seuls apt, systemctl et wg-quick sont des faux. Huit scénarios : parcours zero-touch complet (délai de grâce attendu, progression, audit sans valeur de jeton), refus de l'opérateur pendant la grâce (rien d'installé), infrastructure injoignable puis reprise sans rejouer l'enrôlement, jeton révoqué, abonnement suspendu puis réactivé, fichier de réponses modifié après signature, profil `isp`, box révoquée après coup (pair et livraisons retirés). Il ne remplace pas l'essai sur une vraie carte (#2186).
+
 ## Tests
 
     python3 -m pytest packages/secubox-autoload/tests
