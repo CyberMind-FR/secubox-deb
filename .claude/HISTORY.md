@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-09 — Fermeture de #2146 (profils) et de #2050 (suite en #2180) : closes #2146, closes #2050
+
+#2146 : profils lite/isp/full livrés, release alpha.10 publiée, paquets de profils 1.0.42 dans l'index trixie ; l'essai ESPRESSObin est suivi en #2177. #2050 : vagues 0, 2, 3, 4 faites, 60 transitoires retirés des sources (PR #2179) et de l'index apt trixie, profils 1.0.42 publiés avant le retrait. Le reste (outillage vague 1, écrivains concurrents, méta-paquets en vues, code mort /check, WireGuard/Reality, surf encore en root) est repris dans #2180.
+
 ## 2026-10-09 — Vague 5 (#2050) : retrait des 60 paquets transitoires (ref #2050, ref #2146)
 
 Les 60 répertoires `packages/secubox-*` dont la section est `oldlibs` (publiés un cycle dans alpha.10) sont retirés des sources ; `gabriel-mood` (source mixte `sbxos-audio-mood`) est conservé. Références réparées : liste « hors-arbre » de `arbre.yaml`, profil `secubox-profils` 1.0.42, liste `AvailablePackages` du CLI Go, `profiles/tier-standard.yaml`, source de `scripts/sync-sbxui.sh`, chemins des unités devwatch/freeboxtv dans `test_sockets_chmod_2026.py`. Tests de transition (transitoire vide, postinst du transitoire) remplacés par « le répertoire n'existe plus ». Les absorbants gardent `Replaces`/`Breaks`. Une box encore sur l'ancien module doit d'abord passer par alpha.10.
