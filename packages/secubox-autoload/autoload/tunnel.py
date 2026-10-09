@@ -47,14 +47,21 @@ class TunnelErreur(Exception):
 class Pairs:
     """Les pairs du hub : une clé publique, une adresse. Même base SQLite que les jetons (un seul fichier 0600 à protéger)."""
 
-    def __init__(self, db: Path, horloge: Callable[[], float] = time.time):
-        self.db, self._horloge = Path(db), horloge
+    def __init__(self, db: Path, horloge: Callable[[], float] = time.time, lecture_seule: bool = False):
+        """`lecture_seule` : pour l'assistant root (tunnel-sync) — il lit les pairs, ne crée ni ne modifie jamais la base du service."""
+        self.db, self._horloge, self._ro = Path(db), horloge, lecture_seule
+        if lecture_seule:
+            return
         self.db.parent.mkdir(parents=True, exist_ok=True)
         with self._cx() as cx:
             cx.executescript("CREATE TABLE IF NOT EXISTS pairs (cle_pub TEXT PRIMARY KEY, adresse TEXT NOT NULL UNIQUE, "
                              "cree_le INTEGER NOT NULL, retire_le INTEGER)")
 
     def _cx(self) -> sqlite3.Connection:
+        if self._ro:
+            cx = sqlite3.connect(f"file:{self.db}?mode=ro", uri=True, timeout=15, isolation_level=None)
+            cx.row_factory = sqlite3.Row
+            return cx
         cx = sqlite3.connect(self.db, timeout=15, isolation_level=None)
         cx.row_factory = sqlite3.Row
         return cx

@@ -30,7 +30,7 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes
-CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH
 ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload-audit.log /run/secubox /etc/wireguard
 
 [Install]

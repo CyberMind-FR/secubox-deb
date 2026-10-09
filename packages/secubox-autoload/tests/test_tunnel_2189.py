@@ -170,3 +170,20 @@ def test_revoquer_un_jeton_reclame_retire_le_pair(tmp_path):
     cle = reg.revoquer(e.id, "volée")
     p.retirer(cle)
     assert p.actifs() == []
+
+
+def test_pairs_en_lecture_seule_lit_sans_jamais_ecrire(tmp_path):
+    """L'assistant root ne CRÉE ni ne modifie la base du service (elle appartient à secubox-autoload) : il l'ouvre en lecture seule."""
+    base = tmp_path / "j.db"
+    T.Pairs(base).attribuer(CLE_A)
+    avant = base.read_bytes()
+    ro = T.Pairs(base, lecture_seule=True)
+    assert [p["cle_pub"] for p in ro.actifs()] == [CLE_A]
+    with pytest.raises(Exception):
+        ro.attribuer(CLE_B)
+    with pytest.raises(Exception):
+        ro.retirer(CLE_A)
+    assert base.read_bytes() == avant
+    absente = tmp_path / "nouvelle.db"
+    T.Pairs(absente, lecture_seule=True)
+    assert not absente.exists()

@@ -1,3 +1,9 @@
+secubox-autoload (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * L'assistant root (autoloadctl tunnel-sync, appele par sudo depuis le service) lit la base des pairs en LECTURE SEULE (Pairs(lecture_seule=True)) : il ne cree ni ne modifie la base du service. Dans le bac a sable du service, root sans CAP_DAC_READ_SEARCH ne pouvait pas lire une base 0600 d'un autre proprietaire (constate sur gk2) : la capacite est ajoutee au CapabilityBoundingSet, et elle seule en lecture. L'echec de tunnel garde la FIN du message dans l'audit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 11:30:00 +0200
+
 secubox-autoload (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * tunnel : `wg syncconf` effaçait la clé privée du hub (constaté sur gk2 : sans PrivateKey dans la configuration appliquée, syncconf éteint la clé de l'interface, PostUp ne s'exécutant qu'à la montée). La clé est ajoutée au seul fichier passé à syncconf (0600, dossier privé, supprimé ensuite), jamais à la configuration posée ni en argument. 3 tests.
