@@ -128,7 +128,6 @@ def main(argv=None):
         elif a.cmd == "tunnel-sync":
             pairs_root = T.Pairs(db) if db.exists() else _PairsVides()          # root ne CRÉE jamais la base : elle appartient au service
             n = T.synchroniser(pairs_root, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)))
-            T.accuser_sync(db.parent)                                                  # rend au service d'enrôlement son accusé
             print(f"{n} pair(s) appliqué(s)")
         elif a.cmd == "abonnement":
             print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client")

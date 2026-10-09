@@ -20,20 +20,18 @@ Restart=on-failure
 RestartSec=3
 UMask=0027
 LimitCORE=0
-NoNewPrivileges=yes
+# NoNewPrivileges=no est requis ICI : le sudoers du module accorde à secubox-autoload UN argv exact (autoloadctl tunnel-sync, qui applique les pairs
+# WireGuard en root) ; avec NoNewPrivileges=yes sudo serait neutralisé. ATTENTION — NE PAS AJOUTER ProtectKernelTunables, ProtectKernelModules,
+# ProtectKernelLogs, RestrictSUIDSGID, LockPersonality, RestrictNamespaces, RestrictAddressFamilies, PrivateDevices, SystemCallFilter ni
+# MemoryDenyWriteExecute : chacun impose implicitement NoNewPrivileges=yes via seccomp et ferme la porte du helper (précédent voicestudio, #1917).
+# Le bac à sable se resserre par le profil AppArmor (enforce) et les chemins : l'assistant root hérite de ce système de fichiers en lecture seule.
+NoNewPrivileges=no
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
 ProtectControlGroups=yes
-RestrictSUIDSGID=yes
-LockPersonality=yes
-RestrictAddressFamilies=AF_UNIX AF_INET
-CapabilityBoundingSet=
-ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload-audit.log /run/secubox
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE
+ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload-audit.log /run/secubox /etc/wireguard
 
 [Install]
 WantedBy=multi-user.target

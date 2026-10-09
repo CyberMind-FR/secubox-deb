@@ -26,7 +26,6 @@ if [ "$1" = "configure" ]; then
     fi
 
     systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl enable --now secubox-autoload-sync.path >/dev/null 2>&1 || true
     if [ -f /var/lib/secubox/autoload/hub.pub ]; then
         systemctl enable secubox-autoload.service >/dev/null 2>&1 || true
         # try-restart : une mise à jour ne démarre pas un service que l'exploitant a arrêté.

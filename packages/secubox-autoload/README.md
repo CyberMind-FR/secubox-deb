@@ -51,7 +51,7 @@ Deux applications dans un processus (`/usr/sbin/secubox-autoload-api`), utilisat
 
 **Tunnel** (TCP `10.64.0.1:8470`, uniquement dans WireGuard, `IP_FREEBIND`) : `POST /progression`, `POST /prerapport`, `GET /prerapport/{empreinte}/refus`. L'identité de la box est l'**adresse source de la connexion** (WireGuard ne laisse passer d'un pair que sa propre adresse) ; aucun en-tête n'est cru, et ces routes n'existent pas dans l'application publique.
 
-Le service n'est pas root : il dépose `sync.demande`, l'unité root `secubox-autoload-sync` (CAP_NET_ADMIN seulement) lance `autoloadctl tunnel-sync` et rend l'accusé `sync.fait`.
+Le service n'est pas root, et aucune nouvelle unité root n'existe : il applique le tunnel par **un argv exact** (`sudo -n /usr/sbin/autoloadctl tunnel-sync`, `sudoers.d/secubox-autoload`). `NoNewPrivileges=no` est requis pour cela (exception notée dans `.claude/RULES-CODE.md`) ; le profil AppArmor reste en enforce.
 
 Pare-feu : `udp/51830` en entrée et `tcp/8470` depuis `wg-autoload` seulement (`/etc/nftables.d/zz-secubox-autoload.nft`). La **redirection udp/51830 de la Freebox vers gk2** est à faire à la main. Journal d'audit : `/var/log/secubox/autoload-audit.log`.
 

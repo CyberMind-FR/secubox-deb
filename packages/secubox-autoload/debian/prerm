@@ -2,7 +2,7 @@
 set -e
 case "$1" in
     remove|deconfigure)
-        systemctl disable --now secubox-autoload.service secubox-autoload-sync.path >/dev/null 2>&1 || true
+        systemctl disable --now secubox-autoload.service >/dev/null 2>&1 || true
         ;;
 esac
 #DEBHELPER#

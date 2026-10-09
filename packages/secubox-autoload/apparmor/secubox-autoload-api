@@ -15,6 +15,8 @@
 
   /usr/sbin/secubox-autoload-api r,
   /usr/bin/python3* rix,
+  # Le seul assistant privilégié : sudo (sudoers à argv exact), qui s'exécute hors de ce profil ; ce qu'il peut faire est borné par le sudoers.
+  /usr/bin/sudo Ux,
   /usr/lib/secubox/autoload/** r,
   /usr/lib/secubox/ r,
   /usr/lib/python3/dist-packages/** r,

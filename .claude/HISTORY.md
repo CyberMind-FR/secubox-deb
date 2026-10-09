@@ -11,7 +11,7 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-10 — Auto-Load : service d'enrôlement et panel côté infrastructure (ref #2190, ref #2182)
 
-secubox-autoload 0.3.0 : deux applications (publique sur socket Unix : POST /enrol à preuve de jeton + administration ; tunnel sur 10.64.0.1:8470 : progression, pré-rapport, refus ; identité = adresse source dans WireGuard), registre étendu (jeton `gk2_`, échéance et formule d'abonnement, statut et progression des box, pré-rapports), unités durcies dont une unité root pour `wg syncconf`, AppArmor enforce, nginx, nftables. À déployer sur gk2 ; la redirection udp/51830 de la Freebox est à faire à la main. Suite : #2191 (WebUI), #2192 (rapport final), #2193 (banc de bout en bout) ; #2186 (netboot) attend le matériel.
+secubox-autoload 0.3.0 : deux applications (publique sur socket Unix : POST /enrol à preuve de jeton + administration ; tunnel sur 10.64.0.1:8470 : progression, pré-rapport, refus ; identité = adresse source dans WireGuard), registre étendu (jeton `gk2_`, échéance et formule d'abonnement, statut et progression des box, pré-rapports), unités durcies application du tunnel par sudoers à argv exact (aucune nouvelle unité root), AppArmor enforce, nginx, nftables. À déployer sur gk2 ; la redirection udp/51830 de la Freebox est à faire à la main. Suite : #2191 (WebUI), #2192 (rapport final), #2193 (banc de bout en bout) ; #2186 (netboot) attend le matériel.
 
 ## 2026-10-10 — actord : les robots connus sont classés à part (ref #2201)
 

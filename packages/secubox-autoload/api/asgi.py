@@ -16,7 +16,6 @@ def construire():
     reg = J.Registre(dossier / "jetons.db", Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
     pairs = T.Pairs(dossier / "jetons.db")
 
-    def appliquer():
-        T.demander_sync(dossier)
+    appliquer = T.appliquer_par_sudo
     return (creer_app(reg, pairs, cle_hub_pub, appliquer, portee="public"),
             creer_app(reg, pairs, cle_hub_pub, appliquer, portee="tunnel"))

@@ -21,7 +21,6 @@ import sqlite3
 import subprocess
 import tempfile
 import time
-import uuid
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -153,34 +152,15 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
 
 
 DOSSIER_DEFAUT = Path("/var/lib/secubox/autoload")
+SUDO_SYNC = ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"]       # UN argv exact : c'est ce que le sudoers du paquet accorde, rien d'autre
 
 
-def demander_sync(dossier: Path = DOSSIER_DEFAUT, attente_s: float = 15.0, horloge: Callable[[], float] = time.monotonic,
-                  dormir: Callable[[float], None] = time.sleep) -> None:
-    """Le service d'enrôlement n'est PAS root : il dépose `sync.demande` (un jeton d'identification), l'unité `.path` lance `autoloadctl tunnel-sync` en root,
-    qui recopie ce jeton dans `sync.fait`. On attend cet accusé : la box ne doit pas se voir répondre avant que son pair existe."""
-    dossier = Path(dossier)
-    marque = uuid.uuid4().hex
-    tmp = dossier / f".sync-{marque}"
-    tmp.write_text(marque, encoding="ascii")
-    os.replace(tmp, dossier / "sync.demande")
-    fin = horloge() + attente_s
-    while horloge() < fin:
-        try:
-            if (dossier / "sync.fait").read_text(encoding="ascii").strip() == marque:
-                return
-        except OSError:
-            pass
-        dormir(0.25)
-    raise TunnelErreur("le tunnel n'a pas été appliqué à temps")
-
-
-def accuser_sync(dossier: Path = DOSSIER_DEFAUT) -> None:
-    """Côté root, après un `tunnel-sync` réussi : rend à la demande en attente son accusé."""
-    dossier = Path(dossier)
+def appliquer_par_sudo(executeur=subprocess.run, timeout: int = 30) -> None:
+    """Le service d'enrôlement n'est PAS root (et aucune nouvelle unité root n'est permise) : il demande l'application du tunnel au SEUL assistant
+    que son sudoers lui accorde. L'enrôlement n'est confirmé à la box qu'une fois les pairs réellement appliqués."""
     try:
-        marque = (dossier / "sync.demande").read_text(encoding="ascii").strip()
-    except OSError:
-        return
-    if re.fullmatch(r"[0-9a-f]{32}", marque):
-        _ecrit_prive(dossier / "sync.fait", marque)
+        r = executeur(SUDO_SYNC, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise TunnelErreur(f"synchronisation impossible ({type(e).__name__})") from e
+    if r.returncode != 0:
+        raise TunnelErreur("synchronisation refusée : " + (r.stderr or r.stdout or "").strip()[:200])

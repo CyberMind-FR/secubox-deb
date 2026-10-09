@@ -2,59 +2,58 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#2190 : demande et accusé de synchronisation du tunnel entre le service (non root) et l'unité root."""
-import stat
+"""#2190 : application du tunnel par sudo à argv exact (le service n'est pas root, aucune nouvelle unité root)."""
+import subprocess
+from pathlib import Path
 
 import pytest
 
 from autoload import tunnel as T
 
-
-class Horloge:
-    def __init__(self):
-        self.t = 0.0
-
-    def __call__(self):
-        return self.t
-
-    def dormir(self, s):
-        self.t += s
+ICI = Path(__file__).resolve().parents[1]
 
 
-def test_la_demande_attend_l_accuse_de_la_meme_marque(tmp_path):
-    h = Horloge()
-    etapes = []
-
-    def dormir(s):
-        h.dormir(s)
-        etapes.append(1)
-        if len(etapes) == 3:
-            T.accuser_sync(tmp_path)                                            # l'unité root a terminé
-    T.demander_sync(tmp_path, attente_s=10, horloge=h, dormir=dormir)
-    assert len(etapes) == 3
-    assert stat.S_IMODE((tmp_path / "sync.fait").stat().st_mode) == 0o600
+class R:
+    def __init__(self, rc=0, err=""):
+        self.returncode, self.stdout, self.stderr = rc, "", err
 
 
-def test_sans_accuse_la_demande_echoue_proprement(tmp_path):
-    h = Horloge()
+def test_l_argv_est_exact_avec_delai():
+    vus = []
+
+    def ex(argv, **kw):
+        vus.append((argv, kw))
+        return R()
+    T.appliquer_par_sudo(ex)
+    assert vus[0][0] == ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"] and vus[0][1].get("timeout")
+
+
+def test_le_sudoers_accorde_exactement_cet_argv_et_rien_d_autre():
+    lignes = [l for l in (ICI / "sudoers.d" / "secubox-autoload").read_text().splitlines() if l and not l.startswith("#")]
+    assert lignes == ["secubox-autoload ALL=(root) NOPASSWD: /usr/sbin/autoloadctl tunnel-sync"]
+    assert " ".join(T.SUDO_SYNC[2:]) in lignes[0]
+
+
+@pytest.mark.parametrize("exc", [OSError("introuvable"), subprocess.TimeoutExpired("sudo", 30)])
+def test_un_echec_systeme_devient_une_erreur_de_tunnel(exc):
+    def ex(argv, **kw):
+        raise exc
     with pytest.raises(T.TunnelErreur):
-        T.demander_sync(tmp_path, attente_s=2, horloge=h, dormir=h.dormir)
+        T.appliquer_par_sudo(ex)
 
 
-def test_un_ancien_accuse_ne_valide_pas_une_nouvelle_demande(tmp_path):
-    (tmp_path / "sync.fait").write_text("0" * 32)
-    h = Horloge()
-    with pytest.raises(T.TunnelErreur):
-        T.demander_sync(tmp_path, attente_s=2, horloge=h, dormir=h.dormir)
+def test_un_refus_de_sudo_est_signale():
+    with pytest.raises(T.TunnelErreur, match="refusée"):
+        T.appliquer_par_sudo(lambda argv, **kw: R(1, "sudo: a password is required"))
 
 
-@pytest.mark.parametrize("contenu", ["", "pas-hex", "../../etc/passwd", "A" * 32, "0" * 31, "0" * 33, "0" * 32 + "\nPostUp"])
-def test_une_demande_malformee_n_est_jamais_accusee(tmp_path, contenu):
-    (tmp_path / "sync.demande").write_text(contenu)
-    T.accuser_sync(tmp_path)
-    assert not (tmp_path / "sync.fait").exists()
-
-
-def test_accuser_sans_demande_ne_fait_rien(tmp_path):
-    T.accuser_sync(tmp_path)
-    assert not (tmp_path / "sync.fait").exists()
+def test_l_unite_garde_sudo_possible_sans_root():
+    """NoNewPrivileges=no est requis (sinon sudo est neutralisé) ; les options qui l'imposent par seccomp en sont ABSENTES (précédent voicestudio, #1917)."""
+    u = (ICI / "systemd" / "secubox-autoload.service").read_text()
+    reel = [l for l in u.splitlines() if l and not l.startswith("#")]
+    assert "NoNewPrivileges=no" in reel and "User=secubox-autoload" in reel
+    for interdit in ("ProtectKernelTunables", "RestrictSUIDSGID", "LockPersonality", "RestrictNamespaces", "SystemCallFilter", "MemoryDenyWriteExecute",
+                     "RestrictAddressFamilies", "ProtectKernelModules", "ProtectKernelLogs", "PrivateDevices"):
+        assert not any(l.startswith(interdit + "=") for l in reel), interdit
+    assert not any(l.startswith("User=root") for l in reel)
+    assert not (ICI / "systemd" / "secubox-autoload-sync.service").exists()                   # aucune nouvelle unité root
