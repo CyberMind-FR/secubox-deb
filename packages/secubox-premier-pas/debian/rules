@@ -23,6 +23,7 @@ override_dh_auto_install:
 	install -d debian/secubox-premier-pas/usr/lib/systemd/system
 	install -m 644 systemd/*.service systemd/*.timer systemd/*.path debian/secubox-premier-pas/usr/lib/systemd/system/
 	install -D -m 644 exemples/profil.toml debian/secubox-premier-pas/usr/share/doc/secubox-premier-pas/examples/profil.toml
+	install -D -m 644 exemples/reponses-autoload.toml debian/secubox-premier-pas/usr/share/doc/secubox-premier-pas/examples/reponses-autoload.toml
 
 override_dh_auto_test:
 	true

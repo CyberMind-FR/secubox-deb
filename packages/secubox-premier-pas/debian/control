@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-premier-pas
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core, systemd-timesyncd | time-daemon
+Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core, systemd-timesyncd | time-daemon, gpgv
 Recommends: secubox-auth,
  secubox-profiles,
  secubox-p2p

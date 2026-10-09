@@ -8,6 +8,9 @@
   premier-pasctl examiner  [--profil F]   ce qui est prêt, manque ou est faux
   premier-pasctl plan      [--profil F]   les actions exactes, sans rien faire
   premier-pasctl appliquer [--profil F]   applique (root) ; s'arrête à la 1re erreur
+  premier-pasctl reponses --fichier F --signature S [--trousseau K]
+                                          vérifie un fichier de réponses Auto-Load (#2184) :
+                                          signature, schéma strict, secrets par référence
   premier-pasctl etat                     où en est la box (lu par les faces)
   premier-pasctl silencieux               au démarrage : profil prêt → appliqué ;
                                           sinon l'assistant s'ouvrira à l'étape manquante
@@ -25,7 +28,9 @@ _ici = Path(__file__).resolve().parents[1]
 if (_ici / "premier_pas").is_dir():
     sys.path.insert(0, str(_ici))
 
-from premier_pas import moteur as M, profil as P  # noqa: E402
+from premier_pas import moteur as M, profil as P, provision as V  # noqa: E402
+
+TROUSSEAU_DEFAUT = Path("/usr/share/secubox/autoload/provisioning.gpg")
 
 
 def _profil(args):
@@ -48,6 +53,11 @@ def main(argv=None):
         s = sub.add_parser(c)
         s.add_argument("--profil")
         s.add_argument("--json", action="store_true")
+    r = sub.add_parser("reponses")
+    r.add_argument("--fichier", required=True)
+    r.add_argument("--signature", required=True)
+    r.add_argument("--trousseau", default=str(TROUSSEAU_DEFAUT))
+    r.add_argument("--json", action="store_true")
     sub.add_parser("etat")
     sub.add_parser("silencieux")
     sub.add_parser("appliquer-demande")
@@ -61,6 +71,16 @@ def main(argv=None):
             etat = {}
         print(json.dumps({"fait": fait, **etat}, ensure_ascii=False, indent=1))
         return 0
+
+    if a.cmd == "reponses":
+        try:
+            ex = V.charger_signe(Path(a.fichier), Path(a.signature), Path(a.trousseau))
+        except (V.SignatureInvalide, V.FichierInvalide) as e:
+            print(json.dumps({"valide": False, "refus": str(e)}, ensure_ascii=False) if a.json else f"refusé : {e}", file=sys.stderr if not a.json else sys.stdout)
+            return 4
+        out = {"valide": ex.complet, "manquantes": ex.manquantes, "erreurs": ex.erreurs}
+        print(json.dumps(out, ensure_ascii=False, indent=1) if a.json else ("accepté" if ex.complet else f"incomplet : {out}"))
+        return 0 if ex.complet else 3
 
     if a.cmd == "appliquer-demande":
         demande = Path("/var/lib/secubox/premier-pas/demande")

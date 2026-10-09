@@ -1,3 +1,10 @@
+secubox-premier-pas (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Fichier de reponses du provisionnement Auto-Load (#2184, parent #2182) : premier_pas/provision.py. Le profil de l'assistant etendu d'une section [provision] (mode auto ou one-shot, jeton par REFERENCE ref:/etc/secubox/secrets/<nom>, lot, grace_min, infra), en schema STRICT (section ou cle inconnue refusee, jeton d'invitation en clair refuse, fichier de plus de 64 Kio refuse) et SIGNE (signature detachee verifiee par gpgv contre un trousseau fourni ; fichier modifie, cle inconnue ou signature absente refuses). Mode auto : refuse si le profil n'est pas complet (pas d'ecran pour demander).
+  * premier-pasctl reponses --fichier F --signature S [--trousseau K] : verifie un fichier de reponses (code 4 : refuse). Dependance gpgv. Exemple : examples/reponses-autoload.toml. L'assistant (mode lenient) est inchange.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 00:30:00 +0200
+
 secubox-premier-pas (0.4.10-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-auth au lieu de secubox-users (transitoire, #2050).
