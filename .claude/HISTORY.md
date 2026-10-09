@@ -9,9 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-10-09 — ad-guard 1.8.0 : panneau TV simplifié, mode auto par défaut (ref #2174)
+## 2026-10-09 — ad-guard 1.8.0 : panneau TV simplifié, mode auto par défaut : closes #2174
 
-Une page : état en une phrase, une carte et un interrupteur par appareil (auto en interne), liste « une pub passe encore ? » (Bloquer / C'est légitime), anciens onglets et modes observe/block/off sous « Avancé ». Après chaque bascule le drop-in Unbound est relu : le panneau dit si le changement est appliqué ou ce qui diverge. Déployé gk2 (dpkg + redémarrage de l'agrégateur, routes 401 puis état réel cohérent). Reste : validation visuelle par le propriétaire, index apt à republier (clé verrouillée). Pas de fermeture d'issue tant que non validé.
+Une page : état en une phrase, une carte et un interrupteur par appareil (auto en interne), liste « une pub passe encore ? » (Bloquer / C'est légitime), anciens onglets et modes observe/block/off sous « Avancé ». Après chaque bascule le drop-in Unbound est relu : le panneau dit si le changement est appliqué ou ce qui diverge. Déployé gk2 (dpkg + redémarrage de l'agrégateur, routes 401 puis état réel cohérent). Reste : validation visuelle par le propriétaire, index apt à republier (clé verrouillée). Validé par le propriétaire le 2026-10-09.
 
 ## 2026-10-09 — Profils, fuite mémoire de gk2, fermetures vérifiées : closes #1986, closes #2024, closes #2028, closes #2032, closes #2034, closes #2037, closes #2039, closes #2042, closes #2045, closes #2047 (ref #2146, ref #2050)
 - **Fermetures** : dix issues, après audit en lecture seule (correctif fusionné ET version déployée sur la box concernée, vérifiée par `dpkg -l`, unités et configuration). Laissées ouvertes malgré un correctif déployé : #2021 (le 502 au démarrage de gk3 n'est confirmé que par un redémarrage), #1978 (le panneau n'a pas été vu, seulement ses sources de données), #2030 (test réel du micro dans un navigateur), #2026 (`secubox-zia` 0.1.25 non déployé).
