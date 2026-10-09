@@ -419,3 +419,11 @@ func (s *Server) handleFeedback(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"ok": true, "label": in.Label, "actor": id})
 }
+
+// handleRobots : les robots connus, classés à part (#2201). Des compteurs par famille, aucune adresse.
+func (s *Server) handleRobots(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	r := s.robots
+	s.mu.Unlock()
+	writeJSON(w, r.Snapshot())
+}

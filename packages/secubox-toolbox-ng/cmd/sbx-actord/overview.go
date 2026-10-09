@@ -53,6 +53,8 @@ type Apercu struct {
 	Techniques  map[string][]Technique `json:"techniques"`
 	// ActiviteActeurs : même découpage que Activite24h, par acteur (seulement ceux qui ont de l'activité sur la période).
 	ActiviteActeurs map[string][]int `json:"activite_acteurs"`
+	// Robots : les robots connus, classés à part (#2201). Ils ne comptent ni dans les pays, ni dans les événements récents, ni dans l'activité.
+	Robots []RobotFamille `json:"robots"`
 }
 
 func typeEvenement(e envelope.Envelope) string {
@@ -76,10 +78,16 @@ func apercu(evs []envelope.Envelope, acteurs []*graph.Actor, now int64) Apercu {
 		}
 	}
 	out := Apercu{GenereLe: now, Echantillon: len(evs), TopPays: []PaysN{}, Recents: []EvenementRecent{},
-		Activite24h: make([]int, 24), Techniques: map[string][]Technique{}, ActiviteActeurs: map[string][]int{}}
+		Activite24h: make([]int, 24), Techniques: map[string][]Technique{}, ActiviteActeurs: map[string][]int{}, Robots: []RobotFamille{}}
 	pays := map[string]int{}
 	tech := map[string]map[string]int{}
-	for i, e := range evs {
+	gardes := 0
+	for _, e := range evs {
+		if _, robot := estRobotConnu(&e); robot {
+			continue
+		}
+		i := gardes
+		gardes++
 		if e.GeoCountry != "" {
 			pays[e.GeoCountry]++
 		}
@@ -145,7 +153,12 @@ func (s *Server) handleApercu(w http.ResponseWriter, _ *http.Request) {
 		s.mu.Lock()
 		acteurs := s.graph.Actors()
 		s.mu.Unlock()
-		return apercu(evs, acteurs, time.Now().Unix()), nil
+		out := apercu(evs, acteurs, time.Now().Unix())
+		s.mu.Lock()
+		r := s.robots
+		s.mu.Unlock()
+		out.Robots = r.Snapshot()
+		return out, nil
 	})
 	if err != nil {
 		http.Error(w, "aperçu indisponible", http.StatusInternalServerError)

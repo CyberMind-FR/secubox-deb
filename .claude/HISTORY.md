@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — actord : les robots connus sont classés à part (ref #2201)
+
+meta-externalagent (2 743 adresses, 65 pays) était l'acteur critique n°1 alors qu'il ne fait que parcourir git.gk2. toolbox-ng 0.5.9 / waf-ng 1.19.3 : un accès de robot annoncé refusé par la politique du vhost (étiquette unique `robots`, sévérité basse, non bloqué, famille nommée) ne crée plus d'acteur ; il est compté par famille (`GET /robots`, champ `robots` de l'aperçu) et la page Actor affiche une tuile dédiée. Dès qu'un robot sort de ce rôle, ses événements redeviennent ordinaires. À déployer : redémarrage de `secubox-actord` (puis page waf-ng).
+
 ## 2026-10-10 — WAF : l'auto-test sort des statistiques et des scores (ref #2200, ref #2201, ref #2202)
 
 Constat sur gk2 : actord est en shadow (aucun ban par la détection d'acteurs) ; les bans viennent de sbxwaf (nftables, 4 h) et tiennent (28 adresses réelles bannies en 24 h, aucune revue pendant son ban). L'auto-test de health-doctor (198.51.100.77) gonflait les chiffres : 572 des 5 073 « banned ». toolbox-ng 0.5.8 : il va dans `waf-selftest.log`, ni dans `waf-threats.log` ni vers actord. À déployer : sbxwaf redémarre (reload = restart). Suite : #2201 (robots connus classés à part), #2202 (étude de l'application des propositions d'actord).

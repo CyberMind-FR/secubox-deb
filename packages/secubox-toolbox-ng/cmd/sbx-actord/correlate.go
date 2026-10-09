@@ -86,6 +86,17 @@ func (s *Server) rebuild() {
 // persistance). Pur (graphe + scores), sans effet de bord ledger — réutilisé au
 // rebuild du graphe au démarrage. Retourne l'acteur, sa continuité et sa priorité.
 func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
+	// UN ROBOT CONNU N'EST PAS UN ACTEUR (#2201) : il est compté à part, et ne crée ni ne nourrit aucun acteur.
+	if famille, ok := estRobotConnu(e); ok {
+		s.mu.Lock()
+		if s.robots == nil {
+			s.robots = &Robots{}
+		}
+		r := s.robots
+		s.mu.Unlock()
+		r.Observe(famille, e.SrcIP, e.Timestamp, e.Vhost)
+		return "", 0, 0
+	}
 	obs := graph.Obs{Sig: signatureDe(e), Severity: e.Severity, Target: e.DstService,
 		Tags: e.BehaviorTags, Bloque: e.Action == envelope.ActionBlock, Timestamp: e.Timestamp}
 	s.mu.Lock()
@@ -117,6 +128,9 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 func (s *Server) correlate(e *envelope.Envelope) {
 	defer s.correlated.Add(1)
 	actorID, cont, prio := s.observe(e)
+	if actorID == "" {
+		return // robot connu : classé à part, sans preuve d'acteur (#2201)
+	}
 
 	// Preuve inviolable : chaque événement lie sa source à un acteur + sa priorité,
 	// horodaté et chaîné (RFC-0013 §7/§14). Best-effort : une preuve manquée ne

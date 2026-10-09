@@ -108,13 +108,15 @@
 
 
   /* Vue d'ensemble façon maquette : tuiles, carte du monde (Natural Earth, points de 3°), derniers événements. */
-  .tuiles3{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem}
+  .tuiles3{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.75rem;margin-bottom:1rem}
   .tuile3{border-radius:10px;padding:.7rem .9rem;border:1px solid var(--border);display:flex;align-items:center;gap:.7rem}
   .tuile3 .ti{font-size:1.5rem} .tuile3 .tv{font-size:1.7rem;font-weight:700;line-height:1;text-shadow:0 0 10px currentColor}
   .tuile3 .tl{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
   .tuile3.crit{background:rgba(255,68,102,.12);border-color:rgba(255,68,102,.45);color:var(--red)}
   .tuile3.susp{background:rgba(255,153,68,.12);border-color:rgba(255,153,68,.45);color:var(--orange)}
   .tuile3.obs{background:rgba(68,136,255,.12);border-color:rgba(68,136,255,.4);color:var(--blue)}
+  .tuile3.rob{background:rgba(160,160,180,.10);border-color:rgba(160,160,180,.35);color:var(--dim)}
+  .robdet{grid-column:1/-1;font-size:.72rem;color:var(--dim)}
   .vue2{display:grid;grid-template-columns:1.25fr 1fr;gap:1rem;align-items:start}
   @media(max-width:980px){.vue2{grid-template-columns:1fr}.tuiles3{grid-template-columns:1fr}}
   .carte-monde{display:grid;grid-template-columns:minmax(0,1fr) 140px;gap:12px;align-items:center}
@@ -570,7 +572,16 @@ function rendTuiles(){
   ACTS.forEach(function(a){var n=score(a);if(n>=70)c++;else if(n>=45)s++;else o++;});
   $('tuiles').innerHTML='<div class="tuile3 crit"><span class="ti">🚨</span><div><div class="tv">'+c+'</div><div class="tl">acteurs critiques</div></div></div>'
     +'<div class="tuile3 susp"><span class="ti">⚠️</span><div><div class="tv">'+s+'</div><div class="tl">acteurs suspects</div></div></div>'
-    +'<div class="tuile3 obs"><span class="ti">👁️</span><div><div class="tv">'+o+'</div><div class="tl">acteurs observés</div></div></div>';
+    +'<div class="tuile3 obs"><span class="ti">👁️</span><div><div class="tv">'+o+'</div><div class="tl">acteurs observés</div></div></div>'
+    +rendRobots();
+}
+// Robots connus (#2201) : classés à part, jamais dans les acteurs ni dans leurs scores. Des compteurs par famille, aucune adresse.
+function rendRobots(){
+  var r=(APERCU&&APERCU.robots)||[],t=0;
+  r.forEach(function(x){t+=num(x.hits);});
+  var det=r.slice(0,8).map(function(x){return esc(x.famille)+' '+num(x.hits)+' ('+num(x.ips)+' adr.)';}).join(' · ');
+  return '<div class="tuile3 rob"><span class="ti">🤖</span><div><div class="tv">'+t+'</div><div class="tl">accès de robots connus · '+r.length+' familles</div></div></div>'
+    +(det?'<div class="robdet">Robots connus, classés à part : '+det+'</div>':'');
 }
 function carteMonde(){
   var svg=$('carteMonde'),liste=$('paysTop'),pays=(APERCU&&APERCU.top_pays)||[],h='';

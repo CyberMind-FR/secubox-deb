@@ -1,3 +1,9 @@
+secubox-waf-ng (1.19.3-1~bookworm1) bookworm; urgency=medium
+
+  * Page Actor : tuile « accès de robots connus » et ligne par famille (#2201), alimentees par le champ robots de l'apercu d'actord ; les robots connus ne comptent plus dans les acteurs critiques, suspects ou observes. Valeurs serveur echappees. La grille des tuiles s'etend (auto-fit).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 09:00:00 +0200
+
 secubox-waf-ng (1.19.2-1~bookworm1) bookworm; urgency=medium
 
   * Page Actor et tableau WAF : meme correctif de la bande « terre » a -15 degres sur la carte du monde (#2146).
