@@ -93,6 +93,10 @@ class ClientInfra:
     def progression(self, etape: str, faites: int, total: int, termine: bool = False) -> None:
         self._tunnel("POST", "/progression", {"etape": etape, "faites": faites, "total": total, "termine": termine})
 
+    def rapport(self, rap: Dict) -> bool:
+        """Poste le rapport final ; rend vrai si l'infrastructure l'a envoyé par courrier au client."""
+        return bool(self._tunnel("POST", "/rapport", rap).get("envoye"))
+
     def refuse(self, empreinte: str) -> bool:
         if not isinstance(empreinte, str) or not _EMPREINTE.match(empreinte):
             raise ValueError("empreinte : 64 caractères hexadécimaux")

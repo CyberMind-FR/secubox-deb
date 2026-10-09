@@ -23,6 +23,9 @@ JETONS = [{"id": 1, "client": "boulangerie-dupont", "profil": "lite", "lot": "lo
           {"id": 3, "client": "atelier-martin", "profil": "lite", "lot": None, "serie": None, "etat": "emis", "abonnement": "suspendu", "formule": None,
            "abonnement_expire_le": None, "emis_le": 1, "expire_le": 2, "reclame_le": None}]
 PRE = [{"empreinte": "a" * 64, "client": "boulangerie-dupont", "profil": "lite", "mode": "auto", "paquets": 3, "recu_le": 1_800_000_050, "refuse": False, "motif": None}]
+RAPPORTS = [{"id": 5, "client": "boulangerie-dupont", "profil": "lite", "paquets": 3, "recu_le": 1_800_000_900, "envoye": True}]
+RAPPORT = {"client": "boulangerie-dupont", "profil": "lite", "paquets": ["secubox-core", PIEGE], "domaine": "c.secubox.in", "comptes": ["admin"], "tunnel_adresse": "10.64.0.2/32",
+           "debut": 1_800_000_000, "fin": 1_800_000_900, "etapes": ["plan"]}
 DETAIL = {"box": "boulangerie-dupont", "profil": "lite", "mode": "auto", "paquets": ["secubox-core", PIEGE], "comptes": ["admin"], "secrets": ["jeton"], "reseau": {"mode": "routeur", "domaine": "c.secubox.in"}}
 
 
@@ -56,6 +59,10 @@ def ouvre(navigateur, appels, surcharges=None):
             code, rep = 200, JETONS
         elif cle == ("GET", "/prerapports"):
             code, rep = 200, PRE
+        elif cle == ("GET", "/rapports"):
+            code, rep = 200, RAPPORTS
+        elif cle == ("GET", "/rapports/5"):
+            code, rep = 200, RAPPORT
         elif cle == ("GET", "/prerapports/" + "a" * 64):
             code, rep = 200, DETAIL
         elif cle == ("POST", "/jetons"):
@@ -106,12 +113,14 @@ def test_generation_du_jeton_pose_l_abonnement_et_montre_la_valeur_une_fois(navi
     p.select_option("#fProfil", "isp")
     p.select_option("#fMois", "24")
     p.fill("#fLot", "lot-test")
+    p.fill("#fEmail", "gerant@boulangerie.example")
     p.click("#btnGenerer")
     p.wait_for_selector("#modalJeton.show")
     assert p.inner_text("#mjValeur") == "gk2_" + "0123456789abcdef" * 2 and "client-042" in p.inner_text("#mjClient") and "24 mois" in p.inner_text("#mjClient")
     posts = [a for a in appels if a[0] == "POST"]
     assert posts[0][1:3] == ("/jetons", {"client": "client-042", "profil": "isp", "duree_jours": 90, "lot": "lot-test"})
     assert posts[1][1:3] == ("/clients/client-042/abonnement", {"statut": "actif", "mois": 24, "formule": "isp_24m"})
+    assert posts[2][1:3] == ("/clients/client-042/contact", {"email": "gerant@boulangerie.example"})
     p.click("button[data-act=fermer-modal]")
     assert p.locator("#modalJeton.show").count() == 0
     assert p.input_value("#fClient") == ""                                 # le formulaire est vidé : la valeur n'est plus nulle part
@@ -191,6 +200,19 @@ def test_la_derniere_reponse_reste_affichee_quand_la_relecture_echoue(navigateur
     p.click("button[data-act=rafraichir]")
     p.wait_for_selector("#erreur.show")
     assert p.locator("#lignesBoxes tr").count() == 3                        # double cache : on garde ce qu'on avait
+    ctx.close()
+
+
+def test_les_rapports_finaux_se_listent_et_se_lisent_echappes(navigateur):
+    appels = []
+    ctx, p, erreurs = ouvre(navigateur, appels)
+    p.click("button[data-tab=rapports]")
+    p.wait_for_selector("#lignesRap tr")
+    assert "envoyé" in p.inner_text("#lignesRap") and "boulangerie-dupont" in p.inner_text("#lignesRap")
+    p.click("button[data-act=voir-rap]")
+    p.wait_for_selector("#modalPre.show")
+    assert "Rapport final" in p.inner_text("#detailPre") and "15 min" in p.inner_text("#detailPre")
+    assert p.locator("#detailPre img").count() == 0 and p.evaluate("window.__pwn") is None and not erreurs
     ctx.close()
 
 

@@ -175,7 +175,8 @@ grace_min = {grace}
         def fabrique(rep):
             return VA.pour_mode(rep["provision"]["mode"], rep, dossier=self.tmp / "box", publier=self.infra.publier, refuse=self.infra.refuse,
                                 lire_confirmation=lambda: None, horloge=self.h, dormir=self._dormir)
-        return M.Moteur(self.cfg, executeur=self.sys, enroleur=self._enroler, valideur=valideur, fabrique_valideur=fabrique, rapporteur=self.infra.progression)
+        return M.Moteur(self.cfg, executeur=self.sys, enroleur=self._enroler, valideur=valideur, fabrique_valideur=fabrique, rapporteur=self.infra.progression,
+                        diffuseur=self.infra.rapport, horloge=self.h)
 
     def _enroler(self, jeton, serie, cle_pub, infra):
         rep = self.infra.enroler(jeton, serie, cle_pub, infra)
@@ -224,6 +225,11 @@ def test_A_parcours_complet_zero_touch(banc):
     assert {"jeton-emis", "jeton-reclame", "prerapport-recu"} <= {json.loads(l)["action"] for l in audit.splitlines()}
     assert banc.reg.lister()[0]["etat"] == "reclame" and "gk2_" not in audit
     assert banc.reg.livraison_autorisee(banc.pairs.actifs()[0]["cle_pub"]) is True
+    # le rapport final est arrivé à l'infrastructure, sans secret, avec les mêmes champs que sur la box
+    rapports = banc.admin.get("/rapports").json()
+    assert len(rapports) == 1 and rapports[0]["client"] == "client-042" and rapports[0]["paquets"] == 3
+    rap = banc.admin.get(f"/rapports/{rapports[0]['id']}").json()
+    assert rap == json.loads(banc.cfg.rapport.read_text()) and "gk2_" not in json.dumps(rap) and "argon2" not in json.dumps(rap)
     # un second passage ne refait rien, et le jeton consommé ne rouvre rien
     n = len(banc.sys.cmds)
     assert banc.moteur().run().ok and len(banc.sys.cmds) == n

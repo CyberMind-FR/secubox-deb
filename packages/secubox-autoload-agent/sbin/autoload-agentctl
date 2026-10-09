@@ -8,6 +8,7 @@
   autoload-agentctl run [--reponses F] [--signature S] [--trousseau K]   lance (ou reprend) le parcours ; mode d'après le fichier signé
   autoload-agentctl confirmer EMPREINTE                                  mode one-shot : confirme CE pré-rapport (son empreinte)
   autoload-agentctl etat                                                 où en est le parcours (sans secret)
+  autoload-agentctl rapport                                              le rapport final de la dernière mise en service
 
 Le fichier de réponses doit être SIGNÉ (clé « SecuBox Provisioning » du trousseau) : sans signature valide, rien ne démarre.
 """
@@ -25,7 +26,7 @@ if (_ici / "autoload_agent").is_dir():
     sys.path.insert(0, str(_ici))
     sys.path.insert(0, str(_ici.parent / "secubox-premier-pas"))
 
-from autoload_agent import client as C, moteur as M, validation as VA  # noqa: E402
+from autoload_agent import client as C, moteur as M, rapport as RP, validation as VA  # noqa: E402
 
 DOSSIER = Path(os.environ.get("SECUBOX_AUTOLOAD_AGENT_DOSSIER", "/var/lib/secubox/autoload-agent"))
 REPONSES = "/boot/secubox/autoload/reponses.toml"
@@ -50,7 +51,16 @@ def main(argv=None):
     c = sub.add_parser("confirmer")
     c.add_argument("empreinte")
     sub.add_parser("etat")
+    sub.add_parser("rapport")
     a = ap.parse_args(argv)
+
+    if a.cmd == "rapport":
+        try:
+            print(RP.texte(json.loads((DOSSIER / "rapport.json").read_text(encoding="utf-8"))), end="")
+            return 0
+        except (OSError, ValueError, KeyError):
+            print("aucun rapport : le provisionnement n'est pas terminé", file=sys.stderr)
+            return 1
 
     if a.cmd == "etat":
         try:
@@ -79,9 +89,15 @@ def main(argv=None):
 
     def fabrique(rep):
         return VA.pour_mode(rep["provision"]["mode"], rep, dossier=DOSSIER, publier=infra.publier, refuse=infra.refuse, lire_confirmation=_lire_confirmation)
-    res = M.Moteur(cfg, enroleur=infra.enroler, fabrique_valideur=fabrique, rapporteur=infra.progression).run()
+    def diffuse(rap):
+        RP.ecrire_issue(rap)                                              # à l'écran de la console, puis vers l'infrastructure (courrier au client)
+        infra.rapport(rap)
+    res = M.Moteur(cfg, enroleur=infra.enroler, fabrique_valideur=fabrique, rapporteur=infra.progression, diffuseur=diffuse).run()
     if res.ok:
-        print("provisionnement terminé")
+        try:
+            print(RP.texte(json.loads((DOSSIER / "rapport.json").read_text(encoding="utf-8"))), end="")
+        except (OSError, ValueError, KeyError):
+            print("provisionnement terminé")
         return 0
     print(f"arrêt à « {res.etape} » : {res.detail}", file=sys.stderr)
     return 1

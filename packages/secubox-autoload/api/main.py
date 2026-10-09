@@ -100,6 +100,11 @@ class AbonnementIn(BaseModel):
     formule: Optional[str] = Field(default=None, max_length=30)
 
 
+class ContactIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: Optional[str] = Field(default=None, max_length=254)
+
+
 class ProgressionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     etape: str = Field(max_length=40)
@@ -123,7 +128,7 @@ async def _borne_corps(request: Request) -> None:
         raise HTTPException(413, "corps trop gros")
 
 
-def _routes_box(r: APIRouter, reg: J.Registre, garde_tunnel) -> None:
+def _routes_box(r: APIRouter, reg: J.Registre, garde_tunnel, courrier: Optional[Callable[[Dict, str], None]] = None) -> None:
     @r.post("/progression", dependencies=[Depends(_borne_corps)])
     def progression(corps: ProgressionIn, cle: str = Depends(garde_tunnel)):
         try:
@@ -139,6 +144,23 @@ def _routes_box(r: APIRouter, reg: J.Registre, garde_tunnel) -> None:
         except ValueError as e:
             raise HTTPException(422, str(e)) from None
 
+    @r.post("/rapport", dependencies=[Depends(_borne_corps)])
+    def rapport(corps: Dict = Body(...), cle: str = Depends(garde_tunnel)):
+        try:
+            ident = reg.recevoir_rapport(cle, corps)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from None
+        envoye = False
+        contact = reg.contact(corps["client"])
+        if courrier is not None and contact:
+            try:
+                courrier(corps, contact)
+                reg.marquer_rapport_envoye(ident)
+                envoye = True
+            except Exception as e:  # noqa: BLE001 — SMTP, réseau, adresse : le rapport est déjà conservé, la box n'a pas à en pâtir
+                reg._audit("rapport-mail-echec", f"rapport={ident} : {type(e).__name__}")
+        return {"ok": True, "envoye": envoye}
+
     @r.get("/prerapport/{empreinte}/refus")
     def refus(empreinte: str, cle: str = Depends(garde_tunnel)):
         return {"refuse": reg.prerapport_refuse(empreinte[:64], cle)}
@@ -146,7 +168,7 @@ def _routes_box(r: APIRouter, reg: J.Registre, garde_tunnel) -> None:
 
 
 def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Callable[[], None], horloge: Callable[[], float] = time.time,
-              portee: Literal["public", "tunnel"] = "public") -> FastAPI:
+              portee: Literal["public", "tunnel"] = "public", courrier: Optional[Callable[[Dict, str], None]] = None) -> FastAPI:
     app = FastAPI(title="secubox-autoload", docs_url=None, redoc_url=None, openapi_url=None)
     r = APIRouter(prefix=PREFIXE)
     limiteur = Limiteur(horloge)
@@ -169,7 +191,7 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
         return {"ok": True}
 
     if portee == "tunnel":
-        _routes_box(r, reg, garde_tunnel)
+        _routes_box(r, reg, garde_tunnel, courrier)
         app.include_router(r)
         return app
 
@@ -270,6 +292,25 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
         except ValueError as err:
             raise HTTPException(422, str(err)) from None
         return {"jetons": n, "expire_le": expire}
+
+    @r.get("/rapports", dependencies=[Depends(require_jwt)])
+    def rapports():
+        return reg.rapports()
+
+    @r.get("/rapports/{ident}", dependencies=[Depends(require_jwt)])
+    def un_rapport(ident: int):
+        rap = reg.rapport(ident)
+        if rap is None:
+            raise HTTPException(404, "rapport inconnu")
+        return rap
+
+    @r.post("/clients/{client}/contact", dependencies=[Depends(require_jwt)])
+    def contact(client: str, corps: ContactIn):
+        try:
+            reg.fixer_contact(client, corps.email)
+        except ValueError as err:
+            raise HTTPException(422, str(err)) from None
+        return {"ok": True}
 
     @r.post("/prerapports/{empreinte}/refuser", dependencies=[Depends(require_jwt)])
     def refuser(empreinte: str, corps: MotifIn):

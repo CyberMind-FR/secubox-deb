@@ -60,10 +60,14 @@ CREATE INDEX IF NOT EXISTS jetons_client ON jetons(client);
 CREATE INDEX IF NOT EXISTS jetons_lot ON jetons(lot);
 CREATE TABLE IF NOT EXISTS clients (
   client TEXT PRIMARY KEY, abonnement TEXT NOT NULL CHECK (abonnement IN ('actif','suspendu','revoque')),
-  formule TEXT, expire_le INTEGER
+  formule TEXT, expire_le INTEGER, email TEXT
 );
 CREATE TABLE IF NOT EXISTS progression (
   cle_pub TEXT PRIMARY KEY, etape TEXT NOT NULL, faites INTEGER NOT NULL, total INTEGER NOT NULL, termine INTEGER NOT NULL DEFAULT 0, maj_le INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rapports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, cle_pub TEXT NOT NULL, empreinte TEXT NOT NULL, contenu TEXT NOT NULL, recu_le INTEGER NOT NULL, envoye INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (cle_pub, empreinte)
 );
 CREATE TABLE IF NOT EXISTS prerapports (
   empreinte TEXT PRIMARY KEY, cle_pub TEXT NOT NULL, contenu TEXT NOT NULL, recu_le INTEGER NOT NULL, refuse INTEGER NOT NULL DEFAULT 0, motif TEXT
@@ -139,7 +143,7 @@ class Registre:
         with self._cx() as cx:
             cx.executescript(SCHEMA)
             colonnes = {r["name"] for r in cx.execute("PRAGMA table_info(clients)")}                 # base de la version 0.1/0.2 : on ajoute, sans rien perdre
-            for col, typ in (("formule", "TEXT"), ("expire_le", "INTEGER")):
+            for col, typ in (("formule", "TEXT"), ("expire_le", "INTEGER"), ("email", "TEXT")):
                 if col not in colonnes:
                     cx.execute(f"ALTER TABLE clients ADD COLUMN {col} {typ}")
 
@@ -429,3 +433,43 @@ class Registre:
         with self._cx() as cx:
             r = cx.execute("SELECT refuse, cle_pub FROM prerapports WHERE empreinte=?", (empreinte,)).fetchone()
         return bool(r and r["refuse"] and (cle_pub is None or r["cle_pub"] == cle_pub))
+
+    # ── rapport final et contact du client (#2192) ───────────────────────────────────────────────────────────
+    def fixer_contact(self, client: str, email: Optional[str]) -> None:
+        from . import rapport as R  # noqa: PLC0415
+        client = _nom("client", client)
+        adresse = None if email is None else R.courriel_valide(email)
+        with self._cx() as cx:
+            cx.execute("INSERT INTO clients (client, abonnement, email) VALUES (?, 'actif', ?) ON CONFLICT(client) DO UPDATE SET email=excluded.email", (client, adresse))
+        self._audit("contact", f"client={client} contact={'renseigné' if adresse else 'retiré'}")
+
+    def contact(self, client: str) -> Optional[str]:
+        with self._cx() as cx:
+            r = cx.execute("SELECT email FROM clients WHERE client=?", (client,)).fetchone()
+        return r["email"] if r else None
+
+    def recevoir_rapport(self, cle_pub: str, rap: dict) -> int:
+        from . import rapport as R  # noqa: PLC0415
+        R.valider(rap)
+        emp = hashlib.sha256(json.dumps(rap, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+        with self._cx() as cx:
+            r = self._box_reclamee(cx, cle_pub)
+            cx.execute("INSERT OR IGNORE INTO rapports (cle_pub, empreinte, contenu, recu_le) VALUES (?,?,?,?)", (cle_pub, emp, json.dumps(rap, ensure_ascii=False), self._maintenant()))
+            ident = cx.execute("SELECT id FROM rapports WHERE cle_pub=? AND empreinte=?", (cle_pub, emp)).fetchone()["id"]
+        self._audit("rapport-recu", f"id={r['id']} client={r['client']} rapport={ident}")
+        return ident
+
+    def rapports(self) -> List[dict]:
+        with self._cx() as cx:
+            return [{"id": r["id"], "client": json.loads(r["contenu"])["client"], "profil": json.loads(r["contenu"])["profil"], "paquets": len(json.loads(r["contenu"])["paquets"]),
+                     "recu_le": r["recu_le"], "envoye": bool(r["envoye"])}
+                    for r in cx.execute("SELECT id, contenu, recu_le, envoye FROM rapports ORDER BY id DESC")]
+
+    def rapport(self, ident: int) -> Optional[dict]:
+        with self._cx() as cx:
+            r = cx.execute("SELECT contenu FROM rapports WHERE id=?", (ident,)).fetchone()
+        return json.loads(r["contenu"]) if r else None
+
+    def marquer_rapport_envoye(self, ident: int) -> None:
+        with self._cx() as cx:
+            cx.execute("UPDATE rapports SET envoye=1 WHERE id=?", (ident,))

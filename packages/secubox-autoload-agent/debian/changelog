@@ -1,3 +1,9 @@
+secubox-autoload-agent (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport final (#2192, parent #2182) : autoload_agent/rapport.py. Le parcours termine construit un rapport sans secret (client, profil, paquets, domaine, comptes par nom, adresse de tunnel, debut, fin, etapes : exactement les champs que l'infrastructure accepte), l'ecrit sur la box (0600), l'affiche a l'ecran (/run/issue.d/50-secubox-autoload.issue, lu par agetty) et le diffuse a l'infrastructure par le tunnel, qui l'envoie par courrier au client si son contact est renseigne. Une diffusion en panne n'arrete jamais le parcours ; le rapport reste sur la box. Le moteur enregistre l'heure de debut dans l'etat. autoload-agentctl rapport affiche le dernier rapport ; run l'affiche en fin de parcours.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 17:00:00 +0200
+
 secubox-autoload-agent (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Client de l'infrastructure (autoload_agent/client.py) : enrolement en HTTPS avec certificat ET nom d'hote verifies (jamais verify=False), nom de domaine seulement, redirections jamais suivies, reponses bornees a 64 Kio et validees ; un refus (403, 429) est un EnrolementRefuse, une panne (5xx, reseau, delai) une OSError reessayable. Dans le tunnel : pre-rapport, progression et sondage du refus, vers le hub 10.64.0.1:8470 UNIQUEMENT.
