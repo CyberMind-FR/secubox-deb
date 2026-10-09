@@ -20,7 +20,7 @@ network:
   renderer: networkd
 
   ethernets:
-    # DSA DESACTIVE PAR DEFAUT (#2146) : le pilote mv88e6xxx fige le noyau 6.12 (voir build-image.sh), donc les ports wan/lan0/lan1
+    # DSA DESACTIVE PAR DEFAUT (#2146, par prudence : non prouve comme cause du gel du 1er essai, voir build-image.sh), donc les ports wan/lan0/lan1
     # n'existent pas et eth0 est l'unique interface : elle prend l'adresse en DHCP. Si tu actives le pilote
     # (`systemctl enable --now mv88e6xxx-load`), remets dhcp4: false ici (eth0 devient le port CPU, sans adresse).
     eth0:
