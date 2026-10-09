@@ -1,3 +1,11 @@
+secubox-autoload-agent (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Client de l'infrastructure (autoload_agent/client.py) : enrolement en HTTPS avec certificat ET nom d'hote verifies (jamais verify=False), nom de domaine seulement, redirections jamais suivies, reponses bornees a 64 Kio et validees ; un refus (403, 429) est un EnrolementRefuse, une panne (5xx, reseau, delai) une OSError reessayable. Dans le tunnel : pre-rapport, progression et sondage du refus, vers le hub 10.64.0.1:8470 UNIQUEMENT.
+  * Moteur : une infrastructure injoignable arrete le parcours a l'enrolement et il reprend plus tard ; rapporteur de progression (best-effort, une panne ne l'arrete jamais) ; fabrique de valideur d'apres le mode du fichier de reponses signe ; valideur explicite prioritaire ; sans rien, refus.
+  * autoload-agentctl (root) : run (lance ou reprend le parcours), confirmer EMPREINTE (mode one-shot), etat (sans secret). Le declenchement automatique au demarrage (zero-touch) demande une unite root : voir #2193.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 15:00:00 +0200
+
 secubox-autoload-agent (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Validation (#2188, parent #2182, D6) : autoload_agent/validation.py. Le pre-rapport dit ce qui va arriver (profil, paquets, reseau, comptes crees, et seulement QU'il y a des secrets, jamais leur valeur ni le nom de leur fichier), ecrit en 0600 et identifie par une empreinte SHA-256. Valideur AUTO (zero-touch) : publication du pre-rapport puis delai de grace (15 minutes par defaut, 0 a 1440) pendant lequel l'operateur peut refuser ; FERME PAR DEFAUT (pre-rapport non publiable, ou refus non consultable : on n'applique pas). Valideur MANUEL (one-shot) : applique seulement si l'operateur confirme l'empreinte de CE pre-rapport, sinon refus a l'echeance. pour_mode() choisit selon [provision].mode.

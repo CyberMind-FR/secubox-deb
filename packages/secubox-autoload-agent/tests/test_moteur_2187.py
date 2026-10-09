@@ -217,3 +217,44 @@ def test_le_rapport_liste_ce_qui_a_ete_fait(monde):
     moteur(monde).run()
     rap = json.loads(monde.cfg.rapport.read_text())
     assert rap["client"] == "client-042" and rap["profil"] == "lite" and "secubox-ad-guard" in rap["paquets"] and rap["tunnel"]["adresse"] == "10.64.0.2/32"
+
+
+# ── intégration avec le client (#2187, #2188, #2189) ─────────────────────────────────────────────────────
+def test_une_infrastructure_injoignable_arrete_le_parcours_qui_reprendra_plus_tard(monde):
+    def panne(jeton, serie, cle_pub, infra):
+        raise OSError("infrastructure injoignable")
+    r = moteur(monde, enroleur=panne).run()
+    assert not r.ok and r.etape == "enrolement" and "indisponible" in r.detail
+    assert json.loads(monde.cfg.etat.read_text())["faites"] == ["reponses", "cle"]
+    assert moteur(monde).run().ok                                         # elle revient : le parcours reprend à l'enrôlement
+
+
+def test_le_rapporteur_suit_chaque_etape_puis_termine(monde):
+    vus = []
+    m = M.Moteur(monde.cfg, executeur=monde.ex, enroleur=monde.en, valideur=lambda p: True, rapporteur=lambda *a: vus.append(a))
+    assert m.run().ok
+    assert [v[1] for v in vus][:-1] == sorted({v[1] for v in vus[:-1]})     # le nombre d'étapes faites ne fait que croître
+    assert vus[-1][1:] == (len(M.ETAPES), len(M.ETAPES), True) and all(v[2] == len(M.ETAPES) for v in vus)
+    assert {v[0] for v in vus} >= {"cle", "enrolement", "tunnel", "plan", "validation", "installation", "application"}
+
+
+def test_un_rapporteur_en_panne_n_arrete_jamais_le_parcours(monde):
+    def casse(*a):
+        raise OSError("tunnel pas encore monté")
+    assert M.Moteur(monde.cfg, executeur=monde.ex, enroleur=monde.en, valideur=lambda p: True, rapporteur=casse).run().ok
+
+
+def test_la_fabrique_de_valideur_recoit_les_reponses_signees(monde):
+    vus = []
+
+    def fabrique(reponses):
+        vus.append(reponses["provision"]["mode"])
+        return lambda plan: True
+    assert M.Moteur(monde.cfg, executeur=monde.ex, enroleur=monde.en, fabrique_valideur=fabrique).run().ok
+    assert vus == ["auto"]
+
+
+def test_un_valideur_explicite_prime_sur_la_fabrique(monde):
+    appels = []
+    assert not M.Moteur(monde.cfg, executeur=monde.ex, enroleur=monde.en, valideur=lambda p: False, fabrique_valideur=lambda r: appels.append(1) or (lambda p: True)).run().ok
+    assert appels == []
