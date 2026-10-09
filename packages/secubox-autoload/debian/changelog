@@ -1,3 +1,9 @@
+secubox-autoload (0.3.5-1~bookworm1) bookworm; urgency=medium
+
+  * nginx : proxy_pass avec URI explicite (http://unix:/run/secubox/autoload.sock:/api/v1/autoload/), comme les autres modules ; la forme sans URI faisait arriver au service un chemin sans le prefixe (404 constate sur gk2 par le vhost admin).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 13:00:00 +0200
+
 secubox-autoload (0.3.4-1~bookworm1) bookworm; urgency=medium
 
   * Le journal d'audit par defaut est /var/log/secubox/autoload-audit.log (le service n'est pas le compte secubox, il a son propre journal) : autoloadctl lance en root puis abaisse vers secubox-autoload tentait d'ecrire /var/log/secubox/audit.log et echouait (constate sur gk2).
