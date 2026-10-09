@@ -11,7 +11,7 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-09 — Fermeture de #2146 (profils) et de #2050 (suite en #2180) : closes #2146, closes #2050
 
-#2146 : profils lite/isp/full livrés, release alpha.10 publiée, paquets de profils 1.0.42 dans l'index trixie ; l'essai ESPRESSObin est suivi en #2177. #2050 : vagues 0, 2, 3, 4 faites, 60 transitoires retirés des sources (PR #2179) et de l'index apt trixie, profils 1.0.42 publiés avant le retrait. Le reste (outillage vague 1, écrivains concurrents, méta-paquets en vues, , WireGuard/Reality, ) est repris dans #2180.
+#2146 : profils lite/isp/full livrés, release alpha.10 publiée, paquets de profils 1.0.42 dans l'index trixie ; l'essai ESPRESSObin est suivi en #2177. #2050 : vagues 0, 2, 3, 4 faites, 60 transitoires retirés des sources (PR #2179) et de l'index apt trixie, profils 1.0.42 publiés avant le retrait. Le reste (outillage vague 1, écrivains concurrents, méta-paquets en vues, code mort /check, WireGuard/Reality, surf encore en root) est repris dans #2180.
 
 ## 2026-10-09 — Vague 5 (#2050) : retrait des 60 paquets transitoires (ref #2050, ref #2146)
 
