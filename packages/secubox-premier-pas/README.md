@@ -59,3 +59,16 @@ Routes relevées dans le code source, relatives au montage du module. « aucune 
 ## Tests
 
 4 fichier(s) de test. Lancer : `python3 -m pytest packages/secubox-premier-pas`.
+
+## Fichier de réponses Auto-Load (0.5.0, #2184)
+
+`premier_pas/provision.py` : le profil de l'assistant étendu d'une section `[provision]`, pour le provisionnement réseau (parent #2182, cadrage `docs/dossiers/provisionnement-auto-load.md`). Contrairement à l'assistant, qui ignore ce qu'il ne connaît pas, ce mode est **strict** :
+
+- section ou clé inconnue, sous-table, fichier de plus de 64 Kio : refusés ;
+- aucun secret en clair : mot de passe = empreinte argon2, jeton = référence `ref:/etc/secubox/secrets/<nom>` (jamais la valeur), jeton d'invitation du maillage refusé ;
+- **signature détachée** OpenPGP vérifiée par `gpgv` contre le seul trousseau fourni (`/usr/share/secubox/autoload/provisioning.gpg` par défaut) : fichier modifié, clé inconnue ou signature absente = refus ;
+- `mode = "auto"` exige un profil complet (aucun écran pour demander ce qui manque).
+
+    premier-pasctl reponses --fichier reponses.toml --signature reponses.toml.sig [--trousseau K] [--json]   # code 4 : refusé
+
+Exemple : `examples/reponses-autoload.toml`.
