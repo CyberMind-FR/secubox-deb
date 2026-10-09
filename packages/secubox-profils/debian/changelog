@@ -1,3 +1,9 @@
+secubox-profils (1.0.42-1~bookworm1) bookworm; urgency=medium
+
+  * Vague 5 (#2050) : le profil « reseau » ne depend plus de secubox-vortex-dns ni de secubox-webmail, dont les transitoires sont retires du depot (webmail est dans secubox-mail, deja dependance).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 09 Oct 2026 23:30:00 +0200
+
 secubox-profils (1.0.41-1~bookworm1) bookworm; urgency=medium
 
   * S7 : waf est un composant de secubox-waf-ng (dependance remplacee).

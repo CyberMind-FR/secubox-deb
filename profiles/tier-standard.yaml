@@ -19,9 +19,8 @@ packages:
     - secubox-nac
     - secubox-dpi
     - secubox-qos
-    - secubox-waf
+    - secubox-waf-ng
     - secubox-haproxy
-    - secubox-vhost
 
 features:
   dpi: mirror

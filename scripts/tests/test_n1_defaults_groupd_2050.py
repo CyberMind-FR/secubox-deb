@@ -12,15 +12,9 @@ def _c(p):
     return (PAQ / p / "debian/control").read_text()
 
 
-def test_anciens_transitoires_et_vides():
-    for ancien, (nouveau, v) in ANCIENS.items():
-        c = _c(f"secubox-{ancien}")
-        assert re.search(r"(?m)^Section: oldlibs\s*$", c), ancien
-        assert re.search(rf"(?m)^Depends:.*secubox-{nouveau} \(>= {re.escape(v)}\)", c), ancien
-        for d in ("etc", "sbin", "systemd", "tests", "usr"):
-            assert not (PAQ / f"secubox-{ancien}" / d).exists(), f"{ancien}/{d}"
-        for f in ("install", "triggers", "conffiles"):
-            assert not (PAQ / f"secubox-{ancien}/debian/{f}").exists(), f"{ancien}/debian/{f}"
+def test_anciens_sont_retires_du_depot():
+    for ancien in ANCIENS:
+        assert not (PAQ / f"secubox-{ancien}").exists(), f"secubox-{ancien} : transitoire à retirer"
 
 
 def test_les_absorbants_remplacent_et_cassent_les_anciens():
@@ -67,9 +61,7 @@ def test_plus_aucun_paquet_ne_depend_des_anciens():
                 raise AssertionError(f"{ctrl} : {ligne.strip()}")
 
 
-def test_arbre_les_met_hors_arbre():
+def test_arbre_ne_les_garde_plus():
     arbre = (PAQ / "secubox-meta/arbre.yaml").read_text()
-    avant, _, apres = arbre.partition("# ═══ RACINES")
     for s in ANCIENS:
-        assert re.search(rf"secubox-{s}\b", avant), s
-        assert not re.search(rf"(?m)^\s+- secubox-{s}\b", apres), s
+        assert not re.search(rf"(?m)^\s+- secubox-{s}\b", arbre), s

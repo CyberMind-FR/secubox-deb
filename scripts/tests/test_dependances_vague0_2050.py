@@ -22,12 +22,10 @@ def _binaires():
     return noms
 
 
-def test_streamforge_transitoire_tire_le_vrai_nom_du_paquet_streamlit():
-    """streamforge est un composant de streamlit depuis #2050 ; le transitoire dépend du VRAI nom (« streamlit » seul n'existe pas)."""
-    dep = _champ("secubox-streamforge", "Depends")
-    assert "secubox-streamlit" in dep
-    assert not re.search(r"(?<![\w-])streamlit(?![\w-])", dep)
-    assert "secubox-streamlit" in _binaires()
+def test_streamforge_est_retire_et_le_vrai_nom_du_paquet_streamlit_existe():
+    """streamforge est un composant de streamlit depuis #2050 ; son transitoire est retiré. Le vrai nom est « secubox-streamlit » (« streamlit » seul n'existe pas)."""
+    assert not (RACINE / "packages" / "secubox-streamforge").exists()
+    assert "secubox-streamlit" in _binaires() and "streamlit" not in _binaires()
 
 
 def test_zkp_recommande_les_outils_dont_il_appelle_les_binaires():

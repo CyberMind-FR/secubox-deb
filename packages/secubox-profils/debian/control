@@ -89,8 +89,6 @@ Depends: ${misc:Depends},
          secubox-reality,
          secubox-streamlit,
          secubox-tor,
-         secubox-vortex-dns,
-         secubox-webmail,
          secubox-wireguard,
          secubox-metanews (>= 0.3.0)
 Description: SecuBox — profil « reseau » : Reseau, federation et services heberges

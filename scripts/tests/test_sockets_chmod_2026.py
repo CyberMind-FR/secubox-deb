@@ -10,8 +10,8 @@ from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[2]
 UNITES = {
-    "devwatch": "packages/secubox-devwatch/systemd/secubox-devwatch.service",
-    "freeboxtv": "packages/secubox-freeboxtv/systemd/secubox-freeboxtv.service",
+    "devwatch": "packages/secubox-metanews/composants/devwatch/systemd/secubox-devwatch.service",
+    "freeboxtv": "packages/secubox-media/composants/freeboxtv/systemd/secubox-freeboxtv.service",
     "voicestudio": "packages/secubox-voicestudio/systemd/secubox-voicestudio-api.service",
     "voice": "packages/secubox-voice/systemd/secubox-voice.service",
     "zia": "packages/secubox-zia/systemd/secubox-zia.service",

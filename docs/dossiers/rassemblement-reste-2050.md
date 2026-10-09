@@ -66,6 +66,6 @@ si une montée de dépendance de sécurité oblige à toucher les quatre vendors
 (≈ 192 Mo de copie de travail) sans changer aucune dépendance.
 
 ## Hors cycle
-- Retirer les 52 paquets transitoires et générer les méta-paquets (vague 5) : un cycle après leur publication.
+- ~~Retirer les 52 paquets transitoires~~ : FAIT le 2026-10-09 (60 répertoires `Section: oldlibs` retirés des sources, un cycle après leur publication dans alpha.10 ; `gabriel-mood`, dans `sbxos-audio-mood`, est conservé : source mixte). Reste : générer les méta-paquets en vues (vague 5).
 - WireGuard / Reality : reporté (privilèges et tunnels).
 - `surf` tourne encore en root (dette notée ; un utilisateur dédié demande de valider le rendu Chromium).

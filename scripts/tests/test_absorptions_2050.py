@@ -17,17 +17,10 @@ def _c(p):
     return (PAQ / p / "debian/control").read_text()
 
 
-def test_les_absorbes_sont_transitoires_et_vides():
+def test_les_absorbes_sont_retires_du_depot():
+    """Le transitoire est resté publié un cycle (alpha.10) ; il n'existe plus dans les sources (#2050, vague 5)."""
     for a, o in FUSIONS:
-        c = _c(f"secubox-{o}")
-        assert re.search(r"(?m)^Section: oldlibs\s*$", c), o
-        assert re.search(rf"(?m)^Depends:.*secubox-{a} \(>= ", c), o
-        for d in ("api", "www", "nginx", "systemd", "menu.d", "sbin", "tests"):
-            restes = [f for f in (PAQ / f"secubox-{o}" / d).rglob("*") if f.is_file() and "__pycache__" not in f.parts]
-            assert not restes, f"{o}/{d} : {restes}"
-        # seul un postinst qui remet l'unité en route est permis (voir plus bas)
-        if o not in ARRETAIENT_A_LA_MISE_A_JOUR:
-            assert not (PAQ / f"secubox-{o}/debian/postinst").exists()
+        assert not (PAQ / f"secubox-{o}").exists(), f"secubox-{o} : transitoire à retirer"
 
 
 def test_les_absorbants_portent_le_composant_et_remplacent_l_ancien():
@@ -56,25 +49,11 @@ def test_aucun_paquet_ne_depend_plus_de_l_absorbe():
                     raise AssertionError(f"{ctrl} : {ligne.strip()}")
 
 
-def test_l_arbre_met_les_absorbes_hors_arbre():
+def test_l_arbre_ne_met_pas_les_absorbes_dans_les_racines():
     arbre = (PAQ / "secubox-meta/arbre.yaml").read_text()
-    avant, _, apres = arbre.partition("# ═══ RACINES")
+    _, _, apres = arbre.partition("# ═══ RACINES")
     for _, o in FUSIONS:
-        assert re.search(rf"secubox-{o}(?![\w-])", avant), o
         assert not re.search(rf"(?m)^\s+- secubox-{o}(?![\w-])", apres), o
-
-
-# L'ancien prerm de ces paquets arrêtait l'unité à la mise à jour : le transitoire la remet en route (#2050).
-ARRETAIENT_A_LA_MISE_A_JOUR = ("grafana", "reporter", "smtp-relay", "traffic", "zigbee", "ndpid", "mediaflow", "devwatch", "yacy", "netdiag", "proxypac", "vortex-firewall", "cyberfeed", "vhost", "exposure", "openpgp", "meshname", "users", "cve-triage", "antirootkit", "admin", "ksm", "mirror", "nettweak", "waf")
-
-
-def test_transitoires_remettent_l_unite_en_route():
-    for o in ARRETAIENT_A_LA_MISE_A_JOUR:
-        postinst = PAQ / f"secubox-{o}" / "debian" / "postinst"
-        assert postinst.is_file(), o
-        t = postinst.read_text()
-        assert f"secubox-{o}.service" in t and "masked" in t and "#DEBHELPER#" in t, o
-        assert postinst.stat().st_mode & 0o111, f"{o} : postinst non exécutable"
 
 
 def test_aucun_transitoire_ne_garde_un_fichier_compat():
