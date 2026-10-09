@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.5.9-1~bookworm1) bookworm; urgency=medium
+
+  * sbx-actord : les robots connus sont classes a part (#2201). Un acces de robot annonce que le WAF refuse selon la politique du vhost (etiquette unique « robots », severite basse, non bloque, aucune regle declenchee, famille nommee) ne cree plus d'acteur : il est compte par famille dans un registre a part (acces, adresses distinctes plafonnees a 20 000 par famille, premiere et derniere vue, vhosts), expose par GET /robots (compteurs, jamais d'adresse) et par l'apercu (champ robots), et exclu de l'apercu (pays, evenements recents, activite). Cause : meta-externalagent etait l'acteur critique n°1 (score 89 : 2 743 adresses, 65 pays, 7 845 « bans ») devant les vrais balayages. Des qu'un robot sort de ce role (etiquette en plus, regle, severite), ses evenements redeviennent ordinaires. Limite assumee : un attaquant deguise en robot connu sur un vhost anti-robots n'apparait que dans ce registre ; son volume reste visible par famille. 7 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 09:00:00 +0200
+
 secubox-toolbox-ng (0.5.8-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : l'auto-test de sante de health-doctor n'est plus une menace (#2200). Reconnu aux deux signes (adresse dans 198.51.100.0/24 ET User-Agent SecuBox-WAF-SelfTest/ ; l'adresse vient de la chaine de mandataires de confiance, pas d'un en-tete libre), il est ecrit dans waf-selftest.log et ni dans waf-threats.log ni vers sbx-actord : il ne gonfle plus les statistiques ni les scores d'acteurs (572 des 5 073 evenements « banned » en 24 h). Le ban nftables de l'auto-test reste. Un attaquant qui copie le User-Agent depuis une autre adresse reste une menace. 2 tests.

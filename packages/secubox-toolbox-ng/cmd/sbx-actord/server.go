@@ -41,6 +41,7 @@ type Server struct {
 	inexistants map[string]bool
 	ledger      *evidence.Ledger
 	accum       map[string]*actorSignals
+	robots      *Robots // robots connus classés à part (#2201) ; le registre est créé à la première observation
 
 	// Clé des identifiants de campagne de la vue réduite (vue.go), tirée au
 	// premier usage et gardée en mémoire seulement.
@@ -221,6 +222,7 @@ func (s *Server) apiMux() *http.ServeMux {
 		mux.HandleFunc("GET "+p+"/actors", route(s.handleActors))
 		mux.HandleFunc("GET "+p+"/actors/{id}", route(s.handleActor))
 		mux.HandleFunc("GET "+p+"/campaigns", route(s.handleCampaigns))
+		mux.HandleFunc("GET "+p+"/robots", route(s.handleRobots))                          // compteurs par famille : jamais d'adresse (#2201)
 		mux.HandleFunc("GET "+p+"/overview", route(s.handleApercu))                        // compteurs seulement : servi aussi dans la vue réduite
 		mux.HandleFunc("GET "+p+"/proposals", route(horsVueReduite(s.handlePropositions))) // adresses : jamais dans la vue réduite
 		mux.HandleFunc("GET "+p+"/evidence/{id}", route(horsVueReduite(s.handleEvidence)))

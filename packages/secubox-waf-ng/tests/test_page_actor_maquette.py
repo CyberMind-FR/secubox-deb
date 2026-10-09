@@ -55,3 +55,12 @@ def test_les_scripts_de_la_page_sont_du_javascript_valide():
             f.write(js)
         r = subprocess.run(["node", "--check", f.name], capture_output=True, text=True)
         assert r.returncode == 0, f"script {i + 1} : {r.stderr.strip().splitlines()[-1] if r.stderr else 'erreur'}"
+
+
+def test_les_robots_connus_sont_classes_a_part_et_echappes():
+    """#2201 : une tuile et une ligne dédiées, alimentées par `robots` de l'aperçu ; jamais dans les paliers critiques/suspects/observés."""
+    assert "function rendRobots(" in HTML and "APERCU.robots" in HTML
+    assert "accès de robots connus" in HTML and "esc(x.famille)" in HTML
+    corps = re.search(r"function rendTuiles\(\)\{(.*?)\n\}", HTML, re.S).group(1)
+    assert "rendRobots()" in corps
+    assert "score(a)" in corps and "robot" not in corps.split("rendRobots()")[0].lower().replace("acteurs", "")   # le barème des acteurs ignore les robots
