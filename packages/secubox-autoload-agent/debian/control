@@ -1,0 +1,14 @@
+Source: secubox-autoload-agent
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-autoload-agent
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.11), wireguard-tools, secubox-premier-pas (>= 0.5.0)
+Description: SecuBox — provisionnement réseau Auto-Load, côté box
+ Agent de la box cliente : clé WireGuard générée sur la box, tunnel sortant
+ vers l'infrastructure (admin.gk2.secubox.in), jamais de port entrant.
+ Parent #2182.

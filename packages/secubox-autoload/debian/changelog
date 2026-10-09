@@ -1,3 +1,10 @@
+secubox-autoload (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Tunnel WireGuard cote infrastructure (#2189, parent #2182, D7) : autoload/tunnel.py. Plage dediee 10.64.0.0/16 (hub 10.64.0.1, UDP 51830) distincte de wg-mesh et wg-ephemeral ; attribution d'adresses idempotente et atomique ; une adresse ou une cle retiree n'est jamais reutilisee ; un pair n'a droit qu'a sa propre /32 (les clients ne se voient pas) ; la cle privee du hub n'est jamais dans la configuration (wg set private-key <fichier 0600>). Synchronisation validee par wg-quick strip, posee atomiquement, appliquee par wg syncconf sans couper les pairs existants ; en cas d'echec l'ancienne configuration reste.
+  * autoloadctl : tunnel-init (cle du hub), tunnel-sync, et la revocation retire le pair.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 03:00:00 +0200
+
 secubox-autoload (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Premier jalon du provisionnement Auto-Load cote infrastructure (#2185, parent #2182) : registre des jetons clients (SQLite 0600). Un jeton par box, 128 bits montres une seule fois, stockes sous forme d'empreinte SHA-256 ; usage unique ; la reclamation lie la box a sa cle publique WireGuard. Statut d'abonnement par client (actif, suspendu, revoque) : un abonnement non actif refuse la reclamation et les nouvelles livraisons, jamais une fonction locale. Revocation d'un jeton ou d'un lot (rend la cle a retirer du tunnel). Preenregistrement par numero de serie. Refus de reclamation au message uniforme ; la vraie raison et chaque emission, reclamation ou revocation vont au journal d'audit (jamais la valeur).
