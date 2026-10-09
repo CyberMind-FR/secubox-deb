@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-09 — Dépôt apt : clé de signature déjà déverrouillée par l'unité du niveau 0 : closes #2007 (ref #1366)
+
+La demande de #2007 (charger la phrase de la clé au démarrage) est couverte depuis 2026-10-03 par `secubox-depot-deverrouille.service` (#1366, phrase aléatoire systemd-creds, aucune phrase humaine). Constaté et utilisé le 2026-10-09 : `systemctl restart secubox-depot-deverrouille.service` rétablit la signature, `reprepro export` re-signe les huit suites, ad-guard 1.8.0, acces 1.7.1, oidc 0.1.3, sbxid 0.4.20 et users 1.8.18 publiés dans trixie. Ne JAMAIS préparer la clé à la main (`gpg-preset-passphrase`) : une valeur fausse écrase la bonne en cache.
+
 ## 2026-10-09 — ad-guard 1.8.0 : panneau TV simplifié, mode auto par défaut : closes #2174
 
 Une page : état en une phrase, une carte et un interrupteur par appareil (auto en interne), liste « une pub passe encore ? » (Bloquer / C'est légitime), anciens onglets et modes observe/block/off sous « Avancé ». Après chaque bascule le drop-in Unbound est relu : le panneau dit si le changement est appliqué ou ce qui diverge. Déployé gk2 (dpkg + redémarrage de l'agrégateur, routes 401 puis état réel cohérent). Reste : validation visuelle par le propriétaire, index apt à republier (clé verrouillée). Validé par le propriétaire le 2026-10-09.
