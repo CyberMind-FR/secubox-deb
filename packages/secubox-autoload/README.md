@@ -9,7 +9,7 @@
 
 Provisionnement réseau « Auto-Load », **côté infrastructure** (`admin.gk2.secubox.in`). Parent #2182, cadrage `docs/dossiers/provisionnement-auto-load.md`. Ce paquet ne s'installe pas sur une box cliente (l'agent côté box viendra en `secubox-autoload-agent`).
 
-**État (0.3.0) :** le registre des jetons clients (#2185), le tunnel WireGuard côté infrastructure (#2189) et le service d'enrôlement et de panel (#2190). La WebUI vient ensuite (#2191).
+**État (0.3.0) :** le registre des jetons clients (#2185), le tunnel WireGuard côté infrastructure (#2189) et le service d'enrôlement et de panel (#2190). La WebUI (#2191) est livrée ; restent le rapport final (#2192) et l'essai sur matériel (#2186).
 
 ## Jetons
 

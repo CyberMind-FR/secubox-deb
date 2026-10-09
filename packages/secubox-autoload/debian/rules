@@ -6,6 +6,9 @@ override_dh_auto_install:
 	install -d debian/secubox-autoload/usr/lib/secubox/autoload/autoload debian/secubox-autoload/usr/lib/secubox/autoload/api
 	install -m 644 autoload/*.py debian/secubox-autoload/usr/lib/secubox/autoload/autoload/
 	install -m 644 api/*.py debian/secubox-autoload/usr/lib/secubox/autoload/api/
+	install -d debian/secubox-autoload/usr/share/secubox/www/autoload debian/secubox-autoload/usr/share/secubox/menu.d
+	cp -r www/autoload/. debian/secubox-autoload/usr/share/secubox/www/autoload/
+	cp menu.d/*.json debian/secubox-autoload/usr/share/secubox/menu.d/
 	install -D -m 755 sbin/autoloadctl debian/secubox-autoload/usr/sbin/autoloadctl
 	install -D -m 755 sbin/secubox-autoload-api debian/secubox-autoload/usr/sbin/secubox-autoload-api
 	install -d debian/secubox-autoload/usr/lib/systemd/system

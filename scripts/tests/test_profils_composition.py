@@ -31,6 +31,7 @@ HORS_PROFIL = {
     "secubox-led-heartbeat", "secubox-meshtastic", "secubox-daemon", "secubox-ui-manager",
     "secubox-voice-moteur", "secubox-zia-llm", "secubox-zkp", "secubox-clamav",
     "secubox-netboot", "secubox-vm", "secubox-soc-agent",
+    "secubox-autoload",                                                         # infrastructure seulement (admin.gk2.secubox.in), jamais sur une box cliente (#2182)
 }
 PROTECTIONS = {f"secubox-{m}" for m in (
     "waf-ng", "ipblock", "toolbox-ng", "toolbox", "dpi", "ndpid-engine", "interceptor",
