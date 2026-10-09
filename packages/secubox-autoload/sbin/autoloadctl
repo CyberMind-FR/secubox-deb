@@ -16,6 +16,7 @@
 import argparse
 import json
 import os
+import pwd
 import subprocess
 import sys
 import time
@@ -27,6 +28,28 @@ if (_ici / "autoload").is_dir():
     sys.path.insert(0, str(_ici))
 
 from autoload import jetons as J, tunnel as T  # noqa: E402
+
+
+UTILISATEUR = "secubox-autoload"
+
+
+def _abaisser_privileges():
+    """Lancé en root, les commandes du registre tournent SOUS L'UTILISATEUR DU SERVICE : la base et le journal d'audit gardent leur propriétaire
+    (une base créée par root ne serait plus ouvrable par le service). tunnel-init et tunnel-sync, elles, ont besoin de root."""
+    if os.geteuid() != 0:
+        return
+    try:
+        pw = pwd.getpwnam(UTILISATEUR)
+    except KeyError:
+        return
+    os.initgroups(UTILISATEUR, pw.pw_gid)
+    os.setgid(pw.pw_gid)
+    os.setuid(pw.pw_uid)
+
+
+class _PairsVides:
+    def actifs(self):
+        return []
 
 
 def main(argv=None):
@@ -60,8 +83,11 @@ def main(argv=None):
     sub.add_parser("tunnel-sync")
     a = ap.parse_args(argv)
 
-    reg = J.Registre(Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
-    pairs = T.Pairs(reg.db)
+    db = Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT))
+    if a.cmd not in ("tunnel-init", "tunnel-sync"):
+        _abaisser_privileges()
+        reg = J.Registre(db, Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
+        pairs = T.Pairs(reg.db)
     try:
         if a.cmd == "emettre":
             em = reg.emettre(a.client, a.profil, lot=a.lot, serie=a.serie, duree_s=a.duree_jours * 86400)
@@ -83,7 +109,9 @@ def main(argv=None):
                 retire = pairs.retirer(cle)
                 print("révoqué" + (" ; pair retiré (lancer tunnel-sync pour l'appliquer)" if retire else ""))
             else:
-                print(f"{reg.revoquer_lot(a.lot, a.motif)} jeton(s) révoqué(s)")
+                cles = reg.revoquer_lot_cles(a.lot, a.motif)
+                retires = sum(1 for c in cles if pairs.retirer(c))
+                print(f"lot révoqué ; {retires} pair(s) retiré(s)" + (" (lancer tunnel-sync pour l'appliquer)" if retires else ""))
         elif a.cmd == "tunnel-init":
             cle = Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT))
             if cle.exists():
@@ -95,9 +123,13 @@ def main(argv=None):
                 with os.fdopen(fd, "w") as f:
                     f.write(g.stdout.strip() + "\n")
             pub = subprocess.run(["wg", "pubkey"], input=cle.read_text().strip() + "\n", capture_output=True, text=True, timeout=30, check=True)
-            print(pub.stdout.strip())
+            pub_cle = pub.stdout.strip()
+            (db.parent / "hub.pub").write_text(pub_cle + "\n", encoding="ascii")                 # lue par le service pour répondre aux box
+            os.chmod(db.parent / "hub.pub", 0o644)
+            print(pub_cle)
         elif a.cmd == "tunnel-sync":
-            n = T.synchroniser(pairs, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)))
+            pairs_root = T.Pairs(db, lecture_seule=True) if db.exists() else _PairsVides()          # root ne CRÉE jamais la base : elle appartient au service
+            n = T.synchroniser(pairs_root, Path(os.environ.get("SECUBOX_AUTOLOAD_CONF_WG", T.CONF_DEFAUT)), Path(os.environ.get("SECUBOX_AUTOLOAD_CLE_HUB", T.CLE_HUB_DEFAUT)))
             print(f"{n} pair(s) appliqué(s)")
         elif a.cmd == "abonnement":
             print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client")

@@ -106,3 +106,4 @@ secubox-webos GET /cardlets/podcaster   # idem
 secubox-webos GET /menu/bbs             # idem
 secubox-webos GET /waf/qui-frappe       # caracterisation d'attaquants, deja agregee
 secubox-webos GET /actions/{module}/{action} # A CONFIRMER — un GET nomme « actions » sur un routeur public : a relire
+secubox-autoload POST /enrol            # preuve = le jeton a usage unique (128 bits, refus uniforme, essais limites par source, #2190)

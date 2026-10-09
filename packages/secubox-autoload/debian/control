@@ -7,8 +7,10 @@ Standards-Version: 4.6.2
 
 Package: secubox-autoload
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11)
+Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core, wireguard-tools, nftables, adduser
+Recommends: apparmor
 Description: SecuBox — provisionnement réseau Auto-Load, côté infrastructure
  Jetons clients (un par box, à usage unique, stockés sous forme d'empreinte),
- statut d'abonnement, révocation, préenregistrement par numéro de série.
+ statut d'abonnement avec échéance, révocation, préenregistrement par numéro de
+ série, service d'enrôlement et panel, hub WireGuard (10.64.0.0/16, udp/51830).
  Parent #2182. Installé sur l'infrastructure (admin.gk2.secubox.in) seulement.

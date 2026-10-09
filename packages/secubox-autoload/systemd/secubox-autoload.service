@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-autoload (#2190) — enrôlement et panel du provisionnement Auto-Load.
+# Un utilisateur À LUI : il ne lit que ses propres jetons ; le tunnel est appliqué par une unité root séparée (secubox-autoload-sync).
+[Unit]
+Description=SecuBox Auto-Load — enrôlement et panel (#2190)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-autoload
+Group=secubox-autoload
+SupplementaryGroups=secubox
+WorkingDirectory=/usr/lib/secubox/autoload
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=SECUBOX_AUTOLOAD_AUDIT=/var/log/secubox/autoload-audit.log
+# En root (« + ») : une socket périmée d'un autre utilisateur dans /run/secubox (sticky) ne se retire pas autrement.
+ExecStartPre=+/bin/rm -f /run/secubox/autoload.sock
+ExecStart=/usr/sbin/secubox-autoload-api
+Restart=on-failure
+RestartSec=3
+UMask=0027
+LimitCORE=0
+# NoNewPrivileges=no est requis ICI : le sudoers du module accorde à secubox-autoload UN argv exact (autoloadctl tunnel-sync, qui applique les pairs
+# WireGuard en root) ; avec NoNewPrivileges=yes sudo serait neutralisé. ATTENTION — NE PAS AJOUTER ProtectKernelTunables, ProtectKernelModules,
+# ProtectKernelLogs, RestrictSUIDSGID, LockPersonality, RestrictNamespaces, RestrictAddressFamilies, PrivateDevices, SystemCallFilter ni
+# MemoryDenyWriteExecute : chacun impose implicitement NoNewPrivileges=yes via seccomp et ferme la porte du helper (précédent voicestudio, #1917).
+# Le bac à sable se resserre par le profil AppArmor (enforce) et les chemins : l'assistant root hérite de ce système de fichiers en lecture seule.
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH
+ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload-audit.log /run/secubox /etc/wireguard
+
+[Install]
+WantedBy=multi-user.target

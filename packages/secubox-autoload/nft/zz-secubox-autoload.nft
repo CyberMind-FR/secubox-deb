@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Auto-Load (#2190) — SEULES ouvertures entrantes de l'infrastructure pour ce module :
+#   - udp/51830 : la poignée de main WireGuard des box clientes (tunnel SORTANT côté client) ;
+#   - tcp/8470 depuis l'interface wg-autoload seulement : l'API de box (progression, pré-rapport), jamais depuis le LAN ni le WAN.
+# `inet filter input` est en policy drop : sans ces règles, aucune box ne termine sa poignée de main. Préfixe zz- : chargé APRÈS la table.
+add rule inet filter input udp dport 51830 accept comment "secubox autoload hub"
+add rule inet filter input iifname "wg-autoload" tcp dport 8470 accept comment "secubox autoload tunnel API"

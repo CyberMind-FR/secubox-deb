@@ -1,3 +1,62 @@
+secubox-autoload (0.3.8-1~bookworm1) bookworm; urgency=medium
+
+  * La lecture du panel (boxes, jetons, pre-rapports) passe de require_lecture a require_jwt : elle donne l'identite des clients et leurs pre-rapports, et ne doit pas s'ouvrir en « mode tableau de bord » depuis le LAN (constate sur gk2 : GET /boxes repondait sans jeton).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 14:30:00 +0200
+
+secubox-autoload (0.3.7-1~bookworm1) bookworm; urgency=medium
+
+  * Routes a la RACINE du service, comme les autres modules : l'agregateur relaie /api/v1/autoload/... vers /run/secubox/autoload.sock en retirant le prefixe (cause du 404 constate sur gk2 : la requete passait par l'agregateur, qui envoyait /boxes avec Host: localhost a un service qui attendait /api/v1/autoload/boxes). Le fichier nginx du module (secubox.d/autoload.conf) est supprime (rm_conffile) : l'agregateur suffit, sans configuration propre.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 14:00:00 +0200
+
+secubox-autoload (0.3.6-1~bookworm1) bookworm; urgency=medium
+
+  * nginx : location ^~ /api/v1/autoload/ (au lieu d'une location a prefixe simple). Sur gk2, une location par expression reguliere plus generale supplantait la notre et envoyait la requete a l'agregateur, qui la relayait au service avec le prefixe retire et Host: localhost (404 par le vhost admin alors que la socket repondait 200). ^~ empeche cette supplantation.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 13:30:00 +0200
+
+secubox-autoload (0.3.5-1~bookworm1) bookworm; urgency=medium
+
+  * nginx : proxy_pass avec URI explicite (http://unix:/run/secubox/autoload.sock:/api/v1/autoload/), comme les autres modules ; la forme sans URI faisait arriver au service un chemin sans le prefixe (404 constate sur gk2 par le vhost admin).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 13:00:00 +0200
+
+secubox-autoload (0.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le journal d'audit par defaut est /var/log/secubox/autoload-audit.log (le service n'est pas le compte secubox, il a son propre journal) : autoloadctl lance en root puis abaisse vers secubox-autoload tentait d'ecrire /var/log/secubox/audit.log et echouait (constate sur gk2).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 12:30:00 +0200
+
+secubox-autoload (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * Revocation d'un LOT : retire aussi les pairs WireGuard des box deja reclamees (Registre.revoquer_lot_cles ; autoloadctl revoquer --lot ; POST /lots/{lot}/revoquer, require_jwt). Avant, seule la revocation d'un jeton retirait son pair. 1 test.
+  * Essai de bout en bout sur gk2 : emission, POST /enrol par la socket, reponse avec le gabarit de tunnel, pair 10.64.0.x applique au hub (wg-autoload, cle privee conservee), refus uniforme d'une autre cle.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 12:00:00 +0200
+
+secubox-autoload (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * L'assistant root (autoloadctl tunnel-sync, appele par sudo depuis le service) lit la base des pairs en LECTURE SEULE (Pairs(lecture_seule=True)) : il ne cree ni ne modifie la base du service. Dans le bac a sable du service, root sans CAP_DAC_READ_SEARCH ne pouvait pas lire une base 0600 d'un autre proprietaire (constate sur gk2) : la capacite est ajoutee au CapabilityBoundingSet, et elle seule en lecture. L'echec de tunnel garde la FIN du message dans l'audit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 11:30:00 +0200
+
+secubox-autoload (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * tunnel : `wg syncconf` effaçait la clé privée du hub (constaté sur gk2 : sans PrivateKey dans la configuration appliquée, syncconf éteint la clé de l'interface, PostUp ne s'exécutant qu'à la montée). La clé est ajoutée au seul fichier passé à syncconf (0600, dossier privé, supprimé ensuite), jamais à la configuration posée ni en argument. 3 tests.
+  * enrôlement : un échec de synchronisation est écrit à l'audit (tunnel-echec) avec sa raison ; la box ne reçoit toujours que « service indisponible ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 11:00:00 +0200
+
+secubox-autoload (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Service d'enrolement et panel (#2190, parent #2182) : api/main.py, deux applications. PUBLIQUE (socket Unix /run/secubox/autoload.sock derriere nginx) : POST /enrol (preuve = le jeton a usage unique, refus uniforme, 10 essais par fenetre de 10 minutes et par source, reprise d'une reclamation par la meme cle apres une coupure) et l'administration (lecture require_lecture ; emission, revocation, abonnement avec duree et formule, series, refus de pre-rapport sous require_jwt ; la valeur d'un jeton n'est montree qu'a l'emission). TUNNEL (TCP 10.64.0.1:8470, IP_FREEBIND, uniquement dans WireGuard) : progression, pre-rapport, sondage du refus ; l'identite est l'adresse SOURCE de la connexion (WireGuard ne laisse passer d'un pair que sa propre adresse), jamais un en-tete ; ces routes n'existent pas dans l'application publique.
+  * Registre : jeton prefixe gk2_ (detection de fuite), echeance d'abonnement et formule, progression et statut des box (en attente, preparation, en cours, termine, revoque), pre-rapports (empreinte recalculee et verifiee).
+  * Le service n'est pas root et aucune nouvelle unite root n'est creee : il applique le tunnel par UN argv exact accorde par sudoers.d/secubox-autoload (sudo -n /usr/sbin/autoloadctl tunnel-sync), NoNewPrivileges=no (precedent voicestudio, ligne ajoutee aux exceptions de RULES-CODE). autoloadctl abaisse ses privileges vers secubox-autoload pour les commandes du registre (la base garde son proprietaire) et ecrit hub.pub.
+  * Utilisateur dedie secubox-autoload, unite durcie, profil AppArmor enforce, sudoers a argv exact, journal d'audit /var/log/secubox/autoload-audit.log (logrotate), nginx secubox.d/autoload.conf, nftables zz-secubox-autoload.nft (udp/51830 et tcp/8470 depuis wg-autoload seulement).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 10:00:00 +0200
+
 secubox-autoload (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Tunnel WireGuard cote infrastructure (#2189, parent #2182, D7) : autoload/tunnel.py. Plage dediee 10.64.0.0/16 (hub 10.64.0.1, UDP 51830) distincte de wg-mesh et wg-ephemeral ; attribution d'adresses idempotente et atomique ; une adresse ou une cle retiree n'est jamais reutilisee ; un pair n'a droit qu'a sa propre /32 (les clients ne se voient pas) ; la cle privee du hub n'est jamais dans la configuration (wg set private-key <fichier 0600>). Synchronisation validee par wg-quick strip, posee atomiquement, appliquee par wg syncconf sans couper les pairs existants ; en cas d'echec l'ancienne configuration reste.

@@ -47,14 +47,21 @@ class TunnelErreur(Exception):
 class Pairs:
     """Les pairs du hub : une clé publique, une adresse. Même base SQLite que les jetons (un seul fichier 0600 à protéger)."""
 
-    def __init__(self, db: Path, horloge: Callable[[], float] = time.time):
-        self.db, self._horloge = Path(db), horloge
+    def __init__(self, db: Path, horloge: Callable[[], float] = time.time, lecture_seule: bool = False):
+        """`lecture_seule` : pour l'assistant root (tunnel-sync) — il lit les pairs, ne crée ni ne modifie jamais la base du service."""
+        self.db, self._horloge, self._ro = Path(db), horloge, lecture_seule
+        if lecture_seule:
+            return
         self.db.parent.mkdir(parents=True, exist_ok=True)
         with self._cx() as cx:
             cx.executescript("CREATE TABLE IF NOT EXISTS pairs (cle_pub TEXT PRIMARY KEY, adresse TEXT NOT NULL UNIQUE, "
                              "cree_le INTEGER NOT NULL, retire_le INTEGER)")
 
     def _cx(self) -> sqlite3.Connection:
+        if self._ro:
+            cx = sqlite3.connect(f"file:{self.db}?mode=ro", uri=True, timeout=15, isolation_level=None)
+            cx.row_factory = sqlite3.Row
+            return cx
         cx = sqlite3.connect(self.db, timeout=15, isolation_level=None)
         cx.row_factory = sqlite3.Row
         return cx
@@ -125,9 +132,24 @@ def _ecrit_prive(chemin: Path, texte: str) -> None:
         raise
 
 
+def _avec_cle(strip: str, cle_hub: Path) -> str:
+    """`wg syncconf` applique la configuration TELLE QUELLE : sans PrivateKey il ÉTEINT la clé de l'interface (constaté sur gk2 : le tunnel perdait sa clé à
+    la première synchronisation, PostUp ne s'exécutant qu'à la montée). La clé est donc ajoutée au seul fichier passé à syncconf (0600, dossier privé,
+    supprimé ensuite) ; elle n'est jamais dans la configuration posée ni en argument de commande."""
+    cle = Path(cle_hub).read_text(encoding="ascii").strip()
+    lignes = strip.splitlines()
+    for i, l in enumerate(lignes):
+        if l.strip() == "[Interface]":
+            lignes.insert(i + 1, f"PrivateKey = {cle}")
+            return "\n".join(lignes) + "\n"
+    raise TunnelErreur("configuration sans section [Interface]")
+
+
 def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB_DEFAUT, executeur=subprocess.run) -> int:
     """Valide la configuration (wg-quick strip), la pose atomiquement, puis `wg syncconf` : aucun pair existant n'est coupé."""
     conf = Path(conf)
+    if not Path(cle_hub).is_file():
+        raise TunnelErreur("clé du hub absente (autoloadctl tunnel-init)")
     conf.parent.mkdir(parents=True, exist_ok=True)
     actifs = pairs.actifs()
     texte = rendre_hub(actifs, cle_hub)
@@ -140,7 +162,7 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
         if r.returncode != 0:
             raise TunnelErreur("configuration refusée par wg-quick : " + (r.stderr or "").strip()[:200])
         nu = Path(tmpd) / "strip.conf"
-        nu.write_text(r.stdout, encoding="utf-8")
+        nu.write_text(_avec_cle(r.stdout, cle_hub), encoding="utf-8")
         nu.chmod(0o600)
         _ecrit_prive(conf, texte)
         s = executeur(["wg", "syncconf", INTERFACE, str(nu)], capture_output=True, text=True, timeout=TIMEOUT_S)
@@ -149,3 +171,18 @@ def synchroniser(pairs: Pairs, conf: Path = CONF_DEFAUT, cle_hub: Path = CLE_HUB
             if d.returncode != 0:
                 raise TunnelErreur("tunnel non monté : " + (d.stderr or s.stderr or "").strip()[:200])
     return len(actifs)
+
+
+DOSSIER_DEFAUT = Path("/var/lib/secubox/autoload")
+SUDO_SYNC = ["sudo", "-n", "/usr/sbin/autoloadctl", "tunnel-sync"]       # UN argv exact : c'est ce que le sudoers du paquet accorde, rien d'autre
+
+
+def appliquer_par_sudo(executeur=subprocess.run, timeout: int = 30) -> None:
+    """Le service d'enrôlement n'est PAS root (et aucune nouvelle unité root n'est permise) : il demande l'application du tunnel au SEUL assistant
+    que son sudoers lui accorde. L'enrôlement n'est confirmé à la box qu'une fois les pairs réellement appliqués."""
+    try:
+        r = executeur(SUDO_SYNC, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise TunnelErreur(f"synchronisation impossible ({type(e).__name__})") from e
+    if r.returncode != 0:
+        raise TunnelErreur("synchronisation refusée : " + (r.stderr or r.stdout or "").strip()[:200])
