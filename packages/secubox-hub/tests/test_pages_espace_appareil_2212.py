@@ -17,7 +17,7 @@ SANTE = {"modules": {"waf": {"status": "ok", "msg": "répond"}}}
 CLIENTS = {"count": 2, "clients": [
     {"mac": "aa:bb:cc:00:00:01", "ip": "192.168.1.20", "hostname": "tv-salon", "custom_hostname": "", "online": True, "zone_name": "LAN", "device_type": "tv"},
     {"mac": "aa:bb:cc:00:00:02", "ip": "192.168.1.21", "hostname": "<img src=x onerror=window.__xss=1>", "online": False, "zone_name": "Quarantaine"}]}
-FICHE = {**CLIENTS["clients"][0], "vendor": "Samsung", "first_seen": "2026-10-01", "recent_events": [{"timestamp": "2026-10-10T10:00", "event": "client_joined"}]}
+FICHE = {**CLIENTS["clients"][0], "oui_vendor": "Samsung", "first_seen": "2026-10-01", "recent_events": [{"timestamp": "2026-10-10T10:00", "event": "client_joined"}]}
 
 
 @pytest.fixture(scope="module")
@@ -72,11 +72,10 @@ def test_page_espace_inconnu_dit_pourquoi(navigateur):
 
 def test_liste_appareils_echappe_les_noms_et_ouvre_la_fiche(navigateur):
     ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, CLIENTS), "/api/v1/nac/client/**": (200, FICHE)})
-    p.wait_for_selector("#appareils .carte", state="attached")
+    p.wait_for_selector("#appareils .carte")
     t = p.locator("#appareils").text_content()
     assert "tv-salon" in t and "hors ligne" in t
     assert p.evaluate("window.__xss") is None and "<img" in t
-    p.click("#appareils summary")                               # le groupe « Non identifiés » est replié
     p.click("text=tv-salon")
     p.wait_for_selector("#fiche:not([hidden])")
     p.wait_for_selector("#detail .carte")
@@ -125,7 +124,7 @@ def test_les_conteneurs_lxc_ne_sont_pas_des_appareils(navigateur):
         {"mac": "00:16:3e:1c:41:60", "ip": "fe80::216:3eff:fe1c:4160", "hostname": "nextcloud", "online": True},   # OUI LXC
         {"mac": "02:fb:00:00:d2:80", "ip": "10.55.0.2", "hostname": "tunnel", "online": True}]}
     ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, clients)})
-    p.wait_for_selector("#appareils .carte", state="attached")
+    p.wait_for_selector("#appareils .carte")
     assert p.locator("#appareils .carte").count() == 2          # tv-salon et le client 10.55.0.2 : seuls les conteneurs sont écartés
     t = p.locator("#appareils").text_content()
     assert "tv-salon" in t and "mail" not in t and "nextcloud" not in t
@@ -133,20 +132,38 @@ def test_les_conteneurs_lxc_ne_sont_pas_des_appareils(navigateur):
     ctx.close()
 
 
-def test_les_appareils_sont_regroupes_par_mac_puis_par_type_avec_le_materiel(navigateur):
-    clients = {"count": 5, "clients": [
-        {"mac": "AA:BB:CC:00:00:01", "ip": "192.168.1.20", "hostname": "tv-salon", "online": True, "device_type": "smart_home", "oui_vendor": "Samsung Electronics", "model": "QN90"},
-        {"mac": "aa:bb:cc:00:00:01", "ip": "2a01:e0a::20", "hostname": "tv-salon", "online": True, "device_type": "smart_home", "oui_vendor": "Samsung Electronics"},   # même MAC, autre adresse
-        {"mac": "aa:bb:cc:00:00:03", "ip": "192.168.1.254", "hostname": "freebox", "online": True, "device_type": "router", "oui_vendor": "FREEBOX SAS", "is_router": 1},
-        {"mac": "aa:bb:cc:00:00:04", "ip": "192.168.1.30", "online": False, "device_type": "unknown", "oui_vendor": "Unknown"},
-        {"mac": "aa:bb:cc:00:00:05", "ip": "192.168.1.31", "online": False, "device_type": "unknown", "oui_vendor": "Unknown"}]}
+def test_la_liste_detaille_type_materiel_et_systeme_de_chaque_appareil(navigateur):
+    clients = {"count": 3, "clients": [
+        {"mac": "aa:bb:cc:00:00:01", "ip": "192.168.1.20", "hostname": "android-2", "online": True, "device_type": "phone", "oui_vendor": "Samsung Electronics", "model": "S24"},
+        {"mac": "aa:bb:cc:00:00:03", "ip": "192.168.1.254", "hostname": "freebox", "online": True, "device_type": "router", "oui_vendor": "FREEBOX SAS"},
+        {"mac": "aa:bb:cc:00:00:04", "ip": "192.168.1.30", "online": False, "device_type": "unknown", "oui_vendor": "Unknown"}]}
     ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, clients)})
-    p.wait_for_selector("#appareils .groupe")
-    titres = [t.strip().lower() for t in p.locator("#appareils .groupe > summary").all_inner_texts()]
-    assert titres[0].startswith("routeurs") and any(t.startswith("objets connectés") for t in titres)
-    assert titres[-1].startswith("non identifiés") and "(2)" in titres[-1]            # inconnus en dernier, repliés
-    assert p.locator("#appareils .carte:has-text('tv-salon')").count() == 1            # une carte par MAC
-    carte = p.inner_text("#appareils .carte:has-text('tv-salon')")
-    assert "Samsung Electronics" in carte and "QN90" in carte and "192.168.1.20" in carte and "2a01:e0a::20" in carte
-    assert "Unknown" not in p.locator("#appareils").text_content()                                  # le fabricant « Unknown » n'est pas un matériel
+    p.wait_for_selector("#appareils .carte")
+    assert p.locator("#appareils .groupe").count() == 0                                   # pas de regroupement : une liste
+    tel = p.inner_text("#appareils .carte:has-text('android-2')")
+    assert "Téléphone" in tel and "Samsung Electronics" in tel and "S24" in tel and "Android" in tel
+    assert "Routeur / passerelle" in p.inner_text("#appareils .carte:has-text('freebox')")
+    inconnu = p.inner_text("#appareils .carte:has-text('192.168.1.30')")
+    assert "Type non identifié" in inconnu and "Unknown" not in inconnu and "Android" not in inconnu     # rien d'inventé
+    ctx.close()
+
+
+def test_la_fiche_detaille_l_identite_et_deduit_l_os_du_dns_avec_sa_preuve(navigateur):
+    fiche = {**FICHE, "hostname": "salon", "device_type": "tv", "oui_vendor": "Samsung Electronics", "model": "QN90", "risk_level": "low"}
+    flux = {**FLUX, "domaines": [{"domaine": "time.samsungcloudsolution.com", "requetes": 9, "bloquees": 0}]}
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/#aa%3Abb%3Acc%3A00%3A00%3A01",
+                   {"/api/v1/nac/client/**": (200, fiche), "/api/v1/ad-guard/adblock-tv/flux**": (200, flux)})
+    p.wait_for_selector("#detail .carte")
+    t = p.inner_text("#detail")
+    assert "Télévision" in t and "Samsung Electronics" in t and "QN90" in t and "low" in t
+    p.wait_for_function("document.getElementById('os-carte').innerText.includes('Tizen')")
+    assert "requête DNS vers time.samsungcloudsolution.com" in p.inner_text("#os-carte")
+    ctx.close()
+
+
+def test_la_fiche_sans_indice_dit_que_l_os_n_est_pas_determine(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/#aa%3Abb%3Acc%3A00%3A00%3A01",
+                   {"/api/v1/nac/client/**": (200, {**FICHE, "hostname": "x1"}), "/api/v1/ad-guard/adblock-tv/flux**": (503, {})})
+    p.wait_for_selector("#os-carte")
+    assert "non déterminé" in p.inner_text("#os-carte") and "Aucun indice" in p.inner_text("#os-carte")
     ctx.close()
