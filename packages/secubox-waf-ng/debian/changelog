@@ -1,3 +1,9 @@
+secubox-waf-ng (1.24.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf (sources secubox-toolbox-ng 0.9.1) : Un leurre n'a AUCUN autre but que detecter : tout contact avec un service simule est banni, ou qu'il ait lieu (decision du proprietaire, #2240). Avant, seul le leurre des hotes non routes bannissait ; (1) un LEURRE SERVI SUR UN CHEMIN-APPAT d'un vrai vhost (/.env, /.git/... leurres a la place du 404) ne bannissait PAS — l'attaquant leurre restait libre ; (2) une MARQUE rejouee (fausse cle semee par le leurre) vers un service reel n'etait vue que sur les hotes non routes. Maintenant : ban gradue 1 h / 24 h / 7 j pour le chemin-appat ; marque rejouee = ban de 24 h au minimum, sur tout vhost ; jamais le LAN ni une plage protegee (--actor-ban-protegees vaut aussi pour le leurre : la box, la Freebox, le maillage ne peuvent plus etre bannis par un leurre). Le message de demarrage du leurre ne dit plus « aucun ban n'en decoule ». 8 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 04:00:00 +0200
+
 secubox-waf-ng (1.23.1-1~bookworm1) bookworm; urgency=medium
 
   * Page Actor, carte du monde : la ligne 7 de la grille (environ 67,5 N) etait fautive. Une bande continue de 64 points traversait tout l'Atlantique Nord de l'Alaska a la Norvege, et la Siberie manquait. Ligne reconstruite d'apres la geographie a 67,5 N : Tchoukotka, Alaska-Canada, detroit de Davis, Groenland, Atlantique, Scandinavie-Russie, golfe de l'Ob, Siberie. 3 tests (60 x 120 points, ligne 7, aucune bande continue de plus de 80 points).

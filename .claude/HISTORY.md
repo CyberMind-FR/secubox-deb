@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — Les leurres bannissent partout (ref #2240)
+
+Décision du propriétaire : un service simulé n'a d'autre but que détecter. Ban sur le chemin-appât d'un vrai vhost (jusque-là leurré mais pas banni), marque rejouée = 24 h minimum sur tout vhost, plages protégées respectées par le ban de leurre. toolbox-ng 0.9.1, waf-ng 1.24.0.
+
 ## 2026-10-12 — Carte du monde de la page Actor : ligne 7 corrigée (ref #2240)
 
 La grille TERRE (60 × 120 points de 3°) avait une ligne 7 fautive : bande de 64 points d'une rive à l'autre de l'Atlantique Nord, Sibérie absente. Reconstruite ; waf-ng 1.23.1.

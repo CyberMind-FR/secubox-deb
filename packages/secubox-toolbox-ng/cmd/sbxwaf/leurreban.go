@@ -4,7 +4,11 @@
 
 package main
 
-import "time"
+import (
+	"log"
+	"net/http"
+	"time"
+)
 
 // Ban sur détection de leurre (#2238, décision du propriétaire du 2026-10-11).
 //
@@ -31,4 +35,34 @@ func (s *Server) recidivesLeurre(ip string) int {
 		return 0
 	}
 	return s.nftBan.store.CompteCategorie(ip, "leurre:", time.Now().Add(-fenetreRecidiveLeurre).Unix())
+}
+
+// UN LEURRE N'A AUCUN AUTRE BUT QUE DE DÉTECTER (décision du propriétaire, 2026-10-11) : tout contact avec un service simulé est banni, où qu'il ait
+// lieu — hôte non routé, chemin-appât d'un vrai vhost, marque rejouée. Les garde-fous restent : jamais le LAN, jamais une plage protégée (la box, la
+// Freebox, le maillage), durée graduée à la récidive pour qu'un faux positif (CGNAT) se dénoue en une heure, journal de bans annulable.
+//
+// `minDuree` : plancher de durée. Une MARQUE REJOUÉE (une fausse clé servie par le leurre qui revient dans une requête) prouve que cette source a
+// moissonné le leurre puis essaie ce qu'elle a pris : 24 h au minimum.
+func (s *Server) banLeurre(ip, categorie, sev string, minDuree time.Duration) {
+	if s == nil || !s.leurreBan || s.nftBan == nil || adresseProtegee(ip, s.protegees) {
+		return
+	}
+	d := dureeLeurre(s.recidivesLeurre(ip))
+	if d < minDuree {
+		d = minDuree
+	}
+	log.Printf("sbxwaf: leurre-ban %s ← %s (%s)", ip, categorie, d)
+	go s.nftBan.BanFor(ip, "leurre:"+categorie, sev, d)
+}
+
+// surMarqueRevenue : une marque semée par le leurre revient dans une requête vers un SERVICE RÉEL. Jamais pour le LAN.
+func (s *Server) surMarqueRevenue(r *http.Request) {
+	if s == nil || !s.leurreBan || s.leurre == nil || s.leurre.fil == nil {
+		return
+	}
+	ip := clientIP(r)
+	if privateCIDR(ip) || len(s.marquesRevenues(r)) == 0 {
+		return
+	}
+	s.banLeurre(ip, "marque-revenue", "high", 24*time.Hour)
 }

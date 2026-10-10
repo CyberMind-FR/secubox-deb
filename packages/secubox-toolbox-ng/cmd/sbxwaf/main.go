@@ -215,6 +215,8 @@ type Server struct {
 	widgetHosts []string
 	// leurreBan : un hit sur le leurre bannit dès le premier coup, durée graduée (#2238). Faux par défaut.
 	leurreBan bool
+	// protegees : adresses/plages jamais bannies automatiquement (box, Freebox, maillage) — valent aussi pour le ban de leurre.
+	protegees []*net.IPNet
 	// widgetExclude : applications TIERCES dont on n'injecte pas le HTML. Elles
 	// restent inspectees et protegees — seul le bandeau s'arrete. Voir
 	// widgetExcluded() pour le detail.
@@ -335,6 +337,8 @@ func (s *Server) handler() http.Handler {
 		}
 		host = strings.ToLower(strings.TrimSpace(host))
 		visitHost = host
+
+		s.surMarqueRevenue(r) // une marque du leurre rejouée vers un service réel : bannie (#2240)
 
 		ip, port, ok := s.routeLookup(host)
 		if !ok {
@@ -999,9 +1003,11 @@ func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, fili
 	if action == "banned" {
 		log.Printf("sbxwaf: THREAT [%s] %s host-anomaly=%s host=%q", cls.Sev, ip, cls.Name, r.Host)
 		if leurre != "" && s.leurreBan && !cls.Strong && s.nftBan != nil {
-			d := dureeLeurre(s.recidivesLeurre(ip))
-			log.Printf("sbxwaf: leurre-ban %s ← %s (%s)", ip, leurre, d)
-			go s.nftBan.BanFor(ip, "leurre:"+cls.Name, cls.Sev, d)
+			plancher := time.Duration(0)
+			if len(fusionneMarques(s.marquesRevenues(r), rejouees...)) > 0 {
+				plancher = 24 * time.Hour // une marque rejouée prouve que la source a moissonné le leurre
+			}
+			s.banLeurre(ip, cls.Name, cls.Sev, plancher)
 		} else {
 			s.appliquerBan(ip, cat, cls.Sev)
 		}
@@ -1355,6 +1361,7 @@ func main() {
 		// #747: first-party host suffixes + Hub origin for the injected health banner.
 		widgetHosts:   splitCSV(*widgetHosts),
 		leurreBan:     *leurreBan,
+		protegees:     parseCIDRs(*actorBanProtegees),
 		widgetExclude: splitCSV(*widgetExclude),
 		bannerOrigin:  strings.TrimSpace(*bannerOrigin),
 		// Body inspection cap (--max-body-inspect).
@@ -1365,6 +1372,8 @@ func main() {
 		// finiraient par diverger sur la casse ou le port.
 		skipBodyHosts: parseTrustedHosts(*wafSkipBodyHosts),
 	}
+	// Un leurre servi sur un chemin-appât d'un VRAI vhost bannit à son tour (#2240) : sans cela, l'attaquant leurré restait libre de continuer.
+	srv.leurre.surTouche = func(ip string, f familleSonde) { srv.banLeurre(ip, "appat", "medium", 0) }
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
 	log.Printf("sbxwaf: body-inspect cap=%d bytes; trusted-skip hosts=%d; body-skip hosts=%d",
 		*maxBodyInspectFlag, len(srv.trustedHosts), len(srv.skipBodyHosts))
