@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — WAF : leurres, campagnes et acteurs suivis deviennent des bans (ref #2238)
+
+toolbox-ng 0.6.0 + waf-ng 1.20.0 : `--leurre-ban` (1 h / 24 h / 7 j), `--campagne-ban auto` (haute valeur, preuve par adresse), `--actor-ban auto`. NON deploye : redemarrage de secubox-waf-ng a annoncer. Surveiller `actor-ban-etat.json` et `campagne-ban-etat.json` apres activation.
+
 ## 2026-10-11 — Admin SBXOS : les six espaces deviennent la navigation par defaut (ref #2212)
 
 secubox-hub 1.9.51, apres validation du proprietaire (« 2 ok »). Retour: `?nav=categories`. Reste: nettoyage des anciennes entrees apres un delai d'usage ; #2212 reste ouverte jusque-la.

@@ -1,16 +1,23 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-"""Le ban automatique d'Actor Intelligence est LIVRÉ en mode « propose » : rien ne s'applique tant que l'opérateur n'a pas passé « auto »."""
+"""Bans automatiques (#2238, décision du propriétaire du 2026-10-11) : acteurs suivis et campagnes en « auto », ban sur le leurre dans le dropin du leurre."""
 import re
 from pathlib import Path
 
 SYS = Path(__file__).resolve().parents[1] / "systemd"
 
 
-def test_le_waf_est_livre_en_mode_propose_pas_auto():
+def test_le_waf_est_livre_avec_les_bans_automatiques_des_acteurs_et_des_campagnes():
     t = (SYS / "secubox-waf-ng.service").read_text()
-    m = re.search(r"^\s+--actor-ban (\S+)", t, re.M)
-    assert m and m.group(1) == "propose"
+    assert re.search(r"^\s+--actor-ban auto", t, re.M)
+    assert re.search(r"^\s+--campagne-ban auto", t, re.M)
+
+
+def test_le_ban_sur_le_leurre_n_existe_que_dans_le_dropin_du_leurre():
+    sans_commentaires = lambda txt: "\n".join(l for l in txt.splitlines() if not l.lstrip().startswith("#"))
+    t = sans_commentaires((SYS / "secubox-waf-ng.service").read_text())
+    d = sans_commentaires((SYS.parent / "conf" / "honeypot.conf").read_text())
+    assert "--leurre-ban" in d and "--honeypot" in d and "--leurre-ban" not in t
 
 
 def test_actord_publie_ses_propositions_ou_le_waf_les_lit():

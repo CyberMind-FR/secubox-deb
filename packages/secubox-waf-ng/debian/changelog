@@ -1,3 +1,9 @@
+secubox-waf-ng (1.20.0-1~bookworm1) bookworm; urgency=medium
+
+  * Bans automatiques (#2238) : l'unite passe --actor-ban en auto et ajoute --campagne-ban auto ; le dropin du leurre ajoute --leurre-ban. Garde-fous inchanges (plages protegees, plafonds horaires, durees graduees). Retour a l'observation : remplacer auto par propose. Tests d'unite mis a jour.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 08:00:00 +0200
+
 secubox-waf-ng (1.19.3-1~bookworm1) bookworm; urgency=medium
 
   * Page Actor : tuile « accès de robots connus » et ligne par famille (#2201), alimentees par le champ robots de l'apercu d'actord ; les robots connus ne comptent plus dans les acteurs critiques, suspects ou observes. Valeurs serveur echappees. La grille des tuiles s'etend (auto-fit).

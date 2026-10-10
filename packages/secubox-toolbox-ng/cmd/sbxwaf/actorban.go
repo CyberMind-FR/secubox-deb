@@ -103,12 +103,15 @@ func parseCIDRs(liste string) []*net.IPNet {
 	return out
 }
 
-func (a *ActorBan) protegee(ip string) bool {
+func (a *ActorBan) protegee(ip string) bool { return adresseProtegee(ip, a.protegees) }
+
+// adresseProtegee : jamais bannie automatiquement (privée, boucle locale, lien-local, multicast, plages déclarées : box, Freebox, mesh).
+func adresseProtegee(ip string, protegees []*net.IPNet) bool {
 	p := net.ParseIP(ip)
 	if p == nil || p.IsLoopback() || p.IsPrivate() || p.IsLinkLocalUnicast() || p.IsLinkLocalMulticast() || p.IsMulticast() || p.IsUnspecified() {
 		return true
 	}
-	for _, n := range a.protegees {
+	for _, n := range protegees {
 		if n.Contains(p) {
 			return true
 		}

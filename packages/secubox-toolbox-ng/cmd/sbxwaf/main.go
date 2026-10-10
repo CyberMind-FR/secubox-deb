@@ -213,6 +213,8 @@ type Server struct {
 	// HTML responses the WAF injects the SecuBox health banner (#747). Empty
 	// disables injection. Set from --widget-hosts.
 	widgetHosts []string
+	// leurreBan : un hit sur le leurre bannit dès le premier coup, durée graduée (#2238). Faux par défaut.
+	leurreBan bool
 	// widgetExclude : applications TIERCES dont on n'injecte pas le HTML. Elles
 	// restent inspectees et protegees — seul le bandeau s'arrete. Voir
 	// widgetExcluded() pour le detail.
@@ -956,6 +958,8 @@ func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, fili
 		action = "detect" // notre domaine : jamais de ban (config à câbler, pas une attaque)
 	case cls.Strong:
 		action = "banned" // vide/IP/DGA : ban dès le premier coup
+	case leurre != "" && s.leurreBan:
+		action = "banned" // le leurre n'est servi qu'à un extérieur sur un hôte non à nous : ban gradué (#2238)
 	case s.ban != nil:
 		if _, banned := s.ban.Record(ip, time.Now().Unix()); banned {
 			action = "banned"
@@ -994,7 +998,13 @@ func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, fili
 	}
 	if action == "banned" {
 		log.Printf("sbxwaf: THREAT [%s] %s host-anomaly=%s host=%q", cls.Sev, ip, cls.Name, r.Host)
-		s.appliquerBan(ip, cat, cls.Sev)
+		if leurre != "" && s.leurreBan && !cls.Strong && s.nftBan != nil {
+			d := dureeLeurre(s.recidivesLeurre(ip))
+			log.Printf("sbxwaf: leurre-ban %s ← %s (%s)", ip, leurre, d)
+			go s.nftBan.BanFor(ip, "leurre:"+cls.Name, cls.Sev, d)
+		} else {
+			s.appliquerBan(ip, cat, cls.Sev)
+		}
 	}
 }
 
@@ -1200,6 +1210,10 @@ func main() {
 		"sliding window for escalate-mode categories (a slow scanner needs a long window)")
 	escalateThreshold := flag.Int("escalate-threshold", 3,
 		"probes within the escalate window before an IP is banned")
+	leurreBan := flag.Bool("leurre-ban", false, "ban dès le premier hit sur le leurre (hôte non routé, hors LAN et première partie), durée graduée 1 h / 24 h / 7 j à la récidive (#2238)")
+	campagneBanMode := flag.String("campagne-ban", "off", "ban des campagnes (même workflow de sondes, haute valeur) : off | propose | auto (#2238)")
+	campagneBanEtat := flag.String("campagne-ban-etat", "/var/lib/secubox/waf/campagne-ban-etat.json", "état du ban des campagnes pour le panneau")
+	campagneBanMaxHeure := flag.Int("campagne-ban-max-heure", 30, "coupe-circuit : bans de campagne maximum par heure glissante")
 	actorBanMode := flag.String("actor-ban", "off", "ban automatique piloté par Actor Intelligence : off | propose (n'applique rien, écrit les candidats) | auto")
 	actorProps := flag.String("actor-propositions", "/run/secubox/actord-propositions.json", "fichier de propositions publié par sbx-actord")
 	actorBanEtat := flag.String("actor-ban-etat", "/var/lib/secubox/waf/actor-ban-etat.json", "état du ban automatique (candidats, décisions, plafond) pour le panneau")
@@ -1335,6 +1349,7 @@ func main() {
 		vhostSignals: vhostSignals,
 		// #747: first-party host suffixes + Hub origin for the injected health banner.
 		widgetHosts:   splitCSV(*widgetHosts),
+		leurreBan:     *leurreBan,
 		widgetExclude: splitCSV(*widgetExclude),
 		bannerOrigin:  strings.TrimSpace(*bannerOrigin),
 		// Body inspection cap (--max-body-inspect).
@@ -1382,6 +1397,15 @@ func main() {
 				ab.protegees = parseCIDRs(*actorBanProtegees)
 				go ab.Veiller(time.Minute)
 				log.Printf("sbxwaf: actor-ban mode=%s (min=%d sanctions locales, plafond=%d/h, source=%s)", *actorBanMode, *actorBanMin, *actorBanMaxHeure, *actorProps)
+			}
+			// Ban des campagnes (#2238) : garde-fous dans campagneban.go ; mêmes plages protégées que le ban d'acteurs.
+			if *campagneBanMode == "propose" || *campagneBanMode == "auto" {
+				cb := NewCampagneBan(*threatLog, *campagneBanMode, store, nb)
+				cb.etat = *campagneBanEtat
+				cb.maxParHeure = *campagneBanMaxHeure
+				cb.protegees = parseCIDRs(*actorBanProtegees)
+				go cb.Veiller(5 * time.Minute)
+				log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
 			}
 			// SIGHUP : `systemctl reload secubox-waf-ng`, propagé depuis
 			// nftables.service (ReloadPropagatedFrom) — réparation immédiate au
