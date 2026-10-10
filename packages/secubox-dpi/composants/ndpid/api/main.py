@@ -573,13 +573,17 @@ MALICIOUS_JA3 = {
 }
 
 
-# ── DPI bridge ──────────────────────────────────────────────────────────
-# nDPId's zmq distributor is not run on this board (rejected for perf,
-# #722/#723). The live DPI engine is ndpiReader, whose Go collector writes
-# /var/lib/secubox/dpi/{cumulative,state}.json. When the nDPId database is
-# empty, serve flows/protocols/applications/stats from that collector output so
-# the dashboard shows real data. JA3/JA4 fingerprints and per-flow risks have
-# no equivalent there and remain empty.
+# ── DPI bridges ─────────────────────────────────────────────────────────
+# Ordre de préférence quand la base nDPId locale est vide : (1) sbxdpi, qui consomme le flux d'nDPIsrvd (moteur nDPId) et publie des agrégats vivants
+# (SbxdpiBridge, api/sbxdpi_bridge.py) ; (2) le collecteur Go d'ndpiReader (fenêtres de 60 s sur wg-toolbox), qui écrit
+# /var/lib/secubox/dpi/{cumulative,state}.json. Le client ZMQ historique ci-dessous ne parle pas au vrai nDPIsrvd. Les empreintes JA3/JA4 et les
+# risques par flux n'ont d'équivalent que dans le premier pont.
+try:
+    from api.sbxdpi_bridge import SbxdpiBridge
+except ImportError:  # standalone
+    from sbxdpi_bridge import SbxdpiBridge
+
+
 class DpiBridge:
     DIR = Path("/var/lib/secubox/dpi")
 
@@ -649,6 +653,7 @@ class DpiBridge:
 ndpid_client = NDPIdClient()
 flow_db = FlowDatabase(DB_FILE)
 dpi_bridge = DpiBridge()
+sbx_bridge = SbxdpiBridge()
 
 
 # ============================================================================
@@ -715,8 +720,11 @@ async def status():
     """Public status endpoint."""
     daemon_status = ndpid_client.get_status()
     db_stats = flow_db.get_stats()
-    # nDPId not feeding? surface the ndpiReader/dpi collector as the live source.
-    if not db_stats.get("total_flows") and dpi_bridge.available():
+    # La base locale est vide : le moteur nDPId vivant est lu par sbxdpi ; à défaut, le collecteur ndpiReader.
+    if not db_stats.get("total_flows") and sbx_bridge.available():
+        vivant = sbx_bridge.status()
+        db_stats, daemon_status = vivant["database"], {**daemon_status, **vivant["daemon"]}
+    elif not db_stats.get("total_flows") and dpi_bridge.available():
         db_stats = dpi_bridge.stats()
         daemon_status = {**daemon_status, "running": True, "source": "ndpiReader/dpi"}
     return {
@@ -736,7 +744,9 @@ async def health():
 async def get_flows(active_only: bool = True, limit: int = 100):
     """Get current network flows."""
     flows = ndpid_client.get_flows(active_only)[:limit]
-    if not flows and dpi_bridge.available():
+    if not flows and sbx_bridge.available():
+        flows = sbx_bridge.flows(limit)
+    elif not flows and dpi_bridge.available():
         flows = dpi_bridge.flows(limit)
     return {"flows": flows, "count": len(flows)}
 
@@ -754,7 +764,9 @@ async def get_flow(flow_id: str):
 async def get_protocols():
     """Get detected protocols by traffic."""
     protocols = ndpid_client.get_protocols()
-    if not protocols and dpi_bridge.available():
+    if not protocols and sbx_bridge.available():
+        protocols = sbx_bridge.top_protocols(100)
+    elif not protocols and dpi_bridge.available():
         protocols = dpi_bridge.top_protocols(100)
     return {"protocols": protocols}
 
@@ -763,7 +775,9 @@ async def get_protocols():
 async def get_applications():
     """Get detected applications."""
     applications = ndpid_client.get_applications()
-    if not applications and dpi_bridge.available():
+    if not applications and sbx_bridge.available():
+        applications = sbx_bridge.top_applications(100)
+    elif not applications and dpi_bridge.available():
         applications = dpi_bridge.top_applications(100)
     return {"applications": applications}
 
@@ -772,7 +786,9 @@ async def get_applications():
 async def get_top_protocols(hours: int = 24, limit: int = 20):
     """Get top protocols by traffic."""
     data = flow_db.get_top_protocols(hours, limit)
-    if not data and dpi_bridge.available():
+    if not data and sbx_bridge.available():
+        data = sbx_bridge.top_protocols(limit)
+    elif not data and dpi_bridge.available():
         data = dpi_bridge.top_protocols(limit)
     return {"protocols": data}
 
@@ -781,7 +797,9 @@ async def get_top_protocols(hours: int = 24, limit: int = 20):
 async def get_top_applications(hours: int = 24, limit: int = 20):
     """Get top applications by traffic."""
     data = flow_db.get_top_applications(hours, limit)
-    if not data and dpi_bridge.available():
+    if not data and sbx_bridge.available():
+        data = sbx_bridge.top_applications(limit)
+    elif not data and dpi_bridge.available():
         data = dpi_bridge.top_applications(limit)
     return {"applications": data}
 
@@ -789,13 +807,17 @@ async def get_top_applications(hours: int = 24, limit: int = 20):
 @app.get("/fingerprints", dependencies=[Depends(require_jwt)])
 async def get_fingerprints(fp_type: str = None, limit: int = 100):
     """Get JA3/JA4 fingerprints."""
-    return {"fingerprints": flow_db.get_fingerprints(fp_type, limit)}
+    fps = flow_db.get_fingerprints(fp_type, limit)
+    if not fps and sbx_bridge.available():
+        fps = sbx_bridge.fingerprints(fp_type or "ja4", limit)
+    return {"fingerprints": fps}
 
 
 @app.get("/fingerprints/ja3", dependencies=[Depends(require_jwt)])
 async def get_ja3_fingerprints(limit: int = 100):
     """Get JA3 client fingerprints."""
-    return {"fingerprints": flow_db.get_fingerprints("ja3", limit)}
+    fps = flow_db.get_fingerprints("ja3", limit)
+    return {"fingerprints": fps or (sbx_bridge.fingerprints("ja3", limit) if sbx_bridge.available() else [])}
 
 
 @app.get("/fingerprints/ja3s", dependencies=[Depends(require_jwt)])
@@ -807,7 +829,10 @@ async def get_ja3s_fingerprints(limit: int = 100):
 @app.get("/fingerprints/ja4", dependencies=[Depends(require_jwt)])
 async def get_ja4_fingerprints(limit: int = 100):
     """Get JA4 fingerprints."""
-    return {"fingerprints": flow_db.get_fingerprints("ja4", limit)}
+    fps = flow_db.get_fingerprints("ja4", limit)
+    if not fps and sbx_bridge.available():
+        fps = sbx_bridge.fingerprints("ja4", limit)
+    return {"fingerprints": fps}
 
 
 @app.post("/fingerprints/tag", dependencies=[Depends(require_jwt)])
@@ -830,7 +855,10 @@ async def tag_fingerprint(fingerprint: str, known_app: str = None, threat_intel:
 @app.get("/risks", dependencies=[Depends(require_jwt)])
 async def get_risks(hours: int = 24, limit: int = 100):
     """Get recent risk events."""
-    return {"risks": flow_db.get_risk_events(hours, limit)}
+    risks = flow_db.get_risk_events(hours, limit)
+    if not risks and sbx_bridge.available():
+        risks = sbx_bridge.risks(limit)
+    return {"risks": risks}
 
 
 @app.get("/risks/current", dependencies=[Depends(require_jwt)])

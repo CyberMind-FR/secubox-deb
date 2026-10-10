@@ -45,3 +45,8 @@ Configuration file: `/etc/secubox/ndpid.toml`
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Sources des données (#2240)
+
+Quand la base locale est vide, l'API lit d'abord **sbxdpi** (nDPId → nDPIsrvd → sbxdpi, `/run/secubox/dpi-live.sock`) : protocoles, applications, risques nDPI, empreintes JA4, sessions d'usage. Ce sont des **cumuls depuis le démarrage de sbxdpi** : les risques sont des compteurs par type (source et destination « — »), sans le bruit de gravité basse ; il n'y a pas de JA3. À défaut, le collecteur d'ndpiReader (wg-toolbox, fenêtres de 60 s). Le moteur de capture est l'unité `secubox-ndpid-engine.service` (paquet `secubox-ndpid-engine`).
+
