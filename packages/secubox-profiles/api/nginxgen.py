@@ -174,7 +174,9 @@ def unwire(path: Path) -> bool:  # noqa: D401 — retire include ET regles de bl
 
 
 def _write_atomic(path: Path, text: str) -> None:
-    path = Path(path)
+    # On écrit dans la CIBLE d'un lien (#2253) : `os.replace` sur un lien le remplacerait par un fichier ordinaire, et sites-enabled divergerait
+    # de sites-available sans que rien ne le signale.
+    path = Path(path).resolve()
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:

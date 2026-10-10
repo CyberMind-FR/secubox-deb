@@ -28,7 +28,7 @@
 # ecrire a travers.
 set -euo pipefail
 readonly MODULE="vhost-logs"
-readonly VERSION="1.1.0"
+readonly VERSION="1.1.1"
 
 LIGNE='    access_log /var/log/nginx/secubox-hosts.log sbx_host;'
 REP="${1:-/etc/nginx/sites-enabled}"
@@ -67,9 +67,17 @@ for f in "$REP"/*; do
         mkdir -p "$PASSE"
         # -a : un lien symbolique est sauvegarde en tant que lien.
         cp -a "$f" "$PASSE/$(basename "$f")"
+        # Un lien : sed ecrit desormais dans sa CIBLE (#2253). La cible est donc sauvegardee a part, avec son chemin, pour la rendre telle quelle.
+        if [ -L "$f" ]; then
+            cible=$(readlink -f "$f")
+            mkdir -p "$PASSE/cibles"
+            cp -a "$cible" "$PASSE/cibles/$(basename "$f")"
+            printf '%s' "$cible" > "$PASSE/cibles/$(basename "$f").chemin"
+        fi
         # Apres CHAQUE access_log existant, pour couvrir tous les blocs server
         # du fichier sans avoir a analyser les accolades.
-        sed -i "/^[[:space:]]*access_log[[:space:]]/a\\$LIGNE" "$f"
+        # --follow-symlinks (#2253) : sans lui, `sed -i` REMPLACE le lien par une copie, et sites-available diverge de ce que nginx charge.
+        sed -i --follow-symlinks "/^[[:space:]]*access_log[[:space:]]/a\\$LIGNE" "$f"
     fi
     ajoutes=$((ajoutes+1))
 done
@@ -84,9 +92,18 @@ if [ "$APPLIQUE" = "1" ]; then
             # -L aussi : une sauvegarde de lien relatif ne se resout pas ici.
             [ -e "$b" ] || [ -L "$b" ] || continue
             nom=$(basename "$b")
+            [ "$nom" = "cibles" ] && continue          # les cibles de liens sont rendues plus bas
             # Supprimer D'ABORD : `cp` sur un lien existant ecrit dans sa cible.
             rm -f "$REP/$nom"
             cp -a "$b" "$REP/$nom"
+        done
+        # Les CIBLES des liens modifies : on les rend a leur contenu d'avant la passe (le lien, lui, n'a jamais cesse d'etre un lien).
+        for c in "$PASSE"/cibles/*.chemin; do
+            [ -e "$c" ] || continue
+            nom=$(basename "$c" .chemin)
+            cible=$(cat "$c")
+            rm -f "$cible"
+            cp -a "$PASSE/cibles/$nom" "$cible"
         done
         nginx -t && systemctl reload nginx
         exit 1

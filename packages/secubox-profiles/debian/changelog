@@ -1,3 +1,9 @@
+secubox-profiles (0.20.0-1~bookworm1) bookworm; urgency=medium
+
+  * sites-enabled doit contenir des LIENS (#2253). nginx-sync n'ecrase plus un lien par une copie (os.replace ecrivait sur le lien : _write_atomic ecrit maintenant dans la cible). Nouveau verbe `secubox-wakectl nginx-relink` (essai a blanc par defaut, --apply) : adopte les copies de sites-enabled dans sites-available (ce que nginx charge fait reference), sauvegarde hors de sites-enabled, remet le lien, nginx -t puis reload, retour arriere complet si nginx -t echoue ; refuse d'ecrire a travers un lien. Sur gk2 : 19 copies. 6 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 23:00:00 +0200
+
 secubox-profiles (0.19.18-1~bookworm1) bookworm; urgency=medium
 
   * nginx-sync : l'include du reveil est insere AVANT celui des pages d'erreur et un include mal place est DEPLACE (jamais duplique). Cause : le reveil a la demande etait masque par les pages d'erreur : secubox-errorpages et secubox-waking declarent tous deux `error_page 502 503 504`, nginx retient la PREMIERE, et le vhost incluait les pages d'erreur d'abord ; la page « 504 — Delai depasse » s'affichait, le waker n'etait jamais appele et le conteneur arrete ne se reveillait pas (#2251). Avant, l'idempotence sautait un bloc qui portait deja l'include, donc `secubox-wakectl nginx-sync` ne reparait rien. 3 tests.

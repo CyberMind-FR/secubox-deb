@@ -282,3 +282,17 @@ def test_le_reordonnancement_ne_touche_que_le_bloc_du_domaine(tmp_path):
     assert texte.count("secubox-waking.conf") == 1
     bloc_b = texte[texte.index("b.gk2.secubox.in") - 200:]
     assert "secubox-waking.conf" not in bloc_b
+
+
+def test_wire_sur_un_lien_ecrit_dans_la_cible_et_garde_le_lien(tmp_path):
+    """#2253 : os.replace sur un lien le remplaçait par une copie ; sites-enabled divergeait de sites-available."""
+    import os
+    from api import nginxgen
+    sa, se = tmp_path / "sites-available", tmp_path / "sites-enabled"
+    sa.mkdir()
+    se.mkdir()
+    (sa / "a.conf").write_text(_vhost("a.gk2.secubox.in"))
+    (se / "a.conf").symlink_to("../sites-available/a.conf")
+    assert nginxgen.wire(se / "a.conf", "a.gk2.secubox.in") is True
+    assert (se / "a.conf").is_symlink() and os.readlink(se / "a.conf") == "../sites-available/a.conf"
+    assert "secubox-waking.conf" in (sa / "a.conf").read_text()
