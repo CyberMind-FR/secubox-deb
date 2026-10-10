@@ -1,3 +1,9 @@
+secubox-hub (1.9.43-1~bookworm1) bookworm; urgency=medium
+
+  * Page Vue d'ensemble (#2212) : /apercu/ (menu.d/01-apercu.json, espace « apercu ») affiche l'etat global, une carte par espace (actifs/total, services a l'arret), les ressources et les alertes recentes depuis /api/v1/hub/apercu ; actualisation toutes les 30 s, erreur claire si l'API est illisible, contenu des alertes affiche en texte (jamais interprete). 3 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 22:00:00 +0200
+
 secubox-hub (1.9.42-1~bookworm1) bookworm; urgency=medium
 
   * Vue d'ensemble (#2212) : GET /api/v1/hub/apercu (require_lecture) agrege l'etat de la box a partir des seuls caches en memoire (menu, statistiques, notifications) : etat global ok/degrade/critique/inconnu, un bloc par espace (actifs/total, services arretes), ressources, alertes recentes. Jamais d'apt ni de systemctl sur la requete ; une donnee absente reste null. Fonction pure api/apercu.py, 7 tests.

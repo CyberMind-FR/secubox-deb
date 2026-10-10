@@ -41,7 +41,7 @@ def test_valeurs_valides():
 
 def test_la_vue_d_ensemble_ne_devient_pas_une_page_de_configuration():
     dedans = [k for k, v in TABLE["modules"].items() if v["espace"] == "apercu"]
-    assert sorted(dedans) == ["health", "hub"]
+    assert sorted(dedans) == ["apercu", "health", "hub"]
 
 
 def test_les_identites_humaines_restent_dans_identite_et_pas_dans_systeme():

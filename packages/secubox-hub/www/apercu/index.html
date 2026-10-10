@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+<!-- SecuBox · Vue d'ensemble (#2212) : lit /api/v1/hub/apercu (caches seulement). -->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox · Vue d'ensemble</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="apercu.css">
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+</head>
+<body class="module-root hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main">
+        <header class="page">
+            <h1>🧭 Vue d'ensemble</h1>
+            <div class="actions"><span id="maj" class="maj">—</span><button class="btn" id="rafraichir" type="button">↻ Actualiser</button></div>
+        </header>
+        <div id="erreur" class="banner err" hidden></div>
+        <section id="etat" class="etat inconnu" aria-live="polite"><span class="pastille"></span><div><p id="etat-titre">Chargement…</p><small id="etat-sous"></small></div></section>
+        <section><h2>Espaces</h2><div id="espaces" class="grille"></div></section>
+        <section><h2>Ressources</h2><div id="ressources" class="grille res"></div></section>
+        <section><h2>Alertes récentes <span id="nb-alertes" class="count"></span></h2><ul id="alertes" class="alertes"></ul></section>
+    </main>
+    <script src="/shared/sidebar.js"></script>
+    <script src="apercu.js" defer></script>
+</body>
+</html>

@@ -3,14 +3,15 @@
 <!-- GÉNÉRÉ par scripts/generate-admin-ui-map.py — ne pas éditer à la main ; la source est packages/secubox-hub/espaces.json -->
 # SBXOS Admin — matrice de migration vers les six espaces (#2212)
 
-125 entrées de menu, rattachées chacune à un espace et à un objet central. **Aucune route n'est supprimée ni déplacée** : toutes les pages gardent leur chemin ; seule la navigation les regroupe. Colonnes : ancienne page · nouvelle section · objet · route conservée · composant réutilisé · réécriture nécessaire ? · risque.
+126 entrées de menu, rattachées chacune à un espace et à un objet central. **Aucune route n'est supprimée ni déplacée** : toutes les pages gardent leur chemin ; seule la navigation les regroupe. Colonnes : ancienne page · nouvelle section · objet · route conservée · composant réutilisé · réécriture nécessaire ? · risque.
 
-## 🏠 1 — Vue d'ensemble (2)
+## 🏠 1 — Vue d'ensemble (3)
 
 | Ancienne page | Chemin conservé | Objet | Composant réutilisé | Réécriture ? | Risque | Remarque |
 |---|---|---|---|---|---|---|
 | Dashboard (`hub`) | `/` oui | BOX | `packages/secubox-hub/www` + sidebar.js | non (page conservée) ; la VUE D'ENSEMBLE est une page nouvelle qui agrège ses caches | moyen | tableau de bord lourd : ne pas en faire une seconde page de configuration |
 | Health Monitor (`health`) | `/health/` oui | BOX | `packages/secubox-hub/www` + sidebar.js | non | faible | source de la santé des services |
+| Vue d'ensemble (`apercu`) | `/apercu/` oui | BOX | `packages/secubox-hub/www` + sidebar.js | non | faible |  |
 
 ## 🛡️ 2 — Protection (21)
 

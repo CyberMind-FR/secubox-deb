@@ -79,6 +79,10 @@
    "espace": "protection",
    "objet": "ALERT"
   },
+  "apercu": {
+   "espace": "apercu",
+   "objet": "BOX"
+  },
   "appstore": {
    "espace": "services",
    "objet": "SERVICE"
