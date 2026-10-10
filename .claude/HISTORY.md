@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Release v3.0.0-alpha.11 : admin à six espaces, Actor Intelligence 2.0, billets vivants, installateur sans écran
+Tag `v3.0.0-alpha.11` posé sur master (≈ 110 commits depuis alpha.10). **Sécurité** : Actor Intelligence 2.0 en six phases (modes et enforcement, capteurs pare-feu/DNS/détournement/DPI,
+scénarios, risque et confiance séparés, kill switch logique, Radar des acteurs dans le Hall, politique et procédure d'activation) puis échelle de réponse réelle — délai, défi par preuve de travail,
+tarpit, ban, quarantaine d'un appareil du LAN par le NAC — avec preuve par adresse, moteurs de recherche vérifiés jamais bannis, profil AppArmor corrigé. **Admin** : six espaces par défaut, page
+Vue d'ensemble, fiche d'appareil (OS détecté avec preuve), conteneurs LXC écartés. **Contenu** : billets vivants (remontée par commentaire, animation), billets éphémères, MetaNews qui publie
+des billets de 5 minutes. **Provisionnement** : Auto-Load 1 à 11 (infrastructure, agent, WebUI, banc). **Images** : installateur sans écran (installation automatique sur le premier disque) livré avec
+la release. Incident de la journée : l'index apt signé de gk2 n'avait pas été réexporté après mes publications (agent de signature verrouillé) ; réexporté en relançant l'unité de déverrouillage.
+
 ## 2026-10-11 — NAC 3.4.1 : lecture des mesures à la racine d'actord (ref #2274)
 La vue complète d'actord (avec adresses) n'est servie qu'à la racine ; le NAC lisait sous `/api/v1/actor/` (vue réduite) et n'aurait isolé personne. Il lit `GET /mesures`.
 
