@@ -53,6 +53,9 @@ type NftBanner struct {
 	store    *BanStore
 	runner   nftRunner
 
+	// robots vérifiés (crawlers.go) : jamais bannis. nil = pas de vérification (tests).
+	robots *Crawlers
+
 	cooldown time.Duration
 	mu       sync.Mutex
 	recent   map[string]time.Time // ip → dernier ban (anti-tempête)
@@ -182,6 +185,14 @@ func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Tim
 		b.mu.Unlock()
 		return
 	}
+	if b.robots != nil {
+		b.mu.Unlock() // la vérification DNS peut durer : jamais sous le verrou
+		if nom := b.robots.Verifie(ip); nom != "" {
+			log.Printf("sbxwaf: ban écarté %s ← %s : robot d'indexation vérifié (%s), on ne bannit pas un moteur de recherche", ip, cat, nom)
+			return
+		}
+		b.mu.Lock()
+	}
 	if last, ok := b.recent[ip]; ok && now.Sub(last) < b.cooldown {
 		b.mu.Unlock()
 		return
@@ -249,6 +260,9 @@ func (b *NftBanner) Reload() int {
 		set, ok := b.setPour(r.IP)
 		if !ok {
 			continue
+		}
+		if b.robots != nil && b.robots.Verifie(r.IP) != "" {
+			continue // un robot vérifié n'est pas réinjecté ; LibererRobots écrit son unban
 		}
 		reste := r.Expires - now.Unix()
 		if r.Expires == 0 {
@@ -504,4 +518,36 @@ func (b *NftBanner) Prolonger(ip, cat, sev string, duree time.Duration, now time
 	delete(b.recent, ip)
 	b.mu.Unlock()
 	b.banAt(ip, cat, sev, duree, now)
+}
+
+// LibererRobots retire des ensembles nft (et du journal, par un unban) les bans déjà posés sur des robots d'indexation vérifiés — ceux d'avant
+// l'exemption, qui survivraient sinon jusqu'à leur échéance. Rend le nombre d'adresses libérées.
+func (b *NftBanner) LibererRobots() int {
+	if b.robots == nil {
+		return 0
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	elems, err := b.ElementsAvecCompteurs(ctx)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for ip := range elems {
+		nom := b.robots.Verifie(ip)
+		if nom == "" {
+			continue
+		}
+		set, ok := b.setPour(ip)
+		if !ok {
+			continue
+		}
+		_, _ = b.runner(ctx, "delete", "element", "inet", b.table, set, fmt.Sprintf("{ %s }", ip))
+		if b.store != nil {
+			_ = b.store.Append(BanRecord{IP: ip, Category: "robot-verifie:" + nom, Severity: "info", At: time.Now().Unix(), Action: "unban"})
+		}
+		log.Printf("sbxwaf: ban levé %s : robot d'indexation vérifié (%s)", ip, nom)
+		n++
+	}
+	return n
 }

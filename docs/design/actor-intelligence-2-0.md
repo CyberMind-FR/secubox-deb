@@ -37,7 +37,7 @@ Brief du propriétaire du 2026-10-11. **Règle : étendre l'Actor Intelligence e
 | 11 | Mode PASSIVE_ONLY | **partiel** | `--shadow` seulement ; sbxwaf a `off\|propose\|auto` à part : deux interrupteurs sans vocabulaire commun |
 | 12 | Mode SIMULATION (`WOULD_BLOCK`) | **partiel** | `propose` écrit des candidats ; pas de journal `WOULD_BLOCK` rejouable |
 | 13 | API | **partiel** | existent `/actors`, `/actors/{id}`. Manquent `/actors/{id}/{timeline,graph,risk}`, `/events`, `/decisions`, `/enforcement`, `POST /enforcement/{id}/rollback` |
-| 14 | Vue SENTINEL dans le Hall | **partiel** | page Actor existante ; pas de vue Hall, ni quarantaine, ni radar. **Collision de nom** : « Sentinel/sentinelle » désigne déjà d'autres modules |
+| 14 | Vue SENTINEL dans le Hall | **radar livré (phase 5)** | carte Hall « Radar des acteurs » (risque × confiance, fiche, scénario, refus) ; reste la quarantaine. **Collision de nom** : « Sentinel/sentinelle » désigne déjà d'autres modules |
 | 15 | Fiche acteur (exemple A184) | partiel | données présentes, présentation à composer |
 | 16 | Principes (local first, réversible…) | respectés | règle à garder : aucune décision sur un seul capteur |
 | 17 | Compatibilité | à respecter | ne pas casser `logEntry` (WAF) ni `entreeMenace` (authwatch), volontairement dupliqués |

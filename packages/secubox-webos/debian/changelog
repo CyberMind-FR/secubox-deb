@@ -1,3 +1,9 @@
+secubox-webos (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : carte « Radar des acteurs » (cardlets/radar.html, #2240 phase 5) — un plan a deux axes, RISQUE et CONFIANCE separes, quatre zones (Agir, Confirmer, Surveiller, Ignorer) et les seuils de blocage ; liste des acteurs, fiche (facteurs, etapes du scenario, pourquoi un niveau plus dur est refuse). Donnees reelles de /api/v1/actor/radar uniquement ; sans session ou moteur absent, un etat honnete. Relais nginx du Hall : /api/v1/actor/radar passe par la vue reduite (X-Sbx-Vue reduite, session exigee). Aide de la carte (aide_cartes.json). 10 tests dont comportement reel (point + ligne par acteur, identifiant hostile inerte, fiche, sans session).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 12:00:00 +0200
+
 secubox-webos (1.5.16-1~bookworm1) bookworm; urgency=medium
 
   * PhotoPrism dans « Mes comptes » et dans le SSO du Hall (#2255). La carte l'affiche, ouvert d'office par OIDC, meme sans lien sbxid (le compte se cree a la premiere connexion) et sans le doubler ; ENTREE_SSO photoprism = /api/v1/oidc/login (depart OIDC qui renvoie a l'IdP du Hall). 4 tests.
