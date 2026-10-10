@@ -59,6 +59,8 @@ def entrees():
             d = json.loads(f.read_text(encoding="utf-8"))
             out[d["id"]] = {"nom": d.get("name", d["id"]), "path": d.get("path", ""), "categorie": d.get("category", ""), "theme": d.get("theme", ""),
                             "paquet": f.relative_to(RACINE).parts[1]}
+    # Menus écrits par debian/rules (absents de menu.d/ versionné) : même liste que le test d'exhaustivité.
+    out.setdefault("acces", {"nom": "Accès", "path": "/acces/", "categorie": "auth", "theme": "", "paquet": "secubox-auth"})
     return out
 
 

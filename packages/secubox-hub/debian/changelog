@@ -1,3 +1,9 @@
+secubox-hub (1.9.46-1~bookworm1) bookworm; urgency=medium
+
+  * Espaces (#2212) : l'entree de menu « acces » (ecrite par debian/rules de secubox-auth, donc invisible du glob menu.d) tombait dans « autre » sur gk2 ; classee dans Identite & acces (objet USER). Le test d'exhaustivite connait desormais les menus generes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 01:00:00 +0200
+
 secubox-hub (1.9.45-1~bookworm1) bookworm; urgency=medium
 
   * Pages d'espace et d'appareil (#2212) : /espace/#<id> liste les services d'un espace avec leur etat (menu public + health-batch) ; /appareil/ liste les appareils du NAC (source de verite) et /appareil/#<mac> en donne la fiche (zone, type, fabricant, evenements recents). La Vue d'ensemble y renvoie (cartes d'espace, acces rapide Appareils). Textes toujours inseres en texte. Pas de jointure ad-guard/dpi pour l'instant : seul le NAC est lu. 4 tests navigateur.

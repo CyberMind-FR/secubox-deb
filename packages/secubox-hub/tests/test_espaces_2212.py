@@ -13,13 +13,21 @@ TABLE = json.loads((Path(__file__).resolve().parents[1] / "espaces.json").read_t
 SIX = ["apercu", "protection", "surveillance", "services", "identite", "systeme"]
 
 
+# Entrées de menu écrites par debian/rules et non versionnées en menu.d/ : vues sur gk2 (« autre »), le glob ne les voit pas.
+MENUS_GENERES = {"acces"}
+
+
+def test_les_menus_generes_existent_toujours_dans_les_regles():
+    assert "26-acces.json" in (RACINE / "packages" / "secubox-auth" / "debian" / "rules").read_text(encoding="utf-8")
+
+
 def ids_menu():
     ids = set()
     for motif in ("packages/*/menu.d/*.json", "packages/*/composants/*/menu.d/*.json"):
         for f in RACINE.glob(motif):
             if "/debian/" not in str(f):
                 ids.add(json.loads(f.read_text(encoding="utf-8"))["id"])
-    return ids
+    return ids | MENUS_GENERES
 
 
 def test_les_six_espaces_dans_l_ordre():

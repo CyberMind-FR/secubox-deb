@@ -3,7 +3,7 @@
 <!-- GÉNÉRÉ par scripts/generate-admin-ui-map.py — ne pas éditer à la main ; la source est packages/secubox-hub/espaces.json -->
 # SBXOS Admin — matrice de migration vers les six espaces (#2212)
 
-126 entrées de menu, rattachées chacune à un espace et à un objet central. **Aucune route n'est supprimée ni déplacée** : toutes les pages gardent leur chemin ; seule la navigation les regroupe. Colonnes : ancienne page · nouvelle section · objet · route conservée · composant réutilisé · réécriture nécessaire ? · risque.
+127 entrées de menu, rattachées chacune à un espace et à un objet central. **Aucune route n'est supprimée ni déplacée** : toutes les pages gardent leur chemin ; seule la navigation les regroupe. Colonnes : ancienne page · nouvelle section · objet · route conservée · composant réutilisé · réécriture nécessaire ? · risque.
 
 ## 🏠 1 — Vue d'ensemble (3)
 
@@ -112,10 +112,11 @@
 | MetaNews (`metanews`) | `/metanews/` oui | SERVICE | `packages/secubox-metanews/www` + sidebar.js | non | faible | entrée de menu sans page à son nom : écartée par le hub |
 | YaCy (`yacy`) | `/yacy/` oui | SERVICE | `packages/secubox-metanews/www` + sidebar.js | non | faible |  |
 
-## 👤 5 — Identité & accès (10)
+## 👤 5 — Identité & accès (11)
 
 | Ancienne page | Chemin conservé | Objet | Composant réutilisé | Réécriture ? | Risque | Remarque |
 |---|---|---|---|---|---|---|
+| Accès (`acces`) | `/acces/` oui | USER | `packages/secubox-auth/www` + sidebar.js | non | faible |  |
 | Identité SBX OS (`sbxid`) | `/sbxid/` oui | USER | `packages/secubox-auth/www` + sidebar.js | non | moyen | le menu redirige vers /identite/ : garder la redirection |
 | Portal (`portal`) | `/portal/` oui | USER | `packages/secubox-portal/www` + sidebar.js | non | élevé | page de connexion : hors périmètre de la façade |
 | Annuaire (`annuaire`) | `/annuaire/` oui | USER | `packages/secubox-annuaire/www` + sidebar.js | non | faible |  |

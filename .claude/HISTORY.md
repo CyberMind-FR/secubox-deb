@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Admin SBXOS : deploiement gk2 et entree « acces » (ref #2212)
+
+secubox-hub 1.9.45 installe sur gk2 (1.9.39 -> 1.9.45), agregateur redemarre une fois ; menu : 6 espaces + 1 orphelin « acces » (menu genere par secubox-auth) classe en 1.9.46. Essai : `?nav=espaces`, pages /apercu/, /espace/#id, /appareil/.
+
 ## 2026-10-10 — Admin SBXOS : pages d'espace et d'appareil (ref #2212)
 
 secubox-hub 1.9.45 : `/espace/#id` (services + etat) et `/appareil/` (liste + fiche NAC). Reste : jointure DNS (ad-guard) et DPI sur la fiche appareil, validation par le proprietaire, bascule du defaut, nettoyage.
