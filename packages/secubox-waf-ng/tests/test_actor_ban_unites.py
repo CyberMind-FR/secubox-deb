@@ -31,3 +31,9 @@ def test_actord_publie_ses_propositions_ou_le_waf_les_lit():
 def test_les_adresses_de_la_box_sont_protegees():
     w = (SYS / "secubox-waf-ng.service").read_text()
     assert "--actor-ban-protegees" in w and "82.67.100.75" in w
+
+
+def test_le_kill_switch_logique_est_livre_en_auto_dans_l_unite_et_le_dropin():
+    """#2240 phase 4 : la réévaluation à l'échéance est active partout où les bans automatiques le sont."""
+    for chemin in (SYS / "secubox-waf-ng.service", SYS.parent / "conf" / "honeypot.conf"):
+        assert re.search(r"^\s+--reevaluation auto", chemin.read_text(), re.M), chemin

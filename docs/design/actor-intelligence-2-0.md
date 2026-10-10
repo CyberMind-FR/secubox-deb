@@ -32,7 +32,7 @@ Brief du propriétaire du 2026-10-11. **Règle : étendre l'Actor Intelligence e
 | 6 | Risque ≠ confiance, facteurs visibles | **partiel** | `Vector` porte sévérité, intention, connaissance, confiance ; pas de « risque » unique exposé avec ses facteurs |
 | 7 | Décision OBSERVE / MITIGATE / BLOCK | **partiel** | six modes de réponse existent ; à regrouper en trois niveaux de politique, avec raison, événements sources, durée, rollback |
 | 8 | Abstraction `EnforcementAction` | **manque** | les bans vivent dans le journal de bans de sbxwaf, sans objet commun (type, cible, expiration, `source_decision`) ni pour DNS, quarantaine, segmentation |
-| 9 | Kill switch logique (ré-évaluation) | **manque** | le ban expire par timeout nft ; aucune ré-évaluation « libérer ou prolonger » |
+| 9 | Kill switch logique (ré-évaluation) | **livré (phase 4)** | réévaluation à l'échéance (`reevaluation.go`), RELEASE ou EXTEND, compteurs par élément, preuves `reevaluations.jsonl` ; modes off/propose/auto |
 | 10 | Evidence engine | fait | à relier à chaque décision et à chaque action (résultat, rollback) |
 | 11 | Mode PASSIVE_ONLY | **partiel** | `--shadow` seulement ; sbxwaf a `off\|propose\|auto` à part : deux interrupteurs sans vocabulaire commun |
 | 12 | Mode SIMULATION (`WOULD_BLOCK`) | **partiel** | `propose` écrit des candidats ; pas de journal `WOULD_BLOCK` rejouable |

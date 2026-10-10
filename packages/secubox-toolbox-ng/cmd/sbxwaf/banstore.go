@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Journal de bans persistant (#1070, phase B).
@@ -130,4 +131,38 @@ func (s *BanStore) CompteCategorie(ip, prefixe string, depuis int64) int {
 		}
 	}
 	return n
+}
+
+// DepuisChaine rend depuis combien de temps l'adresse est bannie SANS INTERRUPTION : on remonte les bans de `ip` tant que chacun commence avant la fin du
+// précédent (à 5 min près). Une pause plus longue casse la chaîne : l'adresse a été libre, et un nouveau ban repart de zéro.
+func (s *BanStore) DepuisChaine(ip string, maintenant int64) time.Duration {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.Open(s.path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	debut, fin := int64(0), int64(0)
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		var r BanRecord
+		if json.Unmarshal(sc.Bytes(), &r) != nil || r.IP != ip || r.Action != "ban" {
+			continue
+		}
+		if debut == 0 || r.At > fin+300 {
+			debut = r.At // pause : nouvelle chaîne
+		}
+		if r.Expires > fin {
+			fin = r.Expires
+		}
+	}
+	if debut == 0 || debut > maintenant {
+		return 0
+	}
+	return time.Duration(maintenant-debut) * time.Second
 }
