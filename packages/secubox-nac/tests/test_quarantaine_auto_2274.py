@@ -132,7 +132,7 @@ def test_lire_mesures_parle_a_la_socket_d_actord_en_vue_complete(tmp_path):
     t.join(5)
     srv.close()
     assert len(ms) == 1 and ms[0]["niveau"] == "QUARANTINE"
-    assert "GET /api/v1/actor/mesures" in vu["req"] and "X-Sbx-Vue: complete" in vu["req"]
+    assert vu["req"].startswith("GET /mesures ") and "X-Sbx-Vue: complete" in vu["req"]      # la vue complète n'existe QU'À LA RACINE d'actord (vue.go)
 
 
 def test_lire_mesures_sans_socket_rend_une_liste_vide(tmp_path):
