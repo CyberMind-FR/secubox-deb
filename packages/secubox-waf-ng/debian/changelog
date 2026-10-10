@@ -1,3 +1,9 @@
+secubox-waf-ng (1.23.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbx-actord embarque la phase 3 d'Actor Intelligence 2.0 (#2240) : scenarios ordonnes, risque et confiance separes avec leurs facteurs, decision OBSERVE / MITIGATE / BLOCK (BLOCK >= 2 capteurs), routes GET /actors/{id}/timeline, /actors/{id}/graph, /actors/{id}/risk et /events (vue complete seulement). Sources : secubox-toolbox-ng 0.9.0 (internal/actor/analysis). Le binaire sbx-actord est livre par ce paquet, pas par secubox-toolbox-ng.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 02:00:00 +0200
+
 secubox-waf-ng (1.22.0-1~bookworm1) bookworm; urgency=medium
 
   * Capteur pare-feu (#2240) : l'unite et le dropin du leurre ajoutent --scan-sensor. Prerequis : secubox-hub >= 1.9.52 (sonde nftables) ; sans elle le capteur compte l'erreur, la journalise une fois et n'emet rien.
