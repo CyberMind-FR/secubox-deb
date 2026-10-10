@@ -131,7 +131,7 @@ une mise à jour qui la change. Appliquer un changement : `systemctl restart sec
 
 1. **`PASSIVE_ONLY`** — déploiement sans drapeau : `--actor-ban off --campagne-ban off --reevaluation off`. actord observe, score, affiche. Vérifier que les capteurs
    émettent : `curl --unix-socket /run/secubox/actor.sock http://x/api/v1/actor/stats` (nombre d'acteurs, de campagnes, événements et blocages sur 24 h) et la carte « Radar des acteurs ».
-2. **`SIMULATION`** — copier `conf/actor-intelligence-simulation.conf.example` en dropin, recharger (`systemctl daemon-reload && systemctl restart secubox-waf-ng`).
+2. **`SIMULATION`** — copier `/usr/share/secubox/waf/actor-intelligence-simulation.conf.example` en `/etc/systemd/system/secubox-waf-ng.service.d/20-actor-simulation.conf`, recharger (`systemctl daemon-reload && systemctl restart secubox-waf-ng`).
    Les candidats s'écrivent dans `/var/lib/secubox/waf/actor-ban-etat.json` et `campagne-ban-etat.json`, la réévaluation dans `reevaluations.jsonl` avec
    `"applique": false`. Relire pendant **au moins une semaine** :
    `GET /api/v1/waf/decisions` (`WOULD_BLOCK`), `GET /api/v1/waf/reevaluations`, `GET /api/v1/waf/enforcement/mode` (doit répondre `SIMULATION`).

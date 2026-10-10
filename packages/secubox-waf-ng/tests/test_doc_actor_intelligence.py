@@ -45,3 +45,10 @@ def test_l_exemple_de_configuration_est_en_simulation_et_ne_bannit_rien():
     for d in ("--actor-ban propose", "--campagne-ban propose", "--reevaluation propose"):
         assert d in actifs, d
     assert "auto" not in actifs and "--leurre-ban" not in actifs     # l'exemple n'active rien d'irréversible
+
+
+def test_l_exemple_et_la_doc_sont_installes_par_le_paquet_et_la_doc_donne_le_chemin_installe():
+    rules = (RACINE / "packages" / "secubox-waf-ng" / "debian" / "rules").read_text()
+    assert "conf/actor-intelligence-simulation.conf.example" in rules and "usr/share/secubox/waf/actor-intelligence-simulation.conf.example" in rules
+    assert "ACTOR-INTELLIGENCE-ACTIVATION.md" in rules
+    assert "/usr/share/secubox/waf/actor-intelligence-simulation.conf.example" in DOC
