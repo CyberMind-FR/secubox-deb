@@ -11,6 +11,8 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
     }
+    // Les conteneurs LXC ne sont pas des appareils : pont br-lxc (10.100.0.0/16) ou adresse MAC attribuée par LXC (00:16:3e).
+    function estConteneur(c) { return /^10\.100\./.test(c.ip || '') || /^00:16:3e:/i.test(c.mac || ''); }
     function nom(d) { return d.custom_hostname || d.hostname || d.ip || d.mac; }
     function champ(g, libelle, v) { if (v === undefined || v === null || v === '') return; var c = el('div', 'carte'); c.appendChild(el('small', null, libelle)); c.appendChild(el('span', null, String(v))); g.appendChild(c); }
     // Flux SANS DPI, déduits des requêtes DNS (ad-guard /flux) : services et domaines contactés, jamais de volumes — le DNS ne les voit pas.
@@ -36,15 +38,16 @@
     async function liste() {
         $('fiche').hidden = true; $('liste').hidden = false; $('titre').textContent = '📱 Appareils';
         var d = await json(NAC + '/clients'), g = $('appareils'); g.textContent = '';
-        (d.clients || []).forEach(function (c) {
+        var tous = d.clients || [], clients = tous.filter(function (c) { return !estConteneur(c); }), masques = tous.length - clients.length;
+        clients.forEach(function (c) {
             var a = el('a', 'carte ' + (c.online ? 'ok' : '')); a.href = '#' + encodeURIComponent(c.mac);
             a.appendChild(el('b', null, nom(c)));
             a.appendChild(el('span', 'n', c.online ? 'en ligne' : 'hors ligne'));
             a.appendChild(el('small', null, [c.zone_name, c.ip, c.device_type].filter(Boolean).join(' · ')));
             g.appendChild(a);
         });
-        $('nb').textContent = '(' + (d.count != null ? d.count : (d.clients || []).length) + ')';
-        if (!(d.clients || []).length) g.appendChild(el('p', 'vide', 'Aucun appareil connu pour l’instant.'));
+        $('nb').textContent = '(' + clients.length + ')' + (masques ? ' · ' + masques + ' conteneurs LXC masqués' : '');
+        if (!clients.length) g.appendChild(el('p', 'vide', 'Aucun appareil connu pour l’instant.'));
     }
     async function fiche(mac) {
         $('liste').hidden = true; $('fiche').hidden = false;
