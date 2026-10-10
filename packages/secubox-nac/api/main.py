@@ -37,6 +37,8 @@ from secubox_core.logger import get_logger
 
 from .collector import Collector
 from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_vendor, risk_score
+from .osdetect import est_conteneur_lxc
+from .dnsevidence import domaines_par_adresse
 from .presence.geo import enrich_origin
 from .presence.kbin import collect_kbin
 from .presence.local import collect_local
@@ -682,7 +684,7 @@ def _do_init() -> None:
     # middleware bring it up exactly once, and handed to the Collector so
     # its off-loop cycle also runs the presence collectors.
     presence_store = PresenceStore(DEVICES_DB_PATH)
-    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL, presence_store=presence_store)
+    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL, presence_store=presence_store, dns_provider=domaines_par_adresse)
     collector._emit = _fire_collector_webhook
 
     _initialized = True
@@ -807,6 +809,7 @@ def status(user=Depends(require_jwt)):
 def clients(
     device_type: Optional[str] = None,
     risk_min: Optional[int] = None,
+    exclure_conteneurs: bool = False,
     user=Depends(require_jwt),
 ):
     """Get all known clients with zone info.
@@ -823,8 +826,10 @@ def clients(
     cache slot.
     """
     use_cache = device_type is None and risk_min is None
+    # #2236 : la vue SANS conteneurs a sa propre entrée de cache — elle ne doit jamais ressortir à la place de la vue complète.
+    cle_cache = "clients-sans-conteneurs" if exclure_conteneurs else "clients"
     if use_cache:
-        cached = stats_cache.get("clients")
+        cached = stats_cache.get(cle_cache)
         if cached:
             return cached
 
@@ -834,9 +839,14 @@ def clients(
     # #817 whole-branch fix (I3): batched zone lookup, once per request.
     zmap = _zone_map()
     result = []
+    conteneurs_exclus = 0
 
     for d in devices:
         mac = d["mac"]
+        conteneur = est_conteneur_lxc(mac, d.get("ip") or "", d.get("interface") or "")
+        if conteneur and exclure_conteneurs:
+            conteneurs_exclus += 1
+            continue
         zone = _resolve_zone(mac, d.get("interface", ""), zmap)
         client_meta = meta.get(mac, {})
 
@@ -859,16 +869,18 @@ def clients(
             "first_seen": client_meta.get("first_seen") or d.get("first_seen"),
             "online": is_online,
             "status": status,  # For frontend badge
+            "conteneur": conteneur,  # #2236 : conteneur LXC (br-lxc, 10.100.0.0/16, OUI 00:16:3e), pas un appareil
         })
 
     response = {
         "clients": result,
         "count": len(result),
+        "conteneurs_exclus": conteneurs_exclus,
         "by_zone": {z: sum(1 for c in result if c["zone"] == z) for z in ZONES}
     }
 
     if use_cache:
-        stats_cache.set("clients", response)
+        stats_cache.set(cle_cache, response)
     return response
 
 

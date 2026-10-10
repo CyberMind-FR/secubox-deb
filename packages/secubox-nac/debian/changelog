@@ -1,3 +1,9 @@
+secubox-nac (3.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Detection passive de l'OS et du type fin (#2236). Colonnes os, os_source (la preuve, obligatoire), device_subtype, mac_random dans devices.db (migration additive des bases anciennes), remplies par le collecteur via api/osdetect.py (fonctions pures) : classe vendeur DHCP > User-Agent > domaines DNS de connectivite > nom de l'appareil > empreinte NAC ; le fabricant (OUI) seul ne donne jamais d'OS, une MAC aleatoire n'est pas typee par son fabricant, une conclusion dont la preuve a disparu est retiree. store.set_detection refuse un OS sans source. Preuve DNS : api/dnsevidence.py lit en lecture seule la base d'ad-guard et ne rend que les domaines de connectivite (jamais l'historique de navigation) ; un fournisseur defaillant ne casse pas le cycle. /clients et /client/{mac} exposent les champs ; chaque client porte conteneur (LXC) et ?exclure_conteneurs=true les retire (defaut inchange : zone lxc, toolbox et Tor). 31 tests. DHCP, User-Agent et mDNS sont compris mais pas encore alimentes (README).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 15:00:00 +0200
+
 secubox-nac (3.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe mac-guard, device-intel et iot-guard (#2050, S1) : leurs anciennes adresses (/mac-guard/,

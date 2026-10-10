@@ -167,3 +167,41 @@ def test_la_fiche_sans_indice_dit_que_l_os_n_est_pas_determine(navigateur):
     p.wait_for_selector("#os-carte")
     assert "non déterminé" in p.inner_text("#os-carte") and "Aucun indice" in p.inner_text("#os-carte")
     ctx.close()
+
+
+# ── #2236 : l'OS et le type fin viennent du NAC, avec leur preuve ───────────────────────────────────────────────────────────────────────────
+def test_la_liste_affiche_l_os_et_le_type_fin_detectes_par_le_nac(navigateur):
+    clients = {"count": 1, "clients": [{"mac": "aa:bb:cc:00:00:01", "ip": "192.168.1.20", "hostname": "iPhone-de-Marie", "online": True, "device_type": "phone",
+                                        "os": "iOS 17", "os_source": "user-agent:Mozilla/5.0 (iPhone)", "device_subtype": "smartphone", "mac_random": 0}]}
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, clients)})
+    p.wait_for_selector("#appareils .carte")
+    t = p.inner_text("#appareils .carte")
+    assert "iOS 17" in t and "smartphone" in t
+    ctx.close()
+
+
+def test_la_fiche_montre_la_preuve_du_nac_et_le_type_fin(navigateur):
+    fiche = {**FICHE, "os": "Android 13", "os_source": "dhcp-vendor-class:android-dhcp-13", "device_subtype": "smartphone", "mac_random": 0}
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/#aa%3Abb%3Acc%3A00%3A00%3A01",
+                   {"/api/v1/nac/client/**": (200, fiche), "/api/v1/ad-guard/adblock-tv/flux**": (503, {})})
+    p.wait_for_selector("#os-carte")
+    t = p.inner_text("#os-carte")
+    assert "Android 13" in t and "dhcp-vendor-class:android-dhcp-13" in t
+    assert "smartphone" in p.inner_text("#detail")
+    ctx.close()
+
+
+def test_une_mac_aleatoire_est_signalee_sur_la_fiche(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/#aa%3Abb%3Acc%3A00%3A00%3A01",
+                   {"/api/v1/nac/client/**": (200, {**FICHE, "mac_random": 1}), "/api/v1/ad-guard/adblock-tv/flux**": (503, {})})
+    p.wait_for_selector("#detail .carte")
+    assert "aléatoire" in p.inner_text("#detail")
+    ctx.close()
+
+
+def test_le_drapeau_conteneur_du_nac_masque_l_entree(navigateur):
+    clients = {"count": 2, "clients": [CLIENTS["clients"][0], {"mac": "aa:bb:cc:dd:ee:ff", "ip": "192.168.1.99", "hostname": "monctn", "online": True, "device_type": "unknown", "conteneur": True}]}
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, clients)})
+    p.wait_for_selector("#appareils .carte")
+    assert "monctn" not in p.inner_text("#appareils")
+    ctx.close()

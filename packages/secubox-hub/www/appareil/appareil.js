@@ -12,10 +12,12 @@
         return r.json();
     }
     // Les conteneurs LXC ne sont pas des appareils : pont br-lxc (10.100.0.0/16) ou adresse MAC attribuée par LXC (00:16:3e).
-    function estConteneur(c) { return /^10\.100\./.test(c.ip || '') || /^00:16:3e:/i.test(c.mac || ''); }
+    function estConteneur(c) { return c.conteneur === true || /^10\.100\./.test(c.ip || '') || /^00:16:3e:/i.test(c.mac || ''); }
     var TYPES = { router: 'Routeur / passerelle', computer: 'Ordinateur', phone: 'Téléphone', tablet: 'Tablette', printer: 'Imprimante', smart_home: 'Objet connecté',
                   smart_speaker: 'Enceinte connectée', tv: 'Télévision', media_player: 'Lecteur multimédia', camera: 'Caméra', game_console: 'Console de jeu',
                   nas: 'Stockage réseau (NAS)', iot: 'Objet connecté (IoT)', unknown: 'Type non identifié' };
+    // Type fin détecté par le NAC (smartphone, imprimante…), s'il apporte quelque chose de plus que le type général.
+    function sousType(c) { return c.device_subtype && c.device_subtype !== c.device_type ? c.device_subtype : null; }
     function libelleType(t) { return TYPES[t] || (t ? t : TYPES.unknown); }
     // Matériel = fabricant (l'OUI de la MAC) + modèle + rôle connu du NAC ; « Unknown » n'est pas un fabricant.
     function materiel(c) {
@@ -33,7 +35,7 @@
                       [/(^|\.)samsungcloudsolution\.com$|(^|\.)samsungotn\.net$|(^|\.)samsungads\.com$/i, 'Tizen (Samsung)'],
                       [/(^|\.)lgtvsdp\.com$|(^|\.)lgappstv\.com$/i, 'webOS (LG)'], [/(^|\.)ping\.archlinux\.org$|(^|\.)deb\.debian\.org$|(^|\.)archive\.ubuntu\.com$/i, 'Linux']];
     function deduireOS(d, domaines) {
-        if (d.os) return { nom: d.os, preuve: 'détecté par le NAC' };
+        if (d.os) return { nom: d.os, preuve: 'détecté par le NAC' + (d.os_source ? ' (' + d.os_source + ')' : '') };
         if (d.is_secubox) return { nom: 'Linux (SecuBox)', preuve: 'appareil SecuBox' };
         if (d.is_openwrt) return { nom: 'OpenWrt (Linux)', preuve: 'empreinte OpenWrt du NAC' };
         var h = d.custom_hostname || d.hostname || '';
@@ -76,7 +78,7 @@
             a.appendChild(el('b', null, nom(c)));
             a.appendChild(el('span', 'n', c.online ? 'en ligne' : 'hors ligne'));
             var os = deduireOS(c, []);
-            a.appendChild(el('small', null, [libelleType(c.device_type), materiel(c), os && os.nom].filter(Boolean).join(' · ')));
+            a.appendChild(el('small', null, [libelleType(c.device_type), sousType(c), materiel(c), os && os.nom].filter(Boolean).join(' · ')));
             a.appendChild(el('small', null, [c.zone_name, c.ip].filter(Boolean).join(' · ')));
             g.appendChild(a);
         });
@@ -88,7 +90,7 @@
         var d = await json(NAC + '/client/' + encodeURIComponent(mac)), g = $('detail'); g.textContent = '';
         $('titre').textContent = '📱 ' + nom(d);
         champ(g, 'Adresse MAC', d.mac); champ(g, 'Adresse IP', d.ip); champ(g, 'Zone', d.zone_name || d.zone);
-        champ(g, 'Type', libelleType(d.device_type)); champ(g, 'Fabricant', materiel({ oui_vendor: d.oui_vendor, is_secubox: 0, is_openwrt: 0 }));
+        champ(g, 'Type', libelleType(d.device_type)); champ(g, 'Type détaillé', sousType(d)); champ(g, 'Adresse MAC aléatoire', d.mac_random ? 'oui — le fabricant n\u2019est pas significatif' : null); champ(g, 'Fabricant', materiel({ oui_vendor: d.oui_vendor, is_secubox: 0, is_openwrt: 0 }));
         champ(g, 'Modèle', d.model); champ(g, 'Rôle', d.is_secubox ? 'SecuBox' : (d.is_openwrt ? 'OpenWrt' : (d.is_router ? 'Routeur' : null)));
         var os = deduireOS(d, []); var cos = el('div', 'carte'); cos.id = 'os-carte'; cos.appendChild(el('small', null, 'Système d\u2019exploitation'));
         cos.appendChild(el('span', null, os ? os.nom : 'non déterminé')); cos.appendChild(el('small', null, os ? 'Déduit : ' + os.preuve : 'Aucun indice (nom ni requêtes DNS)')); g.appendChild(cos);

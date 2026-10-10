@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — NAC : détection passive de l'OS et du type fin (ref #2236)
+Colonnes `os`/`os_source`/`device_subtype`/`mac_random` (preuve obligatoire), détecteur pur `osdetect.py`, preuve DNS d'ad-guard en lecture seule, drapeau `conteneur` et `?exclure_conteneurs=`. Page `/appareil/` : OS + preuve + type détaillé + MAC aléatoire. secubox-nac 3.3.0, secubox-hub 1.9.53. DHCP/User-Agent/mDNS compris mais non alimentés.
+
 ## 2026-10-10 — waf-ng 1.26.2 : le postinst recharge le profil AppArmor (ref #2240)
 `aa-enforce` ne recharge pas un profil déjà en enforce : les règles DNS de 1.26.1 n’étaient pas dans le noyau. `apparmor_parser -r` ajouté. Constat gk2 : après rechargement manuel, les 4 bans Googlebot sont levés (unban `robot-verifie:googlebot.com`).
 

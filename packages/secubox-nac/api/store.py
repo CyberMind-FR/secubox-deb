@@ -80,7 +80,8 @@ CREATE TABLE IF NOT EXISTS devices(
   zone TEXT, allow_state TEXT DEFAULT 'unknown', quarantined INTEGER DEFAULT 0, parental_profile TEXT,
   first_seen INTEGER, last_seen INTEGER, source TEXT,
   tags TEXT, notes TEXT, group_id TEXT,
-  plane TEXT, provenance TEXT, geo_cc TEXT, geo_asn TEXT
+  plane TEXT, provenance TEXT, geo_cc TEXT, geo_asn TEXT,
+  os TEXT, os_source TEXT, device_subtype TEXT, mac_random INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_dev_last ON devices(last_seen);
 CREATE INDEX IF NOT EXISTS idx_dev_zone ON devices(zone);
@@ -146,7 +147,7 @@ class DeviceStore:
         is a no-op.
         """
         have = {r["name"] for r in self._conn.execute("PRAGMA table_info(devices)")}
-        for col, decl in (("interface", "TEXT"),):
+        for col, decl in (("interface", "TEXT"), ("os", "TEXT"), ("os_source", "TEXT"), ("device_subtype", "TEXT"), ("mac_random", "INTEGER DEFAULT 0")):
             if col not in have:
                 self._conn.execute(f"ALTER TABLE devices ADD COLUMN {col} {decl}")
 
@@ -212,6 +213,16 @@ class DeviceStore:
         )
         with self._lock:
             self._conn.execute(sql, values)
+            self._conn.commit()
+
+    def set_detection(self, mac: str, *, os: str | None, os_source: str | None, device_subtype: str | None, mac_random: bool) -> None:
+        """Enregistre la détection passive d'OS / de type fin (#2236). CONTRAIREMENT à `upsert`, une valeur absente REMPLACE : une conclusion dont la
+        preuve a disparu ne doit pas survivre. Un OS sans sa source est refusé — aucune inférence sans preuve."""
+        if os and not os_source:
+            raise ValueError("un OS sans os_source (la preuve) est refusé")
+        with self._lock:
+            self._conn.execute("UPDATE devices SET os=?, os_source=?, device_subtype=?, mac_random=? WHERE mac=?",
+                               (os, os_source if os else None, device_subtype, 1 if mac_random else 0, mac))
             self._conn.commit()
 
     def get(self, mac: str) -> dict | None:
