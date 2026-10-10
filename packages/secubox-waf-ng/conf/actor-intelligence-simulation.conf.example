@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Actor Intelligence 2.0 — étape SIMULATION (#2240, docs/ACTOR-INTELLIGENCE-ACTIVATION.md § 6).
+#
+# À copier en /etc/systemd/system/secubox-waf-ng.service.d/20-actor-simulation.conf, ADAPTER les plages protégées, puis :
+#   systemctl daemon-reload && systemctl restart secubox-waf-ng
+#
+# Rien n'est appliqué : les candidats s'écrivent dans /var/lib/secubox/waf/{actor,campagne}-ban-etat.json (décision WOULD_BLOCK) et les réévaluations dans
+# /var/lib/secubox/waf/reevaluations.jsonl avec "applique": false. Relire pendant au moins une semaine avant de passer un drapeau à `auto`.
+# Les leurres (--leurre-ban) ne sont volontairement PAS dans cet exemple : leur ban est immédiat et ne se simule pas.
+[Service]
+ExecStart=
+ExecStart=/usr/sbin/sbxwaf \
+  --listen 127.0.0.1:8085 \
+  --upstream-timeout 1h \
+  --routes /etc/secubox/waf/haproxy-routes.json \
+  --rules /etc/secubox/waf/waf-rules.json \
+  --on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json \
+  --vhost-signals /var/cache/secubox/waf/vhost-signals.json \
+  --threat-log /var/log/secubox/waf/waf-threats.log \
+  --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
+  --media-cache-dir /var/cache/secubox/waf/media \
+  --vhost-profiles /etc/secubox/waf/vhost_profiles.json \
+  --nft-ban \
+  --scan-sensor \
+  --actor-ban propose \
+  --campagne-ban propose \
+  --reevaluation propose \
+  --actor-ban-protegees 192.0.2.10/32
