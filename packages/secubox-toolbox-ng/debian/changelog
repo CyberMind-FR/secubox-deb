@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : capteur DPI d'Actor Intelligence (#2240, phase 2). Une adresse PUBLIQUE dont les flux cumulent >= 6 points de risques nDPI hostiles en 10 min (Malicious Fingerprint 3, Possible Exploit Attempt 5, Malware Host Contacted 5, HTTP Susp User-Agent 2, Probing Attempt 1, TLS Susp Extn 1) devient une enveloppe `dpi` vers actord (gravite 35 + 4 par point, plafond 100, JA4, ports, protocole). Les risques banals (12 M « Known Proto on Non Std Port », 11 M « Error Code » sur gk2) ne comptent pas ; un meme flux ne compte qu'une fois par risque ; jamais d'adresse privee, locale, lien-local, CGNAT ou multicast ; pas de repetition sauf si le score double ; memoire bornee ; la liste DPI_RISK_MUTE de l'operateur vaut aussi pour le capteur. Arme par DPI_ACTOR_SOCK (dpi.env, conffile), poids DPI_ACTOR_RISQUES, seuil DPI_ACTOR_SEUIL. Le postinst ajoute secubox-toolbox au groupe actord-ingest (pas de SupplementaryGroups dans l'unite). 11 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 18:00:00 +0200
+
 secubox-toolbox-ng (0.7.0-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : capteur PARE-FEU d'Actor Intelligence (#2240, phase 2). --scan-sensor relit toutes les 30 s l'ensemble nft des paquets rejetes (sonde du paquet hub) et emet vers actord une enveloppe `firewall` par balayage vertical (>= --scan-seuil ports distincts, 8 par defaut, depuis une meme adresse en 10 min), severite 30 + 4 par port (plafond 100), pays GeoIP. Jamais d'adresse privee, locale, lien-local ni protegee ; pas de repetition sauf extension x2 ; une panne de nft se compte et se journalise une fois sans rien casser. Envelope : capteurs `firewall` et `dns` valides. 9 tests.

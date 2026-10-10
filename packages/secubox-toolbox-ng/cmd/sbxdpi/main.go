@@ -35,9 +35,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/emit"
 )
 
 // Default tuning, overridable via Config for production and tests alike.
@@ -83,6 +87,12 @@ type Config struct {
 	RulesFile   string // règles d'enrichissement usage/app/infra (DPI sémantique)
 	ReloadEvery time.Duration
 
+	// Capteur Actor Intelligence (#2240) : socket d'ingestion d'actord (vide = désactivé), poids des risques nDPI (« Nom=poids, … », vide = défauts),
+	// seuil de score sur 10 min (0 = défaut).
+	ActorSock    string
+	ActorRisques string
+	ActorSeuil   int
+
 	// onReady, if set, is called once the API listener is up (test hook).
 	onReady func()
 }
@@ -124,7 +134,17 @@ func defaultConfig() Config {
 		BoxDomains:      getenvDefault("DPI_BOX_DOMAINS", "/etc/secubox/waf/haproxy-routes.json"),
 		RulesFile:       getenvDefault("DPI_RULES_FILE", "/etc/secubox/dpi/rules.json"),
 		ReloadEvery:     envDurationDefault("DPI_RELOAD_EVERY", defaultReloadEvery),
+		ActorSock:       os.Getenv("DPI_ACTOR_SOCK"), // vide par défaut : le capteur n'est armé que si le socket d'actord est déclaré
+		ActorRisques:    os.Getenv("DPI_ACTOR_RISQUES"),
+		ActorSeuil:      envIntDefault("DPI_ACTOR_SEUIL", 0),
 	}
+}
+
+func envIntDefault(key string, def int) int {
+	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(key))); err == nil && n > 0 {
+		return n
+	}
+	return def
 }
 
 func withDefaults(cfg Config) Config {
@@ -158,7 +178,21 @@ func run(ctx context.Context, cfg Config) error {
 	// restart before the first flush (fail-safe: unreadable → empty agg).
 	agg.loadSnapshot(cfg.CachePath)
 
+	// Capteur Actor Intelligence (#2240) : n'existe que si le socket d'actord est déclaré ; l'émission est fire-and-forget (un actord absent ne ralentit pas sbxdpi).
+	if cfg.ActorSock != "" {
+		em := emit.New(cfg.ActorSock, 4096)
+		defer em.Close()
+		agg.capteur = NewActorSensor(em, parseRisquesCapteur(cfg.ActorRisques))
+		if cfg.ActorSeuil > 0 {
+			agg.capteur.seuil = cfg.ActorSeuil
+		}
+		log.Printf("sbxdpi: capteur Actor Intelligence actif (socket %s, seuil %d)", cfg.ActorSock, agg.capteur.seuil)
+	}
+
 	filt := newFilter(cfg)
+	if agg.capteur != nil {
+		agg.capteur.muet = filt.riskMuted // la liste de silence de l'opérateur vaut aussi pour le capteur
+	}
 	enr := newEnricher(cfg.RulesFile, cfg.ReloadEvery)
 	sess := newSessionTracker(enr)
 

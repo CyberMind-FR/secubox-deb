@@ -58,3 +58,8 @@ Les `*.txt` sont des conffiles hot-reload (mtime), style `sbx-sentinel/c2allow`.
 
 Construit par `debian/rules` (`go build ./cmd/sbxdpi`), livré `/usr/sbin/sbxdpi`,
 unité `sbxdpi.service` (DARK à l'install). Voir aussi `secubox-dpi-engine`.
+
+## Capteur Actor Intelligence (#2240)
+
+`DPI_ACTOR_SOCK` (dans `dpi.env`) arme un capteur qui dépose une enveloppe `dpi` vers actord pour une **adresse publique** dont les flux cumulent, en 10 minutes, au moins `DPI_ACTOR_SEUIL` (6) points de risques nDPI hostiles. Poids par défaut : `Malicious Fingerprint` 3, `Possible Exploit Attempt` 5, `Malware Host Contacted` 5, `HTTP Susp User-Agent` 2, `Probing Attempt` 1, `TLS Susp Extn` 1 ; surcharge `DPI_ACTOR_RISQUES="Nom=poids, …"`. Les risques banals ne comptent jamais, un même flux ne compte qu'une fois par risque, les adresses non publiques ne sont jamais jugées, et `DPI_RISK_MUTE` vaut aussi pour le capteur. La gravité de l'enveloppe est 35 + 4 par point (plafond 100) ; elle porte le JA4, le nombre de ports visés et le protocole.
+
