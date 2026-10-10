@@ -86,6 +86,8 @@ type MesuresWAF struct {
 	tarpitSlots  chan struct{}
 	maxBansHeure int
 	secret       []byte
+	// delaiVerification : le tour n'attend pas plus longtemps la vérification DNS des robots (le reste s'achève en arrière-plan).
+	delaiVerification time.Duration
 
 	mu       sync.RWMutex
 	actives  map[string]mesureActive
@@ -100,7 +102,7 @@ func NewMesuresWAF(chemin, mode string, store *BanStore, b banneurDuree) *Mesure
 	_, _ = rand.Read(sec)
 	return &MesuresWAF{chemin: chemin, mode: mode, store: store, banneur: b, now: time.Now,
 		delai: 1500 * time.Millisecond, tarpitPas: 2 * time.Second, tarpitMax: 60 * time.Second, tarpitSlots: make(chan struct{}, 64),
-		maxBansHeure: 20, secret: sec, actives: map[string]mesureActive{}, vus: map[string]int64{}, bannis: map[string]bool{}}
+		maxBansHeure: 20, secret: sec, delaiVerification: 20 * time.Second, actives: map[string]mesureActive{}, vus: map[string]int64{}, bannis: map[string]bool{}}
 }
 
 var rangMesure = map[string]int{"DELAY": 1, "CHALLENGE": 2, "TARPIT": 3, "DENY": 4}
@@ -179,6 +181,7 @@ func (m *MesuresWAF) Tick() {
 	m.plafonne = false
 	m.mu.Unlock()
 
+	m.prechauffer(f, now)
 	var bans []demandeBan
 	for _, x := range f.Mesures {
 		if x.Expire <= now.Unix() {
@@ -213,6 +216,8 @@ func (m *MesuresWAF) traiter(x mesureLue, ip string, now time.Time, nouv map[str
 		m.preuve(x, ip, "ecarte:protegee", false, now)
 		m.mu.Unlock()
 		return
+	case m.robots != nil && !m.robots.Resolu(ip):
+		return // vérification pas finie : on ne traite JAMAIS comme attaquant ce qu'on n'a pas fini de vérifier (le prochain tour tranchera)
 	case m.robots != nil && m.robots.Verifie(ip) != "":
 		m.mu.Lock()
 		m.preuve(x, ip, "ecarte:robot_verifie", false, now)
@@ -457,3 +462,51 @@ const pageDefi = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><me
 <script>(async function(){var m=document.getElementById("sbx-defi"),s=m.dataset.seed,enc=new TextEncoder(),n=0;
 for(;;n++){var h=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(s+n)));if(h[0]===0&&h[1]===0)break;}
 var f=document.getElementById("f");f.seed.value=s;f.nonce.value=n;f.retour.value=m.dataset.retour;f.submit();})();</script></body></html>`
+
+// prechauffer résout EN PARALLÈLE (32 recherches à la fois) les adresses que le tour va traiter, pour que la vérification des robots ne se fasse pas une adresse
+// après l'autre : sur gk2, 900 adresses en série retardaient les premières mesures de plusieurs minutes. Le tour attend au plus `delaiVerification` ; les
+// recherches non terminées continuent en arrière-plan et leurs adresses sont simplement traitées au tour suivant.
+func (m *MesuresWAF) prechauffer(f mesuresFichierRacine, now time.Time) {
+	if m.robots == nil {
+		return
+	}
+	vus := map[string]bool{}
+	var ips []string
+	for _, x := range f.Mesures {
+		if x.Expire <= now.Unix() || rangMesure[x.Niveau] == 0 {
+			continue
+		}
+		for _, ip := range x.IPs {
+			if !vus[ip] && !adresseProtegee(ip, m.protegees) && !m.robots.Resolu(ip) {
+				vus[ip] = true
+				ips = append(ips, ip)
+			}
+		}
+	}
+	if len(ips) == 0 {
+		return
+	}
+	file := make(chan string)
+	var wg sync.WaitGroup
+	for i := 0; i < 32 && i < len(ips); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ip := range file {
+				m.robots.Verifie(ip)
+			}
+		}()
+	}
+	go func() {
+		for _, ip := range ips {
+			file <- ip
+		}
+		close(file)
+	}()
+	fini := make(chan struct{})
+	go func() { wg.Wait(); close(fini) }()
+	select {
+	case <-fini:
+	case <-time.After(m.delaiVerification):
+	}
+}

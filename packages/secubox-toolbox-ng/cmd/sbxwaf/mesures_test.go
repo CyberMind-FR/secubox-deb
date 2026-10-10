@@ -391,3 +391,53 @@ func between(s, a, b string) string {
 	}
 	return s[:j]
 }
+
+// ── Vérification des robots : parallèle, bornée, et jamais fatale pour un moteur de recherche ───────────────────────────────────────────────────
+
+func TestLaVerificationDesRobotsSeFaitEnParalleleAvantLeTour(t *testing.T) {
+	b := banc(t, "auto")
+	c := NewCrawlers()
+	c.inverse = func(ip string) ([]string, error) { time.Sleep(40 * time.Millisecond); return nil, nil }
+	c.direct = func(string) ([]string, error) { return nil, nil }
+	b.m.robots = c
+	b.m.tarpitPas, b.m.tarpitMax = 5*time.Millisecond, 20*time.Millisecond // le tarpit ne dure pas 60 s dans un test
+	var ms []map[string]any
+	for i := 0; i < 80; i++ {
+		ms = append(ms, mesureFichier(fmt.Sprintf("ACT-%d", i), fmt.Sprintf("203.0.113.%d", 100+i), "TARPIT", b.t.Add(time.Hour), false))
+	}
+	ecrireMesures(t, b.m.chemin, b.t, ms...)
+	debut := time.Now()
+	b.m.Tick()
+	// 80 recherches de 40 ms : 3,2 s en série, bien moins en parallèle
+	if d := time.Since(debut); d > 1500*time.Millisecond {
+		t.Fatalf("la vérification doit être parallèle : %s", d)
+	}
+	if _, traite := b.requete("203.0.113.100", "/x", ""); !traite {
+		t.Fatal("une fois vérifiée (pas un robot), l'adresse est bien sous mesure")
+	}
+}
+
+func TestUneAdresseDontLaVerificationNEstPasFiniePasseSansMesure(t *testing.T) {
+	b := banc(t, "auto")
+	c := NewCrawlers()
+	c.inverse = func(ip string) ([]string, error) {
+		time.Sleep(300 * time.Millisecond)
+		return []string{"crawl.googlebot.com."}, nil
+	}
+	c.direct = func(string) ([]string, error) { return []string{"203.0.113.5"}, nil }
+	b.m.robots = c
+	b.m.delaiVerification = 50 * time.Millisecond // le tour n'attend pas plus
+	ecrireMesures(t, b.m.chemin, b.t, mesureFichier("ACT-1", "203.0.113.5", "DENY", b.t.Add(time.Hour), false), mesureFichier("ACT-2", "203.0.113.5", "TARPIT", b.t.Add(time.Hour), false))
+	b.m.Tick()
+	if len(b.ban.pris) != 0 {
+		t.Fatalf("un moteur de recherche dont la vérification n'est pas finie n'est JAMAIS banni : %v", b.ban.pris)
+	}
+	if _, traite := b.requete("203.0.113.5", "/x", ""); traite {
+		t.Fatal("ni retenu")
+	}
+	time.Sleep(400 * time.Millisecond) // la vérification s'achève en arrière-plan : le prochain tour sait que c'est un robot
+	b.m.Tick()
+	if len(b.ban.pris) != 0 {
+		t.Fatalf("vérifié au tour suivant : toujours exempté : %v", b.ban.pris)
+	}
+}
