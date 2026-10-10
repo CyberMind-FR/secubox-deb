@@ -13,6 +13,9 @@ ExecStart=/usr/sbin/secubox-metanewsd \
     --db /var/lib/secubox/metanews/metanews.db \
     --conf /etc/secubox/secubox.conf \
     --bbs-socket /run/secubox/bbs.sock \
+    --billets-socket /run/secubox/billets.sock \
+    --billets-ttl 5m \
+    --site-public https://metanews.gk2.secubox.in \
     --poll 300
 Restart=on-failure
 RestartSec=5

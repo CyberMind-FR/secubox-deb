@@ -1,3 +1,9 @@
+secubox-billets (0.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * POST /service/ephemere (#2268) : la porte de MetaNews. Un jeton de flotte (JWT HS256 api.jwt_secret) dont le sub est metanews — pas un jeton d'usager, MetaNews n'a pas de session d'exploitant et ne doit pas en avoir — peut creer des billets EPHEMERES, et rien d'autre : ttl_s obligatoire de 30 s a 1 h (jamais de billet durable), aucune modification ni suppression, plafond horaire de 60 cote billets quelle que soit la conduite de l'appelant. Route INTERNE : un appel qui porte X-Real-IP ou X-Forwarded-For est passe par nginx/le WAF, donc vient de l'exterieur — refuse 403 ; MetaNews parle directement a la socket Unix. Jeton absent, invalide, expire ou signe d'un autre secret : 401 sans detail. 7 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 19:00:00 +0200
+
 secubox-billets (0.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Billets EPHEMERES (#2268) : MetaNews publie des billets a duree de vie limitee (5 minutes par defaut). BilletIn.ttl_s (30 s a 24 h, exige publish=True : l'horloge d'un brouillon ne part pas), colonne expires_at (migration 0007) = publication + ttl_s. Le fil, /feed/suite, /feed/maj et les flux RSS/JSON excluent un billet DES son echeance (filtre a la lecture, sans attendre le balayage) ; le permalien d'un echu repond 410 Gone « Ce billet ephemere a expire ». Un balayage toutes les 30 s l'ARCHIVE (status archived, conserve 24 h pour l'audit) puis le SUPPRIME. API JWT : ttl_s dans la charge utile, expires_at dans la vue. Page : chaque carte ephemere porte un compte a rebours (⏳ m:ss, rouge et clignotant la derniere minute) arme depuis les secondes restantes du rendu — l'horloge de l'appareil est indifferente — et s'eteint puis disparait du fil OUVERT a l'echeance ; une carte en lecture n'est retiree qu'apres la lecture. 10 tests dont navigateur reel.

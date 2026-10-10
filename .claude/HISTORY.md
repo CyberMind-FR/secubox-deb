@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — MetaNews crée des billets éphémères de 5 minutes (ref #2268)
+Route `POST /service/ephemere` dans billets (jeton de flotte `metanews`, éphémères seulement, plafond 60/h, interne), client + `internal/diffusion` dans MetaNews (≥ 2 sources, 6/h, grâce 1 h, TTL 5 min). secubox-billets 0.11.0, secubox-metanews 0.4.0.
+
 ## 2026-10-10 — Billets éphémères (ref #2268)
 `ttl_s` à la création, `expires_at` (migration 0007), exclusion à la lecture dès l'échéance, 410 sur le permalien, balayage archive→suppression (24 h), compte à rebours et extinction dans le fil ouvert. secubox-billets 0.10.0. Reste : MetaNews qui les crée.
 
