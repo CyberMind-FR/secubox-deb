@@ -29,4 +29,5 @@ ExecStart=/usr/sbin/sbxwaf \
   --actor-ban propose \
   --campagne-ban propose \
   --reevaluation propose \
+  --mesures propose \
   --actor-ban-protegees 192.0.2.10/32

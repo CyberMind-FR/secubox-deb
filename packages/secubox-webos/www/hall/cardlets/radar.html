@@ -59,6 +59,7 @@
   #fiche li{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dashed var(--line)}
   #fiche li b{font-family:ui-monospace,monospace;color:var(--ok)}
   .refus{color:var(--warn)}
+  .mesure-en-cours{font-size:.54rem;font-weight:800;letter-spacing:.05em;border:1px solid var(--hot);color:var(--hot);border-radius:5px;padding:1px 5px;white-space:nowrap}
   .etapes{display:flex;gap:4px;flex-wrap:wrap}
   .etape{border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:.62rem;background:var(--soft)}
   .vide{color:var(--faint);font-size:.72rem;padding:12px;text-align:center;border:1px dashed var(--line);border-radius:9px}
@@ -105,8 +106,9 @@
     if(!L.length){z.innerHTML='<div class="vide">Aucun acteur à évaluer pour l’instant.</div>';return;}
     z.innerHTML=L.map(function(a,i){
       return '<div class="acteur'+(a.id===CUR?' on':'')+'" data-i="'+i+'"><b>'+esc(a.id)+'</b><span class="mesure">risque <em>'+num(a.risque.valeur)+'</em> · confiance <em>'+num(a.confiance.valeur)+'</em></span>'
-        +'<span class="badge b-'+niveau(a)+'">'+niveau(a)+'</span></div>';}).join('');
+        +'<span class="badge b-'+niveau(a)+'">'+niveau(a)+'</span>'+(a.mesure?'<span class="mesure-en-cours" title="mesure en cours">'+esc(a.mesure.niveau)+' · '+mn(a.mesure.reste_s)+'</span>':'')+'</div>';}).join('');
   }
+  function mn(s){s=Math.max(0,num(s));return s>=3600?Math.floor(s/3600)+' h '+Math.floor(s%3600/60)+' min':Math.max(1,Math.ceil(s/60))+' min';}
   function facteurs(titre,s){
     var fs=(s&&s.facteurs)||[];
     return '<h4>'+esc(titre)+' — '+num(s&&s.valeur)+'</h4>'+(fs.length?'<ul>'+fs.map(function(f){
@@ -118,6 +120,7 @@
     var etapes=(a.etapes||[]).map(function(e){return '<span class="etape">'+esc(e.libelle)+' · '+num(e.evenements)+(e.capteurs&&e.capteurs.length?' · '+esc(e.capteurs.join('+')):'')+'</span>';}).join('');
     z.innerHTML='<div><span class="badge b-'+niveau(a)+'">'+niveau(a)+'</span> <b style="font-family:ui-monospace,monospace">'+esc(a.id)+'</b></div>'
       +'<div class="note" style="margin-top:3px">'+esc(a.action_proposee||'')+' · '+num(a.evenements)+' événement(s) · capteurs : '+esc((a.capteurs||[]).join(', ')||'—')+'</div>'
+      +(a.mesure?'<h4>Mesure en cours</h4><div class="note"><b>'+esc(a.mesure.niveau)+'</b> — encore '+mn(a.mesure.reste_s)+' (réversible, expire seule)</div>':'')
       +facteurs('Risque',a.risque)+facteurs('Confiance',a.confiance)
       +'<h4>Scénario</h4>'+(etapes?'<div class="etapes">'+etapes+'</div>':'<div class="note">pas encore de scénario</div>')
       +((a.refus&&a.refus.length)?'<h4>Pourquoi pas plus dur</h4><ul>'+a.refus.map(function(r){return '<li class="refus">'+esc(r)+'</li>';}).join('')+'</ul>':'');

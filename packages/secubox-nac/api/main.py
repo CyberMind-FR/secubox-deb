@@ -39,6 +39,7 @@ from .collector import Collector
 from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_vendor, risk_score
 from .osdetect import est_conteneur_lxc
 from .dnsevidence import domaines_par_adresse
+from .quarantaine_auto import QuarantaineAuto
 from .presence.geo import enrich_origin
 from .presence.kbin import collect_kbin
 from .presence.local import collect_local
@@ -684,11 +685,63 @@ def _do_init() -> None:
     # middleware bring it up exactly once, and handed to the Collector so
     # its off-loop cycle also runs the presence collectors.
     presence_store = PresenceStore(DEVICES_DB_PATH)
-    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL, presence_store=presence_store, dns_provider=domaines_par_adresse)
+    quarantaine_auto = QuarantaineAuto(_mode_quarantaine_auto, isoler=_isoler_auto, zone_de=lambda mac: _get_client_zone(mac, (store.get(mac) or {}).get("interface", "")),
+                                       trouver=_appareils_par_ip, protegees=_macs_protegees)
+    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL, presence_store=presence_store, dns_provider=domaines_par_adresse,
+                          quarantaine_auto=quarantaine_auto)
     collector._emit = _fire_collector_webhook
+    _etat_quarantaine_auto["q"] = quarantaine_auto
 
     _initialized = True
     log.info("NAC init: device store at %s, %d device(s) known", DEVICES_DB_PATH, store.count())
+
+
+# ── Quarantaine AUTOMATIQUE (#2274) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+_etat_quarantaine_auto: dict = {}
+
+
+def _mode_quarantaine_auto() -> str:
+    """`[nac] quarantaine_auto` : auto (défaut, décision du propriétaire) | propose | off. Une valeur inconnue n'isole rien."""
+    try:
+        v = str((get_config("nac") or {}).get("quarantaine_auto", "auto")).lower()
+    except Exception:  # noqa: BLE001
+        return "off"
+    return v if v in ("auto", "propose", "off") else "off"
+
+
+def _macs_protegees() -> set:
+    try:
+        return {str(x).lower() for x in ((get_config("nac") or {}).get("quarantaine_protegees") or [])}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _appareils_par_ip() -> dict:
+    """ip → appareil connu (le plus récemment vu quand plusieurs partagent une adresse)."""
+    out: dict = {}
+    for d in sorted(store.list(limit=5000) if store else [], key=lambda x: x.get("last_seen") or 0):
+        if d.get("ip"):
+            out[d["ip"]] = d
+    return out
+
+
+def _isoler_auto(mac: str, ip: str, actor: str, raison: str) -> None:
+    """Isole l'appareil dans la zone de quarantaine du NAC — la MÊME que pour un appareil inconnu. Libération : un administrateur le reconnaît et le valide."""
+    _set_client_zone(mac, "quarantine")
+    detail = f"{ip} ← {actor} : {raison}"
+    log.warning("Quarantaine automatique de %s (%s)", mac, detail)
+    if store:
+        store.record_event(mac, "quarantine_auto", detail)
+    _record_event("client_quarantined_auto", {"mac": mac, "ip": ip, "actor": actor, "raison": raison, "by": "actord"})
+    _fire_webhook_sync("client_quarantined", {"mac": mac, "ip": ip, "reason": "actord", "actor": actor})
+    stats_cache.clear()
+
+
+@router.get("/quarantaine/auto")
+def quarantaine_auto_etat(user=Depends(require_jwt)):
+    """Mode de la quarantaine automatique et appareils candidats ou en cours d'isolement."""
+    q = _etat_quarantaine_auto.get("q")
+    return {"mode": _mode_quarantaine_auto(), "candidats": list(q.candidats) if q else []}
 
 
 def _ensure_collector_started() -> None:

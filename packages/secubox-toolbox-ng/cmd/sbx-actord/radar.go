@@ -5,6 +5,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"sort"
 	"time"
@@ -53,6 +54,7 @@ type radarActeur struct {
 	Scenario   string       `json:"scenario"`
 	Capteurs   []string     `json:"capteurs"`
 	Evenements int          `json:"evenements"`
+	Mesure     *mesureVue   `json:"mesure,omitempty"` // la mesure en cours (cran et durée restante), sans adresse
 }
 
 func projeterScore(sc analysis.Score) radarScore {
@@ -63,8 +65,16 @@ func projeterScore(sc analysis.Score) radarScore {
 	return out
 }
 
-// calculerRadar évalue les acteurs les plus prioritaires (double tampon : jamais sur le chemin d'une requête plus d'une fois par radarTTL).
-func (s *Server) calculerRadar() ([]radarActeur, error) {
+// evalActeur : un acteur évalué (analyse complète), avec ce dont l'échelle de réponse a besoin en plus.
+type evalActeur struct {
+	Acteur   graph.Actor
+	Ev       analysis.Evaluation
+	Hostiles int  // événements hostiles (gravité ≥ 40) cumulés
+	LAN      bool // toutes ses adresses sont privées
+}
+
+// evaluerActeurs évalue les acteurs les plus prioritaires. UN SEUL calcul pour le radar et pour les mesures : ils ne peuvent pas diverger.
+func (s *Server) evaluerActeurs(now int64) ([]evalActeur, error) {
 	s.mu.Lock()
 	tous := s.graph.Actors()
 	sort.Slice(tous, func(i, j int) bool { return tous[i].Priority > tous[j].Priority })
@@ -90,8 +100,7 @@ func (s *Server) calculerRadar() ([]radarActeur, error) {
 		}
 		parIP[e.SrcIP] = append(parIP[e.SrcIP], projeter(e))
 	}
-	now := time.Now().Unix()
-	out := make([]radarActeur, 0, len(copies))
+	out := make([]evalActeur, 0, len(copies))
 	for _, c := range copies {
 		var mine []analysis.Event
 		for _, ip := range c.IPs {
@@ -101,10 +110,43 @@ func (s *Server) calculerRadar() ([]radarActeur, error) {
 			continue
 		}
 		sort.Slice(mine, func(i, j int) bool { return mine[i].TS < mine[j].TS })
-		ev := analysis.Evaluer(analysis.Entree{Events: mine, Vecteur: c.Vector, Maintenant: now})
-		ra := radarActeur{ID: c.ID, Risque: projeterScore(ev.Risque), Confiance: projeterScore(ev.Confiance), Niveau: ev.Decision.Niveau,
+		hostiles := 0
+		for _, e := range mine {
+			if e.Severity >= 40 {
+				hostiles++
+			}
+		}
+		out = append(out, evalActeur{Acteur: c, Ev: analysis.Evaluer(analysis.Entree{Events: mine, Vecteur: c.Vector, Maintenant: now}), Hostiles: hostiles, LAN: toutesPrivees(c.IPs)})
+	}
+	return out, nil
+}
+
+// toutesPrivees : l'acteur n'a que des adresses privées, de boucle locale ou de lien local — un appareil du réseau, pas un attaquant venu d'internet.
+func toutesPrivees(ips []string) bool {
+	if len(ips) == 0 {
+		return false
+	}
+	for _, s := range ips {
+		p := net.ParseIP(s)
+		if p == nil || !(p.IsPrivate() || p.IsLoopback() || p.IsLinkLocalUnicast()) {
+			return false
+		}
+	}
+	return true
+}
+
+// calculerRadar : la synthèse du radar (double tampon : jamais sur le chemin d'une requête plus d'une fois par radarTTL).
+func (s *Server) calculerRadar() ([]radarActeur, error) {
+	evalues, err := s.evaluerActeurs(time.Now().Unix())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]radarActeur, 0, len(evalues))
+	for _, x := range evalues {
+		ev := x.Ev
+		ra := radarActeur{ID: x.Acteur.ID, Risque: projeterScore(ev.Risque), Confiance: projeterScore(ev.Confiance), Niveau: ev.Decision.Niveau,
 			Action: ev.Decision.Action, Raisons: ev.Decision.Raisons, Refus: ev.Decision.Refus, Scenario: ev.Scenario.Libelle,
-			Capteurs: ev.Capteurs, Evenements: ev.Evenements}
+			Capteurs: ev.Capteurs, Evenements: ev.Evenements, Mesure: s.mesureDe(x.Acteur.ID)}
 		for _, st := range ev.Scenario.Etapes {
 			ra.Etapes = append(ra.Etapes, radarEtape{Etape: st.Etape, Libelle: st.Libelle, Evenements: st.Evenements, Capteurs: st.Capteurs})
 		}

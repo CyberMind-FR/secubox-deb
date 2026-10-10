@@ -61,6 +61,7 @@ class Collector:
         interval: int = 30,
         presence_store: PresenceStore | None = None,
         dns_provider=None,
+        quarantaine_auto=None,
     ):
         self.store = store
         self.oui_map = oui_map
@@ -68,6 +69,8 @@ class Collector:
         self.presence_store = presence_store
         # #2236 : `dns_provider() -> {ip: [domaines]}` — les domaines de connectivité vus par le DNS, pour déduire l'OS. Facultatif, jamais bloquant.
         self.dns_provider = dns_provider
+        # #2274 : quarantaine automatique d'un appareil du LAN sous mesure QUARANTINE d'actord ; un tour par cycle, jamais bloquant.
+        self.quarantaine_auto = quarantaine_auto
         self._dns_cache: dict = {}
         self._dns_at = 0.0
         self._snapshot: list[dict] = []
@@ -193,6 +196,12 @@ class Collector:
             snapshot.append(enriched)
 
         self._snapshot = snapshot
+
+        if self.quarantaine_auto is not None:
+            try:
+                self.quarantaine_auto.tick()
+            except Exception:  # noqa: BLE001 - une panne de la quarantaine ne sabote ni la découverte ni les cycles suivants
+                logger.warning("collector: quarantaine_auto failed", exc_info=True)
 
         # Project B (#820 Task 5): run the cross-plane presence collectors
         # in this SAME off-loop cycle — `cycle_once` is only ever invoked

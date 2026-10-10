@@ -50,6 +50,7 @@ func main() {
 				"(~220 µs/événement sur la cible) et l'API reste fermée pendant")
 		queue      = flag.Int("queue", 4096, "profondeur de la file d'ingestion (backpressure)")
 		workers    = flag.Int("workers", 2, "nombre de workers d'écriture")
+		mesPath    = flag.String("mesures", "", "fichier où publier les mesures de l'échelle de réponse (délai, défi, tarpit, ban, quarantaine) ; vide = désactivé")
 		propsPath  = flag.String("propositions", "", "fichier où publier les propositions de blocage (acteurs en DENY/QUARANTINE) ; vide = désactivé")
 		replayPath = flag.String("replay", "", "rejoue un journal NDJSON d'enveloppes (calibration RFC-0013 §13) puis quitte")
 		sinceDur   = flag.Duration("since", 0, "avec --replay : ne rejoue que les événements plus récents que cette durée")
@@ -102,6 +103,9 @@ func main() {
 
 	if *propsPath != "" {
 		go srv.publierPropositions(*propsPath, time.Minute)
+	}
+	if *mesPath != "" {
+		go srv.publierMesures(*mesPath, 30*time.Second)
 	}
 
 	if !*readOnly {
