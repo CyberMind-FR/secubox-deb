@@ -166,3 +166,13 @@ def test_la_cli_refuse_hors_root_et_montre_l_etat_sans_secret(tmp_path):
     if os.geteuid() != 0:
         run = subprocess.run([sys.executable, ctl, "run"], capture_output=True, text=True, env=env)
         assert run.returncode == 2 and "root" in run.stderr
+
+
+def test_le_trousseau_livre_est_la_cle_de_signature_du_provisionnement():
+    """Le trousseau installé dans l'image est la partie publique de la clé « SecuBox Provisioning » (empreinte consignée dans le README)."""
+    import subprocess
+    ring = Path(__file__).resolve().parents[1] / "provisioning.gpg"
+    r = subprocess.run(["gpg", "--show-keys", "--with-colons", str(ring)], capture_output=True, text=True)
+    assert "fpr:::::::::14A5B0E26CEB6DF820038B88CF764A1B09C5047C:" in r.stdout and "SecuBox Provisioning" in r.stdout
+    assert "sec:" not in r.stdout                                          # jamais une clé privée dans le dépôt
+    assert (Path(__file__).resolve().parents[1] / "debian" / "rules").read_text().count("provisioning.gpg") >= 1

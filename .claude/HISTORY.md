@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Release alpha.11 en préparation : agent Auto-Load dans les images (ref #2210)
+
+`secubox-lite` 1.5.2 dépend de `secubox-autoload-agent` (donc isp et full) ; l'agent livre le trousseau public « SecuBox Provisioning » (empreinte 14A5B0E2…047C ; clé privée sur gk2 dans /etc/secubox/secrets/autoload-signing, copie hors ligne à faire par l'exploitant) ; `autoloadctl signer` signe un fichier de réponses ; procédure d'essai : docs/dossiers/essai-autoload-espressobin.md. Tag alpha.11 : à décider après fusion.
+
 ## 2026-10-10 — Auto-Load : rapport final, écran et courrier (ref #2192)
 
 secubox-autoload 0.5.0 / autoload-agent 0.5.0 : rapport sans secret construit par la box (écran + diffusion par le tunnel), validé strictement et conservé par l'infrastructure, envoyé par courrier au client si son contact est renseigné (adresse validée contre l'injection d'en-tête, relais configurable dans /etc/secubox/autoload.toml, panne SMTP sans effet sur la box). WebUI : courriel du client et onglet Rapports. Reste à faire côté exploitant : poser /etc/secubox/autoload.toml sur gk2 pour activer le courrier.

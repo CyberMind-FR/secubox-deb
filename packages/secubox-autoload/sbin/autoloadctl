@@ -11,6 +11,7 @@
   autoloadctl revoquer (--id N | --lot L) --motif M
   autoloadctl abonnement --client C --statut actif|suspendu|revoque
   autoloadctl tunnel-init                  crée la clé du hub (0600) et affiche sa clé publique
+  autoloadctl signer FICHIER               signe un fichier de réponses (signature détachée FICHIER.sig, clé « SecuBox Provisioning », root)
   autoloadctl tunnel-sync                  régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf)
 """
 import argparse
@@ -47,6 +48,31 @@ def _abaisser_privileges():
     os.setuid(pw.pw_uid)
 
 
+SIGNATURE_HOME = Path("/etc/secubox/secrets/autoload-signing")
+TAILLE_REPONSES_MAX = 64 * 1024
+
+
+def _signer(fichier: Path) -> int:
+    """Signature détachée du fichier de réponses par la clé « SecuBox Provisioning » (dossier gpg root 0700). Un fichier trop gros ou illisible est refusé."""
+    home = Path(os.environ.get("SECUBOX_AUTOLOAD_SIGNING_HOME", SIGNATURE_HOME))
+    try:
+        if not fichier.is_file() or fichier.stat().st_size > TAILLE_REPONSES_MAX:
+            print("refusé : un fichier ordinaire de 64 Kio au plus", file=sys.stderr)
+            return 2
+    except OSError as e:
+        print(f"refusé : {e}", file=sys.stderr)
+        return 2
+    sortie = Path(str(fichier) + ".sig")
+    r = subprocess.run(["gpg", "--homedir", str(home), "--batch", "--yes", "--no-tty", "--pinentry-mode", "loopback", "--passphrase", "", "--output", str(sortie),
+                        "--detach-sign", "--", str(fichier)], capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        print("signature impossible : " + (r.stderr.strip().splitlines() or ["?"])[-1][:200], file=sys.stderr)
+        return 1
+    os.chmod(sortie, 0o644)
+    print(f"signé : {sortie}")
+    return 0
+
+
 class _PairsVides:
     def actifs(self):
         return []
@@ -79,11 +105,15 @@ def main(argv=None):
     ab = sub.add_parser("abonnement")
     ab.add_argument("--client", required=True)
     ab.add_argument("--statut", required=True)
+    sg = sub.add_parser("signer")
+    sg.add_argument("fichier")
     sub.add_parser("tunnel-init")
     sub.add_parser("tunnel-sync")
     a = ap.parse_args(argv)
 
     db = Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT))
+    if a.cmd == "signer":
+        return _signer(Path(a.fichier))
     if a.cmd not in ("tunnel-init", "tunnel-sync"):
         _abaisser_privileges()
         reg = J.Registre(db, Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))

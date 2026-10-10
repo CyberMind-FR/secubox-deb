@@ -1,3 +1,9 @@
+secubox-autoload (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * autoloadctl signer FICHIER (root) : signature detachee du fichier de reponses par la cle « SecuBox Provisioning » (dossier gpg /etc/secubox/secrets/autoload-signing, root 0700) ; fichier ordinaire de 64 Kio au plus. 2 tests dont la chaine signer puis verification par l'agent avec un vrai gpg (#2210).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 18:00:00 +0200
+
 secubox-autoload (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport final (#2192, parent #2182) : la box poste son rapport par le tunnel (POST /rapport, validation STRICTE : champs exacts, formes bornees, 64 Kio, adresse de tunnel dans 10.64.0.0/16 ; aucun champ ne peut porter un secret ; un rapport rejoue n'est pas double). Consultation par l'administrateur : GET /rapports et /rapports/{id} (require_jwt). Contact du client : POST /clients/{client}/contact (require_jwt), adresse validee contre toute injection d'en-tete (retour a la ligne, virgule, chevrons, doubles points). Quand le client a un contact et que /etc/secubox/autoload.toml porte [rapport] smtp_hote, smtp_port, expediteur, le rapport part par courrier : sobre (pas d'adresse de tunnel, quarante paquets au plus), destinataire valide AVANT toute connexion, delai de 20 s ; une panne SMTP est ecrite a l'audit (rapport-mail-echec) et ne touche jamais la box. WebUI : champ « courriel du client » dans la generation du jeton et onglet « Rapports ».

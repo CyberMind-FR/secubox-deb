@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Fichier de réponses Auto-Load — exemple (#2184). À signer en détaché :
+#   gpg --detach-sign reponses.toml     (clé « SecuBox Provisioning »)
+# Vérifier : premier-pasctl reponses --fichier reponses.toml --signature reponses.toml.sig
+# Aucun secret ici : le mot de passe est une empreinte argon2, le jeton une RÉFÉRENCE.
+
+[box]
+nom     = "client-042"
+langue  = "fr"
+clavier = "fr"
+fuseau  = "Europe/Paris"
+ntp     = true
+
+[admin]
+mot_de_passe = "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA"
+totp         = "enroler"
+
+[reseau]
+mode    = "routeur"
+domaine = "client042.secubox.in"
+
+[services]
+profil = "lite"
+
+[maillage]
+mode = "plus_tard"
+
+[apt]
+auto  = true
+heure = "03:00"
+
+[provision]
+mode      = "auto"                                     # auto (zero-touch) | one-shot (atelier)
+jeton     = "ref:/etc/secubox/secrets/autoload-jeton"  # JAMAIS la valeur
+lot       = "lot-2026-10"
+grace_min = 15                                          # délai avant application (0 à 1440)
+infra     = "admin.gk2.secubox.in"
