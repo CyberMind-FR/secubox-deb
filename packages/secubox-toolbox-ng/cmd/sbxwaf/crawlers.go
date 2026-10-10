@@ -112,6 +112,18 @@ func (c *Crawlers) Verifie(ip string) string {
 	return nom
 }
 
+// Resolu : la vérification de cette adresse est déjà connue (robot ou non), valide dans le cache.
+func (c *Crawlers) Resolu(ip string) bool {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return true // pas une adresse : rien à vérifier
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.cache[a.String()]
+	return ok && c.now().Before(e.exp)
+}
+
 func (c *Crawlers) verifieSansCache(ip string, a netip.Addr) string {
 	noms, err := c.inverse(ip)
 	if err != nil {
