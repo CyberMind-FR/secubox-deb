@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""#2212 : pages /espace/#<id> (services d'un espace) et /appareil/ (liste + fiche, source NAC) ; vrai navigateur, API simulée."""
+import json
+from pathlib import Path
+
+import pytest
+
+playwright = pytest.importorskip("playwright.sync_api")
+WWW = Path(__file__).resolve().parents[1] / "www"
+TYPES = {"html": "text/html", "js": "application/javascript", "css": "text/css"}
+IT = lambda i, nom, actif=True: {"id": i, "name": nom, "icon": "🔹", "path": f"/{i}/", "active": actif, "objet": "SERVICE", "description": "<b>desc</b>"}
+MENU = {"espaces": [{"id": "protection", "nom": "Protection", "icone": "🛡️", "items": [IT("waf", "WAF"), IT("fw", "Pare-feu", False)]}]}
+SANTE = {"modules": {"waf": {"status": "ok", "msg": "répond"}}}
+CLIENTS = {"count": 2, "clients": [
+    {"mac": "aa:bb:cc:00:00:01", "ip": "192.168.1.20", "hostname": "tv-salon", "custom_hostname": "", "online": True, "zone_name": "LAN", "device_type": "tv"},
+    {"mac": "aa:bb:cc:00:00:02", "ip": "192.168.1.21", "hostname": "<img src=x onerror=window.__xss=1>", "online": False, "zone_name": "Quarantaine"}]}
+FICHE = {**CLIENTS["clients"][0], "vendor": "Samsung", "first_seen": "2026-10-01", "recent_events": [{"timestamp": "2026-10-10T10:00", "event": "client_joined"}]}
+
+
+@pytest.fixture(scope="module")
+def navigateur():
+    with playwright.sync_playwright() as pw:
+        b = pw.chromium.launch()
+        yield b
+        b.close()
+
+
+def ouvre(navigateur, url, routes):
+    ctx = navigateur.new_context()
+    p = ctx.new_page()
+
+    def fichier(r):
+        chemin = r.request.url.split("http://sbx.test/", 1)[1].split("?")[0].split("#")[0]
+        f = WWW / chemin
+        f = f / "index.html" if f.is_dir() else f
+        if chemin.startswith("shared/"):
+            r.fulfill(status=200, content_type="text/css" if chemin.endswith(".css") else "application/javascript", body="")
+        elif f.is_file():
+            r.fulfill(status=200, content_type=TYPES[f.suffix[1:]], body=f.read_text(encoding="utf-8"))
+        else:
+            r.fulfill(status=404, body="")
+    p.route("http://sbx.test/**", fichier)
+    def repond(statut, corps):          # fabrique : Playwright passe (route, requête) à un gestionnaire à deux arguments
+        return lambda r: r.fulfill(status=statut, content_type="application/json", body=json.dumps(corps))
+    for chemin, (statut, corps) in routes.items():
+        p.route("http://sbx.test" + chemin, repond(statut, corps))
+    p.goto(url)
+    return ctx, p
+
+
+API = {"/api/v1/hub/public/menu": (200, MENU), "/api/v1/hub/public/health-batch": (200, SANTE)}
+
+
+def test_page_espace_liste_les_services_avec_leur_etat(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/espace/#protection", API)
+    p.wait_for_selector("#services .carte")
+    t = p.inner_text("#services")
+    assert "WAF" in t and "actif" in t and "Pare-feu" in t and "à l’arrêt" in t and "répond" in t
+    assert "<b>desc</b>" in t and "Protection" in p.inner_text("#titre")
+    ctx.close()
+
+
+def test_page_espace_inconnu_dit_pourquoi(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/espace/#nimporte", API)
+    p.wait_for_selector("#erreur:not([hidden])")
+    assert "espace inconnu" in p.inner_text("#erreur")
+    ctx.close()
+
+
+def test_liste_appareils_echappe_les_noms_et_ouvre_la_fiche(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, CLIENTS), "/api/v1/nac/client/**": (200, FICHE)})
+    p.wait_for_selector("#appareils .carte")
+    assert "tv-salon" in p.inner_text("#appareils") and "hors ligne" in p.inner_text("#appareils")
+    assert p.evaluate("window.__xss") is None and "<img" in p.inner_text("#appareils")
+    p.click("text=tv-salon")
+    p.wait_for_selector("#fiche:not([hidden])")
+    p.wait_for_selector("#detail .carte")
+    t = p.inner_text("#detail")
+    assert "Samsung" in t and "192.168.1.20" in t and "client_joined" in p.inner_text("#events")
+    ctx.close()
+
+
+def test_appareils_refus_api_affiche_une_erreur(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (401, {})})
+    p.wait_for_selector("#erreur:not([hidden])")
+    assert "HTTP 401" in p.inner_text("#erreur")
+    ctx.close()
