@@ -63,6 +63,11 @@ override_dh_auto_install:
 	# On n'arme pas un piege en silence sur la box de quelqu'un.
 	install -D -m 0644 conf/honeypot.conf \
 	  debian/secubox-waf-ng/usr/share/secubox/waf/honeypot.conf
+	# Exemple de configuration en SIMULATION et documentation d'activation (#2240 phase 6) : la doc renvoie au chemin installe.
+	install -D -m 0644 conf/actor-intelligence-simulation.conf.example \
+	  debian/secubox-waf-ng/usr/share/secubox/waf/actor-intelligence-simulation.conf.example
+	install -D -m 0644 $(CURDIR)/../../docs/ACTOR-INTELLIGENCE-ACTIVATION.md \
+	  debian/secubox-waf-ng/usr/share/doc/secubox/ACTOR-INTELLIGENCE-ACTIVATION.md
 	install -d debian/secubox-waf-ng/usr/lib/tmpfiles.d
 	install -m 644 tmpfiles.d/secubox-waf-ng.conf \
 	               debian/secubox-waf-ng/usr/lib/tmpfiles.d/secubox-waf-ng.conf

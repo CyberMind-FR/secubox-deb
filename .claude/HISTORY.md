@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — waf-ng 1.26.4 : l'exemple et la doc d'activation sont installés (ref #2240)
+La 1.26.3 les référençait sans les livrer ; `rules` les installe et la procédure donne le chemin installé.
+
 ## 2026-10-10 — Actor Intelligence 2.0, phase 6 : politique et procédure d'activation (ref #2240)
 `docs/ACTOR-INTELLIGENCE-ACTIVATION.md` (scoring v2, modes, drapeaux, garde-fous, procédure `PASSIVE_ONLY → SIMULATION → ACTIVE`, retour arrière, limites) + exemple `conf/actor-intelligence-simulation.conf.example` ; test qui verrouille la doc sur le code. waf-ng 1.26.3.
 
