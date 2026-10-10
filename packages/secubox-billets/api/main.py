@@ -22,6 +22,7 @@ from . import repo
 from .routes.admin import register_admin
 from .routes.public import _samesite
 from .routes.jwt_admin import register_jwt_admin
+from .routes.service import register_service
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
 from .services import antispam, feeds, fiche, media
@@ -318,6 +319,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         pass
     register_admin(app, templates)
     register_jwt_admin(app)  # JWT/SSO JSON surface for the SecuBox Companion
+    register_service(app)    # #2268 : MetaNews crée des billets éphémères (jeton de flotte, direct sur la socket)
     register_public(app, templates)
 
     @app.middleware("http")
