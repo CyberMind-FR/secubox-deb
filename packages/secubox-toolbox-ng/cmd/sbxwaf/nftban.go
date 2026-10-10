@@ -153,7 +153,10 @@ func (b *NftBanner) setPour(ip string) (string, bool) {
 // déjà le LAN, mais ce drop est réel depuis qu'il existe une règle — une seule
 // erreur en amont couperait l'accès d'administration à la box, depuis la box.
 // Le refus est ici, au dernier moment, où rien ne peut le contourner.
-func (b *NftBanner) Ban(ip, cat, sev string) {
+func (b *NftBanner) Ban(ip, cat, sev string) { b.BanFor(ip, cat, sev, b.duration) }
+
+// BanFor est Ban avec une durée choisie par l'appelant (bans gradués : leurre, campagnes). Mêmes garde-fous, même journal.
+func (b *NftBanner) BanFor(ip, cat, sev string, duree time.Duration) {
 	if p := net.ParseIP(ip); p == nil || p.IsLoopback() || p.IsPrivate() || p.IsLinkLocalUnicast() {
 		return
 	}
@@ -181,7 +184,7 @@ func (b *NftBanner) Ban(ip, cat, sev string) {
 	if !ok {
 		return
 	}
-	secs := int(b.duration.Seconds())
+	secs := int(duree.Seconds())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	elem := fmt.Sprintf("{ %s timeout %ds }", ip, secs)
@@ -208,10 +211,10 @@ func (b *NftBanner) Ban(ip, cat, sev string) {
 	if b.store != nil {
 		_ = b.store.Append(BanRecord{
 			IP: ip, Category: cat, Severity: sev,
-			At: now.Unix(), Expires: now.Add(b.duration).Unix(), Action: "ban",
+			At: now.Unix(), Expires: now.Add(duree).Unix(), Action: "ban",
 		})
 	}
-	log.Printf("sbxwaf: nft BAN %s ← %s (sev=%s, dur=%s)", ip, cat, sev, b.duration)
+	log.Printf("sbxwaf: nft BAN %s ← %s (sev=%s, dur=%s)", ip, cat, sev, duree)
 }
 
 // Reload ré-injecte dans nft les bans encore actifs du journal (démarrage).

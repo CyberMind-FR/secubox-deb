@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -104,4 +105,29 @@ func (s *BanStore) ActiveBans(now int64) []BanRecord {
 		actifs = append(actifs, r)
 	}
 	return actifs
+}
+
+// CompteCategorie compte les bans de `ip` dont la catégorie commence par `prefixe`, posés depuis `depuis` (secondes Unix). Sert à graduer la durée
+// d'un ban à la récidive (leurre, campagnes) : le journal append-only est la seule mémoire, elle survit aux redémarrages.
+func (s *BanStore) CompteCategorie(ip, prefixe string, depuis int64) int {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.Open(s.path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	n := 0
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		var r BanRecord
+		if json.Unmarshal(sc.Bytes(), &r) == nil && r.Action == "ban" && r.IP == ip && r.At >= depuis && strings.HasPrefix(r.Category, prefixe) {
+			n++
+		}
+	}
+	return n
 }

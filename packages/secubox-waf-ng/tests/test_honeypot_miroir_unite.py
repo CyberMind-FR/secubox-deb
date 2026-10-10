@@ -38,4 +38,4 @@ def test_le_leurre_n_ajoute_que_ses_propres_drapeaux():
     unite = _drapeaux((PKG / "systemd" / "secubox-waf-ng.service").read_text())
     leurre = _drapeaux((PKG / "conf" / "honeypot.conf").read_text())
     en_plus = set(leurre) - set(unite)
-    assert en_plus <= {"--honeypot", "--honeypot-secret"}, en_plus
+    assert en_plus <= {"--honeypot", "--honeypot-secret", "--leurre-ban"}, en_plus

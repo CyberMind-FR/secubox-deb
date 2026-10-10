@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : leurres, campagnes et acteurs suivis deviennent des bans (#2238, decision du proprietaire). (1) --leurre-ban : un hit sur le leurre (hote non route, hors LAN et premiere partie) bannit des le premier coup, duree graduee 1 h / 24 h / 7 j a la recidive (journal de bans, categorie « leurre: », 30 j). (2) --campagne-ban off|propose|auto : les adresses d'une campagne (meme workflow de sondes, >= 2 adresses) portant des sondes de haute valeur sont bannies, preuve PAR ADRESSE (JA4 retire avant regroupement), robots connus et auto-test ecartes, plages protegees, plafond horaire, duree 4 h / 24 h / 7 j, etat pour le panneau. NftBanner.BanFor (duree choisie), BanStore.CompteCategorie. 11 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 08:00:00 +0200
+
 secubox-toolbox-ng (0.5.9-1~bookworm1) bookworm; urgency=medium
 
   * sbx-actord : les robots connus sont classes a part (#2201). Un acces de robot annonce que le WAF refuse selon la politique du vhost (etiquette unique « robots », severite basse, non bloque, aucune regle declenchee, famille nommee) ne cree plus d'acteur : il est compte par famille dans un registre a part (acces, adresses distinctes plafonnees a 20 000 par famille, premiere et derniere vue, vhosts), expose par GET /robots (compteurs, jamais d'adresse) et par l'apercu (champ robots), et exclu de l'apercu (pays, evenements recents, activite). Cause : meta-externalagent etait l'acteur critique n°1 (score 89 : 2 743 adresses, 65 pays, 7 845 « bans ») devant les vrais balayages. Des qu'un robot sort de ce role (etiquette en plus, regle, severite), ses evenements redeviennent ordinaires. Limite assumee : un attaquant deguise en robot connu sur un vhost anti-robots n'apparait que dans ce registre ; son volume reste visible par famille. 7 tests.
