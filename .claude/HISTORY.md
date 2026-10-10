@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Admin SBXOS : appareils regroupes par MAC, type et materiel (ref #2212)
+
+secubox-hub 1.9.49. OS : non detecte par le NAC (aucun champ) ; piste : empreinte DHCP/TTL/User-Agent cote NAC, a decider.
+
 ## 2026-10-11 — Admin SBXOS : les conteneurs LXC ne sont plus des appareils (ref #2212)
 
 secubox-hub 1.9.48 : `/appareil/` masque les entrees NAC de br-lxc (10.100.0.0/16) et d'OUI 00:16:3e. Le NAC lui-meme les stocke encore (a revoir cote collecteur si on veut les exclure a la source).

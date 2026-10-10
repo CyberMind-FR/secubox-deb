@@ -1,3 +1,9 @@
+secubox-hub (1.9.49-1~bookworm1) bookworm; urgency=medium
+
+  * Appareils (#2212) : /appareil/ regroupe par adresse MAC (une carte par MAC, adresses IPv4/IPv6 reunies) puis par type (routeurs, ordinateurs, telephones, imprimantes, objets connectes, enceintes) ; chaque carte donne le materiel (fabricant de l'OUI, modele, SecuBox/OpenWrt). Les « Non identifies » restent replies. Le systeme d'exploitation n'est PAS affiche : le NAC ne le detecte pas et rien n'est invente. Test dedie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 04:00:00 +0200
+
 secubox-hub (1.9.48-1~bookworm1) bookworm; urgency=medium
 
   * Appareils (#2212) : les conteneurs LXC ne sont pas des appareils. La liste /appareil/ ecarte les entrees du NAC sur le pont br-lxc (10.100.0.0/16) ou dont la MAC porte l'OUI LXC (00:16:3e) et indique « N conteneurs LXC masques ». Filtre cote page : le NAC reste inchange. Test dedie.

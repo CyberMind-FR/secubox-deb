@@ -72,9 +72,11 @@ def test_page_espace_inconnu_dit_pourquoi(navigateur):
 
 def test_liste_appareils_echappe_les_noms_et_ouvre_la_fiche(navigateur):
     ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, CLIENTS), "/api/v1/nac/client/**": (200, FICHE)})
-    p.wait_for_selector("#appareils .carte")
-    assert "tv-salon" in p.inner_text("#appareils") and "hors ligne" in p.inner_text("#appareils")
-    assert p.evaluate("window.__xss") is None and "<img" in p.inner_text("#appareils")
+    p.wait_for_selector("#appareils .carte", state="attached")
+    t = p.locator("#appareils").text_content()
+    assert "tv-salon" in t and "hors ligne" in t
+    assert p.evaluate("window.__xss") is None and "<img" in t
+    p.click("#appareils summary")                               # le groupe « Non identifiés » est replié
     p.click("text=tv-salon")
     p.wait_for_selector("#fiche:not([hidden])")
     p.wait_for_selector("#detail .carte")
@@ -123,9 +125,28 @@ def test_les_conteneurs_lxc_ne_sont_pas_des_appareils(navigateur):
         {"mac": "00:16:3e:1c:41:60", "ip": "fe80::216:3eff:fe1c:4160", "hostname": "nextcloud", "online": True},   # OUI LXC
         {"mac": "02:fb:00:00:d2:80", "ip": "10.55.0.2", "hostname": "tunnel", "online": True}]}
     ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, clients)})
-    p.wait_for_selector("#appareils .carte")
+    p.wait_for_selector("#appareils .carte", state="attached")
     assert p.locator("#appareils .carte").count() == 2          # tv-salon et le client 10.55.0.2 : seuls les conteneurs sont écartés
-    t = p.inner_text("#appareils")
+    t = p.locator("#appareils").text_content()
     assert "tv-salon" in t and "mail" not in t and "nextcloud" not in t
     assert "2 conteneurs lxc masqués" in p.inner_text("#liste").lower()
+    ctx.close()
+
+
+def test_les_appareils_sont_regroupes_par_mac_puis_par_type_avec_le_materiel(navigateur):
+    clients = {"count": 5, "clients": [
+        {"mac": "AA:BB:CC:00:00:01", "ip": "192.168.1.20", "hostname": "tv-salon", "online": True, "device_type": "smart_home", "oui_vendor": "Samsung Electronics", "model": "QN90"},
+        {"mac": "aa:bb:cc:00:00:01", "ip": "2a01:e0a::20", "hostname": "tv-salon", "online": True, "device_type": "smart_home", "oui_vendor": "Samsung Electronics"},   # même MAC, autre adresse
+        {"mac": "aa:bb:cc:00:00:03", "ip": "192.168.1.254", "hostname": "freebox", "online": True, "device_type": "router", "oui_vendor": "FREEBOX SAS", "is_router": 1},
+        {"mac": "aa:bb:cc:00:00:04", "ip": "192.168.1.30", "online": False, "device_type": "unknown", "oui_vendor": "Unknown"},
+        {"mac": "aa:bb:cc:00:00:05", "ip": "192.168.1.31", "online": False, "device_type": "unknown", "oui_vendor": "Unknown"}]}
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, clients)})
+    p.wait_for_selector("#appareils .groupe")
+    titres = [t.strip().lower() for t in p.locator("#appareils .groupe > summary").all_inner_texts()]
+    assert titres[0].startswith("routeurs") and any(t.startswith("objets connectés") for t in titres)
+    assert titres[-1].startswith("non identifiés") and "(2)" in titres[-1]            # inconnus en dernier, repliés
+    assert p.locator("#appareils .carte:has-text('tv-salon')").count() == 1            # une carte par MAC
+    carte = p.inner_text("#appareils .carte:has-text('tv-salon')")
+    assert "Samsung Electronics" in carte and "QN90" in carte and "192.168.1.20" in carte and "2a01:e0a::20" in carte
+    assert "Unknown" not in p.locator("#appareils").text_content()                                  # le fabricant « Unknown » n'est pas un matériel
     ctx.close()
