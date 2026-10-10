@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Admin SBXOS : les six espaces deviennent la navigation par defaut (ref #2212)
+
+secubox-hub 1.9.51, apres validation du proprietaire (« 2 ok »). Retour: `?nav=categories`. Reste: nettoyage des anciennes entrees apres un delai d'usage ; #2212 reste ouverte jusque-la.
+
 ## 2026-10-11 — Admin SBXOS : type, materiel et OS detailles par appareil (ref #2212)
 
 secubox-hub 1.9.50 : le regroupement par type (1.9.49) etait un contresens, retire. L'OS est deduit (nom + DNS) avec preuve ; detection native cote NAC non faite.

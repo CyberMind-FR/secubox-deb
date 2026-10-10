@@ -59,48 +59,43 @@ def titres(p):
     return [t.strip() for t in p.locator("#sidebar .nav-section-title span.cat-label, #sidebar .nav-section-title > span:first-child").all_inner_texts()]
 
 
-def test_par_defaut_la_navigation_reste_celle_des_categories(navigateur):
+def test_par_defaut_la_navigation_est_celle_des_six_espaces(navigateur):
     ctx, p, erreurs = ouvre(navigateur, MENU)
-    texte = p.inner_text("#sidebar")
-    assert "WALL" in texte and "AUTH" in texte and "BOOT" in texte and "PROTECTION" not in texte and "SURVEILLANCE" not in texte
-    assert not erreurs
-    ctx.close()
-
-
-def test_le_drapeau_nav_espaces_bascule_sur_les_six_espaces_et_se_souvient(navigateur):
-    ctx, p, erreurs = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=espaces")
     texte = p.inner_text("#sidebar")
     for nom in ("VUE D'ENSEMBLE", "PROTECTION", "SURVEILLANCE", "SYSTÈME"):
         assert nom in texte, nom
     assert "WALL" not in texte and "AUTH" not in texte
-    assert p.evaluate("localStorage.getItem('sbx_nav')") == "espaces"
     assert p.locator("#sidebar .nav-item").count() == 4                                      # aucune entrée perdue
-    p.goto("http://sbx.test/waf/")                                                            # sans paramètre : le choix est mémorisé
-    p.wait_for_function("document.querySelectorAll('#sidebar .nav-item').length >= 4")
-    assert "PROTECTION" in p.inner_text("#sidebar") and "WALL" not in p.inner_text("#sidebar")
+    assert p.evaluate("localStorage.getItem('sbx_nav')") is None                              # le défaut ne s'écrit pas
     assert not erreurs
     ctx.close()
 
 
 def test_la_section_de_la_page_courante_est_ouverte_et_marquee_active(navigateur):
-    ctx, p, _ = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=espaces")
+    ctx, p, _ = ouvre(navigateur, MENU, "http://sbx.test/waf/")
     actif = p.locator("#sidebar .nav-item.active")
     assert actif.count() == 1 and "WAF" in actif.inner_text()
-    assert p.locator("#sidebar .nav-section:not(.collapsed)").count() >= 1
+    assert p.locator("#sidebar .nav-section.collapsed:has(.nav-item.active)").count() == 0
     ctx.close()
 
 
-def test_nav_categories_revient_a_l_ancienne_navigation(navigateur):
-    ctx, p, _ = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=espaces")
-    p.goto("http://sbx.test/waf/?nav=categories")
+def test_nav_categories_revient_a_l_ancienne_navigation_et_se_souvient(navigateur):
+    ctx, p, erreurs = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=categories")
+    assert "WALL" in p.inner_text("#sidebar") and "PROTECTION" not in p.inner_text("#sidebar")
+    assert p.evaluate("localStorage.getItem('sbx_nav')") == "categories"
+    p.goto("http://sbx.test/waf/")                                                            # sans paramètre : le choix est mémorisé
     p.wait_for_function("document.querySelectorAll('#sidebar .nav-item').length >= 4")
-    assert "WALL" in p.inner_text("#sidebar") and p.evaluate("localStorage.getItem('sbx_nav')") is None
+    assert "WALL" in p.inner_text("#sidebar") and "PROTECTION" not in p.inner_text("#sidebar")
+    p.goto("http://sbx.test/waf/?nav=espaces")                                                # et ?nav=espaces rend le défaut
+    p.wait_for_function("document.querySelectorAll('#sidebar .nav-item').length >= 4")
+    assert "PROTECTION" in p.inner_text("#sidebar") and p.evaluate("localStorage.getItem('sbx_nav')") is None
+    assert not erreurs
     ctx.close()
 
 
-def test_un_hub_sans_espaces_garde_les_categories_meme_avec_le_drapeau(navigateur):
+def test_un_hub_sans_espaces_garde_les_categories_meme_par_defaut(navigateur):
     ancien = {k: v for k, v in MENU.items() if k != "espaces"}
-    ctx, p, erreurs = ouvre(navigateur, ancien, "http://sbx.test/waf/?nav=espaces")
+    ctx, p, erreurs = ouvre(navigateur, ancien)
     assert "WALL" in p.inner_text("#sidebar") and not erreurs                                  # jamais de menu vide parce que l'API est ancienne
     ctx.close()
 
@@ -108,7 +103,7 @@ def test_un_hub_sans_espaces_garde_les_categories_meme_avec_le_drapeau(navigateu
 def test_le_cache_html_ne_melange_pas_les_deux_modes(navigateur):
     ctx, p, _ = ouvre(navigateur, MENU)
     cles = p.evaluate("Object.keys(localStorage).filter(k => k.startsWith('sbx_sidebar_html'))")
-    p.goto("http://sbx.test/waf/?nav=espaces")
+    p.goto("http://sbx.test/waf/?nav=categories")
     p.wait_for_function("document.querySelectorAll('#sidebar .nav-item').length >= 4")
     cles2 = p.evaluate("Object.keys(localStorage).filter(k => k.startsWith('sbx_sidebar_html'))")
     assert set(cles2) - set(cles)                                                              # une clé distincte pour les espaces : pas de HTML périmé de l'autre mode
@@ -118,7 +113,7 @@ def test_le_cache_html_ne_melange_pas_les_deux_modes(navigateur):
 def test_un_lien_permet_de_changer_de_mode(navigateur):
     ctx, p, _ = ouvre(navigateur, MENU)
     lien = p.locator("#sidebar a.nav-mode-link")
-    assert lien.count() == 1 and "nav=espaces" in lien.get_attribute("href")
+    assert lien.count() == 1 and "nav=categories" in lien.get_attribute("href")                # par défaut : le lien propose l'ancienne vue
     ctx.close()
 
 

@@ -1,3 +1,9 @@
+secubox-hub (1.9.51-1~bookworm1) bookworm; urgency=medium
+
+  * Bascule du defaut (#2212) : la navigation a six espaces devient la navigation par defaut (sidebar.js v2.44.0), apres validation du proprietaire. Retour aux categories par ?nav=categories (memorise : sbx_nav=categories), ?nav=espaces rend le defaut. Un hub sans « espaces » ou un stockage indisponible retombent sur les categories : jamais de menu vide. Le lien de bascule en tete du menu propose l'autre vue. Tests adaptes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 06:00:00 +0200
+
 secubox-hub (1.9.50-1~bookworm1) bookworm; urgency=medium
 
   * Appareils (#2212) : correction de comprehension, pas de regroupement. La liste /appareil/ redevient plate ; chaque appareil detaille son type (libelle francais), son materiel (fabricant de l'OUI, modele, role SecuBox/OpenWrt/routeur) et son systeme d'exploitation. Le NAC ne detectant pas l'OS, il est DEDUIT avec sa preuve affichee (« requete DNS vers ... », « nom de l'appareil ... ») a partir du nom et des domaines de connectivite propres a chaque systeme (Android, Apple, Windows, Tizen, webOS, Linux) ; sans indice : « non determine ». Correction : le fabricant lisait le champ vendor au lieu de oui_vendor.
