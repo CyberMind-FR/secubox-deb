@@ -20,7 +20,7 @@
         $('etat-sous').textContent = up ? 'En service depuis ' + up : '';
         var g = $('espaces'); g.textContent = '';
         (d.espaces || []).forEach(function (e) {
-            var c = el('a', 'carte ' + e.etat); c.href = '#' + e.id;
+            var c = el('a', 'carte ' + e.etat); c.href = '/espace/#' + e.id;
             c.appendChild(el('b', null, (e.icone || '') + ' ' + e.nom));
             c.appendChild(el('span', 'n', e.actifs + ' / ' + e.total));
             c.appendChild(el('small', null, e.arretes.length ? 'À l’arrêt : ' + e.arretes.join(', ') : 'Tous les services actifs'));

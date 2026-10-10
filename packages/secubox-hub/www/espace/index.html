@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+<!-- SecuBox · Page d'un espace (#2212) : #<id> dans l'URL ; services de l'espace avec leur état. -->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox · Espace</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/apercu/apercu.css">
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+</head>
+<body class="module-root hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main">
+        <header class="page"><h1 id="titre">Espace</h1><div class="actions"><a class="btn" href="/apercu/">← Vue d'ensemble</a></div></header>
+        <div id="erreur" class="banner err" hidden></div>
+        <section><h2>Services <span id="nb" class="count"></span></h2><div id="services" class="grille"></div></section>
+    </main>
+    <script src="/shared/sidebar.js"></script>
+    <script src="espace.js" defer></script>
+</body>
+</html>
