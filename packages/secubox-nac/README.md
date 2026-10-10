@@ -68,3 +68,27 @@ L'API tourne sans privilège (`NoNewPrivileges`, aucune capacité) : elle n'appe
 Statut réel : `/var/lib/secubox/nac/nft-applied.json` (repris par `/status`). Les chaînes tournent à
 `priority filter - 5` : un drop est final, un oubli ne rend rien accessible. `GET /sync_zones`
 redemande l'application. Preuve de bout en bout : topologie client/routeur/serveur en espaces de noms.
+
+## Détection passive de l'OS et du type fin (#2236)
+
+`devices.db` porte quatre colonnes de plus, remplies par le collecteur (`api/osdetect.py`, fonctions pures) et exposées par `GET /api/v1/nac/clients` et
+`GET /api/v1/nac/client/{mac}` :
+
+| Colonne | Sens |
+|---|---|
+| `os` | système d'exploitation déduit (`iOS 17`, `Android 13`, `Windows`, `OpenWrt (Linux)`…), ou `null` |
+| `os_source` | **la preuve**, obligatoire dès qu'`os` est renseigné : `dhcp-vendor-class:…`, `user-agent:…`, `dns:<domaine>`, `hostname:<nom>`, `empreinte-nac:openwrt` |
+| `device_subtype` | type fin (`smartphone`, `tablette`, `télévision`, `imprimante`, `streaming`, `objet connecté`…), ou `null` |
+| `mac_random` | `1` si le bit « localement administré » de la MAC est posé (confidentialité iOS/Android/Windows) |
+
+Règles : **aucune inférence sans preuve** (`store.set_detection` refuse un OS sans `os_source`) ; le fabricant (OUI) seul ne donne jamais d'OS ; une MAC aléatoire
+n'est pas typée par son fabricant ; une preuve plus forte l'emporte (classe vendeur DHCP > User-Agent > domaines DNS > nom de l'appareil > empreinte du NAC) ;
+une conclusion dont la preuve a disparu est retirée au cycle suivant.
+
+Preuves effectivement branchées : le **nom** de l'appareil, les **domaines DNS de connectivité** (lus en lecture seule dans la base d'ad-guard,
+`api/dnsevidence.py`, jamais d'autre domaine), l'empreinte OpenWrt/SecuBox du NAC. La classe vendeur DHCP, le User-Agent et les services mDNS sont compris par le
+détecteur mais **pas encore alimentés** : sur gk2 le DHCP est servi par la Freebox (la box ne voit pas l'option 60) et sbxmitm ne remonte pas encore de
+User-Agent par appareil.
+
+Conteneurs LXC : chaque entrée de `/clients` porte `conteneur` (br-lxc, 10.100.0.0/16, OUI `00:16:3e`) ; `?exclure_conteneurs=true` les retire (`conteneurs_exclus`
+donne leur nombre). Le défaut est inchangé : la zone `lxc` du NAC, la toolbox et Tor comptent sur eux.

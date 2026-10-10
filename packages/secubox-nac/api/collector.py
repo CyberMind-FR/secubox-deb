@@ -25,6 +25,7 @@ import time
 
 from .discovery import discover
 from .enrich import classify_device_type, openwrt_fingerprint, oui_vendor, risk_score
+from .osdetect import DeviceEvidence, detecter, mac_aleatoire
 from .presence.alerts import evaluate, load_config
 from .presence.geo import enrich_origin
 from .presence.kbin import collect_kbin
@@ -59,11 +60,16 @@ class Collector:
         oui_map: dict,
         interval: int = 30,
         presence_store: PresenceStore | None = None,
+        dns_provider=None,
     ):
         self.store = store
         self.oui_map = oui_map
         self.interval = interval
         self.presence_store = presence_store
+        # #2236 : `dns_provider() -> {ip: [domaines]}` — les domaines de connectivité vus par le DNS, pour déduire l'OS. Facultatif, jamais bloquant.
+        self.dns_provider = dns_provider
+        self._dns_cache: dict = {}
+        self._dns_at = 0.0
         self._snapshot: list[dict] = []
         # Project B (#820) whole-branch fix C1: the SAME dict is reused
         # across every `cycle_once()` call for this process's lifetime, so
@@ -71,6 +77,30 @@ class Collector:
         # its `seen_countries` novelty memory actually span cycles instead
         # of resetting (and re-emailing) on every tick.
         self._alert_state: dict = {}
+
+    def _dns_domaines(self) -> dict:
+        """Domaines DNS par adresse, relus au plus toutes les 10 minutes ; un fournisseur défaillant donne le dernier résultat connu (ou rien)."""
+        if self.dns_provider is None:
+            return {}
+        now = time.time()
+        if now - self._dns_at >= 600:
+            self._dns_at = now
+            try:
+                self._dns_cache = self.dns_provider() or {}
+            except Exception:  # noqa: BLE001 - le DNS manquant n'empêche pas la découverte
+                logger.warning("collector: dns_provider failed", exc_info=True)
+        return self._dns_cache
+
+    def _detecter(self, mac: str, dev: dict, enriched: dict, vendor, dns: dict) -> None:
+        """#2236 : OS et type fin par preuves passives (osdetect) ; chaque conclusion porte sa source."""
+        ev = DeviceEvidence(hostname=dev.get("hostname") or None, vendor=vendor, mac=mac, dns_domains=dns.get(dev.get("ip") or "", []),
+                            is_openwrt=bool(enriched.get("is_openwrt")), is_secubox=bool(enriched.get("is_secubox")))
+        d = detecter(ev)
+        try:
+            self.store.set_detection(mac, os=d["os"], os_source=d["os_source"], device_subtype=d["device_subtype"], mac_random=mac_aleatoire(mac))
+        except Exception:  # noqa: BLE001
+            logger.warning("collector: set_detection failed for %s", mac, exc_info=True)
+        enriched.update(os=d["os"], os_source=d["os_source"], device_subtype=d["device_subtype"], mac_random=int(mac_aleatoire(mac)))
 
     def cycle_once(self) -> None:
         """Run one discover -> enrich -> upsert cycle, synchronously.
@@ -90,6 +120,7 @@ class Collector:
 
         now = int(time.time())
         snapshot: list[dict] = []
+        dns = self._dns_domaines()
 
         for dev in devices:
             mac = dev.get("mac")
@@ -153,6 +184,7 @@ class Collector:
                 enriched["risk_score"] = score
                 enriched["risk_level"] = level
             self.store.upsert(enriched)
+            self._detecter(mac, dev, enriched, vendor, dns)
 
             if is_new:
                 self.store.record_event(mac, "client_joined", hostname or "")

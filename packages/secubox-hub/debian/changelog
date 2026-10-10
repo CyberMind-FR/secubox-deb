@@ -1,3 +1,9 @@
+secubox-hub (1.9.53-1~bookworm1) bookworm; urgency=medium
+
+  * Page /appareil/ : lit l'OS, sa PREUVE (os_source) et le type detaille du NAC (#2236), signale une adresse MAC aleatoire (le fabricant n'est alors pas significatif) et masque les entrees que le NAC marque conteneur ; la deduction cote page reste le repli. 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 15:00:00 +0200
+
 secubox-hub (1.9.52-1~bookworm1) bookworm; urgency=medium
 
   * Sonde du capteur pare-feu d'Actor Intelligence (#2240) : nftables.d/zz-secubox-scan-tap.nft inscrit le couple (source, port) des paquets rejetes par la politique d'entree dans deux ensembles a duree de vie de 10 min (65 536 couples max par famille). ADDITIVE : ne bloque et n'accepte rien, regles ajoutees apres toutes les acceptations. Le postinst la charge seulement si l'ensemble manque (jamais de reload de nftables). 3 tests dont un chargement reel en espace de noms jetable.
