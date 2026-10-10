@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — secubox-lite 1.6.0 : commentaire indenté dans Depends (ref #2280)
+Mes lignes de commentaire dans `Depends` commençaient par un espace : `dpkg-gencontrol` les prenait pour la suite du champ et le paquet ne se construisait plus. Corrigé (colonne 0) et gardé par un test sur lite, isp et full.
+
 ## 2026-10-11 — Auto-Load phase A : une image flashée se provisionne seule (ref #2280)
 `secubox-autoload-agent` 0.6.0 : unité de premier démarrage conditionnelle (fichier de réponses SIGNÉ sur `/boot`, trousseau installé, pas de rapport), installation puis effacement du jeton, `autoload-atelier` (`cle-init`, `preparer` qui
 vérifie la signature comme la box avant d'écrire, `verifier`), trousseau livré. Clé « SecuBox Provisioning » créée sur gk2. Profil `lite` 1.6.0 : l'agent est dans toute image. Guide `docs/AUTOLOAD-ATELIER.md`. Le tag alpha.11 est reposé avec l'agent.
