@@ -1,0 +1,10 @@
+{
+  "id": "apercu",
+  "name": "Vue d'ensemble",
+  "category": "root",
+  "icon": "🧭",
+  "path": "/apercu/",
+  "order": 1,
+  "description": "État global de la box, un coup d'œil par espace",
+  "theme": "hall"
+}

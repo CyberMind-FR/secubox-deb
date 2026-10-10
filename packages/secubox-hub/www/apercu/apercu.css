@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 */
+/* Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> */
+.main{padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:1.2rem}
+header.page{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+header.page h1{margin:0;font-size:1.3rem}
+.actions{display:flex;gap:.8rem;align-items:center}.maj{font-size:.75rem;opacity:.7}
+h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:0 0 .6rem}
+.count{opacity:.6;font-weight:400}
+.banner.err{padding:.6rem .9rem;border-radius:8px;border:1px solid #b3261e;color:#ff7a70}
+.etat{display:flex;gap:.9rem;align-items:center;padding:1rem 1.2rem;border-radius:12px;border:1px solid var(--line,#26352f);background:var(--surface,rgba(255,255,255,.04))}
+.etat p{margin:0;font-weight:600}.etat small{opacity:.7}
+.pastille{width:14px;height:14px;border-radius:50%;background:#8a8a8a;flex:none}
+.etat.ok .pastille{background:#4cd07e}.etat.degrade .pastille{background:#e5a23a}.etat.critique .pastille{background:#ff7a70}
+.grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.8rem}
+.carte{display:flex;flex-direction:column;gap:.3rem;padding:.9rem 1rem;border-radius:10px;border:1px solid var(--line,#26352f);background:var(--surface,rgba(255,255,255,.04));color:inherit;text-decoration:none;min-width:0}
+.carte b{overflow-wrap:anywhere}.carte small{opacity:.7;overflow-wrap:anywhere}
+.carte.degrade{border-color:#e5a23a}.carte.ok .n{color:#4cd07e}.carte.degrade .n{color:#e5a23a}
+.n{font-variant-numeric:tabular-nums;font-size:1.3rem}
+.alertes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem}
+.alertes li{padding:.5rem .8rem;border-radius:8px;border:1px solid var(--line,#26352f);overflow-wrap:anywhere}
+.vide{opacity:.7}
