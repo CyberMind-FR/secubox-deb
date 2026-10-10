@@ -62,6 +62,11 @@ try:
 except ImportError:  # standalone
     from application import application as _application, lire_etat as _lire_etat_nft
 
+try:
+    from api.enforcement import actions as _actions_def, decisions as _decisions_def, mode_global as _mode_global, trouver as _trouver_action
+except ImportError:  # standalone
+    from enforcement import actions as _actions_def, decisions as _decisions_def, mode_global as _mode_global, trouver as _trouver_action
+
 # État publié par sbxwaf (--nft-etat) à chaque veille de 30 s (#1693).
 NFT_ETAT = Path("/var/cache/secubox/waf/nft-etat.json")
 # Dernière lecture nft : l'ensemble du WAF existait-il ? Écrit par _get_bans.
@@ -1645,6 +1650,102 @@ async def ban_ip(req: BanRequest):
     with _warm_lock:
         _warm["bans"] = None  # forcer la relecture de l'ensemble nft
     return {"success": True, "ip": req.ip, "duration": req.duration, "message": message}
+
+
+# ── Actor Intelligence 2.0, phase 1 (#2240) : actions défensives, décisions, modes ────────────────────────────────────────────────────────────
+# Lecture seule des fichiers que sbxwaf écrit déjà (journal de bans append-only, états des bans automatiques) ; rien n'est recopié.
+BANS_JOURNAL = Path("/var/lib/secubox/waf/bans.jsonl")
+ETATS_BAN = {"acteurs": Path("/var/lib/secubox/waf/actor-ban-etat.json"), "campagnes": Path("/var/lib/secubox/waf/campagne-ban-etat.json")}
+AUDIT_LOG = Path("/var/log/secubox/audit.log")
+_JOURNAL_FENETRE_S = 30 * 86400      # le journal grossit sans fin : seuls les 30 derniers jours intéressent la vue
+
+
+def _lire_journal_bans(now: int) -> List[dict]:
+    out: List[dict] = []
+    try:
+        with open(BANS_JOURNAL, encoding="utf-8") as f:
+            for ligne in f:
+                try:
+                    r = json.loads(ligne)
+                except ValueError:
+                    continue
+                if isinstance(r, dict) and int(r.get("at") or 0) >= now - _JOURNAL_FENETRE_S:
+                    out.append(r)
+    except OSError:
+        pass
+    return out
+
+
+def _lire_etats_ban() -> dict:
+    etats = {}
+    for cle, chemin in ETATS_BAN.items():
+        try:
+            etats[cle] = json.loads(chemin.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            etats[cle] = None
+    return etats
+
+
+def _ips_bannies_actives() -> set:
+    with _warm_lock:
+        bans = _warm["bans"]
+    if bans is None:
+        bans = _get_bans()
+    return {b["ip"] for b in bans}
+
+
+def _audit(action: str, detail: str, user) -> None:
+    """Toute décision de sécurité est une ligne de /var/log/secubox/audit.log (ajout seul)."""
+    try:
+        with open(AUDIT_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "waf", "action": action,
+                                "detail": detail[:300], "by": str((user or {}).get("sub") or "")}, ensure_ascii=False) + "\n")
+    except OSError as e:
+        log.warning("audit non écrit (%s) : %s", action, e)
+
+
+@app.get("/enforcement", dependencies=[Depends(require_lecture)])
+async def enforcement(statut: str = "", limite: int = 200):
+    """Actions défensives (bans posés par sbxwaf) : type, cible, raison, durée, échéance, rollback possible."""
+    now = int(time.time())
+    lignes, actifs = await asyncio.to_thread(lambda: (_lire_journal_bans(now), _ips_bannies_actives()))
+    acts = _actions_def(lignes, now, actifs, limite=10**9)
+    if statut:
+        acts = [a for a in acts if a["status"] == statut]
+    return {"genere_le": now, "total": len(acts), "actions": acts[:max(1, min(limite, 1000))]}
+
+
+@app.get("/enforcement/mode", dependencies=[Depends(require_lecture)])
+async def enforcement_mode():
+    """PASSIVE_ONLY | SIMULATION | ACTIVE, par source (acteurs, campagnes) et au global."""
+    return _mode_global(await asyncio.to_thread(_lire_etats_ban), int(time.time()))
+
+
+@app.get("/decisions", dependencies=[Depends(require_lecture)])
+async def decisions_ban():
+    """Décisions des bans automatiques : BLOCKED, WOULD_BLOCK (simulation) ou OBSERVE (écarté, avec le motif)."""
+    now = int(time.time())
+    return {"genere_le": now, "decisions": _decisions_def(await asyncio.to_thread(_lire_etats_ban), now)}
+
+
+@app.post("/enforcement/{ident}/rollback", dependencies=[Depends(require_jwt)])
+async def enforcement_rollback(ident: str, user=Depends(require_jwt)):
+    """Annule une action défensive ACTIVE : retire l'adresse du set nft. Refus net si elle n'est plus active ; l'échec est propagé et audité."""
+    now = int(time.time())
+    lignes, actifs = await asyncio.to_thread(lambda: (_lire_journal_bans(now), _ips_bannies_actives()))
+    action = _trouver_action(lignes, now, actifs, ident)
+    if action is None:
+        raise HTTPException(404, "action inconnue")
+    if not action["rollback"]["available"]:
+        raise HTTPException(409, f"rien à annuler : l'action est « {action['status']} »")
+    ok, message = _unban_ip(action["target"])
+    _audit("enforcement-rollback" if ok else "enforcement-rollback-echec", f"{ident} {action['target']} ← {action['source_decision']} : {message}", user)
+    if not ok:
+        raise HTTPException(500, f"annulation refusée : {message}")
+    stats_cache.invalidate()
+    with _warm_lock:
+        _warm["bans"] = None
+    return {"success": True, "id": ident, "target": action["target"], "status": "rolled_back"}
 
 
 @app.post("/unban/{ip}", dependencies=[Depends(require_jwt)])
