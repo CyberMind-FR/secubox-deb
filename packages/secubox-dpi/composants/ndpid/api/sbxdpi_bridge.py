@@ -22,6 +22,8 @@ from typing import Callable, List, Optional
 SOCKET = "/run/secubox/dpi-live.sock"
 SOURCE = "nDPId → sbxdpi"
 _GRAVITE = {"High": 80, "Medium": 50, "Low": 20}
+# Risques de gravité « Medium » qui sont du BRUIT sur un réseau réel (mesuré sur gk2 : 12 M de « Known Proto on Non Std Port »). Ils noient les vrais signaux.
+BRUIT = {"Known Proto on Non Std Port", "TCP Connection Issues", "Missing SNI TLS Extn", "Error Code", "Unidirectional Traffic"}
 
 
 class _Unix(http.client.HTTPConnection):
@@ -75,7 +77,7 @@ class SbxdpiBridge:
         return bool(s.get("connected") and int(s.get("total_flows") or 0) > 0)
 
     def _risques_notables(self) -> List[dict]:
-        return [r for r in (self._stats().get("risks") or []) if r.get("severity") in ("High", "Medium")]
+        return [r for r in (self._stats().get("risks") or []) if r.get("severity") in ("High", "Medium") and r.get("name") not in BRUIT]
 
     def status(self) -> dict:
         s = self._stats()

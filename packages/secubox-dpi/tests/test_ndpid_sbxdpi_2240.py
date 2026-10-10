@@ -63,6 +63,14 @@ def test_risques_empreintes_et_flux_au_format_de_la_page():
     assert fl[1]["dst_ip"] == "" and fl[1]["application"] == "AWS"
 
 
+def test_le_bruit_de_gravite_moyenne_ne_noie_pas_les_vrais_risques():
+    bruyant = {**STATS, "risks": STATS["risks"] + [{"name": "Known Proto on Non Std Port", "count": 12_000_000, "severity": "Medium"},
+                                                   {"name": "TCP Connection Issues", "count": 99_000, "severity": "Medium"}]}
+    p = pont(stats=bruyant)
+    assert p.status()["database"]["risks_24h"] == 10                       # inchangé : Probing 7 + Malicious 3
+    assert all(r["risk_type"] not in ("Known Proto on Non Std Port", "TCP Connection Issues") for r in p.risks(10))
+
+
 def test_une_lecture_qui_echoue_ne_leve_rien():
     def casse(chemin):
         raise OSError("socket")
