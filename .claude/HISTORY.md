@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Admin SBXOS : type, materiel et OS detailles par appareil (ref #2212)
+
+secubox-hub 1.9.50 : le regroupement par type (1.9.49) etait un contresens, retire. L'OS est deduit (nom + DNS) avec preuve ; detection native cote NAC non faite.
+
 ## 2026-10-11 — Admin SBXOS : appareils regroupes par MAC, type et materiel (ref #2212)
 
 secubox-hub 1.9.49. OS : non detecte par le NAC (aucun champ) ; piste : empreinte DHCP/TTL/User-Agent cote NAC, a decider.
