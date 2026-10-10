@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — waf-ng 1.26.2 : le postinst recharge le profil AppArmor (ref #2240)
+`aa-enforce` ne recharge pas un profil déjà en enforce : les règles DNS de 1.26.1 n’étaient pas dans le noyau. `apparmor_parser -r` ajouté. Constat gk2 : après rechargement manuel, les 4 bans Googlebot sont levés (unban `robot-verifie:googlebot.com`).
+
 ## 2026-10-10 — sbxwaf : le DNS des robots refusé par AppArmor, audit du kill switch illisible (ref #2240)
 L'exemption Googlebot (FCrDNS) échouait en silence : profil AppArmor sans UDP ni fichiers du résolveur. Audit des réévaluations déplacé vers `/var/log/secubox/waf/audit.log` (le journal central n'est pas écrivable par `secubox-waf`). toolbox-ng 0.11.1, waf-ng 1.26.1.
 
