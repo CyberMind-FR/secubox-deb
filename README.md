@@ -137,7 +137,7 @@ release actually ships.
 | VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` | Debian 13 |
 | Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` | Debian 13 |
 | Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-trixie.img.gz` (live) | Debian 13 |
-| Any x86_64 PC | Permanent install | `secubox-installer-amd64-trixie.iso.gz` | Debian 13 |
+| Any x86_64 PC | Permanent install — **headless auto-install** to the first disk | `secubox-installer-amd64-trixie.iso.gz` | Debian 13 |
 | MOCHAbin | Enterprise | `secubox-mochabin-live-usb.img.gz` | Debian 13 |
 | ESPRESSObin v7 / Ultra | Small gateway | `lite` and `isp` images (7 GB, microSD) | Debian 13 |
 
@@ -151,26 +151,27 @@ Flashing, U-Boot and first-boot steps:
 [ARM / U-Boot](https://github.com/CyberMind-FR/secubox-deb/wiki/ARM-Installation) ·
 [Supported hardware](https://github.com/CyberMind-FR/secubox-deb/wiki/Hardware)
 
-### 🧪 Current release: `v3.0.0-alpha.9`
+### 🧪 Current release: `v3.0.0-alpha.11`
 
 This is a **pre-release line**: run it on a test box, not on the link your
-household depends on. What it brings, on top of the earlier alphas:
+household depends on. What it brings, on top of alpha 10:
 
-- **Debian 13 (Trixie) is the base.** Two reference boxes (amd64 and the
-  MOCHAbin) were upgraded in place from Debian 12; the pitfalls found are
-  listed in the [Trixie page](https://github.com/CyberMind-FR/secubox-deb/wiki/Trixie).
-- **Profiles redefined.** `lite` is protection only (firewall, WAF, DPI, MITM,
-  DNS filtering, detection); `isp` is lite plus routing and simple, limited
-  hosting; `full` is the whole fleet of the reference box.
-- **Ad blocking and web filtering** (`ad-guard`, `webfilter`) are part of the
-  protection layer. Web filtering starts in observe-only mode and blocks
-  nothing until you configure it.
-- **zram swap and a collective memory ceiling.** SecuBox modules run under a
-  `secubox.slice` capped as a percentage of physical RAM, so a module storm
-  costs you a module — not the machine.
-- **Module lifecycle derived at first boot**, with the sleeper putting idle
-  modules to sleep.
-- **The nDPI 6.x engine**, built by CI for both amd64 and arm64.
+- **Actor Intelligence 2.0.** The detection engine now *acts*, gradually and reversibly:
+  delay, proof-of-work challenge, tarpit, temporary ban — and, for a device on your own
+  network, automatic isolation by the NAC (its quarantine zone; you validate it to release it).
+  Risk and confidence are scored separately, a ban needs evidence from the address itself,
+  and verified search-engine crawlers are never banned. A new *Radar des acteurs* card in the
+  Hall shows it live. Activation procedure: [`docs/ACTOR-INTELLIGENCE-ACTIVATION.md`](docs/ACTOR-INTELLIGENCE-ACTIVATION.md).
+- **Admin in six spaces** (overview, protection, monitoring, services, identity, system) with
+  global search and a device sheet that shows the detected OS *and the evidence for it*.
+- **Live and ephemeral posts.** The posts feed updates itself — a new post or a new comment
+  pops to the top with an animation — and MetaNews publishes five-minute posts that fade away.
+- **Headless auto-install.** The installer image (`secubox-installer-amd64-trixie`) installs
+  SecuBox on the first disk with no screen and no keyboard. It **wipes that disk**.
+- **Auto-Load groundwork.** Provisioning infrastructure, client agent, admin panel and an
+  end-to-end test bench are in; automatic first-boot provisioning is not shipped yet.
+- Debian 13 (Trixie) base, redefined profiles (`lite`, `isp`, `full`), ad blocking and web
+  filtering, zram and a collective memory ceiling, the nDPI 6.x engine — as in alpha 9 and 10.
 
 Guided path: [Démarrage rapide Alpha](https://github.com/CyberMind-FR/secubox-deb/wiki) —
 VM in one command, or real arm64 hardware — first section of the wiki home.

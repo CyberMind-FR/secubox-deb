@@ -160,6 +160,10 @@ jobs:
           - VM x64 (VirtualBox/QEMU) - amd64
           - QEMU ARM64 emulation script (x86 hosts)
 
+          ### Installer (Headless Auto-Install)
+          - secubox-installer-amd64-trixie.iso.gz / .img.gz - boots, then installs SecuBox on the **first disk** with no
+            screen or keyboard (attached by the *Build Installer ISO* workflow). **It erases that disk.**
+
           ### Live USB Images (Bootable + Flasher)
           - x64 Live USB (GRUB UEFI/BIOS) - amd64
           - EspressoBin V7 Live USB (U-Boot) - arm64
