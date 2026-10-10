@@ -232,3 +232,53 @@ def test_all_mode_covers_proxying_vhosts_only(tmp_path):
     assert "app.gk2" in doms
     assert "vieux.gk2" not in doms, "une redirection n'a pas de backend"
     assert "sauvegarde.gk2" not in doms, "les .bak ne sont pas charges par nginx"
+
+
+# ── #2251 : l'include du reveil doit PRECEDER celui des pages d'erreur ─────────────────────────────────────────────────────────────────────────
+def _vhost_errorpages(dom, avant=True):
+    inc = "    include snippets/secubox-errorpages.conf;\n"
+    return (f"server {{\n{inc if avant else ''}    listen 0.0.0.0:9080;\n    server_name {dom};\n{'' if avant else inc}"
+            f"    location / {{\n        proxy_pass http://10.100.0.130:2342;\n    }}\n}}\n")
+
+
+def _ordre(text):
+    lignes = text.splitlines()
+    return (next(i for i, l in enumerate(lignes) if "secubox-waking.conf" in l), next(i for i, l in enumerate(lignes) if "secubox-errorpages.conf" in l))
+
+
+def test_wire_insere_avant_les_pages_d_erreur_quand_elles_sont_deja_la(tmp_path):
+    from api import nginxgen
+    p = tmp_path / "photoprism.conf"
+    p.write_text(_vhost_errorpages("photoprism.gk2.secubox.in"))
+    assert nginxgen.wire(p, "photoprism.gk2.secubox.in") is True
+    w, e = _ordre(p.read_text())
+    assert w < e, "error_page 502/503/504 : nginx retient la PREMIERE declaration, le reveil doit venir avant les pages d'erreur"
+    assert nginxgen.wire(p, "photoprism.gk2.secubox.in") is False                  # idempotent
+
+
+def test_wire_deplace_un_include_de_reveil_mal_place(tmp_path):
+    from api import nginxgen
+    p = tmp_path / "peertube.conf"
+    p.write_text(_vhost_errorpages("peertube.gk2.secubox.in", avant=False).replace(
+        "    server_name peertube.gk2.secubox.in;\n", "    server_name peertube.gk2.secubox.in;\n" + nginxgen._INCLUDE + "\n"))
+    # état hérité : errorpages juste après server_name, include du réveil après lui
+    texte = p.read_text().replace("    include snippets/secubox-errorpages.conf;\n", "").replace(
+        "    listen 0.0.0.0:9080;\n", "    include snippets/secubox-errorpages.conf;\n    listen 0.0.0.0:9080;\n")
+    p.write_text(texte)
+    w, e = _ordre(texte)
+    assert w > e                                                                   # le défaut hérité est bien posé
+    assert nginxgen.wire(p, "peertube.gk2.secubox.in") is True
+    w, e = _ordre(p.read_text())
+    assert w < e and p.read_text().count("secubox-waking.conf") == 1               # déplacé, jamais dupliqué
+    assert nginxgen.wire(p, "peertube.gk2.secubox.in") is False
+
+
+def test_le_reordonnancement_ne_touche_que_le_bloc_du_domaine(tmp_path):
+    from api import nginxgen
+    p = tmp_path / "deux.conf"
+    p.write_text(_vhost_errorpages("a.gk2.secubox.in") + _vhost_errorpages("b.gk2.secubox.in"))
+    assert nginxgen.wire(p, "a.gk2.secubox.in") is True
+    texte = p.read_text()
+    assert texte.count("secubox-waking.conf") == 1
+    bloc_b = texte[texte.index("b.gk2.secubox.in") - 200:]
+    assert "secubox-waking.conf" not in bloc_b
