@@ -42,7 +42,7 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.43.0';
+    const VERSION = 'v2.44.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -97,16 +97,16 @@
     // immediately on load. The fresh API result then overwrites it
     // (LEDs etc. update from the actual /health-batch call). Net:
     // instant skeleton, no perceived delay.
-    // NAVIGATION À SIX ESPACES (#2212). Derrière un drapeau : `?nav=espaces` l'active et le mémorise (sbx_nav), `?nav=categories` le retire. Par défaut rien ne change.
+    // NAVIGATION À SIX ESPACES (#2212). C'est le DÉFAUT. Le retour aux catégories se choisit par `?nav=categories` (mémorisé : sbx_nav='categories') ; `?nav=espaces` revient au défaut.
     // Le menu des espaces vient de `data.espaces` (hub ≥ 1.9.40, table espaces.json) : un hub plus ancien n'en envoie pas, et la navigation par catégories reste alors seule.
     // Le HTML pré-rendu a sa propre clé par mode : jamais le menu de l'autre vue peint en attendant l'API.
     function navEspaces() {
         try {
             var q = new URLSearchParams(window.location.search).get('nav');
-            if (q === 'espaces') localStorage.setItem('sbx_nav', 'espaces');
-            else if (q === 'categories') localStorage.removeItem('sbx_nav');
-            return localStorage.getItem('sbx_nav') === 'espaces';
-        } catch (e) { return false; }
+            if (q === 'categories') localStorage.setItem('sbx_nav', 'categories');
+            else if (q === 'espaces') localStorage.removeItem('sbx_nav');
+            return localStorage.getItem('sbx_nav') !== 'categories';
+        } catch (e) { return true; }       // stockage indisponible : le défaut ; sans `espaces` de l'API (hub ancien), groupesMenu() retombe sur les catégories
     }
     const NAV_ESPACES = navEspaces();
     // Recherche globale (#2212) : filtre les entrées de tous les espaces, sans casse ni accents ; le nom de l'espace compte aussi.
