@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Actor Intelligence 2.0, phase 2a : capteur pare-feu (ref #2240)
+
+hub 1.9.52 (sonde nft additive), toolbox-ng 0.7.0 (`--scan-sensor`, enveloppe `firewall`/`dns`), waf-ng 1.22.0 (unite). Reste : capteurs DNS et DPI.
+
 ## 2026-10-11 — Actor Intelligence 2.0, phase 1 : actions defensives et decisions (ref #2240)
 
 waf-ng 1.21.0 : `/enforcement`, `/enforcement/mode`, `/decisions`, rollback audite. CrowdSec retire du plan (consigne : sbxwaf le remplace). Reste : phases 2 a 6 ; vue « Radar des acteurs ».
