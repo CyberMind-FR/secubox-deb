@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ site_title }} · Fil immersif</title>
 <link rel="stylesheet" href="/cdn/fonts/css/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="/static/immersif.css?v=im17">
+<link rel="stylesheet" href="/static/immersif.css?v=im19">
 <link rel="alternate" type="application/atom+xml" title="{{ site_title }}" href="/feed.xml">
 </head>
 <body>
@@ -34,7 +34,7 @@
   </aside>
 
   <section class="col" id="col" aria-label="Fil des billets">
-    <div id="fil-billets">{% include "_immersif_items.html" %}</div>
+    <div id="fil-billets" data-depuis="{{ depuis }}"{% if active_tag %} data-tag="{{ active_tag }}"{% endif %}>{% include "_immersif_items.html" %}</div>
     {% if not billets %}<p class="empty">Aucun billet pour le moment.</p>{% endif %}
     {% if next_cursor %}
     <nav class="pager" id="fil-pager" data-cursor="{{ next_cursor }}"{% if active_tag %} data-tag="{{ active_tag }}"{% endif %}>
@@ -52,6 +52,6 @@
 </main>
 
 <dialog id="sheet"></dialog>
-<script src="/static/immersif.js?v=im17" defer></script>
+<script src="/static/immersif.js?v=im19" defer></script>
 </body>
 </html>

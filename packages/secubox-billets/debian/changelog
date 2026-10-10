@@ -1,3 +1,9 @@
+secubox-billets (0.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Le fil est VIVANT (#2266). (1) Un billet publie, ou COMMENTE, remonte en tete : colonne bumped_at (migration 0006 : publication ou dernier commentaire APPROUVE ; un commentaire en attente, rejete ou spam ne remonte rien ; elle ne recule jamais), le fil HTML et /feed/suite se trient par activite, les flux RSS/JSON et micro restent en ordre de publication. (2) Rafraichissement automatique : GET /feed/maj?depuis=<repere> rend en cartes ce qui a bouge depuis le dernier releve du client ; immersif.js l'interroge toutes les 15 s (et au retour sur l'onglet), retire la carte deja presente du billet remonte et pose les nouvelles EN TETE sans recharger. Le lecteur qui a defile garde sa carte sous les yeux (compensation de defilement) ; un billet en lecture n'est pas retire. (3) Animation : un billet NEUF tombe du haut avec un halo et une pastille « nouveau » ; un billet REMONTE glisse depuis son ancienne place (FLIP) avec une pastille « commente » ; les cartes poussees glissent au lieu de sauter ; prefers-reduced-motion respecte. Repere invalide = rien rendu, jamais de rechargement par erreur. 21 tests dont navigateur reel (arrivee en tete, pas de doublon, pas de rechargement, defilement preserve, animations, mouvement reduit, panne reseau).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 17:00:00 +0200
+
 secubox-billets (0.8.72-1~bookworm1) bookworm; urgency=medium
 
   * Le venv est recree quand la version de Python du systeme change, l'ancien est conserve (Debian 13) (ref #1997).

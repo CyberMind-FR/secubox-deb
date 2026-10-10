@@ -452,6 +452,94 @@
   }
   observeCards();
 
+  // ── fil VIVANT (#2266) ─────────────────────────────────────
+  // Toutes les ~15 s on demande à /feed/maj ce qui a bougé depuis le dernier repère : un billet PUBLIÉ ou COMMENTÉ (commentaire approuvé) remonte en tête,
+  // sans recharger la page. Le lecteur n'est pas bousculé : s'il a défilé, sa position est compensée de la hauteur ajoutée ; un billet en lecture
+  // (iframe active) reste en place jusqu'à la fin de sa lecture.
+  var depuis = feed.getAttribute("data-depuis"), tagFil = feed.getAttribute("data-tag"), majEnCours = false;
+  // Positions (haut, en pixels écran) des cartes proches de l'écran : le point de départ de l'animation de déplacement (technique FLIP).
+  function relevePositions() {
+    var m = new Map();
+    [].forEach.call(feed.querySelectorAll(".card"), function (c) {
+      var r = c.getBoundingClientRect();
+      if (r.bottom > -400 && r.top < window.innerHeight + 400) m.set(c, r.top);
+    });
+    return m;
+  }
+  // Fait glisser `c` de `dy` pixels vers sa place : on l'écrit sans transition, puis on la relâche au prochain rendu.
+  function glisse(c, dy, duree) {
+    c.style.transition = "none"; c.style.transform = "translateY(" + Math.round(dy) + "px)";
+    return function () { c.style.transition = "transform " + duree + "ms cubic-bezier(.2,.8,.2,1)"; c.style.transform = ""; setTimeout(function () { c.style.transition = ""; }, duree + 80); };
+  }
+  function pastille(c, texte) {
+    var body = c.querySelector(".body"); if (!body) return;
+    var el = document.createElement("span"); el.className = "pastille-maj"; el.textContent = texte;
+    body.insertBefore(el, body.firstChild);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 7000);
+  }
+  function poserEnTete(d) {
+    var tmp = document.createElement("div"); tmp.innerHTML = d.html;
+    var neufs = [].slice.call(tmp.querySelectorAll(".card"));
+    if (!neufs.length) return;
+    var reduit = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var avant = document.documentElement.scrollHeight, y = window.scrollY, poses = [], ancienTop = {};
+    var positions = reduit ? null : relevePositions();
+    neufs.forEach(function (c) {
+      var id = c.getAttribute("data-id"), ancien = null;
+      [].forEach.call(feed.querySelectorAll(".card"), function (x) { if (x.getAttribute("data-id") === id) ancien = x; });
+      if (ancien) {
+        if (ancien === playing) return;                      // en lecture : on ne la retire pas sous les yeux du lecteur
+        if (positions && positions.has(ancien)) ancienTop[id] = positions.get(ancien);
+        if (active === ancien) deactivate(ancien);
+        positions && positions.delete(ancien);
+        ancien.parentNode.removeChild(ancien);
+        c.setAttribute("data-deplace", "1");
+      }
+      poses.push(c);
+    });
+    // Le plus récent d'abord dans d.html : on insère à l'envers pour que l'ordre final soit le même.
+    for (var i = poses.length - 1; i >= 0; i--) { feed.insertBefore(poses[i], feed.firstChild); }
+    if (!poses.length) return;
+    // Classes et pastilles d'abord (elles changent la hauteur), PUIS la compensation de défilement, PUIS les glissements (qui lisent la mise en page finale).
+    poses.forEach(function (c) {
+      var deplace = c.getAttribute("data-deplace") === "1";
+      c.classList.add("in", deplace ? "remonte" : "nouveau");
+      pastille(c, deplace ? "💬 commenté" : "✨ nouveau");
+    });
+    var ajoute = document.documentElement.scrollHeight - avant;
+    if (y > 80 && ajoute > 0) window.scrollBy(0, ajoute);   // le lecteur qui a défilé garde SA carte sous les yeux
+    var relaches = [];
+    poses.forEach(function (c) {
+      // Un billet REMONTÉ glisse depuis son ancienne place (au plus d'un écran et demi : au-delà il arrive du bas) ; un billet NEUF tombe du haut (CSS).
+      var id = c.getAttribute("data-id");
+      if (!reduit && c.getAttribute("data-deplace") === "1" && ancienTop[id] != null) {
+        var dy = ancienTop[id] - c.getBoundingClientRect().top, max = window.innerHeight * 1.5;
+        relaches.push(glisse(c, Math.max(-max, Math.min(max, dy)), 700));
+      }
+    });
+    // Les cartes déjà là sont POUSSÉES vers le bas : elles glissent de leur ancienne place à la nouvelle, au lieu de sauter.
+    if (positions) positions.forEach(function (top, c) {
+      if (!c.isConnected) return;
+      var dy = top - c.getBoundingClientRect().top;
+      if (Math.abs(dy) > 2 && Math.abs(dy) < window.innerHeight * 3) relaches.push(glisse(c, dy, 600));
+    });
+    if (relaches.length) requestAnimationFrame(function () { requestAnimationFrame(function () { relaches.forEach(function (r) { r(); }); }); });
+    applyFilter(); observeCards(); placeActivity(); onScroll();
+    setTimeout(function () { poses.forEach(function (c) { c.classList.remove("nouveau", "remonte"); c.removeAttribute("data-deplace"); }); }, 6500);
+  }
+  function majFil() {
+    if (!depuis || majEnCours || document.hidden) return;
+    majEnCours = true;
+    var url = "/feed/maj?depuis=" + encodeURIComponent(depuis) + (tagFil ? "&tag=" + encodeURIComponent(tagFil) : "");
+    fetch(url, { headers: { "Accept": "application/json" }, cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (d) { if (d && d.html) poserEnTete(d); if (d && d.depuis) depuis = d.depuis; })
+      .catch(function () { /* hors ligne : on réessaie au prochain tour */ })
+      .then(function () { majEnCours = false; });
+  }
+  setInterval(majFil, 15000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) majFil(); });
+
   loadActivity();
   setInterval(loadActivity, 45000);   // le flux reste vivant
   onScroll();                          // active tout de suite le billet en vue

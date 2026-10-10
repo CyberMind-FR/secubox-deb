@@ -303,3 +303,15 @@ html.reveal .card.in{opacity:1;transform:none;
   .tp{width:100%}
 }
 @media(prefers-reduced-motion:reduce){.theater-pop::before,.tp{animation:none}}
+
+/* #2266 — le fil est vivant. Un billet NEUF tombe du haut avec un halo ; un billet REMONTÉ (commenté) glisse depuis sa place (JS, FLIP) puis pulse ;
+   une pastille dit pourquoi ; les cartes poussées glissent (JS) au lieu de sauter. */
+.card.nouveau{animation:arrivee 6s ease-out 1}
+.card.remonte{animation:pulse-remonte 6s ease-out 1}
+@keyframes arrivee{0%{box-shadow:0 0 0 2px var(--accent,#c9a84c),0 0 28px rgba(201,168,76,.55);transform:translateY(-28px) scale(.97);opacity:0}
+  9%{transform:none;opacity:1}100%{box-shadow:0 0 0 0 transparent,0 0 0 transparent}}
+@keyframes pulse-remonte{0%,18%{box-shadow:0 0 0 2px var(--accent,#c9a84c),0 0 26px rgba(201,168,76,.5)}100%{box-shadow:0 0 0 0 transparent,0 0 0 transparent}}
+.pastille-maj{display:inline-block;margin:0 0 .5rem;padding:.12rem .55rem;border-radius:999px;font-size:.72rem;letter-spacing:.04em;
+  background:var(--accent,#c9a84c);color:#14110a;animation:pastille-maj 7s ease-out 1 both}
+@keyframes pastille-maj{0%{opacity:0;transform:translateY(-6px)}8%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.card.nouveau,.card.remonte{animation:none;outline:2px solid var(--accent,#c9a84c)}.pastille-maj{animation:none}}
