@@ -32,7 +32,7 @@ func TestRadar_ServiDansLaVueReduiteSansAdresseNiCibleNiPreuve(t *testing.T) {
 	if a == nil {
 		t.Fatalf("l'acteur %s est dans le radar : %v", id, corps)
 	}
-	if  a["niveau"] == nil || a["risque"] == nil || a["confiance"] == nil {
+	if a["niveau"] == nil || a["risque"] == nil || a["confiance"] == nil {
 		t.Fatalf("id, niveau, risque et confiance : %v", a)
 	}
 	if et, _ := a["etapes"].([]any); len(et) < 3 {

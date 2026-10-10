@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — sbxwaf : le DNS des robots refusé par AppArmor, audit du kill switch illisible (ref #2240)
+L'exemption Googlebot (FCrDNS) échouait en silence : profil AppArmor sans UDP ni fichiers du résolveur. Audit des réévaluations déplacé vers `/var/log/secubox/waf/audit.log` (le journal central n'est pas écrivable par `secubox-waf`). toolbox-ng 0.11.1, waf-ng 1.26.1.
+
 ## 2026-10-10 — Phase 5 : Radar des acteurs dans le Hall, et on ne bannit plus Googlebot (ref #2240)
 Carte Hall `radar` (risque et confiance sur deux axes, fiche avec facteurs/scénario/refus) alimentée par `GET /radar` de sbx-actord (vue réduite, liste blanche sans adresse ni cible). `GET /api/v1/waf/reevaluations`. **Correctif** : 8 adresses Googlebot bannies par les leurres (4 prolongées par le kill switch) — exemption des robots d'indexation vérifiés par DNS inverse confirmé (FCrDNS) au point unique `BanFor`, bans existants levés au démarrage. toolbox-ng 0.11.0, waf-ng 1.26.0, webos 1.6.0.
 
