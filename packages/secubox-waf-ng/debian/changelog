@@ -1,3 +1,9 @@
+secubox-waf-ng (1.26.2-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : le profil AppArmor de sbxwaf est RECHARGE (apparmor_parser -r) apres aa-enforce. aa-enforce ne recharge pas un profil deja en enforce : la mise a jour 1.26.1 (regles DNS pour l'exemption des robots d'indexation) restait absente du noyau et les bans Googlebot n'etaient pas leves, jusqu'a un rechargement manuel constate sur gk2. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 13:30:00 +0200
+
 secubox-waf-ng (1.26.1-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : la verification DNS des robots d'indexation ne fonctionnait PAS sur gk2 (profil AppArmor en enforce : aucune socket UDP ni fichier du resolveur autorises) ; elle echouait en silence et, par construction, personne n'etait exempte — les 4 adresses Googlebot restaient bannies. Profil : network inet/inet6 dgram, /etc/resolv.conf, nsswitch.conf, hosts, host.conf en lecture. Autre defaut du kill switch (phase 4) trouve au deploiement : la ligne d'audit etait ecrite dans /var/log/secubox/audit.log (secubox:secubox 0640), ferme a l'utilisateur secubox-waf — « permission denied » a chaque reevaluation ; elle va desormais dans /var/log/secubox/waf/audit.log, repertoire que le service peut ecrire. Les preuves (reevaluations.jsonl) n'etaient pas touchees. 3 tests (profil, audit).

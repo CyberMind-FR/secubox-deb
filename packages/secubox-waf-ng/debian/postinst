@@ -152,6 +152,9 @@ case "$1" in
        [ -f /etc/apparmor.d/usr.sbin.sbxwaf ] && \
        [ -d /sys/kernel/security/apparmor ]; then
       aa-enforce /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
+      # aa-enforce ne recharge PAS un profil déjà en enforce : sans ceci, une règle ajoutée par une mise à jour restait absente du noyau (le DNS des
+      # robots d'indexation refusé en silence). Rechargement à chaud, sans redémarrer le démon.
+      apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
     fi
 
     # ── 6. Systemd: single hardened unit (#896 reconcile) ────────────────────

@@ -29,3 +29,12 @@ def test_le_profil_autorise_la_lecture_des_fichiers_du_resolveur():
 def test_l_audit_de_la_reevaluation_va_dans_le_repertoire_ecrivable_du_service():
     m = re.search(r'audit:\s*"([^"]+)"', REEVAL)
     assert m and m.group(1).startswith("/var/log/secubox/waf/"), m and m.group(1)
+
+
+def test_le_postinst_recharge_le_profil_deja_charge():
+    """`aa-enforce` sur un profil déjà en enforce ne recharge pas les règles : une mise à jour du profil restait sans effet dans le noyau
+    (constat gk2 : le DNS des robots refusé jusqu'à un `apparmor_parser -r` manuel). Le paquet recharge lui-même."""
+    post = (RACINE / "debian" / "postinst").read_text()
+    bloc = post[post.index("AppArmor profile"):post.index("Systemd: single hardened unit")]
+    assert "apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf" in bloc
+    assert bloc.index("aa-enforce") < bloc.index("apparmor_parser -r")
