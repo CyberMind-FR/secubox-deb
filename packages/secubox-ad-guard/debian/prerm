@@ -6,6 +6,7 @@ if [ "$1" = "remove" ]; then
     # POC « DNS AdBlock TV » (#1943) : retirer le module remet Unbound en l'état (drop-in de vues et de journalisation retiré).
     systemctl disable --now secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
     systemctl disable --now secubox-ad-guard-auto.timer >/dev/null 2>&1 || true
+    systemctl disable --now secubox-ad-guard-dnssensor.timer >/dev/null 2>&1 || true
     [ -x /usr/sbin/secubox-adguard-tv ] && /usr/sbin/secubox-adguard-tv disable >/dev/null 2>&1 || true
 fi
 #DEBHELPER#

@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Ad Guard — capteur DNS d'Actor Intelligence (domaines malveillants ou anormaux), un passage (#2240)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2240
+After=secubox-actord.service
+# Rien à faire si actord ne tourne pas : le socket d'ingestion (et son groupe) n'existent alors pas.
+ConditionPathExists=/run/secubox/actord.sock
+ConditionPathExists=/var/lib/secubox/ad-guard/dnstv/dnstv.db
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+# Seul ajout de groupe : écrire sur le socket d'ingestion d'actord (srw-rw---- secubox-actord:actord-ingest). Lecture seule du magasin d'ad-guard.
+SupplementaryGroups=actord-ingest
+ExecStart=/usr/sbin/secubox-adguard-dnssensor
+UMask=0027
+# Pas de sudo ici : durcissement complet possible (contrairement au mode auto).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+ReadWritePaths=/var/lib/secubox/ad-guard
+ReadOnlyPaths=/etc/secubox/actor

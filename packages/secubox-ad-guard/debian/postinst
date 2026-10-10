@@ -10,6 +10,8 @@ if [ "$1" = "configure" ]; then
     systemctl try-restart secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
     # Mode auto (#1954) : la minuterie ne fait rien tant qu'aucun appareil n'est en mode auto ; l'activer ne touche pas le DNS.
     systemctl enable --now secubox-ad-guard-auto.timer >/dev/null 2>&1 || true
+    # Capteur DNS d'Actor Intelligence (#2240) : ne fait rien sans actord ni magasin (ConditionPathExists) ; ne juge que les domaines malveillants ou anormaux.
+    systemctl enable --now secubox-ad-guard-dnssensor.timer >/dev/null 2>&1 || true
 
     systemctl daemon-reload
     # PAS d'enable de secubox-ad-guard.service : le module est servi par
