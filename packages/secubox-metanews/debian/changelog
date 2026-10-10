@@ -1,3 +1,9 @@
+secubox-metanews (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * MetaNews publie les sujets qui se forment comme BILLETS EPHEMERES (#2268) : un sujet couvert par au moins 2 sources et mis a jour dans la derniere fenetre (2 periodes de sondage) passe dans le fil des billets pour 5 minutes (--billets-ttl, 30 s a 1 h) puis s'efface. internal/diffusion : plafond de 6 sujets par heure glissante (--billets-max-heure), delai de grace d'une heure par sujet (table billet_ephemere, migration 0004), les plus importants d'abord, l'actualite ancienne n'est jamais rejouee, une panne de billets arrete le tour sans marquer le sujet et n'arrete jamais le sondage. Le titre et le resume d'un flux externe sont echappes (jamais de markdown ni de HTML injecte dans le billet). Le client parle directement a la socket de billets (POST /service/ephemere) avec un jeton de flotte sub=metanews, signe seulement si le secret existe. --billets=false coupe la fonction. 10 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 19:30:00 +0200
+
 secubox-metanews (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-yacy (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

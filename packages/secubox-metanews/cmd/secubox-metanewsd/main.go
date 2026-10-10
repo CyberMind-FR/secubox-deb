@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-metanews/internal/diffusion"
 	"github.com/CyberMind-FR/secubox-deb/secubox-metanews/internal/linker"
 	"github.com/CyberMind-FR/secubox-deb/secubox-metanews/internal/pipeline"
 	"github.com/CyberMind-FR/secubox-deb/secubox-metanews/internal/store"
@@ -38,7 +39,14 @@ func main() {
 		bbsSock = flag.String("bbs-socket", "/run/secubox/bbs.sock", "socket du BBS (pour Discuter)")
 		bbsCat  = flag.String("bbs-cat", "actualites", "slug de catégorie BBS des fils MetaNews")
 		pollSec = flag.Int("poll", 300, "période de sondage des flux, en secondes")
-		montre  = flag.Bool("version", false, "afficher la version")
+		// Billets éphémères (#2268) : les sujets qui se forment passent dans le fil des billets pour quelques minutes.
+		bilActif  = flag.Bool("billets", true, "publier les nouveaux sujets comme billets éphémères")
+		bilSocket = flag.String("billets-socket", "/run/secubox/billets.sock", "socket du module billets")
+		bilTTL    = flag.Duration("billets-ttl", 5*time.Minute, "durée de vie d'un billet éphémère (30 s à 1 h)")
+		bilMax    = flag.Int("billets-max-heure", 6, "plafond de sujets publiés par heure")
+		bilMinSrc = flag.Int("billets-min-sources", 2, "sources minimum pour qu'un sujet soit publié")
+		sitePub   = flag.String("site-public", "", "adresse publique de MetaNews (https://…), pour le lien du billet")
+		montre    = flag.Bool("version", false, "afficher la version")
 	)
 	flag.Parse()
 	if *montre {
@@ -115,7 +123,17 @@ func main() {
 	// périmée de quelques minutes sans impact).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	go boucle(ctx, passes, tourDe(pipe, jr), time.Duration(*pollSec)*time.Second)
+	var dif *diffusion.Diffuseur
+	if *bilActif {
+		if *bilTTL < 30*time.Second || *bilTTL > time.Hour {
+			jr.Fatalf("billets-ttl %s hors de [30 s, 1 h]", *bilTTL)
+		}
+		dif = diffusion.New(st, diffusion.Config{TTL: *bilTTL, MaxParHeure: *bilMax, MinSources: *bilMinSrc,
+			Fenetre: 2 * time.Duration(*pollSec) * time.Second, Cooldown: time.Hour, SiteURL: *sitePub},
+			diffusion.ClientSocket(*bilSocket, secret), jr)
+		jr.Printf("billets éphémères : ttl %s, %d/h max, %d sources min", *bilTTL, *bilMax, *bilMinSrc)
+	}
+	go boucle(ctx, passes, tourDe(pipe, jr, dif), time.Duration(*pollSec)*time.Second)
 
 	_ = os.Remove(*socket)
 	ln, err := net.Listen("unix", *socket)
@@ -139,15 +157,24 @@ func main() {
 }
 
 // tourDe : un sondage suivi d'un regroupement, journalisé.
-func tourDe(pipe *pipeline.Pipe, jr *log.Logger) func() {
+func tourDe(pipe *pipeline.Pipe, jr *log.Logger, dif *diffusion.Diffuseur) func() {
 	return func() {
-		n, t, err := pipe.Tour(time.Now().Unix())
+		now := time.Now().Unix()
+		n, t, err := pipe.Tour(now)
 		if err != nil {
 			jr.Printf("tour : %v", err)
 			return
 		}
 		if n > 0 || t > 0 {
 			jr.Printf("tour : %d articles neufs, %d sujets touchés", n, t)
+		}
+		// Les sujets qui viennent de se former passent dans le fil des billets. Une panne de billets n'arrête jamais le sondage.
+		if dif != nil {
+			if k, err := dif.Tour(now); err != nil {
+				jr.Printf("billets éphémères : %v", err)
+			} else if k > 0 {
+				jr.Printf("billets éphémères : %d publiés", k)
+			}
 		}
 	}
 }
