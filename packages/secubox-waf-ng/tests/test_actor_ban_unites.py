@@ -37,3 +37,16 @@ def test_le_kill_switch_logique_est_livre_en_auto_dans_l_unite_et_le_dropin():
     """#2240 phase 4 : la réévaluation à l'échéance est active partout où les bans automatiques le sont."""
     for chemin in (SYS / "secubox-waf-ng.service", SYS.parent / "conf" / "honeypot.conf"):
         assert re.search(r"^\s+--reevaluation auto", chemin.read_text(), re.M), chemin
+
+
+def test_actord_publie_ses_mesures_ou_sbxwaf_les_lit_et_l_echelle_est_livree_en_auto():
+    """#2274 : l'échelle de réponse (délai, défi, tarpit, ban) est appliquée — actord publie, sbxwaf lit le même fichier, unité et dropin en `auto`."""
+    a = (SYS / "secubox-actord.service").read_text()
+    w = (SYS / "secubox-waf-ng.service").read_text()
+    d = (SYS.parent / "conf" / "honeypot.conf").read_text()
+    chemin = re.search(r"--mesures (\S+)", a).group(1)
+    assert chemin == "/run/secubox/actord-mesures.json"
+    for texte in (w, d):
+        assert re.search(r"^\s+--mesures auto", texte, re.M)
+    main_go = (SYS.parents[1] / "secubox-toolbox-ng" / "cmd" / "sbxwaf" / "main.go").read_text()
+    assert re.search(r'"mesures-fichier", "([^"]+)"', main_go).group(1) == chemin       # le défaut de sbxwaf est ce même chemin

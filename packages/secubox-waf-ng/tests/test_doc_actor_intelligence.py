@@ -30,7 +30,7 @@ def test_chaque_facteur_du_code_est_documente_avec_ses_points():
 
 def test_chaque_drapeau_d_activation_est_documente_avec_son_defaut():
     for drapeau in ("actor-ban", "campagne-ban", "leurre-ban", "reevaluation", "reeval-seuil", "scan-sensor", "scan-seuil", "actor-ban-min",
-                    "actor-ban-max-heure", "campagne-ban-max-heure", "actor-ban-protegees"):
+                    "actor-ban-max-heure", "campagne-ban-max-heure", "actor-ban-protegees", "mesures", "mesures-fichier", "mesures-max-bans-heure"):
         assert f"`--{drapeau}" in DOC, drapeau
         assert re.search(rf'"{drapeau}"', MAIN), f"drapeau {drapeau} introuvable dans main.go"
 
@@ -52,3 +52,25 @@ def test_l_exemple_et_la_doc_sont_installes_par_le_paquet_et_la_doc_donne_le_che
     assert "conf/actor-intelligence-simulation.conf.example" in rules and "usr/share/secubox/waf/actor-intelligence-simulation.conf.example" in rules
     assert "ACTOR-INTELLIGENCE-ACTIVATION.md" in rules
     assert "/usr/share/secubox/waf/actor-intelligence-simulation.conf.example" in DOC
+
+
+MESURE = (RACINE / "packages" / "secubox-toolbox-ng" / "internal" / "actor" / "mesure" / "mesure.go").read_text()
+
+
+def test_les_seuils_et_durees_de_l_echelle_de_reponse_sont_ceux_du_code():
+    for nom in ("SeuilDelay", "SeuilChallenge", "SeuilTarpit", "SeuilBlock", "SeuilConfiance", "SeuilConfBlock", "MinCapteurs", "SeuilInsistance"):
+        valeur = re.search(rf"{nom}\s*=\s*(\d+)", MESURE).group(1)
+        assert re.search(rf"\|\s*`{nom}`\s*\|\s*{valeur}\s*\|", DOC), f"{nom} = {valeur} absent de la table de l'échelle"
+    ligne = re.search(r"var ttl = map\[Niveau\]time\.Duration\{([^}]*)\}", MESURE).group(1)
+    durees = {}
+    for nom, corps in re.findall(r"(\w+):\s*([^,]+)", ligne):
+        m = re.fullmatch(r"(?:(\d+) \* )?time\.(Minute|Hour)", corps.strip())
+        durees[nom] = f"{m.group(1) or 1} {'min' if m.group(2) == 'Minute' else 'h'}"
+    assert set(durees) == {"Delay", "Challenge", "Tarpit", "Deny", "Quarantine"}
+    for cran, d in durees.items():
+        assert re.search(rf"\|\s*{cran.upper()}\s*\|[^\n]*\|\s*{re.escape(d)}\s*\|", DOC), f"durée de {cran} ({d}) absente de la table des crans"
+
+
+def test_la_doc_decrit_l_escalade_la_quarantaine_du_nac_et_les_crans_du_hall():
+    for mot in ("insiste", "quarantaine_auto", "zone de quarantaine", "valide", "preuve de travail", "tarpit", "Radar des acteurs"):
+        assert mot.lower() in DOC.lower(), mot

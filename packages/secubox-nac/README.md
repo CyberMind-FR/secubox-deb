@@ -92,3 +92,18 @@ User-Agent par appareil.
 
 Conteneurs LXC : chaque entrée de `/clients` porte `conteneur` (br-lxc, 10.100.0.0/16, OUI `00:16:3e`) ; `?exclure_conteneurs=true` les retire (`conteneurs_exclus`
 donne leur nombre). Le défaut est inchangé : la zone `lxc` du NAC, la toolbox et Tor comptent sur eux.
+
+## Quarantaine automatique d'un appareil du LAN (#2274)
+
+Quand actord publie pour un appareil du réseau local la mesure `QUARANTINE` (niveau BLOCK : risque ≥ 75, confiance ≥ 80, deux capteurs distincts au moins), le NAC
+l'**isole lui-même** dans sa zone de quarantaine existante — la même que pour un appareil inconnu (DNS et le reste comme aujourd'hui). Il lit `GET /api/v1/actor/mesures`
+sur la socket locale d'actord (vue complète). Libération : un administrateur reconnaît et valide l'appareil ; il n'y a pas de libération automatique, et une même mesure
+n'isole qu'une fois.
+
+| Réglage (`[nac]` de `/etc/secubox/secubox.conf`) | Défaut | Rôle |
+|---|---|---|
+| `quarantaine_auto` | `auto` | `auto` isole, `propose` consigne seulement le candidat, `off` coupe ; toute autre valeur vaut `off` |
+| `quarantaine_protegees` | `[]` | adresses MAC jamais isolées |
+
+Jamais la box, un routeur, un équipement OpenWrt/SecuBox, ni un appareil absent depuis plus de 3 h. `GET /api/v1/nac/quarantaine/auto` rend le mode et les candidats ; chaque
+isolement laisse une ligne `quarantine_auto` dans l'historique de l'appareil et un événement `client_quarantined_auto`.

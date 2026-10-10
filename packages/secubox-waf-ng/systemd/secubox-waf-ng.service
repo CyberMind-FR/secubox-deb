@@ -138,6 +138,7 @@ ExecStart=/usr/sbin/sbxwaf \
   --actor-ban auto \
   --campagne-ban auto \
   --reevaluation auto \
+  --mesures auto \
   --actor-ban-protegees 82.67.100.75/32,2a01:e0a:dec:c4e0::/60
 
 # BANS AUTOMATIQUES (#2238, décision du propriétaire du 2026-10-11) : `--actor-ban auto` (acteurs suivis : 2 sanctions locales, plafond 20/h) et

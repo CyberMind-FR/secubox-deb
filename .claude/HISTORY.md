@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Échelle de réponse réelle : délai, défi, tarpit, ban, quarantaine LAN (ref #2274)
+actord choisit le cran (escalade sur insistance) et publie `actord-mesures.json` ; sbxwaf applique DELAY/CHALLENGE (preuve de travail)/TARPIT/DENY ; le NAC isole en auto un appareil du LAN (zone de quarantaine existante, validation par l'administrateur) ; les crans du Hall reflètent les mesures réelles. toolbox-ng 0.12.0, waf-ng 1.27.0, nac 3.4.0, webos 1.7.0.
+
 ## 2026-10-10 — waf-ng 1.26.4 : l'exemple et la doc d'activation sont installés (ref #2240)
 La 1.26.3 les référençait sans les livrer ; `rules` les installe et la procédure donne le chemin installé.
 

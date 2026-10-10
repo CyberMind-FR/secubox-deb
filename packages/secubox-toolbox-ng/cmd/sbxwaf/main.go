@@ -82,6 +82,9 @@ func upstreamErrorCode(err error) int {
 
 // Server is the sbxwaf reverse-proxy core.
 type Server struct {
+	// mesures : l'échelle de réponse d'Actor Intelligence (délai, défi, tarpit, ban) appliquée aux requêtes (#2274). nil = désactivée.
+	mesures *MesuresWAF
+
 	// ca holds the loaded forging CA. May be nil when --ca-cert/--ca-key are not
 	// provided (tests, non-TLS deployments).
 	ca *forge.CA
@@ -327,6 +330,10 @@ func (s *Server) handler() http.Handler {
 		// restarting the WAF. Same one-stat cost as routes/rules.
 		if s.onDemand != nil {
 			s.onDemand.Maybe()
+		}
+		// Échelle de réponse (#2274) : l'adresse sous mesure est ralentie, défiée, retenue ou refusée AVANT toute autre inspection.
+		if s.mesures != nil && s.mesures.Intercepte(w, r) {
+			return
 		}
 
 		// Strip port from Host header to get the bare hostname for lookup.
@@ -1221,6 +1228,9 @@ func main() {
 	leurreBan := flag.Bool("leurre-ban", false, "ban dès le premier hit sur le leurre (hôte non routé, hors LAN et première partie), durée graduée 1 h / 24 h / 7 j à la récidive (#2238)")
 	campagneBanMode := flag.String("campagne-ban", "off", "ban des campagnes (même workflow de sondes, haute valeur) : off | propose | auto (#2238)")
 	campagneBanEtat := flag.String("campagne-ban-etat", "/var/lib/secubox/waf/campagne-ban-etat.json", "état du ban des campagnes pour le panneau")
+	mesuresMode := flag.String("mesures", "off", "échelle de réponse d'actord appliquée : délai, défi (preuve de travail), tarpit, ban : off | propose | auto (#2274)")
+	mesuresFichier := flag.String("mesures-fichier", "/run/secubox/actord-mesures.json", "mesures publiées par actord")
+	mesuresMaxBans := flag.Int("mesures-max-bans-heure", 20, "coupe-circuit : bans de l'échelle de réponse par heure glissante")
 	reevaluation := flag.String("reevaluation", "off", "kill switch logique : réévalue chaque ban à l'échéance, RELEASE ou EXTEND gradué (jamais permanent, plafond 30 j) : off | propose | auto (#2240 phase 4)")
 	reevalPreuves := flag.String("reevaluation-preuves", "/var/lib/secubox/waf/reevaluations.jsonl", "journal des réévaluations (une ligne par transition, append-only)")
 	reevalSeuil := flag.Uint64("reeval-seuil", seuilReevalDefaut, "paquets reçus pendant le ban à partir desquels l'adresse est jugée insistante")
@@ -1444,6 +1454,18 @@ func main() {
 				cb.protegees = parseCIDRs(*actorBanProtegees)
 				go cb.Veiller(5 * time.Minute)
 				log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
+			}
+			// Échelle de réponse (#2274) : mesures d'actord appliquées aux requêtes ; le ban passe par le même banneur nft. La quarantaine du LAN est celle du NAC.
+			if *mesuresMode == "propose" || *mesuresMode == "auto" {
+				mw := NewMesuresWAF(*mesuresFichier, *mesuresMode, store, nb)
+				mw.etat = "/var/lib/secubox/waf/mesures-etat.json"
+				mw.preuves = "/var/lib/secubox/waf/mesures.jsonl"
+				mw.protegees = parseCIDRs(*actorBanProtegees)
+				mw.robots = nb.robots
+				mw.maxBansHeure = *mesuresMaxBans
+				srv.mesures = mw
+				go mw.Veiller(15 * time.Second)
+				log.Printf("sbxwaf: échelle de réponse mode=%s (fichier=%s, plafond bans=%d/h)", *mesuresMode, *mesuresFichier, *mesuresMaxBans)
 			}
 			// Kill switch logique (#2240, phase 4) : réévaluation des bans à l'échéance (reevaluation.go).
 			if *reevaluation == "propose" || *reevaluation == "auto" {
