@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — Le binaire sbx-actord est livré par secubox-waf-ng (ref #2240)
+
+La phase 3 était dans toolbox-ng 0.9.0 (sources) mais le binaire `sbx-actord` (et `sbxwaf`) est livré par **secubox-waf-ng** : 1.23.0 le rebâtit. Piège : monter toolbox-ng seul ne change pas actord.
+
 ## 2026-10-12 — Actor Intelligence 2.0, phase 3 : scénarios, risque et confiance (ref #2240)
 
 toolbox-ng 0.9.0 : `internal/actor/analysis` (scénario ordonné, risque ≠ confiance avec facteurs, décision OBSERVE/MITIGATE/BLOCK, BLOCK ≥ 2 capteurs), routes `/actors/{id}/{timeline,graph,risk}` et `/events` (vue complète). Reste : phases 4 (kill switch), 5 (vue Hall), 6 (doc).
