@@ -13,6 +13,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 `secubox-lite` 1.5.2 dépend de `secubox-autoload-agent` (donc isp et full) ; l'agent livre le trousseau public « SecuBox Provisioning » (empreinte 14A5B0E2…047C ; clé privée sur gk2 dans /etc/secubox/secrets/autoload-signing, copie hors ligne à faire par l'exploitant) ; `autoloadctl signer` signe un fichier de réponses ; procédure d'essai : docs/dossiers/essai-autoload-espressobin.md. Tag alpha.11 : à décider après fusion.
 
+## 2026-10-10 — Admin SBXOS : audit, matrice et table des six espaces (ref #2212)
+
+Audit (docs/SBXOS_ADMIN_UI_AUDIT.md) et matrice de migration générée (docs/SBXOS_ADMIN_UI_MAP.md, scripts/generate-admin-ui-map.py) : 125 entrées de menu rattachées à 6 espaces et 9 objets centraux, aucune route supprimée. hub 1.9.40 : `espaces.json` et champ `espaces` dans /api/v1/hub/public/menu, compatibilité conservée. Prochaine étape : navigation à 6 espaces dans sidebar.js derrière un drapeau.
+
 ## 2026-10-10 — Auto-Load : rapport final, écran et courrier (ref #2192)
 
 secubox-autoload 0.5.0 / autoload-agent 0.5.0 : rapport sans secret construit par la box (écran + diffusion par le tunnel), validé strictement et conservé par l'infrastructure, envoyé par courrier au client si son contact est renseigné (adresse validée contre l'injection d'en-tête, relais configurable dans /etc/secubox/autoload.toml, panne SMTP sans effet sur la box). WebUI : courriel du client et onglet Rapports. Reste à faire côté exploitant : poser /etc/secubox/autoload.toml sur gk2 pour activer le courrier.
