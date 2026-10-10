@@ -192,6 +192,8 @@
 <body class="crt-light hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <div class="container main" style="margin-left: 220px;">
+        <div id="ndpid-erreur" role="alert" hidden style="margin:10px 0;padding:10px 14px;border:1px solid #b3261e;border-radius:8px;color:#ff7a70"></div>
+        <div id="ndpid-source" hidden style="margin:10px 0;padding:10px 14px;border:1px solid rgba(255,255,255,.2);border-radius:8px;opacity:.85"></div>
         <h1>nDPId - Deep Packet Inspection</h1>
         <p class="subtitle">JA3/JA4 Fingerprinting, Protocol Detection & Risk Analysis</p>
 
@@ -378,7 +380,27 @@
     </div>
 
     <script>
-        const API_BASE = '/api/ndpid';
+        // L'API vit sous /api/v1/ndpid/ (l'ancienne base /api/ndpid/ répondait 404 : toute la page restait vide en silence).
+        const API_BASE = '/api/v1/ndpid';
+
+        // Appel authentifié : jeton `sbx_token` (comme tous les panneaux) + cookie de session ; un refus est AFFICHÉ, jamais avalé.
+        function montrerErreur(msg) {
+            const e = document.getElementById('ndpid-erreur');
+            e.textContent = msg;
+            e.hidden = false;
+        }
+        async function apiFetch(path, opts = {}) {
+            let token = null;
+            try { token = localStorage.getItem('sbx_token'); } catch (e) { /* stockage indisponible */ }
+            const headers = Object.assign({}, opts.headers || {}, token ? { 'Authorization': 'Bearer ' + token } : {});
+            const res = await fetch(`${API_BASE}${path}`, Object.assign({ credentials: 'same-origin' }, opts, { headers }));
+            if (res.status === 401 || res.status === 403) {
+                montrerErreur('Connexion requise : ouvrez une session administrateur pour afficher les flux, protocoles et risques.');
+            } else if (!res.ok) {
+                montrerErreur('Le service nDPId répond ' + res.status + ' pour ' + path + '.');
+            }
+            return res;
+        }
 
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
@@ -405,8 +427,13 @@
 
         async function fetchStatus() {
             try {
-                const res = await fetch(`${API_BASE}/status`);
+                const res = await apiFetch(`/status`);
                 const data = await res.json();
+                const src = document.getElementById('ndpid-source');
+                if (data.daemon?.source === 'ndpiReader/dpi') {
+                    src.textContent = 'Source des données : ndpiReader (fenêtres de 60 s sur wg-toolbox). Le moteur nDPId n\u2019est pas actif : les empreintes JA3/JA4 et les événements de risque restent donc vides.';
+                    src.hidden = false;
+                } else { src.hidden = true; }
 
                 const daemonEl = document.getElementById('daemon-status');
                 if (data.daemon?.running) {
@@ -424,7 +451,7 @@
 
         async function fetchFlows() {
             try {
-                const res = await fetch(`${API_BASE}/flows?limit=50`);
+                const res = await apiFetch(`/flows?limit=50`);
                 const data = await res.json();
                 const tbody = document.getElementById('flows-table');
 
@@ -452,7 +479,7 @@
 
         async function fetchProtocols() {
             try {
-                const res = await fetch(`${API_BASE}/top/protocols?hours=24`);
+                const res = await apiFetch(`/top/protocols?hours=24`);
                 const data = await res.json();
                 const tbody = document.getElementById('protocols-table');
                 const chart = document.getElementById('protocols-chart');
@@ -479,7 +506,7 @@
                 `).join('');
 
                 // Fetch apps too
-                const appsRes = await fetch(`${API_BASE}/top/applications?hours=24`);
+                const appsRes = await apiFetch(`/top/applications?hours=24`);
                 const appsData = await appsRes.json();
                 const appsTbody = document.getElementById('apps-table');
 
@@ -503,8 +530,8 @@
         async function fetchFingerprints() {
             try {
                 const [ja3Res, ja4Res] = await Promise.all([
-                    fetch(`${API_BASE}/fingerprints/ja3`),
-                    fetch(`${API_BASE}/fingerprints/ja4`)
+                    apiFetch(`/fingerprints/ja3`),
+                    apiFetch(`/fingerprints/ja4`)
                 ]);
                 const ja3Data = await ja3Res.json();
                 const ja4Data = await ja4Res.json();
@@ -545,7 +572,7 @@
 
         async function fetchRisks() {
             try {
-                const res = await fetch(`${API_BASE}/risks?hours=24`);
+                const res = await apiFetch(`/risks?hours=24`);
                 const data = await res.json();
                 const tbody = document.getElementById('risks-table');
 
@@ -571,7 +598,7 @@
 
         async function fetchMirredStatus() {
             try {
-                const res = await fetch(`${API_BASE}/mirred/status`);
+                const res = await apiFetch(`/mirred/status`);
                 const data = await res.json();
 
                 document.getElementById('mirred-iface').textContent = data.interface || 'eth0';
@@ -584,7 +611,7 @@
 
         async function fetchRealtimeStats() {
             try {
-                const res = await fetch(`${API_BASE}/stats/realtime`);
+                const res = await apiFetch(`/stats/realtime`);
                 const data = await res.json();
 
                 document.getElementById('realtime-stats').innerHTML = `
@@ -602,7 +629,7 @@
 
         async function controlService(action) {
             try {
-                await fetch(`${API_BASE}/control/${action}`, { method: 'POST' });
+                await apiFetch(`/control/${action}`, { method: 'POST' });
                 setTimeout(fetchStatus, 1000);
             } catch (e) {
                 alert('Service control failed: ' + e.message);
@@ -611,7 +638,7 @@
 
         document.getElementById('btn-setup-mirred').addEventListener('click', async () => {
             try {
-                await fetch(`${API_BASE}/mirred/setup`, { method: 'POST' });
+                await apiFetch(`/mirred/setup`, { method: 'POST' });
                 fetchMirredStatus();
             } catch (e) {
                 alert('Setup failed: ' + e.message);
@@ -620,7 +647,7 @@
 
         document.getElementById('btn-remove-mirred').addEventListener('click', async () => {
             try {
-                await fetch(`${API_BASE}/mirred/remove`, { method: 'POST' });
+                await apiFetch(`/mirred/remove`, { method: 'POST' });
                 fetchMirredStatus();
             } catch (e) {
                 alert('Remove failed: ' + e.message);
