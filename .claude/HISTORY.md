@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Billets : le fil est vivant (ref #2266)
+Un billet publié ou commenté remonte en tête (`bumped_at`, migration 0006), `/feed/maj` + sondage 15 s dans `immersif.js`, animation d'arrivée (nouveau) et de remontée (FLIP, pastille « commenté »). secubox-billets 0.9.0. 52 échecs de tests préexistants dans le module (CSRF/fixtures), aucun de plus.
+
 ## 2026-10-10 — NAC : détection passive de l'OS et du type fin (ref #2236)
 Colonnes `os`/`os_source`/`device_subtype`/`mac_random` (preuve obligatoire), détecteur pur `osdetect.py`, preuve DNS d'ad-guard en lecture seule, drapeau `conteneur` et `?exclure_conteneurs=`. Page `/appareil/` : OS + preuve + type détaillé + MAC aléatoire. secubox-nac 3.3.0, secubox-hub 1.9.53. DHCP/User-Agent/mDNS compris mais non alimentés.
 

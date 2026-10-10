@@ -18,7 +18,11 @@ from .services.tags import extract as tags_extract
 
 _FEED_COLUMNS = ("id,created_at,updated_at,published_at,body,ref_url,embed_url,"
                  "embed_html,embed_provider,embed_fetched_at,slug,status,"
-                 "style,embed_snapshot,view_count")
+                 "style,embed_snapshot,view_count,bumped_at")
+
+
+# Clé de tri du fil : l'activité, et à défaut la publication (billet d'avant la migration 0006).
+_CLE_ACTIVITE = "COALESCE(bumped_at, published_at)"
 
 
 def encode_cursor(published_at: str, billet_id: str) -> str:
@@ -44,9 +48,9 @@ async def create_billet(conn: aiosqlite.Connection, data: BilletIn, *, now: str,
     status = "published" if data.publish else "draft"
     published_at = now if data.publish else None
     await conn.execute(
-        "INSERT INTO billet(id,created_at,updated_at,published_at,body,ref_url,"
-        "embed_url,slug,status,style) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (billet_id, now, now, published_at, data.body, data.ref_url,
+        "INSERT INTO billet(id,created_at,updated_at,published_at,bumped_at,body,ref_url,"
+        "embed_url,slug,status,style) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (billet_id, now, now, published_at, published_at, data.body, data.ref_url,
          data.embed_url, slug, status, data.style),
     )
     await conn.commit()
@@ -70,13 +74,19 @@ async def get_by_id(conn: aiosqlite.Connection, billet_id: str) -> Optional[aios
 
 async def list_published(conn: aiosqlite.Connection, *, limit: int = 20,
                          cursor: Optional[str] = None,
-                         tag: Optional[str] = None) -> tuple[list[aiosqlite.Row], Optional[str]]:
+                         tag: Optional[str] = None,
+                         ordre: str = "publication") -> tuple[list[aiosqlite.Row], Optional[str]]:
     """Return (rows, next_cursor). `next_cursor` is None on the last page.
 
     `tag` restricts the feed to one emoji-hashtag (the quick view). It uses an
     EXISTS against the indexed billet_tag rather than a JOIN, so keyset paging
     stays correct — a JOIN could duplicate a row per matching tag.
+
+    `ordre="publication"` (défaut : flux RSS/JSON, micro) trie par date de publication ;
+    `ordre="activite"` (le fil, #2266) trie par `bumped_at` — publication OU dernier
+    commentaire approuvé — pour qu'un billet commenté remonte en tête.
     """
+    cle = _CLE_ACTIVITE if ordre == "activite" else "published_at"
     limit = max(1, min(limit, 100))
     params: list[Any] = []
     where = "status = 'published'"
@@ -87,17 +97,17 @@ async def list_published(conn: aiosqlite.Connection, *, limit: int = 20,
     if cursor:
         decoded = decode_cursor(cursor)
         if decoded:
-            where += " AND (published_at, id) < (?, ?)"
+            where += f" AND ({cle}, id) < (?, ?)"
             params.extend(decoded)
     q = (f"SELECT {_FEED_COLUMNS} FROM billet WHERE {where} "
-         f"ORDER BY published_at DESC, id DESC LIMIT ?")
+         f"ORDER BY {cle} DESC, id DESC LIMIT ?")
     params.append(limit + 1)  # fetch one extra to know if there's a next page
     async with conn.execute(q, params) as cur:
         rows = await cur.fetchall()
     next_cursor = None
     if len(rows) > limit:
         last = rows[limit - 1]
-        next_cursor = encode_cursor(last["published_at"], last["id"])
+        next_cursor = encode_cursor((last["bumped_at"] or last["published_at"]) if ordre == "activite" else last["published_at"], last["id"])
         rows = rows[:limit]
     return rows, next_cursor
 
@@ -209,8 +219,8 @@ async def set_status(conn: aiosqlite.Connection, billet_id: str, status: str, *,
     if status == "published":
         await conn.execute(
             "UPDATE billet SET status='published', updated_at=?, "
-            "published_at=COALESCE(published_at, ?) WHERE id=?",
-            (now, now, billet_id),
+            "published_at=COALESCE(published_at, ?), bumped_at=COALESCE(bumped_at, ?) WHERE id=?",
+            (now, now, now, billet_id),
         )
     else:
         await conn.execute(
@@ -306,6 +316,8 @@ async def add_comment(conn: aiosqlite.Connection, billet_id: str, *, author_name
         (cid, billet_id, now, author_name, email_hash, body, status, ip_hash,
          1 if honeypot else 0, video_t),
     )
+    if status == "approved":
+        await _remonter(conn, billet_id, now)
     await conn.commit()
     return cid
 
@@ -336,9 +348,35 @@ async def get_comment(conn: aiosqlite.Connection, comment_id: str) -> Optional[a
         return await cur.fetchone()
 
 
-async def moderate_comment(conn: aiosqlite.Connection, comment_id: str, status: str) -> None:
+async def _remonter(conn: aiosqlite.Connection, billet_id: str, quand: str) -> None:
+    """Un commentaire approuvé fait remonter son billet publié (#2266). Ne recule jamais : `bumped_at` ne diminue pas."""
+    await conn.execute(
+        "UPDATE billet SET bumped_at = ? WHERE id = ? AND status = 'published' AND (bumped_at IS NULL OR bumped_at < ?)",
+        (quand, billet_id, quand))
+
+
+async def moderate_comment(conn: aiosqlite.Connection, comment_id: str, status: str, *, now: Optional[str] = None) -> None:
     await conn.execute("UPDATE comment SET status=? WHERE id=?", (status, comment_id))
+    if status == "approved":
+        # L'approbation, pas l'écriture, est ce qui rend le commentaire visible : c'est elle qui fait remonter le billet.
+        async with conn.execute("SELECT billet_id FROM comment WHERE id=?", (comment_id,)) as cur:
+            r = await cur.fetchone()
+        if r:
+            from datetime import datetime, timezone
+            await _remonter(conn, r[0], now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
     await conn.commit()
+
+
+async def list_depuis(conn: aiosqlite.Connection, depuis: str, *, tag: Optional[str] = None, limit: int = 20) -> list[aiosqlite.Row]:
+    """Billets publiés dont l'activité est POSTÉRIEURE à `depuis`, du plus récent au plus ancien (#2266 : /feed/maj)."""
+    params: list[Any] = [depuis]
+    where = f"status = 'published' AND {_CLE_ACTIVITE} > ?"
+    if tag:
+        where += " AND EXISTS (SELECT 1 FROM billet_tag bt WHERE bt.billet_id = billet.id AND bt.tag_slug = ?)"
+        params.append(tag)
+    params.append(max(1, min(limit, 50)))
+    async with conn.execute(f"SELECT {_FEED_COLUMNS} FROM billet WHERE {where} ORDER BY {_CLE_ACTIVITE} DESC, id DESC LIMIT ?", params) as cur:
+        return await cur.fetchall()
 
 
 async def has_prior_approved(conn: aiosqlite.Connection, ip_hash: str, author_name: str) -> bool:

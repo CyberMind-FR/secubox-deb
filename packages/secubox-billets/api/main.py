@@ -327,7 +327,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     @app.get("/", response_class=HTMLResponse)
     async def feed(request: Request, cursor: str | None = None, tag: str | None = None):
         rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE,
-                                                      cursor=cursor, tag=tag)
+                                                      cursor=cursor, tag=tag, ordre="activite")
         base = _base(request)
         media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
         # One batched lookup for the page's chips + the whole-site chip bar.
@@ -337,6 +337,8 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             "billets": [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]))
                         for r in rows],
             "next_cursor": next_cursor,
+            # Repère du dernier changement vu (#2266) : /feed/maj ne rend que ce qui bouge APRÈS lui. Sur la 1re page, c'est l'activité du billet de tête.
+            "depuis": ((rows[0]["bumped_at"] or rows[0]["published_at"]) if rows and not cursor else "1970-01-01T00:00:00Z"),
             "all_tags": await repo.list_tags(app.state.conn),
             "active_tag": tag,
         })
@@ -368,7 +370,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         Sans JS, le lecteur garde le pager `?cursor=` classique de la page."""
         from fastapi.responses import JSONResponse
         rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE,
-                                                      cursor=cursor, tag=tag)
+                                                      cursor=cursor, tag=tag, ordre="activite")
         base = _base(request)
         media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
         tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
@@ -379,6 +381,32 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         # page, dont la CSP fait foi (un embed exotique d'une page ultérieure
         # peut donc être bloqué — cas rare, borné au v1 du mur infini).
         return JSONResponse({"html": html, "next_cursor": next_cursor})
+
+    @app.get("/feed/maj")
+    async def feed_maj(request: Request, depuis: str = "", tag: str | None = None):
+        """Ce qui a BOUGÉ depuis `depuis` (#2266) : billets publiés ou commentés après ce repère, du plus récent au plus ancien, déjà rendus en cartes.
+
+        Le client (immersif.js) interroge toutes les ~15 s, retire les cartes déjà présentes pour ces billets et pose les nouvelles EN TÊTE du fil. `depuis`
+        est rendu tel quel (le nouveau repère = l'activité la plus récente rendue) ; un repère absent ou invalide ne rend rien : jamais de rechargement
+        complet par erreur."""
+        import re
+        from fastapi.responses import JSONResponse
+        if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", depuis or ""):
+            resp = JSONResponse({"html": "", "depuis": depuis if re.fullmatch(r"[\d:TZ-]{0,24}", depuis or "") else "", "slugs": []})
+        else:
+            rows = await repo.list_depuis(app.state.conn, depuis, tag=tag, limit=20)
+            if not rows:
+                resp = JSONResponse({"html": "", "depuis": depuis, "slugs": []})
+            else:
+                base = _base(request)
+                media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
+                tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
+                vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"])) for r in rows]
+                html = templates.env.get_template("_immersif_items.html").render(billets=vues)
+                resp = JSONResponse({"html": html, "slugs": [r["slug"] for r in rows],
+                                     "depuis": max((r["bumped_at"] or r["published_at"]) for r in rows)})
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
 
     @app.get("/activity/{slug}")
     async def activity(request: Request, slug: str):
