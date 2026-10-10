@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Auto-Load phase A : une image flashée se provisionne seule (ref #2280)
+`secubox-autoload-agent` 0.6.0 : unité de premier démarrage conditionnelle (fichier de réponses SIGNÉ sur `/boot`, trousseau installé, pas de rapport), installation puis effacement du jeton, `autoload-atelier` (`cle-init`, `preparer` qui
+vérifie la signature comme la box avant d'écrire, `verifier`), trousseau livré. Clé « SecuBox Provisioning » créée sur gk2. Profil `lite` 1.6.0 : l'agent est dans toute image. Guide `docs/AUTOLOAD-ATELIER.md`. Le tag alpha.11 est reposé avec l'agent.
+
 ## 2026-10-11 — Release v3.0.0-alpha.11 : admin à six espaces, Actor Intelligence 2.0, billets vivants, installateur sans écran
 Tag `v3.0.0-alpha.11` posé sur master (≈ 110 commits depuis alpha.10). **Sécurité** : Actor Intelligence 2.0 en six phases (modes et enforcement, capteurs pare-feu/DNS/détournement/DPI,
 scénarios, risque et confiance séparés, kill switch logique, Radar des acteurs dans le Hall, politique et procédure d'activation) puis échelle de réponse réelle — délai, défi par preuve de travail,

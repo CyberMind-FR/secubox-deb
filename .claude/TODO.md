@@ -13,7 +13,8 @@ y dorment, par mois) — ne le lire que sur demande.
 ---
 
 ## 2026-10-11 — suites de la release alpha.11
-- [ ] **Auto-Load phase A** : mettre `secubox-autoload-agent` dans les images (aujourd'hui hors profils) et livrer l'unité de premier démarrage (zero-touch ; unité root : demander d'abord). Puis netboot (#2186), udp/51830 de la Freebox, SMTP.
+- [ ] **Auto-Load** : phase A livrée (#2280, agent dans les images, unité de premier boot, atelier). Reste : décider de la custody de la clé « SecuBox Provisioning » (aujourd'hui sans phrase de passe sur gk2 ; niveau 0 comme la clé apt ?),
+      essai de bout en bout sur matériel (#2177), netboot (#2186), udp/51830 de la Freebox, SMTP du rapport final.
 - [ ] **Vérifier la CI du tag** : assets de la release (images, installateur sans écran `.iso.gz`/`.img.gz`), `SHA256SUMS`, boot de l'installateur en VM, essai ESPRESSObin lite (#2177).
 - [ ] **Échelle de réponse** (#2274, fermée) : surveiller les adresses partagées (CGNAT) ; trancher les bans sur plages Cloudflare (exemption ?) ; écrire les décisions de sbxwaf dans le journal central
       `audit.log` (aujourd'hui `/var/log/secubox/waf/audit.log`) ; quarantaine du LAN : aucun appareil concerné à ce jour.

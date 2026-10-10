@@ -127,3 +127,9 @@ def test_les_contraintes_de_version_des_profils_sont_satisfaisables():
                 if v is not None and _num(v) < _num(exige):
                     violations.append(f"secubox-{profil} exige secubox-{module} (>= {exige}), le paquet est en {v}")
     assert not violations, violations
+
+
+def test_lite_porte_l_agent_auto_load_donc_toute_image_peut_se_provisionner_seule():
+    """#2280 : l'agent est dans le profil de base — isp et full en héritent — sans quoi une image flashée ne se provisionnerait jamais seule."""
+    assert "secubox-autoload-agent" in _champ("lite", "Depends")
+    assert "secubox-lite" in _champ("isp", "Depends")

@@ -1,0 +1,77 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""autoload-atelier — prépare une image ou une carte SD pour le provisionnement Auto-Load (#2280). À lancer à l'atelier ou sur l'infrastructure, jamais sur la box cliente.
+
+  autoload-atelier cle-init  --homedir D --export TROUSSEAU.gpg            crée la clé « SecuBox Provisioning » (UNE fois) et exporte sa partie publique
+  autoload-atelier preparer  --reponses R.toml --boot POINT_DE_MONTAGE --homedir D [--trousseau T.gpg] [--jeton-fichier F]
+                                                                          valide, signe, vérifie puis dépose reponses.toml, reponses.toml.sig et le jeton sur /boot
+  autoload-atelier verifier  --boot POINT_DE_MONTAGE [--trousseau T.gpg]    contrôle ce qui est déposé, comme la box le fera
+
+Le jeton est lu d'un fichier (--jeton-fichier) ou de l'entrée standard (--jeton-stdin) : jamais en argument de commande, jamais affiché.
+"""
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/autoload-agent")
+sys.path.insert(0, "/usr/lib/secubox/premier-pas")
+_ici = Path(__file__).resolve().parents[1]
+if (_ici / "autoload_agent").is_dir():
+    sys.path.insert(0, str(_ici))
+    sys.path.insert(0, str(_ici.parent / "secubox-premier-pas"))
+
+from autoload_agent import atelier as A  # noqa: E402
+
+TROUSSEAU = "/usr/share/secubox/autoload/provisioning.gpg"
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="autoload-atelier", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    c = sub.add_parser("cle-init")
+    c.add_argument("--homedir", required=True)
+    c.add_argument("--export", required=True)
+    p = sub.add_parser("preparer")
+    p.add_argument("--reponses", required=True)
+    p.add_argument("--boot", required=True)
+    p.add_argument("--homedir", required=True)
+    p.add_argument("--trousseau", default=TROUSSEAU)
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--jeton-fichier")
+    g.add_argument("--jeton-stdin", action="store_true")
+    v = sub.add_parser("verifier")
+    v.add_argument("--boot", required=True)
+    v.add_argument("--trousseau", default=TROUSSEAU)
+    a = ap.parse_args(argv)
+    try:
+        if a.cmd == "cle-init":
+            fpr = A.cle_init(Path(a.homedir), Path(a.export))
+            print(f"clé créée : {fpr}\npartie publique : {a.export}\npartie privée : {a.homedir} (0700) — à ne JAMAIS copier hors de l'atelier")
+            return 0
+        if a.cmd == "preparer":
+            jeton = None
+            if a.jeton_fichier:
+                jeton = Path(a.jeton_fichier).read_text(encoding="ascii").strip()
+            elif a.jeton_stdin:
+                jeton = sys.stdin.readline().strip()
+            dossier = A.preparer(Path(a.reponses), Path(a.boot), Path(a.homedir), Path(a.trousseau), jeton)
+            print(f"déposé dans {dossier} : reponses.toml, reponses.toml.sig" + (", jeton (0600)" if jeton else " (sans jeton)"))
+            return 0
+        from premier_pas import provision as PV
+        d = Path(a.boot) / "secubox" / "autoload"
+        PV.charger_signe(d / "reponses.toml", d / "reponses.toml.sig", Path(a.trousseau))
+        print("réponses valides et signature acceptée" + (" ; jeton présent" if (d / "jeton").exists() else " ; AUCUN jeton"))
+        return 0
+    except (A.AtelierErreur, OSError) as e:
+        print(f"autoload-atelier : {e}", file=sys.stderr)
+        return 1
+    except Exception as e:  # noqa: BLE001 - signature refusée, fichier invalide : un message, pas une trace
+        print(f"autoload-atelier : {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

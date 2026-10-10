@@ -1,3 +1,9 @@
+secubox-lite (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Le profil lite depend de secubox-autoload-agent (#2280) : toute image (lite, isp, full) porte l'agent Auto-Load et peut se provisionner seule au premier demarrage — seulement si /boot porte un fichier de reponses signe ; sinon l'unite ne demarre pas. 1 test de composition.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 02:00:00 +0200
+
 secubox-lite (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-soc-agent retire du profil : il pousse vers une passerelle SOC decommissionnee et accepte des commandes a distance, il n'a rien a faire dans un profil par defaut (#2146). Il reste installable a la demande.

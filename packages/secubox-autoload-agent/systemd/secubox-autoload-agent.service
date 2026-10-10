@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# AUTO-LOAD AU PREMIER DÉMARRAGE (#2280, parent #2182). Une image préparée par `autoload-atelier` porte, sur sa partition de démarrage, un fichier de réponses SIGNÉ
+# et un jeton à usage unique. Au premier démarrage cette unité installe le jeton, appelle l'infrastructure par un tunnel sortant et applique le profil — après le
+# délai de grâce zero-touch si le fichier le demande (15 minutes par défaut), pendant lequel l'opérateur peut refuser.
+#
+# TROIS CONDITIONS, ET L'UNITÉ NE DÉMARRE PAS :
+#   - pas de fichier de réponses sur /boot → c'est une box ordinaire, rien ne se passe ;
+#   - pas de trousseau « SecuBox Provisioning » → aucune signature ne pourrait être vérifiée ;
+#   - un rapport existe déjà → le parcours est terminé et ne recommence pas.
+# La signature du fichier est vérifiée par le moteur lui-même (gpgv, contre le seul trousseau installé) : un fichier modifié ou signé par une autre clé est refusé.
+#
+# root : le parcours installe des paquets (apt), monte un tunnel (wg) et applique un profil. Il n'y a pas d'autre compte qui le puisse ; le durcissement compense.
+[Unit]
+Description=SecuBox — provisionnement Auto-Load au premier démarrage (#2280)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/blob/master/docs/dossiers/provisionnement-auto-load.md
+ConditionPathExists=/boot/secubox/autoload/reponses.toml
+ConditionPathExists=/usr/share/secubox/autoload/provisioning.gpg
+ConditionPathExists=!/var/lib/secubox/autoload-agent/rapport.json
+Wants=network-online.target
+After=network-online.target secubox-firstboot.service
+StartLimitIntervalSec=3600
+StartLimitBurst=10
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/autoload-agent-demarrage
+ExecStart=/usr/sbin/autoload-agentctl run
+Restart=on-failure
+RestartSec=60
+# Le délai de grâce zero-touch peut aller jusqu'à 24 h : aucun délai de démarrage.
+TimeoutStartSec=infinity
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

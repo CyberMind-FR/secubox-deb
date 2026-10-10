@@ -1,0 +1,19 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""ExecStartPre de secubox-autoload-agent.service : installe le jeton déposé par l'atelier sur /boot (voir autoload_agent/demarrage.py)."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/autoload-agent")
+_ici = Path(__file__).resolve().parents[1]
+if (_ici / "autoload_agent").is_dir():
+    sys.path.insert(0, str(_ici))
+
+from autoload_agent import demarrage as D  # noqa: E402
+
+etat = D.installer_jeton()
+print(f"autoload-agent-demarrage : jeton {etat}")
+sys.exit(0)                                       # un jeton absent ou refusé n'arrête pas l'unité : le moteur le dira, avec sa raison, à l'étape d'enrôlement

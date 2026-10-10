@@ -168,8 +168,10 @@ household depends on. What it brings, on top of alpha 10:
   pops to the top with an animation — and MetaNews publishes five-minute posts that fade away.
 - **Headless auto-install.** The installer image (`secubox-installer-amd64-trixie`) installs
   SecuBox on the first disk with no screen and no keyboard. It **wipes that disk**.
-- **Auto-Load groundwork.** Provisioning infrastructure, client agent, admin panel and an
-  end-to-end test bench are in; automatic first-boot provisioning is not shipped yet.
+- **Auto-Load: images that provision themselves.** Every image now carries the Auto-Load agent. A box prepared at the workshop
+  (`autoload-atelier`: signed answers file + one-time token on the boot partition) enrolls through an outbound tunnel on its first
+  boot, shows a pre-report, waits a grace period and installs its profile. A box without that file is untouched. Guide:
+  [`docs/AUTOLOAD-ATELIER.md`](docs/AUTOLOAD-ATELIER.md). Network boot (phase B) is not shipped.
 - Debian 13 (Trixie) base, redefined profiles (`lite`, `isp`, `full`), ad blocking and web
   filtering, zram and a collective memory ceiling, the nDPI 6.x engine — as in alpha 9 and 10.
 
