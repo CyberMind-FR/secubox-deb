@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — PhotoPrism dans « Mes comptes » et le SSO du Hall (ref #2255)
+
+PhotoPrism n'avait aucun réglage OIDC (`photoprismctl sso` jamais abouti) ; `sso` rejoué sur gk2, `/api/v1/oidc/login` → IdP du Hall. Carte « Mes comptes » (OIDC, sans lien) + `ENTREE_SSO` + `install` appelle `sso`. webos 1.5.16, photoprism 1.4.2.
+
 ## 2026-10-11 — sites-enabled : des liens, plus des copies (ref #2253)
 
 Causes : `sed -i` (secubox-vhost-logs) et `os.replace` (nginxgen) remplacent un lien par une copie. Corrigés (metrics 1.17.1, profiles 0.20.0) + `secubox-wakectl nginx-relink` pour adopter les 19 copies de gk2. Disque local à 100 % constaté et nettoyé (worktrees fusionnés).

@@ -53,3 +53,9 @@ def test_route_en_tetes_et_invite(monkeypatch):
     assert r.status_code == 200
     assert r.headers["cache-control"] == "private, no-store" and r.headers["vary"] == "Cookie"
     assert r.json()["role"] == "guest" and r.json()["domaine"] == "exemple.test"
+
+
+def test_photoprism_s_ouvre_par_l_entree_oidc_du_hall():
+    """#2255 : PhotoPrism n'a pas de /sbx/entrer ; il s'ouvre par son départ OIDC, qui renvoie à l'IdP du Hall (compte créé à la première connexion)."""
+    ms = mods(sm.construire("user", True, "exemple.test", E, C))
+    assert ms["photoprism"]["url"] == "https://photoprism.exemple.test/api/v1/oidc/login"

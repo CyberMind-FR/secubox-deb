@@ -67,6 +67,11 @@
     bbs:       {ic:'💬', nom:'Forum BBS', hote:'bbs',      chemin:'/sbx/auto', passif:true},
     gitea:     {ic:'🦊', nom:'Gitea',     hote:'git',      aide:'connexion Gitea'}
   };
+  // Services OUVERTS PAR OIDC (#2255) : pas de lien sbxid à lire, le compte se crée à la première connexion (OIDCRegister) avec la session du Hall.
+  // Toute identité les voit ; un lien existant n'est jamais doublé.
+  var OIDC = {
+    photoprism: {ic:'🖼️', nom:'PhotoPrism', hote:'photoprism', chemin:'/api/v1/oidc/login', passif:true}
+  };
   function vide(html){ $('liste').innerHTML = '<div class="vide">' + html + '</div>'; }
   fetch('/api/v1/sbxid/moi', {credentials:'same-origin', headers:{Accept:'application/json'}})
     .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
@@ -78,16 +83,21 @@
       var vu = {};
       liens.sort(function(a, b){ return (/^sbx-/i.test(a.app_handle) ? 1 : 0) - (/^sbx-/i.test(b.app_handle) ? 1 : 0); });
       liens = liens.filter(function(l){ if (vu[l.app]) return false; vu[l.app] = 1; return true; });
+      // Services OIDC : un par service, avec le pseudo de la personne comme nom de compte (créé à la première connexion).
+      Object.keys(OIDC).forEach(function(app){
+        if (!vu[app]) liens.push({app: app, app_handle: m.identite.pseudo, oidc: true});
+      });
       if (!liens.length){ vide('Aucun compte lié pour l\'instant. L\'administration de la box peut vous en ouvrir (courriel, Nextcloud, PeerTube).'); return; }
       var box = $('liste'); box.replaceChildren();
       liens.forEach(function(l){
-        var s = SVC[l.app], a = el('a', 'cpt');
+        var s = SVC[l.app] || OIDC[l.app], a = el('a', 'cpt');
         a.href = 'https://' + s.hote + '.' + dom + (s.chemin || '/');
         a.target = '_blank'; a.rel = 'noopener';
         a.append(el('span', 'ic', s.ic));
         var t = el('span'); t.append(el('span', 'n', s.nom), el('span', 'id', l.app_handle)); a.append(t);
         a.append(el('span', 'go' + (s.passif ? ' passif' : ''), s.passif ? 'ouvert d\'office ↗' : 'ouvrir ↗'));
-        a.title = s.passif ? 'Ouvert avec votre session du Hall, sans mot de passe' : ('Identifiant ' + l.app_handle + ' · ' + s.aide);
+        a.title = l.oidc ? 'Ouvert avec votre session du Hall, sans mot de passe ; le compte se crée à la première connexion'
+                         : (s.passif ? 'Ouvert avec votre session du Hall, sans mot de passe' : ('Identifiant ' + l.app_handle + ' · ' + s.aide));
         box.appendChild(a);
       });
     })

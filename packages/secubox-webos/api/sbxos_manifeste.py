@@ -26,7 +26,8 @@ from typing import Any, Dict, Optional
 ESPACES_TOML = Path("/usr/share/secubox/sbxos/espaces.toml")
 CURATION = Path("/usr/share/secubox/www/sbxos/mine/curation.json")
 # Entrée sans mot de passe des services qui en ont une (#1562).
-ENTREE_SSO = {"nextcloud": "/sbx/entrer", "peertube": "/sbx/entrer"}
+# PhotoPrism n'a pas de /sbx/entrer : il s'ouvre par le départ OIDC, qui renvoie à l'IdP du Hall ; le compte se crée à la première connexion (#2255).
+ENTREE_SSO = {"nextcloud": "/sbx/entrer", "peertube": "/sbx/entrer", "photoprism": "/api/v1/oidc/login"}
 _HOTE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 
