@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — waf-ng 1.27.3 : le correctif du cache est dans l'unité, drop-in corrompu retiré (ref #2283)
+`/etc/systemd/system/secubox-waf-ng.service.d/20-cache-owner.conf` (gk2, #1001) contenait l'aide de la commande `secubox` collée par un heredoc à backticks ; systemd ignorait ses lignes. `mkdir` et `chown` du cache sont dans l'unité du paquet, un test refuse tout fichier d'unité corrompu, les deux drop-ins manuels sont retirés. Leçon : jamais de backtick dans un heredoc non protégé.
+
 ## 2026-10-11 — secubox-lite 1.6.0 : commentaire indenté dans Depends (ref #2280)
 Mes lignes de commentaire dans `Depends` commençaient par un espace : `dpkg-gencontrol` les prenait pour la suite du champ et le paquet ne se construisait plus. Corrigé (colonne 0) et gardé par un test sur lite, isp et full.
 
