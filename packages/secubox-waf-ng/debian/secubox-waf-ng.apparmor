@@ -65,6 +65,14 @@
   network inet  stream,
   network inet6 stream,
   network unix  stream,
+  # Vérification DNS des robots d'indexation (FCrDNS, crawlers.go, #2240) : le résolveur parle en UDP et lit les fichiers du système. Sans ces règles
+  # elle échouait en silence — aucun robot n'était reconnu, Googlebot restait banni.
+  network inet  dgram,
+  network inet6 dgram,
+  /etc/resolv.conf           r,
+  /etc/nsswitch.conf         r,
+  /etc/hosts                 r,
+  /etc/host.conf             r,
 
   # ── Ban nft natif (#1070 B, #1218, #1693) ────────────────────────────────
   # --nft-ban exécute `nft` pour poser et réparer la table inet secubox. Ajouté

@@ -27,7 +27,7 @@ import (
 //   - pas de compteur (ensemble ancien)  → RELEASE : jamais de prolongation à l'aveugle ;
 //   - chaîne de bans de 30 jours         → RELEASE quoi qu'il arrive : jamais de ban permanent accidentel ; une prolongation ne dépasse jamais ce plafond.
 //
-// Chaque transition laisse une ligne de preuve (reevaluations.jsonl, append-only) et une ligne d'audit. Mode `off` | `propose` (écrit ce qu'il ferait, n'applique
+// Chaque transition laisse une ligne de preuve (reevaluations.jsonl, append-only) et une ligne d'audit (/var/log/secubox/waf/audit.log : le répertoire que le service peut écrire ; le journal central est secubox:secubox 0640, fermé à secubox-waf). Mode `off` | `propose` (écrit ce qu'il ferait, n'applique
 // rien) | `auto`. Seuls les bans du journal de sbxwaf sont réévalués : un ban posé à la main (wafctl) n'y figure pas et n'est jamais touché.
 const (
 	plafondChaine     = 30 * 24 * time.Hour
@@ -96,7 +96,7 @@ type Reeval struct {
 }
 
 func NewReeval(b *NftBanner, store *BanStore, mode, preuves string) *Reeval {
-	return &Reeval{banneur: b, store: store, mode: mode, preuves: preuves, audit: "/var/log/secubox/audit.log", seuil: seuilReevalDefaut,
+	return &Reeval{banneur: b, store: store, mode: mode, preuves: preuves, audit: "/var/log/secubox/waf/audit.log", seuil: seuilReevalDefaut,
 		now: time.Now, deja: map[string]int64{}}
 }
 
