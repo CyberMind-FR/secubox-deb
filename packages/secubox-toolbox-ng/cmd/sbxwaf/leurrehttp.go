@@ -114,6 +114,8 @@ type LeurreHTTP struct {
 	// filigrane). C'est la trace qui permettra, plus tard, de dire d'où vient
 	// une marque qui revient.
 	journal func(hote, chemin string, famille familleSonde, alea string)
+	// surTouche : un visiteur a reçu un LEURRE sur un chemin-appât d'un vrai vhost (#2240). Le serveur y accroche le ban : un leurre n'a pas d'autre but.
+	surTouche func(ip string, famille familleSonde)
 }
 
 // NewLeurreHTTP construit le leurre. `actif=false` → il ne sert jamais rien et
@@ -301,7 +303,7 @@ func construitLeurre(actif bool, cheminSecret string) *LeurreHTTP {
 			cheminSecret)
 	} else {
 		log.Printf("sbxwaf: leurre ARMÉ sur les hôtes non routés, filigrane actif " +
-			"(apprentissage seul — aucun ban n'en découle)")
+			"(un contact avec le leurre est banni si --leurre-ban : le leurre n'a pas d'autre but que de détecter)")
 	}
 	return NewLeurreHTTP(true, fil, func(hote, chemin string, f familleSonde, alea string) {
 		// Journal du SEMIS : c'est lui qui, plus tard, dira d'où vient une
@@ -441,6 +443,9 @@ func (l *LeurreHTTP) LeurrerLe404(resp *http.Response) bool {
 	resp.Header.Set("Content-Length", strconv.Itoa(len(corps)))
 	resp.Header.Del("Content-Encoding") // le corps de remplacement est en clair
 
+	if l.surTouche != nil {
+		l.surTouche(clientIP(r), famille)
+	}
 	if l.journal != nil {
 		l.journal(r.Host, r.URL.Path, famille, alea)
 	}
