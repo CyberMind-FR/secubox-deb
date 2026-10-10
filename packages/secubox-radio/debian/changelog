@@ -1,3 +1,9 @@
+secubox-radio (0.1.79-1~bookworm1) bookworm; urgency=medium
+
+  * Vhost nginx : l'include du reveil (secubox-waking) precede desormais celui des pages d'erreur ; avant, le reveil a la demande etait masque par les pages d'erreur : secubox-errorpages et secubox-waking declarent tous deux `error_page 502 503 504`, nginx retient la PREMIERE, et le vhost incluait les pages d'erreur d'abord ; la page « 504 — Delai depasse » s'affichait, le waker n'etait jamais appele et le conteneur arrete ne se reveillait pas (#2251).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 22:00:00 +0200
+
 secubox-radio (0.1.78-1~bookworm1) bookworm; urgency=medium
 
   * « Moins souvent » : le contraire du coeur. Le sysop peut pousser un titre vers le bas (POST /pistes/{id}/bas, {"bas": true|false}) : il

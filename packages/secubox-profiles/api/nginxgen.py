@@ -24,6 +24,7 @@ fantôme). La sûreté transactionnelle (nginx -t + rollback) est orchestrée pa
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -59,6 +60,24 @@ def _is_server_name_line(line: str, domain: str) -> bool:
     return domain in toks
 
 
+_ERRORPAGES = "secubox-errorpages.conf"
+
+
+def _bloc_server(lines: list[str], idx: int) -> tuple[int, int]:
+    """(ligne du `server {`, ligne de son `}` fermant) du bloc qui contient `idx`. Comptage d'accolades hors commentaires."""
+    debut = idx
+    while debut > 0 and not re.match(r"\s*server\s*\{", lines[debut].split("#", 1)[0]):
+        debut -= 1
+    depth, fin = 0, len(lines)
+    for n in range(debut, len(lines)):
+        code = lines[n].split("#", 1)[0]
+        depth += code.count("{") - code.count("}")
+        if depth <= 0 and n >= debut and "{" in "".join(l.split("#", 1)[0] for l in lines[debut:n + 1]):
+            fin = n
+            break
+    return debut, fin
+
+
 def find_config(domain: str, sites_dir: Path) -> Path | None:
     """Le fichier de conf nginx dont un `server_name` contient `domain`, ou None.
     On lit les fichiers de `sites_dir` triés (déterminisme) ; on ignore les
@@ -85,18 +104,27 @@ def wire(path: Path, domain: str) -> bool:
     aucune ligne server_name du domaine n'existe."""
     path = Path(path)
     lines = path.read_text(encoding="utf-8").splitlines()
-    out: list[str] = []
-    done = False
-    for idx, line in enumerate(lines):
-        out.append(line)
-        if not done and _is_server_name_line(line, domain):
-            nxt = lines[idx + 1] if idx + 1 < len(lines) else ""
-            if MARKER in nxt:
-                return False        # ce bloc a déjà l'include
-            out.append(_INCLUDE)
-            done = True
-    if not done:
+    i = next((n for n, ln in enumerate(lines) if _is_server_name_line(ln, domain)), None)
+    if i is None:
         return False
+    debut, fin = _bloc_server(lines, i)
+    err = next((n for n in range(debut + 1, fin) if _ERRORPAGES in lines[n].split("#", 1)[0]), None)
+    wake = next((n for n in range(debut + 1, fin) if MARKER in lines[n]), None)
+    out = list(lines)
+    if err is None:
+        # Pas de pages d'erreur dans ce bloc : l'include suit le server_name, comme avant.
+        if wake is not None and wake == i + 1:
+            return False                # ce bloc a déjà l'include
+        out.insert(i + 1, _INCLUDE)
+    else:
+        # LE REVEIL DOIT PRECEDER LES PAGES D'ERREUR (#2251). Les deux declarent `error_page 502 503 504` au meme niveau, et nginx retient la
+        # PREMIERE : si secubox-errorpages passe d'abord, la page « 504 — Delai depasse » masque `= @sbx_wake`, le waker n'est jamais appele et le
+        # conteneur arrete ne se reveille pas. Un include deja present mais APRES est DEPLACE (jamais duplique).
+        if wake is not None and wake < err:
+            return False                # déjà avant les pages d'erreur
+        if wake is not None:
+            del out[wake]
+        out.insert(err, _INCLUDE)
 
     # Deuxieme passe : redeclarer la regle 5xx dans les blocs qui declarent un
     # error_page 401 (cf. _LOC_MARKER). Sans elle, l'include ci-dessus est

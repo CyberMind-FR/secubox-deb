@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Vhosts on-demand : le réveil était masqué par les pages d'erreur (ref #2251)
+
+PhotoPrism ne se réveillait pas (504 puis 502). Cause : `secubox-errorpages` avant `secubox-waking` dans le vhost (nginx retient la première `error_page`). Corrigé dans photoprism, peertube, radio, podcaster ; `nginxgen.wire()` insère avant et déplace un include mal placé (profiles 0.19.18) ; garde de dépôt.
+
 ## 2026-10-11 — /ndpid/ : l'API lit le moteur nDPId via sbxdpi (ref #2240)
 
 secubox-dpi 1.8.0 : `SbxdpiBridge` (statut, flux, protocoles, applications, risques, JA4) avant le repli ndpiReader. Moteur nDPId démarré sur gk2 (engine 1.7.1, eth2).
