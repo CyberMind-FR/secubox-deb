@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Actor Intelligence 2.0, phase 6 : politique et procédure d'activation (ref #2240)
+`docs/ACTOR-INTELLIGENCE-ACTIVATION.md` (scoring v2, modes, drapeaux, garde-fous, procédure `PASSIVE_ONLY → SIMULATION → ACTIVE`, retour arrière, limites) + exemple `conf/actor-intelligence-simulation.conf.example` ; test qui verrouille la doc sur le code. waf-ng 1.26.3.
+
 ## 2026-10-10 — MetaNews crée des billets éphémères de 5 minutes (ref #2268)
 Route `POST /service/ephemere` dans billets (jeton de flotte `metanews`, éphémères seulement, plafond 60/h, interne), client + `internal/diffusion` dans MetaNews (≥ 2 sources, 6/h, grâce 1 h, TTL 5 min). secubox-billets 0.11.0, secubox-metanews 0.4.0.
 

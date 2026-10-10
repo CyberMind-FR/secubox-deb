@@ -60,7 +60,7 @@ Chaque phase est livrable seule, testée, et laisse le système fonctionnel.
 3. **Scénarios, risque et confiance.** *(livré, toolbox-ng 0.9.0 : `internal/actor/analysis`, routes `/actors/{id}/{timeline,graph,risk}` et `/events`, politique `v2` ; reste l'affichage dans la vue Hall, phase 5.)* Fenêtres temporelles configurables ; scénario ordonné par acteur (reconnaissance → scan → tentative → répétition) ; `risk` et `confidence` exposés séparément avec leurs facteurs (`+20 scan`, `+15 répétition`…, la somme est le score) ; `GET /actors/{id}/{timeline,graph,risk}` et `GET /events`.
 4. **Kill switch logique.** À l'échéance d'un ban ou d'une quarantaine : ré-évaluation, puis `RELEASE` ou `EXTEND` (durée graduée existante), jamais de permanent accidentel ; chaque transition est une ligne de preuve.
 5. **Vue SENTINEL dans le Hall.** Réutilise la page Actor (`waf-ng/www/actor`) et le registre du Hall ; ajoute décisions, actions défensives et état de quarantaine. **Nom à décider** : « Sentinel » existe déjà (module sentinelle, `sbx-sentinel`).
-6. **Documentation et activation.** Politique de scoring par défaut, exemple de configuration, procédure `PASSIVE_ONLY → SIMULATION → ACTIVE`.
+6. **Documentation et activation.** *(livré : `docs/ACTOR-INTELLIGENCE-ACTIVATION.md`, exemple de configuration, test doc/code.)* Politique de scoring par défaut, exemple de configuration, procédure `PASSIVE_ONLY → SIMULATION → ACTIVE`.
 
 ## 5. Politique de scoring par défaut (proposée, versionnée `v2`)
 
