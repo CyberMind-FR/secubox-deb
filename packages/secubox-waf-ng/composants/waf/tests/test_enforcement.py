@@ -179,3 +179,29 @@ def test_decisions_et_mode_par_l_api(monkeypatch, tmp_path):
     finally:
         waf.app.dependency_overrides.clear()
     assert {x["decision"] for x in d["decisions"]} == {"WOULD_BLOCK", "BLOCKED", "OBSERVE"} and m["mode"] == "ACTIVE"
+
+
+# ── Phase 4 : les réévaluations à l'échéance (reevaluations.jsonl) ───────────────────────────────────────────────────────────────────────────
+from api.enforcement import reevaluations  # noqa: E402
+
+
+def ree(ip, decision, ts, applique=True, paquets=40):
+    return {"ts": ts, "ip": ip, "categorie": "leurre:unrouted", "paquets": paquets, "compteur": True, "recidives": 0, "decision": decision,
+            "duree_s": 86400 if decision == "EXTEND" else 0, "raison": "r", "mode": "auto", "applique": applique, "version": "v1"}
+
+
+def test_les_reevaluations_sont_rendues_recentes_d_abord_avec_leurs_totaux():
+    lignes = [ree("203.0.113.1", "RELEASE", NOW - 300), ree("203.0.113.2", "EXTEND", NOW - 200), ree("203.0.113.3", "EXTEND", NOW - 100, applique=False)]
+    r = reevaluations(lignes, NOW, limite=10)
+    assert [x["ip"] for x in r["reevaluations"]] == ["203.0.113.3", "203.0.113.2", "203.0.113.1"]
+    assert r["totaux"] == {"RELEASE": 1, "EXTEND": 2, "appliquees": 2}
+
+
+def test_les_reevaluations_ignorent_les_lignes_illisibles_et_bornent_la_liste():
+    r = reevaluations([{"ip": "x"}, "n'importe quoi", ree("203.0.113.1", "RELEASE", NOW - 5), ree("203.0.113.2", "RELEASE", NOW - 4)], NOW, limite=1)
+    assert len(r["reevaluations"]) == 1 and r["reevaluations"][0]["ip"] == "203.0.113.2" and r["totaux"]["RELEASE"] == 2
+
+
+def test_une_reevaluation_est_expliquee_en_clair():
+    x = reevaluations([ree("203.0.113.2", "EXTEND", NOW - 10)], NOW, limite=5)["reevaluations"][0]
+    assert x["decision"] == "EXTEND" and x["duree_s"] == 86400 and x["raison"] == "r" and x["paquets"] == 40 and x["mode"] == "auto"

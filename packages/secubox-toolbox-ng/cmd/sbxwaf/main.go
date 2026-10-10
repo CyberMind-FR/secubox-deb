@@ -1404,6 +1404,14 @@ func main() {
 			// ré-appliqués ; toutes les 2 min les bans actifs sont ré-affirmés
 			// (un `flush set` vide l'ensemble sans toucher la chaîne). Le retrait
 			// à l'échéance reste assuré par le timeout nft du noyau.
+			// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. Branchés APRÈS le premier Reload (le DNS ne retarde pas le démarrage),
+			// puis les bans déjà posés sur eux sont levés en arrière-plan.
+			nb.robots = NewCrawlers()
+			go func() {
+				if n := nb.LibererRobots(); n > 0 {
+					log.Printf("sbxwaf: %d ban(s) levé(s) sur des robots d'indexation vérifiés", n)
+				}
+			}()
 			go nb.Veiller(30*time.Second, 2*time.Minute)
 			// Ban automatique piloté par Actor Intelligence : garde-fous dans actorban.go. « off » par défaut ; « propose » n'applique rien.
 			if *actorBanMode == "propose" || *actorBanMode == "auto" {

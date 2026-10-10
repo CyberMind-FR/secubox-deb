@@ -63,9 +63,9 @@ except ImportError:  # standalone
     from application import application as _application, lire_etat as _lire_etat_nft
 
 try:
-    from api.enforcement import actions as _actions_def, decisions as _decisions_def, mode_global as _mode_global, trouver as _trouver_action
+    from api.enforcement import actions as _actions_def, decisions as _decisions_def, mode_global as _mode_global, reevaluations as _reevaluations_def, trouver as _trouver_action
 except ImportError:  # standalone
-    from enforcement import actions as _actions_def, decisions as _decisions_def, mode_global as _mode_global, trouver as _trouver_action
+    from enforcement import actions as _actions_def, decisions as _decisions_def, mode_global as _mode_global, reevaluations as _reevaluations_def, trouver as _trouver_action
 
 # État publié par sbxwaf (--nft-etat) à chaque veille de 30 s (#1693).
 NFT_ETAT = Path("/var/cache/secubox/waf/nft-etat.json")
@@ -1726,6 +1726,33 @@ async def decisions_ban():
     """Décisions des bans automatiques : BLOCKED, WOULD_BLOCK (simulation) ou OBSERVE (écarté, avec le motif)."""
     now = int(time.time())
     return {"genere_le": now, "decisions": _decisions_def(await asyncio.to_thread(_lire_etats_ban), now)}
+
+
+REEVALUATIONS_JOURNAL = Path("/var/lib/secubox/waf/reevaluations.jsonl")
+_REEVAL_LIGNES_MAX = 5000   # on ne relit que la fin du journal : il est append-only et ne cesse de grossir
+
+
+def _lire_reevaluations() -> List[dict]:
+    try:
+        with open(REEVALUATIONS_JOURNAL, encoding="utf-8") as f:
+            fin = f.readlines()[-_REEVAL_LIGNES_MAX:]
+    except OSError:
+        return []
+    out: List[dict] = []
+    for ligne in fin:
+        try:
+            r = json.loads(ligne)
+        except ValueError:
+            continue
+        if isinstance(r, dict):
+            out.append(r)
+    return out
+
+
+@app.get("/reevaluations", dependencies=[Depends(require_lecture)])
+async def reevaluations_ban(limite: int = 100):
+    """Kill switch logique : ce que sbxwaf a décidé à l'échéance de chaque ban (RELEASE ou EXTEND), avec le motif et la durée."""
+    return _reevaluations_def(await asyncio.to_thread(_lire_reevaluations), int(time.time()), limite)
 
 
 @app.post("/enforcement/{ident}/rollback", dependencies=[Depends(require_jwt)])

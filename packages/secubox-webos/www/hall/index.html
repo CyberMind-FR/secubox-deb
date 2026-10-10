@@ -1387,6 +1387,9 @@ const FEATURED = [
   // actor.gk2 est servi (#1575) : le mégamenu ouvre la vraie page, plus la
   // cardlet agrandie (#1466 avait retiré l'url faute de vhost) ; ⚙️ → /actor/.
   {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:420, auth:true, admin:"/actor/"},
+  // RADAR DES ACTEURS (#2240, phase 5) : le risque et la confiance de chaque acteur suivi, séparés, avec la décision que le moteur PROPOSE et pourquoi
+  // il n'ira pas plus loin. Lit /api/v1/actor/radar (vue réduite : ni adresse, ni cible). auth:true comme le Renseignement.
+  {id:"radar",      label:"Radar des acteurs", icon:"📡", color:"#7a3d5b", carte:"/cardlets/radar.html", h:420, auth:true, admin:"/actor/"},
   // COFFRE (#1367 P5, une seule carte depuis #2146) : le compartiment de la personne, ouvert par SA
   // serrure. Pas de vhost : la carte EST la page /coffre/ (motif SBX OS), que le Hall agrandit telle
   // quelle ; son badge dit l'état du Coffre de la box. La console (compteurs, journal, serrures,

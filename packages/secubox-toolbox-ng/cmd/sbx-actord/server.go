@@ -53,6 +53,7 @@ type Server struct {
 
 	// Stats des 24 dernières heures, en double tampon (handleStats).
 	statsT tampon[store.Stats]
+	radarT tampon[[]radarActeur]       // synthèse du Radar des acteurs (radar.go)
 	evT    tampon[[]envelope.Envelope] // derniers événements, pour les routes d'analyse (analyse.go)
 
 	ingested   atomic.Uint64 // enveloppes persistées
@@ -224,6 +225,7 @@ func (s *Server) apiMux() *http.ServeMux {
 		mux.HandleFunc("GET "+p+"/actors/{id}", route(s.handleActor))
 		mux.HandleFunc("GET "+p+"/campaigns", route(s.handleCampaigns))
 		mux.HandleFunc("GET "+p+"/robots", route(s.handleRobots))                          // compteurs par famille : jamais d'adresse (#2201)
+		mux.HandleFunc("GET "+p+"/radar", route(s.handleRadar))                            // synthèse sans adresse ni cible : servie aussi dans la vue réduite (phase 5)
 		mux.HandleFunc("GET "+p+"/overview", route(s.handleApercu))                        // compteurs seulement : servi aussi dans la vue réduite
 		mux.HandleFunc("GET "+p+"/proposals", route(horsVueReduite(s.handlePropositions))) // adresses : jamais dans la vue réduite
 		mux.HandleFunc("GET "+p+"/evidence/{id}", route(horsVueReduite(s.handleEvidence)))

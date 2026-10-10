@@ -22,6 +22,14 @@
       ]
     },
     {
+      "id": "radar", "ic": "📡", "nom": "Radar des acteurs", "service": "actor", "acces": "session",
+      "role": "Chaque acteur suivi est placé selon son RISQUE (ce qu'il pourrait faire) et sa CONFIANCE (ce que les preuves permettent d'affirmer), deux mesures séparées. Le moteur propose une décision (observer, atténuer, bloquer) avec ses raisons et ses refus ; il n'applique rien lui-même.",
+      "usage": ["Quatre zones : Agir (risque et confiance élevés), Confirmer (risque élevé, preuves insuffisantes), Surveiller, Ignorer.", "Un clic sur un point ou une ligne ouvre la fiche : facteurs du risque et de la confiance, étapes du scénario, et pourquoi un niveau plus dur est refusé.", "Aucun blocage sur un seul capteur : la confiance le dit."],
+      "metriques": [
+        {"libelle": "acteurs suivis", "url": "/api/v1/actor/stats", "chemin": "actors"}
+      ]
+    },
+    {
       "id": "mon-coffre", "ic": "🔐", "nom": "Coffre", "service": "vault", "acces": "session",
       "role": "Votre compartiment dans le Coffre de la box : des secrets à vous (clé OpenPGP, codes, notes), ouverts par VOTRE serrure — votre connexion, une phrase ou une clé d'appareil. Le badge dit l'état du Coffre de la box (scellé ou ouvert) ; un administrateur, même Coffre ouvert, n'y lit rien.",
       "usage": ["La première fois : créer sa serrure. Ensuite : l'ouvrir, ranger, voir, retirer ; la serrure n'est tenue que par l'onglet et s'oublie après cinq minutes sans geste.", "Le compartiment n'est lisible que lorsque le Coffre de la box est ouvert par un administrateur.", "Le ⚙️ ouvre la console du Coffre (administrateurs) : ouvrir, sceller, compteurs, journal, clés d'appareil."],

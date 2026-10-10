@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Phase 5 : Radar des acteurs dans le Hall, et on ne bannit plus Googlebot (ref #2240)
+Carte Hall `radar` (risque et confiance sur deux axes, fiche avec facteurs/scénario/refus) alimentée par `GET /radar` de sbx-actord (vue réduite, liste blanche sans adresse ni cible). `GET /api/v1/waf/reevaluations`. **Correctif** : 8 adresses Googlebot bannies par les leurres (4 prolongées par le kill switch) — exemption des robots d'indexation vérifiés par DNS inverse confirmé (FCrDNS) au point unique `BanFor`, bans existants levés au démarrage. toolbox-ng 0.11.0, waf-ng 1.26.0, webos 1.6.0.
+
 ## 2026-10-10 — Actor Intelligence 2.0, phase 4 : kill switch logique (ref #2240)
 Réévaluation de chaque ban à l'échéance (RELEASE ou EXTEND gradué, plafond 30 j, jamais permanent), compteurs par élément sur `waf_ban{,6}` avec migration, preuves `reevaluations.jsonl` + audit, modes off/propose/auto (`--reevaluation`, `--reeval-seuil`). toolbox-ng 0.10.0, waf-ng 1.25.0. Tests Go `reevaluation_test.go`.
 

@@ -99,3 +99,16 @@ def mode_global(etats: Dict[str, Optional[dict]], now: int) -> dict:
         e = _etat_frais(etats.get(cle), now)
         detail[cle] = _MODES.get((e or {}).get("mode", ""), "PASSIVE_ONLY")
     return {"mode": max(detail.values(), key=_ORDRE_MODE.get), "detail": detail}
+
+
+def reevaluations(lignes: List[dict], now: int, limite: int = 100) -> dict:
+    """Phase 4 : les réévaluations de bans à l'échéance (RELEASE | EXTEND), relues de `reevaluations.jsonl` — récentes d'abord, avec les totaux."""
+    valides = [r for r in lignes if isinstance(r, dict) and r.get("decision") in ("RELEASE", "EXTEND") and r.get("ip")]
+    valides.sort(key=lambda r: int(r.get("ts") or 0), reverse=True)
+    totaux = {"RELEASE": 0, "EXTEND": 0, "appliquees": 0}
+    for r in valides:
+        totaux[r["decision"]] += 1
+        totaux["appliquees"] += 1 if r.get("applique") else 0
+    champs = ("ts", "ip", "categorie", "paquets", "compteur", "recidives", "decision", "duree_s", "raison", "mode", "applique")
+    return {"genere_le": now, "totaux": totaux,
+            "reevaluations": [{k: r.get(k) for k in champs} for r in valides[:max(1, min(int(limite), 1000))]]}

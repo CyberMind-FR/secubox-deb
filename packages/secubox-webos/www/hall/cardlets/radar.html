@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Radar des acteurs » (Actor Intelligence 2.0, phase 5, #2240).
+
+  Le RISQUE (ce que l'acteur pourrait faire) et la CONFIANCE (ce que les preuves permettent d'affirmer) sont deux mesures SÉPARÉES : le plan les met sur
+  deux axes. Un acteur très risqué mais peu documenté se « confirme » ; il ne se bloque pas sur un seul capteur. La décision proposée (OBSERVE · MITIGATE ·
+  BLOCK) vient du moteur, avec les raisons ET les refus. Le moteur PROPOSE : cette vue n'applique rien.
+
+  DONNÉES RÉELLES UNIQUEMENT via /api/v1/actor/radar (sbx-actord, vue réduite du Hall : ni adresse, ni cible, ni référence de preuve). Sans session, ou moteur
+  absent, un état honnête — jamais de valeur inventée.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar des acteurs</title>
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0; --panel:#ffffff; --soft:#f5f7fc;
+         --cyan:#0784a8; --ok:#0f9d54; --warn:#c87832; --hot:#d64545; --sky:#1655a0; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b; --panel:#141a26; --soft:#10151f;
+    --cyan:#28d6ff; --ok:#35d07f; --warn:#e0b46a; --hot:#ff6a6a; --sky:#6aa8e6; } }
+  :root[data-theme="dark"]{ --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b; --panel:#141a26; --soft:#10151f;
+    --cyan:#28d6ff; --ok:#35d07f; --warn:#e0b46a; --hot:#ff6a6a; --sky:#6aa8e6; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px;overflow-y:auto;scrollbar-width:none}
+  body::-webkit-scrollbar{display:none}
+  .mw{display:flex;flex-direction:column;gap:.5rem;padding:.55rem .65rem}
+  .h{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:3px solid transparent;
+     border-image:linear-gradient(90deg,var(--ok),var(--warn),var(--hot)) 1}
+  .h .tt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+  .h b{font-size:.98rem;letter-spacing:.03em;text-transform:uppercase;font-weight:800}
+  .h small{font-size:.6rem;color:var(--muted)}
+  .h .mode{margin-left:auto;font-size:.54rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);font-weight:700;border:1px solid var(--line);border-radius:20px;padding:2px 9px;white-space:nowrap}
+  #radar{width:100%;max-height:260px;aspect-ratio:1/0.78;background:var(--soft);border:1px solid var(--line);border-radius:10px}
+  #radar text{fill:var(--faint);font-size:3px;font-family:inherit}
+  #radar .zone{font-weight:700;letter-spacing:.2px}
+  #radar .grille{stroke:var(--line);stroke-width:.3}
+  #radar .seuil{stroke:var(--hot);stroke-width:.35;stroke-dasharray:1.4 1.2;opacity:.65}
+  #radar circle.pt{stroke:var(--fond);stroke-width:.5;cursor:pointer;transition:r .15s}
+  #radar circle.pt.on{stroke:var(--texte);stroke-width:.8}
+  .n-OBSERVE{fill:var(--sky)} .n-MITIGATE{fill:var(--warn)} .n-BLOCK{fill:var(--hot)}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;font-size:.6rem;color:var(--muted)}
+  .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+  .acteur{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:9px;padding:5px 8px;background:var(--soft);cursor:pointer;margin-bottom:4px}
+  .acteur.on{border-color:var(--cyan)}
+  .acteur b{font-family:ui-monospace,monospace;font-size:.78rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+  .mesure{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;color:var(--muted);white-space:nowrap}
+  .mesure em{font-style:normal;font-weight:800;color:var(--texte)}
+  .badge{font-size:.54rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:5px;padding:2px 6px;color:#fff}
+  .b-OBSERVE{background:var(--sky)} .b-MITIGATE{background:var(--warn)} .b-BLOCK{background:var(--hot)}
+  #fiche{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel);font-size:.72rem}
+  #fiche h4{margin:6px 0 3px;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  #fiche ul{margin:0;padding:0;list-style:none}
+  #fiche li{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dashed var(--line)}
+  #fiche li b{font-family:ui-monospace,monospace;color:var(--ok)}
+  .refus{color:var(--warn)}
+  .etapes{display:flex;gap:4px;flex-wrap:wrap}
+  .etape{border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:.62rem;background:var(--soft)}
+  .vide{color:var(--faint);font-size:.72rem;padding:12px;text-align:center;border:1px dashed var(--line);border-radius:9px}
+  .note{font-size:.58rem;color:var(--faint);line-height:1.4}
+</style>
+<div class="mw">
+  <div class="h"><span style="font-size:1.25rem">📡</span><div class="tt"><b>Radar des acteurs</b><small>risque et confiance, séparés</small></div><span class="mode" id="mode">shadow · propose</span></div>
+  <svg id="radar" viewBox="0 0 100 78" role="img" aria-label="Acteurs placés selon la confiance (horizontal) et le risque (vertical)"></svg>
+  <div class="legende"><span><i style="background:var(--sky)"></i>OBSERVE</span><span><i style="background:var(--warn)"></i>MITIGATE</span><span><i style="background:var(--hot)"></i>BLOCK</span><span>— — seuil de blocage (risque ≥ 75, confiance ≥ 80, 2 capteurs)</span></div>
+  <div id="liste"><div class="vide">Chargement…</div></div>
+  <div id="fiche"><div class="vide">Sélectionne un acteur.</div></div>
+  <div class="note">Le moteur <b>propose</b>, il n'applique rien. Une mesure d'un seul capteur ne suffit jamais à bloquer : la confiance le dit.</div>
+</div>
+
+<script src="../sonde.js"></script>
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function sessionOk(){return jget('/api/v1/acces/session/etat').then(function(s){return !!(s&&s.session);});}
+  var L=[],CUR=null;
+  // Plan 100 × 78 : x = confiance (marge gauche 9), y = risque (haut = risqué).
+  var X0=9,X1=97,Y0=4,Y1=70;
+  function px(c){return X0+(X1-X0)*Math.max(0,Math.min(100,num(c)))/100;}
+  function py(r){return Y1-(Y1-Y0)*Math.max(0,Math.min(100,num(r)))/100;}
+  function niveau(a){return /^(OBSERVE|MITIGATE|BLOCK)$/.test(a.niveau)?a.niveau:'OBSERVE';}
+  function plan(){
+    var h='<line class="grille" x1="'+X0+'" y1="'+py(50)+'" x2="'+X1+'" y2="'+py(50)+'"/><line class="grille" x1="'+px(50)+'" y1="'+Y0+'" x2="'+px(50)+'" y2="'+Y1+'"/>'
+      +'<line class="seuil" x1="'+X0+'" y1="'+py(75)+'" x2="'+X1+'" y2="'+py(75)+'"/><line class="seuil" x1="'+px(80)+'" y1="'+Y0+'" x2="'+px(80)+'" y2="'+Y1+'"/>'
+      +'<text class="zone" x="'+(X0+2)+'" y="'+(Y0+4)+'">Confirmer</text><text class="zone" text-anchor="end" x="'+(X1-2)+'" y="'+(Y0+4)+'">Agir</text>'
+      +'<text class="zone" x="'+(X0+2)+'" y="'+(Y1-2)+'">Ignorer</text><text class="zone" text-anchor="end" x="'+(X1-2)+'" y="'+(Y1-2)+'">Surveiller</text>'
+      +'<text x="'+((X0+X1)/2)+'" y="76" text-anchor="middle">Confiance →</text><text transform="rotate(-90)" x="-'+((Y0+Y1)/2)+'" y="5" text-anchor="middle">Risque →</text>';
+    L.forEach(function(a,i){
+      var dx=((i*37)%7-3)*.35;   // léger écart déterministe : deux acteurs de mêmes mesures ne se masquent pas
+      h+='<circle class="pt n-'+niveau(a)+(a.id===CUR?' on':'')+'" data-i="'+i+'" cx="'+(px(a.confiance.valeur)+dx).toFixed(1)+'" cy="'+py(a.risque.valeur).toFixed(1)+'" r="'+(1.6+Math.min(2.2,num(a.evenements)/20)).toFixed(1)+'"><title>'+esc(a.id)+' — risque '+num(a.risque.valeur)+', confiance '+num(a.confiance.valeur)+'</title></circle>';
+    });
+    el('radar').innerHTML=h;
+  }
+  function liste(){
+    var z=el('liste');
+    if(!L.length){z.innerHTML='<div class="vide">Aucun acteur à évaluer pour l’instant.</div>';return;}
+    z.innerHTML=L.map(function(a,i){
+      return '<div class="acteur'+(a.id===CUR?' on':'')+'" data-i="'+i+'"><b>'+esc(a.id)+'</b><span class="mesure">risque <em>'+num(a.risque.valeur)+'</em> · confiance <em>'+num(a.confiance.valeur)+'</em></span>'
+        +'<span class="badge b-'+niveau(a)+'">'+niveau(a)+'</span></div>';}).join('');
+  }
+  function facteurs(titre,s){
+    var fs=(s&&s.facteurs)||[];
+    return '<h4>'+esc(titre)+' — '+num(s&&s.valeur)+'</h4>'+(fs.length?'<ul>'+fs.map(function(f){
+      return '<li><span>'+esc(f.libelle)+'</span><b>'+(num(f.points)>=0?'+':'')+num(f.points)+'</b></li>';}).join('')+'</ul>':'<div class="note">aucun facteur</div>');
+  }
+  function fiche(){
+    var a=L.filter(function(x){return x.id===CUR;})[0],z=el('fiche');
+    if(!a){z.innerHTML='<div class="vide">Sélectionne un acteur.</div>';return;}
+    var etapes=(a.etapes||[]).map(function(e){return '<span class="etape">'+esc(e.libelle)+' · '+num(e.evenements)+(e.capteurs&&e.capteurs.length?' · '+esc(e.capteurs.join('+')):'')+'</span>';}).join('');
+    z.innerHTML='<div><span class="badge b-'+niveau(a)+'">'+niveau(a)+'</span> <b style="font-family:ui-monospace,monospace">'+esc(a.id)+'</b></div>'
+      +'<div class="note" style="margin-top:3px">'+esc(a.action_proposee||'')+' · '+num(a.evenements)+' événement(s) · capteurs : '+esc((a.capteurs||[]).join(', ')||'—')+'</div>'
+      +facteurs('Risque',a.risque)+facteurs('Confiance',a.confiance)
+      +'<h4>Scénario</h4>'+(etapes?'<div class="etapes">'+etapes+'</div>':'<div class="note">pas encore de scénario</div>')
+      +((a.refus&&a.refus.length)?'<h4>Pourquoi pas plus dur</h4><ul>'+a.refus.map(function(r){return '<li class="refus">'+esc(r)+'</li>';}).join('')+'</ul>':'');
+  }
+  function choisit(i){var a=L[num(i)];if(!a)return;CUR=a.id;plan();liste();fiche();}
+  el('liste').addEventListener('click',function(e){var d=e.target.closest&&e.target.closest('.acteur');if(d)choisit(d.getAttribute('data-i'));});
+  el('radar').addEventListener('click',function(e){var c=e.target.closest&&e.target.closest('circle.pt');if(c)choisit(c.getAttribute('data-i'));});
+  function tick(){
+    if(document.hidden)return;
+    sessionOk().then(function(ok){
+      if(!ok){L=[];el('radar').innerHTML='';el('liste').innerHTML='<div class="vide">Ouvre une session pour voir le radar des acteurs.</div>';el('fiche').innerHTML='';return null;}
+      return jget('/api/v1/actor/radar?limit=30').then(function(r){
+        if(!r){el('liste').innerHTML='<div class="vide">Moteur Actor Intelligence en démarrage ou injoignable — nouvel essai automatique.</div>';return;}
+        L=(r.acteurs||[]).filter(function(a){return a&&a.risque&&a.confiance;});
+        if(CUR&&!L.some(function(x){return x.id===CUR;}))CUR=null;
+        if(!CUR&&L.length)CUR=L[0].id;
+        plan();liste();fiche();
+      });
+    });
+  }
+  tick();setInterval(tick,20000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)tick();});
+  (function(){var t=new URLSearchParams(location.search).get('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);})();
+  addEventListener('message',function(ev){var d=ev.data;if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light'))document.documentElement.setAttribute('data-theme',d.theme);});
+})();
+</script>
