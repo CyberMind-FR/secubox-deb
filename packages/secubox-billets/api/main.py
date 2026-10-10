@@ -276,6 +276,16 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None)
         or "peertube" in _eh or _eh.startswith("tube.") or _eh.endswith(".tv"))
     d["poster"] = _poster_for(d)
     d["cat"] = _categorie(d.get("id", ""))
+    # Billet ÉPHÉMÈRE (#2268) : secondes restantes À L'INSTANT DU RENDU. Le client arme son propre compte à rebours à partir de ce nombre (pas d'une heure
+    # absolue) : l'horloge de l'appareil n'a donc aucune importance.
+    d["expire_dans"] = None
+    if d.get("expires_at"):
+        from datetime import datetime, timezone
+        try:
+            reste = (datetime.strptime(d["expires_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).total_seconds()
+            d["expire_dans"] = max(0, int(reste))
+        except ValueError:
+            pass
     return d
 
 
@@ -557,6 +567,9 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     @app.get("/b/{slug}", response_class=HTMLResponse)
     async def permalink(request: Request, slug: str):
         row = await repo.get_by_slug(app.state.conn, slug)
+        if row is not None and row["expires_at"] and row["expires_at"] <= repo._maintenant():
+            # Éphémère échu (#2268) : 410 Gone, pas 404 — le billet a existé, il a expiré à dessein.
+            raise HTTPException(status_code=410, detail="Ce billet éphémère a expiré")
         if row is None or row["status"] != "published":
             raise HTTPException(status_code=404, detail="Billet introuvable")
         await repo.increment_view(app.state.conn, row["id"])

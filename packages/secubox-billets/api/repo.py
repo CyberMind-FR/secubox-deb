@@ -18,11 +18,28 @@ from .services.tags import extract as tags_extract
 
 _FEED_COLUMNS = ("id,created_at,updated_at,published_at,body,ref_url,embed_url,"
                  "embed_html,embed_provider,embed_fetched_at,slug,status,"
-                 "style,embed_snapshot,view_count,bumped_at")
+                 "style,embed_snapshot,view_count,bumped_at,expires_at")
 
 
 # Clé de tri du fil : l'activité, et à défaut la publication (billet d'avant la migration 0006).
 _CLE_ACTIVITE = "COALESCE(bumped_at, published_at)"
+
+
+_FORMAT_T = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def _maintenant() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime(_FORMAT_T)
+
+
+def _plus_secondes(iso: str, secondes: int) -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.strptime(iso, _FORMAT_T).replace(tzinfo=timezone.utc) + timedelta(seconds=secondes)).strftime(_FORMAT_T)
+
+
+# Billet VIVANT : durable, ou pas encore échu (#2268). L'échéance exclut le billet DÈS qu'elle passe, sans attendre le balayage.
+_VIVANT = "(expires_at IS NULL OR expires_at > ?)"
 
 
 def encode_cursor(published_at: str, billet_id: str) -> str:
@@ -47,10 +64,11 @@ async def create_billet(conn: aiosqlite.Connection, data: BilletIn, *, now: str,
     slug = slugify(data.body, suffix=billet_id[-8:])
     status = "published" if data.publish else "draft"
     published_at = now if data.publish else None
+    expires_at = _plus_secondes(now, data.ttl_s) if (data.publish and data.ttl_s) else None
     await conn.execute(
-        "INSERT INTO billet(id,created_at,updated_at,published_at,bumped_at,body,ref_url,"
-        "embed_url,slug,status,style) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (billet_id, now, now, published_at, published_at, data.body, data.ref_url,
+        "INSERT INTO billet(id,created_at,updated_at,published_at,bumped_at,expires_at,body,ref_url,"
+        "embed_url,slug,status,style) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (billet_id, now, now, published_at, published_at, expires_at, data.body, data.ref_url,
          data.embed_url, slug, status, data.style),
     )
     await conn.commit()
@@ -75,7 +93,8 @@ async def get_by_id(conn: aiosqlite.Connection, billet_id: str) -> Optional[aios
 async def list_published(conn: aiosqlite.Connection, *, limit: int = 20,
                          cursor: Optional[str] = None,
                          tag: Optional[str] = None,
-                         ordre: str = "publication") -> tuple[list[aiosqlite.Row], Optional[str]]:
+                         ordre: str = "publication",
+                         maintenant: Optional[str] = None) -> tuple[list[aiosqlite.Row], Optional[str]]:
     """Return (rows, next_cursor). `next_cursor` is None on the last page.
 
     `tag` restricts the feed to one emoji-hashtag (the quick view). It uses an
@@ -89,7 +108,8 @@ async def list_published(conn: aiosqlite.Connection, *, limit: int = 20,
     cle = _CLE_ACTIVITE if ordre == "activite" else "published_at"
     limit = max(1, min(limit, 100))
     params: list[Any] = []
-    where = "status = 'published'"
+    where = "status = 'published' AND " + _VIVANT
+    params.append(maintenant or _maintenant())
     if tag:
         where += (" AND EXISTS (SELECT 1 FROM billet_tag bt WHERE bt.billet_id = billet.id "
                   "AND bt.tag_slug = ?)")
@@ -367,10 +387,11 @@ async def moderate_comment(conn: aiosqlite.Connection, comment_id: str, status: 
     await conn.commit()
 
 
-async def list_depuis(conn: aiosqlite.Connection, depuis: str, *, tag: Optional[str] = None, limit: int = 20) -> list[aiosqlite.Row]:
+async def list_depuis(conn: aiosqlite.Connection, depuis: str, *, tag: Optional[str] = None, limit: int = 20,
+                      maintenant: Optional[str] = None) -> list[aiosqlite.Row]:
     """Billets publiés dont l'activité est POSTÉRIEURE à `depuis`, du plus récent au plus ancien (#2266 : /feed/maj)."""
-    params: list[Any] = [depuis]
-    where = f"status = 'published' AND {_CLE_ACTIVITE} > ?"
+    params: list[Any] = [maintenant or _maintenant(), depuis]
+    where = f"status = 'published' AND {_VIVANT} AND {_CLE_ACTIVITE} > ?"
     if tag:
         where += " AND EXISTS (SELECT 1 FROM billet_tag bt WHERE bt.billet_id = billet.id AND bt.tag_slug = ?)"
         params.append(tag)
@@ -496,3 +517,20 @@ async def list_tags(conn: aiosqlite.Connection) -> list[dict]:
     async with conn.execute(q) as cur:
         return [{"slug": r["slug"], "emoji": r["emoji"], "count": r["n"]}
                 for r in await cur.fetchall()]
+
+
+# ── éphémères (#2268) ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+CONSERVATION_ARCHIVE_S = 24 * 3600
+
+
+async def expirer(conn: aiosqlite.Connection, maintenant: Optional[str] = None) -> tuple[int, int]:
+    """Balayage des billets éphémères : ARCHIVE ceux dont l'échéance est passée (hors du fil, conservés pour l'audit), SUPPRIME ceux échus depuis plus de
+    24 h. Idempotent ; ne touche jamais un billet durable (`expires_at` NULL) ni un brouillon. Rend (archivés, supprimés)."""
+    now = maintenant or _maintenant()
+    cur = await conn.execute("UPDATE billet SET status='archived', updated_at=? WHERE status='published' AND expires_at IS NOT NULL AND expires_at <= ?", (now, now))
+    archives = cur.rowcount or 0
+    limite = _plus_secondes(now, -CONSERVATION_ARCHIVE_S)
+    cur = await conn.execute("DELETE FROM billet WHERE expires_at IS NOT NULL AND expires_at <= ?", (limite,))
+    supprimes = cur.rowcount or 0
+    await conn.commit()
+    return archives, supprimes
