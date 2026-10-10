@@ -10,6 +10,11 @@ d'ingestion d'actord). Lit le magasin d'ad-guard en LECTURE SEULE, applique les 
 jamais les requêtes ordinaires) et dépose une enveloppe `dns` par constat nouveau.
 
   --dry-run   affiche les constats en JSON sans rien envoyer ni mémoriser (pour calibrer, ou comprendre ce que le capteur verrait)
+  --collecter prend l'instantané des réponses du cache d'Unbound (`sudo -n secubox-adguard-tv cache-dump`, argument exact) et le range dans
+              cache-reponses.tsv ; lancé toutes les 5 min par secubox-ad-guard-dnsdump.timer. Aucun jugement ici.
+  --accepter DOMAINE   l'opérateur confirme qu'un changement de réseau d'un domaine est légitime : ses réponses actuelles entrent dans la référence
+
+Détournement d'un domaine normal (réponses d'Unbound) : voir api/dnstv_reponses.py. Référence dans reponses.db, apprentissage silencieux de 3 jours.
 
 Un échec d'envoi n'efface rien : l'état de dédoublonnage n'est mémorisé qu'après un dépôt réussi, le prochain passage réessaie.
 """
@@ -20,6 +25,7 @@ import json
 import os
 import socket
 import sqlite3
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -29,10 +35,15 @@ for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])
     if _p not in sys.path:
         sys.path.insert(0, _p)
 from api import dnstv_anomalies as A  # noqa: E402
+from api import dnstv_reponses as R  # noqa: E402
 
 ETAT_DIR = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
 SOCKET = os.environ.get("SECUBOX_ACTORD_SOCKET", "/run/secubox/actord.sock")
 LISTE = Path(os.environ.get("SECUBOX_DNS_MALVEILLANTS", "/etc/secubox/actor/dns-malveillants.txt"))
+CTL = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
+SUDO = os.environ.get("SECUBOX_ADGUARD_SUDO", "sudo")
+ASN_DB = os.environ.get("SECUBOX_GEOIP_ASN", "/var/lib/GeoIP/GeoLite2-ASN.mmdb")
+FRAICHEUR_REPONSES_S = 20 * 60
 JOURS_BASE = 14
 MIN_JOURS_CONNU = 3
 
@@ -73,6 +84,64 @@ def lire_magasin(db: Path, now: int):
         cx.close()
 
 
+def asn_resolveur():
+    """ip → numéro d'ASN, via la base GeoLite2-ASN si le module et la base sont là ; sinon None partout (la référence retombe sur les préfixes)."""
+    try:
+        import maxminddb
+        lecteur = maxminddb.open_database(ASN_DB)
+    except Exception:                                                  # module absent, base absente ou illisible : repli documenté
+        return lambda ip: None
+
+    def asn(ip: str):
+        try:
+            r = lecteur.get(ip)
+            return int(r["autonomous_system_number"]) if r and "autonomous_system_number" in r else None
+        except Exception:
+            return None
+    return asn
+
+
+def collecter() -> int:
+    """Range l'instantané des réponses du cache dans cache-reponses.tsv (écrit par nous, jamais par root)."""
+    try:
+        r = subprocess.run([SUDO, "-n", CTL, "cache-dump"], capture_output=True, text=True, timeout=150)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"secubox-adguard-dnssensor : cache-dump impossible ({type(e).__name__})", file=sys.stderr)
+        return 0
+    if r.returncode != 0:
+        print("secubox-adguard-dnssensor : cache-dump refusé : " + (r.stderr or r.stdout).strip()[:160], file=sys.stderr)
+        return 0
+    couples = R.parse_tsv(r.stdout)                                      # revalidé : on ne range que ce qui se relit
+    cible = ETAT_DIR / "cache-reponses.tsv"
+    tmp = cible.with_suffix(".tmp")
+    tmp.write_text("".join(f"{n}\t{i}\n" for n, i in couples), encoding="utf-8")
+    os.replace(tmp, cible)
+    return 0
+
+
+def lire_reponses(now: int):
+    """Couples (nom, adresse) du dernier instantané ; None s'il manque ou s'il est périmé (Unbound arrêté, minuterie figée)."""
+    f = ETAT_DIR / "cache-reponses.tsv"
+    try:
+        if f.is_symlink() or now - f.stat().st_mtime > FRAICHEUR_REPONSES_S:
+            return None
+        return R.parse_tsv(f.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+
+
+def accepter(domaine: str, now: int) -> int:
+    reps = lire_reponses(now)
+    if reps is None:
+        print("secubox-adguard-dnssensor : pas d'instantané récent des réponses ; lancer --collecter d'abord", file=sys.stderr)
+        return 1
+    cx = R.ouvrir(ETAT_DIR / "reponses.db")
+    R.accepter(cx, domaine.lower().strip("."), reps, now, asn_resolveur())
+    cx.close()
+    print(f"secubox-adguard-dnssensor : {domaine} accepté ; ses réponses actuelles entrent dans la référence")
+    return 0
+
+
 def deposer(chemin: str, enveloppes: list) -> None:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
         s.settimeout(5)
@@ -83,13 +152,32 @@ def deposer(chemin: str, enveloppes: list) -> None:
 def principal(argv=None, now: int = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--collecter", action="store_true")
+    ap.add_argument("--accepter", metavar="DOMAINE")
     a = ap.parse_args(argv)
     now = int(now if now is not None else time.time())
+    if a.collecter:
+        return collecter()
+    if a.accepter:
+        return accepter(a.accepter, now)
     lu = lire_magasin(ETAT_DIR / "dnstv.db", now)
     if lu is None:
         return 0                                    # aucun magasin : le POC DNS n'a rien enregistré, rien à juger
     evts, connus, base, noms = lu
     constats = A.detecter(evts, now, connus, base, noms, lire_liste(LISTE))
+    reps = lire_reponses(now)
+    if reps is not None:                                # détournement d'un domaine normal : réponses d'Unbound contre la référence apprise
+        cx = R.ouvrir(":memory:" if a.dry_run else ETAT_DIR / "reponses.db")
+        if a.dry_run and (ETAT_DIR / "reponses.db").is_file():
+            src = sqlite3.connect(f"file:{ETAT_DIR / 'reponses.db'}?mode=ro", uri=True)
+            src.backup(cx)                              # --dry-run n'apprend rien : il travaille sur une copie
+            src.close()
+        demandeurs = defaultdict(lambda: defaultdict(int))
+        for e in evts:
+            demandeurs[A.registre_du_domaine(e["domaine"])][e["client"]] += 1
+        clients = {r: max(c.items(), key=lambda kv: kv[1])[0] for r, c in demandeurs.items()}
+        constats += R.analyser(cx, reps, now, connus, asn_resolveur(), clients)
+        cx.close()
     fichier_etat = ETAT_DIR / "dnssensor-etat.json"
     try:
         etat = json.loads(fichier_etat.read_text(encoding="utf-8")).get("emis", {})

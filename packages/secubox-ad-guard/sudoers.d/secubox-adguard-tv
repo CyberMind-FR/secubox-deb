@@ -1,3 +1,3 @@
 # POC « DNS AdBlock TV » (#1943) : l'API (utilisateur secubox) peut demander au contrôleur root d'appliquer ou retirer la configuration
 # Unbound du POC. Arguments EXACTS, aucun joker : le contrôleur relit et revalide lui-même l'état que l'API écrit.
-secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-adguard-tv apply, /usr/sbin/secubox-adguard-tv disable, /usr/sbin/secubox-adguard-tv status, /usr/sbin/secubox-adguard-tv regles-appliquer
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-adguard-tv apply, /usr/sbin/secubox-adguard-tv disable, /usr/sbin/secubox-adguard-tv status, /usr/sbin/secubox-adguard-tv regles-appliquer, /usr/sbin/secubox-adguard-tv cache-dump

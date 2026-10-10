@@ -30,7 +30,7 @@ override_dh_auto_install:
 	install -d debian/secubox-ad-guard/lib/systemd/system
 	install -m 644 debian/secubox-ad-guard-dnsfeed.service debian/secubox-ad-guard-auto.service debian/secubox-ad-guard-auto.timer debian/secubox-ad-guard/lib/systemd/system/
 	# #2240 — capteur DNS d'Actor Intelligence : unité, minuterie et exemple de liste de l'opérateur
-	install -m 644 debian/secubox-ad-guard-dnssensor.service debian/secubox-ad-guard-dnssensor.timer debian/secubox-ad-guard/lib/systemd/system/
+	install -m 644 debian/secubox-ad-guard-dnssensor.service debian/secubox-ad-guard-dnssensor.timer debian/secubox-ad-guard-dnsdump.service debian/secubox-ad-guard-dnsdump.timer debian/secubox-ad-guard/lib/systemd/system/
 	install -d debian/secubox-ad-guard/usr/share/secubox/ad-guard/config
 	install -m 644 config/dns-malveillants.txt.example debian/secubox-ad-guard/usr/share/secubox/ad-guard/config/
 

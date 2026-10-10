@@ -163,3 +163,14 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 
 L'appareil est la source de l'enveloppe ; seul le domaine enregistré est conservé, jamais les sous-noms. Un constat n'est ré-émis qu'au bout de 6 h. `secubox-adguard-dnssensor --dry-run` montre ce que le capteur verrait sans rien envoyer. **Non couvert** : le détournement d'un domaine normal vers une adresse inattendue demande les réponses DNS, que le magasin ne garde pas.
 
+### Détournement d'un domaine normal (réponses d'Unbound)
+
+`secubox-ad-guard-dnsdump.timer` (5 min) prend un instantané des seules réponses A/AAAA du cache d'Unbound (`sudo -n secubox-adguard-tv cache-dump`, argument exact : le contrôleur root imprime sur la sortie standard et n'écrit rien). Le capteur compare ces réponses à une **référence apprise en silence pendant 3 jours** (`reponses.db`, par domaine : ASN via GeoLite2-ASN si disponible, sinon préfixe /16 ou /32).
+
+| Règle | Déclencheur | Source de l'enveloppe |
+|---|---|---|
+| `dns.hijack.new_net` | un nom d'un domaine connu et stable résout vers un réseau jamais vu (au plus 5 réseaux dans la référence : un CDN qui tourne n'en a pas) | l'adresse inattendue |
+| `dns.hijack.special` | un nom public résout vers loopback, privé, lien-local, nul, CGNAT ou multicast | l'appareil qui a demandé le domaine |
+
+Une adresse suspecte n'entre pas dans la référence : elle est re-signalée (6 h) jusqu'à ce que l'opérateur la confirme avec `secubox-adguard-dnssensor --accepter DOMAINE`. Un nom toujours privé (zone locale) n'est jamais jugé. `--dry-run` travaille sur une copie : il n'apprend rien.
+

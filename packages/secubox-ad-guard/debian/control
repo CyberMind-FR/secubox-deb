@@ -18,6 +18,7 @@ Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.7.1), secubox-toolbox,
  unbound, python3-httpx | python3-pip,
          dns-root-data
+Recommends: python3-maxminddb
 Description: SecuBox Ad Guard Module
  Ad and tracker detection with per-device statistics.
  Features blocklist management, delayed blacklisting workflow,
