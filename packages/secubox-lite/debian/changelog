@@ -1,3 +1,9 @@
+secubox-lite (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * Depend de secubox-autoload-agent (>= 0.5.0) : l'agent du provisionnement Auto-Load (#2182) est dans toutes les images lite, donc isp et full qui en heritent (#2210).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 18:00:00 +0200
+
 secubox-lite (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-soc-agent retire du profil : il pousse vers une passerelle SOC decommissionnee et accepte des commandes a distance, il n'a rien a faire dans un profil par defaut (#2146). Il reste installable a la demande.

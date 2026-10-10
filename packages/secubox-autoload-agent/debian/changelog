@@ -1,3 +1,9 @@
+secubox-autoload-agent (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le paquet livre le trousseau public « SecuBox Provisioning » (/usr/share/secubox/autoload/provisioning.gpg, empreinte 14A5B0E26CEB6DF820038B88CF764A1B09C5047C), la cle de signature des fichiers de reponses. Un test refuse toute cle privee dans le depot (#2210).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 18:00:00 +0200
+
 secubox-autoload-agent (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport final (#2192, parent #2182) : autoload_agent/rapport.py. Le parcours termine construit un rapport sans secret (client, profil, paquets, domaine, comptes par nom, adresse de tunnel, debut, fin, etapes : exactement les champs que l'infrastructure accepte), l'ecrit sur la box (0600), l'affiche a l'ecran (/run/issue.d/50-secubox-autoload.issue, lu par agetty) et le diffuse a l'infrastructure par le tunnel, qui l'envoie par courrier au client si son contact est renseigne. Une diffusion en panne n'arrete jamais le parcours ; le rapport reste sur la box. Le moteur enregistre l'heure de debut dans l'etat. autoload-agentctl rapport affiche le dernier rapport ; run l'affiche en fin de parcours.

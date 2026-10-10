@@ -47,6 +47,10 @@ Le moteur remet son plan à un valideur. Le **pré-rapport** dit ce qui va arriv
 
 À la fin du parcours, `autoload_agent/rapport.py` construit un rapport **sans secret** (client, profil, paquets, domaine, comptes par nom, adresse de tunnel, début, fin, étapes), l'écrit sur la box (`/var/lib/secubox/autoload-agent/rapport.json`), l'affiche à l'écran (`/run/issue.d/50-secubox-autoload.issue`, lu par agetty au prochain affichage de connexion) et le diffuse à l'infrastructure, qui l'envoie par courrier au client si son contact est renseigné. Une diffusion en panne n'arrête jamais le parcours. `autoload-agentctl rapport` affiche le dernier rapport.
 
+## Clé de signature du provisionnement (0.5.1)
+
+Le fichier de réponses est signé par la clé **« SecuBox Provisioning <provision@secubox.in> »** (ed25519, empreinte `14A5 B0E2 6CEB 6DF8 2003 8B88 CF76 4A1B 09C5 047C`). Sa partie publique est livrée par ce paquet (`/usr/share/secubox/autoload/provisioning.gpg`) ; la partie privée reste sur l'infrastructure (`/etc/secubox/secrets/autoload-signing`, root 0700) : `autoloadctl signer reponses.toml` produit `reponses.toml.sig`. **À faire par l'exploitant : une copie hors ligne de ce dossier.**
+
 ## Tests
 
     python3 -m pytest packages/secubox-autoload-agent/tests

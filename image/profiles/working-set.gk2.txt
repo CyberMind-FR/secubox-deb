@@ -162,6 +162,7 @@ messagerie
 metanews
 metrics
 premier-pas
+autoload-agent
 sbxos
 socialrelay
 surf

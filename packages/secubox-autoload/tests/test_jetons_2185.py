@@ -227,3 +227,33 @@ def test_cli_emettre_lister_revoquer(tmp_path):
     assert run("revoquer", "--lot", "l1", "--motif", "test").returncode == 0
     assert json.loads(run("lister", "--json").stdout)[0]["etat"] == "revoque"
     assert run("emettre", "--client", "BAD NAME", "--profil", "lite").returncode == 2
+
+
+def test_signer_produit_une_signature_que_le_trousseau_de_l_agent_accepte(tmp_path):
+    """`autoloadctl signer` + `premier-pasctl`/provision.verifier_signature : la chaîne de signature de bout en bout, avec un vrai gpg jetable."""
+    home = tmp_path / "gnupg"
+    home.mkdir(mode=0o700)
+    env = dict(os.environ, GNUPGHOME=str(home), SECUBOX_AUTOLOAD_SIGNING_HOME=str(home), SECUBOX_AUTOLOAD_DB=str(tmp_path / "x.db"), SECUBOX_AUTOLOAD_AUDIT=str(tmp_path / "a.log"))
+    subprocess.run(["gpg", "--batch", "--quiet", "--passphrase", "", "--pinentry-mode", "loopback", "--quick-generate-key", "Test <t@test.invalid>", "ed25519", "sign", "never"], env=env, check=True, capture_output=True)
+    ring = tmp_path / "ring.gpg"
+    ring.write_bytes(subprocess.run(["gpg", "--export"], env=env, check=True, capture_output=True).stdout)
+    f = tmp_path / "reponses.toml"
+    f.write_text("[box]\nnom = \"x\"\n")
+    ctl = str(ICI / "sbin" / "autoloadctl")
+    r = subprocess.run([sys.executable, ctl, "signer", str(f)], capture_output=True, text=True, env=env)
+    assert r.returncode == 0 and (tmp_path / "reponses.toml.sig").is_file()
+    sys.path.insert(0, str(ICI.parent / "secubox-premier-pas"))
+    from premier_pas import provision as V
+    V.verifier_signature(f, tmp_path / "reponses.toml.sig", ring)                  # signature acceptée
+    f.write_text("[box]\nnom = \"modifie\"\n")
+    with pytest.raises(V.SignatureInvalide):
+        V.verifier_signature(f, tmp_path / "reponses.toml.sig", ring)
+
+
+def test_signer_refuse_un_fichier_absent_ou_trop_gros(tmp_path):
+    ctl = str(ICI / "sbin" / "autoloadctl")
+    env = dict(os.environ, SECUBOX_AUTOLOAD_SIGNING_HOME=str(tmp_path))
+    assert subprocess.run([sys.executable, ctl, "signer", str(tmp_path / "absent")], capture_output=True, text=True, env=env).returncode == 2
+    gros = tmp_path / "gros.toml"
+    gros.write_text("#" * 70000)
+    assert subprocess.run([sys.executable, ctl, "signer", str(gros)], capture_output=True, text=True, env=env).returncode == 2
