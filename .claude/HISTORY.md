@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Échelle de réponse : la preuve est par adresse (ref #2274)
+Un acteur fusionné de 1 389 adresses les entraînait toutes sous mesure ; une mesure ne vise plus que les adresses individuellement hostiles (≥ 3 événements en 24 h), un ban en exige 10. toolbox-ng 0.12.2, waf-ng 1.27.2.
+
 ## 2026-10-10 — Échelle de réponse : vérification des robots en parallèle (ref #2274)
 Le premier tour sur gk2 (900 adresses) était retardé par la vérification DNS en série ; elle est parallèle et une adresse non vérifiée n'est jamais touchée. toolbox-ng 0.12.1, waf-ng 1.27.1.
 

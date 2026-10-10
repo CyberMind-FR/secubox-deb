@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -162,4 +163,87 @@ func contient(s, sous string) bool {
 		}
 	}
 	return false
+}
+
+// ── Une mesure ne vise que les adresses qui se sont elles-mêmes mal comportées ──────────────────────────────────────────────────────────────────
+func TestIPsHostilesNeGardeQueLesAdressesQuiSeSontMalComportees(t *testing.T) {
+	ips := []string{"198.51.100.10", "198.51.100.11", "198.51.100.12", "198.51.100.13"}
+	hostiles := map[string]int{"198.51.100.10": 30, "198.51.100.11": 0, "198.51.100.12": mesure.SeuilHostilesIP - 1, "198.51.100.13": mesure.SeuilHostilesIP}
+	got := ipsHostiles(ips, hostiles)
+	if len(got) != 2 || got[0] != "198.51.100.10" || got[1] != "198.51.100.13" {
+		t.Fatalf("seules les adresses qui ont elles-mêmes atteint le seuil : %v", got)
+	}
+	if len(ipsHostiles(ips, nil)) != 0 {
+		t.Fatal("sans aucune preuve individuelle : personne")
+	}
+}
+
+func TestUneAdresseInnocenteMelangeeAUnAttaquantNEstPasPunie(t *testing.T) {
+	s := serveur(t)
+	maintenant := time.Now().Unix()
+	for i := 0; i < 30; i++ {
+		ingere(t, s, envelope.Envelope{Timestamp: maintenant - 200 + int64(i), Sensor: "waf", SrcIP: "198.51.100.10", DstService: "git.gk2", Severity: 85, BehaviorTags: []string{"sqli", "high_value_probe"}})
+	}
+	ingere(t, s, envelope.Envelope{Timestamp: maintenant - 100, Sensor: "waf", SrcIP: "198.51.100.11", DstService: "git.gk2", Severity: 10})
+	s.evT = tampon[[]envelope.Envelope]{}
+	ms, err := s.recalculerMesures(maintenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parIP(ms, "198.51.100.10")) == 0 {
+		t.Fatalf("l'adresse qui a attaqué est sous mesure : %+v", ms)
+	}
+	for _, m := range ms {
+		for _, ip := range m.IPs {
+			if ip == "198.51.100.11" {
+				t.Fatalf("l'adresse qui n'a rien fait n'est jamais sous mesure : %+v", m)
+			}
+		}
+	}
+}
+
+func TestUnActeurDontAucuneAdresseEstHostileNAPasDeMesure(t *testing.T) {
+	s := serveur(t)
+	maintenant := time.Now().Unix()
+	for i := 0; i < 30; i++ { // beaucoup d'événements, tous de gravité faible, étalés sur de nombreuses adresses : aucune n'atteint le seuil individuel
+		ingere(t, s, envelope.Envelope{Timestamp: maintenant - 200 + int64(i), Sensor: "waf", SrcIP: fmt.Sprintf("198.51.100.%d", 100+i), DstService: "git.gk2", Severity: 45, BehaviorTags: []string{"scanners"}})
+	}
+	s.evT = tampon[[]envelope.Envelope]{}
+	ms, _ := s.recalculerMesures(maintenant)
+	for _, m := range ms {
+		if len(m.IPs) == 0 {
+			t.Fatalf("une mesure sans adresse n'existe pas : %+v", m)
+		}
+	}
+}
+
+func TestUnBanExigeUnePreuveIndividuelleBienPlusForteQueLeRalentissement(t *testing.T) {
+	ips := []string{"198.51.100.1", "198.51.100.2", "198.51.100.3"}
+	h := map[string]int{"198.51.100.1": mesure.SeuilHostilesDeny, "198.51.100.2": mesure.SeuilHostilesDeny - 1, "198.51.100.3": mesure.SeuilHostilesIP}
+	forts, faibles := repartirDeny(ips, h)
+	if len(forts) != 1 || forts[0] != "198.51.100.1" || len(faibles) != 2 {
+		t.Fatalf("forts=%v faibles=%v", forts, faibles)
+	}
+}
+
+func TestUnActeurEnDenyDontCertainesAdressesSontFaiblesLesRalentitSeulement(t *testing.T) {
+	s := serveur(t)
+	maintenant := time.Now().Unix()
+	pose := func(ip string, n int) {
+		for i := 0; i < n; i++ {
+			ingere(t, s, envelope.Envelope{Timestamp: maintenant - 300 + int64(i), Sensor: "waf", SrcIP: ip, DstService: "git.gk2", Severity: 85, BehaviorTags: []string{"sqli", "high_value_probe"}})
+			ingere(t, s, envelope.Envelope{Timestamp: maintenant - 300 + int64(i), Sensor: "dpi", SrcIP: ip, Severity: 80, RuleID: "dpi.risk.malicious_fingerprint"})
+		}
+	}
+	pose("198.51.100.20", 15) // beaucoup d'événements, deux capteurs
+	pose("198.51.100.21", 3)  // quelques-uns seulement
+	s.evT = tampon[[]envelope.Envelope]{}
+	ms, _ := s.recalculerMesures(maintenant)
+	fort, faible := niveauMax(parIP(ms, "198.51.100.20")), niveauMax(parIP(ms, "198.51.100.21"))
+	if fort == mesure.Observe {
+		t.Fatalf("l'adresse très active est sous mesure : %v", ms)
+	}
+	if faible == mesure.Deny || faible == mesure.Quarantine {
+		t.Fatalf("une adresse qui n'a que %d événements n'est jamais bannie sur la réputation de l'acteur : %s", 3*2, faible)
+	}
 }
