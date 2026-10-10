@@ -94,6 +94,11 @@ ExecStartPre=+/bin/sh -c 'test -e /var/log/secubox/waf/waf-threats.log && /bin/c
 ExecStartPre=+/bin/mkdir -p /var/lib/secubox/waf
 ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/lib/secubox/waf
 ExecStartPre=+/bin/chmod 0770 /var/lib/secubox/waf
+# Le cache (signaux d'activité des vhosts, cache média) appartient au service (#1001, #2283). Il appartenait à `secubox` alors que le service tourne en `secubox-waf` : sbxwaf ne
+# pouvait pas y écrire ses signaux d'activité, le fichier est resté figé ONZE JOURS et tous les vhosts paraissaient inactifs — la mise en veille branchée dessus aurait éteint la box.
+# Ce correctif vivait dans un drop-in posé à la main sur gk2 ; il est ici, dans le paquet.
+ExecStartPre=+/bin/mkdir -p /var/cache/secubox/waf
+ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/cache/secubox/waf
 # DELAI AMONT : 10 s PAR DEFAUT, TROP COURT POUR QUI ECRIT SUR DISQUE (#1030).
 #
 # Un depot de 22 Mio a mis 116 s a s'ecrire sur cette board. Le WAF abandonnait

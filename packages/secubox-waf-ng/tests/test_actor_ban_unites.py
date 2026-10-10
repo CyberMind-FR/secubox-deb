@@ -50,3 +50,30 @@ def test_actord_publie_ses_mesures_ou_sbxwaf_les_lit_et_l_echelle_est_livree_en_
         assert re.search(r"^\s+--mesures auto", texte, re.M)
     main_go = (SYS.parents[1] / "secubox-toolbox-ng" / "cmd" / "sbxwaf" / "main.go").read_text()
     assert re.search(r'"mesures-fichier", "([^"]+)"', main_go).group(1) == chemin       # le défaut de sbxwaf est ce même chemin
+
+
+# ── #2283 : l'unité prépare elle-même le cache, et aucun fichier d'unité n'est corrompu ───────────────────────────────────────────────────────
+def test_l_unite_donne_le_cache_au_service_sans_drop_in_manuel():
+    """Le correctif de #1001 vivait dans un drop-in posé à la main sur gk2 (corrompu par un heredoc à backticks). Il appartient à l'unité."""
+    t = (SYS / "secubox-waf-ng.service").read_text()
+    assert re.search(r"^ExecStartPre=\+/bin/mkdir -p /var/cache/secubox/waf$", t, re.M)
+    assert re.search(r"^ExecStartPre=\+/bin/chown -R secubox-waf:secubox-waf /var/cache/secubox/waf$", t, re.M)
+
+
+def test_aucun_fichier_d_unite_ou_de_dropin_du_paquet_n_est_corrompu():
+    """Chaque ligne utile est une section, une directive `Clé=valeur` ou la suite d'une ligne finissant par `\\` ; jamais une aide de commande collée là, ni un code couleur ANSI."""
+    fichiers = list(SYS.glob("*.service")) + list(SYS.glob("*.timer")) + list((SYS.parent / "conf").glob("*.conf")) + list((SYS.parent / "conf").glob("*.example"))
+    assert fichiers
+    for f in fichiers:
+        texte = f.read_text()
+        assert "\x1b" not in texte and "\\033" not in texte, f"{f.name} : code couleur ANSI (sortie de commande collée)"
+        suite = False
+        for n, ligne in enumerate(texte.splitlines(), 1):
+            brut = ligne.strip()
+            if suite:
+                suite = ligne.rstrip().endswith("\\")
+                continue
+            if not brut or brut.startswith(("#", ";")):
+                continue
+            assert re.match(r"^(\[[A-Za-z]+\]|[A-Za-z][A-Za-z0-9]*=.*)$", brut), f"{f.name}:{n} : « {brut[:60]} » n'est ni une section ni une directive"
+            suite = ligne.rstrip().endswith("\\")
