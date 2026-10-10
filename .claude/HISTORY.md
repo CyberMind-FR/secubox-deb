@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Admin SBXOS : API de la Vue d'ensemble (ref #2212)
+
+secubox-hub 1.9.42 : `GET /api/v1/hub/apercu`, agregat des caches (pas d'apt/systemctl), `api/apercu.py` pur. Suite : la page web qui l'affiche, puis recherche et notifications.
+
 ## 2026-10-10 — Admin SBXOS : navigation a six espaces derriere un drapeau (ref #2212)
 
 secubox-hub 1.9.41 : sidebar.js v2.42.0, `?nav=espaces` / `?nav=categories`, choix memorise, defaut inchange. Suite : page Vue d'ensemble, recherche, fiches appareil/service, bascule du defaut apres validation.

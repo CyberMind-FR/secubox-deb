@@ -1,3 +1,9 @@
+secubox-hub (1.9.42-1~bookworm1) bookworm; urgency=medium
+
+  * Vue d'ensemble (#2212) : GET /api/v1/hub/apercu (require_lecture) agrege l'etat de la box a partir des seuls caches en memoire (menu, statistiques, notifications) : etat global ok/degrade/critique/inconnu, un bloc par espace (actifs/total, services arretes), ressources, alertes recentes. Jamais d'apt ni de systemctl sur la requete ; une donnee absente reste null. Fonction pure api/apercu.py, 7 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 21:00:00 +0200
+
 secubox-hub (1.9.41-1~bookworm1) bookworm; urgency=medium
 
   * Navigation a six espaces (#2212), derriere un drapeau : /shared/sidebar.js v2.42.0 affiche les espaces du menu (« espaces » de l'API) avec ?nav=espaces, memorise le choix (localStorage sbx_nav) et revient aux categories avec ?nav=categories. Par defaut rien ne change ; un hub sans « espaces » garde les categories ; le HTML pre-rendu a sa propre cle par mode. Lien de bascule en tete du menu. 7 tests navigateur.
