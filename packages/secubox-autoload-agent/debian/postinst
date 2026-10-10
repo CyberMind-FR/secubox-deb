@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Le dossier où l'atelier dépose les réponses signées et le jeton : lisible de root seulement (le jeton y passe quelques instants).
+    # mkdir -p, jamais `install -d -m` sur un dossier qui existe peut-être : cela en changerait les droits (et le masque ACL d'un dossier voisin).
+    mkdir -p /boot/secubox/autoload 2>/dev/null && chmod 0700 /boot/secubox/autoload 2>/dev/null || true
+    mkdir -p /var/lib/secubox/autoload-agent && chmod 0700 /var/lib/secubox/autoload-agent
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    # Activée ; ne démarre que si /boot/secubox/autoload/reponses.toml existe, qu'un trousseau est installé et qu'aucun rapport n'est déjà écrit.
+    systemctl enable secubox-autoload-agent.service >/dev/null 2>&1 || true
+fi
+#DEBHELPER#
+exit 0

@@ -9,7 +9,7 @@
 
 Provisionnement réseau « Auto-Load », **côté box cliente**. Parent #2182, cadrage `docs/dossiers/provisionnement-auto-load.md`. Le côté infrastructure est `secubox-autoload`.
 
-**État (0.5.0) :** le tunnel sortant (#2189), le moteur de provisioning (#2187), la validation (#2188) et le client de l'infrastructure ; `autoload-agentctl` lance le parcours à la main (atelier, one-shot). Le démarrage automatique (zero-touch) demande une unité root et reste à décider (#2193) ; le rapport final (#2192) est livré.
+**État (0.6.0) :** le tunnel sortant (#2189), le moteur de provisioning (#2187), la validation (#2188) et le client de l'infrastructure ; `autoload-agentctl` lance le parcours à la main (atelier, one-shot). Le démarrage automatique au premier boot (unité root, durcie) est livré en 0.6.0, avec l'atelier qui prépare une image (#2280) ; le rapport final (#2192) est livré.
 
 ## Tunnel (`autoload_agent/tunnel.py`)
 
@@ -46,6 +46,12 @@ Le moteur remet son plan à un valideur. Le **pré-rapport** dit ce qui va arriv
 ## Rapport final (0.5.0, #2192)
 
 À la fin du parcours, `autoload_agent/rapport.py` construit un rapport **sans secret** (client, profil, paquets, domaine, comptes par nom, adresse de tunnel, début, fin, étapes), l'écrit sur la box (`/var/lib/secubox/autoload-agent/rapport.json`), l'affiche à l'écran (`/run/issue.d/50-secubox-autoload.issue`, lu par agetty au prochain affichage de connexion) et le diffuse à l'infrastructure, qui l'envoie par courrier au client si son contact est renseigné. Une diffusion en panne n'arrête jamais le parcours. `autoload-agentctl rapport` affiche le dernier rapport.
+
+## Premier démarrage automatique et atelier (0.6.0, #2280)
+
+Phase A livrée : l'agent est dans le profil `lite` (donc dans toute image), `secubox-autoload-agent.service` démarre au premier boot **si** `/boot/secubox/autoload/reponses.toml` existe, qu'un trousseau est installé
+et qu'aucun rapport n'existe. `autoload-agent-demarrage` installe le jeton déposé sur `/boot` (0600, root) puis l'efface ; `autoload-atelier` (`cle-init`, `preparer`, `verifier`) compose, valide, signe et vérifie
+le dépôt. Le trousseau « SecuBox Provisioning » (clé publique) est livré dans `keyring/provisioning.gpg`. Procédure complète, gestion de la clé et limites : `docs/AUTOLOAD-ATELIER.md`.
 
 ## Tests
 

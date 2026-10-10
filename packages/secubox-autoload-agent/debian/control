@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-autoload-agent
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), wireguard-tools, secubox-premier-pas (>= 0.5.0), secubox-profiles
+Depends: ${misc:Depends}, python3 (>= 3.11), wireguard-tools, gpgv, gnupg, secubox-premier-pas (>= 0.5.0), secubox-profiles
 Description: SecuBox — provisionnement réseau Auto-Load, côté box
  Agent de la box cliente : clé WireGuard générée sur la box, tunnel sortant
  vers l'infrastructure (admin.gk2.secubox.in), jamais de port entrant.

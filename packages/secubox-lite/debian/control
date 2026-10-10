@@ -18,6 +18,9 @@ Depends: ${misc:Depends},
  secubox-system (>= 1.0),
  secubox-hardening (>= 1.0),
  secubox-premier-pas,
+ # Auto-Load phase A (#2280) : l'agent est dans CHAQUE image, donc une box flashée se provisionne seule au premier démarrage — mais seulement si /boot porte un
+ # fichier de réponses SIGNÉ ; sans lui l'unité ne démarre pas.
+ secubox-autoload-agent,
  secubox-health,
  secubox-profiles,
  secubox-appstore,

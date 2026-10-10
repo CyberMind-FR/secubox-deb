@@ -17,15 +17,16 @@ real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à 
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
-## 🔄 Chantier en cours — release v3.0.0-alpha.11 (tag posé le 2026-10-11)
+## 🔄 Chantier en cours — release v3.0.0-alpha.11 (tag posé le 2026-10-11, reposé avec l'agent Auto-Load)
 
 - **Contenu depuis alpha.10 (≈ 110 commits)** : admin à six espaces par défaut (#2212) ; Actor Intelligence 2.0 en six phases (#2240) dont l'échelle de réponse réelle
   (délai, défi, tarpit, ban, quarantaine du LAN par le NAC, #2274) ; billets vivants et éphémères, MetaNews qui publie des billets de 5 minutes (#2266, #2268) ; détection d'OS du NAC
   (#2236) ; Auto-Load 1 à 11 sur 11 (infrastructure, agent, WebUI, banc sans matériel, #2182) ; ad-guard TV 1.8.0 ; 60 paquets transitoires retirés (#2050) ; image ESPRESSObin sans pilote DSA.
 - **Images** : posées par la CI au tag (`release.yml`, `build-installer-iso.yml`) — dont l'**installateur sans écran** (`secubox-installer-amd64-trixie.iso.gz` et `.img.gz`, entrée
   « SecuBox Install (Headless Auto-Install) » : installe sur le premier disque). **À vérifier après la CI** : assets présents, `SHA256SUMS`, boot de l'installateur en VM, essai ESPRESSObin (#2177).
-- **Auto-Load** : le démarrage automatique au premier boot n'est PAS livré (unité root, à demander) et l'agent `secubox-autoload-agent` n'est dans aucun profil d'image : les images ne
-  se provisionnent pas encore seules (phase A du dossier `provisionnement-auto-load.md`). Reste aussi netboot (#2186), udp/51830 de la Freebox, SMTP.
+- **Auto-Load phase A LIVRÉE (#2280)** : `secubox-autoload-agent` 0.6.0 est dans le profil `lite` (donc dans toute image) ; `secubox-autoload-agent.service` démarre au premier boot si `/boot` porte un fichier de réponses
+  SIGNÉ ; `autoload-atelier` prépare l'image (valide, signe, vérifie, dépose réponses + jeton) ; clé « SecuBox Provisioning » générée sur gk2 (sans phrase de passe : décision de custody en attente). Guide :
+  `docs/AUTOLOAD-ATELIER.md`. Reste : essai matériel (#2177), netboot (#2186), udp/51830 de la Freebox, SMTP du rapport.
 - **Dépôt apt gk2** : `reprepro includedeb` n'exporte pas toujours l'index signé (« Pinentry : Inappropriate ioctl ») ; après chaque publication, vérifier la date de `dists/trixie/InRelease`,
   sinon `systemctl restart secubox-depot-deverrouille.service` puis `reprepro export trixie` (jamais de preset à la main). Index réexporté le 2026-10-10.
 - **Surveillance** : échelle de réponse en `auto` sur gk2 (adresses partagées/CGNAT ralenties avec leurs voisines ; 587 adresses visées au départ, un seul acteur en ban) ; 3 bans sur des plages

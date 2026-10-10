@@ -6,6 +6,15 @@ override_dh_auto_install:
 	install -d debian/secubox-autoload-agent/usr/lib/secubox/autoload-agent/autoload_agent
 	install -m 644 autoload_agent/*.py debian/secubox-autoload-agent/usr/lib/secubox/autoload-agent/autoload_agent/
 	install -D -m 755 sbin/autoload-agentctl debian/secubox-autoload-agent/usr/sbin/autoload-agentctl
+	install -D -m 755 sbin/autoload-agent-demarrage debian/secubox-autoload-agent/usr/sbin/autoload-agent-demarrage
+	install -D -m 755 sbin/autoload-atelier debian/secubox-autoload-agent/usr/sbin/autoload-atelier
+	install -D -m 644 systemd/secubox-autoload-agent.service debian/secubox-autoload-agent/usr/lib/systemd/system/secubox-autoload-agent.service
+	# Le trousseau « SecuBox Provisioning » (clé PUBLIQUE seulement) : sans lui l'agent refuse tout fichier de réponses.
+	install -D -m 644 keyring/provisioning.gpg debian/secubox-autoload-agent/usr/share/secubox/autoload/provisioning.gpg
 
 override_dh_auto_test:
 	true
+
+# Activation choisie par le postinst : l'unité est activée, mais elle ne démarre que si /boot porte un fichier de réponses (conditions de l'unité).
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
