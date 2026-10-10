@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — Actor Intelligence 2.0, phase 3 : scénarios, risque et confiance (ref #2240)
+
+toolbox-ng 0.9.0 : `internal/actor/analysis` (scénario ordonné, risque ≠ confiance avec facteurs, décision OBSERVE/MITIGATE/BLOCK, BLOCK ≥ 2 capteurs), routes `/actors/{id}/{timeline,graph,risk}` et `/events` (vue complète). Reste : phases 4 (kill switch), 5 (vue Hall), 6 (doc).
+
 ## 2026-10-12 — PhotoPrism dans « Mes comptes » et le SSO du Hall (ref #2255)
 
 PhotoPrism n'avait aucun réglage OIDC (`photoprismctl sso` jamais abouti) ; `sso` rejoué sur gk2, `/api/v1/oidc/login` → IdP du Hall. Carte « Mes comptes » (OIDC, sans lien) + `ENTREE_SSO` + `install` appelle `sso`. webos 1.5.16, photoprism 1.4.2.

@@ -53,6 +53,7 @@ type Server struct {
 
 	// Stats des 24 dernières heures, en double tampon (handleStats).
 	statsT tampon[store.Stats]
+	evT    tampon[[]envelope.Envelope] // derniers événements, pour les routes d'analyse (analyse.go)
 
 	ingested   atomic.Uint64 // enveloppes persistées
 	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation
@@ -226,6 +227,11 @@ func (s *Server) apiMux() *http.ServeMux {
 		mux.HandleFunc("GET "+p+"/overview", route(s.handleApercu))                        // compteurs seulement : servi aussi dans la vue réduite
 		mux.HandleFunc("GET "+p+"/proposals", route(horsVueReduite(s.handlePropositions))) // adresses : jamais dans la vue réduite
 		mux.HandleFunc("GET "+p+"/evidence/{id}", route(horsVueReduite(s.handleEvidence)))
+		// Phase 3 (#2240) : chronologie, graphe, risque/confiance/scénario/décision d'un acteur, et événements. Adresses et cibles : vue complète seulement.
+		mux.HandleFunc("GET "+p+"/actors/{id}/timeline", route(horsVueReduite(s.handleActorTimeline)))
+		mux.HandleFunc("GET "+p+"/actors/{id}/graph", route(horsVueReduite(s.handleActorGraph)))
+		mux.HandleFunc("GET "+p+"/actors/{id}/risk", route(horsVueReduite(s.handleActorRisk)))
+		mux.HandleFunc("GET "+p+"/events", route(horsVueReduite(s.handleEvents)))
 		mux.HandleFunc("POST "+p+"/feedback/{id}", route(horsVueReduite(s.handleFeedback)))
 	}
 	return mux
