@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — Carte du monde de la page Actor : ligne 7 corrigée (ref #2240)
+
+La grille TERRE (60 × 120 points de 3°) avait une ligne 7 fautive : bande de 64 points d'une rive à l'autre de l'Atlantique Nord, Sibérie absente. Reconstruite ; waf-ng 1.23.1.
+
 ## 2026-10-12 — Le binaire sbx-actord est livré par secubox-waf-ng (ref #2240)
 
 La phase 3 était dans toolbox-ng 0.9.0 (sources) mais le binaire `sbx-actord` (et `sbxwaf`) est livré par **secubox-waf-ng** : 1.23.0 le rebâtit. Piège : monter toolbox-ng seul ne change pas actord.
