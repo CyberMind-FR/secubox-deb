@@ -8,7 +8,7 @@ case "$1" in
     fi
     systemctl daemon-reload || true
     systemctl enable --now secubox-ndpisrvd.service || true
-    systemctl enable --now secubox-ndpid.service || true
+    systemctl enable --now secubox-ndpid-engine.service || true
     ;;
 esac
 exit 0

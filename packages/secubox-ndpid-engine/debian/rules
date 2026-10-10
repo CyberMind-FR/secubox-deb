@@ -48,7 +48,7 @@ override_dh_auto_install:
 	install -m 0755 "$(SRC)/build/nDPId" "$(SRC)/build/nDPIsrvd" \
 		debian/secubox-ndpid-engine/usr/sbin/
 	install -d debian/secubox-ndpid-engine/lib/systemd/system
-	install -m 0644 systemd/secubox-ndpid.service systemd/secubox-ndpisrvd.service \
+	install -m 0644 systemd/secubox-ndpid-engine.service systemd/secubox-ndpisrvd.service \
 		debian/secubox-ndpid-engine/lib/systemd/system/
 	install -d debian/secubox-ndpid-engine/etc/secubox
 	install -m 0644 conf/ndpid-engine.env debian/secubox-ndpid-engine/etc/secubox/
@@ -58,7 +58,7 @@ override_dh_installsystemd:
 	# unites et passe outre les options qui suivent (piege rencontre sur
 	# secubox-netmodes, #1362).
 	dh_installsystemd --name=secubox-ndpisrvd
-	dh_installsystemd --name=secubox-ndpid
+	dh_installsystemd --name=secubox-ndpid-engine
 
 override_dh_auto_clean:
 	rm -rf "$(SRC)"
