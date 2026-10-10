@@ -133,3 +133,10 @@ def test_lite_porte_l_agent_auto_load_donc_toute_image_peut_se_provisionner_seul
     """#2280 : l'agent est dans le profil de base — isp et full en héritent — sans quoi une image flashée ne se provisionnerait jamais seule."""
     assert "secubox-autoload-agent" in _champ("lite", "Depends")
     assert "secubox-lite" in _champ("isp", "Depends")
+
+
+def test_les_commentaires_du_control_de_chaque_profil_sont_en_colonne_zero():
+    """Une ligne qui commence par un espace est la SUITE du champ : un « # » indenté dans Depends casse dpkg-gencontrol (vu sur secubox-lite 1.6.0, #2280)."""
+    for profil in ("lite", "isp", "full"):
+        for n, ligne in enumerate((RACINE / "packages" / f"secubox-{profil}" / "debian" / "control").read_text().splitlines(), 1):
+            assert not ligne.startswith((" #", "\t#")), f"secubox-{profil}/debian/control:{n} : commentaire indenté dans un champ"
