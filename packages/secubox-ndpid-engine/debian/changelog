@@ -1,3 +1,9 @@
+secubox-ndpid-engine (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'unite de capture s'appelle desormais secubox-ndpid-engine.service. Elle s'appelait secubox-ndpid.service, comme l'unite de l'API livree par secubox-dpi (composants/ndpid) : les deux paquets se disputaient le meme fichier, c'est celui de l'API qui l'emportait, et le moteur nDPId n'avait donc AUCUNE unite — jamais lance, distributeur nDPIsrvd muet, flux d'sbxdpi fige, page /ndpid/ vide (JA3/JA4, risques, flux en direct). Le postinst active maintenant secubox-ndpid-engine.service ; l'API (secubox-dpi) l'attend par Wants/After.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 20:00:00 +0200
+
 secubox-ndpid-engine (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Premiere entree de changelog : ce paquet existait dans le depot avec un

@@ -1,8 +1,8 @@
 [Unit]
 Description=SecuBox nDPId API
-After=network.target secubox-core.service ndpid.service
+After=network.target secubox-core.service secubox-ndpid-engine.service
 Wants=secubox-core.service
-Wants=ndpid.service
+Wants=secubox-ndpid-engine.service
 
 [Service]
 Type=simple
