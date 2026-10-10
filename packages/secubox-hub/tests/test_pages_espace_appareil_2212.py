@@ -88,3 +88,29 @@ def test_appareils_refus_api_affiche_une_erreur(navigateur):
     p.wait_for_selector("#erreur:not([hidden])")
     assert "HTTP 401" in p.inner_text("#erreur")
     ctx.close()
+
+
+FLUX = {"heures": 6, "domaines": [{"domaine": "ads.tracker.example", "service": "Régie", "type": "pub", "requetes": 14, "bloquees": 14},
+                                  {"domaine": "<img src=x onerror=window.__xss=1>", "service": None, "type": None, "requetes": 3, "bloquees": 0}],
+        "services": [{"service": "Netflix", "type": "video", "requetes": 120, "bloquees": 0, "domaines": 4}, {"service": "Régie", "type": "pub", "requetes": 14, "bloquees": 14, "domaines": 1}],
+        "limite": "pas de volumes (octets) : le DNS ne les voit pas"}
+
+
+def test_fiche_appareil_deduit_les_flux_du_dns_sans_dpi(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/#aa%3Abb%3Acc%3A00%3A00%3A01",
+                   {"/api/v1/nac/client/**": (200, FICHE), "/api/v1/ad-guard/adblock-tv/flux**": (200, FLUX)})
+    p.wait_for_selector("#flux .carte")
+    t = p.inner_text("#flux")
+    assert "Netflix" in t and "120" in t and "Régie" in t and "ads.tracker.example" in t
+    assert "pas de volumes" in p.inner_text("#flux-limite")
+    assert p.evaluate("window.__xss") is None
+    ctx.close()
+
+
+def test_flux_dns_indisponibles_ne_cassent_pas_la_fiche(navigateur):
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/#aa%3Abb%3Acc%3A00%3A00%3A01",
+                   {"/api/v1/nac/client/**": (200, FICHE), "/api/v1/ad-guard/adblock-tv/flux**": (503, {})})
+    p.wait_for_selector("#detail .carte")
+    p.wait_for_function("document.getElementById('flux-limite').textContent.length > 0")
+    assert "indisponible" in p.inner_text("#flux-limite") and p.locator("#erreur:not([hidden])").count() == 0
+    ctx.close()

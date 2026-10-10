@@ -1,3 +1,9 @@
+secubox-hub (1.9.47-1~bookworm1) bookworm; urgency=medium
+
+  * Fiche appareil (#2212) : bloc « Flux deduits du DNS » (6 dernieres heures) = services, types et domaines contactes par l'appareil, lus dans ad-guard /adblock-tv/flux (equivalent DPI sans DPI). Jamais de volumes : le DNS ne les voit pas, et la fiche le dit. Si ad-guard est indisponible, la fiche NAC reste affichee. 2 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 02:00:00 +0200
+
 secubox-hub (1.9.46-1~bookworm1) bookworm; urgency=medium
 
   * Espaces (#2212) : l'entree de menu « acces » (ecrite par debian/rules de secubox-auth, donc invisible du glob menu.d) tombait dans « autre » sur gk2 ; classee dans Identite & acces (objet USER). Le test d'exhaustivite connait desormais les menus generes.

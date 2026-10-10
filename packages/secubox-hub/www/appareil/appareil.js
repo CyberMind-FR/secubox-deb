@@ -13,6 +13,26 @@
     }
     function nom(d) { return d.custom_hostname || d.hostname || d.ip || d.mac; }
     function champ(g, libelle, v) { if (v === undefined || v === null || v === '') return; var c = el('div', 'carte'); c.appendChild(el('small', null, libelle)); c.appendChild(el('span', null, String(v))); g.appendChild(c); }
+    // Flux SANS DPI, déduits des requêtes DNS (ad-guard /flux) : services et domaines contactés, jamais de volumes — le DNS ne les voit pas.
+    async function fluxDns(d) {
+        var g = $('flux'), lim = $('flux-limite'); g.textContent = ''; lim.textContent = '';
+        try {
+            var f = await json('/api/v1/ad-guard/adblock-tv/flux?heures=6&source=' + encodeURIComponent(d.mac || d.ip));
+            (f.services || []).slice(0, 8).forEach(function (s) {
+                var c = el('div', 'carte ' + (s.bloquees ? 'degrade' : '')); c.appendChild(el('b', null, s.service || '(inconnu)'));
+                c.appendChild(el('span', 'n', s.requetes + ' requêtes'));
+                c.appendChild(el('small', null, [s.type, s.domaines + ' domaine(s)', s.bloquees ? s.bloquees + ' bloquée(s)' : null].filter(Boolean).join(' · ')));
+                g.appendChild(c);
+            });
+            (f.domaines || []).slice(0, 10).forEach(function (x) {
+                var c = el('div', 'carte'); c.appendChild(el('small', null, x.domaine));
+                c.appendChild(el('span', null, x.requetes + ' requêtes' + (x.bloquees ? ' · ' + x.bloquees + ' bloquées' : '')));
+                g.appendChild(c);
+            });
+            lim.textContent = f.limite || 'Déduit du DNS : pas de volumes.';
+            if (!g.children.length) { lim.textContent = 'Aucune requête DNS vue pour cet appareil sur la période. ' + lim.textContent; }
+        } catch (e) { lim.textContent = 'Flux DNS indisponibles (' + e.message + ').'; }
+    }
     async function liste() {
         $('fiche').hidden = true; $('liste').hidden = false; $('titre').textContent = '📱 Appareils';
         var d = await json(NAC + '/clients'), g = $('appareils'); g.textContent = '';
@@ -36,6 +56,7 @@
         var ul = $('events'); ul.textContent = '';
         (d.recent_events || []).forEach(function (e) { ul.appendChild(el('li', null, (e.timestamp || '') + ' — ' + (e.event || ''))); });
         if (!(d.recent_events || []).length) ul.appendChild(el('li', 'vide', 'Aucun événement récent.'));
+        fluxDns(d);
     }
     async function aller() {
         var mac = decodeURIComponent((location.hash || '').slice(1));
