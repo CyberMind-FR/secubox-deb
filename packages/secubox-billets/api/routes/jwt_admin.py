@@ -50,6 +50,7 @@ class BilletPayload(BaseModel):
     embed_url: Optional[str] = None
     style: str = "default"
     status: str = "published"  # "published" | "draft"
+    ttl_s: Optional[int] = None  # #2268 : durée de vie en secondes (30..86400), billet éphémère ; None = durable
 
 
 def _permalien(slug: Optional[str]) -> str:
@@ -90,6 +91,7 @@ def _view(row, tags: Optional[list] = None) -> dict:
         # billet; `body` stays available for the editor.
         "summary": feeds.excerpt(d.get("body") or "", max_len=140),
         "status": d.get("status"),
+        "expires_at": d.get("expires_at"),
         "style": d.get("style"),
         "ref_url": d.get("ref_url"),
         "embed_url": d.get("embed_url"),
@@ -128,7 +130,7 @@ def register_jwt_admin(app: FastAPI) -> None:
     def _billet_in(p: BilletPayload) -> BilletIn:
         try:
             return BilletIn(body=p.body, ref_url=p.ref_url, embed_url=p.embed_url,
-                            style=p.style, publish=(p.status == "published"))
+                            style=p.style, publish=(p.status == "published"), ttl_s=p.ttl_s)
         except ValidationError as exc:
             raise HTTPException(422, f"invalid billet: {exc.errors()}")
 

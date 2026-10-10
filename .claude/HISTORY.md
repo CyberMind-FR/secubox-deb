@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Billets éphémères (ref #2268)
+`ttl_s` à la création, `expires_at` (migration 0007), exclusion à la lecture dès l'échéance, 410 sur le permalien, balayage archive→suppression (24 h), compte à rebours et extinction dans le fil ouvert. secubox-billets 0.10.0. Reste : MetaNews qui les crée.
+
 ## 2026-10-10 — Billets : le fil est vivant (ref #2266)
 Un billet publié ou commenté remonte en tête (`bumped_at`, migration 0006), `/feed/maj` + sondage 15 s dans `immersif.js`, animation d'arrivée (nouveau) et de remontée (FLIP, pastille « commenté »). secubox-billets 0.9.0. 52 échecs de tests préexistants dans le module (CSRF/fixtures), aucun de plus.
 

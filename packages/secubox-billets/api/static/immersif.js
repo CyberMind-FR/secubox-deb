@@ -540,6 +540,33 @@
   setInterval(majFil, 15000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) majFil(); });
 
+  // ── billets ÉPHÉMÈRES (#2268) ──────────────────────────────────
+  // Une carte portant data-ttl (secondes restantes AU RENDU) reçoit un compte à rebours ; à zéro elle s'éteint puis disparaît du fil ouvert. L'horloge est
+  // locale (échéance = maintenant + ttl), donc indifférente au décalage de l'appareil. Une carte en lecture n'est retirée qu'une fois la lecture finie.
+  function mmss(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  function armerEphemeres() {
+    [].forEach.call(feed.querySelectorAll(".card[data-ttl]:not([data-arme])"), function (c) {
+      c.setAttribute("data-arme", "1");
+      c._echeance = Date.now() + Number(c.getAttribute("data-ttl")) * 1000;
+      var p = document.createElement("span"); p.className = "pastille-ephemere"; p.textContent = "⏳ " + mmss((c._echeance - Date.now()) / 1000);
+      var body = c.querySelector(".body"); if (body) body.insertBefore(p, body.firstChild);
+    });
+  }
+  function eteindre(c) {
+    if (active === c) deactivate(c);
+    c.classList.add("s-eteint");
+    setTimeout(function () { if (c.parentNode) c.parentNode.removeChild(c); placeActivity(); }, 900);
+  }
+  function tourEphemeres() {
+    [].forEach.call(feed.querySelectorAll(".card[data-arme]:not(.s-eteint)"), function (c) {
+      var reste = (c._echeance - Date.now()) / 1000, p = c.querySelector(".pastille-ephemere");
+      if (p) { p.textContent = "⏳ " + mmss(reste); p.classList.toggle("urgent", reste <= 60); }
+      if (reste <= 0 && c !== playing) eteindre(c);
+    });
+  }
+  armerEphemeres();
+  setInterval(function () { armerEphemeres(); tourEphemeres(); }, 1000);
+
   loadActivity();
   setInterval(loadActivity, 45000);   // le flux reste vivant
   onScroll();                          // active tout de suite le billet en vue

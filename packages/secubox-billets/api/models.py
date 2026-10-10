@@ -106,6 +106,21 @@ class BilletIn(BaseModel):
     embed_url: Optional[_HttpsUrl] = None
     style: Literal["default", "communique"] = "default"
     publish: bool = False
+    # Durée de vie en secondes (#2268) : le billet quitte le fil à publication + ttl_s. De 30 s à 24 h ; None = durable. Un brouillon n'expire pas.
+    ttl_s: Optional[int] = None
+
+    @field_validator("ttl_s")
+    @classmethod
+    def _ttl_borne(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (30 <= v <= 86400):
+            raise ValueError("ttl_s doit être compris entre 30 et 86400 secondes")
+        return v
+
+    @model_validator(mode="after")
+    def _ttl_exige_publication(self) -> "BilletIn":
+        if self.ttl_s is not None and not self.publish:
+            raise ValueError("ttl_s exige publish=True : l'horloge d'un billet éphémère part à sa publication")
+        return self
 
     @field_validator("ref_url", "embed_url")
     @classmethod
@@ -163,6 +178,7 @@ class Billet(BaseModel):
     style: str = "default"
     embed_snapshot: Optional[str] = None
     view_count: int = 0
+    expires_at: Optional[str] = None
 
 
 class Comment(BaseModel):
