@@ -1,3 +1,9 @@
+secubox-waf-ng (1.26.4-1~bookworm1) bookworm; urgency=low
+
+  * Le paquet installe l'exemple de configuration en simulation (/usr/share/secubox/waf/actor-intelligence-simulation.conf.example) et la documentation d'activation (/usr/share/doc/secubox/ACTOR-INTELLIGENCE-ACTIVATION.md) : la 1.26.3 les referencait sans les livrer. La procedure donne le chemin installe. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 21:30:00 +0200
+
 secubox-waf-ng (1.26.3-1~bookworm1) bookworm; urgency=low
 
   * Phase 6 d'Actor Intelligence 2.0 (#2240) : documentation d'exploitation docs/ACTOR-INTELLIGENCE-ACTIVATION.md — capteurs, politique de scoring v2 (tous les facteurs de risque et de confiance avec leurs points, seuils de decision, raisons de refus), modes PASSIVE_ONLY / SIMULATION / ACTIVE et chaque drapeau avec son defaut, garde-fous (plages protegees, moteurs de recherche verifies, plafonds, 30 jours maximum, reevaluation), procedure d'activation par etapes et retour arriere, limites connues. Exemple de configuration conf/actor-intelligence-simulation.conf.example (tout en propose, aucun leurre, rien d'applique). Un test verrouille la doc sur le code : seuils, facteurs et drapeaux sont lus dans analysis.go et main.go ; si l'un change sans la doc, le test echoue. 5 tests.
