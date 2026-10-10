@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Page /ndpid/ vide : mauvaise route d'API et aucun jeton (ref #2240)
+
+secubox-dpi 1.7.3 : base `/api/v1/ndpid` (l'ancienne `/api/ndpid` donnait 404), jeton `sbx_token`, erreurs visibles, bandeau « source = ndpiReader ». JA3/JA4 et événements de risque restent vides tant que nDPId ne tourne pas.
+
 ## 2026-10-11 — Actor Intelligence 2.0, phase 2d : capteur DPI (ref #2240)
 
 toolbox-ng 0.8.0 : sbxdpi émet une enveloppe `dpi` pour une adresse publique cumulant des risques nDPI hostiles (`DPI_ACTOR_SOCK`). Phase 2 terminée (WAF, pare-feu, DNS, DNS-détournement, DPI). Reste : phases 3 à 6.

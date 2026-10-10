@@ -1,3 +1,9 @@
+secubox-dpi (1.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * Page /ndpid/ : elle restait vide. Cause : elle appelait /api/ndpid/... (404, l'API est sous /api/v1/ndpid/...), et n'envoyait aucun jeton aux routes protegees. Corrige : base /api/v1/ndpid, appel authentifie (sbx_token + cookie de session), refus affiche (« Connexion requise ») au lieu d'un silence, et bandeau expliquant que les flux viennent d'ndpiReader (wg-toolbox) donc que les empreintes JA3/JA4 et les evenements de risque restent vides tant que nDPId n'est pas actif. 3 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 19:00:00 +0200
+
 secubox-dpi (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * Base d'ingestion mitm dans /var/lib/secubox/dpi-ingest (secubox) au lieu de /var/lib/secubox/dpi (root) : sur un etat neuf l'API bouclait sur « unable to open database file » (gk3, depuis au moins le 5 octobre). L'ancienne base est deplacee par le postinst.
