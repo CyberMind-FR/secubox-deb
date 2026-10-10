@@ -1,3 +1,9 @@
+secubox-hub (1.9.41-1~bookworm1) bookworm; urgency=medium
+
+  * Navigation a six espaces (#2212), derriere un drapeau : /shared/sidebar.js v2.42.0 affiche les espaces du menu (« espaces » de l'API) avec ?nav=espaces, memorise le choix (localStorage sbx_nav) et revient aux categories avec ?nav=categories. Par defaut rien ne change ; un hub sans « espaces » garde les categories ; le HTML pre-rendu a sa propre cle par mode. Lien de bascule en tete du menu. 7 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 20:00:00 +0200
+
 secubox-hub (1.9.40-1~bookworm1) bookworm; urgency=medium
 
   * Les six espaces de l'administration (#2212) : packages/secubox-hub/espaces.json rattache chaque entree de menu.d a un espace (Vue d'ensemble, Protection, Surveillance, Services, Identite & acces, Systeme) et a un objet central (BOX, DEVICE, USER, SERVICE, ACTOR, ALERT, CERTIFICATE, BACKUP, UPDATE). GET /api/v1/hub/public/menu ajoute « espaces » (espaces non vides dans l'ordre, « autre » en dernier ; une entree non classee n'est jamais perdue) et « espace »/« objet » sur chaque entree ; categories et themes sont inchanges. Table installee en /usr/share/secubox/espaces.json. 9 tests dont l'exhaustivite (chaque entree de menu classee, aucune ligne perimee) et la separation des identites.

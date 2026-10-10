@@ -42,7 +42,7 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.41.0';
+    const VERSION = 'v2.42.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -97,7 +97,25 @@
     // immediately on load. The fresh API result then overwrites it
     // (LEDs etc. update from the actual /health-batch call). Net:
     // instant skeleton, no perceived delay.
-    const SIDEBAR_HTML_CACHE_KEY = 'sbx_sidebar_html_v1';
+    // NAVIGATION À SIX ESPACES (#2212). Derrière un drapeau : `?nav=espaces` l'active et le mémorise (sbx_nav), `?nav=categories` le retire. Par défaut rien ne change.
+    // Le menu des espaces vient de `data.espaces` (hub ≥ 1.9.40, table espaces.json) : un hub plus ancien n'en envoie pas, et la navigation par catégories reste alors seule.
+    // Le HTML pré-rendu a sa propre clé par mode : jamais le menu de l'autre vue peint en attendant l'API.
+    function navEspaces() {
+        try {
+            var q = new URLSearchParams(window.location.search).get('nav');
+            if (q === 'espaces') localStorage.setItem('sbx_nav', 'espaces');
+            else if (q === 'categories') localStorage.removeItem('sbx_nav');
+            return localStorage.getItem('sbx_nav') === 'espaces';
+        } catch (e) { return false; }
+    }
+    const NAV_ESPACES = navEspaces();
+    function groupesMenu(data) {
+        if (NAV_ESPACES && Array.isArray(data.espaces) && data.espaces.length) {
+            return data.espaces.map(function (e) { return { icon: e.icone, name: e.nom, items: e.items || [] }; });
+        }
+        return data.categories;
+    }
+    const SIDEBAR_HTML_CACHE_KEY = 'sbx_sidebar_html_v1' + (NAV_ESPACES ? '_esp' : '');
     function saveCachedSidebarHTML(html) {
         try {
             localStorage.setItem(SIDEBAR_HTML_CACHE_KEY, JSON.stringify({
@@ -2417,7 +2435,9 @@
             var preCache = loadPreCache();
 
             var menuHTML = '';
-            data.categories.forEach(function(cat) {
+            var groupes = groupesMenu(data);
+            var enEspaces = NAV_ESPACES && groupes !== data.categories;
+            groupes.forEach(function(cat) {
                 var hasActive = cat.items.some(function(i) {
                     return curPath === i.path || (i.path !== '/' && curPath.startsWith(i.path));
                 });
@@ -2466,6 +2486,9 @@
 
                 menuHTML += '</div></div>';
             });
+
+            menuHTML = '<div class="nav-mode" style="padding:.35rem .9rem"><a class="nav-mode-link" style="font-size:.68rem;opacity:.75;text-decoration:none;color:inherit" href="?nav=' +
+                (enEspaces ? 'categories' : 'espaces') + '">' + (enEspaces ? '☰ Vue par catégories' : '🧭 Vue par espaces') + '</a></div>' + menuHTML;
 
             sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
                 '<div class="header-leds-metrics" id="header-leds-metrics">' +

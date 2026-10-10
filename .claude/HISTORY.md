@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Admin SBXOS : navigation a six espaces derriere un drapeau (ref #2212)
+
+secubox-hub 1.9.41 : sidebar.js v2.42.0, `?nav=espaces` / `?nav=categories`, choix memorise, defaut inchange. Suite : page Vue d'ensemble, recherche, fiches appareil/service, bascule du defaut apres validation.
+
 ## 2026-10-10 — Admin SBXOS : audit, matrice et table des six espaces (ref #2212)
 
 Audit (docs/SBXOS_ADMIN_UI_AUDIT.md) et matrice de migration générée (docs/SBXOS_ADMIN_UI_MAP.md, scripts/generate-admin-ui-map.py) : 125 entrées de menu rattachées à 6 espaces et 9 objets centraux, aucune route supprimée. hub 1.9.40 : `espaces.json` et champ `espaces` dans /api/v1/hub/public/menu, compatibilité conservée. Prochaine étape : navigation à 6 espaces dans sidebar.js derrière un drapeau.
