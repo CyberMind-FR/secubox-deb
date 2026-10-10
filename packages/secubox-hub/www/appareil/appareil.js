@@ -13,6 +13,13 @@
     }
     // Les conteneurs LXC ne sont pas des appareils : pont br-lxc (10.100.0.0/16) ou adresse MAC attribuée par LXC (00:16:3e).
     function estConteneur(c) { return /^10\.100\./.test(c.ip || '') || /^00:16:3e:/i.test(c.mac || ''); }
+    var TYPES = { router: 'Routeurs et passerelles', computer: 'Ordinateurs', phone: 'Téléphones', printer: 'Imprimantes', smart_home: 'Objets connectés',
+                  smart_speaker: 'Enceintes connectées', unknown: 'Non identifiés' };
+    // Matériel = fabricant (l'OUI de la MAC) + modèle + rôle connu du NAC ; « Unknown » n'est pas un fabricant. Le NAC ne détecte pas le système d'exploitation.
+    function materiel(c) {
+        var v = c.oui_vendor && !/^unknown$/i.test(c.oui_vendor) ? c.oui_vendor : null;
+        return [v, c.model, c.is_secubox ? 'SecuBox' : (c.is_openwrt ? 'OpenWrt' : null)].filter(Boolean).join(' · ');
+    }
     function nom(d) { return d.custom_hostname || d.hostname || d.ip || d.mac; }
     function champ(g, libelle, v) { if (v === undefined || v === null || v === '') return; var c = el('div', 'carte'); c.appendChild(el('small', null, libelle)); c.appendChild(el('span', null, String(v))); g.appendChild(c); }
     // Flux SANS DPI, déduits des requêtes DNS (ad-guard /flux) : services et domaines contactés, jamais de volumes — le DNS ne les voit pas.
@@ -39,15 +46,34 @@
         $('fiche').hidden = true; $('liste').hidden = false; $('titre').textContent = '📱 Appareils';
         var d = await json(NAC + '/clients'), g = $('appareils'); g.textContent = '';
         var tous = d.clients || [], clients = tous.filter(function (c) { return !estConteneur(c); }), masques = tous.length - clients.length;
+        // Une carte par adresse MAC : les lignes d'un même MAC (IPv4, IPv6…) sont fusionnées, leurs adresses réunies.
+        var parMac = {};
         clients.forEach(function (c) {
-            var a = el('a', 'carte ' + (c.online ? 'ok' : '')); a.href = '#' + encodeURIComponent(c.mac);
-            a.appendChild(el('b', null, nom(c)));
-            a.appendChild(el('span', 'n', c.online ? 'en ligne' : 'hors ligne'));
-            a.appendChild(el('small', null, [c.zone_name, c.ip, c.device_type].filter(Boolean).join(' · ')));
-            g.appendChild(a);
+            var k = String(c.mac || '').toLowerCase(), m = parMac[k];
+            if (!m) { parMac[k] = m = Object.assign({}, c, { ips: [] }); }
+            if (c.ip && m.ips.indexOf(c.ip) === -1) m.ips.push(c.ip);
+            m.online = m.online || c.online;
         });
-        $('nb').textContent = '(' + clients.length + ')' + (masques ? ' · ' + masques + ' conteneurs LXC masqués' : '');
-        if (!clients.length) g.appendChild(el('p', 'vide', 'Aucun appareil connu pour l’instant.'));
+        var groupes = {};
+        Object.keys(parMac).forEach(function (k) { var m = parMac[k], t = TYPES[m.device_type] ? m.device_type : 'unknown'; (groupes[t] = groupes[t] || []).push(m); });
+        var ordre = Object.keys(TYPES).filter(function (t) { return groupes[t]; });
+        ordre.forEach(function (t) {
+            var liste = groupes[t].sort(function (x, y) { return nom(x).localeCompare(nom(y)); });
+            var box = el('details', 'groupe'); if (t !== 'unknown') box.open = true;       // les non identifiés restent repliés
+            box.appendChild(el('summary', null, TYPES[t] + ' (' + liste.length + ')'));
+            var grille = el('div', 'grille');
+            liste.forEach(function (c) {
+                var a = el('a', 'carte ' + (c.online ? 'ok' : '')); a.href = '#' + encodeURIComponent(c.mac);
+                a.appendChild(el('b', null, nom(c)));
+                a.appendChild(el('span', 'n', c.online ? 'en ligne' : 'hors ligne'));
+                var mat = materiel(c); if (mat) a.appendChild(el('small', null, mat));
+                a.appendChild(el('small', null, [c.zone_name].concat(c.ips).filter(Boolean).join(' · ')));
+                grille.appendChild(a);
+            });
+            box.appendChild(grille); g.appendChild(box);
+        });
+        $('nb').textContent = '(' + Object.keys(parMac).length + ')' + (masques ? ' · ' + masques + ' conteneurs LXC masqués' : '');
+        if (!clients.length) g.appendChild(el('p', 'vide', 'Aucun appareil connu pour l\u2019instant.'));
     }
     async function fiche(mac) {
         $('liste').hidden = true; $('fiche').hidden = false;
