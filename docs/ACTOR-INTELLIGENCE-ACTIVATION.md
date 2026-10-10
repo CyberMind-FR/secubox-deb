@@ -103,6 +103,8 @@ Tout cran est temporaire, réversible, et porte sa raison.
 | DENY | risque ≥ 75, confiance ≥ 80, deux capteurs distincts | ban nft de durée graduée 1 h, 24 h, 7 j | 1 h | sbxwaf |
 | QUARANTINE | idem DENY, pour un appareil du LAN (toutes ses adresses privées) | isolement dans la zone de quarantaine du NAC | 6 h | NAC |
 
+**La preuve est PAR ADRESSE, jamais par appartenance à un acteur.** Le graphe peut fusionner en un seul acteur des centaines d'adresses sans lien (constaté sur gk2 : 1 389 adresses dans un acteur) : une mesure ne vise que les adresses qui ont elles-mêmes produit `SeuilHostilesIP` événements hostiles dans les 24 dernières heures, et un ban exige `SeuilHostilesDeny`. Aucune adresse hostile : aucune mesure.
+
 **Escalade sur insistance** : un acteur qui produit encore `SeuilInsistance` événements hostiles NOUVEAUX (gravité ≥ 40) sous sa mesure monte d'un cran à la fois
 (DELAY → CHALLENGE → TARPIT → DENY). C'est ainsi qu'un acteur vu par le seul WAF, qui n'atteindra jamais « deux capteurs », finit banni sans que le moteur ait
 jamais bloqué sur une incertitude : la confiance doit rester ≥ 50. Une mesure en cours ne descend pas avant son échéance.
@@ -117,6 +119,8 @@ jamais bloqué sur une incertitude : la confiance doit rester ≥ 50. Une mesure
 | `SeuilConfBlock` | 80 | confiance minimale pour DENY / QUARANTINE |
 | `MinCapteurs` | 2 | capteurs distincts pour DENY / QUARANTINE |
 | `SeuilInsistance` | 10 | événements hostiles nouveaux pour monter d'un cran |
+| `SeuilHostilesIP` | 3 | événements hostiles (gravité ≥ 40, 24 h) qu'une ADRESSE doit avoir produits elle-même pour être visée par une mesure |
+| `SeuilHostilesDeny` | 10 | idem pour être bannie : en dessous, une adresse d'un acteur au niveau DENY est seulement retenue (TARPIT) |
 
 **Quarantaine d'un appareil du LAN** : c'est le **NAC** qui lit les mesures d'actord (socket locale, vue complète) et isole l'appareil dans sa zone de quarantaine
 existante — la même que pour un appareil inconnu : DNS et le reste comme aujourd'hui. Il y reste jusqu'à ce qu'un administrateur le reconnaisse et le **valide** ; il

@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.12.2-1~bookworm1) bookworm; urgency=high
+
+  * Echelle de reponse (#2274) : LA PREUVE EST PAR ADRESSE, jamais par appartenance a un acteur. Constate au deploiement sur gk2 : le graphe avait fusionne 1 389 adresses sans lien dans un seul acteur (risque 100, niveau DENY), et la mesure s'appliquait a TOUTES — punition collective, y compris d'adresses innocentes (plus de 1 300 adresses sous mesure, 20 bans pose d'un coup). Desormais une mesure ne vise que les adresses qui ont ELLES-MEMES produit au moins 3 evenements hostiles (gravite >= 40) dans les 24 dernieres heures ; un BAN exige 10 evenements individuels, en dessous une adresse d'un acteur DENY est seulement retenue (TARPIT) ; aucune adresse hostile = aucune mesure ; l'insistance ne compte que les evenements des adresses visees. Documentation et test doc/code etendus. 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 00:30:00 +0200
+
 secubox-toolbox-ng (0.12.1-1~bookworm1) bookworm; urgency=medium
 
   * Echelle de reponse (#2274) : la verification DNS des robots d'indexation se fait EN PARALLELE (32 recherches a la fois) avant le tour, au lieu d'une adresse apres l'autre. Constate au deploiement sur gk2 : 900 adresses sous mesure, verifiees en serie, retardaient de plusieurs minutes l'activation des premieres mesures (elles ne s'activent qu'en fin de tour). Le tour n'attend que 20 s ; les recherches non terminees continuent en arriere-plan. Et surtout : une adresse dont la verification n'est PAS finie n'est jamais traitee comme attaquante — ni ban, ni tarpit — elle passe sans mesure jusqu'au tour suivant ; un moteur de recherche ne peut donc pas etre touche par lenteur du DNS. Crawlers.Resolu. 2 tests.

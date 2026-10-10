@@ -33,6 +33,13 @@ const (
 	SeuilConfBlock  = 80
 	MinCapteurs     = 2
 	SeuilInsistance = 10 // événements hostiles NOUVEAUX sous la mesure courante pour monter d'un cran
+	// SeuilHostilesIP : une mesure ne vise QUE les adresses qui ont elles-mêmes produit au moins ce nombre d'événements hostiles (gravité ≥ 40) dans les dernières
+	// 24 h. Le graphe peut fusionner en un seul acteur des centaines d'adresses sans lien (constaté sur gk2 : 1 389 adresses dans ACT-0002) : la preuve est PAR ADRESSE,
+	// jamais par appartenance à un acteur.
+	SeuilHostilesIP = 3
+	// SeuilHostilesDeny : un BAN exige une preuve individuelle bien plus forte que le ralentissement. Une adresse qui n'a que SeuilHostilesIP à SeuilHostilesDeny-1
+	// événements, dans un acteur au niveau DENY, est seulement retenue (TARPIT) : sa part dans la réputation de l'acteur ne suffit pas à la bannir.
+	SeuilHostilesDeny = 10
 )
 
 var rang = map[Niveau]int{Observe: 0, Delay: 1, Challenge: 2, Tarpit: 3, Deny: 4, Quarantine: 4}

@@ -76,13 +76,36 @@ func (s *Server) recalculerMesures(now int64) ([]MesureActeur, error) {
 		if e, ok := s.mes.etats[id]; ok {
 			prev = &e
 		}
-		m, st := mesure.Choisir(mesure.Entree{Risque: x.Ev.Risque.Valeur, Confiance: x.Ev.Confiance.Valeur, Capteurs: len(x.Ev.Capteurs), Hostiles: x.Hostiles, LAN: x.LAN}, prev, now)
+		// La preuve est PAR ADRESSE : un acteur fusionné de centaines d'adresses sans lien ne les entraîne pas toutes. Aucune adresse hostile → pas de mesure.
+		ips := ipsHostiles(x.Acteur.IPs, x.HostilesIP)
+		if len(ips) == 0 {
+			delete(s.mes.etats, id)
+			continue
+		}
+		hostiles := 0
+		for _, ip := range ips {
+			hostiles += x.HostilesIP[ip]
+		}
+		m, st := mesure.Choisir(mesure.Entree{Risque: x.Ev.Risque.Valeur, Confiance: x.Ev.Confiance.Valeur, Capteurs: len(x.Ev.Capteurs), Hostiles: hostiles, LAN: toutesPrivees(ips)}, prev, now)
 		s.mes.etats[id] = st
 		if m.Niveau == mesure.Observe {
 			continue
 		}
-		out = append(out, MesureActeur{Actor: id, IPs: append([]string(nil), x.Acteur.IPs...), Niveau: m.Niveau, TTLs: int64(m.TTL.Seconds()), Depuis: st.Depuis, Expire: st.Expire,
-			Risque: x.Ev.Risque.Valeur, Confiance: x.Ev.Confiance.Valeur, Capteurs: x.Ev.Capteurs, Hostiles: x.Hostiles, LAN: x.LAN, Raison: m.Raison})
+		ajoute := func(niveau mesure.Niveau, adresses []string, raison string) {
+			if len(adresses) == 0 {
+				return
+			}
+			ttl := mesure.TTL(niveau)
+			out = append(out, MesureActeur{Actor: id, IPs: adresses, Niveau: niveau, TTLs: int64(ttl.Seconds()), Depuis: st.Depuis, Expire: st.Depuis + int64(ttl.Seconds()),
+				Risque: x.Ev.Risque.Valeur, Confiance: x.Ev.Confiance.Valeur, Capteurs: x.Ev.Capteurs, Hostiles: hostiles, LAN: toutesPrivees(adresses), Raison: raison})
+		}
+		if m.Niveau == mesure.Deny {
+			forts, faibles := repartirDeny(ips, x.HostilesIP)
+			ajoute(mesure.Deny, forts, m.Raison)
+			ajoute(mesure.Tarpit, faibles, "adresse trop peu documentée pour un ban : retenue seulement (acteur au niveau DENY)")
+		} else {
+			ajoute(m.Niveau, ips, m.Raison)
+		}
 	}
 	for id := range s.mes.etats { // un acteur sorti de la population évaluée n'a plus d'état
 		if !vus[id] {
@@ -156,4 +179,27 @@ func (s *Server) handleMesures(w http.ResponseWriter, r *http.Request) {
 		rep["mesures"] = cur
 	}
 	writeJSON(w, rep)
+}
+
+// ipsHostiles : parmi les adresses d'un acteur, celles qui ont elles-mêmes atteint le seuil d'événements hostiles. Ordre conservé.
+func ipsHostiles(ips []string, hostiles map[string]int) []string {
+	var out []string
+	for _, ip := range ips {
+		if hostiles[ip] >= mesure.SeuilHostilesIP {
+			out = append(out, ip)
+		}
+	}
+	return out
+}
+
+// repartirDeny sépare les adresses d'un acteur au niveau DENY : celles dont la preuve INDIVIDUELLE justifie un ban, et les autres (simple ralentissement).
+func repartirDeny(ips []string, hostiles map[string]int) (forts, faibles []string) {
+	for _, ip := range ips {
+		if hostiles[ip] >= mesure.SeuilHostilesDeny {
+			forts = append(forts, ip)
+		} else {
+			faibles = append(faibles, ip)
+		}
+	}
+	return
 }

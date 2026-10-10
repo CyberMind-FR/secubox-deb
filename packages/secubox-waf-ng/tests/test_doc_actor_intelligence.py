@@ -58,7 +58,7 @@ MESURE = (RACINE / "packages" / "secubox-toolbox-ng" / "internal" / "actor" / "m
 
 
 def test_les_seuils_et_durees_de_l_echelle_de_reponse_sont_ceux_du_code():
-    for nom in ("SeuilDelay", "SeuilChallenge", "SeuilTarpit", "SeuilBlock", "SeuilConfiance", "SeuilConfBlock", "MinCapteurs", "SeuilInsistance"):
+    for nom in ("SeuilDelay", "SeuilChallenge", "SeuilTarpit", "SeuilBlock", "SeuilConfiance", "SeuilConfBlock", "MinCapteurs", "SeuilInsistance", "SeuilHostilesIP", "SeuilHostilesDeny"):
         valeur = re.search(rf"{nom}\s*=\s*(\d+)", MESURE).group(1)
         assert re.search(rf"\|\s*`{nom}`\s*\|\s*{valeur}\s*\|", DOC), f"{nom} = {valeur} absent de la table de l'échelle"
     ligne = re.search(r"var ttl = map\[Niveau\]time\.Duration\{([^}]*)\}", MESURE).group(1)

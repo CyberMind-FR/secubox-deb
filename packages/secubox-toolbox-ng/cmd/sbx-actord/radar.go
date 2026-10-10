@@ -69,8 +69,10 @@ func projeterScore(sc analysis.Score) radarScore {
 type evalActeur struct {
 	Acteur   graph.Actor
 	Ev       analysis.Evaluation
-	Hostiles int  // événements hostiles (gravité ≥ 40) cumulés
-	LAN      bool // toutes ses adresses sont privées
+	Hostiles int // événements hostiles (gravité ≥ 40) cumulés
+	// HostilesIP : événements hostiles des dernières 24 h, PAR adresse — la preuve individuelle sur laquelle une mesure s'appuie.
+	HostilesIP map[string]int
+	LAN        bool // toutes ses adresses sont privées
 }
 
 // evaluerActeurs évalue les acteurs les plus prioritaires. UN SEUL calcul pour le radar et pour les mesures : ils ne peuvent pas diverger.
@@ -111,12 +113,16 @@ func (s *Server) evaluerActeurs(now int64) ([]evalActeur, error) {
 		}
 		sort.Slice(mine, func(i, j int) bool { return mine[i].TS < mine[j].TS })
 		hostiles := 0
+		parAdresse := map[string]int{}
 		for _, e := range mine {
 			if e.Severity >= 40 {
 				hostiles++
+				if e.TS >= now-86400 {
+					parAdresse[e.SrcIP]++
+				}
 			}
 		}
-		out = append(out, evalActeur{Acteur: c, Ev: analysis.Evaluer(analysis.Entree{Events: mine, Vecteur: c.Vector, Maintenant: now}), Hostiles: hostiles, LAN: toutesPrivees(c.IPs)})
+		out = append(out, evalActeur{Acteur: c, Ev: analysis.Evaluer(analysis.Entree{Events: mine, Vecteur: c.Vector, Maintenant: now}), Hostiles: hostiles, HostilesIP: parAdresse, LAN: toutesPrivees(c.IPs)})
 	}
 	return out, nil
 }
