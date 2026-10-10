@@ -208,6 +208,7 @@ func ingest(agg *aggregator, filt *filter, sess *sessionTracker, ev *dpiEvent) {
 		}
 		agg.recordFlow(ev, d.firstParty)
 		agg.recordRisks(ev, filt)
+		agg.capteur.Observe(ev) // #2240 : capteur Actor Intelligence (nil-safe)
 	case "end", "idle":
 		d := filt.classify(ev)
 		if d.drop {
@@ -215,6 +216,7 @@ func ingest(agg *aggregator, filt *filter, sess *sessionTracker, ev *dpiEvent) {
 		}
 		agg.recordBytes(ev)
 		agg.recordRisks(ev, filt)
+		agg.capteur.Observe(ev) // #2240
 		// Corrélation en session (L3) : au flow-end, octets connus.
 		sess.observe(ev, time.Now().Unix())
 	}

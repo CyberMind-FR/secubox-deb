@@ -38,6 +38,9 @@ type counter struct {
 }
 
 type aggregator struct {
+	// capteur : capteur Actor Intelligence (#2240), nil si non armé ; Observe est sans effet sur nil. Posé avant le démarrage des lecteurs, jamais modifié ensuite.
+	capteur *ActorSensor
+
 	mu         sync.Mutex
 	protocols  map[string]*counter // master proto: "TLS"
 	apps       map[string]*counter // full proto: "TLS.Google"

@@ -25,6 +25,12 @@ case "$1" in
       install -d -m 0755 -o secubox-toolbox -g secubox-toolbox /data/secubox/sbxdpi 2>/dev/null || true
       install -d -m 0755 -o secubox-toolbox -g secubox-toolbox /data/secubox/media-buffer 2>/dev/null || true
     fi
+    # CAPTEUR ACTOR INTELLIGENCE (#2240) : sbxdpi (et authwatch) déposent leurs enveloppes sur le socket d'ingestion d'actord (srw-rw---- secubox-actord:actord-ingest).
+    # Appartenir au groupe suffit : pas de SupplementaryGroups dans l'unité, qui échouerait à démarrer si le groupe disparaissait un jour (paquet actord retiré).
+    # Le groupe est créé par secubox-waf-ng ; absent, rien n'est fait et le capteur reste muet.
+    if getent group actord-ingest >/dev/null 2>&1 && id secubox-toolbox >/dev/null 2>&1; then
+      usermod -aG actord-ingest secubox-toolbox >/dev/null 2>&1 || true
+    fi
     # Intentionally NO `systemctl enable --now`. See the unit header and
     # debian/changelog: enabled only at the Phase 6 cutover.
 
