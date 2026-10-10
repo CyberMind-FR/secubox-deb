@@ -42,7 +42,7 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.42.0';
+    const VERSION = 'v2.43.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -109,6 +109,26 @@
         } catch (e) { return false; }
     }
     const NAV_ESPACES = navEspaces();
+    // Recherche globale (#2212) : filtre les entrées de tous les espaces, sans casse ni accents ; le nom de l'espace compte aussi.
+    function sansAccents(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+    document.addEventListener('input', function (ev) {
+        if (!ev.target || ev.target.id !== 'sbx-recherche') return;
+        var q = sansAccents(ev.target.value.trim()), reste = 0;
+        document.querySelectorAll('#sidebar .nav-section').forEach(function (sec) {
+            var titre = sansAccents((sec.querySelector('.nav-section-title') || {}).textContent);
+            var vus = 0;
+            sec.querySelectorAll('.nav-item').forEach(function (a) {
+                var ok = !q || titre.indexOf(q) !== -1 || sansAccents(a.textContent).indexOf(q) !== -1;
+                a.style.display = ok ? '' : 'none';
+                if (ok) vus++;
+            });
+            sec.style.display = vus ? '' : 'none';
+            if (q && vus) sec.classList.remove('collapsed');
+            reste += vus;
+        });
+        var vide = document.getElementById('sbx-recherche-vide');
+        if (vide) vide.hidden = !q || reste > 0;
+    });
     function groupesMenu(data) {
         if (NAV_ESPACES && Array.isArray(data.espaces) && data.espaces.length) {
             return data.espaces.map(function (e) { return { icon: e.icone, name: e.nom, items: e.items || [] }; });
@@ -2488,7 +2508,9 @@
             });
 
             menuHTML = '<div class="nav-mode" style="padding:.35rem .9rem"><a class="nav-mode-link" style="font-size:.68rem;opacity:.75;text-decoration:none;color:inherit" href="?nav=' +
-                (enEspaces ? 'categories' : 'espaces') + '">' + (enEspaces ? '☰ Vue par catégories' : '🧭 Vue par espaces') + '</a></div>' + menuHTML;
+                (enEspaces ? 'categories' : 'espaces') + '">' + (enEspaces ? '☰ Vue par catégories' : '🧭 Vue par espaces') + '</a>' +
+                (enEspaces ? '<input id="sbx-recherche" type="search" placeholder="Rechercher un module…" aria-label="Rechercher un module" autocomplete="off" style="width:100%;margin-top:.35rem;padding:.3rem .5rem;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;font-size:.78rem"><div id="sbx-recherche-vide" hidden style="font-size:.72rem;opacity:.7;padding:.3rem 0">Aucun résultat.</div>' : '') +
+                '</div>' + menuHTML;
 
             sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
                 '<div class="header-leds-metrics" id="header-leds-metrics">' +
