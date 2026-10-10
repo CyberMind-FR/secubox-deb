@@ -114,3 +114,18 @@ def test_flux_dns_indisponibles_ne_cassent_pas_la_fiche(navigateur):
     p.wait_for_function("document.getElementById('flux-limite').textContent.length > 0")
     assert "indisponible" in p.inner_text("#flux-limite") and p.locator("#erreur:not([hidden])").count() == 0
     ctx.close()
+
+
+def test_les_conteneurs_lxc_ne_sont_pas_des_appareils(navigateur):
+    clients = {"count": 4, "clients": [
+        CLIENTS["clients"][0],
+        {"mac": "3e:56:63:13:4e:8a", "ip": "10.100.0.10", "hostname": "mail", "online": True},            # pont br-lxc
+        {"mac": "00:16:3e:1c:41:60", "ip": "fe80::216:3eff:fe1c:4160", "hostname": "nextcloud", "online": True},   # OUI LXC
+        {"mac": "02:fb:00:00:d2:80", "ip": "10.55.0.2", "hostname": "tunnel", "online": True}]}
+    ctx, p = ouvre(navigateur, "http://sbx.test/appareil/", {"/api/v1/nac/clients": (200, clients)})
+    p.wait_for_selector("#appareils .carte")
+    assert p.locator("#appareils .carte").count() == 2          # tv-salon et le client 10.55.0.2 : seuls les conteneurs sont écartés
+    t = p.inner_text("#appareils")
+    assert "tv-salon" in t and "mail" not in t and "nextcloud" not in t
+    assert "2 conteneurs lxc masqués" in p.inner_text("#liste").lower()
+    ctx.close()
