@@ -952,6 +952,24 @@ async def save_widgets(req: WidgetRequest, user=Depends(require_jwt)):
     return {"success": True}
 
 
+@router.get("/apercu", dependencies=[Depends(require_lecture)])
+async def apercu():
+    """Vue d'ensemble (#2212) : caches en mémoire seulement, jamais d'apt ni de systemctl sur le chemin de la requête."""
+    from .apercu import construire_apercu
+    menu = _menu_cache or _cache.get("menu") or {}
+    notifs = []
+    nf = Path("/var/lib/secubox/notifications.json")
+    try:
+        notifs = await asyncio.to_thread(lambda: json.loads(nf.read_text()) if nf.exists() else [])
+    except Exception:
+        notifs = []
+    try:
+        up = int(float(Path("/proc/uptime").read_text().split()[0]))
+    except Exception:
+        up = None
+    return construire_apercu(menu, _cache.get("system_stats", {}), notifs, up)
+
+
 @router.get("/security_summary")
 async def security_summary(user=Depends(require_jwt)):
     """Résumé de sécurité."""
