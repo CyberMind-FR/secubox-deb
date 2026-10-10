@@ -1,3 +1,9 @@
+secubox-nac (3.4.1-1~bookworm1) bookworm; urgency=high
+
+  * Quarantaine automatique (#2274) : le NAC lisait GET /api/v1/actor/mesures, or la vue COMPLETE d'actord (la seule qui porte les adresses) n'est servie qu'a la RACINE — sous /api/v1/actor/ il ne recevait que la vue reduite, sans adresse, et n'aurait jamais isole personne. Il lit desormais GET /mesures. Constate sur gk2 en comparant les deux reponses. Le test verifie le chemin.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 01:00:00 +0200
+
 secubox-nac (3.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Quarantaine AUTOMATIQUE d'un appareil du LAN (#2274). Quand actord publie la mesure QUARANTINE (niveau BLOCK : risque >= 75, confiance >= 80, deux capteurs distincts) pour un appareil du reseau local, le NAC l'isole lui-meme dans sa zone de quarantaine EXISTANTE — celle d'un appareil inconnu : DNS et le reste comme aujourd'hui — jusqu'a ce qu'un administrateur le reconnaisse et le valide (pas de liberation automatique). api/quarantaine_auto.py : lecture de GET /api/v1/actor/mesures sur la socket locale (vue complete), choix en fonction pure, un tour par cycle du collecteur. Garde-fous : jamais la box, un routeur, un equipement OpenWrt/SecuBox, une MAC protegee, ni un appareil absent depuis plus de 3 h ; une mesure isole une seule fois (un appareil libere n'est pas re-isole par elle) ; un echec reessaie au tour suivant. Reglage [nac] quarantaine_auto = auto (defaut) | propose | off, quarantaine_protegees ; GET /quarantaine/auto. 23 tests.

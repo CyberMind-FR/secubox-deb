@@ -96,8 +96,8 @@ donne leur nombre). Le défaut est inchangé : la zone `lxc` du NAC, la toolbox 
 ## Quarantaine automatique d'un appareil du LAN (#2274)
 
 Quand actord publie pour un appareil du réseau local la mesure `QUARANTINE` (niveau BLOCK : risque ≥ 75, confiance ≥ 80, deux capteurs distincts au moins), le NAC
-l'**isole lui-même** dans sa zone de quarantaine existante — la même que pour un appareil inconnu (DNS et le reste comme aujourd'hui). Il lit `GET /api/v1/actor/mesures`
-sur la socket locale d'actord (vue complète). Libération : un administrateur reconnaît et valide l'appareil ; il n'y a pas de libération automatique, et une même mesure
+l'**isole lui-même** dans sa zone de quarantaine existante — la même que pour un appareil inconnu (DNS et le reste comme aujourd'hui). Il lit `GET /mesures`
+sur la socket locale d'actord, à la racine (vue complète : c'est la seule qui porte les adresses). Libération : un administrateur reconnaît et valide l'appareil ; il n'y a pas de libération automatique, et une même mesure
 n'isole qu'une fois.
 
 | Réglage (`[nac]` de `/etc/secubox/secubox.conf`) | Défaut | Rôle |

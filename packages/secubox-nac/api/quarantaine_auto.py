@@ -9,7 +9,7 @@ Actord publie, pour chaque acteur, la mesure de l'échelle de réponse. Quand un
 confiance ≥ 80, deux capteurs distincts au moins), c'est le NAC — et lui seul — qui l'isole, dans sa zone de quarantaine EXISTANTE : le même isolement qu'un appareil
 inconnu (DNS et le reste comme aujourd'hui). Il reste isolé jusqu'à ce qu'un administrateur le reconnaisse et le valide : pas de libération automatique.
 
-Le NAC lit lui-même la socket d'actord (vue complète, adresses comprises) : sbxwaf, exposé à internet, ne détient ni le secret de flotte ni de raison de toucher au LAN.
+Le NAC lit lui-même la socket d'actord (vue complète, adresses comprises : elle n'est servie qu'à la RACINE, `GET /mesures`, jamais sous /api/v1/actor/) : sbxwaf, exposé à internet, ne détient ni le secret de flotte ni de raison de toucher au LAN.
 
 GARDE-FOUS : seule une mesure QUARANTINE active, marquée LAN, sur une adresse privée ; jamais la box, un routeur, un équipement OpenWrt/SecuBox, ni une adresse MAC déclarée
 protégée ; un appareil absent depuis plus de 3 h n'est pas isolé (l'adresse a pu changer de main) ; une mesure isole une seule fois — un appareil libéré par
@@ -46,7 +46,7 @@ def lire_mesures(chemin: str = ACTOR_SOCK, timeout: float = 3.0) -> List[dict]:
     """Les mesures actives publiées par actord (vue complète). Toute panne donne une liste vide : sans actord, rien n'est isolé."""
     try:
         c = _UnixHTTP(chemin, timeout)
-        c.request("GET", "/api/v1/actor/mesures", headers={"X-Sbx-Vue": "complete", "Accept": "application/json"})
+        c.request("GET", "/mesures", headers={"X-Sbx-Vue": "complete", "Accept": "application/json"})
         r = c.getresponse()
         corps = r.read(1 << 22)
         c.close()
