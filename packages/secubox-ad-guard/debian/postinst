@@ -12,6 +12,8 @@ if [ "$1" = "configure" ]; then
     systemctl enable --now secubox-ad-guard-auto.timer >/dev/null 2>&1 || true
     # Capteur DNS d'Actor Intelligence (#2240) : ne fait rien sans actord ni magasin (ConditionPathExists) ; ne juge que les domaines malveillants ou anormaux.
     systemctl enable --now secubox-ad-guard-dnssensor.timer >/dev/null 2>&1 || true
+    # Instantané des réponses d'Unbound (détournement d'un domaine normal) : lecture seule du cache, étape privilégiée minimale par sudo (exact).
+    systemctl enable --now secubox-ad-guard-dnsdump.timer >/dev/null 2>&1 || true
 
     systemctl daemon-reload
     # PAS d'enable de secubox-ad-guard.service : le module est servi par

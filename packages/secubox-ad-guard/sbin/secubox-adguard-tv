@@ -9,6 +9,8 @@
   secubox-adguard-tv regles-appliquer   applique À CHAUD les seules différences de règles du mode auto (#1954) ; sinon rechargement complet
   secubox-adguard-tv disable    retire le drop-in et recharge Unbound : tout est remis en l'état
   secubox-adguard-tv status     JSON : drop-in présent, état, configuration valide
+  secubox-adguard-tv cache-dump  écrit sur la SORTIE STANDARD les seuls couples « nom<TAB>adresse » (A/AAAA) du cache d'Unbound (#2240) : lecture
+                                seule, rien n'est écrit sur le disque par root ; le capteur DNS les range lui-même, sous son compte
 
 Lancé en root par sudo depuis l'API (utilisateur `secubox`) : l'état et la liste personnalisée sont donc écrits par un compte NON privilégié.
 Le contrôleur ne leur fait aucune confiance : il les relit en refusant les liens symboliques, valide chaque champ (adresse IP, mode, nom
@@ -353,6 +355,25 @@ def desactiver() -> int:
     return 0
 
 
+def cache_dump() -> int:
+    """Instantané des RÉPONSES A/AAAA du cache d'Unbound, sur la sortie standard (#2240). `unbound-control dump_cache` seul : aucun argument libre,
+    sortie filtrée par une expression stricte, adresses revalidées. Root n'écrit RIEN : l'appelant (secubox) range le texte dans son propre dossier."""
+    from api import dnstv_reponses
+    try:
+        r = subprocess.run([CONTROL, "dump_cache"], capture_output=True, text=True, timeout=90)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        audit("cache-dump-echec", type(e).__name__)
+        print("cache-dump : unbound-control injoignable ou trop lent", file=sys.stderr)
+        return 1
+    if r.returncode != 0:
+        audit("cache-dump-echec", (r.stderr or r.stdout).strip()[:120])
+        print("cache-dump : unbound-control a refusé : " + (r.stderr or r.stdout).strip()[:120], file=sys.stderr)
+        return 1
+    couples = dnstv_reponses.parse_dump(r.stdout)
+    sys.stdout.write("".join(f"{nom}\t{ip}\n" for nom, ip in couples))
+    return 0
+
+
 def etat_courant() -> int:
     ok = subprocess.run([CHECKCONF], capture_output=True, text=True, timeout=120).returncode == 0
     etat, erreur = dnstv.lire_etat()
@@ -361,7 +382,7 @@ def etat_courant() -> int:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer"):
+    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
@@ -369,6 +390,8 @@ def main(argv: list[str]) -> int:
         return 3
     if argv[1] == "status":
         return etat_courant()
+    if argv[1] == "cache-dump":
+        return cache_dump()                                              # lecture seule : ni verrou, ni écriture
     with verrou_controleur():
         if argv[1] == "apply":
             (dossier_root() / "desactive").unlink(missing_ok=True)         # une demande explicite lève la désactivation

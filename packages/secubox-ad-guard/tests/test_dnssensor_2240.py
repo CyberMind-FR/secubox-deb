@@ -138,3 +138,85 @@ def test_l_empaquetage_installe_unite_minuterie_exemple_et_gere_activation():
     sans_com = "\n".join(l for l in unite.splitlines() if not l.lstrip().startswith("#"))
     assert "User=secubox" in sans_com and "SupplementaryGroups=actord-ingest" in sans_com and "RestrictAddressFamilies=AF_UNIX" in sans_com
     assert "User=root" not in sans_com and "NoNewPrivileges=yes" in sans_com and "ConditionPathExists=/run/secubox/actord.sock" in sans_com
+
+
+# ── détournement d'un domaine normal : de la collecte au dépôt ─────────────────────────────────────────────────────────────────────────────────
+def _faux_ctl(tmp_path, sortie):
+    ctl = tmp_path / "ctl"
+    ctl.write_text(f"#!/bin/sh\n[ \"$1\" = cache-dump ] || exit 9\ncat <<'EOF'\n{sortie}EOF\n")
+    ctl.chmod(0o755)
+    sudo = tmp_path / "sudo"
+    sudo.write_text("#!/bin/sh\n[ \"$1\" = -n ] || exit 8\nshift\nexec \"$@\"\n")                # faux sudo : exige -n, exécute le reste
+    sudo.chmod(0o755)
+    return ctl, sudo
+
+
+def test_collecter_revalide_et_range_l_instantane(tmp_path, capteur, monkeypatch):
+    ctl, sudo = _faux_ctl(tmp_path, "www.exemple.org\t93.184.216.34\nmauvais nom\t1.2.3.4\nx.exemple.org\tpas-une-ip\nv6.exemple.org\t2606:2800::1\n")
+    monkeypatch.setattr(capteur, "CTL", str(ctl))
+    monkeypatch.setattr(capteur, "SUDO", str(sudo))
+    assert capteur.collecter() == 0
+    assert (tmp_path / "cache-reponses.tsv").read_text() == "v6.exemple.org\t2606:2800::1\nwww.exemple.org\t93.184.216.34\n"
+
+
+def test_collecter_ctl_en_echec_ne_casse_rien(tmp_path, capteur, monkeypatch, capsys):
+    monkeypatch.setattr(capteur, "CTL", str(tmp_path / "absent"))
+    monkeypatch.setattr(capteur, "SUDO", "/bin/false")
+    assert capteur.collecter() == 0 and not (tmp_path / "cache-reponses.tsv").exists() and "refusé" in capsys.readouterr().err
+
+
+def test_detournement_de_bout_en_bout(tmp_path, capteur, monkeypatch):
+    import os
+    import time as _t
+    # historique de requêtes : « exemple.org » demandé 4 jours de suite ; l'appareil TV l'a demandé tout à l'heure
+    counts = [(f"2027-01-{d:02d}", TV, "www.exemple.org", "ALLOWED", 40) for d in (10, 11, 12, 13)]
+    magasin(tmp_path, [(NOW - 30, TV, "www.exemple.org", "A", "ALLOWED")], counts)
+    monkeypatch.setattr(capteur, "asn_resolveur", lambda: (lambda ip: {"93.184.216.34": 15133, "151.101.1.1": 54113}.get(ip)))
+    tsv = tmp_path / "cache-reponses.tsv"
+    for k in range(4):                                                 # quatre jours de référence : même ASN
+        tsv.write_text("www.exemple.org\t93.184.216.34\n")
+        os.utime(tsv, (NOW - (4 - k) * 86400, NOW - (4 - k) * 86400))
+        capteur.FRAICHEUR_REPONSES_S = 10**12
+        capteur.principal([], now=NOW - (4 - k) * 86400)
+    recu, srv = serveur(str(tmp_path / "a.sock"))
+    tsv.write_text("www.exemple.org\t151.101.1.1\n")                    # soudain un autre ASN
+    os.utime(tsv, (NOW, NOW))
+    capteur.principal([], now=NOW)
+    srv.close()
+    assert [e["rule_id"] for e in recu] == ["dns.hijack.new_net"] and recu[0]["src_ip"] == "151.101.1.1" and recu[0]["path_shape"] == "dns:exemple.org"
+
+
+def test_instantane_perime_ne_juge_rien(tmp_path, capteur):
+    import os
+    magasin(tmp_path, [(NOW - 30, TV, "www.exemple.org", "A", "ALLOWED")])
+    tsv = tmp_path / "cache-reponses.tsv"
+    tsv.write_text("www.exemple.org\t151.101.1.1\n")
+    os.utime(tsv, (NOW - 3 * 3600, NOW - 3 * 3600))
+    assert capteur.lire_reponses(NOW) is None
+
+
+def test_controleur_root_cache_dump_imprime_et_n_ecrit_rien(tmp_path, monkeypatch, capsys):
+    import stat
+    control = tmp_path / "control"
+    control.write_text("#!/bin/sh\n[ \"$1\" = dump_cache ] || exit 9\nprintf 'www.exemple.org.\\t300\\tIN\\tA\\t93.184.216.34\\nwww.exemple.org.\\t300\\tIN\\tCNAME\\tx.\\n'\n")
+    control.chmod(control.stat().st_mode | stat.S_IXUSR)
+    for k, v in {"SECUBOX_ADGUARD_TV_CONTROL": control, "SECUBOX_ADGUARD_TV_AUDIT": tmp_path / "audit.log", "SECUBOX_ADGUARD_TV_SANS_ROOT": "1",
+                 "SECUBOX_ADGUARD_TV_ETAT": tmp_path, "SECUBOX_ADGUARD_TV_APPLIQUE": tmp_path / "racine" / "applique.json"}.items():
+        monkeypatch.setenv(k, str(v))
+    loader = importlib.machinery.SourceFileLoader("ctl_mod", str(SBIN.parent / "secubox-adguard-tv"))
+    spec = importlib.util.spec_from_loader("ctl_mod", loader)
+    m = importlib.util.module_from_spec(spec)
+    loader.exec_module(m)
+    avant = sorted(p.name for p in tmp_path.iterdir())
+    assert m.main(["secubox-adguard-tv", "cache-dump"]) == 0
+    assert capsys.readouterr().out == "www.exemple.org\t93.184.216.34\n"
+    assert sorted(p.name for p in tmp_path.iterdir()) == avant            # aucun fichier écrit par le contrôleur
+
+
+def test_sudoers_et_unite_de_collecte():
+    pkg = Path(__file__).resolve().parents[1]
+    assert "secubox-adguard-tv cache-dump" in (pkg / "sudoers.d" / "secubox-adguard-tv").read_text()
+    u = "\n".join(l for l in (pkg / "debian" / "secubox-ad-guard-dnsdump.service").read_text().splitlines() if not l.lstrip().startswith("#"))
+    assert "User=secubox" in u and "User=root" not in u and "ExecStart=/usr/sbin/secubox-adguard-dnssensor --collecter" in u
+    rules = (pkg / "debian" / "rules").read_text()
+    assert "secubox-ad-guard-dnsdump.timer" in rules and "secubox-ad-guard-dnsdump.timer" in (pkg / "debian" / "postinst").read_text()

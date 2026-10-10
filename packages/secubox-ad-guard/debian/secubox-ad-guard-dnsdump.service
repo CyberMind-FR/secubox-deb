@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Ad Guard — instantané des réponses du cache d'Unbound pour le capteur DNS (#2240), un passage
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2240
+After=unbound.service
+ConditionPathExists=/var/lib/secubox/ad-guard/dnstv/dnstv.db
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+# La seule étape privilégiée : `sudo -n secubox-adguard-tv cache-dump` (argument exact, sudoers.d/secubox-adguard-tv) ne fait que LIRE le cache d'Unbound et
+# imprimer des couples nom/adresse ; root n'écrit rien. sudo exige NoNewPrivileges=no (exception écrite dans .claude/RULES-CODE.md), donc AUCUNE option
+# reposant sur seccomp ici (LockPersonality, ProtectKernelTunables, SystemCallFilter, RestrictNamespaces…, voir secubox-ad-guard-auto.service). Le jugement
+# est fait par une AUTRE unité, entièrement durcie : celle-ci ne décide de rien.
+ExecStart=/usr/sbin/secubox-adguard-dnssensor --collecter
+UMask=0027
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=yes
+ReadWritePaths=/var/lib/secubox/ad-guard /var/log/secubox

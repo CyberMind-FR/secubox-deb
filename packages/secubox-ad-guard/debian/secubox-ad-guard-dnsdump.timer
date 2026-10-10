@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Ad Guard — instantané des réponses d'Unbound, toutes les 5 minutes (#2240)
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=300s
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

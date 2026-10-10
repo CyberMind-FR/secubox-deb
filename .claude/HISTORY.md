@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Actor Intelligence 2.0, phase 2c : détournement DNS (ref #2240)
+
+ad-guard 1.10.0 : `dns.hijack.new_net` / `dns.hijack.special` à partir d'un instantané du cache d'Unbound (`sudo -n secubox-adguard-tv cache-dump`). Reste : DPI.
+
 ## 2026-10-11 — Actor Intelligence 2.0, phase 2b : capteur DNS (ref #2240)
 
 ad-guard 1.9.0 : `secubox-adguard-dnssensor` (domaines malveillants ou anormaux uniquement ; dérive des domaines connus). Consigne du propriétaire : « seulement les domaines malveillants ou anormaux » + « possiblement les domaines normaux qui auraient pu être corrompus ». Reste : DPI, réponses DNS (détournement).
