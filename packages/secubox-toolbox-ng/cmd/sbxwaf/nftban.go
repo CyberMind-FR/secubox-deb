@@ -106,10 +106,22 @@ func (b *NftBanner) execNft(ctx context.Context, args ...string) ([]byte, error)
 func (b *NftBanner) Ensure() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	// COMPTEURS PAR ÉLÉMENT (#2240, phase 4). Un ban dont l'ensemble porte `counter` compte les paquets que l'adresse bannie continue d'envoyer : c'est la
+	// SEULE façon de savoir, à l'échéance, si elle insiste (rien d'autre ne la voit, la chaîne la rejette avant tout journal). Un ensemble créé avant
+	// cela n'a pas le compteur et `add set` refuserait une définition différente (« File exists ») : on le migre — chaîne vidée (elle est de toute façon
+	// recréée juste après), ensemble supprimé puis recréé ; Reload() réinjecte les bans du journal avec leur temps restant.
+	for _, nom := range []string{b.set4, b.set6} {
+		if out, err := b.runner(ctx, "-j", "list", "set", "inet", b.table, nom); err == nil && ensembleSansCompteur(out) {
+			_, _ = b.runner(ctx, "flush", "chain", "inet", b.table, b.chain)
+			if _, err := b.runner(ctx, "delete", "set", "inet", b.table, nom); err == nil {
+				log.Printf("sbxwaf: nft — ensemble %s migré pour porter des compteurs par élément", nom)
+			}
+		}
+	}
 	cmds := [][]string{
 		{"add", "table", "inet", b.table},
-		{"add", "set", "inet", b.table, b.set4, "{", "type", "ipv4_addr;", "flags", "timeout;", "}"},
-		{"add", "set", "inet", b.table, b.set6, "{", "type", "ipv6_addr;", "flags", "timeout;", "}"},
+		{"add", "set", "inet", b.table, b.set4, "{", "type", "ipv4_addr;", "flags", "timeout;", "counter;", "}"},
+		{"add", "set", "inet", b.table, b.set6, "{", "type", "ipv6_addr;", "flags", "timeout;", "counter;", "}"},
 		// La chaîne qui CONSULTE les sets. Sans elle, tout ce qui précède est
 		// une comptabilité sans effet. Priorité -100 : avant le filtrage
 		// général, pour qu'une source bannie soit écartée au plus tôt.
@@ -157,6 +169,11 @@ func (b *NftBanner) Ban(ip, cat, sev string) { b.BanFor(ip, cat, sev, b.duration
 
 // BanFor est Ban avec une durée choisie par l'appelant (bans gradués : leurre, campagnes). Mêmes garde-fous, même journal.
 func (b *NftBanner) BanFor(ip, cat, sev string, duree time.Duration) {
+	b.banAt(ip, cat, sev, duree, time.Now())
+}
+
+// banAt est BanFor avec l'instant du ban passé en argument (le kill switch pose ses prolongations à SON horloge, qui est testable).
+func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Time) {
 	if p := net.ParseIP(ip); p == nil || p.IsLoopback() || p.IsPrivate() || p.IsLinkLocalUnicast() {
 		return
 	}
@@ -165,7 +182,6 @@ func (b *NftBanner) BanFor(ip, cat, sev string, duree time.Duration) {
 		b.mu.Unlock()
 		return
 	}
-	now := time.Now()
 	if last, ok := b.recent[ip]; ok && now.Sub(last) < b.cooldown {
 		b.mu.Unlock()
 		return
@@ -395,4 +411,97 @@ func (b *NftBanner) EcrireEtat() {
 		log.Printf("sbxwaf: état nft non publié dans %s : %v", b.etatFichier, err)
 	}
 	b.etatEchoue = err != nil
+}
+
+// ensembleSansCompteur : la sortie de `nft -j list set` décrit un ensemble qui EXISTE mais ne porte pas de `stmt` compteur. Une sortie illisible, vide ou
+// sans ensemble n'est pas « sans compteur » : l'ensemble est absent, il sera simplement créé.
+func ensembleSansCompteur(out []byte) bool {
+	var doc struct {
+		Nftables []struct {
+			Set *struct {
+				Stmt []map[string]any `json:"stmt"`
+			} `json:"set"`
+		} `json:"nftables"`
+	}
+	if json.Unmarshal(out, &doc) != nil {
+		return false
+	}
+	for _, e := range doc.Nftables {
+		if e.Set == nil {
+			continue
+		}
+		for _, st := range e.Set.Stmt {
+			if _, ok := st["counter"]; ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// ElemBan est un ban vivant dans nft : combien de paquets l'adresse a envoyés DEPUIS qu'elle est bannie, et le temps qu'il lui reste.
+type ElemBan struct {
+	Paquets      uint64
+	Reste        int64
+	AvecCompteur bool
+}
+
+// ElementsAvecCompteurs lit les deux ensembles. Un élément sans compteur (ensemble ancien, avant migration) est rendu avec AvecCompteur=false : l'appelant
+// n'en tire AUCUNE preuve de persistance.
+func (b *NftBanner) ElementsAvecCompteurs(ctx context.Context) (map[string]ElemBan, error) {
+	out := map[string]ElemBan{}
+	for _, nom := range []string{b.set4, b.set6} {
+		brut, err := b.runner(ctx, "-j", "list", "set", "inet", b.table, nom)
+		if err != nil {
+			return nil, fmt.Errorf("nft list set %s: %v", nom, err)
+		}
+		var doc struct {
+			Nftables []struct {
+				Set *struct {
+					Elem []struct {
+						Elem struct {
+							Val     string `json:"val"`
+							Expires int64  `json:"expires"`
+							Counter *struct {
+								Packets uint64 `json:"packets"`
+							} `json:"counter"`
+						} `json:"elem"`
+					} `json:"elem"`
+				} `json:"set"`
+			} `json:"nftables"`
+		}
+		if err := json.Unmarshal(brut, &doc); err != nil {
+			return nil, fmt.Errorf("sortie nft illisible (%s): %v", nom, err)
+		}
+		for _, e := range doc.Nftables {
+			if e.Set == nil {
+				continue
+			}
+			for _, el := range e.Set.Elem {
+				v := ElemBan{Reste: el.Elem.Expires}
+				if el.Elem.Counter != nil {
+					v.AvecCompteur, v.Paquets = true, el.Elem.Counter.Packets
+				}
+				out[el.Elem.Val] = v
+			}
+		}
+	}
+	return out, nil
+}
+
+// Prolonger repose un ban avec une nouvelle durée. `add element` sur un élément existant ne change PAS son timeout : on le retire d'abord, et l'anti-tempête
+// (cooldown) est levé pour cette adresse. Le journal de bans reçoit une nouvelle ligne (BanFor), donc le ban prolongé est visible et annulable comme les autres.
+func (b *NftBanner) Prolonger(ip, cat, sev string, duree time.Duration, now time.Time) {
+	set, ok := b.setPour(ip)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _ = b.runner(ctx, "delete", "element", "inet", b.table, set, fmt.Sprintf("{ %s }", ip))
+	b.mu.Lock()
+	delete(b.recent, ip)
+	b.mu.Unlock()
+	b.banAt(ip, cat, sev, duree, now)
 }

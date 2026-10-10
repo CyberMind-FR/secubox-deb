@@ -1221,6 +1221,9 @@ func main() {
 	leurreBan := flag.Bool("leurre-ban", false, "ban dès le premier hit sur le leurre (hôte non routé, hors LAN et première partie), durée graduée 1 h / 24 h / 7 j à la récidive (#2238)")
 	campagneBanMode := flag.String("campagne-ban", "off", "ban des campagnes (même workflow de sondes, haute valeur) : off | propose | auto (#2238)")
 	campagneBanEtat := flag.String("campagne-ban-etat", "/var/lib/secubox/waf/campagne-ban-etat.json", "état du ban des campagnes pour le panneau")
+	reevaluation := flag.String("reevaluation", "off", "kill switch logique : réévalue chaque ban à l'échéance, RELEASE ou EXTEND gradué (jamais permanent, plafond 30 j) : off | propose | auto (#2240 phase 4)")
+	reevalPreuves := flag.String("reevaluation-preuves", "/var/lib/secubox/waf/reevaluations.jsonl", "journal des réévaluations (une ligne par transition, append-only)")
+	reevalSeuil := flag.Uint64("reeval-seuil", seuilReevalDefaut, "paquets reçus pendant le ban à partir desquels l'adresse est jugée insistante")
 	campagneBanMaxHeure := flag.Int("campagne-ban-max-heure", 30, "coupe-circuit : bans de campagne maximum par heure glissante")
 	actorBanMode := flag.String("actor-ban", "off", "ban automatique piloté par Actor Intelligence : off | propose (n'applique rien, écrit les candidats) | auto")
 	actorProps := flag.String("actor-propositions", "/run/secubox/actord-propositions.json", "fichier de propositions publié par sbx-actord")
@@ -1433,6 +1436,13 @@ func main() {
 				cb.protegees = parseCIDRs(*actorBanProtegees)
 				go cb.Veiller(5 * time.Minute)
 				log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
+			}
+			// Kill switch logique (#2240, phase 4) : réévaluation des bans à l'échéance (reevaluation.go).
+			if *reevaluation == "propose" || *reevaluation == "auto" {
+				rv := NewReeval(nb, store, *reevaluation, *reevalPreuves)
+				rv.seuil = *reevalSeuil
+				go rv.Veiller(30 * time.Second)
+				log.Printf("sbxwaf: réévaluation des bans mode=%s (seuil=%d paquets, preuves=%s)", *reevaluation, *reevalSeuil, *reevalPreuves)
 			}
 			// SIGHUP : `systemctl reload secubox-waf-ng`, propagé depuis
 			// nftables.service (ReloadPropagatedFrom) — réparation immédiate au

@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Actor Intelligence 2.0, phase 4 : kill switch logique (ref #2240)
+Réévaluation de chaque ban à l'échéance (RELEASE ou EXTEND gradué, plafond 30 j, jamais permanent), compteurs par élément sur `waf_ban{,6}` avec migration, preuves `reevaluations.jsonl` + audit, modes off/propose/auto (`--reevaluation`, `--reeval-seuil`). toolbox-ng 0.10.0, waf-ng 1.25.0. Tests Go `reevaluation_test.go`.
+
 ## 2026-10-12 — Les leurres bannissent partout (ref #2240)
 
 Décision du propriétaire : un service simulé n'a d'autre but que détecter. Ban sur le chemin-appât d'un vrai vhost (jusque-là leurré mais pas banni), marque rejouée = 24 h minimum sur tout vhost, plages protégées respectées par le ban de leurre. toolbox-ng 0.9.1, waf-ng 1.24.0.
