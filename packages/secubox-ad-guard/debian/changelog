@@ -1,3 +1,9 @@
+secubox-ad-guard (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Capteur DNS d'Actor Intelligence (#2240, phase 2) : secubox-adguard-dnssensor (minuterie 60 s, utilisateur secubox + groupe actord-ingest, durcissement complet, ConditionPathExists sur le socket d'actord et le magasin) depose une enveloppe `dns` vers actord UNIQUEMENT pour un domaine malveillant ou anormal, jamais pour une requete ordinaire. Regles : dns.listed (liste de l'operateur /etc/secubox/actor/dns-malveillants.txt, vide par defaut), dns.dga, dns.tunnel (meme sur un domaine normal), dns.drift.spike et dns.drift.subdomains (domaine connu qui derive : un domaine normal peut avoir ete corrompu). L'appareil est la source, seul le domaine enregistre est conserve. Pas de liste ni de service tiers. Non couvert et dit : le detournement d'un domaine normal vers une adresse inattendue exige les reponses DNS. --dry-run pour calibrer. 21 tests dont un de bout en bout (magasin SQLite reel, socket Unix reel).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 14:00:00 +0200
+
 secubox-ad-guard (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Panneau simplifie (#2174) : une page avec l'etat en une phrase, une carte par appareil et un interrupteur anti-pub (mode auto en interne). Apres chaque bascule le filtre Unbound est relu et le panneau dit si le changement est bien applique, ou ce qui diverge (un changement perdu ne passe plus sous silence). Liste « une pub passe encore ? » : noms servis qui ressemblent a de la pub, avec Bloquer / C'est legitime. Les anciens onglets et les modes observe, block, off passent sous « Avance ».

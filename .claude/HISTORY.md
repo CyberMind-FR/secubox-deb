@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Actor Intelligence 2.0, phase 2b : capteur DNS (ref #2240)
+
+ad-guard 1.9.0 : `secubox-adguard-dnssensor` (domaines malveillants ou anormaux uniquement ; dérive des domaines connus). Consigne du propriétaire : « seulement les domaines malveillants ou anormaux » + « possiblement les domaines normaux qui auraient pu être corrompus ». Reste : DPI, réponses DNS (détournement).
+
 ## 2026-10-11 — Actor Intelligence 2.0, phase 2a : capteur pare-feu (ref #2240)
 
 hub 1.9.52 (sonde nft additive), toolbox-ng 0.7.0 (`--scan-sensor`, enveloppe `firewall`/`dns`), waf-ng 1.22.0 (unite). Reste : capteurs DNS et DPI.

@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-adguard-dnssensor — un passage du capteur DNS d'Actor Intelligence (#2240).
+
+Lancé chaque minute par `secubox-ad-guard-dnssensor.timer` sous `secubox`, avec le seul groupe `actord-ingest` en plus (écriture sur le socket
+d'ingestion d'actord). Lit le magasin d'ad-guard en LECTURE SEULE, applique les règles de api/dnstv_anomalies.py (domaines malveillants ou anormaux,
+jamais les requêtes ordinaires) et dépose une enveloppe `dns` par constat nouveau.
+
+  --dry-run   affiche les constats en JSON sans rien envoyer ni mémoriser (pour calibrer, ou comprendre ce que le capteur verrait)
+
+Un échec d'envoi n'efface rien : l'état de dédoublonnage n'est mémorisé qu'après un dépôt réussi, le prochain passage réessaie.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import socket
+import sqlite3
+import sys
+import time
+from collections import defaultdict
+from pathlib import Path
+
+for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+from api import dnstv_anomalies as A  # noqa: E402
+
+ETAT_DIR = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
+SOCKET = os.environ.get("SECUBOX_ACTORD_SOCKET", "/run/secubox/actord.sock")
+LISTE = Path(os.environ.get("SECUBOX_DNS_MALVEILLANTS", "/etc/secubox/actor/dns-malveillants.txt"))
+JOURS_BASE = 14
+MIN_JOURS_CONNU = 3
+
+
+def lire_liste(chemin: Path) -> set:
+    """Liste de l'opérateur : un domaine par ligne, # commentaires. Absente = vide ; plus d'1 Mio ou lien symbolique = ignorée."""
+    try:
+        if chemin.is_symlink() or chemin.stat().st_size > 1_000_000:
+            return set()
+        return {l.split("#")[0].strip().lower().strip(".") for l in chemin.read_text(encoding="utf-8").splitlines() if l.split("#")[0].strip()}
+    except OSError:
+        return set()
+
+
+def lire_magasin(db: Path, now: int):
+    """(requêtes récentes, domaines connus, base par appareil, noms connus). Lecture seule ; None si le magasin est absent."""
+    if not db.is_file():
+        return None
+    cx = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+    try:
+        evts = [{"ts": t, "client": c, "domaine": d.lower(), "qtype": q, "decision": dec} for t, c, d, q, dec in cx.execute(
+            "SELECT ts, client, domaine, qtype, decision FROM dnstv_recents WHERE ts >= ?", (now - A.FENETRE_PIC_S,))]
+        aujourdhui = time.strftime("%Y-%m-%d", time.gmtime(now))
+        depuis = time.strftime("%Y-%m-%d", time.gmtime(now - JOURS_BASE * 86400))
+        jours_par_reg = defaultdict(set)
+        base = defaultdict(lambda: defaultdict(int))
+        noms = defaultdict(set)
+        for jour, client, domaine, hits in cx.execute(
+                "SELECT jour, client, domaine, SUM(hits) FROM dnstv_counts WHERE jour >= ? AND jour < ? GROUP BY jour, client, domaine", (depuis, aujourdhui)):
+            d = domaine.lower()
+            reg = A.registre_du_domaine(d)
+            jours_par_reg[reg].add(jour)
+            base[(client, reg)][jour] += hits
+            noms[reg].add(d)
+        connus = {r for r, j in jours_par_reg.items() if len(j) >= MIN_JOURS_CONNU}
+        return evts, connus, {k: list(v.values()) for k, v in base.items()}, noms
+    finally:
+        cx.close()
+
+
+def deposer(chemin: str, enveloppes: list) -> None:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(5)
+        s.connect(chemin)
+        s.sendall(b"".join(json.dumps(e, ensure_ascii=False).encode() + b"\n" for e in enveloppes))
+
+
+def principal(argv=None, now: int = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--dry-run", action="store_true")
+    a = ap.parse_args(argv)
+    now = int(now if now is not None else time.time())
+    lu = lire_magasin(ETAT_DIR / "dnstv.db", now)
+    if lu is None:
+        return 0                                    # aucun magasin : le POC DNS n'a rien enregistré, rien à juger
+    evts, connus, base, noms = lu
+    constats = A.detecter(evts, now, connus, base, noms, lire_liste(LISTE))
+    fichier_etat = ETAT_DIR / "dnssensor-etat.json"
+    try:
+        etat = json.loads(fichier_etat.read_text(encoding="utf-8")).get("emis", {})
+    except (OSError, ValueError):
+        etat = {}
+    nouveaux = A.deduplique(constats, dict(etat), now) if not a.dry_run else constats
+    if a.dry_run:
+        print(json.dumps(nouveaux, ensure_ascii=False, indent=1))
+        return 0
+    if not nouveaux:
+        return 0
+    etat_apres = dict(etat)
+    A.deduplique(constats, etat_apres, now)
+    try:
+        deposer(SOCKET, [A.enveloppe(c, now) for c in nouveaux])
+    except OSError as e:
+        print(f"secubox-adguard-dnssensor : dépôt vers {SOCKET} impossible ({e}) — le prochain passage réessaie", file=sys.stderr)
+        return 0
+    tmp = fichier_etat.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"emis": etat_apres}), encoding="utf-8")
+    os.replace(tmp, fichier_etat)
+    for c in nouveaux:
+        print(f"secubox-adguard-dnssensor : {c['rule']} {c['client']} {c['domaine']} (gravité {c['severity']}) — {c['detail']}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(principal())

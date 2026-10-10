@@ -148,3 +148,18 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 | `POST /adblock-tv/simple/suspects/legitime` | `require_jwt` | `{"domaine": ...}` ; mémorisé dans `suspects-ignores.json` (500 au plus) |
 
 « Bloquer » réutilise `POST /adblock-tv/custom`. La vérification compare, pour chaque adresse de l'appareil, la vue Unbound attendue (`sbx-tv-auto-<slug>`, ou aucune pour `off`) à celle du drop-in.
+
+## Capteur DNS d'Actor Intelligence (#2240)
+
+`secubox-ad-guard-dnssensor.timer` (chaque minute, utilisateur `secubox`, groupe `actord-ingest` en plus, durcissement complet) lance `secubox-adguard-dnssensor`. Il lit le magasin d'ad-guard en lecture seule et dépose une enveloppe `dns` vers actord **uniquement** pour un domaine malveillant ou anormal ; une requête ordinaire ne laisse aucune trace.
+
+| Règle | Déclencheur |
+|---|---|
+| `dns.listed` | domaine (ou parent) dans `/etc/secubox/actor/dns-malveillants.txt` (vide par défaut ; exemple dans `/usr/share/secubox/ad-guard/config/`) |
+| `dns.dga` | ≥ 3 domaines d'allure aléatoire, inconnus de l'historique, demandés par un même appareil en 10 min |
+| `dns.tunnel` | ≥ 30 sous-noms longs distincts, ou ≥ 20 requêtes TXT/NULL/ANY, vers un même domaine en 10 min — **même un domaine normal** |
+| `dns.drift.spike` | domaine connu (≥ 3 jours) demandé ≥ 10× son pic quotidien habituel dans l'heure |
+| `dns.drift.subdomains` | domaine connu qui reçoit ≥ 25 sous-noms jamais vus, à étiquette longue, en 10 min |
+
+L'appareil est la source de l'enveloppe ; seul le domaine enregistré est conservé, jamais les sous-noms. Un constat n'est ré-émis qu'au bout de 6 h. `secubox-adguard-dnssensor --dry-run` montre ce que le capteur verrait sans rien envoyer. **Non couvert** : le détournement d'un domaine normal vers une adresse inattendue demande les réponses DNS, que le magasin ne garde pas.
+
