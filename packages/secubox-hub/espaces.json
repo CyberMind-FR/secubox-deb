@@ -1,0 +1,555 @@
+{
+ "version": 1,
+ "description": "Les six espaces de l'administration SBXOS (#2212) et le rattachement de chaque entrée de menu.d : une seule source, lue par /api/v1/hub/public/menu. Un id absent d'ici n'est jamais perdu : il tombe dans « autre ».",
+ "objets": [
+  "BOX",
+  "DEVICE",
+  "USER",
+  "SERVICE",
+  "ACTOR",
+  "ALERT",
+  "CERTIFICATE",
+  "BACKUP",
+  "UPDATE"
+ ],
+ "espaces": [
+  {
+   "id": "apercu",
+   "nom": "Vue d'ensemble",
+   "icone": "🏠",
+   "ordre": 1
+  },
+  {
+   "id": "protection",
+   "nom": "Protection",
+   "icone": "🛡️",
+   "ordre": 2
+  },
+  {
+   "id": "surveillance",
+   "nom": "Surveillance",
+   "icone": "👁️",
+   "ordre": 3
+  },
+  {
+   "id": "services",
+   "nom": "Services",
+   "icone": "📦",
+   "ordre": 4
+  },
+  {
+   "id": "identite",
+   "nom": "Identité & accès",
+   "icone": "👤",
+   "ordre": 5
+  },
+  {
+   "id": "systeme",
+   "nom": "Système",
+   "icone": "⚙️",
+   "ordre": 6
+  }
+ ],
+ "modules": {
+  "actor": {
+   "espace": "surveillance",
+   "objet": "ACTOR"
+  },
+  "ad-guard": {
+   "espace": "protection",
+   "objet": "DEVICE"
+  },
+  "admin": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "ai-gateway": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "ai-insights": {
+   "espace": "surveillance",
+   "objet": "ALERT"
+  },
+  "annuaire": {
+   "espace": "identite",
+   "objet": "USER"
+  },
+  "antirootkit": {
+   "espace": "protection",
+   "objet": "ALERT"
+  },
+  "appstore": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "assist": {
+   "espace": "identite",
+   "objet": "USER"
+  },
+  "auth": {
+   "espace": "identite",
+   "objet": "USER"
+  },
+  "autoload": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "avatar": {
+   "espace": "identite",
+   "objet": "USER"
+  },
+  "backup": {
+   "espace": "systeme",
+   "objet": "BACKUP"
+  },
+  "bbs": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "billets": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "c3box": {
+   "espace": "surveillance",
+   "objet": "BOX"
+  },
+  "cdn": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "centers": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "certs": {
+   "espace": "identite",
+   "objet": "CERTIFICATE"
+  },
+  "cloner": {
+   "espace": "systeme",
+   "objet": "BACKUP"
+  },
+  "config-advisor": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "console": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "cookies": {
+   "espace": "protection",
+   "objet": null
+  },
+  "cve-triage": {
+   "espace": "protection",
+   "objet": "UPDATE"
+  },
+  "cyberfeed": {
+   "espace": "protection",
+   "objet": null
+  },
+  "devwatch": {
+   "espace": "surveillance",
+   "objet": "SERVICE"
+  },
+  "dns": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "dns-guard": {
+   "espace": "protection",
+   "objet": null
+  },
+  "dns-provider": {
+   "espace": "systeme",
+   "objet": "CERTIFICATE"
+  },
+  "dpi": {
+   "espace": "surveillance",
+   "objet": "DEVICE"
+  },
+  "droplet": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "exposure": {
+   "espace": "protection",
+   "objet": "SERVICE"
+  },
+  "eye-remote": {
+   "espace": "systeme",
+   "objet": "DEVICE"
+  },
+  "fleet": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "freebox": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "gitea": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "glances": {
+   "espace": "surveillance",
+   "objet": "BOX"
+  },
+  "grafana": {
+   "espace": "surveillance",
+   "objet": "BOX"
+  },
+  "haproxy": {
+   "espace": "protection",
+   "objet": null
+  },
+  "hardening": {
+   "espace": "protection",
+   "objet": "BOX"
+  },
+  "health": {
+   "espace": "apercu",
+   "objet": "BOX"
+  },
+  "hub": {
+   "espace": "apercu",
+   "objet": "BOX"
+  },
+  "interceptor": {
+   "espace": "protection",
+   "objet": null
+  },
+  "ipblock": {
+   "espace": "protection",
+   "objet": null
+  },
+  "jabber": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "jellyfin": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "jitsi": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "ksm": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "localrecall": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "lyrion": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "mail": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "matrix": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "mcp-server": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "media": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "mediaflow": {
+   "espace": "surveillance",
+   "objet": "DEVICE"
+  },
+  "mesh": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "meshname": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "meshtastic": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "metablogizer": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "metacatalog": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "metanews": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "metrics": {
+   "espace": "surveillance",
+   "objet": "BOX"
+  },
+  "mirror": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "modem": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "mqtt": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "nac": {
+   "espace": "surveillance",
+   "objet": "DEVICE"
+  },
+  "ndpid": {
+   "espace": "surveillance",
+   "objet": "DEVICE"
+  },
+  "netboot": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "netdiag": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "netmodes": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "nettweak": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "network-anomaly": {
+   "espace": "surveillance",
+   "objet": "ALERT"
+  },
+  "nextcloud": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "p2p": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "peertube": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "photoprism": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "picobrew": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "podcaster": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "portal": {
+   "espace": "identite",
+   "objet": "USER"
+  },
+  "premier-pas-maitre": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "profiles": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "proxypac": {
+   "espace": "protection",
+   "objet": null
+  },
+  "publish": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "qos": {
+   "espace": "systeme",
+   "objet": "DEVICE"
+  },
+  "radio": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "reality": {
+   "espace": "protection",
+   "objet": null
+  },
+  "releases": {
+   "espace": "systeme",
+   "objet": "UPDATE"
+  },
+  "repo": {
+   "espace": "systeme",
+   "objet": "UPDATE"
+  },
+  "reporter": {
+   "espace": "surveillance",
+   "objet": "BOX"
+  },
+  "rlevel": {
+   "espace": "protection",
+   "objet": "DEVICE"
+  },
+  "routes": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "saas-relay": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "sbxid": {
+   "espace": "identite",
+   "objet": "USER"
+  },
+  "sbxos-audio-mood": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "security-posture": {
+   "espace": "surveillance",
+   "objet": "BOX"
+  },
+  "sentinelle-gsm": {
+   "espace": "surveillance",
+   "objet": "ALERT"
+  },
+  "smtp-relay": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "soc": {
+   "espace": "surveillance",
+   "objet": "ALERT"
+  },
+  "socialrelay": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "streamforge": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "streamlit": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "system": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "threatmesh": {
+   "espace": "protection",
+   "objet": "ACTOR"
+  },
+  "threats": {
+   "espace": "surveillance",
+   "objet": "ALERT"
+  },
+  "toolbox": {
+   "espace": "protection",
+   "objet": "DEVICE"
+  },
+  "tor": {
+   "espace": "protection",
+   "objet": null
+  },
+  "torrent": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "traffic": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
+  "turn": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "users": {
+   "espace": "identite",
+   "objet": "USER"
+  },
+  "vault": {
+   "espace": "identite",
+   "objet": "CERTIFICATE"
+  },
+  "vhost": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "vm": {
+   "espace": "systeme",
+   "objet": "SERVICE"
+  },
+  "voicestudio": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "voicestudio-usager": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "vortex-firewall": {
+   "espace": "protection",
+   "objet": null
+  },
+  "waf": {
+   "espace": "protection",
+   "objet": null
+  },
+  "watchdog": {
+   "espace": "surveillance",
+   "objet": "SERVICE"
+  },
+  "webfilter": {
+   "espace": "protection",
+   "objet": "DEVICE"
+  },
+  "wireguard": {
+   "espace": "protection",
+   "objet": "DEVICE"
+  },
+  "yacy": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "ytsas": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "zia": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "zigbee": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
+  "zkp": {
+   "espace": "identite",
+   "objet": "USER"
+  }
+ }
+}

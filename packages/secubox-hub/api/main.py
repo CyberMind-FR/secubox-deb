@@ -76,6 +76,41 @@ def _epingles_off() -> set:
         return set()
 
 
+# LES SIX ESPACES DE L'ADMINISTRATION (#2212). Une seule source, `espaces.json` (installé en /usr/share/secubox/), rattache chaque entrée de menu.d à un espace et à un objet
+# central ; les pages ne changent pas. Un id absent de la table n'est jamais perdu : il tombe dans « autre ». Lecture tolérante : sans fichier, le menu reste celui d'avant.
+ESPACES_FICHIER = Path(os.environ.get("SECUBOX_ESPACES", "/usr/share/secubox/espaces.json"))
+_ESPACES_DEPOT = Path(__file__).resolve().parents[1] / "espaces.json"
+_ESPACE_AUTRE = {"id": "autre", "nom": "Autre", "icone": "📦", "ordre": 99}
+
+
+def _charger_espaces() -> dict:
+    for chemin in (ESPACES_FICHIER, _ESPACES_DEPOT):
+        try:
+            return json.loads(chemin.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+    return {}
+
+
+def _espaces_du_menu(items: list) -> list:
+    """Enrichit chaque entrée (`espace`, `objet`) et rend les espaces non vides, dans l'ordre, « autre » en dernier."""
+    table = _charger_espaces()
+    meta = {e["id"]: e for e in table.get("espaces", [])}
+    modules = table.get("modules", {})
+    par_espace: dict = {}
+    for it in items:
+        m = modules.get(it.get("id", ""), {})
+        espace = m.get("espace") if m.get("espace") in meta else "autre"
+        it["espace"], it["objet"] = espace, m.get("objet")
+        par_espace.setdefault(espace, []).append(it)
+    sortie = []
+    for eid, lst in par_espace.items():
+        e = dict(meta.get(eid, _ESPACE_AUTRE))
+        e["items"] = sorted(lst, key=lambda i: (i.get("order", 999), i.get("id", "")))
+        sortie.append(e)
+    return sorted(sortie, key=lambda e: e.get("ordre", 99))
+
+
 def _compute_menu_sync() -> dict:
     """Compute full menu (synchronous, called from thread).
 
@@ -126,6 +161,8 @@ def _compute_menu_sync() -> dict:
             item_copy["active"] = _check_module_active(module_www)
             installed_items.append(item_copy)
 
+    espaces = _espaces_du_menu(installed_items)
+
     # Group by category
     categories = {}
     for item in installed_items:
@@ -161,6 +198,7 @@ def _compute_menu_sync() -> dict:
     return {
         "categories": sorted_categories,
         "themes": sorted_themes,
+        "espaces": espaces,
         "total_installed": len(installed_items),
         "total_active": sum(1 for i in installed_items if i.get("active")),
         "cached_at": time.time(),

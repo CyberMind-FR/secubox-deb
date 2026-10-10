@@ -1,3 +1,9 @@
+secubox-hub (1.9.40-1~bookworm1) bookworm; urgency=medium
+
+  * Les six espaces de l'administration (#2212) : packages/secubox-hub/espaces.json rattache chaque entree de menu.d a un espace (Vue d'ensemble, Protection, Surveillance, Services, Identite & acces, Systeme) et a un objet central (BOX, DEVICE, USER, SERVICE, ACTOR, ALERT, CERTIFICATE, BACKUP, UPDATE). GET /api/v1/hub/public/menu ajoute « espaces » (espaces non vides dans l'ordre, « autre » en dernier ; une entree non classee n'est jamais perdue) et « espace »/« objet » sur chaque entree ; categories et themes sont inchanges. Table installee en /usr/share/secubox/espaces.json. 9 tests dont l'exhaustivite (chaque entree de menu classee, aucune ligne perimee) et la separation des identites.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 19:00:00 +0200
+
 secubox-hub (1.9.39-1~bookworm1) bookworm; urgency=medium
 
   * vortex-dns retire (#2050, D3) : routes nginx /vortex-dns/ et /api/v1/vortex-dns/ et lien du module inconnu supprimes.
