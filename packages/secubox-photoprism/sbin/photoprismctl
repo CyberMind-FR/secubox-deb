@@ -64,6 +64,9 @@ cmd_install() {
     SECUBOX_PHOTOPRISM_HOSTNAME="$PUBLIC_HOSTNAME" SECUBOX_PHOTOPRISM_PORT="$HTTP_PORT" \
     SECUBOX_PHOTOPRISM_AUTO_INDEX="$AUTO_INDEX" SECUBOX_PHOTOPRISM_WORKERS="$WORKERS" \
         bash "$INSTALL_LIB" || { echo "[photoprism] ERREUR : l'installation a échoué (voir ci-dessus) — rien n'est « fait » (#1729)" >&2; exit 1; }
+    # Entree « SecuBox » par OIDC (#2255) : le postinst la rejoue a chaque configure, mais PhotoPrism n'etait alors pas encore installe (sso reporte) ;
+    # sans cet appel, il n'avait JAMAIS d'entree OIDC et manquait au SSO du Hall.
+    cmd_sso || warn "entree OIDC non configuree — relancer 'photoprismctl sso'"
     log "Done. Try 'photoprismctl status'."
 }
 

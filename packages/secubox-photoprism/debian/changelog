@@ -1,3 +1,9 @@
+secubox-photoprism (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * `photoprismctl install` configure l'entree OIDC « SecuBox » une fois PhotoPrism installe (#2255). Le postinst la rejouait avant l'installation (« sso reporte ») et personne ne la rejouait ensuite : PhotoPrism restait en mot de passe seul, sans SSO. Un echec de sso previent sans annuler l'installation. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 00:00:00 +0200
+
 secubox-photoprism (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Vhost nginx : l'include du reveil (secubox-waking) precede desormais celui des pages d'erreur ; avant, le reveil a la demande etait masque par les pages d'erreur : secubox-errorpages et secubox-waking declarent tous deux `error_page 502 503 504`, nginx retient la PREMIERE, et le vhost incluait les pages d'erreur d'abord ; la page « 504 — Delai depasse » s'affichait, le waker n'etait jamais appele et le conteneur arrete ne se reveillait pas (#2251).
