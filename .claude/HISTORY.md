@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — sites-enabled : des liens, plus des copies (ref #2253)
+
+Causes : `sed -i` (secubox-vhost-logs) et `os.replace` (nginxgen) remplacent un lien par une copie. Corrigés (metrics 1.17.1, profiles 0.20.0) + `secubox-wakectl nginx-relink` pour adopter les 19 copies de gk2. Disque local à 100 % constaté et nettoyé (worktrees fusionnés).
+
 ## 2026-10-11 — Vhosts on-demand : le réveil était masqué par les pages d'erreur (ref #2251)
 
 PhotoPrism ne se réveillait pas (504 puis 502). Cause : `secubox-errorpages` avant `secubox-waking` dans le vhost (nginx retient la première `error_page`). Corrigé dans photoprism, peertube, radio, podcaster ; `nginxgen.wire()` insère avant et déplace un include mal placé (profiles 0.19.18) ; garde de dépôt.

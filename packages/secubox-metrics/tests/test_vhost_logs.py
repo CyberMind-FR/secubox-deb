@@ -116,3 +116,16 @@ def test_succes_ajoute_la_ligne_et_garde_la_passe_a_part(tmp_path):
     passes = [p for p in sauv.iterdir() if p.is_dir()]
     assert len(passes) == 1 and passes[0].name.startswith("passe-")
     assert [p.name for p in passes[0].iterdir()] == ["b.conf"]
+
+
+def test_succes_sur_un_lien_ecrit_dans_la_cible_et_garde_le_lien(tmp_path):
+    """#2253 : `sed -i` remplaçait le lien de sites-enabled par une COPIE ; sites-available et ce que nginx charge divergeaient en silence."""
+    sa, se, sauv, bin_ = _banc(tmp_path, [0])
+    (sa / "a.conf").write_text(VHOST)
+    (se / "a.conf").symlink_to("../sites-available/a.conf")
+
+    r = _lancer(se, sauv, bin_)
+
+    assert r.returncode == 0, r.stderr
+    assert (se / "a.conf").is_symlink() and os.readlink(se / "a.conf") == "../sites-available/a.conf"
+    assert (sa / "a.conf").read_text().count(LIGNE) == 1, "la ligne doit etre ecrite dans la cible, sites-available"

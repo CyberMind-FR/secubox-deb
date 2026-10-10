@@ -1,3 +1,9 @@
+secubox-metrics (1.17.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-vhost-logs 1.1.1 : `sed -i --follow-symlinks`. Sans lui, sed remplacait le lien de sites-enabled par une COPIE, et sites-available divergeait en silence de ce que nginx charge (19 copies sur gk2, #2253). La sauvegarde de la passe garde aussi la CIBLE d'un lien, rendue telle quelle si nginx -t echoue. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 23:00:00 +0200
+
 secubox-metrics (1.17.0-1~bookworm1) bookworm; urgency=medium
 
   * Historique de la memoire de la box : un releve toutes les 5 minutes (timer secubox-metrics-memoire, 7 jours en JSON-lignes) de la memoire noyau non recuperable, de la memoire disponible et du swap, route GET /api/v1/metrics/memory/history, alerte au journal sur seuil (part de la RAM) et sur croissance soutenue du noyau (> 50 Mo/h). Sur gk2, 4,2 Go de memoire noyau s'etaient accumules sans aucun historique pour dire quand ni a quelle vitesse (#2146).

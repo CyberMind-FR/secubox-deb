@@ -113,6 +113,12 @@ def main(argv: list[str] | None = None) -> int:
     # autres vhosts gardent la page BRUTE de nginx sur un 502.
     sp2.add_argument("--all", action="store_true",
                      help="cabler TOUS les vhosts qui relaient, pas seulement les on-demand")
+    # sites-enabled doit contenir des LIENS (#2253). Essai a blanc par defaut : on montre ce qui serait relie avant de toucher a nginx.
+    spr = sub.add_parser("nginx-relink", help="remplacer les copies de sites-enabled par des liens (essai a blanc par defaut)")
+    spr.add_argument("--enabled", default="/etc/nginx/sites-enabled")
+    spr.add_argument("--available", default="/etc/nginx/sites-available")
+    spr.add_argument("--backups", default="/var/lib/secubox/profiles/relink")
+    spr.add_argument("--apply", action="store_true")
     sp3 = sub.add_parser("waf-sync")
     sp3.add_argument("--out", default="/etc/secubox/waf/on-demand-vhosts.json")
     sp5 = sub.add_parser("lxc-stagger",
@@ -176,6 +182,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  on-demand sans vhost nginx : {', '.join(rep['no_config'])}",
                   file=sys.stderr)
         return 1 if rep["rolled_back"] else 0
+    if args.cmd == "nginx-relink":
+        from . import nginxrelink
+        actions = nginxrelink.plan(Path(args.enabled), Path(args.available))
+        for a in actions:
+            print(f"  {a['action']:<9} {a['nom']}")
+        print(f"nginx-relink: {len(actions)} copie(s) a traiter" + ("" if args.apply else " — essai a blanc, relancer avec --apply"))
+        if not args.apply or not actions:
+            return 0
+        if not _running_as_root():
+            print("nginx-relink --apply doit etre lance en root (ecrit dans /etc/nginx + reload).", file=sys.stderr)
+            return 1
+        rep = nginxrelink.apply(actions, Path(args.enabled), Path(args.available), Path(args.backups), _run)
+        print(f"nginx-relink: {len(rep['relies'])} relie(s)" + (f", {len(rep['refuses'])} refuse(s)" if rep["refuses"] else "")
+              + (" — ROLLBACK (nginx -t a echoue)" if rep["retour_arriere"] else (" — nginx recharge" if rep["recharge"] else "")))
+        return 1 if rep["retour_arriere"] else 0
     if args.cmd == "waf-sync":
         from . import wafsync
         doms = wafsync.write_ondemand(manifests=load_all(Path(args.root) / "modules.d"),
