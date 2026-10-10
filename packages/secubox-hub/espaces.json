@@ -51,6 +51,10 @@
   }
  ],
  "modules": {
+  "acces": {
+   "espace": "identite",
+   "objet": "USER"
+  },
   "actor": {
    "espace": "surveillance",
    "objet": "ACTOR"
