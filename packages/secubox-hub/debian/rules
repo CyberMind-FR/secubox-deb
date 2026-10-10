@@ -72,6 +72,9 @@ override_dh_auto_install:
 	install -d debian/secubox-hub/usr/share/secubox/hub/nftables.d
 	install -m 0644 nftables.d/zz-secubox-netstats-tap.nft \
 	  debian/secubox-hub/usr/share/secubox/hub/nftables.d/
+	# #2240 — capteur pare-feu d'Actor Intelligence : couples (source, port) des paquets rejetés
+	install -m 0644 nftables.d/zz-secubox-scan-tap.nft \
+	  debian/secubox-hub/usr/share/secubox/hub/nftables.d/
 	# sudoers fragment so the hub service (User=secubox) can fall back to
 	# realtime `nft list` when the cache is stale (read-only nft, no risk).
 	# Two patterns because `-j` is a global option for nft and must precede

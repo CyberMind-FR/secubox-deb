@@ -156,3 +156,12 @@ func TestNewEventID_Unique(t *testing.T) {
 		vus[id] = true
 	}
 }
+
+func TestCapteursPareFeuEtDNSSontValides(t *testing.T) {
+	for _, s := range []string{SensorFirewall, SensorDNS} {
+		e := &Envelope{EventID: NewEventID(), Timestamp: 1_800_000_000, Sensor: s, SrcIP: "203.0.113.9", Severity: 40}
+		if err := e.Validate(); err != nil {
+			t.Fatalf("capteur %s : %v", s, err)
+		}
+	}
+}

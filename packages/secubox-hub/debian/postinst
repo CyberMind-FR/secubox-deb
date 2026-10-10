@@ -69,6 +69,17 @@ TOML
             /usr/sbin/nft -f /etc/nftables.d/zz-secubox-netstats-tap.nft 2>/dev/null || true
         fi
     fi
+    # #2240 — sonde du capteur pare-feu (ensembles + règles additives). Même prudence que ci-dessus : JAMAIS de reload de nftables ; chargée seulement si
+    # l'ensemble manque (sinon les règles se dupliqueraient à chaque mise à jour), et seulement si la chaîne d'entrée existe.
+    if [ -f /usr/share/secubox/hub/nftables.d/zz-secubox-scan-tap.nft ]; then
+        install -d -m 0755 /etc/nftables.d
+        install -m 0644 /usr/share/secubox/hub/nftables.d/zz-secubox-scan-tap.nft \
+            /etc/nftables.d/zz-secubox-scan-tap.nft
+        if nft list chain inet filter input >/dev/null 2>&1 \
+           && ! nft list set inet filter sbx_scan_seen4 >/dev/null 2>&1; then
+            /usr/sbin/nft -f /etc/nftables.d/zz-secubox-scan-tap.nft 2>/dev/null || true
+        fi
+    fi
     # #758 — enable the collector timer (idempotent)
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable --now secubox-netstats.timer 2>/dev/null || true

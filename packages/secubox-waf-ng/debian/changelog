@@ -1,3 +1,9 @@
+secubox-waf-ng (1.22.0-1~bookworm1) bookworm; urgency=medium
+
+  * Capteur pare-feu (#2240) : l'unite et le dropin du leurre ajoutent --scan-sensor. Prerequis : secubox-hub >= 1.9.52 (sonde nftables) ; sans elle le capteur compte l'erreur, la journalise une fois et n'emet rien.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 12:00:00 +0200
+
 secubox-waf-ng (1.21.0-1~bookworm1) bookworm; urgency=medium
 
   * Actor Intelligence 2.0, phase 1 (#2240) : les bans de sbxwaf deviennent des actions defensives lisibles et annulables. GET /enforcement (type, cible, raison, duree, echeance, statut active/expired/released, rollback), GET /enforcement/mode (PASSIVE_ONLY / SIMULATION / ACTIVE selon off / propose / auto de sbxwaf), GET /decisions (BLOCKED, WOULD_BLOCK, OBSERVE avec motif et preuves), POST /enforcement/{id}/rollback (require_jwt, retire l'adresse du set nft, ligne d'audit, refus net d'une action inactive). Aucune donnee recopiee : relecture du journal de bans et des etats de ban. api/enforcement.py (fonctions pures), 13 tests.

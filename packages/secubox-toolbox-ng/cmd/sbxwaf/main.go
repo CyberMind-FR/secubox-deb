@@ -1210,6 +1210,8 @@ func main() {
 		"sliding window for escalate-mode categories (a slow scanner needs a long window)")
 	escalateThreshold := flag.Int("escalate-threshold", 3,
 		"probes within the escalate window before an IP is banned")
+	scanSensor := flag.Bool("scan-sensor", false, "capteur pare-feu : relit l'ensemble nft des paquets rejetés (nftables.d/zz-secubox-scan-tap.nft) et émet les balayages de ports vers actord (#2240)")
+	scanSeuil := flag.Int("scan-seuil", 8, "ports DISTINCTS frappés par une même adresse (10 min) pour parler de balayage vertical")
 	leurreBan := flag.Bool("leurre-ban", false, "ban dès le premier hit sur le leurre (hôte non routé, hors LAN et première partie), durée graduée 1 h / 24 h / 7 j à la récidive (#2238)")
 	campagneBanMode := flag.String("campagne-ban", "off", "ban des campagnes (même workflow de sondes, haute valeur) : off | propose | auto (#2238)")
 	campagneBanEtat := flag.String("campagne-ban-etat", "/var/lib/secubox/waf/campagne-ban-etat.json", "état du ban des campagnes pour le panneau")
@@ -1313,10 +1315,13 @@ func main() {
 	// Émission désactivable (--actor-socket ""); si actord est absent, les
 	// enveloppes sont déposées sans jamais ralentir le WAF.
 	tl := NewThreatLog(*threatLog)
+	var emitter *emit.Emitter // partagé avec le capteur pare-feu (#2240)
+	var geo *Geo
 	if *actorSocket != "" {
-		emitter := emit.New(*actorSocket, 8192)
+		emitter = emit.New(*actorSocket, 8192)
 		tl.SetEmitter(emitter)
 		if g := NewGeo(*geoipPath); g != nil {
+			geo = g
 			tl.SetGeo(g)
 			defer g.Close()
 		}
@@ -1397,6 +1402,19 @@ func main() {
 				ab.protegees = parseCIDRs(*actorBanProtegees)
 				go ab.Veiller(time.Minute)
 				log.Printf("sbxwaf: actor-ban mode=%s (min=%d sanctions locales, plafond=%d/h, source=%s)", *actorBanMode, *actorBanMin, *actorBanMaxHeure, *actorProps)
+			}
+			// Capteur pare-feu (#2240) : lit l'ensemble nft des paquets rejetés, émet vers actord ; sans --actor-socket il n'a nulle part où écrire.
+			if *scanSensor {
+				if emitter == nil {
+					log.Printf("sbxwaf: capteur pare-feu demandé mais --actor-socket est vide : désactivé")
+				} else {
+					ss := NewScanSensor(nb.runner, emitter)
+					ss.seuil = *scanSeuil
+					ss.protegees = parseCIDRs(*actorBanProtegees)
+					ss.geo = geo
+					go ss.Veiller(30 * time.Second)
+					log.Printf("sbxwaf: capteur pare-feu actif (balayage = %d ports distincts en 10 min, relecture 30 s)", *scanSeuil)
+				}
 			}
 			// Ban des campagnes (#2238) : garde-fous dans campagneban.go ; mêmes plages protégées que le ban d'acteurs.
 			if *campagneBanMode == "propose" || *campagneBanMode == "auto" {

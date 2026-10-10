@@ -40,6 +40,8 @@ const (
 	SensorDPI       = "dpi"       // sbxdpi (nDPI)
 	SensorAuthWatch = "authwatch" // sbx-authwatch (SSH/SMTP/IMAP)
 	SensorSentinel  = "sentinel"  // sbx-sentinel (flux/IOC)
+	SensorFirewall  = "firewall"  // nftables : paquets rejetés par la politique d'entrée (scans de ports), lus par sbxwaf (#2240)
+	SensorDNS       = "dns"       // anomalies DNS (#2240)
 	SensorReplay    = "replay"    // outil de rejeu (RFC-0013 §13), données anonymisées
 )
 
@@ -84,7 +86,7 @@ var (
 
 	validSensors = map[string]bool{
 		SensorWAF: true, SensorDPI: true, SensorAuthWatch: true,
-		SensorSentinel: true, SensorReplay: true,
+		SensorSentinel: true, SensorFirewall: true, SensorDNS: true, SensorReplay: true,
 	}
 	validRDNS = map[string]bool{
 		"": true, RDNSCloud: true, RDNSHosting: true, RDNSISP: true,

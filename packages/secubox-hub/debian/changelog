@@ -1,3 +1,9 @@
+secubox-hub (1.9.52-1~bookworm1) bookworm; urgency=medium
+
+  * Sonde du capteur pare-feu d'Actor Intelligence (#2240) : nftables.d/zz-secubox-scan-tap.nft inscrit le couple (source, port) des paquets rejetes par la politique d'entree dans deux ensembles a duree de vie de 10 min (65 536 couples max par famille). ADDITIVE : ne bloque et n'accepte rien, regles ajoutees apres toutes les acceptations. Le postinst la charge seulement si l'ensemble manque (jamais de reload de nftables). 3 tests dont un chargement reel en espace de noms jetable.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 12:00:00 +0200
+
 secubox-hub (1.9.51-1~bookworm1) bookworm; urgency=medium
 
   * Bascule du defaut (#2212) : la navigation a six espaces devient la navigation par defaut (sidebar.js v2.44.0), apres validation du proprietaire. Retour aux categories par ?nav=categories (memorise : sbx_nav=categories), ?nav=espaces rend le defaut. Un hub sans « espaces » ou un stockage indisponible retombent sur les categories : jamais de menu vide. Le lien de bascule en tete du menu propose l'autre vue. Tests adaptes.
