@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-10 — Admin SBXOS : recherche globale (ref #2212)
+
+secubox-hub 1.9.44 : champ de recherche dans la vue par espaces (sans casse ni accents). Le panneau de notifications reste porte par la section Alertes de la Vue d'ensemble (pas de requete supplementaire sur chaque page). Suite : pages d'espace, fiches appareil/service.
+
 ## 2026-10-10 — Admin SBXOS : page Vue d'ensemble (ref #2212)
 
 secubox-hub 1.9.43 : page `/apercu/` branchee sur `/api/v1/hub/apercu`, entree de menu dans l'espace Vue d'ensemble. Suite : recherche globale, notifications, pages d'espace, fiches appareil/service.

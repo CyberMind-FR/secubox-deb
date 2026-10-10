@@ -120,3 +120,31 @@ def test_un_lien_permet_de_changer_de_mode(navigateur):
     lien = p.locator("#sidebar a.nav-mode-link")
     assert lien.count() == 1 and "nav=espaces" in lien.get_attribute("href")
     ctx.close()
+
+
+# ── Recherche globale (vue par espaces uniquement) ─────────────────────────────────────────────────────────
+def test_la_recherche_filtre_les_entrees_de_tous_les_espaces(navigateur):
+    ctx, p, erreurs = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=espaces")
+    p.fill("#sbx-recherche", "back")
+    visibles = [t.strip() for t in p.locator("#sidebar .nav-item:visible").all_inner_texts()]
+    assert len(visibles) == 1 and "Backup" in visibles[0]
+    assert p.locator("#sidebar .nav-section:visible").count() == 1       # les espaces vides disparaissent
+    p.fill("#sbx-recherche", "")
+    assert p.locator("#sidebar .nav-item:visible").count() == 4
+    assert not erreurs
+    ctx.close()
+
+
+def test_la_recherche_ignore_casse_et_accents_et_dit_quand_rien_ne_correspond(navigateur):
+    ctx, p, _ = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=espaces")
+    p.fill("#sbx-recherche", "SYSTEME")                                   # « Système » : l'espace, pas le nom d'entrée
+    assert p.locator("#sidebar .nav-item:visible").count() == 1
+    p.fill("#sbx-recherche", "zzz")
+    assert "Aucun résultat" in p.inner_text("#sbx-recherche-vide")
+    ctx.close()
+
+
+def test_pas_de_recherche_dans_la_vue_par_categories(navigateur):
+    ctx, p, _ = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=categories")
+    assert p.locator("#sbx-recherche").count() == 0
+    ctx.close()

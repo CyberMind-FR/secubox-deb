@@ -1,3 +1,9 @@
+secubox-hub (1.9.44-1~bookworm1) bookworm; urgency=medium
+
+  * Recherche globale (#2212) : en vue par espaces, la barre laterale (sidebar.js v2.43.0) propose un champ « Rechercher un module » qui filtre les entrees de tous les espaces, sans casse ni accents, le nom de l'espace comptant aussi ; les espaces vides disparaissent, « Aucun resultat » s'affiche si rien ne correspond. Absent de la vue par categories. 3 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 10 Oct 2026 23:00:00 +0200
+
 secubox-hub (1.9.43-1~bookworm1) bookworm; urgency=medium
 
   * Page Vue d'ensemble (#2212) : /apercu/ (menu.d/01-apercu.json, espace « apercu ») affiche l'etat global, une carte par espace (actifs/total, services a l'arret), les ressources et les alertes recentes depuis /api/v1/hub/apercu ; actualisation toutes les 30 s, erreur claire si l'API est illisible, contenu des alertes affiche en texte (jamais interprete). 3 tests navigateur.
