@@ -7,6 +7,7 @@ override_dh_auto_install:
 	cp -r api debian/secubox-hub/usr/lib/secubox/hub/
 	install -d debian/secubox-hub/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-hub/usr/share/secubox/www/ || true
+	install -D -m 644 espaces.json debian/secubox-hub/usr/share/secubox/espaces.json
 	install -d debian/secubox-hub/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-hub/usr/share/secubox/menu.d/ || true
 	# Modular nginx config
