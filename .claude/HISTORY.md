@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Tag alpha.11 : l'agent Auto-Load refusé par verify-profile (ref #2285)
+Le tag a construit les paquets (121 jobs) et l'installateur sans écran, mais 7 images disque ont échoué : `scripts/verify-profile.sh` refuse un module absent du working-set de gk2, et l'agent (ajouté au profil `lite` par #2280)
+y était absent. Entrée manuelle dans `image/profiles/working-set.gk2.txt` et test qui lance la porte sur lite, isp et full. Leçon : lancer `verify-profile.sh` avant tout changement de profil.
+
 ## 2026-10-11 — waf-ng 1.27.3 : le correctif du cache est dans l'unité, drop-in corrompu retiré (ref #2283)
 `/etc/systemd/system/secubox-waf-ng.service.d/20-cache-owner.conf` (gk2, #1001) contenait l'aide de la commande `secubox` collée par un heredoc à backticks ; systemd ignorait ses lignes. `mkdir` et `chown` du cache sont dans l'unité du paquet, un test refuse tout fichier d'unité corrompu, les deux drop-ins manuels sont retirés. Leçon : jamais de backtick dans un heredoc non protégé.
 

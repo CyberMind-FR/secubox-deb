@@ -7,6 +7,12 @@
 # sur gk2 (secubox-ndpid-engine 1.7.0, proprietaire de /usr/sbin/nDPId et
 # nDPIsrvd) mais le snapshot ne le voyait pas — il ne releve que les
 # services « enabled », or le moteur n'en expose pas sous ce nom.
+# AJOUT MANUEL 2026-10-11 : autoload-agent (#2280). L'agent Auto-Load est dans le profil lite
+# (donc dans toute image) pour qu'une box flashee se provisionne seule. Son unite est ACTIVEE mais
+# ne demarre que si /boot porte un fichier de reponses signe : sur gk2 elle reste inactive, et un
+# snapshot qui ne releve que les services « running » ne la verrait pas. Sans cette ligne,
+# verify-profile refuse lite, isp et full (sept images en echec sur le tag alpha.11, #2285).
+autoload-agent
 # NE PAS regenerer a l'aveugle : un snapshot pris pendant que le sleeper
 # a endormi les modules on-demand RETIRE dns, hub, hardening et consorts,
 # et invalide les trois profils. Verifie le 2026-09-19 (#1308).
