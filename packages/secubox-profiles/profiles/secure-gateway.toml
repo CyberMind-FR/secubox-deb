@@ -9,4 +9,5 @@ on = [
   "aggregator", "auth", "certs", "core", "dns",
   "dns-guard", "dns-provider", "exposure", "haproxy", "hardening", "ipblock",
   "users", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
+  "console", "kiosk",
 ]

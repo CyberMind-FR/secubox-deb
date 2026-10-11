@@ -55,10 +55,10 @@ DEFAULT_WAKE_CLASS = "normal"
 PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault", "autoload-agent"})
 
 
-# Modules que le moteur de profils ne GÈRE PAS du tout : ni stop, ni start (#2329). Le kiosque est l'interface locale de la box (écran) : aucun profil ne le liste, donc le moteur le
-# mettait à OFF — la box finissait son Auto-Load sans interface. L'ajouter aux profils le ferait DÉMARRER sur une box sans tête, où son ExecStartPre échoue (sentinelle .kiosk-enabled
-# absente) : « état non atteint », tout l'apply annulé (même piège que #2315). Il reste donc tel que le propriétaire de l'écran l'a laissé.
-HORS_PLAN = frozenset({"kiosk"})
+# Modules que le moteur de profils ne GÈRE PAS du tout : ni stop, ni start (#2329). Vide depuis #2332 : le kiosque (interface locale) et la console (sa partie headless) sont dans tous
+# les profils, et leurs unités ne démarrent que si leur condition est remplie (sentinelle .kiosk-enabled) — un démarrage « ignoré » compte comme réussi, il n'annule plus l'apply (#2315).
+# Le mécanisme reste pour un module qu'on ne doit jamais toucher.
+HORS_PLAN: frozenset = frozenset()
 
 
 class ManifestError(Exception):

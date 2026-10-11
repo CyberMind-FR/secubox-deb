@@ -13,4 +13,5 @@ on = [
   "network-ready", "p2p", "portal", "routes", "runtime", "system",
   "users", "vhost", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
   "watchdog", "wireguard",
+  "console", "kiosk",
 ]

@@ -124,15 +124,17 @@ def test_module_without_observation_is_skipped():
     assert plan_changes(ms, prof, {}, {}) == []
 
 
-def test_le_kiosque_n_est_jamais_touche_par_un_profil_qui_ne_le_liste_pas():
-    """#2329 : le kiosque (interface locale) absent de tous les profils était arrêté ET désactivé par l'apply ; la box finissait son Auto-Load sans interface. Hors plan : ni stop, ni start."""
+def test_un_module_hors_plan_n_est_ni_arrete_ni_demarre(monkeypatch):
+    """Le mécanisme HORS_PLAN (#2329) reste : un module qu'on ne doit jamais toucher n'est ni arrêté ni démarré par un profil."""
+    import api.diff as D
+    monkeypatch.setattr(D, "HORS_PLAN", frozenset({"kiosk"}))
     ms = {"kiosk": mk("kiosk"), "lyrion": mk("lyrion")}
     prof = Profile(name="lite", label="l", on=frozenset())
     ids = [c.id for c in plan_changes(ms, prof, {}, {"kiosk": on(), "lyrion": on()})]
-    assert "lyrion" in ids and "kiosk" not in ids                                       # un module ordinaire absent du profil est bien arrêté
-    assert plan_changes({"kiosk": mk("kiosk")}, prof, {}, {"kiosk": off()}) == []        # et il n'est pas démarré non plus (box sans tête : l'unité échouerait)
+    assert "lyrion" in ids and "kiosk" not in ids
+    assert plan_changes({"kiosk": mk("kiosk")}, prof, {}, {"kiosk": off()}) == []
 
 
-def test_hors_plan_ne_contient_que_le_kiosque_pour_l_instant():
+def test_hors_plan_est_vide_depuis_que_le_kiosque_est_dans_les_profils():
     from api.manifest import HORS_PLAN
-    assert HORS_PLAN == frozenset({"kiosk"})
+    assert HORS_PLAN == frozenset()

@@ -23,4 +23,5 @@ on = [
   "threats", "tor", "traffic", "turn", "users", "vault",
   "vhost", "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng",
   "waf-ratelimit", "watchdog", "wireguard", "yacy", "zigbee", "zkp",
+  "console", "kiosk",
 ]

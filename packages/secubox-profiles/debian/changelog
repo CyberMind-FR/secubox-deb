@@ -1,3 +1,9 @@
+secubox-profiles (0.20.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le kiosque WebUI et la console (sa partie headless) sont dans TOUS les profils (#2332) : lite, full, media-lab, secure-gateway. HORS_PLAN est vide : le kiosque n'a plus besoin d'etre ignore, son unite ne demarre que si sa condition est remplie. Le mecanisme reste.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 12:00:00 +0200
+
 secubox-profiles (0.20.3-1~bookworm1) bookworm; urgency=medium
 
   * Le kiosque n'est plus arrete par un profil (#2329) : l'interface locale de la box (module kiosk, absent de tous les profils) etait mise a OFF — stop + disable — par `profilectl apply`, et une box avec ecran finissait son Auto-Load sans interface (constate dans la VM : Session terminated, Deactivated). Nouveau HORS_PLAN : ni stop, ni start (l'ajouter aux profils le ferait demarrer sur une box sans tete, ou son ExecStartPre echoue et tout l'apply serait annule, comme #2315). 2 tests (rouges sans le correctif).

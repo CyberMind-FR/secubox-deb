@@ -1,3 +1,9 @@
+secubox-lite (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * La console TUI (partie headless de l'interface locale) est dans toute image (#2332) : elle quitte secubox-full. Le kiosque WebUI et la console sont dans tous les profils.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 12:00:00 +0200
+
 secubox-lite (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Le profil lite depend de secubox-autoload-agent (#2280) : toute image (lite, isp, full) porte l'agent Auto-Load et peut se provisionner seule au premier demarrage — seulement si /boot porte un fichier de reponses signe ; sinon l'unite ne demarre pas. 1 test de composition.
