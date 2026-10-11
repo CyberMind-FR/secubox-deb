@@ -34,3 +34,45 @@ def test_prerempli_depuis_le_profil_sans_secret():
     assert majs.valeurs(C.valeurs_de(majs)) == {"auto": False}
     admin = next(p for p in ps if p.id == "admin")
     assert all(c.valeur == "" for c in admin.champs)          # jamais pré-rempli
+
+
+# ── #2312 : choisir une option dans une liste verticale ──────────────────────────────────────────
+def _choix(valeur="a"):
+    return C.Champ("profil", "Profil", "choix", [("a", "A"), ("b", "B"), ("c", "C")], valeur)
+
+
+def test_haut_bas_choisissent_quand_la_page_n_a_qu_un_champ():
+    import curses
+    c = _choix()
+    assert C.change_choix(c, curses.KEY_DOWN, True) and c.valeur == "b"
+    assert C.change_choix(c, curses.KEY_UP, True) and C.change_choix(c, curses.KEY_UP, True) and c.valeur == "c"      # tourne
+
+
+def test_haut_bas_gardent_leur_role_de_focus_quand_il_y_a_plusieurs_champs():
+    import curses
+    c = _choix()
+    assert not C.change_choix(c, curses.KEY_DOWN, False) and c.valeur == "a"
+
+
+def test_plus_moins_espace_chiffres_et_fleches_marchent_partout():
+    import curses
+    c = _choix()
+    assert C.change_choix(c, "+", False) and c.valeur == "b"
+    assert C.change_choix(c, "-", False) and c.valeur == "a"
+    assert C.change_choix(c, " ", False) and c.valeur == "b"
+    assert C.change_choix(c, "3", False) and c.valeur == "c"
+    assert C.change_choix(c, curses.KEY_LEFT, False) and c.valeur == "b"
+    assert C.change_choix(c, curses.KEY_RIGHT, False) and c.valeur == "c"
+    assert not C.change_choix(c, "9", False) and c.valeur == "c"                      # chiffre hors liste : ignoré
+
+
+def test_un_champ_texte_n_est_pas_touche():
+    c = C.Champ("nom", "Nom", "texte", [], "x")
+    assert not C.change_choix(c, "+", True) and c.valeur == "x"
+
+
+def test_le_pied_de_page_n_utilise_que_de_l_ascii():
+    import re
+    src = (Path(__file__).resolve().parents[1] / "premier_pas" / "console.py").read_text(encoding="utf-8")
+    pied = re.search(r'e\.addstr\(20, x0 \+ 2, "([^"]+)"', src).group(1)
+    assert pied.isascii() and "Haut/Bas" in pied

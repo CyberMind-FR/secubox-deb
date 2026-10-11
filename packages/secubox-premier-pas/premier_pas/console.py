@@ -15,7 +15,7 @@ Même moteur que le kiosque : chaque étape passe par premier_pas.remplir.
 La console tourne en root sur tty1, elle n'a donc pas besoin du jeton : c'est
 l'accès physique à la box qui fait foi, comme pour le kiosque.
 
-Touches : Tab / ↑↓ champ · ←→ choix · Entrée continuer · Échap retour · F10 quitter
+Touches : Tab champ · haut/bas, gauche/droite, +/-, espace ou chiffre : choix · Entrée continuer · Échap retour · F10 quitter
 """
 from __future__ import annotations
 
@@ -112,6 +112,27 @@ def valeurs_de(page: Page) -> Dict[str, str]:
     return v
 
 
+def change_choix(c: "Champ", k, seul: bool) -> bool:
+    """Change l'option d'un champ « choix » selon la touche ; rend True si la touche a servi (#2312).
+    La liste s'affiche en colonne : haut/bas doivent choisir quand la page n'a qu'UN champ (sinon ils déplacent le focus entre champs, et il n'y en a pas d'autre).
+    Gauche/droite, plus/moins, espace et les chiffres 1..n marchent partout : la console Linux ne dessine pas toujours les flèches, on ne dépend pas d'elles."""
+    if c.genre != "choix" or not c.options:
+        return False
+    vals = [o[0] for o in c.options]
+    if isinstance(k, str) and k.isdigit() and 1 <= int(k) <= len(vals):
+        c.valeur = vals[int(k) - 1]
+        return True
+    if k in (curses.KEY_RIGHT, "+", "=", " ") or (seul and k == curses.KEY_DOWN):
+        pas = 1
+    elif k in (curses.KEY_LEFT, "-", "_") or (seul and k == curses.KEY_UP):
+        pas = -1
+    else:
+        return False
+    j = vals.index(c.valeur) if c.valeur in vals else 0
+    c.valeur = vals[(j + pas) % len(vals)]
+    return True
+
+
 def champs_visibles(page: Page) -> List[Champ]:
     v = valeurs_de(page)
     return [c for c in page.champs if c.visible(v)]
@@ -153,7 +174,7 @@ class Console:
             e.addstr(y, x0 + L - 1, "│", self.OR)
         e.addstr(19, x0, "├" + "─" * (L - 2) + "┤", self.OR)
         e.addstr(20, x0, "│", self.OR)
-        e.addstr(20, x0 + 2, "Tab champ · ←/→ choix · Entrée continuer · Échap retour"[:L - 4], self.GR)
+        e.addstr(20, x0 + 2, "Tab champ - Haut/Bas ou +/- choix - Entree continuer - Echap retour"[:L - 4], self.GR)
         e.addstr(20, x0 + L - 1, "│", self.OR)
         e.addstr(21, x0, "└" + "─" * (L - 2) + "┘", self.OR)
         e.addstr(5, x0 + 2, titre.upper()[:L - 4], curses.A_BOLD)
@@ -226,14 +247,12 @@ class Console:
             k = self.touche()
             if k in ("__force__", "__proposition__"):
                 return k
-            if k in ("\t", curses.KEY_DOWN):
+            if change_choix(c, k, len(vis) == 1):
+                pass
+            elif k in ("\t", curses.KEY_DOWN):
                 self.focus = (self.focus + 1) % len(vis)
             elif k in (curses.KEY_BTAB, curses.KEY_UP):
                 self.focus = (self.focus - 1) % len(vis)
-            elif k in (curses.KEY_LEFT, curses.KEY_RIGHT) and c.genre == "choix":
-                vals = [o[0] for o in c.options]
-                j = vals.index(c.valeur) if c.valeur in vals else 0
-                c.valeur = vals[(j + (1 if k == curses.KEY_RIGHT else -1)) % len(vals)]
             elif k in ("\n", "\r", curses.KEY_ENTER):
                 return "suivant"
             elif k == "\x1b":

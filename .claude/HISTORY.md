@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — premier-pas 0.5.2 : on peut choisir une option dans la console (ref #2312)
+
+Trouvé par le test VirtualBox : liste verticale, seules gauche/droite changeaient l'option, pied de page illisible. Haut/bas, +/-, espace et chiffres.
+
 ## 2026-10-12 — autoload-agent 0.6.2 : profilectl appelé avec --profile (ref #2310)
 
 Quatrième bogue du test VirtualBox : `unrecognized arguments: lite`, après reprise sur redémarrage. Le test confronte maintenant la commande à la vraie CLI.

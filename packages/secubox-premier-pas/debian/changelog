@@ -1,3 +1,9 @@
+secubox-premier-pas (0.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * Console : on peut enfin CHOISIR une option (#2312). La liste des profils s'affichait en colonne mais seules gauche/droite changeaient l'option ; haut/bas deplacaient le focus (il n'y a qu'un champ : rien ne se passait). Haut/bas choisissent quand la page n'a qu'un champ ; plus/moins, espace et les chiffres 1..n marchent partout ; le pied de page est en ASCII (la console Linux ne dessinait pas les fleches : « +/+ choix »). 5 tests (rouges sans le correctif).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:00:00 +0200
+
 secubox-premier-pas (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Etape reseau en mode « lan » sans secubox-net-detect (#2306) : le parcours Auto-Load s'arretait a « Reseau et domaine » (code 127), l'outil n'etant livre par aucune image (il n'existe que dans image/sbin). Une seule carte, rien a reconfigurer : le reseau en place est CONSERVE apres verification d'une route par defaut (sinon l'etape echoue en le disant). Routeur et pont gardent la commande et echouent clairement sans l'outil. Livrer l'outil dans les images reste une decision a part (firstboot.sh le lancerait en `apply router`). 4 tests.
