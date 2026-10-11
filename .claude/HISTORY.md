@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — Auto-Load : le rapport final d'une box LAN arrive enfin (autoload 0.5.1, agent 0.7.1, ref #2319)
+
+Le test VirtualBox va jusqu'à « Votre boîtier est prêt », mais le rapport final était refusé en 422 (domaine vide en mode LAN) et avalé par l'agent. Domaine vide admis des deux côtés.
+
 ## 2026-10-12 — L'assistant manuel s'efface devant l'Auto-Load : premier-pas 0.5.3, autoload-agent 0.7.0 (ref #2317)
 
 Demandé par le propriétaire après le test VirtualBox (assistant en parallèle : routeur par défaut, nom écrasé). Faces fermées tant que le fichier signé est présent, sauf abandon de l'agent (8 échecs). Sans fichier Auto-Load : assistant, code de préparation et propositions du maître inchangés.

@@ -91,3 +91,8 @@ def test_la_cli_affiche_le_dernier_rapport(tmp_path):
     assert r.returncode == 0 and "client042.secubox.in" in r.stdout
     vide = subprocess.run([sys.executable, str(ICI / "sbin" / "autoload-agentctl"), "rapport"], capture_output=True, text=True, env=dict(env, SECUBOX_AUTOLOAD_AGENT_DOSSIER=str(tmp_path / "vide")))
     assert vide.returncode == 1 and "aucun rapport" in vide.stderr
+
+
+def test_l_ecran_d_une_box_lan_dit_reseau_local_seulement():
+    rap = dict(RAP, domaine="")
+    assert "réseau local seulement" in R.texte(rap) and "Adresse du boîtier : \n" not in R.texte(rap)

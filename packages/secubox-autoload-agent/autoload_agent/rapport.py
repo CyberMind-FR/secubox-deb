@@ -24,7 +24,7 @@ def texte(rap: Dict) -> str:
     paquets = rap["paquets"]
     lignes = ["Votre boîtier SecuBox est prêt.", "",
               f"  Profil installé : {PROFILS.get(rap['profil'], rap['profil'])}",
-              f"  Adresse du boîtier : {rap['domaine']}",
+              f"  Adresse du boîtier : {rap['domaine'] or 'réseau local seulement (aucun domaine)'}",
               f"  Comptes créés : {', '.join(rap['comptes']) or 'aucun'}",
               f"  Durée de la mise en service : environ {minutes} minute{'s' if minutes > 1 else ''}",
               f"  Composants installés : {len(paquets)} paquets", ""]
