@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Actor Intelligence : carte et page fidèles à l'infographie (ref #2291)
+
+webos 1.9.0 : page `/actor-intelligence/` (complet ou carte `?embed=1`, `?demo=1` annoncé), données d'actord seulement ; tuiles définies en infobulle ; risque et confiance séparés ; mesure absente = tiret. Audit de l'existant : définitions de compteurs partielles, baseline par appareil absente, états proposé/annulé de l'action absents, taux de faux positifs par règle absent.
+
 ## 2026-10-11 — Guardian : le gardien du réseau domestique (ref #2287)
 
 ad-guard 1.11.0 : route `GET /adblock-tv/gardien` + page unique `/guardian/` (tableau de bord complet ou cardlet `?embed=1`, `?demo=1` annoncé). Données réelles seulement (NAC, DNS, actord) ; une mesure absente s'affiche « — », jamais 0. webos 1.8.0 : carte Hall, relais nginx, aide. Vhost public dédié : décision du propriétaire (DNS, ACME, HAProxy, route WAF).
