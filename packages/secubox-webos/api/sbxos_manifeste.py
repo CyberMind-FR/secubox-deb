@@ -41,6 +41,12 @@ def _lis(espaces: Path, curation: Path) -> tuple[dict, list]:
 def _url(lieu: dict, domaine: str) -> Optional[str]:
     """Réécrit l'hôte de la curation sur le domaine de CETTE box : seul le
     premier label est gardé, et seulement s'il est un nom d'hôte simple."""
+    chemin = str(lieu.get("chemin") or "")
+    if chemin and not lieu.get("url"):
+        # Page du Hall (#2351) : pas d'hôte propre, un chemin sur hall.<domaine>.
+        if not domaine or not re.fullmatch(r"/[a-z0-9][a-z0-9/_-]{0,60}/", chemin):
+            return None
+        return f"https://hall.{domaine}{chemin}"
     brut = str(lieu.get("url") or "")
     sous = brut.split("://")[-1].split("/")[0].split(".")[0].lower()
     if not domaine or not _HOTE.match(sous):

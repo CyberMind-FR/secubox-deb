@@ -32,6 +32,24 @@ from pathlib import Path
 _CHAMPS = ("id", "label", "icon", "color", "url", "lan")
 
 
+def _chemin(brut: str) -> str | None:
+    """Page du Hall (hôte hall.<domaine>) d'une carte sans hôte propre (#2351). On préfère une VRAIE page
+    (carte hors /cardlets/, sinon la page d'administration) ; une carte qui n'est qu'un widget du Hall
+    n'est pas un lieu. Sans requête : seul le chemin est gardé."""
+    cand = []
+    c = re.search(r'\bcarte\s*:\s*"([^"]*)"', brut)
+    if c and not c.group(1).startswith("/cardlets/"):
+        cand.append(c.group(1))
+    a = re.search(r'\badmin\s*:\s*"([^"]*)"', brut)
+    if a:
+        cand.append(a.group(1))
+    for x in cand:
+        x = x.split("?")[0]
+        if re.fullmatch(r"/[a-z0-9][a-z0-9/_-]{0,60}/", x):
+            return x
+    return None
+
+
 def extrait(html: str) -> list[dict]:
     bloc = re.search(r"const FEATURED\s*=\s*\[(.*?)\n\];", html, re.S)
     if not bloc:
@@ -48,7 +66,11 @@ def extrait(html: str) -> list[dict]:
                 e["lan"] = True
         # UNE CARTE SANS ADRESSE N'EST PAS UN LIEU. Les agrégats du Hall
         # (« securite », « contenu ») n'ouvrent rien par eux-mêmes.
-        if e.get("id") and e.get("url"):
+        if e.get("id") and not e.get("url"):
+            ch = _chemin(brut) if e["id"] != "sbxos" else None   # SBX OS ne se liste pas lui-même
+            if ch:
+                e["chemin"] = ch
+        if e.get("id") and (e.get("url") or e.get("chemin")):
             sortie.append(e)
     return sortie
 
