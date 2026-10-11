@@ -300,13 +300,19 @@
   </header>
 
   <div class="onglets" role="tablist">
-    <button class="onglet" role="tab" aria-selected="true" aria-controls="e1" id="t1"><span class="pt"></span>Vigie</button>
+    <button class="onglet" role="tab" aria-selected="true" aria-controls="e0" id="t0"><span class="pt"></span>Guardian</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e1" id="t1"><span class="pt"></span>Vigie</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e2" id="t2"><span class="pt"></span>Meta-metrics</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e3" id="t3"><span class="pt"></span>Centrale d'alertes</button>
   </div>
 
+  <!-- ÉCRAN 0 — GUARDIAN (#2341) : la vue d'ensemble de la maquette, page encadrée de même origine, hauteur annoncée par la page -->
+  <section class="ecran" id="e0" role="tabpanel" aria-labelledby="t0">
+    <iframe id="guardianFrame" src="guardian.html" title="SecuBox Guardian — la vigie du réseau" style="width:100%;height:1400px;border:0;display:block;background:transparent"></iframe>
+  </section>
+
   <!-- ÉCRAN 1 — VIGIE -->
-  <section class="ecran" id="e1" role="tabpanel" aria-labelledby="t1">
+  <section class="ecran" id="e1" role="tabpanel" aria-labelledby="t1" hidden>
     <div class="sect"><h2>Posture du jour</h2><span class="quoi">ce qui est arrivé, ce qui est passé</span>
       <span class="src">waf/stats</span></div>
     <div class="posture">
@@ -806,6 +812,12 @@
     }
     $("chaine").innerHTML = m.join("");
   }
+
+  window.addEventListener("message", function (e) {
+    if (e.origin === location.origin && e.data && e.data.sbxSocVue) {
+      var f = $("guardianFrame"); if (f) f.style.height = Math.min(4000, Math.max(600, +e.data.sbxSocVue + 4)) + "px";
+    }
+  });
 
   // ── Onglets ────────────────────────────────────────────────────────
   var onglets = [].slice.call(document.querySelectorAll(".onglet"));
