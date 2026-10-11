@@ -151,9 +151,3 @@ def test_photoprism_et_jitsi_ne_sont_plus_dans_isp_photoprism_est_dans_full():
     assert not ({"secubox-photoprism", "secubox-jitsi"} & isp)
     assert "secubox-photoprism" in full and "secubox-jitsi" not in full
     assert "secubox-jitsi" in _champ("full", "Suggests")
-
-
-def test_suricata_n_est_qu_une_suggestion_de_threats():
-    """Le paquet Debian démarre sans règles (suricata.rules absent) et échoue à chaque démarrage ; secubox-threats lit eve.json seulement s'il existe."""
-    ctl = (RACINE / "packages" / "secubox-threats" / "debian" / "control").read_text(encoding="utf-8")
-    assert "Suggests: suricata" in ctl and "Recommends: suricata" not in ctl

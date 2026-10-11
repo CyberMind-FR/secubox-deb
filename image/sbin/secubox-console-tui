@@ -166,7 +166,6 @@ draw_security() {
 
     local services=(
         "crowdsec:CrowdSec IDS"
-        "suricata:Suricata IPS"
         "secubox-waf:WAF (HAProxy)"
         "tor:Tor Network"
         "wg-quick@wg0:WireGuard VPN"
@@ -385,7 +384,7 @@ show_services() {
     echo -e "  $(draw_line '─' 60)"
     echo
     systemctl list-units --type=service --state=running,failed --no-pager --no-legend 2>/dev/null | \
-        grep -E 'secubox|nginx|crowdsec|suricata|tor|wireguard|nftables|ssh|network' | \
+        grep -E 'secubox|nginx|crowdsec|tor|wireguard|nftables|ssh|network' | \
         head -20 | while read -r unit load active sub desc; do
             local icon=$(status_icon "$active")
             printf "  %s %-35s %s\n" "$icon" "$unit" "$active"

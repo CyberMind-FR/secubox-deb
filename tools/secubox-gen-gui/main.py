@@ -127,7 +127,6 @@ STAGES = [
 COMPONENTS = {
     "security": [
         ("secubox-crowdsec", "CrowdSec IDS/IPS", True),
-        ("secubox-suricata", "Suricata IDS", False),
         ("secubox-nftables", "nftables Firewall", True),
         ("secubox-fail2ban", "Fail2ban", False),
     ],

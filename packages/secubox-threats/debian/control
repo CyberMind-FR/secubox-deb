@@ -11,11 +11,10 @@ Depends: ${misc:Depends},
  secubox-core (>= 1.4.0),
  python3-tomli,
  python3 (>= 3.11)
-Suggests: suricata
 Replaces: secubox-ai-insights (<< 1.2.3~)
 Breaks: secubox-ai-insights (<< 1.2.3~)
 Description: SecuBox Unified Threats Dashboard
  Unified security threats dashboard aggregating alerts from
- Suricata and WAF. Features threat intelligence,
+ the WAF. Features threat intelligence,
  IOC management, risk scoring, incident tracking, and
  report generation.

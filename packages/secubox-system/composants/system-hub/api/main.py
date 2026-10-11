@@ -149,7 +149,6 @@ class SystemHub:
         self.core_services = [
             "haproxy",
             "secubox-waf-ng",
-            "suricata",
             "unbound",
             "nftables",
             "tailscaled",

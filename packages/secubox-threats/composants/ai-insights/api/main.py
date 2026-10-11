@@ -12,7 +12,7 @@ Features:
   - Anomaly detection in network traffic
   - Log analysis with ML models
   - Threat scoring and classification
-  - Integration with Suricata alerts
+  - Integration with nDPId flows
   - Model management (train, deploy)
 
 Three-fold architecture:
@@ -138,7 +138,6 @@ class ConfigModel(BaseModel):
     anomaly_sensitivity: float = 0.8
     auto_train: bool = True
     train_interval_hours: int = 24
-    suricata_integration: bool = True
     max_correlations: int = 100
     retention_days: int = 30
 
@@ -224,7 +223,6 @@ detection_threshold = {config.detection_threshold}
 anomaly_sensitivity = {config.anomaly_sensitivity}
 auto_train = {str(config.auto_train).lower()}
 train_interval_hours = {config.train_interval_hours}
-suricata_integration = {str(config.suricata_integration).lower()}
 max_correlations = {config.max_correlations}
 retention_days = {config.retention_days}
 """
@@ -304,10 +302,6 @@ async def _periodic_analysis():
 
             config = _load_config()
 
-            # Check Suricata integration
-            if config.suricata_integration:
-                await _analyze_suricata_alerts()
-
             # Run correlation analysis
             await _correlate_alerts()
 
@@ -315,66 +309,6 @@ async def _periodic_analysis():
             break
         except Exception as e:
             log.error("Periodic analysis error: %s", e)
-
-
-async def _analyze_suricata_alerts():
-    """Analyze Suricata alerts for ML insights."""
-    try:
-        eve_log = Path("/var/log/suricata/eve.json")
-        if not eve_log.exists():
-            return
-
-        # Read last 100 lines of eve.json
-        proc = await asyncio.create_subprocess_exec(
-            "tail", "-n", "100", str(eve_log),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode == 0 and stdout:
-            alerts = []
-            for line in stdout.decode().strip().split("\n"):
-                try:
-                    event = json.loads(line)
-                    if event.get("event_type") == "alert":
-                        alerts.append(event)
-                except Exception:
-                    pass
-            if alerts:
-                _process_external_alerts(alerts, "suricata")
-    except Exception as e:
-        log.debug("Suricata analysis skipped: %s", e)
-
-
-def _process_external_alerts(alerts: List[Dict], source: str):
-    """Process alerts from external sources."""
-    history = _load_json(THREATS_HISTORY_FILE, {"threats": []})
-    existing_ids = {t.get("id") for t in history.get("threats", [])}
-
-    for alert in alerts[-50:]:  # Process last 50
-        alert_id = f"{source}-{hashlib.sha256(json.dumps(alert, sort_keys=True).encode()).hexdigest()[:8]}"
-        if alert_id in existing_ids:
-            continue
-
-        # Create threat detection
-        threat = ThreatDetection(
-            id=alert_id,
-            timestamp=alert.get("timestamp", datetime.now().isoformat()),
-            type=ThreatType.INTRUSION,
-            severity=ThreatSeverity.MEDIUM,
-            source_ip=alert.get("src_ip"),
-            target_ip=alert.get("dest_ip"),
-            score=60.0,
-            description=alert.get("alert", {}).get("signature", "Suricata alert"),
-            indicators=[alert.get("alert", {}).get("category", "unknown")],
-            model_id="suricata-integration"
-        )
-
-        history["threats"].append(threat.model_dump())
-
-    # Keep last 1000 threats
-    history["threats"] = history["threats"][-1000:]
-    _save_json(THREATS_HISTORY_FILE, history)
 
 
 async def _correlate_alerts():
@@ -484,7 +418,7 @@ async def components():
                 "name": "Alert Correlator",
                 "type": "analyzer",
                 "description": "Correlates alerts from multiple sources",
-                "sources": ["Suricata", "nDPId"],
+                "sources": ["nDPId"],
             },
             {
                 "name": "Model Manager",
@@ -515,7 +449,6 @@ def access():
             },
         ],
         "integrations": [
-            {"name": "Suricata", "endpoint": "/api/v1/suricata/", "status": "active"},
             {"name": "nDPId", "endpoint": "/api/v1/ndpid/", "status": "active"},
         ],
         "documentation": "https://docs.secubox.in/ai-insights/",
@@ -572,9 +505,7 @@ async def status():
         "correlations": len(correlations.get("correlations", [])),
         "models_deployed": sum(1 for m in models if m.status in [ModelStatus.DEPLOYED, ModelStatus.READY]),
         "detection_threshold": config.detection_threshold,
-        "integrations": {
-            "suricata": config.suricata_integration,
-        },
+        "integrations": {},
         "last_analysis": datetime.now().isoformat(),
     }
 
@@ -980,26 +911,9 @@ async def analyze(req: AnalyzeRequest, user=Depends(require_jwt)):
 
 @app.get("/integrations")
 def get_integrations(user=Depends(require_jwt)):
-    """Get Suricata integration status."""
-    config = _load_config()
-
-    # Check Suricata
-    suricata_status = "disabled"
-    if config.suricata_integration:
-        try:
-            proc = subprocess.run(["pgrep", "suricata"], capture_output=True, timeout=2)
-            suricata_status = "running" if proc.returncode == 0 else "stopped"
-        except Exception:
-            suricata_status = "error"
-
+    """Get integration status (nDPId)."""
     return {
         "integrations": [
-            {
-                "name": "Suricata",
-                "enabled": config.suricata_integration,
-                "status": suricata_status,
-                "description": "Network IDS/IPS alerts"
-            },
             {
                 "name": "nDPId",
                 "enabled": True,

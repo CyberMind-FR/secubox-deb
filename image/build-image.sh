@@ -1358,7 +1358,7 @@ cat > "${ROOTFS}/usr/bin/secubox-logs" <<'LOGS_CMD'
 # SecuBox Live Security Logs
 echo "📋 SecuBox Security Logs (Ctrl+C to exit)"
 echo "─────────────────────────────────────────"
-journalctl -f -u 'secubox-*' -u suricata -u nginx --no-pager 2>/dev/null || \
+journalctl -f -u 'secubox-*' -u nginx --no-pager 2>/dev/null || \
 journalctl -f --no-pager
 LOGS_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-logs"
@@ -1410,7 +1410,7 @@ echo ""
 
 # Core services
 echo -e "${WHITE}  🔧 Core Services${RESET}"
-services=(nginx haproxy secubox-api secubox-hub suricata)
+services=(nginx haproxy secubox-api secubox-hub)
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         echo -e "     ${ok} ${GRAY}${svc}${RESET}"

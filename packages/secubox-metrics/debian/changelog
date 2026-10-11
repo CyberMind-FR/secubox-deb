@@ -1,3 +1,9 @@
+secubox-metrics (1.18.3-1~bookworm1) bookworm; urgency=low
+
+  * Tableau Grafana Suricata retire (#2326).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:00:00 +0200
+
 secubox-metrics (1.18.2-1~bookworm1) bookworm; urgency=low
 
   * Rapport de securite (#2299) : sur la box, la liste des sites les plus vises (8 lignes) debordait de son panneau et mordait sur le suivant ; les listes de la page WAF sont plafonnees a 6 lignes. 1 test.

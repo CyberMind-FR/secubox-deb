@@ -22,7 +22,7 @@ Description: SecuBox SOC Agent — Edge Node Agent for SOC Integration
  .
  Features:
   - System metrics collection (CPU, memory, disk, network)
-  - Security alert aggregation (Suricata, WAF)
+  - Security alert aggregation (WAF)
   - HMAC-SHA256 signed metric push to upstream SOC
   - Remote command execution with signature validation
   - Automatic enrollment with SOC gateway
