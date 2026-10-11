@@ -59,3 +59,19 @@ def test_photoprism_s_ouvre_par_l_entree_oidc_du_hall():
     """#2255 : PhotoPrism n'a pas de /sbx/entrer ; il s'ouvre par son départ OIDC, qui renvoie à l'IdP du Hall (compte créé à la première connexion)."""
     ms = mods(sm.construire("user", True, "exemple.test", E, C))
     assert ms["photoprism"]["url"] == "https://photoprism.exemple.test/api/v1/oidc/login"
+
+
+def test_les_pages_du_hall_sont_des_lieux_2351():
+    """#2351 — une carte sans hôte propre mais avec une vraie page (radar, guardian, dpi…) s'ouvre sur hall.<domaine>."""
+    r = sm.construire("admin", True, "exemple.test", E, C)
+    ms = mods(r)
+    for mid, chemin in (("guardian", "/guardian/"), ("dpi", "/dpi-vue/"), ("radar", "/actor/"),
+                        ("messagerie", "/messagerie/"), ("metablogizer", "/metablogizer/")):
+        assert ms[mid]["url"] == f"https://hall.exemple.test{chemin}", mid
+    assert "voicestudio" in ms and "sbxos" not in ms
+    assert "gk2" not in json.dumps(r)
+
+
+def test_un_chemin_hors_gabarit_n_est_pas_suivi_2351():
+    assert sm._url({"id": "x", "chemin": "//evil.example/"}, "exemple.test") is None
+    assert sm._url({"id": "x", "chemin": "/../x/"}, "exemple.test") is None

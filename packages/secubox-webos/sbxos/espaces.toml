@@ -6,17 +6,17 @@
 [espaces.hall]
 nom = "Hall"
 guide = "Lexie"
-modules = ["acces", "zia", "mood", "forums", "bbs", "mail"]
+modules = ["acces", "zia", "mood", "forums", "bbs", "mail", "messagerie"]
 
 [espaces.atelier]
 nom = "Atelier"
 guide = "Néo"
-modules = ["devwatch", "depot", "contenu", "cloud", "nextcloud", "nextcloud-super", "torrent"]
+modules = ["devwatch", "depot", "contenu", "cloud", "nextcloud", "nextcloud-super", "torrent", "voicestudio", "metablogizer"]
 
 [espaces.securite]
 nom = "Sécurité"
 guide = "Actor"
-modules = ["securite", "acteurs", "coffre", "mon-coffre"]
+modules = ["securite", "acteurs", "radar", "guardian", "dpi", "coffre", "mon-coffre"]
 
 [espaces.media]
 nom = "Média"

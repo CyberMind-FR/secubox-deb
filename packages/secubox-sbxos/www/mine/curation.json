@@ -14,7 +14,28 @@
    "label": "Renseignement",
    "icon": "🧠",
    "color": "#2e6a5b",
-   "url": "actor.gk2.secubox.in"
+   "chemin": "/actor-intelligence/"
+  },
+  {
+   "id": "radar",
+   "label": "Radar des acteurs",
+   "icon": "📡",
+   "color": "#7a3d5b",
+   "chemin": "/actor/"
+  },
+  {
+   "id": "guardian",
+   "label": "Guardian",
+   "icon": "🛡️",
+   "color": "#1d5fa8",
+   "chemin": "/guardian/"
+  },
+  {
+   "id": "mon-coffre",
+   "label": "Coffre",
+   "icon": "🔐",
+   "color": "#6b4a2e",
+   "chemin": "/coffre/"
   },
   {
    "id": "contenu",
@@ -82,13 +103,6 @@
    "url": "nc.gk2.secubox.in"
   },
   {
-   "id": "nextcloud-super",
-   "label": "Cloud +",
-   "icon": "☁️",
-   "color": "#1655a0",
-   "url": "nc.gk2.secubox.in"
-  },
-  {
    "id": "photoprism",
    "label": "Photos",
    "icon": "📷",
@@ -108,6 +122,20 @@
    "icon": "🎙️",
    "color": "#c87832",
    "url": "podcaster.gk2.secubox.in"
+  },
+  {
+   "id": "voicestudio",
+   "label": "VoiceStudio",
+   "icon": "🎙️",
+   "color": "#c87832",
+   "url": "voicestudio.gk2.secubox.in"
+  },
+  {
+   "id": "metablogizer",
+   "label": "Mes sites",
+   "icon": "🌐",
+   "color": "#3d6b4a",
+   "chemin": "/metablogizer/"
   },
   {
    "id": "mood",
@@ -138,6 +166,13 @@
    "url": "socialrelay.gk2.secubox.in"
   },
   {
+   "id": "messagerie",
+   "label": "Messagerie",
+   "icon": "💬",
+   "color": "#0784a8",
+   "chemin": "/messagerie/"
+  },
+  {
    "id": "mail",
    "label": "Mail",
    "icon": "📧",
@@ -166,11 +201,18 @@
    "url": "admin.gk2.secubox.in/devwatch"
   },
   {
+   "id": "dpi",
+   "label": "DPI · Trafic",
+   "icon": "🔬",
+   "color": "#d64545",
+   "chemin": "/dpi-vue/"
+  },
+  {
    "id": "zia",
    "label": "ZIA",
    "icon": "🦊",
    "color": "#0a93a6",
-   "url": "admin.gk2.secubox.in/zia"
+   "url": "hall.gk2.secubox.in/zia"
   },
   {
    "id": "acces",

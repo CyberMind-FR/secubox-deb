@@ -1,3 +1,9 @@
+secubox-webos (1.9.6-1~bookworm1) bookworm; urgency=medium
+
+  * SBX OS : les pages du Hall deviennent des lieux (ref #2351). Une carte sans hote propre mais avec une vraie page (guardian, dpi, radar, messagerie, metablogizer) s'ouvre sur hall.<domaine>/<chemin> ; voicestudio et ces pages sont placees dans les Espaces. Chemin valide par gabarit, jamais suivi s'il en sort. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 16:00:00 +0200
+
 secubox-webos (1.9.5-1~bookworm1) bookworm; urgency=medium
 
   * Hall : un lien vers un service de la box ne passe plus par le Surf (ref #2349). Le relais refuse ce qui mene a la box (garde SSRF) : bbs.gk2.secubox.in/t/1136 ouvert depuis le Hall affichait « Cette adresse mene a la box ». ouvreSurf detourne les hotes du domaine de la box : service embarque s'il est au registre, sinon nouvel onglet. 2 tests.
