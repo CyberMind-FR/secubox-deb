@@ -259,13 +259,17 @@
 
         <!-- #747 — dashboard tabs: Menaces / Attaquants suivis / Visites -->
         <div class="waf-tabs" id="wafTabs">
-            <button class="waf-tab active" data-tab="overview" onclick="switchTab('overview')">🛡️ Menaces</button>
+            <button class="waf-tab active" data-tab="vue" onclick="switchTab('vue')">📊 Vue d'ensemble</button>
+            <button class="waf-tab" data-tab="overview" onclick="switchTab('overview')">🛡️ Menaces</button>
             <button class="waf-tab" data-tab="attackers" onclick="switchTab('attackers')">🎯 Attaquants suivis</button>
             <button class="waf-tab" data-tab="visits" onclick="switchTab('visits')">👁️ Visites</button>
             <button class="waf-tab" data-tab="recon" onclick="switchTab('recon')">🛰️ Surfaces</button>
             <button class="waf-tab" data-tab="history" onclick="switchTab('history')">📈 Historique</button>
             <button class="waf-tab" data-tab="campaigns" onclick="switchTab('campaigns')">⚔️ Campagnes</button>
         </div>
+
+        <!-- #2293 : la vue d'ensemble (tableau de bord SBXWAF), page encadrée de même origine ; l'ancien contenu reste dans les autres onglets -->
+        <div id="vueCard" style="grid-column:1 / -1"><iframe id="vueFrame" src="vue.html" title="SBXWAF — vue d'ensemble" style="width:100%;height:1500px;border:0;display:block;background:transparent"></iframe></div>
 
         <div class="grid-2">
             <!-- Security Events (combined alerts/bans) -->
@@ -1317,12 +1321,18 @@
         }
 
         // #747 — dashboard tabs (Menaces / Attaquants suivis / Visites)
+        window.addEventListener('message', (e) => {
+            if (e.origin === location.origin && e.data && e.data.sbxwafVue) {
+                const f = document.getElementById('vueFrame'); if (f) f.style.height = Math.min(4000, Math.max(600, +e.data.sbxwafVue + 4)) + 'px';
+            }
+        });
         function switchTab(name) {
             document.querySelectorAll('#wafTabs .waf-tab').forEach(b =>
                 b.classList.toggle('active', b.dataset.tab === name));
             const show = (sel, on) => document.querySelectorAll(sel).forEach(el =>
                 el.style.display = on ? '' : 'none');
             const overview = name === 'overview';
+            const vc = document.getElementById('vueCard'); if (vc) vc.style.display = (name === 'vue') ? '' : 'none';
             show('.grid-2', overview);
             show('.eyemote-card', overview);
             // By Severity / By Category / Top Attacked Sites : onglet Menaces seul (#1369).
@@ -1453,6 +1463,7 @@
         setInterval(refresh, 30000);
         // More frequent live updates
         setInterval(loadSecurityEvents, 10000);
+        switchTab("vue");   // #2293 : la vue d'ensemble est l'onglet par défaut
     </script>
 </body>
 </html>

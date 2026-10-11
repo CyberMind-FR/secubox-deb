@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — SBXWAF : vue d'ensemble fidèle à l'infographie (ref #2293)
+
+waf-ng 1.28.0 : nouvel onglet par défaut « Vue d'ensemble » de la page /waf/ (page vue.html encadrée, même origine) ; anciens onglets conservés. Données du WAF seulement ; mesure absente = tiret ; ?demo=1 annoncé.
+
 ## 2026-10-11 — Actor Intelligence : carte et page fidèles à l'infographie (ref #2291)
 
 webos 1.9.0 : page `/actor-intelligence/` (complet ou carte `?embed=1`, `?demo=1` annoncé), données d'actord seulement ; tuiles définies en infobulle ; risque et confiance séparés ; mesure absente = tiret. Audit de l'existant : définitions de compteurs partielles, baseline par appareil absente, états proposé/annulé de l'action absents, taux de faux positifs par règle absent.
