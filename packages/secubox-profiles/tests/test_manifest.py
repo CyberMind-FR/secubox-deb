@@ -186,3 +186,12 @@ def test_invalid_wake_class_raises(tmp_path):
 def test_le_coffre_est_protege():
     """Un pin `off` périmé ne doit plus pouvoir éteindre le Coffre (#1367)."""
     assert "vault" in PROTECTED_IDS
+
+
+def test_ceux_qui_pilotent_l_application_d_un_profil_sont_proteges(tmp_path):
+    """#2308 : `profilectl apply lite` arrêtait secubox-autoload-agent, qui le pilotait — le parcours mourait à 10/13. Même forçage que pour le cœur : le fichier ne décide pas."""
+    for mid in ("autoload-agent", "premier-pas", "premier-pas-appliquer", "premier-pas-console"):
+        assert mid in PROTECTED_IDS
+        f = tmp_path / f"{mid}.toml"
+        f.write_text(f'id="{mid}"\ncategory="infra"\nruntime="native"\nexposure="lan"\nunits=["secubox-{mid}.service"]\nprotected=false\n')
+        assert load_manifest(f).protected is True, mid

@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — profiles 0.20.1 : profilectl n'arrête plus l'agent qui le pilote (ref #2308)
+
+Troisième bogue du test VirtualBox Auto-Load : l'étape « services » arrêtait secubox-autoload-agent (hors du profil lite) ; le parcours mourait à 10/13. autoload-agent et premier-pas* rejoignent PROTECTED_IDS.
+
 ## 2026-10-12 — premier-pas 0.5.1 : l'étape réseau en mode lan sans secubox-net-detect (ref #2306)
 
 Suite du test VirtualBox : le parcours s'arrêtait à « Réseau et domaine » (code 127), l'outil n'étant livré par aucune image. Mode lan : réseau existant conservé après contrôle d'une route par défaut ; routeur et pont échouent clairement. Décision restante : livrer `secubox-net-detect` dans les images ou non.

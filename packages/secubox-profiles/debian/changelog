@@ -1,3 +1,9 @@
+secubox-profiles (0.20.1-1~bookworm1) bookworm; urgency=high
+
+  * Le moteur de profils n'arrete plus ce qui le pilote (#2308) : autoload-agent, premier-pas, premier-pas-appliquer et premier-pas-console rejoignent le noyau protege (PROTECTED_IDS, force par load_manifest quoi que dise le fichier). Trouve par le test VirtualBox d'Auto-Load : `profilectl apply --profile lite` (etape services) arretait secubox-autoload-agent, le parcours mourait a 10/13 et aucun rapport n'etait ecrit. 1 test (rouge sans le correctif). 3 echecs preexistants de test_web (wake), sans rapport.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 03:30:00 +0200
+
 secubox-profiles (0.20.0-1~bookworm1) bookworm; urgency=medium
 
   * sites-enabled doit contenir des LIENS (#2253). nginx-sync n'ecrase plus un lien par une copie (os.replace ecrivait sur le lien : _write_atomic ecrit maintenant dans la cible). Nouveau verbe `secubox-wakectl nginx-relink` (essai a blanc par defaut, --apply) : adopte les copies de sites-enabled dans sites-available (ce que nginx charge fait reference), sauvegarde hors de sites-enabled, remet le lien, nginx -t puis reload, retour arriere complet si nginx -t echoue ; refuse d'ecrire a travers un lien. Sur gk2 : 19 copies. 6 tests.
