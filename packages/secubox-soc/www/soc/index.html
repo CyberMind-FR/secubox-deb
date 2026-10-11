@@ -101,6 +101,7 @@
             box-shadow:0 0 0 1px color-mix(in srgb,var(--cyan) 28%,transparent); }
   .onglet .pt { width:6px; height:6px; border-radius:50%; background:var(--faible); }
   .onglet[aria-selected="true"] .pt { background:var(--cyan); }
+  .grp { align-self:center; font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; color:var(--faible); padding:0 4px 0 10px; border-left:1px solid var(--bord); margin-left:4px; }
   .onglet:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
   .ecran[hidden] { display:none; }
 
@@ -301,10 +302,26 @@
 
   <div class="onglets" role="tablist">
     <button class="onglet" role="tab" aria-selected="true" aria-controls="e0" id="t0"><span class="pt"></span>Guardian</button>
+    <span class="grp" aria-hidden="true">Pare-feu</span>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tm" data-vue="/waf/menaces.html?embed=1"><span class="pt"></span>Menaces</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="ta" data-vue="/waf/attaquants.html?embed=1"><span class="pt"></span>Attaquants</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tc" data-vue="/waf/campagnes.html?embed=1"><span class="pt"></span>Campagnes</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="ts" data-vue="/waf/surfaces.html?embed=1"><span class="pt"></span>Surfaces</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tv" data-vue="/waf/visites.html?embed=1"><span class="pt"></span>Visites</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="th" data-vue="/waf/historique.html?embed=1"><span class="pt"></span>Historique</button>
+    <span class="grp" aria-hidden="true">Réseau &amp; acteurs</span>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="td" data-vue="/dpi/vue.html?embed=1"><span class="pt"></span>Trafic (DPI)</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tr" data-vue="/actor-intelligence/?embed=1"><span class="pt"></span>Renseignement</button>
+    <span class="grp" aria-hidden="true">Poste</span>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e1" id="t1"><span class="pt"></span>Vigie</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e2" id="t2"><span class="pt"></span>Meta-metrics</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e3" id="t3"><span class="pt"></span>Centrale d'alertes</button>
   </div>
+
+  <!-- ÉCRAN 4 — LES VUES RASSEMBLÉES (#2358) : une page Aurora de même origine par onglet, une seule source (/waf, /dpi, /actor-intelligence), hauteur annoncée par la page -->
+  <section class="ecran" id="e4" role="tabpanel" hidden>
+    <iframe id="vueFrame" title="Vue SecuBox" style="width:100%;height:1400px;border:0;display:block;background:transparent"></iframe>
+  </section>
 
   <!-- ÉCRAN 0 — GUARDIAN (#2341) : la vue d'ensemble de la maquette, page encadrée de même origine, hauteur annoncée par la page -->
   <section class="ecran" id="e0" role="tabpanel" aria-labelledby="t0">
@@ -817,17 +834,22 @@
     if (e.origin === location.origin && e.data && e.data.sbxSocVue) {
       var f = $("guardianFrame"); if (f) f.style.height = Math.min(4000, Math.max(600, +e.data.sbxSocVue + 4)) + "px";
     }
+    // Les vues rassemblées : WAF (sbxWafVue + onglet), DPI (sbxdpiVue) ; une page sans annonce garde la hauteur par défaut.
+    if (e.origin === location.origin && e.data) {
+      var h = e.data.sbxWafVue || e.data.sbxdpiVue, v = $("vueFrame");
+      if (h && v) v.style.height = Math.min(4000, Math.max(400, +h + 4)) + "px";
+    }
   });
 
   // ── Onglets ────────────────────────────────────────────────────────
   var onglets = [].slice.call(document.querySelectorAll(".onglet"));
   onglets.forEach(function (o) {
     o.addEventListener("click", function () {
-      onglets.forEach(function (autre) {
-        var actif = autre === o;
-        autre.setAttribute("aria-selected", String(actif));
-        $(autre.getAttribute("aria-controls")).hidden = !actif;
-      });
+      var cible = o.getAttribute("aria-controls");
+      onglets.forEach(function (autre) { autre.setAttribute("aria-selected", String(autre === o)); });
+      [].slice.call(document.querySelectorAll(".ecran")).forEach(function (e) { e.hidden = e.id !== cible; });
+      var url = o.getAttribute("data-vue"), f = $("vueFrame");
+      if (url && f && f.getAttribute("data-u") !== url) { f.setAttribute("data-u", url); f.style.height = "1400px"; f.src = url; }
     });
   });
 

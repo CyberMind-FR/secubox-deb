@@ -1,3 +1,9 @@
+secubox-dpi (1.11.2-1~bookworm1) bookworm; urgency=medium
+
+  * La vue DPI mesure son cadre et non le document (ref #2358) : la hauteur annoncee ne pouvait que croitre une fois encadree par le SOC.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 21:00:00 +0200
+
 secubox-dpi (1.11.1-1~bookworm1) bookworm; urgency=medium
 
   * Agregation de mediaflow et ndpid : l'ancien demon est arrete SANS condition (#2337). Le postinst le testait par `systemctl cat`, qui echoue quand l'unite n'est plus livree alors que le processus tourne encore : sur gk2, ndpid est reste actif apres 1.11.0. 1 test.

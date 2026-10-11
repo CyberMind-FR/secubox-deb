@@ -22,7 +22,7 @@
   body{background:radial-gradient(1200px 520px at 85% -10%,rgba(41,182,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.12),transparent 60%),var(--fond);
        color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
   body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
-  .cadre{container-type:inline-size;container-name:a;min-height:100vh;padding:10px}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
   .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
   .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
   .marque{display:flex;align-items:center;gap:8px}
@@ -184,7 +184,7 @@
     clients:[{name:'PC Bureau',device:'a',bytes:12e9,usages:[{name:'web',bytes:6e9},{name:'cloud',bytes:3e9},{name:'social',bytes:3e9}],top_dst:[{host:'google.com',bytes:8.4e9}]},{name:'TV Salon',device:'b',bytes:10e9,usages:[{name:'streaming',bytes:10e9}],top_dst:[{host:'netflix.com',bytes:4.3e9}]},{name:'Smartphone',device:'c',bytes:6e9,usages:[{name:'social',bytes:3e9},{name:'web',bytes:3e9}],top_dst:[{host:'youtube.com',bytes:6.1e9}]}],
     sessions:[{application:'YouTube',bytes:11.2e9},{application:'Netflix',bytes:5.8e9},{application:'Chrome',bytes:3.2e9}],sugg:[{domain:'maegia.tv',bytes:5e6,reason:'1 sous-domaine non classé'}]};
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxdpiVue:document.documentElement.scrollHeight},location.origin);}catch(e){}}}
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxdpiVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY)},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
   if(q.get('demo')){rend(DEMO);return;}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
