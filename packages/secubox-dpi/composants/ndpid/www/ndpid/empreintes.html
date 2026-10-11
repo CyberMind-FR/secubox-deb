@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — nDPId, onglet « Empreintes » : empreintes TLS (JA3, JA3S, JA4), famille du client, SNI. Lecture seule.
+  Une colonne en ?embed=1 ou sous 900 px, plusieurs colonnes au-delà.
+  DONNÉES RÉELLES UNIQUEMENT (API /api/v1/ndpid : /status, /fingerprints, /flows, lues en session). Une mesure absente s'affiche « — », jamais 0.
+  La famille est déduite du nom d'application connu (known_app) ; threat_intel renseigné = menace connue.
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nDPId — Empreintes TLS</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.inc{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{background:var(--cyan);color:#001;text-align:center;font-weight:600;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info a{color:#001}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .tuile .v.pt{font-size:1.05rem}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .outils{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+  .outils input,.outils select{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0}
+  .outils input{flex:1 1 160px} .outils select{flex:0 1 auto}
+  .rang{display:grid;gap:6px}
+  .fp{display:grid;grid-template-columns:1fr auto;gap:4px 10px;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(18,40,78,.35);min-width:0}
+  .fp .h{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+  .fp code{font-family:ui-monospace,"JetBrains Mono",Consolas,monospace;font-size:.78rem;color:var(--cyan);overflow-wrap:anywhere}
+  .fp .typ{font-size:.62rem;font-weight:700;color:var(--doux);border:1px solid var(--trait2);border-radius:5px;padding:0 5px}
+  .fp .cp{padding:0 6px;font-size:.66rem}
+  .fp .n{font-weight:700;font-size:1.05rem;text-align:right;font-variant-numeric:tabular-nums}
+  .fp .n small{display:block;color:var(--faible);font-weight:500;font-size:.62rem}
+  .fp .m{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--doux);font-size:.72rem;align-items:center}
+  .fam{display:inline-flex;align-items:center;gap:5px;color:var(--texte)} .fam i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .conf{border-radius:999px;padding:1px 9px;font-size:.66rem;font-weight:700}
+  .conf.h{background:rgba(46,204,113,.18);color:var(--vert)} .conf.m{background:rgba(255,159,28,.18);color:var(--orange)}
+  .conf.b{background:rgba(159,179,214,.2);color:var(--doux)} .conf.x{background:rgba(255,77,94,.2);color:var(--rouge)}
+  .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
+  svg.donut{width:120px;height:120px;display:block}
+  svg.donut text{fill:var(--texte);font-size:15px;font-weight:700;text-anchor:middle} svg.donut text.p{fill:var(--doux);font-size:8px;font-weight:500}
+  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  @container a (max-width:499px){.repart{grid-template-columns:96px 1fr}svg.donut{width:96px;height:96px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.7fr 1fr} .col{display:grid;gap:10px;align-content:start}}
+</style>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a8 8 0 00-8 8v2M12 3a8 8 0 018 8v3a4 4 0 01-4 4" fill="rgba(59,130,246,.10)"/><path d="M8 20c0-3 1-5 1-8a3 3 0 016 0c0 2 0 4-1 6M12 12v3M5 16v1M19 13v1"/></svg><span><b>nDPId</b><small>Empreintes TLS · JA3 / JA4</small></span></span>
+    <span class="actif inc" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Empreintes des clients TLS</h2><div class="sous">Qui parle sur le réseau, reconnu à la forme de sa poignée de main TLS. Lecture seule.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Classement des empreintes <i id="cptRang"></i></h3>
+      <div class="outils">
+        <input type="search" id="rech" placeholder="Rechercher : hash, application, famille…" aria-label="Rechercher une empreinte">
+        <select id="fType" aria-label="Type d'empreinte"><option value="">Tous types</option><option value="ja3">JA3</option><option value="ja4">JA4</option><option value="ja3s">JA3S</option></select>
+        <select id="fFam" aria-label="Famille"><option value="">Toutes familles</option></select>
+        <select id="tri" aria-label="Tri"><option value="n">Tri : flux</option><option value="vu">Tri : dernière vue</option><option value="nouv">Tri : plus récentes</option></select>
+      </div>
+      <div class="rang" id="rang"></div>
+    </div>
+    <div class="col">
+      <div class="pan"><h3>Répartition par famille <i>empreintes distinctes</i></h3><div class="repart"><div id="donut"></div><div class="leg" id="fams"></div></div></div>
+      <div class="pan"><h3>SNI les plus fréquents <i id="sniNote">flux</i></h3><div id="sni"></div></div>
+    </div>
+  </div>
+  <div class="note">Famille déduite du nom d’application connu de l’empreinte ; « Inconnue » = jamais étiquetée. Une même empreinte peut couvrir plusieurs outils : contexte, pas verdict.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var FAM={nav:['Navigateurs','#3b82f6'],lib:['Bibliothèques','#29b6f6'],out:['Outils','#ff9f1c'],mal:['Menaces connues','#ff4d5e'],inc:['Inconnue','#6f84a8'],aut:['Autres','#a78bfa']};
+  var ORDRE=['nav','lib','out','mal','aut','inc'];
+  function famille(f){
+    if(f.ti) return 'mal';
+    var a=String(f.app||'').toLowerCase();
+    if(!a||a==='-') return 'inc';
+    if(/chrom|firefox|safari|edge|opera|brave|webkit|browser|navigat/.test(a)) return 'nav';
+    if(/curl|wget|nmap|masscan|zgrab|metasploit|burp|sqlmap|nikto|scanner|tor|openvpn|ssh/.test(a)) return 'out';
+    if(/python|requests|urllib|java|okhttp|go-http|golang|node|openssl|libcurl|ruby|perl|php|rust|\.net|library|lib/.test(a)) return 'lib';
+    return 'aut';
+  }
+  function norm(f){
+    return {h:String(f.fingerprint||''),t:String(f.fingerprint_type||f.fp_type||'').toLowerCase(),app:String(f.known_app||''),ti:String(f.threat_intel||''),
+      n:num(f.hit_count),p:f.first_seen?Date.parse(f.first_seen):NaN,d:f.last_seen?Date.parse(f.last_seen):NaN};
+  }
+  function rel(ms){
+    if(!isFinite(ms)) return '—';
+    var s=Math.max(0,(Date.now()-ms)/1000);
+    if(s<60) return 'à l’instant';
+    if(s<3600) return 'il y a '+Math.floor(s/60)+' min';
+    if(s<86400) return 'il y a '+Math.floor(s/3600)+' h';
+    return 'il y a '+Math.floor(s/86400)+' j';
+  }
+  function complet(ms){return isFinite(ms)?new Date(ms).toLocaleString('fr-FR',{dateStyle:'full',timeStyle:'medium'}):'date inconnue';}
+  function court(h){return h.length>20?h.slice(0,10)+'…'+h.slice(-6):h;}
+  function conf(r){
+    if(r.ti) return ['menace','x','Étiquetée avec du renseignement de menace.'];
+    if(!r.app) return ['inconnue','b','Jamais rattachée à une application.'];
+    if(r.n>=20) return ['élevée','h','Application connue, vue sur de nombreux flux.'];
+    if(r.n>=3) return ['moyenne','m','Application connue, peu de flux : à confirmer.'];
+    return ['faible','b','Application connue mais vue très rarement.'];
+  }
+  var IC={
+    emp:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><path d="M8 20c0-3 1-5 1-8a3 3 0 016 0c0 2 0 4-1 6M5 12a7 7 0 0114 0M12 12v3" /></svg>',
+    cli:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="5" width="18" height="12" rx="2" fill="rgba(41,182,246,.14)"/><path d="M8 21h8M12 17v4"/></svg>',
+    rar:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,159,28,.12)"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.3M12 17h.01"/></svg>',
+    sni:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(167,139,250,.14)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    nv:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(46,204,113,.12)"/><path d="M12 7v5l3 2"/></svg>'
+  };
+  function tuile(ic,v,l,s,def,pt){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div style="min-width:0"><div class="l">'+esc(l)+'</div><div class="v'+(pt?' pt':'')+'">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  var D=null; // dernier jeu de données normalisé
+  function donut(parts,tot){
+    var R=46,C=2*Math.PI*R,acc=0,s='<svg class="donut" viewBox="0 0 120 120" role="img" aria-label="Répartition par famille"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="16"/>';
+    parts.forEach(function(p){var l=C*p.n/tot;s+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+p.c+'" stroke-width="16" stroke-dasharray="'+l.toFixed(2)+' '+(C-l).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+esc(p.l)+' : '+fmt(p.n)+'</title></circle>';acc+=l;});
+    return s+'<text x="60" y="62">'+fmt(tot)+'</text><text class="p" x="60" y="75">empreintes</text></svg>';
+  }
+  function liste(){
+    if(!D) return;
+    var t=el('fType').value,fa=el('fFam').value,r=el('rech').value.trim().toLowerCase(),tri=el('tri').value;
+    var L=D.fps.filter(function(f){
+      if(t&&f.t!==t) return false; if(fa&&f.fam!==fa) return false;
+      return !r||(f.h+' '+f.app+' '+f.ti+' '+FAM[f.fam][0]+' '+f.t).toLowerCase().indexOf(r)>=0;});
+    L.sort(function(a,b){
+      if(tri==='vu') return (isFinite(b.d)?b.d:0)-(isFinite(a.d)?a.d:0);
+      if(tri==='nouv') return (isFinite(b.p)?b.p:0)-(isFinite(a.p)?a.p:0);
+      return b.n-a.n;});
+    el('cptRang').textContent=!D.has?'—':L.length===D.fps.length?fmt(L.length)+' empreintes':fmt(L.length)+' sur '+fmt(D.fps.length);
+    el('rang').innerHTML=L.length?L.slice(0,100).map(function(f,i){
+      var c=conf(f),F=FAM[f.fam];
+      return '<div class="fp"><div class="h"><span class="typ">'+esc((f.t||'?').toUpperCase())+'</span><code title="'+esc(f.h)+'">'+esc(court(f.h))+'</code><button type="button" class="cp" data-i="'+i+'" title="Copier l’empreinte complète">Copier</button></div>'
+        +'<div class="n">'+fmt(f.n)+'<small>flux</small></div>'
+        +'<div class="m"><span class="fam"><i style="background:'+F[1]+'"></i>'+esc(F[0])+(f.app?' · '+esc(f.app):'')+'</span><span class="conf '+c[1]+'" title="'+esc(c[2])+'">'+esc(c[0])+'</span>'
+        +(f.ti?'<span style="color:var(--rouge)">'+esc(f.ti)+'</span>':'')
+        +'<span title="'+esc(complet(f.p))+'">1re vue : '+esc(rel(f.p))+'</span><span title="'+esc(complet(f.d))+'">dernière : '+esc(rel(f.d))+'</span></div></div>';}).join('')
+      :'<div class="vide">'+(D.fps.length?'Aucune empreinte ne correspond au filtre.':'Aucune empreinte enregistrée. Le moteur nDPId doit être actif pour relever JA3/JA4.')+'</div>';
+    el('rang').querySelectorAll('button.cp').forEach(function(b){b.addEventListener('click',function(){
+      var f=L[+b.getAttribute('data-i')];if(!f) return;
+      var ok=function(){b.textContent='Copié';setTimeout(function(){b.textContent='Copier';},1200);};
+      try{navigator.clipboard.writeText(f.h).then(ok,function(){});}catch(e){}
+    });});
+    hauteur();
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.fp||d.status);
+    var st=d.status,a=el('actif'),run=st&&st.daemon?st.daemon.running:null;
+    a.className='actif'+(run===true?'':run===false?' hors':' inc');
+    a.textContent=run===true?'MOTEUR ACTIF':run===false?'MOTEUR ARRÊTÉ':'ÉTAT INCONNU';
+    var fps=(d.fp||[]).map(norm).filter(function(f){return f.h;});
+    fps.forEach(function(f){f.fam=famille(f);});
+    D={fps:fps,has:!!d.fp};
+    var has=!!d.fp,N=function(v){return has?fmt(v):'—';};
+    var inc=fps.filter(function(f){return f.fam==='inc'||f.n<=2;}).length;
+    var clients=fps.filter(function(f){return f.t==='ja3'||f.t==='ja4';}).length;
+    var snis={},nsni=0;(d.flows||[]).forEach(function(x){var s=x&&(x.server_name||(x.tls&&x.tls.server_name));if(s){s=String(s).toLowerCase();snis[s]=(snis[s]||0)+1;nsni++;}});
+    var sl=Object.keys(snis).map(function(k){return [k,snis[k]];}).sort(function(x,y){return y[1]-x[1];});
+    var rec=fps.filter(function(f){return isFinite(f.p);}).sort(function(x,y){return y.p-x.p;})[0];
+    el('tuiles').innerHTML=
+      tuile(IC.emp,N(fps.length),'Empreintes distinctes',has?'tous types':'','Empreintes TLS enregistrées (JA3, JA3S, JA4), toutes confondues.')
+     +tuile(IC.cli,N(clients),'Clients TLS',has?'JA3 + JA4':'','Empreintes de clients (JA3 et JA4). Les JA3S décrivent des serveurs.')
+     +tuile(IC.rar,N(inc),'Inconnues ou rares',has?'sans étiquette ou ≤ 2 flux':'','Empreintes jamais rattachées à une application, ou vues sur 2 flux au plus : à examiner en premier.')
+     +tuile(IC.sni,d.flows?fmt(sl.length):'—','SNI distincts',d.flows&&!sl.length?'non remonté par le moteur':'','Noms de serveur (SNI) distincts relevés dans les flux en cours. Absent si le moteur ne les remonte pas.')
+     +tuile(IC.nv,rec?'<span title="'+esc(complet(rec.p))+'">'+esc(rel(rec.p))+'</span>':'—','Dernière nouvelle',rec?(rec.t||'?').toUpperCase()+' '+court(rec.h):'','Première observation la plus récente parmi les empreintes.',true);
+    var cnt={};fps.forEach(function(f){cnt[f.fam]=(cnt[f.fam]||0)+1;});
+    var parts=ORDRE.filter(function(k){return cnt[k];}).map(function(k){return {k:k,l:FAM[k][0],c:FAM[k][1],n:cnt[k]};});
+    el('donut').innerHTML=parts.length?donut(parts,fps.length):'<svg class="donut" viewBox="0 0 120 120"><circle cx="60" cy="60" r="46" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="16"/><text x="60" y="66">—</text></svg>';
+    el('fams').innerHTML=parts.length?parts.map(function(p){return '<div><i style="background:'+p.c+'"></i><span>'+esc(p.l)+'</span><b>'+fmt(p.n)+' · '+Math.round(100*p.n/fps.length)+'%</b></div>';}).join(''):'<div class="vide">'+(has?'Aucune empreinte.':'Session requise.')+'</div>';
+    var fv=el('fFam'),cur=fv.value;
+    fv.innerHTML='<option value="">Toutes familles</option>'+ORDRE.map(function(k){return '<option value="'+k+'">'+esc(FAM[k][0])+'</option>';}).join('');fv.value=cur;
+    var mx=sl.length?sl[0][1]:1;
+    el('sni').innerHTML=sl.length?sl.slice(0,8).map(function(s,i){return '<div class="ligne"><span class="n" style="text-align:left" title="'+esc(s[0])+'">'+esc(s[0])+'</span><span>'+fmt(s[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*s[1]/mx)+'%;background:var(--violet)"></i></div></div>';}).join(''):'<div class="vide">'+(d.flows?'Aucun SNI remonté par le moteur.':'Session requise.')+'</div>';
+    liste();
+  }
+  var DEMO=(function(){
+    var m=Date.now(),h=3600e3,j=86400e3,iso=function(x){return new Date(m-x).toISOString();};
+    return {demo:true,status:{daemon:{running:true}},
+      fp:[{fingerprint:'771,4865-4866-4867-49195-49199,0-23-65281-10-11-35-16-5-13,29-23-24,0',fingerprint_type:'ja3',hit_count:48210,known_app:'Chrome 128',first_seen:iso(40*j),last_seen:iso(20e3)},
+        {fingerprint:'t13d1516h2_8daaf6152771_b186095e22b6',fingerprint_type:'ja4',hit_count:41877,known_app:'Chrome 128',first_seen:iso(40*j),last_seen:iso(35e3)},
+        {fingerprint:'t13d1715h2_5b57614c22b0_3d5424432f57',fingerprint_type:'ja4',hit_count:12044,known_app:'Firefox 131',first_seen:iso(33*j),last_seen:iso(2*60e3)},
+        {fingerprint:'t13d1516h2_8daaf6152771_02713d6af862',fingerprint_type:'ja4',hit_count:9120,known_app:'Safari / iOS 18',first_seen:iso(21*j),last_seen:iso(9*60e3)},
+        {fingerprint:'771,4866-4867-4865-49196-49200,0-11-10-35-22,29-23-24,0',fingerprint_type:'ja3',hit_count:2210,known_app:'Python requests',first_seen:iso(12*j),last_seen:iso(1*h)},
+        {fingerprint:'t13d311100_e8f1e7e78f70_d41ae481755e',fingerprint_type:'ja4',hit_count:1480,known_app:'curl 8.x',first_seen:iso(18*j),last_seen:iso(3*h)},
+        {fingerprint:'t12d190800_d83cc789557e_7af1ed941c26',fingerprint_type:'ja4',hit_count:640,known_app:'Go net/http',first_seen:iso(9*j),last_seen:iso(5*h)},
+        {fingerprint:'771,49192-49191-49172-49171,0-10-11-13,23-24,0',fingerprint_type:'ja3',hit_count:61,known_app:'nmap NSE',first_seen:iso(3*j),last_seen:iso(26*h)},
+        {fingerprint:'e7d705a3286e19ea42f587b344ee6865',fingerprint_type:'ja3',hit_count:37,known_app:'',threat_intel:'Trickbot (abuse.ch)',first_seen:iso(6*j),last_seen:iso(7*h)},
+        {fingerprint:'t10i030200_5a1d1a2b3c4d_000000000000',fingerprint_type:'ja4',hit_count:2,known_app:'',first_seen:iso(2*h),last_seen:iso(2*h)},
+        {fingerprint:'769,47-53-5-10-49161,0-10-11,23-24,0',fingerprint_type:'ja3',hit_count:1,known_app:'',first_seen:iso(25*60e3),last_seen:iso(25*60e3)},
+        {fingerprint:'ae4edc6faf64d08308082ad26be60767',fingerprint_type:'ja3s',hit_count:3300,known_app:'nginx',first_seen:iso(30*j),last_seen:iso(40e3)}],
+      flows:[{server_name:'www.example.org'},{server_name:'api.github.com'},{server_name:'www.example.org'},{server_name:'cdn.jsdelivr.net'},{server_name:'update.debian.org'},{server_name:'www.example.org'},{server_name:'api.github.com'},{server_name:'mail.secubox.in'},{server_name:'deb.debian.org'},{server_name:'cdn.jsdelivr.net'},{server_name:'www.example.org'}]};
+  })();
+  function heure(){el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxNdpidVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'empreintes'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);
+  if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
+  ['rech','fType','fFam','tri'].forEach(function(i){el(i).addEventListener(i==='rech'?'input':'change',liste);});
+  heure();
+  if(q.get('demo')){el('rafraichir').addEventListener('click',function(){heure();rend(DEMO);});rend(DEMO);return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    var b='/api/v1/ndpid/';heure();
+    Promise.all([jget(b+'status'),jget(b+'fingerprints?limit=500'),jget(b+'flows?active_only=false&limit=500')]).then(function(r){
+      rend({status:r[0],fp:r[1]&&r[1].fingerprints||null,flows:r[2]&&r[2].flows||null});
+    });
+  }
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  setInterval(function(){if(document.visibilityState==='visible')charge();},30000);
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')charge();});
+})();
+</script>

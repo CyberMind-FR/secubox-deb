@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — nDPId, onglet « Réglages ». Page autonome, une colonne en ?embed=1 ou sous 900 px, deux colonnes au-delà.
+  DONNÉES RÉELLES UNIQUEMENT (API /api/v1/ndpid : /status, /settings, /mirred/status, /stats/realtime). Une mesure absente s'affiche « — », jamais 0.
+  Valeurs de configuration en LECTURE SEULE (l'ancien onglet n'écrivait aucun réglage). Actions d'écriture conservées à l'identique :
+  POST /control/{start,restart,stop}, POST /mirred/setup, POST /mirred/remove (jeton sbx_token en Bearer + cookie de session), chacune avec confirmation intégrée.
+  `?demo=1` : données de DÉMONSTRATION et actions factices inertes (aucun appel d'écriture), annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nDPId — réglages du moteur DPI</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.inc{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;font-size:.78rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 11px;cursor:pointer}
+  button:hover{background:rgba(59,130,246,.3)} button:disabled{opacity:.5;cursor:wait}
+  button.danger{background:rgba(255,77,94,.16);border-color:rgba(255,77,94,.5)} button.danger:hover{background:rgba(255,77,94,.3)}
+  button.ghost{background:transparent}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo a{color:#001}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile .haut>div{min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.3rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .col{display:grid;gap:10px;align-content:start;min-width:0}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:6px 2px}
+  .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;font-size:.8rem}
+  .kv>div{padding:5px 0;border-top:1px solid rgba(86,150,255,.12);min-width:0}
+  .kv>div:nth-child(-n+2){border-top:0}
+  .kv .k{color:var(--doux)} .kv .w{text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .on,.off,.inc{border-radius:5px;padding:1px 8px;font-weight:700;font-size:.68rem;display:inline-block}
+  .on{background:rgba(46,204,113,.2);color:var(--vert)} .off{background:rgba(255,77,94,.2);color:var(--rouge)} .inc{background:rgba(159,179,214,.2);color:var(--doux)}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .conf{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;padding:8px 10px;border:1px solid var(--orange);border-radius:8px;background:rgba(255,159,28,.1);font-size:.78rem}
+  .conf span{flex:1 1 200px}
+  .res{margin-top:8px;padding:7px 10px;border-radius:8px;font-size:.78rem;overflow-wrap:anywhere;border:1px solid var(--trait)}
+  .res.ok{border-color:var(--vert);background:rgba(46,204,113,.1);color:var(--vert)} .res.ko{border-color:var(--rouge);background:rgba(255,77,94,.1);color:var(--rouge)}
+  .res ul{margin:4px 0 0;padding-left:16px}
+  pre.brut{margin:8px 0 0;padding:8px;border-radius:8px;background:rgba(0,0,0,.3);color:var(--doux);font-size:.68rem;max-height:120px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+  .note{color:var(--faible);font-size:.68rem;margin-top:8px}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .grille{grid-template-columns:1fr 1fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(59,130,246,.16)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span><b>nDPId</b><small>Inspection des protocoles · réglages</small></span></span>
+    <span class="actif inc" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette ; les actions sont factices, rien n’est envoyé au service</div>
+  <div><h2>Réglages</h2><div class="sous">Configuration courante du moteur nDPId, redirection TC mirred et contrôle du service.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille">
+    <div class="col">
+      <div class="pan"><h3>Capture <i>lecture seule</i></h3><div class="kv" id="capture"></div></div>
+      <div class="pan"><h3>Analyse <i>lecture seule</i></h3><div class="kv" id="analyse"></div>
+        <div class="note">Les réglages ne sont pas modifiables depuis cette page, comme dans l’ancien onglet.</div></div>
+      <div class="pan"><h3>Statistiques temps réel <i id="rtIf"></i></h3><div class="kv" id="rt"></div></div>
+    </div>
+    <div class="col">
+      <div class="pan"><h3>Redirection TC mirred <i>flux dupliqué vers l’analyse</i></h3>
+        <div class="kv" id="mirred"></div>
+        <div class="actions"><button type="button" data-act="mirred-setup">Installer mirred</button><button type="button" class="danger" data-act="mirred-remove">Retirer mirred</button></div>
+        <div id="conf-mirred"></div><div id="res-mirred"></div></div>
+      <div class="pan"><h3>Contrôle du service <i>unité ndpid</i></h3>
+        <div class="actions"><button type="button" data-act="start">Démarrer</button><button type="button" data-act="restart">Redémarrer</button><button type="button" class="danger" data-act="stop">Arrêter</button></div>
+        <div id="conf-svc"></div><div id="res-svc"></div>
+        <div class="note">Chaque action demande une confirmation avant l’appel.</div></div>
+    </div>
+  </div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var API_BASE='/api/v1/ndpid';
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:null;}
+  function fmt(n){n=num(n);return n==null?'—':Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  function octets(b){b=num(b);if(b==null)return '—';if(b<1024)return b+' o';if(b<1048576)return (b/1024).toFixed(1)+' Ko';if(b<1073741824)return (b/1048576).toFixed(1)+' Mo';return (b/1073741824).toFixed(2)+' Go';}
+  var q=new URLSearchParams(location.search),DEMO_ON=!!q.get('demo');
+  if(q.get('embed')) document.body.classList.add('emb');
+  var IC={
+    mot:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(46,204,113,.14)"/><path d="M12 7v5l3 2"/></svg>',
+    ifc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="8" width="18" height="9" rx="2" fill="rgba(41,182,246,.14)"/><path d="M7 17v2M12 17v2M17 17v2M7 12h.1M12 12h.1M17 12h.1"/></svg>',
+    ver:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h10l6 6v10H4z" fill="rgba(167,139,250,.14)"/><path d="M14 4v6h6"/></svg>',
+    flx:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h14M13 4l4 4-4 4M21 16H7M11 12l-4 4 4 4" fill="none"/></svg>',
+    up:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><path d="M4 18l5-6 4 3 7-9" /><path d="M4 21h16"/></svg>',
+    bdd:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ffd23f" stroke-width="1.7"><ellipse cx="12" cy="6" rx="7" ry="3" fill="rgba(255,210,63,.14)"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  function kv(rows){return rows.map(function(r){return '<div class="k">'+esc(r[0])+'</div><div class="w">'+r[1]+'</div>';}).join('');}
+  function bool(v){return v===true?'<span class="on">OUI</span>':v===false?'<span class="off">NON</span>':'<span class="inc">—</span>';}
+  function txt(v){return v==null||v===''?'—':esc(v);}
+
+  function rend(d){
+    var st=d.status,cf=d.settings,mi=d.mirred,rt=d.rt,dm=st&&st.daemon,db=st&&st.database;
+    el('demo').hidden=!DEMO_ON;el('session').hidden=!!(DEMO_ON||st||cf);
+    var a=el('actif'),run=dm?(dm.running===true?true:dm.running===false?false:null):null;
+    a.textContent=run===true?'MOTEUR ACTIF':run===false?'MOTEUR ARRÊTÉ':'ÉTAT INCONNU';
+    a.className='actif'+(run===true?'':run===false?' hors':' inc');
+    var ifn=(cf&&cf.interface)||(mi&&mi.interface)||null;
+    el('tuiles').innerHTML=
+      tuile(IC.mot,run===true?'Actif':run===false?'Arrêté':'—','Moteur',dm&&dm.source==='ndpiReader/dpi'?'source : ndpiReader (nDPId inactif)':(dm&&dm.source)||'','État du processus nDPId (ou du collecteur ndpiReader à défaut), lu par /status.')
+     +tuile(IC.ifc,txt(ifn),'Interface capturée','','Interface réseau configurée pour la capture (réglage « interface »).')
+     +tuile(IC.ver,txt(st&&st.version),'Version nDPId','','Version du moteur : non exposée par l’API, « — » tant qu’elle ne la fournit pas.')
+     +tuile(IC.flx,db?fmt(db.total_flows):'—','Flux suivis',db&&db.flows_24h!=null?fmt(db.flows_24h)+' sur 24 h':'','Nombre de flux enregistrés dans la base (total, puis 24 dernières heures).')
+     +tuile(IC.up,txt(dm&&dm.uptime),'Uptime','','Durée de fonctionnement : non exposée par l’API, « — » tant qu’elle ne la fournit pas.')
+     +tuile(IC.bdd,db&&db.db_size!=null?octets(db.db_size):'—','Taille de la base','','Taille de la base de flux : non exposée par l’API, « — » tant qu’elle ne la fournit pas.');
+    el('capture').innerHTML=cf?kv([['Interface',txt(cf.interface)],['Mode de capture',txt(cf.capture_mode)],['Mode promiscuous',bool(cf.promisc)],['Taille de capture (snaplen)',cf.snaplen!=null?fmt(cf.snaplen)+' o':'—'],['Expiration d’un flux',cf.flow_timeout!=null?fmt(cf.flow_timeout)+' s':'—']]):'<div class="vide" style="grid-column:1/-1">Configuration indisponible (session requise).</div>';
+    el('analyse').innerHTML=cf?kv([['Empreintes JA3',bool(cf.enable_ja3)],['Empreintes JA4',bool(cf.enable_ja4)],['Événements de risque',bool(cf.enable_risks)],['Sortie ZeroMQ',bool(cf.zmq_enabled)],['Point ZeroMQ',txt(dm&&dm.zmq_endpoint)],['Socket du moteur',dm&&dm.socket_available!=null?bool(dm.socket_available):'<span class="inc">—</span>']]):'<div class="vide" style="grid-column:1/-1">Configuration indisponible (session requise).</div>';
+    el('rtIf').textContent=rt&&rt.interface?rt.interface:'';
+    el('rt').innerHTML=rt?kv([['Reçu (RX)',octets(rt.rx_bytes)+' · '+fmt(rt.rx_packets)+' paquets'],['Émis (TX)',octets(rt.tx_bytes)+' · '+fmt(rt.tx_packets)+' paquets'],['Erreurs RX',fmt(rt.rx_errors)],['Erreurs TX',fmt(rt.tx_errors)]]):'<div class="vide" style="grid-column:1/-1">Statistiques indisponibles.</div>';
+    el('mirred').innerHTML=mi?kv([['Interface',txt(mi.interface)],['Redirection active',bool(mi.active===true?true:mi.active===false?false:null)]])
+      +((mi.qdisc||mi.filters)?'<div style="grid-column:1/-1"><pre class="brut">'+esc(((mi.qdisc||'')+'\n'+(mi.filters||'')).trim())+'</pre></div>':''):'<div class="vide" style="grid-column:1/-1">État de mirred indisponible (session requise).</div>';
+    el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    hauteur();
+  }
+
+  var DEMO={status:{daemon:{running:true,socket_available:true,zmq_endpoint:'tcp://127.0.0.1:5555',source:'nDPId',uptime:'3 j 4 h',},database:{total_flows:48213,flows_24h:9120,total_fingerprints:312,risks_24h:41,db_size:73400320},version:'1.7'},
+    settings:{interface:'eth0',capture_mode:'pcap',promisc:true,snaplen:1600,flow_timeout:60,enable_ja3:true,enable_ja4:true,enable_risks:true,zmq_enabled:true},
+    mirred:{interface:'eth0',active:true,qdisc:'qdisc ingress ffff: parent ffff:fff1 ----------------',filters:'filter protocol all pref 49152 u32 chain 0\n  action order 1: mirred (Egress Redirect to device ifb0)'},
+    rt:{interface:'eth0',rx_bytes:48211345678,tx_bytes:9211345678,rx_packets:61234567,tx_packets:23456789,rx_errors:0,tx_errors:0}};
+
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function entetes(){var t=jeton();return t?{'Authorization':'Bearer '+t}:{};}
+  function jget(p){return fetch(API_BASE+p,{headers:Object.assign({'Accept':'application/json'},entetes()),credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  var enCours=false;
+  function charge(){
+    if(DEMO_ON){rend(DEMO);return;}
+    if(enCours) return;enCours=true;
+    Promise.all([jget('/status'),jget('/settings'),jget('/mirred/status'),jget('/stats/realtime')]).then(function(r){
+      enCours=false;rend({status:r[0],settings:r[1],mirred:r[2],rt:r[3]});
+    });
+  }
+
+  // ---- Actions d'écriture : mêmes routes, même méthode (POST sans corps), mêmes en-têtes que l'ancien onglet ----
+  var ACTIONS={
+    'start':{zone:'svc',titre:'Démarrer le service nDPId',chemin:'/control/start'},
+    'restart':{zone:'svc',titre:'Redémarrer le service nDPId',chemin:'/control/restart'},
+    'stop':{zone:'svc',titre:'Arrêter le service nDPId',chemin:'/control/stop'},
+    'mirred-setup':{zone:'mirred',titre:'Installer la redirection mirred',chemin:'/mirred/setup'},
+    'mirred-remove':{zone:'mirred',titre:'Retirer la redirection mirred',chemin:'/mirred/remove'}
+  };
+  function ecrire(chemin){
+    return fetch(API_BASE+chemin,{credentials:'same-origin',method:'POST',headers:entetes()});
+  }
+  function resultat(zone,ok,html){el('res-'+zone).innerHTML='<div class="res '+(ok?'ok':'ko')+'" role="status">'+html+'</div>';hauteur();}
+  function interprete(chemin,j){
+    if(chemin==='/mirred/setup'){var l=(j&&j.results)||[],ko=l.filter(function(x){return !x.success;});
+      return {ok:l.length>0&&!ko.length,html:(ko.length?'Étapes en échec :':'Redirection installée.')+'<ul>'+l.map(function(x){return '<li>'+(x.success?'OK':'ÉCHEC')+' — <code>'+esc(x.cmd)+'</code>'+(x.error?' : '+esc(x.error):'')+'</li>';}).join('')+'</ul>'};}
+    if(chemin==='/mirred/remove') return {ok:!!(j&&j.status==='removed'),html:j&&j.status==='removed'?'Redirection retirée.':'Réponse inattendue du service.'};
+    return {ok:!!(j&&j.success),html:j&&j.success?'Action effectuée.':'Échec'+(j&&j.error?' : '+esc(j.error):'.')};
+  }
+  function executer(cle,btns){
+    var a=ACTIONS[cle];
+    el('conf-'+a.zone).innerHTML='';
+    if(DEMO_ON){resultat(a.zone,true,'Simulation (démonstration) : « '+esc(a.titre)+' » n’a rien envoyé au service.');return;}
+    btns.forEach(function(b){b.disabled=true;});
+    resultat(a.zone,true,'Envoi en cours…');
+    ecrire(a.chemin).then(function(r){
+      if(r.status===401||r.status===403){resultat(a.zone,false,'Connexion requise : ouvrez une session administrateur ('+r.status+').');return null;}
+      if(!r.ok){resultat(a.zone,false,'Le service nDPId répond '+r.status+' pour '+esc(a.chemin)+'.');return null;}
+      return r.json().then(function(j){var i=interprete(a.chemin,j);resultat(a.zone,i.ok,esc(a.titre)+' : '+i.html);setTimeout(charge,1000);},function(){resultat(a.zone,false,'Réponse illisible du service.');});
+    }).catch(function(e){resultat(a.zone,false,'Appel impossible : '+esc(e&&e.message||e));}).then(function(){btns.forEach(function(b){b.disabled=false;});});
+  }
+  function demander(cle,btns){
+    var a=ACTIONS[cle],z=el('conf-'+a.zone);el('res-'+a.zone).innerHTML='';
+    z.innerHTML='<div class="conf"><span>Confirmer : <b>'+esc(a.titre)+'</b> ?'+(DEMO_ON?' (simulation)':'')+'</span><button type="button" class="danger" data-ok="1">Confirmer</button><button type="button" class="ghost" data-ko="1">Annuler</button></div>';
+    z.querySelector('[data-ok]').addEventListener('click',function(){executer(cle,btns);});
+    z.querySelector('[data-ko]').addEventListener('click',function(){z.innerHTML='';hauteur();});
+    hauteur();
+  }
+  var tous=[].slice.call(document.querySelectorAll('button[data-act]'));
+  tous.forEach(function(b){b.addEventListener('click',function(){demander(b.getAttribute('data-act'),tous);});});
+
+  // ---- hauteur annoncée à la page parente ----
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxNdpidVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().height),onglet:'reglages'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+  el('rafraichir').addEventListener('click',charge);
+  function saisie(){var e=document.activeElement;return !!(e&&/^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName));}
+  setInterval(function(){if(!document.hidden&&!saisie()&&!document.querySelector('.conf'))charge();},30000);
+  charge();
+})();
+</script>

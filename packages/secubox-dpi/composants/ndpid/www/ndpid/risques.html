@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — nDPId, onglet « Risques » : les risques détectés par nDPI sur les flux (certificat expiré ou auto-signé, protocole obsolète,
+  DNS suspect, flux anormaux, exfiltration…). Page autonome, LECTURE SEULE, deux mises en page :
+    · une colonne en ?embed=1 ou sous 900 px ;
+    · plusieurs colonnes à partir de 900 px.
+  DONNÉES RÉELLES UNIQUEMENT (API /api/v1/ndpid : /status, /risks, /flows — lues en session). Une mesure absente s'affiche « — », jamais 0.
+  Quand le moteur n'expose que des cumuls par risque (pont sbxdpi), il n'y a ni hôte ni flux individuel : la page le dit.
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nDPId — les risques détectés sur le réseau</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.inc{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{background:rgba(41,182,246,.12);border:1px solid var(--trait2);color:var(--doux);border-radius:8px;padding:4px 10px;font-size:.74rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .outils{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .outils input,.outils select{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait);border-radius:8px;padding:4px 8px;min-width:0;flex:1 1 150px}
+  .outils select option{background:#0b1830}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;align-items:center;font-size:.76rem;padding:5px 0;border-top:1px solid rgba(86,150,255,.10)}
+  .ligne:first-child{border-top:0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte);display:flex;align-items:center;gap:7px;min-width:0}
+  .ligne .n span.t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ligne .c{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ligne .barre{grid-column:1/-1}
+  .ligne .cat{grid-column:1/-1;color:var(--faible);font-size:.66rem;margin-top:-1px}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .hote{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;font-size:.76rem;padding:4px 0}
+  .hote .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums} .hote .c{color:var(--doux);font-variant-numeric:tabular-nums}
+  .hote .barre{grid-column:1/-1}
+  .past{display:inline-block;flex:none;text-align:center;border-radius:5px;padding:1px 7px;font-weight:700;font-size:.66rem;white-space:nowrap}
+  .repart{display:grid;gap:12px;grid-template-columns:120px minmax(0,1fr);align-items:center}
+  .repart svg{width:120px;height:120px;display:block}
+  .leg div{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)}
+  .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .leg .vide{display:block;padding:2px 0}
+  .leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-variant-numeric:tabular-nums}
+  @container a (max-width:599px){.repart{grid-template-columns:100px minmax(0,1fr)}.repart svg{width:100px;height:100px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){body:not(.emb) .tuiles{grid-template-columns:repeat(5,1fr)} body:not(.emb) .g1{grid-template-columns:1.5fr 1fr} body:not(.emb) .g2{grid-template-columns:1fr 1fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2l9.2 16H2.8z" fill="rgba(255,159,28,.16)"/><path d="M12 9.5v4.6M12 17h.01"/></svg><span><b>nDPId</b><small>Risques détectés sur les flux</small></span></span>
+    <span class="actif inc" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Risques</h2><div class="sous">Ce que nDPI juge dangereux ou anormal dans le trafic : certificats, protocoles obsolètes, DNS suspect, flux anormaux, exfiltration. Lecture seule.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="info" id="cumul" hidden></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Classement des risques <i id="clNote"></i></h3>
+      <div class="outils">
+        <input type="search" id="fTexte" placeholder="Filtrer (nom, catégorie)" aria-label="Filtrer les risques">
+        <select id="fGrav" aria-label="Gravité"><option value="">Toutes gravités</option><option value="crit">Critique</option><option value="haute">Haute</option><option value="moy">Moyenne</option><option value="faible">Faible</option></select>
+        <select id="fCat" aria-label="Catégorie"><option value="">Toutes catégories</option></select>
+        <select id="fTri" aria-label="Tri"><option value="n">Tri : nombre de flux</option><option value="g">Tri : gravité</option><option value="a">Tri : nom</option></select>
+      </div>
+      <div id="classement"></div></div>
+    <div class="pan"><h3>Hôtes les plus exposés <i>flux à risque par adresse source</i></h3><div id="hotes"></div></div>
+  </div>
+  <div class="grille g2">
+    <div class="pan"><h3>Répartition par gravité <i>flux à risque</i></h3><div class="repart"><div id="donutG"></div><div class="leg" id="legG"></div></div></div>
+    <div class="pan"><h3>Répartition par catégorie <i>flux à risque</i></h3><div class="repart"><div id="donutC"></div><div class="leg" id="legC"></div></div></div>
+  </div>
+  <div class="pan"><h3>Derniers flux à risque <i id="evNote"></i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th>Source</th><th>Destination</th><th>Risque</th><th>Gravité</th><th>Score</th><th>Détail</th></tr></thead><tbody id="events"></tbody></table></div></div>
+  <div class="note">Gravité d’après le score nDPI : critique ≥ 90 · haute ≥ 70 · moyenne ≥ 40 · faible en dessous. Page en lecture seule : aucune action sur les flux.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+
+  // Gravité d'après le score (le pont sbxdpi donne 80 = High, 50 = Medium, 20 = Low).
+  var GR={crit:['Critique','#ff4d5e'],haute:['Haute','#ff9f1c'],moy:['Moyenne','#ffd23f'],faible:['Faible','#29b6f6']};
+  var ORDRE={crit:4,haute:3,moy:2,faible:1};
+  function grav(s){s=num(s);return s>=90?'crit':s>=70?'haute':s>=40?'moy':'faible';}
+  function past(g){return '<span class="past" style="background:'+GR[g][1]+'33;color:'+GR[g][1]+'">'+GR[g][0]+'</span>';}
+
+  var CATS={cert:['Certificats','#29b6f6'],obs:['Protocoles obsolètes','#ff9f1c'],dns:['DNS suspect','#a78bfa'],ano:['Flux anormaux','#3b82f6'],exf:['Exfiltration','#ff4d5e'],exp:['Exploitation','#ffd23f'],rep:['Réputation','#f472b6'],autre:['Autres','#6f84a8']};
+  // Nom nDPI → nom lisible, catégorie, définition. Premier motif qui correspond ; sinon le nom brut, catégorie « Autres ».
+  var REGLES=[
+    [/about to expire/,'Certificat bientôt expiré','cert','Le certificat TLS du serveur arrive à échéance : sans renouvellement, les clients seront avertis ou refusés.'],
+    [/cert.*expired|expired/,'Certificat expiré','cert','Le serveur présente un certificat TLS dont la date de validité est dépassée : l’identité du serveur n’est plus garantie.'],
+    [/self.?signed/,'Certificat auto-signé','cert','Le certificat n’est signé par aucune autorité reconnue : impossible de vérifier à qui l’on parle (interception possible).'],
+    [/mismatch/,'Certificat au nom incorrect','cert','Le nom du certificat ne correspond pas au serveur contacté : signe d’une interception ou d’une mauvaise configuration.'],
+    [/validity too long/,'Certificat à validité excessive','cert','Durée de validité supérieure à ce que tolèrent les navigateurs : pratique typique de certificats non publics.'],
+    [/malicious (sha1|ja3|ja4)|ja3|ja4/,'Empreinte malveillante connue','rep','L’empreinte TLS (ou le certificat) figure dans une liste d’outils malveillants connus.'],
+    [/obsolete|weak cipher|deprecated/,'Protocole ou chiffrement obsolète','obs','Version de protocole ou suite de chiffrement dépassée (SSLv3, TLS 1.0/1.1, chiffres faibles) : attaques connues.'],
+    [/unsafe protocol|clear-?text|credential/,'Protocole non sécurisé','obs','Échange en clair (identifiants, contenu) sur un protocole sans chiffrement : lisible par tout intermédiaire.'],
+    [/dga/,'Domaine généré (DGA) suspect','dns','Nom de domaine d’allure aléatoire, typique des logiciels malveillants qui cherchent leur serveur de commande.'],
+    [/large dns|fragmented dns/,'Message DNS inhabituel','dns','Paquet DNS surdimensionné ou fragmenté : tunnel DNS ou attaque par amplification possible.'],
+    [/dns/,'Trafic DNS suspect','dns','Requêtes DNS qui s’écartent d’un usage normal (volume, forme, serveur inattendu).'],
+    [/risky domain|idn domain/,'Nom de domaine à risque','dns','Domaine connu pour son mauvais usage ou masquant son vrai nom par des caractères trompeurs.'],
+    [/entropy|obfuscat/,'Données dissimulées (entropie élevée)','exf','Contenu chiffré, compressé ou obscurci dans un protocole qui n’en porte normalement pas : exfiltration ou canal caché possible.'],
+    [/binary app|exfil/,'Transfert d’exécutable ou de données','exf','Un binaire ou un volume de données inhabituel est transféré : téléchargement de charge ou exfiltration.'],
+    [/non std port/,'Protocole connu sur un port inhabituel','ano','Un protocole reconnu circule sur un port qui n’est pas le sien : contournement de filtrage ou service dissimulé.'],
+    [/periodic/,'Flux périodique (balise)','ano','Connexions à intervalles réguliers : comportement de balise de logiciel de contrôle à distance.'],
+    [/unidirectional/,'Trafic à sens unique','ano','Le flux ne circule que dans un sens : balayage, flux détourné ou réponse bloquée.'],
+    [/tcp connection issues|probing|malformed|missing sni|error code|fragment|minor issues/,null,'ano','Flux anormal : connexions défaillantes, paquets mal formés ou sondage de ports.'],
+    [/xss|sql|rce|exploit|injection|suspicious (url|header|user)|numeric ip|non-printable|obsolete server/,null,'exp','Contenu qui ressemble à une tentative d’exploitation : injection, URL ou en-tête suspect.'],
+    [/asn|anonymous|crawler|bot|tor|desktop|file sharing/,null,'rep','Origine ou usage jugé risqué : réseau mal réputé, anonymiseur, robot ou partage de fichiers.']
+  ];
+  var CACHE={};
+  function decrit(nom){
+    var n=String(nom||''); if(CACHE[n]) return CACHE[n];
+    var l=n.toLowerCase(),r=null;
+    for(var i=0;i<REGLES.length;i++){ if(REGLES[i][0].test(l)){r=REGLES[i];break;} }
+    return CACHE[n]=r?{fr:r[1]||n,cat:r[2],def:r[3]+' (nDPI : « '+n+' »)'}:{fr:n||'—',cat:'autre',def:'Risque nDPI sans description locale (« '+n+' »).'};
+  }
+  var IC={
+    flux:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l9.2 16H2.8z" fill="rgba(255,159,28,.16)"/><path d="M12 9.5v4.6M12 17h.01"/></svg>',
+    dist:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="4" width="7" height="7" rx="1.5" fill="rgba(167,139,250,.16)"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5" fill="rgba(167,139,250,.16)"/></svg>',
+    crit:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><path d="M12 7v6M12 16.5h.01"/></svg>',
+    hote:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2" fill="rgba(41,182,246,.14)"/><path d="M8 20h8M12 16v4"/></svg>',
+    part:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(59,130,246,.14)"/><path d="M12 12V3M12 12l6.4 6.4"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+
+  // Anneau SVG : segments [[valeur,couleur],…]
+  function anneau(segs,total,etiq){
+    var R=44,C=2*Math.PI*R,acc=0,s='<svg viewBox="0 0 120 120" role="img" aria-label="'+esc(etiq)+'"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="16"/>';
+    if(total>0) segs.forEach(function(g){var l=C*g[0]/total;if(l<=0)return;s+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+g[1]+'" stroke-width="16" stroke-dasharray="'+l.toFixed(2)+' '+(C-l).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 60 60)"/>';acc+=l;});
+    return s+'<text x="60" y="60" text-anchor="middle" fill="#eaf1ff" font-size="20" font-weight="700">'+(total>0?fmt(total):'—')+'</text><text x="60" y="75" text-anchor="middle" fill="#9fb3d6" font-size="9">flux</text></svg>';
+  }
+  function legende(rows,total){return rows.length?rows.map(function(r){return '<div><i style="background:'+r[1]+'"></i><span title="'+esc(r[0])+'">'+esc(r[0])+'</span><b>'+Math.round(100*r[2]/total)+'%</b></div>';}).join(''):'<div class="vide">Aucun flux à risque.</div>';}
+
+  var ETAT={ev:null,flows:null,status:null,demo:false};
+  function reel(ip){ip=String(ip==null?'':ip).trim();return ip&&ip!=='—'&&ip!=='-'?ip:'';}
+  function nbFlux(e){var m=/^\s*(\d+)\s+flux/i.exec(String(e.description||''));return m?+m[1]:1;}
+  // Agrège les événements par type de risque.
+  function agrege(ev){
+    var m={};
+    ev.forEach(function(e){
+      var k=String(e.risk_type||'');var o=m[k]||(m[k]={nom:k,n:0,score:0});
+      o.n+=nbFlux(e);o.score=Math.max(o.score,num(e.risk_score));
+    });
+    return Object.keys(m).map(function(k){var o=m[k],d=decrit(o.nom);o.fr=d.fr;o.cat=d.cat;o.def=d.def;o.g=grav(o.score);return o;});
+  }
+  function quand(t){var d=new Date(t);return isNaN(d)?'—':d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+
+  function classement(R){
+    var ft=el('fTexte').value.trim().toLowerCase(),fg=el('fGrav').value,fc=el('fCat').value,tri=el('fTri').value;
+    var L=R.filter(function(r){return (!fg||r.g===fg)&&(!fc||r.cat===fc)&&(!ft||(r.fr+' '+r.nom+' '+CATS[r.cat][0]).toLowerCase().indexOf(ft)>=0);});
+    L.sort(function(a,b){return tri==='a'?a.fr.localeCompare(b.fr,'fr'):tri==='g'?(ORDRE[b.g]-ORDRE[a.g])||(b.n-a.n):(b.n-a.n)||(ORDRE[b.g]-ORDRE[a.g]);});
+    var mx=L.reduce(function(m,r){return Math.max(m,r.n);},1);
+    el('clNote').textContent=R.length?(L.length===R.length?R.length+' risques':L.length+' sur '+R.length):'';
+    el('classement').innerHTML=L.length?L.map(function(r){
+      return '<div class="ligne" title="'+esc(r.def)+'"><span class="n">'+past(r.g)+'<span class="t">'+esc(r.fr)+'</span></span><span class="c">'+fmt(r.n)+' flux</span><div class="barre"><i style="width:'+Math.max(3,100*r.n/mx)+'%;background:'+GR[r.g][1]+'"></i></div><span class="cat" style="color:'+CATS[r.cat][1]+'">'+esc(CATS[r.cat][0])+'</span></div>';}).join('')
+      :'<div class="vide">'+(ETAT.ev?(R.length?'Aucun risque ne correspond au filtre.':'Aucun risque détecté.'):'Session requise.')+'</div>';
+  }
+  var DERN=null;
+  function rend(){
+    var ev=ETAT.ev,st=ETAT.status,fl=ETAT.flows;
+    el('demo').hidden=!ETAT.demo;el('session').hidden=!!(ETAT.demo||ev||st||fl);
+    var a=el('actif'),dm=st&&st.daemon;
+    if(dm){a.textContent=dm.running?'MOTEUR ACTIF · '+String(dm.source||'nDPId').toUpperCase():'MOTEUR ARRÊTÉ';a.className='actif'+(dm.running?'':' hors');}
+    else{a.textContent=ev?'ÉTAT INCONNU':'HORS LIGNE';a.className='actif '+(ev?'inc':'hors');}
+    var R=ev?agrege(ev):null,tot=R?R.reduce(function(t,r){return t+r.n;},0):null;
+    var crit=R?R.filter(function(r){return r.g==='crit'||r.g==='haute';}).reduce(function(t,r){return t+r.n;},0):null;
+    // hôtes : adresses sources réelles des événements, sinon des flux notés
+    var H={};
+    (ev||[]).forEach(function(e){var h=reel(e.src_ip);if(h)H[h]=(H[h]||0)+nbFlux(e);});
+    var fr=(fl||[]).filter(function(f){return num(f.risk_score)>0;});
+    if(!Object.keys(H).length) fr.forEach(function(f){var h=reel(f.src_ip);if(h)H[h]=(H[h]||0)+Math.max(1,num(f.flow_count));});
+    var HL=Object.keys(H).map(function(k){return [k,H[k]];}).sort(function(x,y){return y[1]-x[1];});
+    var base=st&&st.database?num(st.database.flows_24h||st.database.total_flows):0;
+    var part=tot!=null&&base>0?Math.min(100,100*tot/base):null;
+    var cumul=ev&&ev.some(function(e){return /cumul/i.test(String(e.description||''));});
+    el('tuiles').innerHTML=
+       tuile(IC.flux,tot==null?'—':fmt(tot),'Flux à risque',ev?'au moins un risque nDPI':'','Nombre de flux sur lesquels nDPI a relevé au moins un risque (somme des flux par type de risque, fenêtre de 24 h).')
+      +tuile(IC.dist,R?fmt(R.length):'—','Risques distincts',R?'types différents':'','Nombre de types de risque nDPI différents observés.')
+      +tuile(IC.crit,crit==null?'—':fmt(crit),'Critiques et hauts',R?'score ≥ 70':'','Flux dont le risque a un score nDPI de 70 ou plus (gravité haute ou critique).')
+      +tuile(IC.hote,ev?(HL.length||'—'):'—','Hôtes concernés',HL.length?'adresses sources':(ev?'non exposés par le moteur':''),'Nombre d’adresses sources distinctes portant au moins un flux à risque. Le pont sbxdpi ne donne que des cumuls : pas d’adresse.')
+      +tuile(IC.part,part==null?'—':(part<1?'< 1':Math.round(part))+' %','Part du trafic à risque',part==null?'':fmt(tot)+' sur '+fmt(base)+' flux','Flux à risque rapportés au total des flux vus par le moteur.');
+    el('cumul').hidden=!cumul;
+    el('cumul').textContent=cumul?'Le moteur ne donne ici que des cumuls par type de risque depuis son démarrage (sbxdpi) : pas d’hôte, d’adresse ni d’heure par flux.':'';
+    // filtre catégorie
+    var sel=el('fCat'),cur=sel.value,pre=(R||[]).map(function(r){return r.cat;}).filter(function(c,i,t){return t.indexOf(c)===i;});
+    sel.innerHTML='<option value="">Toutes catégories</option>'+pre.map(function(c){return '<option value="'+c+'">'+esc(CATS[c][0])+'</option>';}).join('');
+    sel.value=pre.indexOf(cur)>=0?cur:'';
+    classement(R||[]);DERN=R;
+    var mh=HL.length?HL[0][1]:1;
+    el('hotes').innerHTML=HL.length?HL.slice(0,8).map(function(h){return '<div class="hote"><span class="n" title="'+esc(h[0])+'">'+esc(h[0])+'</span><span class="c">'+fmt(h[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*h[1]/mh)+'%;background:var(--orange)"></i></div></div>';}).join('')
+      :'<div class="vide">'+(ev?'Le moteur n’expose pas l’adresse des hôtes concernés.':'Session requise.')+'</div>';
+    var G={crit:0,haute:0,moy:0,faible:0},C={};
+    (R||[]).forEach(function(r){G[r.g]+=r.n;C[r.cat]=(C[r.cat]||0)+r.n;});
+    var gs=Object.keys(G).filter(function(k){return G[k]>0;}).map(function(k){return [GR[k][0],GR[k][1],G[k]];});
+    var cs=Object.keys(C).sort(function(x,y){return C[y]-C[x];}).map(function(k){return [CATS[k][0],CATS[k][1],C[k]];});
+    el('donutG').innerHTML=anneau(gs.map(function(g){return [g[2],g[1]];}),tot||0,'Répartition par gravité');el('legG').innerHTML=legende(gs,tot||1);
+    el('donutC').innerHTML=anneau(cs.map(function(g){return [g[2],g[1]];}),tot||0,'Répartition par catégorie');el('legC').innerHTML=legende(cs,tot||1);
+    // derniers flux : événements aux adresses réelles, sinon flux notés
+    var rows=(ev||[]).filter(function(e){return reel(e.src_ip)||reel(e.dst_ip);}).map(function(e){var d=decrit(e.risk_type);return {t:e.timestamp,s:reel(e.src_ip),d:reel(e.dst_ip),fr:d.fr,def:d.def,sc:num(e.risk_score),det:String(e.description||'')};});
+    if(!rows.length) rows=fr.map(function(f){var rs=f.risk_reasons&&f.risk_reasons.length?f.risk_reasons.join(' · '):'';return {t:f.last_seen||f.timestamp||null,s:reel(f.src_ip),d:reel(f.dst_ip),fr:rs?decrit(f.risk_reasons[0]).fr:'Score de risque',def:'',sc:num(f.risk_score),det:[f.l7_protocol,f.application].filter(Boolean).join(' · ')};});
+    rows.sort(function(x,y){return String(y.t||'').localeCompare(String(x.t||''));});
+    el('evNote').textContent=!ev&&!fl?'session requise':rows.length?(rows.length>12?'12 derniers sur '+fmt(rows.length):''):'';
+    el('events').innerHTML=rows.length?rows.slice(0,12).map(function(r){var g=grav(r.sc);
+      return '<tr><td>'+esc(r.t?quand(r.t):'—')+'</td><td>'+esc(r.s||'—')+'</td><td>'+esc(r.d||'—')+'</td><td title="'+esc(r.def)+'">'+esc(r.fr)+'</td><td>'+past(g)+'</td><td>'+fmt(r.sc)+'</td><td title="'+esc(r.det)+'">'+esc(r.det||'—')+'</td></tr>';}).join('')
+      :'<tr><td colspan="7" class="vide">'+(ev||fl?'Aucun flux individuel à risque exposé par le moteur.':'Ouvre une session pour voir les flux.')+'</td></tr>';
+    hauteur();
+  }
+
+  // ---- démonstration : données plausibles, annoncées par un bandeau
+  function demo(){
+    var T=[['TLS Certificate Expired',70,'Certificat expiré depuis 12 jours (static.ancien-fournisseur.example)'],['TLS Self-signed Certificate',50,'Certificat auto-signé (nas.local)'],['TLS Obsolete Version',50,'TLS 1.0 négocié'],
+      ['Suspicious DGA Domain name',80,'Domaine à l’allure aléatoire : xk3qz9vt1.example'],['DNS Suspicious Traffic',50,'Réponses DNS volumineuses'],['Periodic Flow',50,'Connexion toutes les 60 s'],['Suspicious Entropy',50,'Données chiffrées sur le port 80'],['Binary App Transfer',50,'Exécutable téléchargé en HTTP'],['Known Proto on Non Std Port',20,'SSH sur le port 8022'],['Clear-Text Credentials',80,'Identifiants FTP en clair'],['Malicious JA3 Fingerprint',95,'Empreinte d’un outil connu']];
+    var H=['10.64.0.7','10.64.0.12','10.64.0.31','10.64.0.44','10.64.0.58','10.64.1.5'],D=['93.184.216.34','151.101.1.69','185.220.101.3','104.18.32.7','198.51.100.23','203.0.113.50'],ev=[],s=7;
+    function al(m){s=(s*9301+49297)%233280;return Math.floor(s/233280*m);}
+    var poids=[4,9,12,5,6,8,3,4,10,2,1];
+    T.forEach(function(t,i){for(var k=0;k<poids[i];k++){var d=new Date(Date.now()-(al(86400)*1000));ev.push({timestamp:d.toISOString(),flow_id:'d'+i+'-'+k,src_ip:H[al(H.length)],dst_ip:D[al(D.length)],risk_type:t[0],risk_score:t[1],description:t[2]});}});
+    ev.sort(function(x,y){return y.timestamp.localeCompare(x.timestamp);});
+    return {demo:true,ev:ev,flows:null,status:{daemon:{running:true,source:'nDPId → sbxdpi'},database:{total_flows:2140,flows_24h:2140}}};
+  }
+
+  // ---- hauteur transmise à la page parente (onglet encadré)
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxNdpidVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().height),onglet:'risques'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+
+  function horloge(){el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+  ['fTexte','fGrav','fCat','fTri'].forEach(function(i){el(i).addEventListener('input',function(){classement(DERN||[]);hauteur();});});
+  horloge();
+  if(q.get('demo')){var D=demo();ETAT=D;rend();return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    var b='/api/v1/ndpid/';horloge();
+    Promise.all([jget(b+'status'),jget(b+'risks?hours=24&limit=1000'),jget(b+'flows?active_only=false&limit=500')]).then(function(r){
+      ETAT={demo:false,status:r[0],ev:r[1]&&Array.isArray(r[1].risks)?r[1].risks:null,flows:r[2]&&Array.isArray(r[2].flows)?r[2].flows:null};
+      rend();
+    });
+  }
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  setInterval(function(){if(!document.hidden) charge();},30000);
+})();
+</script>
