@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "secubox-premier-pas"))
 from autoload_agent import client as C  # noqa: E402
 
 OK = {"tunnel": {"endpoint": "e", "serveur_cle_pub": "k", "adresse": "a", "hub": "h"}, "client": "c1", "profil": "lite"}
