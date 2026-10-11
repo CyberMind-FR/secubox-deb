@@ -802,7 +802,8 @@ cmd_cert_add() {
 
         # Combine for HAProxy
         cat "$CERTS_DIR/${domain}.crt" "$CERTS_DIR/${domain}.key" > "$CERTS_DIR/${domain}.pem"
-        chmod 600 "$CERTS_DIR/${domain}.pem"
+        chmod 640 "$CERTS_DIR/${domain}.pem"
+        chown haproxy:secubox "$CERTS_DIR/${domain}.pem" 2>/dev/null || true   # lisible par le module certs (#2383)
 
         log "Certificate installed: $CERTS_DIR/${domain}.pem"
     else
@@ -905,7 +906,10 @@ cmd_cert_sync() {
         # rechargement — donc tomber pour TOUS les vhosts, pas seulement celui-ci.
         local tmp="$cible.nouveau"
         cat "$chaine" "$cle" > "$tmp" || { error "cert-sync: ecriture $nom impossible"; rm -f "$tmp"; continue; }
-        chmod 0600 "$tmp"
+        # 0640 haproxy:secubox, comme `certsctl deploy` : en 0600 root, le module certs (utilisateur secubox, servi par l'agregateur)
+        # ne pouvait pas lire le certificat et le montrait « expired » alors qu'il etait valide (#2383).
+        chmod 0640 "$tmp"
+        chown haproxy:secubox "$tmp" 2>/dev/null || true
         mv "$tmp" "$cible"
     done
 

@@ -115,6 +115,8 @@ def detect_origin(domain: str) -> tuple:
 
 def get_ttd_emoji(days: int) -> str:
     """Get Time-To-Death emoji based on days remaining."""
+    if days is None:
+        return "❔"  # illisible : on ne sait pas (#2383)
     if days < 0:
         return "💀"  # Expired
     if days == 0:
@@ -130,8 +132,10 @@ def get_ttd_emoji(days: int) -> str:
     return "💚"  # Healthy
 
 
-def get_cert_status(days: int) -> str:
-    """Get status string from days remaining."""
+def get_cert_status(days) -> str:
+    """Get status string from days remaining. `None` = certificat illisible : « unknown », JAMAIS « expired » (#2383)."""
+    if days is None:
+        return "unknown"
     if days < 0:
         return "expired"
     if days <= 7:
@@ -214,6 +218,8 @@ def _infos_pem(pem_path: Path) -> tuple:
             ["openssl", "x509", "-enddate", "-issuer", "-noout", "-in", str(pem_path)],
             capture_output=True, text=True, timeout=5
         )
+        if result.returncode != 0:
+            return None, None          # un ÉCHEC n'est pas mémorisé : le fichier peut devenir lisible sans changer de taille ni de date (#2383)
         if result.returncode == 0:
             m = re.search(r"notAfter=(.+)", result.stdout)
             if m:
@@ -225,6 +231,18 @@ def _infos_pem(pem_path: Path) -> tuple:
         return None, None
     _PEM_MEMO[str(pem_path)] = (cle, expiry, issuer)
     return expiry, issuer
+
+
+def resume(certs: list) -> dict:
+    """Compte par statut ; un certificat illisible (days None) est « unknown », pas « expired » (#2383)."""
+    lus = [c for c in certs if c["days"] is not None]
+    return {
+        "expired": len([c for c in lus if c["days"] < 0]),
+        "critical": len([c for c in lus if 0 <= c["days"] <= 7]),
+        "warning": len([c for c in lus if 7 < c["days"] <= 30]),
+        "healthy": len([c for c in lus if c["days"] > 30]),
+        "unknown": len(certs) - len(lus),
+    }
 
 
 def scan_certificates() -> list:
@@ -242,10 +260,8 @@ def scan_certificates() -> list:
             domain = "*." + domain.replace("_wildcard_.", "")
 
         expiry, issuer = _infos_pem(pem_file)
-        if expiry:
-            days = (expiry - now).days
-        else:
-            days = -999  # Unknown
+        # Illisible (fichier root 0600 pour l'utilisateur du service, openssl en échec…) : on NE SAIT PAS, ce n'est pas « expiré » (#2383).
+        days = (expiry - now).days if expiry else None
 
         origin_emoji, origin_name = detect_origin(domain)
         issuer = issuer or "Unknown"
@@ -373,10 +389,8 @@ async def list_certificates():
     certs = _certs_cache if _certs_cache else scan_certificates()
 
     # Calculate summary stats
-    expired = len([c for c in certs if c["days"] < 0])
-    critical = len([c for c in certs if 0 <= c["days"] <= 7])
-    warning = len([c for c in certs if 7 < c["days"] <= 30])
-    healthy = len([c for c in certs if c["days"] > 30])
+    _r = resume(certs)
+    expired, critical, warning, healthy = _r["expired"], _r["critical"], _r["warning"], _r["healthy"]
 
     return {
         "certificates": certs,
@@ -386,6 +400,7 @@ async def list_certificates():
             "critical": critical,
             "warning": warning,
             "healthy": healthy,
+            "unknown": _r["unknown"],
         },
         "timestamp": datetime.utcnow().isoformat(),
     }
@@ -396,10 +411,8 @@ async def cert_status():
     """Get overall certificate health status."""
     certs = _certs_cache if _certs_cache else scan_certificates()
 
-    expired = len([c for c in certs if c["days"] < 0])
-    critical = len([c for c in certs if 0 <= c["days"] <= 7])
-    warning = len([c for c in certs if 7 < c["days"] <= 30])
-    healthy = len([c for c in certs if c["days"] > 30])
+    _r = resume(certs)
+    expired, critical, warning, healthy = _r["expired"], _r["critical"], _r["warning"], _r["healthy"]
 
     # Calculate health percentage
     total = len(certs)
@@ -444,7 +457,7 @@ def cert_details(domain: str):
 
     expiry = parse_pem_expiry(pem_path)
     now = datetime.utcnow()
-    days = (expiry - now).days if expiry else -999
+    days = (expiry - now).days if expiry else None   # illisible = inconnu, pas expiré (#2383)
 
     origin_emoji, origin_name = detect_origin(domain)
 
@@ -655,7 +668,7 @@ async def renew_certificate(domain: str):
 async def renew_all_expiring():
     """Renew all certificates expiring within 30 days."""
     certs = _certs_cache if _certs_cache else scan_certificates()
-    expiring = [c for c in certs if c["days"] <= 30]
+    expiring = [c for c in certs if c["days"] is not None and c["days"] <= 30]   # un certificat illisible n'est pas renouvelé à l'aveugle (#2383)
 
     results = []
     for cert in expiring:
