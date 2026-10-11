@@ -41,10 +41,10 @@
      est le même que celui du BBS. -->
 <meta name="sbx-no-health-banner">
 <style>
-@font-face{font-family:"Cinzel";src:url("fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
-@font-face{font-family:"Fraunces";src:url("fonts/fraunces.woff2") format("woff2");font-weight:400 700;font-display:swap}
-@font-face{font-family:"Inter";src:url("fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
-@font-face{font-family:"JetBrains Mono";src:url("fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
+@font-face{font-family:"Cinzel";src:url("/fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Fraunces";src:url("/fonts/fraunces.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Inter";src:url("/fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
 :root{
   --ink:#17232d; --paper:#eef2f6; --panel:#ffffff; --line:#dbe3e9; --line-2:#c5cfd7;
   --soft:#f1f4f7; --dim:#647685;
@@ -1129,7 +1129,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 <body>
 <header class="mast">
   <div class="mast-main">
-    <div class="logo-wrap"><a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a><button type="button" class="logo-notif hidden" id="logo-notif" title="Diffusions du parc" aria-label="Nouvelles diffusions du parc"></button><div class="logo-diff" id="logo-diff" role="menu" aria-label="Diffusions du parc"><div class="ld-tete">📡 Diffusions du parc <span id="logo-diff-n"></span></div><div class="ld-liste" id="logo-diff-liste"><p class="who-note">Aucune diffusion reçue pour l’instant.</p></div></div></div>
+    <div class="logo-wrap"><a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="/hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="/medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a><button type="button" class="logo-notif hidden" id="logo-notif" title="Diffusions du parc" aria-label="Nouvelles diffusions du parc"></button><div class="logo-diff" id="logo-diff" role="menu" aria-label="Diffusions du parc"><div class="ld-tete">📡 Diffusions du parc <span id="logo-diff-n"></span></div><div class="ld-liste" id="logo-diff-liste"><p class="who-note">Aucune diffusion reçue pour l’instant.</p></div></div></div>
     <nav class="mnav" aria-label="Menus">
       <!-- Bouton « Accueil » retiré (#1266) : le logo mène déjà à l'accueil,
            c'était un doublon. -->
@@ -1372,7 +1372,11 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 </footer>
 
 <script src="/api/v1/webos/public/hotes.js"></script>
-<script src="domaine.js"></script>
+<script src="/domaine.js"></script>
+<script>
+// UN LIEN D'ACTIVITE /bbs/t|f/<id> OUVERT SUR LE HALL (#2339) : le collecteur l'ecrit tel quel, et le BBS vit sur SON hote. Sans cela nginx servait cette page (repli SPA) a ce chemin, sans rien de ce qu'elle charge.
+(function(){var m=/^\/bbs\/(t|f)\/([A-Za-z0-9_-]{1,64})$/.exec(location.pathname);if(m&&window.SBX_DOMAINE)location.replace("https://"+SBX_DOMAINE.hote("bbs.gk2.secubox.in")+"/"+m[1]+"/"+m[2]);})();
+</script>
 <script>
 // Services PRINCIPAUX = curation « all.gk2.net » (apps grand public, cf. design).
 // Tout le reste va sous SYSTÈME. Les ids inexistants sont simplement ignorés.
@@ -5617,6 +5621,6 @@ const CARDLET_ICONES = {
 
 <!-- Lexie — la fenêtre vocale du Hall (#1287). Chargée en dernier : elle se
      greffe sur la barre déjà construite, et n'est requise par rien d'autre. -->
-<script src="lexie.js"></script>
+<script src="/lexie.js"></script>
 </body>
 </html>

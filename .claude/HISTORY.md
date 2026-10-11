@@ -12,6 +12,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-12 — profiles 0.20.3 : le kiosque n'est plus arrêté par un profil (ref #2329)
 
 L'interface locale (module kiosk, dans aucun profil) était mise à OFF par `profilectl apply` : la VM finissait son Auto-Load sans interface. HORS_PLAN : ni stop, ni start.
+## 2026-10-12 — Hall 1.9.4 : un lien d'activité /bbs/t/<id> ne casse plus la page (ref #2339)
+
+Références absolues dans index.html + redirection vers le BBS de la box.
+
 ## 2026-10-12 — dpi 1.11.1 : l'ancien démon est arrêté sans condition (ref #2337)
 
 Le postinst conditionnel laissait ndpid actif. Corrigé et testé.
