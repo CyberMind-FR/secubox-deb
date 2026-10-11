@@ -352,6 +352,8 @@
 
         <!-- #2293 : la vue d'ensemble (tableau de bord SBXWAF), page encadrée de même origine ; l'ancien contenu reste dans les autres onglets -->
         <div id="vueCard" style="grid-column:1 / -1"><iframe id="vueFrame" src="vue.html" title="SBXWAF — vue d'ensemble" style="width:100%;height:1500px;border:0;display:block;background:transparent"></iframe></div>
+        <!-- #2354 : les six autres onglets sont des pages autonomes du profil Aurora (menaces, attaquants, visites, surfaces, historique, campagnes), encadrées comme la vue d'ensemble -->
+        <div id="pageCard" style="grid-column:1 / -1;display:none"><iframe id="pageFrame" title="SBXWAF" style="width:100%;height:1200px;border:0;display:block;background:transparent"></iframe></div>
 
         <div class="grid-2">
             <!-- Security Events (combined alerts/bans) -->
@@ -1404,10 +1406,14 @@
 
         // #747 — dashboard tabs (Menaces / Attaquants suivis / Visites)
         window.addEventListener('message', (e) => {
-            if (e.origin === location.origin && e.data && e.data.sbxwafVue) {
-                const f = document.getElementById('vueFrame'); if (f) f.style.height = Math.min(4000, Math.max(600, +e.data.sbxwafVue + 4)) + 'px';
-            }
+            if (e.origin !== location.origin || !e.data) return;
+            // vue.html poste `sbxwafVue` ; les pages d'onglet postent `sbxWafVue` + `onglet` (#2354).
+            const px = (h) => Math.min(4000, Math.max(300, +h + 4)) + 'px';
+            if (e.data.sbxwafVue) { const f = document.getElementById('vueFrame'); if (f) f.style.height = px(e.data.sbxwafVue); }
+            if (e.data.sbxWafVue && e.data.onglet) { const f = document.getElementById('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue); }
         });
+        // onglet -> page autonome (#2354)
+        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes' };
         function switchTab(name) {
             document.querySelectorAll('#wafTabs .waf-tab').forEach(b =>
                 b.classList.toggle('active', b.dataset.tab === name));
@@ -1415,6 +1421,17 @@
                 el.style.display = on ? '' : 'none');
             const overview = name === 'overview';
             const vc = document.getElementById('vueCard'); if (vc) vc.style.display = (name === 'vue') ? '' : 'none';
+            const pc = document.getElementById('pageCard'); const page = WAF_PAGES[name];
+            if (pc) pc.style.display = page ? '' : 'none';
+            show('.stats-grid, .live-attack-banner', !page);   // la page d'onglet porte ses propres tuiles
+            if (page) {
+                // La page autonome remplace le contenu d'origine, qui reste dans le DOM (masqué) pour le reste du script.
+                show('.grid-2, .eyemote-card, .overview-only, .recon-card', false);
+                ['trackedAttackersCard', 'visitsCard', 'historyCard', 'campaignsCard'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+                const f = document.getElementById('pageFrame');
+                if (f && f.dataset.p !== page) { f.dataset.p = page; f.style.height = '1200px'; f.src = page + '.html?embed=1'; }
+                return;
+            }
             show('.grid-2', overview);
             show('.eyemote-card', overview);
             // By Severity / By Category / Top Attacked Sites : onglet Menaces seul (#1369).

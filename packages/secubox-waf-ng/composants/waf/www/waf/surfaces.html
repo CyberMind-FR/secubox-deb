@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « SBXWAF », onglet Surfaces : ce qui est sondé (surfaces, comptes visés, leurres touchés, pays d'origine, noms non servis).
+  Une seule page, deux mises en page : CARTE compacte une colonne (?embed=1 ou < 900 px) / TABLEAU DE BORD multi-colonnes (≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API du WAF : /stats, lue en session). Une mesure absente s'affiche « — », jamais 0.
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBXWAF — surfaces de reconnaissance</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .carte{display:grid;gap:8px;grid-template-columns:1fr}
+  svg.monde{width:100%;height:auto;display:block;border-radius:8px}
+  .pays{display:grid;gap:3px;align-content:start;font-size:.78rem}
+  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 80px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .ligne .n code{font-family:ui-monospace,"IBM Plex Mono",monospace;font-size:.74rem}
+  .ligne.ent{color:var(--faible);font-size:.68rem}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .surf{display:grid;grid-template-columns:minmax(0,1fr) auto 90px;gap:2px 8px;align-items:center;font-size:.8rem;padding:5px 0;border-top:1px solid rgba(86,150,255,.10)}
+  .surf:first-child{border-top:0}
+  .surf .n{font-weight:700} .surf .n em{font-style:normal;font-weight:400;color:var(--faible);font-size:.68rem;display:block}
+  .surf span{text-align:right;color:var(--doux);font-variant-numeric:tabular-nums} .surf span b{color:var(--texte)}
+  .moteurs{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;color:var(--doux);font-size:.74rem} .moteurs b{color:var(--texte);font-variant-numeric:tabular-nums}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1fr 1.2fr} .g3{grid-template-columns:1fr 1fr 1fr} .carte{grid-template-columns:1fr 130px}}
+</style>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg><span><b>SBXWAF</b><small>Surfaces de reconnaissance</small></span></span>
+    <span class="actif" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Surfaces</h2><div class="sous">Ce qui est sondé : services visés, comptes tentés, leurres touchés, origines et noms que la box ne sert pas.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Surfaces les plus sondées <i>sbxwaf voit le HTTP ; authwatch le reste</i></h3><div id="surfaces"></div><div class="moteurs" id="moteurs"></div></div>
+    <div class="pan"><h3>Pays d’origine <i>pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="monde" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des requêtes"></svg><div class="pays" id="pays"></div></div><div class="note" id="geoNote"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Comptes visés <i>SSH, SMTP, IMAP</i></h3><div id="comptes"></div><div class="note">Un compte tenté depuis des centaines de sources n’est pas un utilisateur qui se trompe : s’il n’existe pas sur la box, c’est du ciblage.</div></div>
+    <div class="pan"><h3>Leurres touchés <i>services inexistants</i></h3><div id="leurres"></div><div class="note">Ces ports n’offrent rien : toute connexion y est un balayage, et vaut un bannissement dès le premier contact.</div></div>
+    <div class="pan"><h3>Requêtes non servies <i id="nsNote"></i></h3><div id="nonservis"></div><div class="note">Ces noms reçoivent un 421 : aucun vhost ne leur répond. La liste désigne aussi les vhosts qui manquent.</div></div>
+  </div>
+  <div class="note">Aucun blocage sur un seul signal · actions réversibles · chaque décision est écrite dans le journal d’audit.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var PAL=['#ff4d5e','#a78bfa','#3b82f6','#ff9f1c','#29b6f6','#2ecc71','#ffd23f'];
+  function ic(c,corps){return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="'+c+'" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+corps+'</svg>';}
+  var IC={
+    surf:ic('#3b82f6','<circle cx="12" cy="5" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M12 7v5M12 12L6 17M12 12l6 5"/>'),
+    cpt:ic('#ff4d5e','<circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#ff4d5e"/>'),
+    leu:ic('#a78bfa','<path d="M4 12c3-5 13-5 16 0-3 5-13 5-16 0z" fill="rgba(167,139,250,.14)"/><circle cx="12" cy="12" r="2.2"/>'),
+    pays:ic('#29b6f6','<circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'),
+    ns:ic('#ff9f1c','<rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(255,159,28,.14)"/><path d="M9 9l6 6M15 9l-6 6"/>')
+  };
+  var SURF={http:['HTTP','sbxwaf, devant les services'],ssh:['SSH','échecs d’authentification'],smtp:['SMTP','SASL refusé sur postfix'],imap:['IMAP','connexions dovecot'],leurre:['Leurres','services inexistants'],autre:['Autre','type non classé']};
+  function tuile(i,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+i+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+  var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  function monde(pays){
+    var s='<defs><radialGradient id="lueur"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".95"/><stop offset="1" stop-color="#ff4d5e" stop-opacity="0"/></radialGradient></defs><rect width="120" height="60" fill="rgba(6,13,27,.5)"/>';
+    TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
+      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)s+='<circle cx="'+(x+i+.5)+'" cy="'+(j+.5)+'" r=".42" fill="#33507f"/>';}x+=n;cur=!cur;});});
+    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+    pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
+      s+='<circle cx="'+((c[1]+180)/3).toFixed(1)+'" cy="'+((90-c[0])/3).toFixed(1)+'" r="'+(1.4+3.4*Math.sqrt(num(p.n)/max)).toFixed(1)+'" fill="url(#lueur)"><title>'+esc(p.code)+' : '+fmt(p.n)+'</title></circle>';});
+    return s;
+  }
+  // dictionnaire {clé: n} ou liste [{country,count}] -> [[clé, n]] trié
+  function paires(o,kc,kn){
+    var r=[];
+    if(Array.isArray(o)) o.forEach(function(x){if(x&&x[kc]!=null)r.push([String(x[kc]),num(x[kn])]);});
+    else if(o&&typeof o==='object') Object.keys(o).forEach(function(k){r.push([k,num(o[k])]);});
+    else return null;
+    return r.filter(function(x){return x[1]>0;}).sort(function(a,b){return b[1]-a[1];});
+  }
+  function liste(cible,p,ent,couleur,vide,code){
+    var e=el(cible);
+    if(!p){e.innerHTML='<div class="vide">Session requise.</div>';return;}
+    if(!p.length){e.innerHTML='<div class="vide">'+esc(vide)+'</div>';return;}
+    var m=p[0][1];
+    e.innerHTML='<div class="ligne ent"><span style="text-align:left">'+esc(ent[0])+'</span><span>'+esc(ent[1])+'</span><span></span></div>'
+      +p.slice(0,10).map(function(x){return '<div class="ligne"><span class="n" title="'+esc(x[0])+'" style="text-align:left">'+(code?'<code>'+esc(x[0])+'</code>':esc(x[0]))+'</span><span>'+fmt(x[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*x[1]/m)+'%;background:'+couleur+'"></i></div></div>';}).join('');
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.stats);
+    var s=d.stats,a=el('actif');
+    a.textContent=s?'ACTIF':'HORS LIGNE';a.classList.toggle('hors',!s);
+    var N=function(v){return v==null?'—':fmt(v);};
+    var pt=s&&s.par_type?paires(s.par_type,0,0):null,po=s&&s.par_origine||null;
+    var cpt=s?paires(s.comptes_vises):null,leu=s?paires(s.leurres_touches):null,ns=s?paires(s.noms_non_routes):null;
+    var pays=s?paires(s.pays||s.top_countries,'country','count'):null;
+    var cptN=cpt?cpt.reduce(function(t,x){return t+x[1];},0):null,leuN=leu?leu.reduce(function(t,x){return t+x[1];},0):null;
+    var nsTot=s&&s.noms_non_routes_total!=null?num(s.noms_non_routes_total):(ns?ns.reduce(function(t,x){return t+x[1];},0):null);
+    var nsDist=s&&s.noms_non_routes_distincts!=null?num(s.noms_non_routes_distincts):(ns?ns.length:null);
+    el('tuiles').innerHTML=
+      tuile(IC.surf,N(pt&&pt.length),'Surfaces sondées',pt&&pt.length?pt.slice(0,4).map(function(x){return x[0];}).join(', '):'','Types de trafic ayant produit des événements (http, ssh, smtp, imap, leurres…).')
+     +tuile(IC.cpt,N(cpt&&cpt.length),'Comptes visés',cptN!=null?fmt(cptN)+' tentatives':'','Comptes distincts tentés en SSH, SMTP ou IMAP (relevé par authwatch).')
+     +tuile(IC.leu,N(leu&&leu.length),'Leurres touchés',leuN!=null?fmt(leuN)+' contacts':'','Services inexistants contactés : tout contact est un balayage.')
+     +tuile(IC.pays,N(pays&&pays.length),'Pays d’origine',pays&&pays.length?'déduits de l’adresse':'','Pays distincts déduits de l’adresse source, sur l’ensemble du journal de menaces.')
+     +tuile(IC.ns,N(nsTot),'Requêtes non servies',nsDist!=null?fmt(nsDist)+' noms distincts':'','Noms demandés auxquels aucun vhost ne répond (421).');
+    // surfaces
+    if(!pt) el('surfaces').innerHTML='<div class="vide">Session requise.</div>';
+    else if(!pt.length) el('surfaces').innerHTML='<div class="vide">Aucun événement classé pour l’instant : authwatch ne lit que ce qui survient après son démarrage.</div>';
+    else{var tot=pt.reduce(function(t,x){return t+x[1];},0)||1,m=pt[0][1];
+      el('surfaces').innerHTML=pt.map(function(x,i){var inf=SURF[x[0]]||[x[0].toUpperCase(),''];
+        return '<div class="surf"><div class="n">'+esc(inf[0])+'<em>'+esc(inf[1])+'</em></div><span><b>'+fmt(x[1])+'</b> · '+(x[1]*100<tot?'< 1':Math.round(100*x[1]/tot))+' %</span><div class="barre"><i style="width:'+Math.max(4,100*x[1]/m)+'%;background:'+PAL[i%7]+'"></i></div></div>';}).join('');}
+    var w=po?num(po.waf):0,au=po?num(po.authwatch):0;
+    el('moteurs').innerHTML=(w||au)?'<span>Moteurs</span><span>sbxwaf <b>'+fmt(w)+'</b></span><span>authwatch <b>'+fmt(au)+'</b></span>':'';
+    // pays
+    el('monde').innerHTML=monde((pays||[]).map(function(p){return {code:p[0],n:p[1]};}));
+    el('pays').innerHTML=pays&&pays.length?pays.slice(0,8).map(function(p){return '<div><span>'+drapeau(p[0])+' '+esc(p[0])+'</span><b>'+fmt(p[1])+'</b></div>';}).join(''):'<div class="vide">'+(pays?'Aucune géolocalisation.':'Session requise.')+'</div>';
+    el('geoNote').textContent=pays&&pays.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':'';
+    liste('comptes',cpt,['Compte','Tentatives'],'var(--rouge)','Aucune tentative d’authentification enregistrée pour l’instant.',true);
+    liste('leurres',leu,['Service','Contacts'],'var(--violet)','Aucun leurre touché pour l’instant.',true);
+    liste('nonservis',ns,['Nom demandé','Requêtes'],'var(--orange)','Aucun nom non servi.',true);
+    el('nsNote').textContent=nsDist?fmt(nsDist)+' noms · '+fmt(nsTot)+' requêtes':'';
+    hauteur();
+  }
+  var DEMO={demo:true,stats:{
+    par_type:{http:1228856,leurre:24581,smtp:18151,ssh:17458,imap:3210,autre:914},par_origine:{waf:1228856,authwatch:64314},
+    comptes_vises:{root:9120,admin:3480,ubuntu:1210,postmaster:870,test:640,oracle:402,pi:318,'info@secubox.in':190},
+    leurres_touches:{'telnet/23':6120,'mysql/3306':4210,'rdp/3389':3880,'redis/6379':2410,'vnc/5900':1320,'smb/445':980},
+    pays:{US:2224,DE:532,GB:421,CN:398,NL:310,FR:287,SG:198,RU:142,BR:96,IN:88,JP:61,CA:44},
+    noms_non_routes:{'wp-admin.secubox.in':4120,'mail.old.secubox.in':1830,'phpmyadmin.gk2.secubox.in':1240,'vpn.secubox.in':760,'git.secubox.in':410,'cpanel.secubox.in':220},
+    noms_non_routes_total:8580,noms_non_routes_distincts:6}};
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  // hauteur annoncée à la page /waf/ qui encadre : pas de défilement interne
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'surfaces'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
+  if(q.get('demo')){rend(DEMO);return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){jget('/api/v1/waf/stats').then(function(s){rend({stats:s&&typeof s==='object'?s:null});});}
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  setInterval(function(){if(!document.hidden)charge();},30000);
+})();
+</script>

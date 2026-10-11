@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « SBXWAF », le pare-feu applicatif : campagnes d'attaque. Page autonome en LECTURE SEULE, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px) : plusieurs colonnes.
+  DONNÉES RÉELLES UNIQUEMENT (API du WAF, lues en session) :
+    /campaigns  → signature, outil, attaquants[], nb_attaquants, sondes, haute_valeur, exemple_sequence[] ;
+    /alerts     → recoupées par adresse pour dater, situer (cible, pays, catégories, gravité) chaque campagne ;
+    /bans       → adresses effectivement bannies (nft).
+  Le corrélateur ne date ni ne situe ses campagnes : ces champs viennent du recoupement avec les alertes récentes et
+  se disent « — » quand le recoupement ne trouve rien. Une mesure absente s'affiche « — », jamais 0.
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBXWAF — campagnes d’attaque</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .v.txt{font-size:1rem;line-height:1.15}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  svg.frise{width:100%;height:auto;display:block} svg.frise text{fill:var(--faible);font-size:9.5px} svg.frise text.nom{fill:var(--doux);font-size:10px} svg.frise .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:4px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
+  svg.donut{width:120px;height:120px;display:block}
+  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ligne{display:grid;grid-template-columns:1fr auto 80px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .cartes{display:grid;gap:10px;grid-template-columns:1fr}
+  .camp{border:1px solid var(--trait);border-left:3px solid var(--cyan);border-radius:12px;padding:10px 12px;background:linear-gradient(160deg,rgba(18,40,78,.55),rgba(8,18,38,.6));display:grid;gap:7px;min-width:0;align-content:start}
+  .camp.active{border-left-color:var(--rouge)} .camp.bannie{border-left-color:var(--orange)} .camp.terminee{border-left-color:var(--faible)}
+  .camp .tt{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .camp .nom{font-weight:700;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .camp code{color:var(--faible);font-size:.68rem}
+  .pastille{display:inline-block;border-radius:999px;padding:1px 9px;font-size:.66rem;font-weight:700;letter-spacing:.03em;border:1px solid currentColor;white-space:nowrap}
+  .pastille.etat{margin-left:auto}
+  .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .kv div{background:rgba(6,13,27,.45);border-radius:8px;padding:5px 8px;min-width:0}
+  .kv b{display:block;font-size:1.05rem;font-variant-numeric:tabular-nums} .kv small{color:var(--faible);font-size:.64rem}
+  .ln{display:grid;grid-template-columns:76px 1fr;gap:8px;font-size:.74rem;color:var(--doux);align-items:baseline}
+  .ln>span:first-child{color:var(--faible);font-size:.68rem}
+  .ln>span:last-child{min-width:0;overflow-wrap:anywhere}
+  .puces{display:flex;flex-wrap:wrap;gap:4px}
+  .puce{background:rgba(59,130,246,.16);border:1px solid var(--trait);border-radius:6px;padding:0 6px;font-size:.68rem;color:var(--texte);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .puce.ip{font-family:ui-monospace,"IBM Plex Mono",monospace;background:rgba(255,77,94,.12)}
+  .seq{display:flex;flex-wrap:wrap;gap:3px;align-items:center;color:var(--faible);font-size:.66rem}
+  .seq .puce{background:rgba(167,139,250,.14)}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}.cartes{grid-template-columns:1fr 1fr}}
+  @container a (max-width:599px){.repart{grid-template-columns:100px 1fr}svg.donut{width:100px;height:100px}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.5fr 1fr} .g2{grid-template-columns:1fr 1fr} .cartes{grid-template-columns:repeat(3,1fr)}}
+  @container a (max-width:599px){svg.frise text{font-size:15px}svg.frise text.nom{font-size:16px}}
+  body.emb .cartes{grid-template-columns:1fr !important}
+  body.emb .tuiles{grid-template-columns:repeat(2,1fr) !important}
+  body.emb .grille{grid-template-columns:1fr !important}
+</style>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg><span><b>SBXWAF</b><small>Web Application Firewall</small></span></span>
+    <span class="actif neutre" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Campagnes d’attaque</h2><div class="sous">Des adresses différentes, un même mode opératoire : mêmes sondes, même outil, corrélés à travers le temps.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Frise chronologique <i id="frNote">premier et dernier signe</i></h3><div id="frise"></div><div class="legende" id="legFrise"></div></div>
+    <div class="pan"><h3>Répartition par catégorie <i>événements des campagnes</i></h3><div class="repart"><div id="donut"></div><div class="leg" id="cats"></div></div></div>
+  </div>
+  <div class="pan"><h3>Une carte par campagne <i id="cNote"></i></h3><div class="cartes" id="cartes"></div></div>
+  <div class="grille g2">
+    <div class="pan"><h3>Répartition par pays <i>adresses recoupées</i></h3><div id="pays"></div></div>
+    <div class="pan"><h3>Cibles les plus visées <i>événements des campagnes</i></h3><div id="cibles"></div></div>
+  </div>
+  <div class="note" id="noteBas">Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var PAL=['#ff4d5e','#a78bfa','#3b82f6','#ff9f1c','#29b6f6','#2ecc71','#ffd23f'];
+  var RANG={info:0,audit:0,low:1,medium:2,high:3,critical:4};
+  var GRAV=[['—','#6f84a8'],['Faible','#ffd23f'],['Moyenne','#ff9f1c'],['Haute','#ff4d5e'],['Critique','#ff4d5e']];
+  var ETAT={active:['ACTIVE','#ff4d5e'],bannie:['BANNIE','#ff9f1c'],terminee:['TERMINÉE','#6f84a8'],inconnu:['ÉTAT INCONNU','#6f84a8']};
+  var RECENT=6*3600*1000;
+  var IC={
+    camp:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L5 14h6l-1 7 8-11h-6z" fill="rgba(255,77,94,.16)"/></svg>',
+    ip:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><circle cx="6" cy="7" r="2.2"/><circle cx="18" cy="7" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M8 8l3 8M16 8l-3 8M8.2 7h7.6" fill="none"/></svg>',
+    req:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(59,130,246,.16)"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+    der:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M12 7v5l3.5 2"/></svg>',
+    ban:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,159,28,.14)"/><path d="M6 6l12 12"/></svg>'
+  };
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  function tuile(ic,v,l,s,def,txt){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div style="min-width:0"><div class="l">'+esc(l)+'</div><div class="v'+(txt?' txt':'')+'">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  function ts(x){var t=Date.parse(x);return isFinite(t)?t:null;}
+  function complet(t){return new Date(t).toLocaleString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+  function relatif(t,now){
+    if(t==null) return '—';var d=Math.max(0,now-t)/1000;
+    if(d<90) return 'à l’instant';if(d<3600) return 'il y a '+Math.round(d/60)+' min';
+    if(d<86400) return 'il y a '+Math.round(d/3600)+' h';return 'il y a '+Math.round(d/86400)+' j';
+  }
+  function tempsHtml(t,now){return t==null?'—':'<span title="'+esc(complet(t))+'">'+esc(relatif(t,now))+'</span>';}
+  function court(t){return new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
+  function top(map,n){return Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,n);}
+
+  // Recoupe campagnes / alertes / bans : tout ce que le corrélateur ne dit pas lui-même.
+  function enrichit(camps,alertes,bans,now){
+    var parIp={};(alertes||[]).forEach(function(a){var k=a.client_ip;if(k)(parIp[k]=parIp[k]||[]).push(a);});
+    var bannies={};(bans||[]).forEach(function(b){if(b.ip)bannies[b.ip]=true;});
+    return camps.map(function(c){
+      var ips=(c.attaquants||[]).map(String),cats={},hosts={},pays={},first=null,last=null,sev=0,evts=0,nban=0,vus={};
+      ips.forEach(function(ip){
+        if(bans&&bannies[ip]) nban++;
+        (parIp[ip]||[]).forEach(function(a){
+          evts++;var t=ts(a.timestamp);
+          if(t!=null){if(first==null||t<first)first=t;if(last==null||t>last)last=t;}
+          if(a.category) cats[a.category]=(cats[a.category]||0)+1;
+          if(a.host) hosts[a.host]=(hosts[a.host]||0)+1;
+          if(a.country&&!vus[ip]){pays[a.country]=(pays[a.country]||0)+1;vus[ip]=1;}
+          sev=Math.max(sev,RANG[a.severity]||0);
+        });
+      });
+      if(!evts&&num(c.haute_valeur)>0) sev=3;
+      var etat='inconnu';
+      if(bans&&nban>0) etat='bannie';
+      else if(last!=null) etat=(now-last<RECENT)?'active':'terminee';
+      return {sig:String(c.signature||''),outil:c.outil||'',ips:ips,n:num(c.nb_attaquants)||ips.length,sondes:num(c.sondes),hv:num(c.haute_valeur),
+        seq:(c.exemple_sequence||[]).map(String),cats:cats,hosts:hosts,pays:pays,first:first,last:last,sev:sev,evts:evts,nban:nban,etat:etat,bansConnus:!!bans};
+    });
+  }
+  function frise(L,now){
+    var D=L.filter(function(c){return c.first!=null;}).slice(0,10);
+    if(!D.length) return '<div class="vide">Aucune campagne datable : le recoupement avec les alertes récentes n’a rien trouvé.</div>';
+    var t0=Math.min.apply(null,D.map(function(c){return c.first;})),t1=Math.max(now,Math.max.apply(null,D.map(function(c){return c.last;}))),span=Math.max(t1-t0,60000);
+    var W=560,LM=118,RM=10,T=6,RH=24,H=T+D.length*RH+20,x=function(t){return LM+(t-t0)/span*(W-LM-RM);},g='';
+    for(var k=0;k<=4;k++){var X=LM+k*(W-LM-RM)/4;g+='<line class="gr" x1="'+X+'" y1="'+T+'" x2="'+X+'" y2="'+(H-18)+'"/>'+(k%2?'':'<text x="'+X+'" y="'+(H-5)+'" text-anchor="'+(k===0?'start':k===4?'end':'middle')+'">'+esc(court(t0+span*k/4))+'</text>');}
+    D.forEach(function(c,i){
+      var y=T+i*RH,col=ETAT[c.etat][1],x1=x(c.first),x2=Math.max(x(c.last),x1+5),nom=c.outil||c.sig.slice(0,8);
+      if(nom.length>17) nom=nom.slice(0,16)+'…';
+      g+='<text class="nom" x="'+(LM-8)+'" y="'+(y+15)+'" text-anchor="end">'+esc(nom)+'</text><rect x="'+LM+'" y="'+(y+3)+'" width="'+(W-LM-RM)+'" height="'+(RH-8)+'" rx="4" fill="rgba(159,179,214,.06)"/>'
+        +'<rect x="'+x1.toFixed(1)+'" y="'+(y+5)+'" width="'+(x2-x1).toFixed(1)+'" height="'+(RH-12)+'" rx="3.5" fill="'+col+'" opacity=".9"><title>'+esc((c.outil||c.sig)+' : '+court(c.first)+' → '+court(c.last)+' · '+fmt(c.n)+' adresse(s)')+'</title></rect>';
+    });
+    return '<svg class="frise" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Frise chronologique des campagnes">'+g+'</svg>';
+  }
+  function donut(items){
+    var tot=items.reduce(function(t,c){return t+c[1];},0),R=46,C=2*Math.PI*R,off=0,s='';
+    items.forEach(function(c,i){var len=C*c[1]/(tot||1);s+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+PAL[i%7]+'" stroke-width="16" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+esc(c[0])+' : '+fmt(c[1])+'</title></circle>';off+=len;});
+    return '<svg class="donut" viewBox="0 0 120 120" role="img" aria-label="Répartition par catégorie"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(159,179,214,.12)" stroke-width="16"/>'+s+'<text x="60" y="58" text-anchor="middle" fill="#eaf1ff" font-size="19" font-weight="700">'+fmt(tot)+'</text><text x="60" y="73" text-anchor="middle" fill="#9fb3d6" font-size="9">événements</text></svg>';
+  }
+  function barres(items,coul){
+    var m=items.length?items[0][1]:1;
+    return items.map(function(c,i){return '<div class="ligne"><span class="n" title="'+esc(c[0])+'" style="text-align:left">'+esc(c[2]||c[0])+'</span><span>'+fmt(c[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*c[1]/m)+'%;background:'+(coul||PAL[i%7])+'"></i></div></div>';}).join('');
+  }
+  function carte(c,now){
+    var g=GRAV[c.sev],e=ETAT[c.etat],nom=c.outil||('empreinte '+c.sig.slice(0,8));
+    var cat=top(c.cats,4),cible=top(c.hosts,1),pays=top(c.pays,3);
+    var ips=c.ips.slice(0,4).map(function(p){return '<span class="puce ip" title="'+esc(p)+'">'+esc(p)+'</span>';}).join('')+(c.ips.length>4?'<span class="puce">+'+(c.ips.length-4)+'</span>':'');
+    var seq=c.seq.slice(0,6).map(function(s){return '<span class="puce" title="'+esc(s)+'">'+esc(s)+'</span>';}).join('<span>→</span>')+(c.seq.length>6?'<span>…</span>':'');
+    return '<div class="camp '+c.etat+'"><div class="tt"><span class="nom" title="'+esc(nom)+'">'+esc(nom)+'</span><code title="Empreinte du mode opératoire">'+esc(c.sig.slice(0,8))+'</code><span class="pastille etat" style="color:'+e[1]+'" title="'+esc(c.etat==='bannie'&&c.bansConnus?c.nban+' adresse(s) sur '+c.n+' bannie(s)':c.etat==='active'?'Dernier signe il y a moins de 6 h':c.etat==='terminee'?'Dernier signe il y a plus de 6 h':'Aucune alerte récente ne permet de conclure')+'">'+e[0]+(c.etat==='bannie'?' '+c.nban+'/'+c.n:'')+'</span></div>'
+      +'<div class="kv"><div title="Adresses regroupées dans la campagne"><b>'+fmt(c.n)+'</b><small>adresses</small></div><div title="Sondes cumulées du mode opératoire"><b>'+fmt(c.sondes)+'</b><small>sondes</small></div><div title="Gravité maximale des alertes recoupées (ou haute valeur si des ressources sensibles sont visées)"><b style="color:'+g[1]+'">'+esc(g[0])+'</b><small>gravité</small></div></div>'
+      +'<div class="ln"><span>Cible</span><span>'+(cible.length?esc(cible[0][0])+(Object.keys(c.hosts).length>1?' <small style="color:var(--faible)">+'+(Object.keys(c.hosts).length-1)+'</small>':''):'—')+'</span></div>'
+      +'<div class="ln"><span>Catégories</span><span class="puces">'+(cat.length?cat.map(function(k){return '<span class="puce" title="'+esc(k[0])+' : '+fmt(k[1])+'">'+esc(k[0])+'</span>';}).join(''):'—')+'</span></div>'
+      +'<div class="ln"><span>Premier signe</span><span>'+tempsHtml(c.first,now)+'</span></div>'
+      +'<div class="ln"><span>Dernier signe</span><span>'+tempsHtml(c.last,now)+'</span></div>'
+      +'<div class="ln"><span>Pays</span><span>'+(pays.length?pays.map(function(p){return drapeau(p[0])+' '+esc(p[0]);}).join(' · '):'—')+'</span></div>'
+      +'<div class="ln"><span>Haute valeur</span><span>'+(c.hv>0?fmt(c.hv)+' sonde(s) visant secrets, exécution ou admin':'—')+'</span></div>'
+      +'<div class="ln"><span>Adresses</span><span class="puces">'+(ips||'—')+'</span></div>'
+      +(c.seq.length?'<div class="ln"><span>Séquence</span><span class="seq">'+seq+'</span></div>':'')+'</div>';
+  }
+  var dernier=null;
+  function rend(d){
+    var now=d.now||Date.now();
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.campaigns);
+    var camps=d.campaigns&&d.campaigns.campagnes||null,a=el('actif');
+    if(!d.campaigns){a.textContent='SESSION REQUISE';a.className='actif neutre';}
+    else if(d.campaigns.available===false){a.textContent='CORRÉLATEUR PAS ENCORE PASSÉ';a.className='actif neutre';}
+    else{a.textContent=camps.length?camps.length+' CAMPAGNE'+(camps.length>1?'S':'')+' CORRÉLÉE'+(camps.length>1?'S':''):'AUCUNE CAMPAGNE';a.className='actif'+(camps.length?' hors':'');}
+    var L=camps?enrichit(camps,d.alerts,d.bans,now).sort(function(x,y){return y.sondes-x.sondes;}):[];
+    var N=function(v){return v==null?'—':fmt(v);},ok=!!camps;
+    var actives=ok&&(d.alerts||d.bans)?L.filter(function(c){return c.etat==='active';}).length:null;
+    var adr=ok?num(d.campaigns.attaquants)||L.reduce(function(t,c){return t+c.n;},0):null;
+    var req=ok?L.reduce(function(t,c){return t+c.sondes;},0):null;
+    var dern=L.filter(function(c){return c.last!=null;}).sort(function(x,y){return y.last-x.last;})[0];
+    var banIps=null;if(ok&&d.bans){banIps=0;L.forEach(function(c){banIps+=c.nban;});}
+    var DD='Dernier signe d’activité parmi les campagnes (recoupement avec les alertes récentes).';
+    el('tuiles').innerHTML=
+      tuile(IC.camp,N(actives),'Campagnes actives','dernier signe < 6 h'+(ok?' · sur '+L.length:''),'Campagnes dont une adresse a produit une alerte il y a moins de 6 heures (recoupement avec les alertes récentes).')
+     +tuile(IC.ip,N(adr),'Adresses impliquées','toutes campagnes','Adresses ou empreintes d’attaquants regroupées dans des campagnes.')
+     +tuile(IC.req,N(req),'Requêtes totales','sondes cumulées','Total des sondes observées pour l’ensemble des campagnes (journal du WAF, fenêtre de rétention).')
+     +tuile(IC.der,dern?tempsHtml(dern.last,now):'—','Dernière campagne',dern?(dern.outil||dern.sig.slice(0,8)):'',DD,true)
+     +tuile(IC.ban,N(banIps),'Bannies automatiquement','adresses de campagnes bloquées','Adresses de campagnes actuellement présentes dans l’ensemble de bannissement du pare-feu.');
+    // frise
+    el('frise').innerHTML=ok?(L.length?frise(L,now):'<div class="vide">Aucune campagne détectée.</div>'):'<div class="vide">Session requise.</div>';
+    el('legFrise').innerHTML=ok&&L.length?['active','bannie','terminee'].map(function(k){return '<span><i style="background:'+ETAT[k][1]+'"></i>'+ETAT[k][0].toLowerCase()+'</span>';}).join(''):'';
+    // catégories, pays, cibles : tout vient du recoupement
+    var cats={},pays={},hosts={};
+    L.forEach(function(c){Object.keys(c.cats).forEach(function(k){cats[k]=(cats[k]||0)+c.cats[k];});Object.keys(c.pays).forEach(function(k){pays[k]=(pays[k]||0)+c.pays[k];});Object.keys(c.hosts).forEach(function(k){hosts[k]=(hosts[k]||0)+c.hosts[k];});});
+    var cl=top(cats,6),rest=Object.keys(cats).reduce(function(t,k){return t+cats[k];},0)-cl.reduce(function(t,c){return t+c[1];},0);
+    if(rest>0) cl.push(['autres',rest]);
+    el('donut').innerHTML=cl.length?donut(cl):donut([]).replace('>0<','>—<');
+    var tot=cl.reduce(function(t,c){return t+c[1];},0);
+    el('cats').innerHTML=cl.length?cl.map(function(c,i){return '<div><i style="background:'+PAL[i%7]+'"></i><span title="'+esc(c[0])+'">'+esc(c[0])+'</span><b>'+Math.round(100*c[1]/tot)+'%</b></div>';}).join(''):'<div class="vide">'+(ok?'Aucune catégorie recoupée.':'Session requise.')+'</div>';
+    var pl=top(pays,8).map(function(p){return [p[0],p[1],drapeau(p[0])+' '+p[0]];});
+    el('pays').innerHTML=pl.length?barres(pl):'<div class="vide">'+(ok?'Aucun pays recoupé.':'Session requise.')+'</div>';
+    var hl=top(hosts,6);
+    el('cibles').innerHTML=hl.length?barres(hl,'var(--rouge)'):'<div class="vide">'+(ok?'Aucune cible recoupée.':'Session requise.')+'</div>';
+    // cartes
+    el('cNote').textContent=ok&&L.length?L.length+' campagne'+(L.length>1?'s':'')+', par volume de sondes':'';
+    el('cartes').innerHTML=ok&&L.length?L.map(function(c){return carte(c,now);}).join(''):'<div class="vide">'+(!ok?'Session requise.':d.campaigns.available===false?'Le corrélateur n’est pas encore passé : aucune campagne à afficher.':'Aucune campagne détectée.')+'</div>';
+    var nr=L.filter(function(c){return !c.evts;}).length;
+    el('noteBas').textContent='Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.'+(ok&&nr?' · '+nr+' campagne(s) sans alerte récente correspondante : dates, cible et pays « — ».':'')+(ok&&!d.bans?' · Bannissements indisponibles : état « bannie » non évalué.':'');
+    dernier=Date.now();
+    el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+  function demo(){
+    var n=Date.now(),h=3600000,iso=function(dt){return new Date(n-dt).toISOString();};
+    var al=[],mk=function(ip,dt,cat,host,pays,sev,act){al.push({timestamp:iso(dt),client_ip:ip,country:pays,category:cat,host:host,path:'/',severity:sev,action:act});};
+    ['57.141.0.17','57.141.0.57','57.141.3.58','57.141.3.42'].forEach(function(ip,i){mk(ip,(0.2+i*0.7)*h,'sql.injection','app.gk2.secubox.in','US','critical','banned');mk(ip,(5+i*3)*h,'sql.injection','api.secubox.in','US','high','banned');});
+    ['185.220.101.3','185.220.101.9','45.155.205.4'].forEach(function(ip,i){mk(ip,(1+i)*h,'fuzzer.scan','www.gk2.secubox.in',i===2?'NL':'DE','high','blocked');mk(ip,(20+i*6)*h,'traversal','www.gk2.secubox.in',i===2?'NL':'DE','medium','warning');});
+    ['103.27.8.2','103.27.8.19'].forEach(function(ip,i){mk(ip,(30+i*5)*h,'bots.malveillants','mail.secubox.in','CN','medium','warning');mk(ip,(44+i*4)*h,'bots.malveillants','mail.secubox.in','CN','medium','warning');});
+    ['91.92.241.7','91.92.241.8','91.92.242.1'].forEach(function(ip,i){mk(ip,(2+i*2)*h,'rce.exec','api.secubox.in','RU','critical','banned');mk(ip,(9+i)*h,'unauthorized','api.secubox.in','RU','high','blocked');});
+    return {demo:true,now:n,alerts:al,bans:[{ip:'57.141.0.17'},{ip:'57.141.0.57'},{ip:'91.92.241.7'}],
+      campaigns:{available:true,attaquants:12,campagnes:[
+        {signature:'089b4a5e1234',outil:'sqlmap',attaquants:['57.141.0.17','57.141.0.57','57.141.3.58','57.141.3.42'],nb_attaquants:4,sondes:5273,haute_valeur:312,exemple_sequence:['GET /index.php?id=#','GET /login','POST /login','GET /.env','GET /admin']},
+        {signature:'1392fa1c9876',outil:'nuclei',attaquants:['185.220.101.3','185.220.101.9','45.155.205.4'],nb_attaquants:3,sondes:2987,haute_valeur:40,exemple_sequence:['GET /','GET /.git/config','GET /wp-login.php','GET /phpmyadmin/']},
+        {signature:'7be0c4d2aa10',outil:'webshell-dropper',attaquants:['91.92.241.7','91.92.241.8','91.92.242.1'],nb_attaquants:3,sondes:864,haute_valeur:211,exemple_sequence:['POST /upload.php','GET /shell.php?cmd=id','GET /cgi-bin/']},
+        {signature:'c41d77e5f002',outil:'masscan-http',attaquants:['103.27.8.2','103.27.8.19'],nb_attaquants:2,sondes:410,haute_valeur:0,exemple_sequence:['GET /','HEAD /','GET /robots.txt']}]}};
+  }
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    if(q.get('demo')){rend(demo());return;}
+    var b='/api/v1/waf/';
+    Promise.all([jget(b+'campaigns'),jget(b+'alerts?limit=500'),jget(b+'bans')]).then(function(r){
+      var c=r[0]&&typeof r[0]==='object'&&Array.isArray(r[0].campagnes)||r[0]&&r[0].available===false?r[0]:null;
+      rend({campaigns:c,alerts:r[1]&&r[1].alerts||null,bans:r[2]&&Array.isArray(r[2].bans)?r[2].bans:null});
+    });
+  }
+  // encadrée par la page /waf/ : on lui dit sa hauteur pour qu'elle n'ait pas de défilement interne
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'campagnes'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);
+  if(window.ResizeObserver) new ResizeObserver(hauteur).observe(el('cadre'));
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  if(!q.get('demo')) setInterval(function(){if(document.visibilityState==='visible') charge();},30000);
+})();
+</script>
