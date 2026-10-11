@@ -575,7 +575,8 @@ def resume_statuts(statuts: Optional[dict]) -> str:
 
 def envoyer(pdf: bytes, destinataire: Optional[str] = None,
             portee: str = "Tous les vhosts", periode: str = "semaine",
-            resume: str = "") -> dict:
+            resume: str = "", objet: Optional[str] = None,
+            nom_fichier: Optional[str] = None, intro: Optional[str] = None) -> dict:
     """Expedie le PDF. Bloquant : thread/tache oneshot obligatoire.
 
     Deux modes selon la config `[rapport]` :
@@ -594,7 +595,7 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
         raise ValueError("adresse destinataire invalide")
 
     msg = EmailMessage()
-    msg["Subject"] = f"SecuBox — frequentation {portee} ({periode})"
+    msg["Subject"] = objet or f"SecuBox — frequentation {portee} ({periode})"
     msg["From"] = c["expediteur"]
     msg["To"] = dest
     bcc = c.get("copie_cachee")
@@ -602,7 +603,7 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
         # send_message honore Bcc dans l'enveloppe puis retire l'en-tete.
         msg["Bcc"] = bcc
     corps = (
-        f"Rapport de frequentation SecuBox.\n\n"
+        f"{intro or 'Rapport de frequentation SecuBox.'}\n\n"
         f"Portee  : {portee}\n"
         f"Periode : {periode}\n"
         f"Genere  : {datetime.now().strftime('%d/%m/%Y a %H:%M')}\n\n"
@@ -621,7 +622,7 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
     msg.set_content(corps)
     horodatage = datetime.now().strftime("%Y%m%d")
     msg.add_attachment(pdf, maintype="application", subtype="pdf",
-                       filename=f"secubox-frequentation-{horodatage}.pdf")
+                       filename=(nom_fichier or "secubox-frequentation-{date}.pdf").format(date=horodatage))
 
     # Le scan antivirus du relais peut attendre le réveil du LXC clamav (jusqu'à ~120 s au premier message
     # après un long repos) : la transaction SMTP reste ouverte autant de temps. 20 s coupaient l'envoi

@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — Rapport PDF quotidien de sécurité : WAF + Actor Intelligence + DPI (ref #2299)
+
+metrics 1.18.0 : PDF sombre à trois volets (style des vues du Hall), données réelles seulement, définitions, mesures non disponibles listées ; ancien PDF WAF via `format = "waf"`. dpi 1.10.0 : résumé agrégé écrit par `secubox-dpi-resume.timer` (le rapport ne lit pas l'API à jeton).
+
 ## 2026-10-11 — Guardian, Actor Intelligence, SBXWAF et DPI validés par le propriétaire : closes #2287, closes #2291, closes #2293
 
 Quatre vues d'ensemble fidèles aux infographies, déployées sur gk2 (ad-guard 1.11.0, webos 1.9.3, waf-ng 1.28.2, dpi 1.9.0). Modes d'Actor Intelligence : le mode réel d'application des décisions (WAF), pas le mode d'analyse d'actord.

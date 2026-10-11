@@ -1,3 +1,9 @@
+secubox-metrics (1.18.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport PDF quotidien de securite (#2299) : trois volets WAF, Actor Intelligence, DPI, au style des vues du Hall (theme sombre, tuiles, courbes, donuts, carte en points, barres), a la place du PDF WAF seul du service quotidien. Memes destinataires ([rapport.waf]) ; `format = "waf"` rend l'ancien PDF. Donnees reelles seulement : une source muette est un tiret et une ligne de « Mesures non disponibles », jamais un zero ; un resume DPI perime est annonce. Actor : vue reduite d'actord par son socket, mode global d'application des decisions. Page de definitions (unite, fenetre, source). envoyer() accepte objet, nom_fichier, intro (anciens appels inchanges). 12 tests. (2 echecs preexistants de test_vhost_stats, sans rapport.)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 00:30:00 +0200
+
 secubox-metrics (1.17.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-vhost-logs 1.1.1 : `sed -i --follow-symlinks`. Sans lui, sed remplacait le lien de sites-enabled par une COPIE, et sites-available divergeait en silence de ce que nginx charge (19 copies sur gk2, #2253). La sauvegarde de la passe garde aussi la CIBLE d'un lien, rendue telle quelle si nginx -t echoue. 1 test.

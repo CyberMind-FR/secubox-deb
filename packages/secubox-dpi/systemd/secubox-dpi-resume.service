@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Résumé DPI pour le rapport PDF quotidien (#2299) : un fichier JSON agrégé, en lecture seule, que le rapport lit sans jeton. Un passage, pas un démon.
+[Unit]
+Description=SecuBox DPI — résumé agrégé pour le rapport quotidien (#2299)
+After=secubox-dpi.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/dpi
+ExecStart=/usr/bin/python3 -m api.resume_rapport
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=120
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/cache/secubox/dpi
+ReadOnlyPaths=/var/lib/secubox/dpi /var/lib/secubox/ad-guard /etc/secubox/dpi
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+SystemCallArchitectures=native
