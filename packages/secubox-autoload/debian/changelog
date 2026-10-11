@@ -1,3 +1,9 @@
+secubox-autoload (0.5.2-1~bookworm1) bookworm; urgency=low
+
+  * Pre-rapports : la liste montre le NOM DE BOX saisi (box.nom du fichier de reponses) a cote du client du jeton (#2314). Avant, seul le client du jeton s'affichait (test-vm-lite2) alors que l'operateur a saisi essai-vm-lite. `box` est expose par l'API ; colonnes « Box (nom saisi) » et « Client (jeton) ». 2 tests (rouges sans le correctif).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:00:00 +0200
+
 secubox-autoload (0.5.1-1~bookworm1) bookworm; urgency=high
 
   * Le rapport final d'une box en mode LAN seul est accepte (#2319) : le domaine vide est admis (il etait refuse en 422, aucun rapport, aucun courrier). Texte « reseau local seulement ». Un domaine malforme reste refuse. Trouve par le test VirtualBox. 2 tests.
