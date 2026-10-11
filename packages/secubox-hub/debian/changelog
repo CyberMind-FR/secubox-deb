@@ -1,3 +1,9 @@
+secubox-hub (1.9.55-1~bookworm1) bookworm; urgency=low
+
+  * Les stats reseau ne sont plus marquees « perimees » en permanence (ref #2388) : le seuil de peremption (120 s) etait inferieur a la cadence du collecteur (120 s + 30 s de delai aleatoire, drop-in de cadence de secubox-core), si bien que « Reseau en direct » du SOC et l'onglet Reseau du Toolbox affichaient « COLLECTEUR ARRETE ? » collecteur en marche. Seuil porte a 360 s (deux cadences + marge) ; test lie au drop-in de cadence.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:00:00 +0200
+
 secubox-hub (1.9.54-1~bookworm1) bookworm; urgency=low
 
   * webui.conf : /api/v1/ndpid/ vise l'agregateur (#2335) ; la socket /run/secubox/ndpid.sock disparait avec le demon dedie de nDPId.
