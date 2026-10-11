@@ -8,6 +8,7 @@
   backfill-tags              extract #hashtags from pre-tags billets
   backfill-media             embed BBS /f/NN media into billets published before #1094
   backfill-embeds            promeut en embed les liens vidéo restés dans le corps
+  backfill-posters           donne une vignette (image d'aperçu ffmpeg) aux vidéos stockées sans (#2395)
 """
 from __future__ import annotations
 
@@ -118,6 +119,18 @@ async def _backfill_media(bbs_db: str, files_root: str) -> int:
         await conn.close()
 
 
+async def _backfill_posters() -> int:
+    """#2395 — vignette des vidéos déjà stockées sans. Idempotent ; une extraction qui échoue laisse la ligne telle quelle."""
+    from .services import backfill_media as bm
+    conn = await db.connect(now=_now())
+    try:
+        r = await bm.rattraper_posters(conn)
+        print(f"{r['vues']} vidéo(s) sans vignette, {r['faites']} vignette(s) créée(s)")
+        return 0
+    finally:
+        await conn.close()
+
+
 async def _backfill_embeds(dry: bool) -> int:
     """Rattrape les billets dont le lien vidéo est resté DANS LE CORPS (#1268).
 
@@ -184,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("username")
     sub.add_parser("seed")
     sub.add_parser("backfill-tags")
+    sub.add_parser("backfill-posters")
     spm = sub.add_parser("backfill-media")
     spm.add_argument("--bbs-db", default="/var/lib/secubox/bbs/index.db",
                      help="chemin de l'index SQLite du BBS (lecture seule)")
@@ -198,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_backfill_tags())
     if args.cmd == "backfill-media":
         return asyncio.run(_backfill_media(args.bbs_db, args.files_root))
+    if args.cmd == "backfill-posters":
+        return asyncio.run(_backfill_posters())
     if args.cmd == "backfill-embeds":
         return asyncio.run(_backfill_embeds(args.dry_run))
 

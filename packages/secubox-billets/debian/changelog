@@ -1,3 +1,9 @@
+secubox-billets (0.11.3-1~bookworm1) bookworm; urgency=medium
+
+  * Une video attachee a un billet a une vignette (ref #2395) : une image d'apercu extraite par ffmpeg (a 1 s, repli sur la premiere image, `<id>_t.jpg`) est enregistree comme vignette du media ; le fil et la carte du Hall montrent un apercu au lieu du placeholder, alors que la video se jouait deja sur la page du billet. La galerie d'images (page et fil classique) ne prend que les images : la video reste embarquee en ligne, sans doublon ni lightbox sur un mp4. Sans ffmpeg ou si l'extraction echoue : pas de vignette, jamais d'erreur. Rattrapage : `python -m api.manage backfill-posters`. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 13:00:00 +0200
+
 secubox-billets (0.11.2-1~bookworm1) bookworm; urgency=medium
 
   * POST /service/ephemere accepte vignette_url, https seulement (ref #2343) : l'image du flux est rapatriee en local (SSRF-gardee, sans navigateur) comme vignette du billet, au lieu d'une capture de page que les sites d'actualite refusent. 2 tests.

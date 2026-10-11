@@ -344,7 +344,10 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             else:
                 fn = await asyncio.to_thread(
                     media.store_raw, mid, processed["ext"], processed["data"])
-                await repo.add_media(conn, billet_id, filename=fn, thumb="",
+                # vignette d'une VIDÉO (#2395) : sans elle, la carte du fil reste un placeholder
+                poster = (await asyncio.to_thread(media.poster_video, mid, processed["data"], processed["ext"])
+                          if processed["kind"] == "video" else "")
+                await repo.add_media(conn, billet_id, filename=fn, thumb=poster,
                                      mime=processed["mime"], width=0, height=0,
                                      alt="", now=_now(request), ulid=mid)
         return skipped
