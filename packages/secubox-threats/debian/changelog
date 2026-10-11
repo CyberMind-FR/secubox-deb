@@ -1,3 +1,9 @@
+secubox-threats (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Webui refait au profil projet reference Aurora (ref #2362) : tuiles (alertes 24 h, IOC actifs, incidents ouverts, sources, score de risque), chronologie 24 h par gravite, jauge et classement du score, alertes recentes, IOC, incidents, sources en anneau, flux de renseignement, rapports. Lecture seule comme avant ; suit les champs reels de l'API (events, last_refresh) que l'ancienne page lisait sous d'autres noms. ?embed=1, ?demo=1 annonce, « — » sans mesure, hauteur annoncee (sbxThreatsVue). 6 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 00:00:00 +0200
+
 secubox-threats (1.3.2-1~bookworm1) bookworm; urgency=low
 
   * Suricata decommissionne (#2326) : plus de collecte eve.json, plus d'entree « Suricata » dans les sources d'alertes, plus de /var/log/suricata dans ReadWritePaths (son absence provoquait le crash 226/NAMESPACE de #494 bis), ai-insights sans l'option suricata_integration ni l'analyse. Les anciennes configurations qui portent la cle sont ignorees.
