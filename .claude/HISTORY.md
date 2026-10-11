@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — profiles 0.20.2 : régression de 0.20.1, premier-pas* ne sont plus protégés (ref #2315)
+
+Un protégé est démarré par l'apply ; les oneshot premier-pas-* ne sont jamais « actifs » → timeout → tout l'apply annulé, le parcours Auto-Load échouait à l'étape Services. Seul autoload-agent reste protégé.
+
 ## 2026-10-12 — premier-pas 0.5.2 : on peut choisir une option dans la console (ref #2312)
 
 Trouvé par le test VirtualBox : liste verticale, seules gauche/droite changeaient l'option, pied de page illisible. Haut/bas, +/-, espace et chiffres.

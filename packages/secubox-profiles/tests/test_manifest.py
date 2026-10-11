@@ -188,10 +188,12 @@ def test_le_coffre_est_protege():
     assert "vault" in PROTECTED_IDS
 
 
-def test_ceux_qui_pilotent_l_application_d_un_profil_sont_proteges(tmp_path):
-    """#2308 : `profilectl apply lite` arrêtait secubox-autoload-agent, qui le pilotait — le parcours mourait à 10/13. Même forçage que pour le cœur : le fichier ne décide pas."""
-    for mid in ("autoload-agent", "premier-pas", "premier-pas-appliquer", "premier-pas-console"):
-        assert mid in PROTECTED_IDS
-        f = tmp_path / f"{mid}.toml"
-        f.write_text(f'id="{mid}"\ncategory="infra"\nruntime="native"\nexposure="lan"\nunits=["secubox-{mid}.service"]\nprotected=false\n')
-        assert load_manifest(f).protected is True, mid
+def test_l_agent_auto_load_est_protege_mais_pas_les_oneshot_de_premier_pas(tmp_path):
+    """#2308 : `profilectl apply lite` arrêtait secubox-autoload-agent, qui le pilotait. #2315 : protéger les oneshot premier-pas-* faisait DÉMARRER des unités qui ne sont jamais « actives »
+    (timeout 300 s, TOUT l'apply annulé) — on ne protège que le service durable."""
+    assert "autoload-agent" in PROTECTED_IDS
+    f = tmp_path / "autoload-agent.toml"
+    f.write_text('id="autoload-agent"\ncategory="infra"\nruntime="native"\nexposure="lan"\nunits=["secubox-autoload-agent.service"]\nprotected=false\n')
+    assert load_manifest(f).protected is True                                    # forcé, quoi que dise le fichier
+    for mid in ("premier-pas", "premier-pas-appliquer", "premier-pas-console"):
+        assert mid not in PROTECTED_IDS, mid

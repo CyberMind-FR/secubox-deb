@@ -1,3 +1,9 @@
+secubox-profiles (0.20.2-1~bookworm1) bookworm; urgency=high
+
+  * Regression de 0.20.1 corrigee (#2315) : premier-pas, premier-pas-appliquer et premier-pas-console quittent PROTECTED_IDS. Un protege est DEMARRE par l'apply ; ces unites sont des oneshot (declenches par un .path ou conditionnes par un marqueur), jamais « actives » : « premier-pas-appliquer: etat non atteint (timeout) » annulait TOUT l'apply (rolled_back) et le parcours Auto-Load echouait a l'etape Services. Seul autoload-agent, service durable qui pilote l'apply, reste protege. Trouve par le test VirtualBox. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:30:00 +0200
+
 secubox-profiles (0.20.1-1~bookworm1) bookworm; urgency=high
 
   * Le moteur de profils n'arrete plus ce qui le pilote (#2308) : autoload-agent, premier-pas, premier-pas-appliquer et premier-pas-console rejoignent le noyau protege (PROTECTED_IDS, force par load_manifest quoi que dise le fichier). Trouve par le test VirtualBox d'Auto-Load : `profilectl apply --profile lite` (etape services) arretait secubox-autoload-agent, le parcours mourait a 10/13 et aucun rapport n'etait ecrit. 1 test (rouge sans le correctif). 3 echecs preexistants de test_web (wake), sans rapport.
