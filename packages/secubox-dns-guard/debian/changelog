@@ -1,3 +1,9 @@
+secubox-dns-guard (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Webuis dns-guard et network-anomaly refaits au profil projet reference Aurora (ref #2380) : tuiles, classement des domaines suspects, repartition par type, domaines les plus bloques, clients concernes, verification d'un domaine, listes du puits DNS avec leurs actions a l'identique (autoriser, sync, activer/desactiver, sources, whitelist, allowlist IP) et confirmation integree ; network-anomaly : etat du collecteur, histogramme 24 h, classement par score, lignes de base, acquittement. Le bouton Block de l'ancienne page, qui visait une route inexistante, n'est pas repris. ?embed=1, ?demo=1 annonce, hauteur annoncee (sbxVue).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:00:00 +0200
+
 secubox-dns-guard (1.3.1-1~bookworm1) bookworm; urgency=medium
 
   * network-anomaly collecte enfin (#2328) : la mesure et la detection n'etaient declenchees que par POST /detect, a la main — aucune metrique ne remontait, la page restait vide, les lignes de base ne se construisaient jamais (repertoire metrics vide depuis mai). Un passage chaque minute (secubox-network-anomaly-collecte.timer + unite oneshot durcie, python -m api.collecte) : mesure, historique, alertes ; un echec est dit sur stderr et sort en erreur. 4 tests.
