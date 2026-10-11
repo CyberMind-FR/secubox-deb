@@ -198,7 +198,7 @@ class Moteur:
             raise EtapeEchec("installation", "apt-get install a échoué : " + (r.stderr or "").strip()[:200])
 
     def _application(self, etat: dict):
-        for argv in (["premier-pasctl", "appliquer", "--profil", str(self.cfg.reponses)], ["secubox-profilectl", "apply", etat["plan"]["profil"], "--yes"]):
+        for argv in (["premier-pasctl", "appliquer", "--profil", str(self.cfg.reponses)], ["secubox-profilectl", "apply", "--profile", etat["plan"]["profil"], "--yes"]):
             r = self._cmd(argv, TIMEOUT_INSTALL_S)
             if r.returncode != 0:
                 raise EtapeEchec("application", f"{argv[0]} a échoué : " + (r.stderr or "").strip()[:200])

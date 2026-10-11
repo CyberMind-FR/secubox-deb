@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — autoload-agent 0.6.2 : profilectl appelé avec --profile (ref #2310)
+
+Quatrième bogue du test VirtualBox : `unrecognized arguments: lite`, après reprise sur redémarrage. Le test confronte maintenant la commande à la vraie CLI.
+
 ## 2026-10-12 — profiles 0.20.1 : profilectl n'arrête plus l'agent qui le pilote (ref #2308)
 
 Troisième bogue du test VirtualBox Auto-Load : l'étape « services » arrêtait secubox-autoload-agent (hors du profil lite) ; le parcours mourait à 10/13. autoload-agent et premier-pas* rejoignent PROTECTED_IDS.

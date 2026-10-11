@@ -1,3 +1,9 @@
+secubox-autoload-agent (0.6.2-1~bookworm1) bookworm; urgency=high
+
+  * L'application du profil passe le profil par --profile (#2310) : moteur.py appelait `secubox-profilectl apply <profil> --yes`, la CLI refuse l'argument positionnel (« unrecognized arguments: lite ») et le parcours s'arretait a l'etape application, apres reprise sur redemarrage. Trouve par le test VirtualBox, apres l'enrolement (#2301), l'etape reseau (#2306) et l'arret de l'agent par profilectl (#2308). Un test confronte desormais la commande a la VRAIE CLI (rouge sans le correctif). 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 04:00:00 +0200
+
 secubox-autoload-agent (0.6.1-1~bookworm1) bookworm; urgency=high
 
   * L'enrolement HTTPS levait TypeError (#2301) : client.py passait `context=` a OpenerDirector.open(), qui ne l'accepte pas — aucune box ne pouvait s'enroler. Trouve par le test VirtualBox de bout en bout (VM isp alpha.11, jeton emis, fichier signe, tunnel). Le contexte TLS est lie au gestionnaire HTTPS de l'ouvreur. Les anciens tests passaient parce que leur faux ouvreur acceptait `context=` : un test d'enrolement HTTPS de bout en bout avec l'ouvreur reel (serveur TLS local) les complete. 2 tests.
