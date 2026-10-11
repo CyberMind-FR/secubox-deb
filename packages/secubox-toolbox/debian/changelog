@@ -1,3 +1,9 @@
+secubox-toolbox (2.10.1-1~bookworm1) bookworm; urgency=low
+
+  * RAZ des clients : le message dit que les clients sont CONSERVES (ref #2373). « 92 clients, 0 enregistrements » se lisait comme une suppression ; la RAZ garde la ligne du client et efface ses statistiques (evenements, consentements, graphe social, score), ce qu'elle a toujours fait. Le message rend maintenant « 92 clients remis a zero et conserves, 0 enregistrement supprime (rien a effacer) ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:00:00 +0200
+
 secubox-toolbox (2.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Webui et onglets refaits au profil projet reference Aurora (ref #2373) : Vue d'ensemble, Clients, Filtres MITM, Cartographie sociale, Pubs, Tor, Sentinelle et Config sont des pages autonomes encadrees (apercu, clients, filtres, social, pubs, tor, sentinelle, config .html) ; l'onglet Reseau encadre « Reseau en direct » du SOC (une seule source). Toutes les actions existantes gardent leur appel a l'identique (niveau R et RAZ des clients, filtres et whitelist de splice, Ad-Guard, Tor : bascule, nouvelle identite, pays de sortie, clients VPN, bridges, emancipation, C2 de la sentinelle) avec confirmation integree a la page. Limites annoncees dans les pages : pas de compteur par filtre, pas de graphe appareil-tracker (la table social_edges n'est pas exposee), validite de la CA et pays de sortie Tor non fournis par l'API. 51 tests.
