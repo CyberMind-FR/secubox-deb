@@ -1,3 +1,9 @@
+secubox-system (1.7.1-1~bookworm1) bookworm; urgency=low
+
+  * system-hub : Suricata retire des services de base surveilles (#2326).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:00:00 +0200
+
 secubox-system (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-system-tuning (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

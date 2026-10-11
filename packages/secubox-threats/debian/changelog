@@ -1,3 +1,9 @@
+secubox-threats (1.3.2-1~bookworm1) bookworm; urgency=low
+
+  * Suricata decommissionne (#2326) : plus de collecte eve.json, plus d'entree « Suricata » dans les sources d'alertes, plus de /var/log/suricata dans ReadWritePaths (son absence provoquait le crash 226/NAMESPACE de #494 bis), ai-insights sans l'option suricata_integration ni l'analyse. Les anciennes configurations qui portent la cle sont ignorees.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:00:00 +0200
+
 secubox-threats (1.3.1-1~bookworm1) bookworm; urgency=low
 
   * Suricata n'est plus qu'une suggestion (#2322) : le paquet Debian demarre sans regles (/var/lib/suricata/rules/suricata.rules absent) et echouait a chaque demarrage ; il n'est ni installe ni actif sur gk2. secubox-threats lit eve.json seulement s'il existe.

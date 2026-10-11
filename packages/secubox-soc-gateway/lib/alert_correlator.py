@@ -118,7 +118,7 @@ class AlertCorrelator:
 
             severity = alert.get("severity", "medium")
             if isinstance(severity, int):
-                # Suricata uses numeric severity
+                # numeric severity (IDS convention: 1 = highest)
                 if severity <= 1:
                     severity = "critical"
                 elif severity == 2:

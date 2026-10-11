@@ -212,43 +212,6 @@ def _generate_id() -> str:
 # ALERT AGGREGATION
 # ══════════════════════════════════════════════════════════════
 
-def _fetch_suricata_alerts() -> List[Dict]:
-    """Fetch alerts from Suricata eve.json log."""
-    alerts = []
-    eve_log = Path("/var/log/suricata/eve.json")
-    if eve_log.exists():
-        try:
-            # Read last 100 lines
-            result = subprocess.run(
-                ["tail", "-n", "100", str(eve_log)],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0:
-                for line in result.stdout.strip().split("\n"):
-                    if not line:
-                        continue
-                    try:
-                        event = json.loads(line)
-                        if event.get("event_type") == "alert":
-                            alert_data = event.get("alert", {})
-                            severity_map = {1: "critical", 2: "high", 3: "medium"}
-                            alerts.append({
-                                "id": f"sur-{event.get('flow_id', _generate_id())}",
-                                "source": "suricata",
-                                "severity": severity_map.get(alert_data.get("severity", 3), "low"),
-                                "message": alert_data.get("signature", "Unknown"),
-                                "value": event.get("src_ip", ""),
-                                "timestamp": event.get("timestamp", ""),
-                                "category": alert_data.get("category", ""),
-                                "raw": event
-                            })
-                    except Exception:
-                        continue
-        except Exception:
-            pass
-    return alerts[-50:]
-
-
 def _fetch_waf_alerts() -> List[Dict]:
     """Fetch alerts from the sbxwaf threat log.
 
@@ -465,7 +428,6 @@ async def list_alerts(
 
     # Fetch fresh alerts from sources
     fresh_alerts = []
-    fresh_alerts.extend(_fetch_suricata_alerts())
     fresh_alerts.extend(_fetch_waf_alerts())
 
     # Merge fresh alerts (avoid duplicates by ID)
@@ -502,19 +464,6 @@ async def list_alerts(
 def get_alert_sources():
     """Get available alert sources and their status."""
     sources = []
-
-    # Suricata
-    try:
-        result = subprocess.run(["systemctl", "is-active", "suricata"], capture_output=True, text=True, timeout=5)
-        sur_active = result.stdout.strip() == "active"
-    except Exception:
-        sur_active = False
-    sources.append({
-        "id": "suricata",
-        "name": "Suricata IDS",
-        "active": sur_active,
-        "description": "Network intrusion detection"
-    })
 
     # WAF
     waf_log = Path("/var/log/secubox/waf.json")

@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — Suricata décommissionné (ref #2326)
+
+Intégration retirée de threats (+ ai-insights), soc-agent, system-hub, metrics (tableau Grafana), core (répertoire de journal), scripts d'image et outil gen-gui ; test de non-retour. Il n'était ni installé ni actif sur gk2. Versions : secubox-threats 1.3.2, secubox-soc-agent 1.0.5, secubox-soc-gateway 1.1.4, secubox-system 1.7.1, secubox-metrics 1.18.3, secubox-core 1.7.3.
+
 ## 2026-10-12 — Modules optionnels : isp 1.4.0, full 1.6.0, threats 1.3.1 (ref #2322)
 
 PhotoPrism et Jitsi hors d'isp (PhotoPrism dans full, Jitsi à la demande), Suricata suggéré (il échouait à chaque démarrage de la VM isp ; ni installé ni actif sur gk2).

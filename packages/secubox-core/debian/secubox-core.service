@@ -10,7 +10,7 @@ RemainAfterExit=yes
 # ran AFTER tmpfiles.d and silently regressed the dir to 775, breaking cross-
 # user traversal for daemons running as users other than secubox (e.g.
 # secubox-threats which 226/NAMESPACE-failed because ReadWritePaths bind
-# couldn't cross 775 secubox:secubox + missing /var/log/suricata). See
+# couldn't cross 775 secubox:secubox + a missing log directory). See
 # secubox-core/debian/changelog 1.1.7 for the failure post-mortem.
 #
 # /run/secubox lifecycle is now :
@@ -18,11 +18,7 @@ RemainAfterExit=yes
 #   2. this service is a no-op for /run/secubox (NOT touched)
 #   3. each module's postinst chmods its own socket via UMask if needed
 
-# /var/log/suricata must exist for any service whose ReadWritePaths references
-# it (secubox-threats, secubox-suricata). Create idempotently.
-ExecStart=/bin/mkdir -p /var/log/suricata
-ExecStart=/bin/sh -c "chown secubox:secubox /var/log/suricata 2>/dev/null || true"
-ExecStart=/bin/chmod 0755 /var/log/suricata
+# (#2326 : the IDS log directory is no longer created ; no unit references it any more.)
 
 # Add www-data to secubox group (for nginx static-file access).
 ExecStart=/bin/sh -c "id -nG www-data | grep -q secubox || usermod -aG secubox www-data"

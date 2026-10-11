@@ -23,7 +23,6 @@ import logging
 logger = logging.getLogger("secubox.soc-agent.collector")
 
 # Paths
-SURICATA_EVE_LOG = Path("/var/log/suricata/eve.json")
 WAF_ALERTS_DIR = Path("/var/log/secubox/waf")
 
 # Cache for expensive operations
@@ -159,7 +158,7 @@ def get_load_average() -> Dict[str, float]:
 def get_services_status() -> List[Dict[str, Any]]:
     """Get status of key SecuBox services."""
     services = [
-        "nginx", "haproxy", "suricata",
+        "nginx", "haproxy",
         "secubox-hub", "secubox-watchdog"
     ]
 
@@ -177,43 +176,6 @@ def get_services_status() -> List[Dict[str, Any]]:
         })
 
     return results
-
-
-def get_suricata_alerts(limit: int = 20) -> List[Dict[str, Any]]:
-    """Get recent Suricata alerts from eve.json."""
-    alerts = []
-    try:
-        if not SURICATA_EVE_LOG.exists():
-            return []
-
-        # Read last N lines
-        success, out, _ = run_cmd(
-            ["tail", "-n", "500", str(SURICATA_EVE_LOG)],
-            timeout=5
-        )
-        if not success:
-            return []
-
-        for line in out.strip().split("\n"):
-            try:
-                event = json.loads(line)
-                if event.get("event_type") == "alert":
-                    alerts.append({
-                        "source": "suricata",
-                        "ip": event.get("src_ip"),
-                        "dest_ip": event.get("dest_ip"),
-                        "signature": event.get("alert", {}).get("signature"),
-                        "category": event.get("alert", {}).get("category"),
-                        "severity": event.get("alert", {}).get("severity", 3),
-                        "timestamp": event.get("timestamp")
-                    })
-            except json.JSONDecodeError:
-                continue
-
-        return alerts[-limit:]
-    except Exception as e:
-        logger.warning(f"Failed to get Suricata alerts: {e}")
-    return []
 
 
 def get_waf_alerts(limit: int = 20) -> List[Dict[str, Any]]:
@@ -355,7 +317,6 @@ async def collect_alerts() -> List[Dict[str, Any]]:
     alerts = []
 
     # Collect from all sources
-    alerts.extend(get_suricata_alerts(20))
     alerts.extend(get_waf_alerts(20))
 
     # Sort by timestamp (newest first)
