@@ -1,3 +1,9 @@
+secubox-toolbox (2.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Oublier des clients (ref #2379) : la « RAZ » du Toolbox efface les statistiques mais GARDE la ligne de chaque client (92 clients, dont 82 non vus depuis plus de 30 jours, restaient apres la RAZ). Nouvelles actions explicites : oublier les clients inactifs (30 jours), oublier tous les clients (avertissement : le niveau R choisi est perdu, le client reapparait avec son activite), oublier un client. API : POST /admin/clients/forget {inactive_days: N, 0 = tous ; toute autre valeur : 422, rien de supprime} et POST /admin/clients/{h}/forget, fermees sur le vhost public ; supprime la ligne, les evenements, consentements, rapports et le graphe social. L'acces reseau ne depend pas de cette table. 15 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:00:00 +0200
+
 secubox-toolbox (2.10.1-1~bookworm1) bookworm; urgency=low
 
   * RAZ des clients : le message dit que les clients sont CONSERVES (ref #2373). « 92 clients, 0 enregistrements » se lisait comme une suppression ; la RAZ garde la ligne du client et efface ses statistiques (evenements, consentements, graphe social, score), ce qu'elle a toujours fait. Le message rend maintenant « 92 clients remis a zero et conserves, 0 enregistrement supprime (rien a effacer) ».

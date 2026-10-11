@@ -60,3 +60,12 @@ def test_ancien_onglet_toujours_coherent():
     old = (PAGE.parent / "index.html").read_text(encoding="utf-8")
     for r in ("/admin/clients/${macHash}/level", "/admin/clients/${macHash}/reset", "/admin/clients/reset-all"):
         assert r in old or "clients/reset-all" in old
+
+
+def test_oublier_des_clients_est_branche_et_confirme_dans_la_page_2379():
+    """#2379 — la RAZ garde les lignes ; « oublier » les retire : appels, corps et confirmation intégrée."""
+    assert "/admin/clients/forget" in SRC and "inactive_days" in SRC
+    assert "'/forget'" in SRC or "/forget'" in SRC
+    for ident in ("oublieInact", "oublieTous", "confOubli", "data-oubli", "data-oublioui"):
+        assert ident in SRC, ident
+    assert "confirm(" not in SRC and "alert(" not in SRC
