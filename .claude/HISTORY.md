@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — profil projet référence Aurora : règles, galerie et script (ref #2354)
+
+Les règles déduites du style Aurora sont écrites dans `.claude/AURORA-REFERENCE.md` (jetons, squelette, container queries, vérité des données, protocole de hauteur d'iframe, actions et confirmations intégrées, intégration en onglets, pièges, tests). `docs/aurora/` rassemble 28 pages en capture bureau et mobile, en démonstration (aucune capture authentifiée publiée) ; `scripts/snapshots-aurora.py` les régénère. Le README racine et `AGENTS.md` y pointent.
+
 ## 2026-10-12 — billets 0.11.1 + metanews 0.4.1 : billets éphémères avec sources, aperçu et vignette (ref #2343)
 
 Le billet éphémère de MetaNews n'avait ni lien, ni média, ni vignette. MetaNews liste maintenant jusqu'à 5 sources en liens (https seulement) et envoie l'article principal en `embed_url` ; `/service/ephemere` résout l'embed et capture la vignette en tâche de fond, sans jamais bloquer la création.
