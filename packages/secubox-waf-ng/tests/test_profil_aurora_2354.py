@@ -21,3 +21,11 @@ def test_les_six_autres_onglets_sont_couverts_par_les_memes_classes():
     bloc = S[S.index("PROFIL PROJET RÉFÉRENCE AURORA"):]
     for classe in (".card", ".stat-card", ".data-table", ".waf-tab", ".btn"):
         assert re.search(re.escape(classe) + r"[\s,{.:]", bloc), classe
+
+
+def test_aurora_repond_au_skin_partage_a_specificite_superieure():
+    """hybrid-skin.css est injecté après la page et pose ses teintes en !important : sans préfixe plus spécifique, rien ne change."""
+    bloc = S[S.index("PROFIL PROJET RÉFÉRENCE AURORA"):]
+    assert "html :is(.hybrid-skin, body) button.waf-tab" in bloc
+    assert "html :is(.hybrid-skin, body) .stat-card .value" in bloc
+    assert "html :is(.hybrid-skin, body) table th" in bloc

@@ -248,6 +248,41 @@
         .severity-badge, .event-type { font-family: var(--aurora-sans); border-radius: 999px; }
         input, select, textarea { font-family: var(--aurora-sans); background: rgba(8,18,38,.7); color: var(--texte); border: 1px solid var(--trait2); border-radius: 8px; }
         @media (max-width: 760px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .grid-2, .grid-3 { grid-template-columns: 1fr; } .main { margin-left: 0; padding: .9rem; padding-top: 56px; } }
+
+        /* Le skin partagé (hybrid-skin.css, injecté APRÈS cette page) impose ses teintes en !important : on lui répond à
+           spécificité supérieure, sinon les onglets et les tuiles retombent sur son vert et ses lueurs. */
+        html :is(.hybrid-skin, body) .card, html :is(.hybrid-skin, body) .stat-card {
+            background: linear-gradient(160deg, rgba(15,32,64,.78), rgba(7,15,32,.82)) !important;
+            border: 1px solid var(--trait) !important; border-radius: 12px !important; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+        html :is(.hybrid-skin, body) .card:hover, html :is(.hybrid-skin, body) .stat-card:hover { border-color: var(--trait2) !important; transform: none; box-shadow: none; }
+        html :is(.hybrid-skin, body) .stat-card .value, html :is(.hybrid-skin, body) .value { text-shadow: none !important; }
+        html :is(.hybrid-skin, body) .stat-card .label, html :is(.hybrid-skin, body) .label { color: var(--doux) !important; }
+        html :is(.hybrid-skin, body) .main, html :is(.hybrid-skin, body) .card, html :is(.hybrid-skin, body) .stat-card { color: var(--texte) !important; }
+        html :is(.hybrid-skin, body) table th { background: rgba(41,182,246,.10) !important; color: var(--faible) !important; border-bottom: 1px solid var(--trait) !important;
+            font-size: .66rem; letter-spacing: .06em; }
+        html :is(.hybrid-skin, body) table td { border-bottom: 1px solid rgba(86,150,255,.12) !important; color: var(--texte) !important; }
+        html :is(.hybrid-skin, body) table tr:hover td { background: rgba(41,182,246,.07) !important; }
+        html :is(.hybrid-skin, body) button.waf-tab:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn) {
+            background: transparent !important; border: 1px solid transparent !important; border-radius: 999px !important; color: var(--doux) !important;
+            text-transform: none; letter-spacing: 0; backdrop-filter: none; box-shadow: none; }
+        html :is(.hybrid-skin, body) button.waf-tab:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn):hover {
+            background: rgba(59,130,246,.12) !important; color: var(--texte) !important; border-color: transparent !important; box-shadow: none; }
+        html :is(.hybrid-skin, body) button.waf-tab.active:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn) {
+            background: rgba(41,182,246,.18) !important; border-color: var(--cyan) !important; color: var(--texte) !important; }
+        html :is(.hybrid-skin, body) button.btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn),
+        html :is(.hybrid-skin, body) button.quick-btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn) {
+            background: rgba(59,130,246,.14) !important; border: 1px solid var(--trait2) !important; border-radius: 8px !important; color: var(--texte) !important; backdrop-filter: none; }
+        html :is(.hybrid-skin, body) button.btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn):hover,
+        html :is(.hybrid-skin, body) button.quick-btn:not(.sidebar-logout):not(.theme-toggle):not(.filter-btn):hover {
+            background: rgba(41,182,246,.18) !important; border-color: var(--cyan) !important; box-shadow: none; }
+        html :is(.hybrid-skin, body) button.btn.primary { color: var(--cyan) !important; border-color: var(--cyan) !important; }
+        html :is(.hybrid-skin, body) button.btn.danger { color: var(--red) !important; border-color: var(--red) !important; background: rgba(255,77,94,.14) !important; }
+        html :is(.hybrid-skin, body) button.btn.success { color: var(--green) !important; border-color: var(--green) !important; background: rgba(46,204,113,.14) !important; }
+        html :is(.hybrid-skin, body) .stat-card .value { color: var(--cyan) !important; }
+        html :is(.hybrid-skin, body) .stat-card.critical .value { color: var(--red) !important; }
+        html :is(.hybrid-skin, body) .stat-card.high .value { color: var(--orange) !important; }
+        html :is(.hybrid-skin, body) .stat-card.medium .value { color: var(--yellow) !important; }
+        html :is(.hybrid-skin, body) .stat-card.low .value { color: var(--green) !important; }
         /* ═══ fin du profil projet référence Aurora ═══ */
     </style>
 </head>
