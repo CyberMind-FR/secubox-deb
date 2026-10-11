@@ -1,3 +1,9 @@
+secubox-soc (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Guardian : l'iframe ne reste plus a 4000 px de vide (ref #2341). La page mesurait documentElement.scrollHeight, jamais inferieur a la hauteur de l'iframe : la hauteur ne pouvait que croitre. Elle mesure maintenant le bas du cadre.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 13:00:00 +0200
+
 secubox-soc (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Refonte visuelle (#2341) sur la maquette « SecuBox Guardian — Mode Canari » : nouvel onglet par defaut Guardian (page guardian.html encadree, meme origine) — sept tuiles (menaces vues, appareils, connexions, protocoles, pays, critiques, ecartees), carte des attaques, evolution, repartition par categorie, derniers evenements, usages, appareils principaux, canaris/leurres, etat du mode Guardian (le mode est celui du WAF, jamais suppose), ce qui protege. Donnees reelles seulement, « — » sans mesure, ?demo=1 annonce. Les onglets Vigie, Meta-metrics et Centrale d'alertes restent. 6 tests en navigateur reel.
