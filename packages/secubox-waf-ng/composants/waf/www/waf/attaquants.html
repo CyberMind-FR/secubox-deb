@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « SBXWAF », attaquants suivis : les adresses écartées du réseau et toujours profilées sur 24 h. Une seule page, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/waf/bans/history?hours=24 (lue en session). L'API ne fournit ni pays ni série horaire par adresse :
+  la page n'invente rien (pas de drapeau) ; la frise montre, pour chaque adresse, l'intervalle réel première vue → dernière vue.
+  Une mesure absente s'affiche « — », jamais 0. Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBXWAF — attaquants suivis</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  /* filtres */
+  .filtres{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .filtres input,.filtres select{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;min-width:0}
+  .filtres input{flex:1 1 130px} .filtres select{flex:0 1 auto;max-width:100%}
+  .filtres input:focus,.filtres select:focus,.droite button:focus-visible,.plus:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  /* classement */
+  .rang{display:grid;gap:6px}
+  .att{display:grid;gap:4px 10px;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid rgba(86,150,255,.14);border-radius:10px;padding:7px 9px;background:rgba(14,30,60,.5);min-width:0}
+  .att:hover{border-color:var(--trait2)}
+  .att .id{display:flex;align-items:center;gap:7px;min-width:0}
+  .att .nat{font-size:1.15rem;flex:none} .att code{font-size:.84rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .att .intent{color:var(--faible);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .att .jauge{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .jauge b{font-variant-numeric:tabular-nums;font-size:.78rem} .jauge b small{color:var(--faible);font-weight:500;font-size:.64rem}
+  .att .pas{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--doux);font-size:.7rem}
+  .pas span{white-space:nowrap}
+  .cats{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px}
+  .pil{border-radius:999px;padding:1px 8px;font-size:.66rem;border:1px solid var(--trait2);color:var(--doux);background:rgba(59,130,246,.10);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grav{display:inline-block;min-width:58px;text-align:center;border-radius:5px;padding:1px 7px;font-weight:700;font-size:.7rem}
+  .etat{border-radius:5px;padding:1px 8px;font-weight:700;font-size:.66rem;white-space:nowrap}
+  .etat.ban{background:rgba(255,77,94,.2);color:var(--rouge)} .etat.suivi{background:rgba(159,179,214,.2);color:var(--doux)}
+  .att .tags{display:flex;gap:6px;align-items:center;justify-self:end}
+  .plus[hidden]{display:none}
+  .plus{display:block;margin:8px auto 0;font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 12px;cursor:pointer}
+  /* répartitions */
+  .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
+  .donut{width:120px;height:120px;display:block}
+  .donut text{fill:var(--texte);text-anchor:middle} .donut .ct{font-size:20px;font-weight:700} .donut .cl{font-size:8px;fill:var(--doux)}
+  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .leg div.clic{cursor:pointer} .leg div.clic:hover{color:var(--texte)}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span.v{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  /* frise */
+  svg.frise{width:100%;max-width:780px;margin:0 auto;height:auto;display:block} svg.frise text{fill:var(--faible);font-size:9px} svg.frise .gr{stroke:rgba(159,179,214,.14);stroke-width:1} svg.frise text.ip{fill:var(--doux);font-size:9.5px}
+  .sec2{display:none}
+  @container a (max-width:599px){.repart{grid-template-columns:100px 1fr}.donut{width:100px;height:100px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}.sec2{display:block}
+    .att{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto}
+    .att .id{grid-column:1;grid-row:1}.att .jauge{grid-column:2;grid-row:1}.att .tags{grid-column:3;grid-row:1}
+    .att .cats,.att .pas{grid-column:1/-1}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.7fr 1fr} .cote{display:grid;gap:10px;align-content:start}}
+  .cote{display:grid;gap:10px;align-content:start;min-width:0}
+</style>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg><span><b>SBXWAF</b><small>Web Application Firewall</small></span></span>
+    <span class="actif neutre" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Attaquants suivis</h2><div class="sous">Adresses écartées du réseau, toujours profilées sur les dernières 24 h.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Classement des attaquants <i id="nbAff"></i></h3>
+      <div class="filtres">
+        <input type="search" id="fq" placeholder="Rechercher une IP…" aria-label="Rechercher une adresse IP" autocomplete="off">
+        <select id="fg" aria-label="Filtrer par gravité"><option value="">Toutes gravités</option><option value="critical">Critique</option><option value="high">Haute</option><option value="medium">Moyenne</option><option value="low">Faible</option></select>
+        <select id="fe" aria-label="Filtrer par état"><option value="">Tous états</option><option value="ban">Bannis</option><option value="suivi">Suivis seuls</option></select>
+        <select id="ft" aria-label="Trier"><option value="sondes">Tri : sondes</option><option value="recent">Tri : dernière vue</option><option value="grave">Tri : gravité</option></select>
+      </div>
+      <div class="rang" id="rang"></div><button type="button" class="plus" id="plus" hidden></button></div>
+    <div class="cote">
+      <div class="pan"><h3>Répartition par gravité <i>adresses</i></h3><div class="repart"><div id="donutG"></div><div class="leg" id="legG"></div></div></div>
+      <div class="pan"><h3>Répartition par nature <i>lue dans les règles déclenchées</i></h3><div id="nature"></div></div>
+    </div>
+  </div>
+  <div class="pan sec2"><h3>Frise d’activité <i>intervalle première → dernière vue, 10 premières adresses</i></h3><div id="frise"></div><div class="note">Chaque barre va de la première à la dernière sonde vue sur la fenêtre de 24 h ; la barre ne dit pas si l’activité était continue entre les deux.</div></div>
+  <div class="note">Aucun blocage sur un seul signal · actions réversibles · chaque décision est écrite dans le journal d’audit.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var GRAV={critical:['Critique','#ff4d5e',4],high:['Haute','#ff9f1c',3],medium:['Moyenne','#ffd23f',2],low:['Faible','#29b6f6',1]};
+  var ORDRE=['critical','high','medium','low'];
+  var NATURES=[['🔑','tente des identifiants','#ff9f1c'],['🎯','exploitation ciblée','#ff4d5e'],['🤖','balayage automatisé','#29b6f6'],['📖','énumère des noms d’hôtes','#a78bfa'],['🔥','activité à forte gravité','#ff4d5e'],['👤','bruit de fond','#6f84a8']];
+  var IC={
+    nb:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(59,130,246,.16)"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#3b82f6"/></svg>',
+    son:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="12" width="4" height="8" rx="1" fill="rgba(167,139,250,.16)"/><rect x="10" y="6" width="4" height="14" rx="1" fill="rgba(167,139,250,.16)"/><rect x="17" y="3" width="4" height="17" rx="1" fill="rgba(167,139,250,.16)"/></svg>',
+    cri:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z" fill="rgba(255,77,94,.14)"/><path d="M12 10v4M12 17.2v.1"/></svg>',
+    ban:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+    act:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M12 7v5l3 2"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  // Nature de l'adresse : lue dans les catégories des règles déclenchées (même grille que la page de l'administration), jamais devinée.
+  function nature(r){
+    var cats=(r.top_categories||[]).map(function(c){return String(c.category||'').toLowerCase();}).join(' '),sev=String(r.severity_max||'').toLowerCase();
+    if(/auth|login|brute|credential/.test(cats)) return 0;
+    if(/lfi|rce|sqli|xss|traversal|exec|inject|sql/.test(cats)) return 1;
+    if(/scan|recon|probe|crawl/.test(cats)) return 2;
+    if(/host|anomaly|unrouted|vhost/.test(cats)) return 3;
+    if(sev==='critical'||sev==='high') return 4;
+    return 5;
+  }
+  function ts(iso){ // l'API écrit des horodatages UTC ; sans fuseau explicite on les lit en UTC
+    if(!iso) return null;var s=String(iso);if(!/(Z|[+-]\d\d:?\d\d)$/.test(s)) s=s.replace(' ','T')+'Z';
+    var d=new Date(s);return isNaN(d.getTime())?null:d.getTime();
+  }
+  function rel(t){
+    if(t==null) return '—';var s=Math.round((Date.now()-t)/1000);if(s<0)s=0;
+    if(s<60) return 'à l’instant';if(s<3600) return 'il y a '+Math.floor(s/60)+' min';
+    if(s<86400) return 'il y a '+Math.floor(s/3600)+' h';return 'il y a '+Math.floor(s/86400)+' j';
+  }
+  function plein(t){return t==null?'':new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+  var DONNEES=null,ETAT={n:40},MAINTENANT=Date.now();
+  function lignes(d){
+    return (d&&d.tracked||[]).map(function(r){
+      return {ip:String(r.ip||'—'),n:num(r.count),sev:String(r.severity_max||'low').toLowerCase(),cats:r.top_categories||[],
+        a:ts(r.first_seen),b:ts(r.last_seen),ban:!!r.currently_banned,nat:nature(r),chemin:r.sample_path||''};
+    });
+  }
+  function donut(parts,total){
+    var R=44,C=2*Math.PI*R,acc=0,s='<svg class="donut" viewBox="0 0 120 120" role="img" aria-label="Répartition par gravité"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="14"/>';
+    if(total>0) parts.forEach(function(p){var l=C*p[1]/total;s+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+p[2]+'" stroke-width="14" stroke-dasharray="'+l.toFixed(2)+' '+(C-l).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+esc(p[0])+' : '+fmt(p[1])+'</title></circle>';acc+=l;});
+    return s+'<text class="ct" x="60" y="62">'+(total>0?fmt(total):'—')+'</text><text class="cl" x="60" y="75">adresses</text></svg>';
+  }
+  function frise(L){
+    var T=L.filter(function(r){return r.a!=null&&r.b!=null;}).sort(function(x,y){return y.n-x.n;}).slice(0,10);
+    if(!T.length) return '<div class="vide">Aucun horodatage exploitable.</div>';
+    var fin=MAINTENANT,deb=fin-24*3600e3,W=520,LM=96,RM=8,TP=6,BT=18,H=TP+BT+T.length*16;
+    var x=function(t){return LM+(Math.max(deb,Math.min(fin,t))-deb)/(fin-deb)*(W-LM-RM);},g='';
+    for(var h=0;h<=24;h+=6){var X=LM+h/24*(W-LM-RM);g+='<line class="gr" x1="'+X+'" y1="'+TP+'" x2="'+X+'" y2="'+(H-BT)+'"/><text x="'+X+'" y="'+(H-5)+'" text-anchor="'+(h===0?'start':h===24?'end':'middle')+'">'+(h===24?'maintenant':'−'+(24-h)+' h')+'</text>';}
+    T.forEach(function(r,i){var y=TP+i*16+3,x1=x(r.a),x2=Math.max(x(r.b),x1+3),c=(GRAV[r.sev]||GRAV.low)[1];
+      g+='<text class="ip" x="'+(LM-6)+'" y="'+(y+8)+'" text-anchor="end">'+esc(r.ip.length>16?r.ip.slice(0,15)+'…':r.ip)+'</text><rect x="'+x1.toFixed(1)+'" y="'+y+'" width="'+(x2-x1).toFixed(1)+'" height="9" rx="3" fill="'+c+'" opacity=".85"><title>'+esc(r.ip)+' : '+esc(plein(r.a))+' → '+esc(plein(r.b))+' · '+fmt(r.n)+' sondes</title></rect>';});
+    return '<svg class="frise" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Frise d’activité des attaquants sur 24 heures">'+g+'</svg>';
+  }
+  function filtrer(L){
+    var t=el('fq').value.trim().toLowerCase(),g=el('fg').value,e=el('fe').value,s=el('ft').value;
+    var R=L.filter(function(r){return (!t||r.ip.toLowerCase().indexOf(t)>=0)&&(!g||r.sev===g)&&(!e||(e==='ban')===r.ban);});
+    R.sort(function(x,y){
+      if(s==='recent') return num(y.b)-num(x.b);
+      if(s==='grave') return ((GRAV[y.sev]||[0,0,0])[2]-(GRAV[x.sev]||[0,0,0])[2])||(y.n-x.n);
+      return y.n-x.n;});
+    return R;
+  }
+  function carte(r,max){
+    var g=GRAV[r.sev]||[r.sev,'#6f84a8',0],nt=NATURES[r.nat],tot=null;
+    var cats=r.cats.map(function(c){return '<span class="pil" title="'+esc(c.category)+' : '+fmt(c.count)+' sondes">'+esc(c.category)+' · '+fmt(c.count)+'</span>';}).join('');
+    return '<div class="att"><div class="id"><span class="nat" title="'+esc(nt[1])+'">'+nt[0]+'</span><div style="min-width:0"><code title="'+esc(r.ip)+'">'+esc(r.ip)+'</code><div class="intent">'+esc(nt[1])+'</div></div></div>'
+      +'<div class="tags"><span class="grav" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span><span class="etat '+(r.ban?'ban':'suivi')+'" title="'+(r.ban?'Écarté : un blocage réseau est actif en ce moment.':'Le blocage a expiré, le profil reste suivi.')+'">'+(r.ban?'BANNI':'SUIVI')+'</span></div>'
+      +'<div class="jauge" title="'+fmt(r.n)+' sondes sur 24 h"><div class="barre"><i style="width:'+Math.max(3,100*r.n/max)+'%;background:'+g[1]+'"></i></div><b>'+fmt(r.n)+' <small>sondes</small></b></div>'
+      +(cats?'<div class="cats">'+cats+'</div>':'')
+      +'<div class="pas"><span title="'+esc(plein(r.a))+'">Première vue : '+esc(rel(r.a))+'</span><span title="'+esc(plein(r.b))+'">Dernière vue : '+esc(rel(r.b))+'</span></div></div>';
+  }
+  function liste(){
+    var L=lignes(DONNEES);
+    if(!DONNEES){el('rang').innerHTML='<div class="vide">Session requise pour voir les attaquants.</div>';el('nbAff').textContent='';el('plus').hidden=true;return;}
+    var R=filtrer(L),max=Math.max.apply(null,L.map(function(r){return r.n;}).concat([1]));
+    el('nbAff').textContent=L.length?(R.length===L.length?fmt(L.length)+' adresses':fmt(R.length)+' sur '+fmt(L.length)):'';
+    el('rang').innerHTML=!L.length?'<div class="vide">Aucun attaquant suivi sur les 24 dernières heures.</div>':!R.length?'<div class="vide">Aucune adresse ne correspond aux filtres.</div>':R.slice(0,ETAT.n).map(function(r){return carte(r,max);}).join('');
+    var reste=R.length-ETAT.n;el('plus').hidden=reste<=0;if(reste>0)el('plus').textContent='Afficher '+fmt(Math.min(reste,40))+' de plus ('+fmt(reste)+' restantes)';
+  }
+  function rend(d){
+    DONNEES=d.data;MAINTENANT=Date.now();
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.data);
+    var L=lignes(d.data),ok=!!d.data,a=el('actif');
+    a.textContent=ok?(L.length?fmt(L.length)+' ADRESSES SUIVIES':'AUCUN ATTAQUANT'):'SESSION REQUISE';a.className='actif'+(ok?'':' neutre')+(ok&&L.length&&L.some(function(r){return r.sev==='critical';})?' hors':'');
+    var N=function(v){return ok?fmt(v):'—';};
+    var sondes=L.reduce(function(t,r){return t+r.n;},0),crit=L.filter(function(r){return r.sev==='critical';}).length,bans=L.filter(function(r){return r.ban;}).length,rec=L.filter(function(r){return r.b!=null&&MAINTENANT-r.b<3600e3;}).length;
+    el('tuiles').innerHTML=
+      tuile(IC.nb,N(L.length),'Attaquants suivis','sur 24 h','Adresses source ayant déclenché au moins une règle du WAF sur les 24 dernières heures (trafic interne exclu du classement : il est regroupé sous « local »).')
+     +tuile(IC.son,N(sondes),'Sondes totales','24 h','Somme des requêtes suspectes de toutes les adresses suivies sur 24 h (source : journal des menaces du WAF).')
+     +tuile(IC.cri,N(crit),'Critiques',ok&&L.length?Math.round(100*crit/L.length)+' % des adresses':'','Adresses dont la gravité maximale observée est « critique ».')
+     +tuile(IC.ban,N(bans),'Écartés / bannis',ok&&L.length?fmt(L.length-bans)+' suivis seuls':'','Adresses avec un blocage réseau (drop nft) actif en ce moment. Les autres sont suivies : le blocage a expiré mais le profil est conservé.')
+     +tuile(IC.act,N(rec),'Actifs dans l’heure','dernière vue < 1 h','Adresses dont la dernière sonde date de moins d’une heure : celles qui insistent encore.');
+    var cnt={};L.forEach(function(r){cnt[r.sev]=(cnt[r.sev]||0)+1;});
+    var parts=ORDRE.filter(function(k){return cnt[k];}).map(function(k){return [GRAV[k][0],cnt[k],GRAV[k][1],k];});
+    el('donutG').innerHTML=donut(parts,L.length);
+    el('legG').innerHTML=parts.length?parts.map(function(p){return '<div class="clic" data-g="'+p[3]+'" title="Filtrer sur cette gravité"><i style="background:'+p[2]+'"></i><span>'+esc(p[0])+'</span><b>'+fmt(p[1])+' · '+Math.round(100*p[1]/L.length)+'%</b></div>';}).join(''):'<div class="vide">'+(ok?'Aucune adresse.':'Session requise.')+'</div>';
+    var nn=NATURES.map(function(){return 0;});L.forEach(function(r){nn[r.nat]++;});var nm=Math.max.apply(null,nn.concat([1]));
+    el('nature').innerHTML=L.length?NATURES.map(function(n,i){return nn[i]?'<div class="ligne"><span class="n">'+n[0]+' '+esc(n[1])+'</span><span class="v">'+fmt(nn[i])+'</span><div class="barre"><i style="width:'+Math.max(4,100*nn[i]/nm)+'%;background:'+n[2]+'"></i></div></div>':'';}).join(''):'<div class="vide">'+(ok?'Aucune adresse.':'Session requise.')+'</div>';
+    el('frise').innerHTML=L.length?frise(L):'<div class="vide">'+(ok?'Aucune activité à afficher.':'Session requise.')+'</div>';
+    liste();
+  }
+  var DEMO=(function(){
+    var n=Date.now(),h=function(x){return new Date(n-x*3600e3).toISOString();};
+    return {demo:true,data:{window_hours:24,total_ips:9,tracked:[
+      {ip:'57.141.0.17',count:254,first_seen:h(22),last_seen:h(0.1),severity_max:'critical',currently_banned:true,top_categories:[{category:'sql.injection',count:140},{category:'traversal',count:80},{category:'rce',count:34}]},
+      {ip:'185.220.101.3',count:187,first_seen:h(20),last_seen:h(1.4),severity_max:'high',currently_banned:true,top_categories:[{category:'scan-ports',count:120},{category:'recon',count:67}]},
+      {ip:'45.155.205.233',count:96,first_seen:h(13),last_seen:h(3),severity_max:'high',currently_banned:false,top_categories:[{category:'brute-force-login',count:70},{category:'auth',count:26}]},
+      {ip:'2a0b:7140:3::17',count:61,first_seen:h(9),last_seen:h(2.2),severity_max:'medium',currently_banned:true,top_categories:[{category:'host.anomaly',count:41},{category:'unrouted-vhost',count:20}]},
+      {ip:'91.92.241.10',count:44,first_seen:h(18),last_seen:h(6),severity_max:'critical',currently_banned:false,top_categories:[{category:'lfi',count:30},{category:'xss',count:14}]},
+      {ip:'141.98.11.62',count:23,first_seen:h(7),last_seen:h(0.5),severity_max:'medium',currently_banned:false,top_categories:[{category:'crawl',count:23}]},
+      {ip:'194.26.135.5',count:12,first_seen:h(5),last_seen:h(4),severity_max:'low',currently_banned:false,top_categories:[{category:'http.suspicious',count:12}]},
+      {ip:'103.144.3.90',count:8,first_seen:h(2),last_seen:h(1.8),severity_max:'low',currently_banned:false,top_categories:[{category:'unknown',count:8}]},
+      {ip:'local',count:3,first_seen:h(11),last_seen:h(10),severity_max:'low',currently_banned:false,top_categories:[{category:'http.suspicious',count:3}]}]}};
+  })();
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  ['fq','fg','fe','ft'].forEach(function(i){el(i).addEventListener(i==='fq'?'input':'change',function(){ETAT.n=40;liste();hauteur();});});
+  el('plus').addEventListener('click',function(){ETAT.n+=40;liste();hauteur();});
+  el('legG').addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-g]');if(!t)return;el('fg').value=el('fg').value===t.getAttribute('data-g')?'':t.getAttribute('data-g');ETAT.n=40;liste();hauteur();});
+  // encadrée par la page /waf/ : on lui dit sa hauteur pour qu'elle n'ait pas de défilement interne
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'attaquants'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
+  if(q.get('demo')){rend(DEMO);hauteur();return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    jget('/api/v1/waf/bans/history?hours=24&limit=500').then(function(r){
+      rend({data:r&&Array.isArray(r.tracked)?r:null});
+      el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      hauteur();
+    });
+  }
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  setInterval(function(){if(document.visibilityState==='visible')charge();},30000);
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')charge();});
+})();
+</script>
