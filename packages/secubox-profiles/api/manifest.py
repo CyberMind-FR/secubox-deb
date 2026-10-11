@@ -48,7 +48,10 @@ DEFAULT_WAKE_CLASS = "normal"
 # « vault » (le Coffre, #1367) : un pin `off` hérité de l'ancien module (13/08) le
 # gardait arrêté et désactivé — carte « injoignable » dans le Hall, ouverture par
 # la connexion impossible. Le moteur de profils ne coupe pas le Coffre.
-PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault"})
+# « autoload-agent » et « premier-pas* » (#2308) : ce sont eux qui PILOTENT `profilectl apply`. Le test VirtualBox d'Auto-Load l'a montré : l'étape « services » arrêtait
+# secubox-autoload-agent (hors du profil « lite »), le parcours mourait à 10/13 et aucun rapport n'était écrit. Un module qui appelle le moteur de profils n'est pas arrêtable par lui.
+PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault",
+                           "autoload-agent", "premier-pas", "premier-pas-appliquer", "premier-pas-console"})
 
 
 class ManifestError(Exception):
