@@ -17,6 +17,8 @@ override_dh_auto_install:
 	install -d debian/secubox-dns-guard/usr/share/secubox/menu.d
 	[ -d composants/network-anomaly/menu.d ] && cp -r composants/network-anomaly/menu.d/. debian/secubox-dns-guard/usr/share/secubox/menu.d/ || true
 	install -D -m 644 composants/network-anomaly/debian/secubox-network-anomaly.service debian/secubox-dns-guard/usr/lib/systemd/system/secubox-network-anomaly.service
+	install -D -m 644 composants/network-anomaly/debian/secubox-network-anomaly-collecte.service debian/secubox-dns-guard/usr/lib/systemd/system/secubox-network-anomaly-collecte.service
+	install -D -m 644 composants/network-anomaly/debian/secubox-network-anomaly-collecte.timer debian/secubox-dns-guard/usr/lib/systemd/system/secubox-network-anomaly-collecte.timer
 	install -D -m 755 composants/network-anomaly/debian/postinst debian/secubox-dns-guard/usr/lib/secubox/dns-guard/maintscripts/network-anomaly.postinst
 	install -D -m 755 composants/network-anomaly/debian/prerm debian/secubox-dns-guard/usr/lib/secubox/dns-guard/maintscripts/network-anomaly.prerm
 

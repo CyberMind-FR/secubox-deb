@@ -12,6 +12,9 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-12 — profiles 0.20.3 : le kiosque n'est plus arrêté par un profil (ref #2329)
 
 L'interface locale (module kiosk, dans aucun profil) était mise à OFF par `profilectl apply` : la VM finissait son Auto-Load sans interface. HORS_PLAN : ni stop, ni start.
+## 2026-10-12 — network-anomaly collecte enfin : dns-guard 1.3.1 (ref #2328)
+
+La collecte n'existait que derrière POST /detect. Minuteur d'une minute + unité oneshot.
 
 ## 2026-10-12 — Suricata décommissionné : closes #2326
 
