@@ -1,3 +1,9 @@
+secubox-webos (1.9.5-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : un lien vers un service de la box ne passe plus par le Surf (ref #2349). Le relais refuse ce qui mene a la box (garde SSRF) : bbs.gk2.secubox.in/t/1136 ouvert depuis le Hall affichait « Cette adresse mene a la box ». ouvreSurf detourne les hotes du domaine de la box : service embarque s'il est au registre, sinon nouvel onglet. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 15:00:00 +0200
+
 secubox-webos (1.9.4-1~bookworm1) bookworm; urgency=medium
 
   * Hall : un lien d'activite /bbs/t|f/<id> ouvert sur le Hall ne casse plus la page (#2339). Le collecteur ecrit ce chemin tel quel ; nginx servait index.html (repli SPA) a ce chemin profond et ses references RELATIVES (domaine.js, lexie.js, polices, logo, medaillons) se resolvaient sous /bbs/t/ : MIME text/html, SBX_DOMAINE is not defined. References absolues, et redirection vers le BBS de la box (comme la carte Activite). 6 tests en navigateur (rouges sans le correctif).
