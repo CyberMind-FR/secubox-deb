@@ -202,6 +202,53 @@
           border-radius:4px;font-weight:800;font-size:.58rem;letter-spacing:.1em}
         .tampon.banni{color:var(--red);background:rgba(255,68,102,.10)}
         .tampon.suivi{color:var(--blue)}
+    
+        /* ═══ PROFIL PROJET RÉFÉRENCE AURORA (#2354) ═══════════════════════════════════
+           Les jetons et les formes de la vue d'ensemble (vue.html), du Guardian et du DPI, posés sur l'existant :
+           palette, typographie, cartes, tuiles, tableaux, onglets, boutons. Aucune logique de données ici ; les
+           couleurs que le JavaScript référence (var(--cyan), var(--red)…) sont remappées sur la palette Aurora. */
+        :root {
+            --fond: #060d1b; --trait: rgba(86,150,255,.22); --trait2: rgba(86,150,255,.38);
+            --texte: #eaf1ff; --doux: #9fb3d6; --faible: #6f84a8;
+            --bg-dark: #060d1b; --bg-card: rgba(12,26,54,.62); --bg-row: rgba(10,22,46,.55);
+            --border: rgba(86,150,255,.22); --text: #eaf1ff; --p31-dim: #9fb3d6; --muted-dark: #9fb3d6; --text-dark: #eaf1ff;
+            --cyan: #29b6f6; --blue: #3b82f6; --green: #2ecc71; --red: #ff4d5e; --orange: #ff9f1c; --purple: #a78bfa; --yellow: #ffd23f;
+            --wall-light: #29b6f6; --boot-light: #a78bfa; --root-light: #29b6f6;
+            --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+            --aurora-sans: "IBM Plex Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        body { font-family: var(--aurora-sans); font-size: 14px; line-height: 1.35;
+               background: radial-gradient(1200px 520px at 85% -10%, rgba(59,130,246,.2), transparent 60%),
+                           radial-gradient(900px 500px at -10% 110%, rgba(255,77,94,.10), transparent 60%), var(--fond); }
+        .main { background: transparent; }
+        .header h1 { font-family: var(--aurora-sans); font-size: 1.4rem; font-weight: 800; letter-spacing: .02em; color: var(--texte); text-shadow: none; }
+        .btn, .quick-btn { font-family: var(--aurora-sans); border: 1px solid var(--trait2); background: rgba(59,130,246,.14); color: var(--texte); border-radius: 8px; }
+        .btn:hover, .quick-btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 0 1px rgba(41,182,246,.25); }
+        .btn.primary { background: rgba(41,182,246,.18); border-color: var(--cyan); color: var(--cyan); }
+        .btn.success { background: rgba(46,204,113,.14); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,77,94,.14); border-color: var(--red); color: var(--red); }
+        .waf-tabs { gap: 6px; border-bottom: 1px solid var(--trait); padding-bottom: 8px; }
+        .waf-tab { font-family: var(--aurora-sans); font-size: .82rem; font-weight: 600; color: var(--doux); border: 1px solid transparent; border-radius: 999px; padding: 6px 14px; }
+        .waf-tab:hover { color: var(--texte); background: rgba(59,130,246,.12); }
+        .waf-tab.active { color: var(--texte); background: rgba(41,182,246,.18); border-color: var(--cyan); }
+        .card { border: 1px solid var(--trait); border-radius: 12px; background: linear-gradient(160deg, rgba(15,32,64,.78), rgba(7,15,32,.82)); }
+        .card h2 { font-family: var(--aurora-sans); font-size: .95rem; font-weight: 700; color: var(--texte); }
+        .stat-card { border: 1px solid var(--trait); border-radius: 12px; background: linear-gradient(160deg, rgba(18,40,78,.7), rgba(8,18,38,.7)); text-align: left; }
+        .stat-card:hover { border-color: var(--trait2); transform: none; }
+        .stat-card .value { font-family: var(--aurora-sans); font-weight: 700; text-shadow: none; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: .7rem; letter-spacing: .04em; color: var(--doux); }
+        .live-attack-banner { border-radius: 12px; border: 1px solid var(--trait2); }
+        .data-table th, .events-table th { font-family: var(--aurora-sans); color: var(--faible); font-size: .66rem; letter-spacing: .06em; }
+        .data-table td, .events-table td { font-family: var(--aurora-sans); font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(86,150,255,.12); }
+        .data-table code, .events-table td code, .last-attack-ip { font-family: var(--font-mono); color: var(--cyan); }
+        .data-table tbody tr:hover, .events-table tbody tr:hover { background: rgba(41,182,246,.07); }
+        .cat-pill, .legend-row-mini, .vhost-badge { font-family: var(--aurora-sans); border: 1px solid var(--trait); border-radius: 10px; background: var(--bg-row); }
+        .cat-pill:hover { border-color: var(--trait2); transform: none; }
+        .muted { color: var(--faible); }
+        .severity-badge, .event-type { font-family: var(--aurora-sans); border-radius: 999px; }
+        input, select, textarea { font-family: var(--aurora-sans); background: rgba(8,18,38,.7); color: var(--texte); border: 1px solid var(--trait2); border-radius: 8px; }
+        @media (max-width: 760px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .grid-2, .grid-3 { grid-template-columns: 1fr; } .main { margin-left: 0; padding: .9rem; padding-top: 56px; } }
+        /* ═══ fin du profil projet référence Aurora ═══ */
     </style>
 </head>
 <body class="hybrid-dark">
