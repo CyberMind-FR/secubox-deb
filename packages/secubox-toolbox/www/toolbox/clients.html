@@ -277,7 +277,7 @@
     if(bloque()) return;
     fetch(API+'/admin/clients/'+h+'/reset',{method:'POST',credentials:'same-origin'}).then(function(r){
       if(!r.ok) throw new Error('HTTP '+r.status);return r.json();
-    }).then(function(j){msg('RAZ effectuée : '+(j.rows_deleted||0)+' enregistrements supprimés.','ok');charge();})
+    }).then(function(j){msg('RAZ effectuée : client conservé, '+(j.rows_deleted||0)+' enregistrement'+((j.rows_deleted||0)>1?'s':'')+' supprimé'+((j.rows_deleted||0)>1?'s':'')+'.','ok');charge();})
     .catch(function(e){msg('Échec RAZ : '+e.message,'err');});
   }
   function resetAll(){
@@ -285,7 +285,7 @@
     fetch(API+'/admin/clients/reset-all',{method:'POST',credentials:'same-origin'}).then(function(r){
       return r.json().catch(function(){return {};}).then(function(d){
         if(!r.ok){msg('Reset all refusé : '+(d.detail||('HTTP '+r.status)),'err');return;}
-        msg('RAZ de tous les clients effectuée : '+(d.clients_reset||0)+' clients, '+(d.rows_deleted||0)+' enregistrements.','ok');return charge();
+        msg('RAZ effectuée : '+(d.clients_reset||0)+' clients remis à zéro et conservés, '+(d.rows_deleted||0)+' enregistrement'+((d.rows_deleted||0)>1?'s':'')+' supprimé'+((d.rows_deleted||0)>1?'s':'')+(d.rows_deleted?'':' (rien à effacer)')+'.','ok');return charge();
       });
     }).catch(function(e){msg('Reset all erreur : '+e,'err');});
   }
