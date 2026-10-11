@@ -1,3 +1,9 @@
+secubox-metrics (1.19.1-1~bookworm1) bookworm; urgency=medium
+
+  * « WAF HORS SERVICE » a tort (ref #2391) : l'etat du WAF de la sante globale (portail, bandeau) etait le controle d'avant la bascule — conteneur LXC mitmproxy-in ou processus mitmdump, qui n'existent plus — donc faux en permanence alors que sbxwaf tournait. Il suit maintenant secubox-waf-ng (service actif ET port 8085 qui repond) ; l'ancien controle reste en repli. 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:00:00 +0200
+
 secubox-metrics (1.19.0-1~bookworm1) bookworm; urgency=medium
 
   * Webui refait au profil projet reference Aurora (ref #2370) : index.html (sante globale, processeur, memoire, disque, charge, uptime, connexions, requetes web, menaces ; jauges et courbes 24 h ; services, connexions TCP, trafic WAF, campagnes, certificats, sante des modules) et vhosts.html (sites : classement trie/filtre, donut des statuts, histogramme par jour, detail d'un site, certificats, hotes en direct ; actions de relecture des journaux et rapport PDF conservees). ?embed=1, ?demo=1 annonce, « — » sans mesure, hauteur annoncee (sbxMetricsVue). La temperature n'est fournie par aucune route : « — ». 14 tests.

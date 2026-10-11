@@ -224,6 +224,20 @@ def run_cmd(cmd: list, default: str = "") -> str:
     except Exception:
         return default
 
+def sbxwaf_actif() -> bool:
+    """Le WAF est sbxwaf (service secubox-waf-ng, 127.0.0.1:8085) depuis la bascule ; l'ancien contrôle (conteneur LXC
+    mitmproxy-in, processus mitmdump) n'existe plus et affichait « WAF HORS SERVICE » alors que sbxwaf tournait (#2391).
+    Actif = le service systemd est actif ET le port répond ; l'un sans l'autre n'est pas un WAF qui protège."""
+    if run_cmd(['systemctl', 'is-active', 'secubox-waf-ng']) != 'active':
+        return False
+    try:
+        import socket
+        with socket.create_connection(("127.0.0.1", 8085), timeout=1.5):
+            return True
+    except OSError:
+        return False
+
+
 def get_cache_age() -> int:
     """Get cache age in seconds."""
     if not CACHE_FILE.exists():
@@ -355,7 +369,8 @@ def build_overview() -> dict:
         return result == 'active'
 
     haproxy_up = check_lxc_running('haproxy') or check_systemd_service('haproxy')
-    mitmproxy_up = check_lxc_running('mitmproxy-in') or check_process('mitmdump')
+    # sbxwaf d'abord ; le contrôle de l'ancien mitmproxy reste en repli pour une box qui ne l'a pas migré (#2391)
+    mitmproxy_up = sbxwaf_actif() or check_lxc_running('mitmproxy-in') or check_process('mitmdump')
 
     # Counts - adapted for Debian (using config files instead of UCI)
     vhost_count = 0
@@ -428,7 +443,7 @@ def build_overview() -> dict:
 
 def build_waf_stats() -> dict:
     """Build WAF statistics."""
-    mitmproxy_running = bool(run_cmd(['pgrep', '-f', 'mitmdump']))
+    mitmproxy_running = sbxwaf_actif() or bool(run_cmd(['pgrep', '-f', 'mitmdump']))
 
     bans = alerts_today = waf_blocked = 0
 
