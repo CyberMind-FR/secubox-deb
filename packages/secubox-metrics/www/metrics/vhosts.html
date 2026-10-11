@@ -4,524 +4,587 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
+  SecuBox — « Metrics », page Sites / vhosts : les statistiques par site web (hôte virtuel). Une seule page, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API du module metrics, lue en session sous /api/v1/metrics :
+  vhost-stats, vhost-stats/{vhost}, cert-status, live-hosts). Une mesure absente s'affiche « — », jamais 0.
+  Actions conservées à l'identique : relecture des journaux d'un vhost (POST vhost-stats/{vhost}/refresh),
+  rapport PDF (POST vhost-stats/rapport). `?demo=1` : données de DÉMONSTRATION (exemple.test), annoncées par un bandeau.
+-->
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — Statistiques vhosts</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-dark.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — statistiques par site</title>
 <style>
-:root{
-  --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
-  --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
-  --cyan:#00d4ff; --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00;
-  --green:#00e676; --violet:#a78bfa;
-  --mono:"Courier Prime",ui-monospace,"Courier New",monospace;
-}
-*{box-sizing:border-box}
-body.hybrid-dark{background:var(--bg-dark);color:var(--text);font-family:var(--mono);font-size:14px}
-.main{padding:22px 18px 60px;max-width:1180px}
-.header{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;justify-content:space-between;
-  padding-bottom:14px;margin-bottom:20px;border-bottom:1px solid var(--border)}
-h1{font-size:21px;margin:0;letter-spacing:.5px}
-.sub{color:var(--p31-dim);font-size:12px;margin-top:4px}
-.btn-group{display:flex;gap:8px;flex-wrap:wrap}
-.btn{font-family:var(--mono);font-size:12px;padding:7px 12px;cursor:pointer;background:var(--bg-row);
-  color:var(--text);border:1px solid var(--border);border-radius:4px;transition:.15s}
-.btn:hover{border-color:var(--cyan);color:var(--cyan)}
-.btn.on,.btn.pri{background:rgba(0,212,255,.14);border-color:var(--cyan);color:var(--cyan)}
-.btn[disabled]{opacity:.45;cursor:wait}
-.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
-.tools{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-bottom:20px}
-.grp{display:flex;gap:6px;align-items:center}
-.lbl{color:var(--p31-dim);font-size:11px;text-transform:uppercase;letter-spacing:1px}
-.sw{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;user-select:none}
-.sw i{width:34px;height:18px;border-radius:9px;background:var(--bg-row);border:1px solid var(--border);
-  position:relative;transition:.2s;flex:none}
-.sw i::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;
-  background:var(--p31-dim);transition:.2s}
-.sw.on i{background:rgba(0,212,255,.25);border-color:var(--cyan)}
-.sw.on i::after{transform:translateX(16px);background:var(--cyan)}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:24px}
-.tile{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:13px 15px;
-  position:relative;overflow:hidden}
-.tile::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--cyan)}
-.tile.w::before{background:var(--orange)}.tile.d::before{background:var(--red)}
-.tile.g::before{background:var(--green)}.tile.v::before{background:var(--violet)}
-.tile .k{color:var(--p31-dim);font-size:11px;text-transform:uppercase;letter-spacing:.8px}
-.tile .v{font-size:25px;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums}
-.tile .n{color:var(--p31-dim);font-size:11px;margin-top:2px}
-.card{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px 18px;margin-bottom:18px}
-.card h2{font-size:13px;margin:0 0 14px;letter-spacing:1px;text-transform:uppercase;color:var(--cyan);
-  display:flex;justify-content:space-between;align-items:center;gap:10px}
-.card h2 span{color:var(--p31-dim);text-transform:none;letter-spacing:0;font-size:11px}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-@media(max-width:760px){.cols{grid-template-columns:1fr}}
-.hist{display:flex;align-items:flex-end;gap:4px;height:150px;padding-top:8px;overflow-x:auto}
-.bar{flex:1;min-width:14px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;
-  height:100%;position:relative;cursor:pointer}
-.bar .seg{width:100%;border-radius:2px 2px 0 0}
-.bar .visites{background:linear-gradient(180deg,var(--cyan),rgba(0,212,255,.45))}
-.bar .sondes{background:var(--red);border-radius:0}
-.bar:hover .seg{filter:brightness(1.35)}
-.bar .tip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#04070c;
-  border:1px solid var(--cyan);border-radius:4px;padding:5px 8px;font-size:11px;white-space:nowrap;
-  opacity:0;pointer-events:none;transition:.15s;z-index:5}
-.bar:hover .tip{opacity:1}
-.axis{display:flex;gap:4px;margin-top:6px;color:var(--p31-dim);font-size:10px}
-.axis span{flex:1;min-width:14px;text-align:center;overflow:hidden}
-.legend{display:flex;gap:16px;font-size:11px;color:var(--p31-dim);margin-top:10px}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
-.rows{display:flex;flex-direction:column;gap:9px}
-.row{display:grid;grid-template-columns:96px 1fr 64px;gap:10px;align-items:center;font-size:12px}
-.row .track{height:16px;background:var(--bg-row);border-radius:3px;overflow:hidden}
-.row .fill{height:100%;border-radius:3px}
-.row .num{text-align:right;color:var(--p31-dim);font-variant-numeric:tabular-nums}
-.tblwrap{overflow-x:auto}
-.tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{text-align:left;color:var(--p31-dim);font-weight:400;font-size:10px;text-transform:uppercase;
-  letter-spacing:1px;padding:0 8px 9px;border-bottom:1px solid var(--border);white-space:nowrap}
-.tbl th.r,.tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
-.tbl td{padding:9px 8px;border-bottom:1px solid rgba(100,150,200,.08)}
-.tbl tbody tr.cliq{cursor:pointer}
-.tbl tbody tr.cliq:hover{background:rgba(0,212,255,.06)}
-.dom{color:var(--cyan);font-weight:700}
-.fam{display:inline-block;font-size:10px;color:var(--p31-dim);border:1px solid var(--border);
-  border-radius:3px;padding:1px 5px;margin-left:7px}
-.membres{color:var(--p31-dim);font-size:11px;padding-left:14px}
-.pill{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}
-.pill.ok{background:rgba(0,230,118,.14);color:var(--green)}
-.pill.warn{background:rgba(255,153,68,.16);color:var(--orange)}
-.pill.bad{background:rgba(255,68,102,.16);color:var(--red)}
-#detail{display:none}
-.back{color:var(--cyan);cursor:pointer;font-size:12px;margin-bottom:12px;display:inline-block}
-.back:hover{text-decoration:underline}
-.paths{display:flex;flex-direction:column;gap:7px;font-size:12px}
-.path{display:flex;justify-content:space-between;gap:12px;padding:6px 9px;background:var(--bg-row);border-radius:3px}
-.path code{color:var(--text);word-break:break-all;font-size:11px}
-.path b{color:var(--cyan);font-variant-numeric:tabular-nums;flex:none}
-.modal{position:fixed;inset:0;background:rgba(4,7,12,.82);display:none;align-items:center;
-  justify-content:center;padding:20px;z-index:50}
-.modal.on{display:flex}
-.sheet{background:#111823;border:1px solid var(--cyan);border-radius:8px;max-width:440px;width:100%;padding:22px}
-.sheet h3{margin:0 0 4px;font-size:15px;color:var(--cyan)}
-.sheet p{color:var(--p31-dim);font-size:12px;margin:0 0 16px}
-.field{margin-bottom:13px}
-.field label{display:block;font-size:11px;color:var(--p31-dim);margin-bottom:5px;
-  text-transform:uppercase;letter-spacing:.8px}
-.field input,.field select{width:100%;font-family:var(--mono);font-size:12px;padding:8px 10px;
-  background:var(--bg-row);border:1px solid var(--border);border-radius:4px;color:var(--text)}
-.field input:focus,.field select:focus{outline:none;border-color:var(--cyan)}
-.note{font-size:11px;color:var(--p31-dim);border-left:2px solid var(--border);padding-left:10px;margin:14px 0}
-.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,90px);background:#04070c;
-  border:1px solid var(--green);color:var(--green);padding:10px 18px;border-radius:5px;font-size:12px;
-  transition:.3s;z-index:60;max-width:90vw}
-.toast.on{transform:translate(-50%,0)}
-.toast.err{border-color:var(--red);color:var(--red)}
-.vide{color:var(--p31-dim);font-size:12px;padding:18px 0;text-align:center}
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .bt,.droite a{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .bt:hover,.droite a:hover{border-color:var(--cyan)} .bt:focus-visible,.droite a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bt.on{background:rgba(41,182,246,.28);border-color:var(--cyan);color:var(--cyan)} .bt[disabled]{opacity:.5;cursor:wait}
+  .bt.pri{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo a{color:#001}
+  .demo.info{background:var(--cyan)}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile svg.sp{width:100%;height:30px}
+  .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .outils{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{color:var(--faible);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+  input[type=search],select,input[type=text],input[type=email]{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:4px 9px;min-width:0}
+  input[type=search]{width:190px;max-width:100%} select option{background:#0b1830}
+  .sw{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.74rem;color:var(--doux);user-select:none}
+  .sw i{width:30px;height:16px;border-radius:8px;background:rgba(159,179,214,.16);border:1px solid var(--trait2);position:relative;flex:none}
+  .sw i::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--faible);transition:.2s}
+  .sw.on i{background:rgba(41,182,246,.25);border-color:var(--cyan)} .sw.on i::after{transform:translateX(14px);background:var(--cyan)}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.78rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:4px 7px;font-size:.68rem;white-space:nowrap;user-select:none}
+  th.tri{cursor:pointer} th.tri:hover{color:var(--cyan)} th.tri.actuel{color:var(--cyan)}
+  th.r,td.r{text-align:right}
+  td{padding:5px 7px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;font-variant-numeric:tabular-nums;vertical-align:middle}
+  tr.cliq{cursor:pointer} tr.cliq:hover td{background:rgba(41,182,246,.07)} tr.cliq:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+  td.site{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+  .dom{color:var(--cyan);font-weight:700;overflow:hidden;text-overflow:ellipsis;display:block}
+  .fam{display:inline-block;font-size:.62rem;color:var(--faible);border:1px solid var(--trait);border-radius:4px;padding:0 5px;margin-left:6px;font-weight:500}
+  .mini{height:3px;border-radius:2px;background:rgba(159,179,214,.14);margin-top:3px;overflow:hidden} .mini i{display:block;height:100%;background:var(--cyan);border-radius:2px}
+  .past{display:inline-block;min-width:34px;text-align:center;border-radius:999px;padding:1px 8px;font-weight:700;font-size:.68rem;border:1px solid transparent}
+  .past.v{background:rgba(46,204,113,.16);color:var(--vert);border-color:rgba(46,204,113,.4)}
+  .past.o{background:rgba(255,159,28,.16);color:var(--orange);border-color:rgba(255,159,28,.4)}
+  .past.r{background:rgba(255,77,94,.16);color:var(--rouge);border-color:rgba(255,77,94,.45)}
+  .past.g{background:rgba(159,179,214,.12);color:var(--faible);border-color:rgba(159,179,214,.2)}
+  .repart{display:grid;gap:12px;grid-template-columns:120px minmax(0,1fr);align-items:center}
+  .donut{width:120px;height:120px;border-radius:50%;position:relative;background:rgba(159,179,214,.16)}
+  .donut span{position:absolute;inset:21px;border-radius:50%;background:#0b1830;display:grid;place-items:center;text-align:center;font-size:.7rem;color:var(--doux)} .donut span b{display:block;font-size:1.05rem;color:var(--texte);white-space:nowrap}
+  .leg div{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px}
+  .leg b{color:var(--texte);font-variant-numeric:tabular-nums} .leg em{font-style:normal;color:var(--faible);font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+  .leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 90px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte);text-align:left} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:4px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .cert{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.78rem;padding:3px 0}
+  .cert .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .resume{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+  .chemin{display:flex;justify-content:space-between;gap:12px;padding:4px 8px;background:rgba(6,13,27,.5);border-radius:6px;font-size:.74rem;margin-bottom:3px}
+  .chemin code{color:var(--texte);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0} .chemin b{color:var(--cyan);font-variant-numeric:tabular-nums;flex:none}
+  .retour{color:var(--cyan);cursor:pointer;font-size:.8rem;background:none;border:0;padding:0;font:inherit;text-align:left} .retour:hover{text-decoration:underline}
+  #detail{display:none;gap:10px}
+  .modal{position:fixed;inset:0;background:rgba(4,7,12,.82);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+  .modal.on{display:flex}
+  .feuille{background:#0b1830;border:1px solid var(--cyan);border-radius:12px;max-width:440px;width:100%;padding:16px;display:grid;gap:10px}
+  .feuille h3{margin:0;color:var(--cyan);font-size:1rem} .feuille label{display:block;font-size:.68rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+  .feuille input,.feuille select{width:100%}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translate(-50%,90px);background:#04070c;border:1px solid var(--vert);color:var(--vert);padding:8px 16px;border-radius:8px;font-size:.78rem;transition:.3s;z-index:60;max-width:90vw;visibility:hidden;opacity:0}
+  .toast.on{transform:translate(-50%,0);visibility:visible;opacity:1} .toast.err{border-color:var(--rouge);color:var(--rouge)}
+  @container a (max-width:599px){.opt{display:none}.repart{grid-template-columns:96px minmax(0,1fr)}.donut{width:96px;height:96px}.donut span{inset:17px}.ligne{grid-template-columns:minmax(0,1fr) auto 56px}td.site{max-width:112px}th,td{padding:5px 4px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .g21{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}}
 </style>
 </head>
-<body class="hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-
-<main class="main">
-
-<div class="header">
-  <div>
-    <h1>📊 Statistiques par vhost</h1>
-    <div class="sub" id="sub">chargement…</div>
+<body>
+<div id="coque" class="coque">
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="rgba(59,130,246,.16)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span><b>Metrics</b><small>Sites web et hôtes virtuels</small></span></span>
+    <span class="actif" id="actif">…</span>
+    <div class="droite"><a href="index.html" id="retourIndex">← Vue d’ensemble</a><span id="heure"></span><button type="button" class="bt" id="rafraichir">⟳ Rafraîchir</button><button type="button" class="bt pri" id="bRapport">Rapport PDF</button></div>
   </div>
-  <div class="btn-group">
-    <button class="btn" id="bRefresh" onclick="charger()">↻ Rafraîchir</button>
-    <button class="btn pri" onclick="ouvrir(false)">📄 Rapport PDF</button>
-  </div>
-</div>
+  <div class="demo info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
 
-<div class="tools">
-  <div class="grp">
-    <span class="lbl">Période</span>
-    <button class="btn" data-p="jour" onclick="periode('jour')">Jour</button>
-    <button class="btn on" data-p="semaine" onclick="periode('semaine')">7 jours</button>
-    <button class="btn" data-p="mois" onclick="periode('mois')">30 jours</button>
-  </div>
-  <div class="sw" id="swg" onclick="grouper()">
-    <i></i><span>Rassembler les domaines d'une même famille</span>
-  </div>
-</div>
-
-<div id="liste">
-  <div class="tiles" id="tuiles"></div>
-
-  <div class="card">
-    <h2>Fréquentation jour par jour <span>visites · sondes en rouge</span></h2>
-    <div class="hist" id="hist"></div>
-    <div class="axis" id="axis"></div>
-    <div class="legend">
-      <span><i style="background:var(--cyan)"></i>Visites</span>
-      <span><i style="background:var(--red)"></i>Sondes</span>
+  <div id="liste" class="grille">
+    <div><h2>Statistiques par site</h2><div class="sous" id="sous">Visites, visiteurs, erreurs, bande passante et certificats de chaque hôte virtuel.</div></div>
+    <div class="outils">
+      <div class="grp"><span class="lbl">Période</span><button type="button" class="bt" data-p="jour">Jour</button><button type="button" class="bt on" data-p="semaine">7 jours</button><button type="button" class="bt" data-p="mois">30 jours</button></div>
+      <div class="sw" id="swg" role="switch" aria-checked="false" tabindex="0" title="Fond en une seule ligne les domaines d’une même famille"><i></i><span>Rassembler les familles de domaines</span></div>
     </div>
-  </div>
-
-  <div class="cols">
-    <div class="card"><h2>Navigateurs</h2><div class="rows" id="nav"></div></div>
-    <div class="card"><h2>Plateformes</h2><div class="rows" id="plat"></div></div>
-  </div>
-
-  <div class="card">
-    <h2>Vhosts <span id="cnt"></span></h2>
-    <div class="tblwrap">
-      <table class="tbl">
+    <div class="tuiles" id="tuiles"></div>
+    <div class="pan">
+      <h3>Classement des sites <i id="cnt"></i></h3>
+      <div class="outils" style="margin-bottom:8px">
+        <input type="search" id="rech" placeholder="Rechercher un site…" aria-label="Rechercher un site">
+        <select id="filtre" aria-label="Filtrer">
+          <option value="">Tous les sites</option><option value="5xx">Avec erreurs 5xx</option><option value="err">Avec erreurs 4xx/5xx</option>
+          <option value="cert">Certificat à renouveler</option><option value="sonde">Sondés ou ciblés</option>
+        </select>
+        <select id="tri" aria-label="Trier par">
+          <option value="requetes">Tri : requêtes</option><option value="visites">Tri : visites</option><option value="visiteurs">Tri : visiteurs</option>
+          <option value="erreurs">Tri : erreurs</option><option value="octets">Tri : bande passante</option><option value="vhost">Tri : nom</option><option value="cert">Tri : certificat</option>
+        </select>
+      </div>
+      <div class="scroll"><table>
         <thead><tr>
-          <th>Domaine</th><th class="r">Visites</th><th class="r">Visiteurs</th>
-          <th class="r">Requêtes</th><th class="r">Robots</th><th class="r">Sondes</th><th>État</th>
+          <th class="tri" data-t="vhost">Site</th><th class="tri r" data-t="visites">Visites</th><th class="tri r" data-t="visiteurs" title="IP distinctes vues par le site. Attention : si nginx journalise l’adresse du relais amont (proxy, WAF) et non celle du client, ce nombre tombe à 1 ou presque, sans que le site n’ait un seul visiteur.">Visiteurs ⓘ</th>
+          <th class="tri r opt" data-t="requetes">Requêtes</th><th class="tri r" data-t="erreurs">Erreurs</th><th class="tri r opt" data-t="octets">Bande passante</th><th class="tri" data-t="cert">Certificat</th>
         </tr></thead>
         <tbody id="tb"></tbody>
-      </table>
+      </table></div>
+      <div class="note" id="plus"></div>
+      <div class="note">« Visiteurs » compte des adresses IP : derrière un proxy qui n’est pas déclaré comme relais de confiance, toutes les visites ont la même adresse et le site affiche 1 visiteur. Le chiffre n’est pas masqué, il est à lire avec cette réserve. Un clic sur un site ouvre son détail.</div>
+    </div>
+    <div class="grille g2">
+      <div class="pan"><h3>Statuts HTTP <i>réponses servies, tous sites</i></h3><div class="repart"><div class="donut" id="donut"><span id="donutC"></span></div><div class="leg" id="legS"></div></div></div>
+      <div class="pan"><h3>Requêtes par site <i>les plus sollicités</i></h3><div id="barres"></div></div>
+    </div>
+    <div class="grille g21">
+      <div class="pan"><h3>Fréquentation jour par jour <i>visites · sondes</i></h3><div id="courbe"></div><div class="legende" id="legC"></div></div>
+      <div class="grille">
+        <div class="pan"><h3>Hôtes en direct <i id="liveNote"></i></h3><div id="live"></div></div>
+        <div class="pan"><h3>Certificats <i id="certNote"></i></h3><div id="certs"></div></div>
+      </div>
     </div>
   </div>
+
+  <div id="detail" class="grille">
+    <button type="button" class="retour" id="retour">← Retour aux sites</button>
+    <div class="tete"><div><h2 id="dTitre">—</h2><div class="sous" id="dSub"></div></div>
+      <div class="droite"><button type="button" class="bt" id="bVhost">⟳ Relire les journaux de ce site</button><button type="button" class="bt pri" id="bRapportV">Rapport PDF</button></div></div>
+    <div class="note" style="margin-top:0">Relire les journaux d’un site lit ses journaux tournés, gzip compris, et reconstruit son historique. C’est coûteux, d’où le bouton plutôt qu’une boucle.</div>
+    <div class="tuiles" id="dTuiles"></div>
+    <div class="grille g2">
+      <div class="pan"><h3>Visites et sondes <i>jour par jour</i></h3><div id="dCourbe"></div><div class="legende"><span><i style="background:#29b6f6"></i>Visites</span><span><i style="background:#ff4d5e"></i>Sondes</span></div></div>
+      <div class="pan"><h3>Codes de retour <i>par classe</i></h3><div id="dSt"></div></div>
+    </div>
+    <div class="grille g2">
+      <div class="pan"><h3>Navigateurs</h3><div id="dNav"></div></div>
+      <div class="pan"><h3>Pays des visiteurs <i>déduit de l’adresse</i></h3><div id="dPays"></div></div>
+    </div>
+    <div class="grille g2">
+      <div class="pan"><h3>Pages les plus vues</h3><div id="dPaths"></div></div>
+      <div class="pan"><h3>Référents</h3><div id="dRef"></div></div>
+    </div>
+    <div class="pan"><h3>Visites cumulées <i id="dCumulNote">depuis la première visite</i></h3><div id="dCumul"></div></div>
+  </div>
+  <div class="note">Seules des statistiques agrégées sont conservées : l’agent utilisateur brut n’est jamais stocké. Lecture seule, hors relecture des journaux et rapport.</div>
+</div></div>
 </div>
 
-<div id="detail">
-  <span class="back" onclick="retour()">← Retour aux vhosts</span>
-  <div class="header" style="margin-top:6px">
-    <div><h1 id="dTitre">🌐</h1><div class="sub" id="dSub"></div></div>
-    <div class="btn-group">
-      <button class="btn" id="bVhost" onclick="rafraichirVhost()">↻ Rafraîchir ce vhost</button>
-      <button class="btn pri" onclick="ouvrir(true)">📄 Rapport PDF</button>
-    </div>
-  </div>
-  <div class="note">
-    Le rafraîchissement d'un vhost relit ses journaux <em>tournés</em>, gzip compris,
-    et reconstruit son historique. C'est coûteux — d'où le bouton plutôt qu'une boucle.
-  </div>
-  <div class="tiles" id="dTuiles"></div>
-  <div class="card">
-    <h2>Visites et sondes <span>jour par jour</span></h2>
-    <div class="hist" id="dHist"></div><div class="axis" id="dAxis"></div>
-    <div class="legend">
-      <span><i style="background:var(--cyan)"></i>Visites</span>
-      <span><i style="background:var(--red)"></i>Sondes</span>
-    </div>
-  </div>
-  <div class="cols">
-    <div class="card"><h2>Navigateurs</h2><div class="rows" id="dNav"></div></div>
-    <div class="card"><h2>Codes de retour</h2><div class="rows" id="dSt"></div></div>
-  </div>
-  <div class="cols">
-    <div class="card"><h2>Pages les plus vues</h2><div class="paths" id="dPaths"></div></div>
-    <div class="card"><h2>Référents</h2><div class="paths" id="dRef"></div></div>
-    <div class="card"><h2>Pays des visiteurs</h2>
-      <div id="dPaysGraph"></div>
-      <div class="paths" id="dPays"></div></div>
-    <div class="card"><h2>Visites cumulées depuis la première visite</h2>
-      <div id="dCumul"></div></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitre">
+  <div class="feuille">
+    <h3 id="mTitre">Rapport de fréquentation</h3>
+    <div class="sous" id="mPortee"></div>
+    <div><label for="mPer">Période</label><select id="mPer"><option value="semaine">7 derniers jours</option><option value="mois">30 derniers jours</option><option value="jour">Journée écoulée</option></select></div>
+    <div><label for="mDest">Destinataire (messagerie interne)</label><input type="email" id="mDest" placeholder="admin@localdomain"></div>
+    <div class="note" style="margin:0">Le rapport part par la messagerie interne de la boîte. Il ne sort pas sur le WAN et n’emprunte aucun relais tiers.</div>
+    <div class="droite" style="justify-content:flex-end"><button type="button" class="bt" id="mAnnuler">Annuler</button><button type="button" class="bt" id="bDl">Télécharger</button><button type="button" class="bt pri" id="bEnv">Générer et envoyer</button></div>
   </div>
 </div>
-
-</main>
-
-<div class="modal" id="modal" onclick="if(event.target===this)fermer()">
-  <div class="sheet">
-    <h3>📄 Rapport de fréquentation</h3>
-    <p id="mPortee"></p>
-    <div class="field"><label>Période</label>
-      <select id="mPer"><option value="semaine">7 derniers jours</option>
-        <option value="mois">30 derniers jours</option><option value="jour">Journée écoulée</option></select></div>
-    <div class="field"><label>Destinataire (messagerie interne)</label>
-      <input id="mDest" placeholder="admin@localdomain"></div>
-    <div class="note">
-      Le rapport part par la messagerie interne de la boîte. Il ne sort pas sur
-      le WAN et n'emprunte aucun relais tiers.
-    </div>
-    <div class="btn-group" style="justify-content:flex-end;margin-top:6px">
-      <button class="btn" onclick="fermer()">Annuler</button>
-      <button class="btn" id="bDl" onclick="rapport(false)">⬇ Télécharger</button>
-      <button class="btn pri" id="bEnv" onclick="rapport(true)">✉ Générer et envoyer</button>
-    </div>
-  </div>
-</div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
-const API = "/api/v1/metrics";
-let per = "semaine", groupe = false, vue = null, det = null, vhostCourant = null;
-
-const jeton = () => localStorage.getItem('sbx_token');
-const entetes = () => { const t = jeton(); return t ? {'Authorization': 'Bearer ' + t} : {}; };
-const fmt = n => (n ?? 0).toLocaleString("fr-FR");
-const el = i => document.getElementById(i);
-
-let tid;
-function toast(m, err){
-  const t = el("toast");
-  t.textContent = m; t.classList.toggle("err", !!err); t.classList.add("on");
-  clearTimeout(tid); tid = setTimeout(() => t.classList.remove("on"), 3400);
-}
-
-async function api(chemin, opts){
-  const r = await fetch(API + chemin, Object.assign({headers: entetes()}, opts || {}));
-  if(!r.ok){
-    // Un 401 ici veut dire jeton absent ou perime, pas « pas de donnees ».
-    if(r.status === 401) throw new Error("session expirée — reconnectez-vous");
-    throw new Error(`${r.status} ${await r.text().catch(() => "")}`.slice(0, 140));
+(function(){
+  "use strict";
+  const API = "/api/v1/metrics";
+  const el = i => document.getElementById(i);
+  const esc = t => String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const num = x => { x = Number(x); return isFinite(x) ? x : 0; };
+  const fmt = n => Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+  const court = n => { n = num(n); return n>=1e6 ? (n/1e6).toFixed(2).replace('.',',')+' M' : n>=1e4 ? Math.round(n/1e3)+' k' : fmt(n); };
+  function octets(n){
+    if(n==null) return '—'; n = num(n);
+    const u = ['o','Ko','Mo','Go','To']; let i = 0;
+    while(n>=1024 && i<u.length-1){ n/=1024; i++; }
+    return (i===0 ? Math.round(n) : n.toFixed(n>=100?0:1).replace('.',',')) + ' ' + u[i];
   }
-  return r.json();
-}
+  const q = new URLSearchParams(location.search);
+  const EMBED = !!q.get('embed'), DEMO = !!q.get('demo');
+  if(EMBED) document.body.classList.add('emb');
+  const PAL = ['#3b82f6','#29b6f6','#a78bfa','#ff9f1c','#2ecc71','#ffd23f','#6f84a8'];
+  const CLS = {'2xx':['Succès','#2ecc71'],'3xx':['Redirections','#3b82f6'],'4xx':['Erreurs client','#ff9f1c'],'5xx':['Erreurs serveur','#ff4d5e'],other:['Autres','#6f84a8']};
 
-// ── rendus ───────────────────────────────────────────────────────────────
-function tuiles(cible, s, sousTitres){
-  const cases = [
-    ["", "Visites", s.visites, sousTitres.visites],
-    ["g", "Visiteurs", s.visiteurs, sousTitres.visiteurs],
-    ["v", "Requêtes", s.requetes, sousTitres.requetes],
-    ["w", "Erreurs", s.erreurs, sousTitres.erreurs],
-    ["d", "Sondes", s.sondes, sousTitres.sondes],
-  ];
-  el(cible).innerHTML = cases.map(([c, k, v, n]) =>
-    `<div class="tile ${c}"><div class="k">${k}</div><div class="v">${fmt(v)}</div>
-     <div class="n">${n || ""}</div></div>`).join("");
-}
+  // Coque (barre latérale commune) : seulement hors cadre du Hall et hors ?embed=1.
+  let encadre = true; try{ encadre = window.top !== window.self; }catch(e){}
+  if(!EMBED && !encadre && !DEMO){
+    const nav = document.createElement('nav'); nav.className = 'sidebar'; nav.id = 'sidebar';
+    document.body.insertBefore(nav, document.body.firstChild);
+    el('coque').classList.add('main-content');
+    const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s);
+  }
 
-function histo(cibleH, cibleA, serie){
-  if(!serie || !serie.length){ el(cibleH).innerHTML = '<div class="vide">aucune donnée</div>';
-    el(cibleA).innerHTML = ""; return; }
-  const max = Math.max(1, ...serie.map(d => (d.visites || 0) + (d.sondes || 0)));
-  el(cibleH).innerHTML = serie.map(d => `<div class="bar">
-    <div class="tip">${d.jour} · ${fmt(d.visites)} visites · ${fmt(d.sondes)} sondes</div>
-    <div class="seg sondes" style="height:${(d.sondes || 0) / max * 100}%"></div>
-    <div class="seg visites" style="height:${(d.visites || 0) / max * 100}%"></div></div>`).join("");
-  el(cibleA).innerHTML = serie.map(d => `<span>${d.jour.slice(5)}</span>`).join("");
-}
+  // ── état ──
+  let per = 'semaine', groupe = false, vue = null, certs = null, live = null, det = null, courant = null;
+  let tri = 'requetes', sens = -1, filtre = '', recherche = '', toutAfficher = false, session = true;
 
-const COULEURS = ["var(--cyan)","var(--green)","var(--violet)","var(--yellow)",
-                  "var(--orange)","var(--red)","var(--p31-dim)"];
-
-function barres(cible, donnees){
-  const items = Object.entries(donnees || {}).slice(0, 7);
-  if(!items.length){ el(cible).innerHTML = '<div class="vide">aucune donnée</div>'; return; }
-  const tot = items.reduce((a, [, v]) => a + v, 0) || 1;
-  el(cible).innerHTML = items.map(([k, v], i) => {
-    const p = v / tot * 100;
-    return `<div class="row"><span>${k}</span>
-      <div class="track"><div class="fill" style="width:${p}%;background:${COULEURS[i % 7]}"></div></div>
-      <span class="num">${p.toFixed(1)} %</span></div>`;
-  }).join("");
-}
-
-// ── #1190 · camembert des pays ────────────────────────────────────────────
-// Au-dela de sept parts on ne lit plus rien : les suivantes sont regroupees en
-// « autres ». La legende porte le compte ET le pourcentage — le pourcentage
-// seul ne dit pas si 70 % vaut 7 visites ou 7000.
-function camembert(cible, pays){
-  const items = Object.entries(pays || {}).sort((a,b)=>b[1]-a[1]);
-  if(!items.length){ el(cible).innerHTML = '<div class="vide">pas de géolocalisation</div>'; return; }
-  const tete = items.slice(0,7);
-  const reste = items.slice(7).reduce((a,[,v])=>a+v,0);
-  if(reste) tete.push(["autres", reste]);
-  const tot = tete.reduce((a,[,v])=>a+v,0) || 1;
-
-  const R=54, C=60; let a0=-Math.PI/2, arcs="";
-  tete.forEach(([,v],i)=>{
-    const a1 = a0 + 2*Math.PI*v/tot;
-    // Une part de 100 % ne peut pas se tracer en arc : les deux extremites se
-    // rejoignent et le chemin est vide. On rend alors un disque plein.
-    if(v/tot > .999){
-      arcs += `<circle cx="${C}" cy="${C}" r="${R}" fill="${COULEURS[i%7]}"/>`;
-    } else {
-      const g = (a1-a0) > Math.PI ? 1 : 0;
-      arcs += `<path d="M${C},${C} L${C+R*Math.cos(a0)},${C+R*Math.sin(a0)} `
-           +  `A${R},${R} 0 ${g},1 ${C+R*Math.cos(a1)},${C+R*Math.sin(a1)} Z" `
-           +  `fill="${COULEURS[i%7]}" stroke="var(--bg-card)" stroke-width="1"/>`;
+  // ── réseau : jeton sbx_token, sinon session par cookie ──
+  const jeton = () => { try{ return localStorage.getItem('sbx_token') || ''; }catch(e){ return ''; } };
+  const entetes = () => { const t = jeton(); const h = {'Accept':'application/json'}; if(t) h.Authorization = 'Bearer ' + t; return h; };
+  async function api(chemin, opts){
+    const r = await fetch(API + chemin, Object.assign({headers: entetes(), credentials:'same-origin', cache:'no-store'}, opts || {}));
+    if(!r.ok){
+      const e = new Error(r.status === 401 ? 'session expirée — reconnectez-vous' : (r.status + ' ' + (await r.text().catch(()=>''))).slice(0,140));
+      e.status = r.status; throw e;
     }
-    a0 = a1;
-  });
-  const legende = tete.map(([k,v],i)=>
-    `<div class="row"><span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;
-       background:${COULEURS[i%7]};margin-right:6px"></i>${k}</span>
-     <span class="num">${fmt(v)} · ${(v/tot*100).toFixed(0)} %</span></div>`).join("");
-  el(cible).innerHTML =
-    `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-       <svg viewBox="0 0 120 120" width="120" height="120" role="img"
-            aria-label="répartition des visites par pays">${arcs}</svg>
-       <div style="flex:1;min-width:150px">${legende}</div></div>`;
-}
+    return r.json();
+  }
+  const sûr = p => p.catch(e => { if(e && e.status===401) session = false; return null; });
 
-// ── #1190 · cumul depuis la premiere visite ───────────────────────────────
-// `base` porte les jours deja sortis de la retention : sans lui la courbe
-// repartirait de zero tous les trente jours, et ne dirait plus « depuis la
-// premiere visite » mais « depuis un mois ». Une COURBE, pas des barres : ce
-// qu'on lit ici est une pente.
-function cumul(cible, serie, base, depuis){
-  serie = serie || [];
-  if(!serie.length){ el(cible).innerHTML = '<div class="vide">aucun historique</div>'; return; }
-  let t = base || 0;
-  const pts = serie.map(s => (t += (s.visites||0)));
-  const min = base || 0, max = pts[pts.length-1] || 1;
-  const etendue = (max - min) || 1;
-  const L=560, H=120, P=6;
-  const x = i => P + i*(L-2*P)/Math.max(1, pts.length-1);
-  const y = v => H - P - (v-min)*(H-2*P)/etendue;
-  const ligne = pts.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const aire = `${ligne} L${x(pts.length-1).toFixed(1)},${H-P} L${x(0).toFixed(1)},${H-P} Z`;
-  el(cible).innerHTML =
-    `<svg viewBox="0 0 ${L} ${H}" width="100%" height="130" role="img"
-          aria-label="visites cumulées depuis la première visite">
-       <path d="${aire}" fill="${COULEURS[0]}" opacity=".16"/>
-       <path d="${ligne}" fill="none" stroke="${COULEURS[0]}" stroke-width="2"/>
-     </svg>
-     <div class="row"><span>${depuis ? "depuis le " + depuis : "depuis la première visite"}</span>
-       <span class="num">${fmt(max)} visites</span></div>`;
-}
+  let tid;
+  function toast(m, err){ const t = el('toast'); t.textContent = m; t.classList.toggle('err', !!err); t.classList.add('on'); clearTimeout(tid); tid = setTimeout(()=>t.classList.remove('on'), 3400); }
 
-function etat(v){
-  // Un vhost « ciblé » n'est pas un vhost qui recoit des erreurs : c'est un
-  // vhost dont une part notable du trafic vise des chemins de scan.
-  const part = v.requetes ? v.sondes / v.requetes * 100 : 0;
-  if(part >= 10) return ["bad", "ciblé"];
-  if(part >= 2)  return ["warn", "sondé"];
-  return ["ok", "sain"];
-}
+  // ── dessins ──
+  const IC = {
+    site:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="rgba(59,130,246,.16)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    req:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(41,182,246,.16)"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+    vis:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="rgba(46,204,113,.14)"/><circle cx="12" cy="12" r="3"/></svg>',
+    err:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3L2.5 20h19z" fill="rgba(255,77,94,.14)"/><path d="M12 10v4.5M12 17.2h.01"/></svg>',
+    cert:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(255,159,28,.14)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg>',
+    bw:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="rgba(167,139,250,.14)"/><path d="M12 7v10M8.5 13.5L12 17l3.5-3.5"/></svg>'
+  };
+  function spark(a,c){
+    if(!a || a.length<2) return '';
+    const m = Math.max.apply(null, a.map(num).concat([1])), w = 100/a.length;
+    return '<svg class="sp" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">'+a.map((v,i)=>{ const h = Math.max(1, 28*num(v)/m); return '<rect x="'+(i*w+w*.15).toFixed(2)+'" y="'+(30-h).toFixed(2)+'" width="'+(w*.7).toFixed(2)+'" height="'+h.toFixed(2)+'" fill="'+c+'" opacity=".85"/>'; }).join('')+'</svg>';
+  }
+  const tuile = (ic,v,l,s,def,sp) => '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+(sp||'')+'</div>';
 
-function table(){
-  const lignes = [];
-  (vue.vhosts || []).forEach(v => {
-    const [cls, txt] = etat(v);
-    const multi = v.membres && v.membres.length > 1;
-    lignes.push(`<tr class="cliq" onclick="detail('${v.vhost.replace(/'/g, "")}')">
-      <td><span class="dom">${v.vhost}</span>${multi ? `<span class="fam">${v.membres.length} domaines</span>` : ""}</td>
-      <td class="r">${fmt(v.visites)}</td>
-      <td class="r">${fmt(v.visiteurs)}${v.visiteurs_minores ? " +" : ""}</td>
-      <td class="r">${fmt(v.requetes)}</td>
-      <td class="r">${v.part_robots} %</td>
-      <td class="r">${fmt(v.sondes)}</td>
-      <td><span class="pill ${cls}">${txt}</span></td></tr>`);
-    if(multi) lignes.push(`<tr><td colspan="7" class="membres">↳ ${v.membres.join(" · ")}</td></tr>`);
-  });
-  el("tb").innerHTML = lignes.join("") ||
-    '<tr><td colspan="7" class="vide">aucun trafic sur la période</td></tr>';
-  const t = vue.total || {};
-  el("cnt").textContent = groupe
-    ? `${t.vhosts || 0} familles · ${t.domaines || 0} domaines`
-    : `${t.vhosts || 0} domaines actifs`;
-}
-
-// ── chargement ───────────────────────────────────────────────────────────
-async function charger(){
-  const b = el("bRefresh"); b.disabled = true;
-  try{
-    vue = await api(`/vhost-stats?periode=${per}&grouper=${groupe}`);
-    if(vue.actif === false){ el("sub").textContent = "collecte désactivée"; return; }
-    const t = vue.total || {};
-    el("sub").textContent =
-      `${t.vhosts || 0} vhosts actifs · du ${vue.du} au ${vue.au}` +
-      (vue.maj ? ` · maj ${new Date(vue.maj).toLocaleTimeString("fr-FR")}` : " · collecte en cours");
-    tuiles("tuiles", t, {
-      visites: "pages, hors accessoires",
-      visiteurs: "IP distinctes, cumul par vhost",
-      requetes: "tout compris",
-      erreurs: "codes 4xx et 5xx",
-      sondes: "chemins de scan connus",
+  // histogramme SVG : visites (cyan) et sondes (rouge) empilées, jour par jour
+  function histo(serie){
+    if(!serie || serie.length<1) return '<div class="vide">Pas encore de jour mesuré.</div>';
+    const n = serie.length, W = 520, H = 170, L = 40, R = 8, T = 8, B = 20;
+    const max = Math.max.apply(null, serie.map(d=>num(d.visites)+num(d.sondes)).concat([1]));
+    const pas = [10,20,25,50,100,200,250,500,1000,2000,5000,10000,20000,25000,50000,100000,200000,250000,500000,1000000,5000000].filter(u=>u*3>=max)[0] || Math.ceil(max/3), haut = pas*3;
+    const cw = (W-L-R)/n, y = v => T+(H-T-B)*(1-num(v)/haut);
+    let g = '';
+    for(let k=0;k<=3;k++){ const v = pas*k, Y = y(v); g += '<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-5)+'" y="'+(Y+3)+'" text-anchor="end">'+court(v)+'</text>'; }
+    const st = Math.max(1, Math.ceil(n/7)); let b = '', xs = '';
+    serie.forEach((d,i)=>{
+      const x = L+i*cw+cw*.18, w = cw*.64, hv = (H-B)-y(num(d.visites)), hs = (H-B)-y(num(d.sondes));
+      b += '<g><title>'+esc(d.jour+' : '+fmt(d.visites)+' visites, '+fmt(d.sondes)+' sondes')+'</title>'
+        + '<rect x="'+x.toFixed(1)+'" y="'+(y(num(d.visites)+num(d.sondes))).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+Math.max(0,hv+hs).toFixed(1)+'" rx="2" fill="#ff4d5e"/>'
+        + '<rect x="'+x.toFixed(1)+'" y="'+(H-B-hv).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+Math.max(num(d.visites)>0?1:0,hv).toFixed(1)+'" rx="2" fill="#29b6f6"/></g>';
+      if(i%st===0 || i===n-1) xs += '<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-5)+'" text-anchor="middle">'+esc(String(d.jour).slice(5))+'</text>';
     });
-    histo("hist", "axis", vue.serie || []);
-    barres("nav", t.navigateurs); barres("plat", t.plateformes);
-    table();
-  }catch(e){ toast("Chargement impossible : " + e.message, true); }
-  finally{ b.disabled = false; }
-}
-
-async function detail(nom){
-  vhostCourant = nom;
-  try{
-    det = await api(`/vhost-stats/${encodeURIComponent(nom)}?periode=${per}`);
-  }catch(e){ toast("Détail indisponible : " + e.message, true); return; }
-  el("dTitre").textContent = "🌐 " + nom;
-  const memb = det.membres || [];
-  // Quand on ouvre une famille, dire lesquels de ses domaines sont additionnes :
-  // sinon les chiffres semblent sortir de nulle part.
-  el("dSub").textContent = `${per}` +
-    (memb.length > 1 ? ` · ${memb.length} domaines : ${memb.join(", ")}` : "") +
-    (det.maj ? ` · maj ${new Date(det.maj).toLocaleTimeString("fr-FR")}` : "");
-  tuiles("dTuiles", det, {
-    visites: "pages, hors accessoires", visiteurs: "IP distinctes",
-    requetes: "tout compris", erreurs: "codes 4xx et 5xx", sondes: "chemins de scan",
-  });
-  histo("dHist", "dAxis", det.serie);
-  barres("dNav", det.navigateurs); barres("dSt", det.statuts);
-  el("dPaths").innerHTML = (det.top_chemins || []).map(e =>
-    `<div class="path"><code>${e.chemin}</code><b>${fmt(e.n)}</b></div>`).join("")
-    || '<div class="vide">aucune page</div>';
-  el("dRef").innerHTML = (det.top_referents || []).map(e =>
-    `<div class="path"><code>${e.hote}</code><b>${fmt(e.n)}</b></div>`).join("")
-    || '<div class="vide">aucun référent</div>';
-  camembert("dPaysGraph", det.pays_cumul || {});
-  cumul("dCumul", det.serie, (det.cumul||{}).base, (det.cumul||{}).depuis);
-  el("dPays").innerHTML = (det.pays || []).map(e =>
-    `<div class="path"><span>${e.drapeau} ${e.code}</span><b>${fmt(e.n)}</b></div>`).join("")
-    || '<div class="vide">pas de géolocalisation</div>';
-  el("liste").style.display = "none"; el("detail").style.display = "block";
-  window.scrollTo(0, 0);
-}
-
-function retour(){ el("detail").style.display = "none"; el("liste").style.display = "block"; }
-
-async function rafraichirVhost(){
-  const b = el("bVhost"); b.disabled = true; b.textContent = "↻ relecture…";
-  try{
-    const r = await api(`/vhost-stats/${encodeURIComponent(vhostCourant)}/refresh`, {method: "POST"});
-    toast(`Journaux relus : ${r.fichiers} fichiers, ${fmt(r.lignes)} lignes`);
-    await detail(vhostCourant); await charger();
-  }catch(e){ toast("Relecture impossible : " + e.message, true); }
-  finally{ b.disabled = false; b.textContent = "↻ Rafraîchir ce vhost"; }
-}
-
-function periode(p){
-  per = p;
-  document.querySelectorAll(".tools .btn").forEach(x => x.classList.toggle("on", x.dataset.p === p));
-  charger(); if(el("detail").style.display === "block") detail(vhostCourant);
-}
-function grouper(){ groupe = !groupe; el("swg").classList.toggle("on", groupe); charger(); }
-
-// ── rapport ──────────────────────────────────────────────────────────────
-function ouvrir(un){
-  el("modal").dataset.vhost = un ? vhostCourant : "";
-  el("mPortee").textContent = (un ? vhostCourant : "Tous les vhosts") + " · rapport PDF";
-  el("mPer").value = per;
-  el("modal").classList.add("on");
-}
-function fermer(){ el("modal").classList.remove("on"); }
-
-async function rapport(envoyer){
-  const b = el(envoyer ? "bEnv" : "bDl"); b.disabled = true;
-  const vhost = el("modal").dataset.vhost || "";
-  const q = new URLSearchParams({periode: el("mPer").value, vhost, grouper: groupe,
-                                 envoyer: envoyer, destinataire: el("mDest").value.trim()});
-  try{
-    const r = await fetch(`${API}/vhost-stats/rapport?${q}`, {method: "POST", headers: entetes()});
-    if(!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 140)}`);
-    if(envoyer){
-      const d = await r.json();
-      fermer(); toast(`Rapport expédié à ${d.destinataire}`);
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Visites et sondes par jour">'+g+b+xs+'</svg>';
+  }
+  function cumulSvg(serie, base){
+    if(!serie || serie.length<2) return '<div class="vide">Pas assez de jours pour une courbe.</div>';
+    let t = num(base); const pts = serie.map(s=>(t += num(s.visites)));
+    const min = num(base), max = pts[pts.length-1] || 1, et = (max-min) || 1, L = 560, H = 120, P = 8;
+    const x = i => P+i*(L-2*P)/Math.max(1,pts.length-1), y = v => H-P-(v-min)*(H-2*P)/et;
+    const ligne = pts.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)).join(' ');
+    return '<svg class="courbe" viewBox="0 0 '+L+' '+H+'" preserveAspectRatio="none" style="height:130px" role="img" aria-label="Visites cumulées"><path d="'+ligne+' L'+x(pts.length-1).toFixed(1)+','+(H-P)+' L'+x(0).toFixed(1)+','+(H-P)+' Z" fill="#29b6f6" opacity=".16"/><path d="'+ligne+'" fill="none" stroke="#29b6f6" stroke-width="2" stroke-linecap="round"/></svg><div class="legende"><span>'+fmt(max)+' visites cumulées</span></div>';
+  }
+  function barresListe(paires, couleur, unite){
+    if(!paires.length) return null;
+    const m = paires[0][1] || 1;
+    return paires.map(p=>'<div class="ligne"><span class="n" title="'+esc(p[0])+'">'+esc(p[0])+'</span><span>'+fmt(p[1])+(unite||'')+'</span><div class="barre"><i style="width:'+Math.max(4,100*p[1]/m)+'%;background:'+(couleur||'var(--cyan)')+'"></i></div></div>').join('');
+  }
+  function donut(idD, idC, idL, lst, unite, info){
+    const tot = lst.reduce((t,c)=>t+c[1],0);
+    if(tot>0){
+      let acc = 0; const seg = lst.map(c=>{ const p = 100*c[1]/tot, b = acc; acc += p; return c[3]+' '+b+'% '+acc+'%'; });
+      el(idD).style.background = 'conic-gradient('+seg.join(',')+')';
+      el(idC).innerHTML = '<div title="'+fmt(tot)+'"><b>'+court(tot)+'</b>'+esc(unite)+'</div>';
+      el(idL).innerHTML = lst.map(c=>'<div title="'+esc(c[2]+' : '+fmt(c[1]))+'"><i style="background:'+c[3]+'"></i><span>'+esc(c[2])+'</span><b>'+fmt(c[1])+'</b><em>'+(100*c[1]/tot<1?'<1':Math.round(100*c[1]/tot))+' %</em></div>').join('');
     }else{
-      // Telechargement : le PDF arrive en corps de reponse, pas en lien.
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `secubox-frequentation-${new Date().toISOString().slice(0,10)}.pdf`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-      fermer(); toast("PDF généré");
+      el(idD).style.background = 'rgba(159,179,214,.16)'; el(idC).textContent = '—'; el(idL).innerHTML = '<div class="vide" style="display:block">'+esc(info)+'</div>';
     }
-  }catch(e){ toast("Rapport impossible : " + e.message, true); }
-  finally{ b.disabled = false; }
-}
+  }
+  function statutsDe(vhosts){
+    const o = {}; (vhosts||[]).forEach(v=>{ const s = v.statuts||{}; Object.keys(s).forEach(k=>{ o[k] = (o[k]||0)+num(s[k]); }); });
+    return o;
+  }
+  const classe = (st,k) => num((st||{})[k]);
+  function listeStatuts(st){
+    const ordre = ['2xx','3xx','4xx','5xx'].concat(Object.keys(st||{}).filter(k=>!/^[2-5]xx$/.test(k)));
+    return ordre.filter(k=>num((st||{})[k])>0).map(k=>{ const m = CLS[k] || [k,'#6f84a8']; return [k, num(st[k]), m[0]+' ('+k+')', m[1]]; });
+  }
 
-charger();
-setInterval(() => { if(el("detail").style.display !== "block") charger(); }, 120000);
+  // ── certificats : l'API ne détaille que ceux à surveiller (warnings) ──
+  function certIndex(){
+    const idx = {}; if(!certs || certs.enabled===false) return idx;
+    (certs.warnings||[]).forEach(w=>{ idx[w.host] = w; });
+    return idx;
+  }
+  function certDe(v, idx){
+    const noms = (v.membres && v.membres.length) ? v.membres : [v.vhost];
+    let pire = null;
+    noms.forEach(n=>{ const c = idx[n]; if(c && (pire===null || c.days < pire.days)) pire = c; });
+    return pire;
+  }
+  function pastCert(c){
+    if(!c) return '<span class="past g" title="Jours restants connus uniquement pour les certificats à renouveler : l’API ne détaille pas les certificats valides.">—</span>';
+    const j = num(c.days);
+    if(c.state==='expired' || j<=0) return '<span class="past r" title="Certificat expiré">expiré</span>';
+    return '<span class="past '+(c.state==='expiring_critical'?'r':'o')+'" title="'+(c.state==='expiring_critical'?'Renouvellement critique':'À renouveler bientôt')+'">'+j+' j</span>';
+  }
+  function pastErr(v){
+    const e5 = classe(v.statuts,'5xx'), e = num(v.erreurs);
+    if(v.erreurs==null) return '<span class="past g">—</span>';
+    if(e5>0) return '<span class="past r" title="'+fmt(e5)+' erreurs serveur (5xx), '+fmt(e)+' erreurs au total">'+fmt(e)+'</span>';
+    if(e>0) return '<span class="past o" title="Erreurs client (4xx) : '+fmt(e)+'">'+fmt(e)+'</span>';
+    return '<span class="past v" title="Aucune erreur">0</span>';
+  }
+
+  // ── liste ──
+  function lignesFiltrees(){
+    const idx = certIndex(), r = recherche.trim().toLowerCase();
+    let l = (vue && vue.vhosts || []).map(v=>({v:v, c:certDe(v, idx)}));
+    if(r) l = l.filter(x=>x.v.vhost.toLowerCase().indexOf(r)>=0 || (x.v.membres||[]).some(m=>m.toLowerCase().indexOf(r)>=0));
+    if(filtre==='5xx') l = l.filter(x=>classe(x.v.statuts,'5xx')>0);
+    else if(filtre==='err') l = l.filter(x=>num(x.v.erreurs)>0);
+    else if(filtre==='cert') l = l.filter(x=>x.c);
+    else if(filtre==='sonde') l = l.filter(x=>num(x.v.requetes)>0 && 100*num(x.v.sondes)/num(x.v.requetes)>=2);
+    const val = x => tri==='vhost' ? x.v.vhost.toLowerCase() : tri==='cert' ? (x.c ? num(x.c.days) : 1e9) : num(x.v[tri]);
+    l.sort((a,b)=>{ const A = val(a), B = val(b); return (A<B?-1:A>B?1:0)*sens || a.v.vhost.localeCompare(b.v.vhost); });
+    return l;
+  }
+  function rendTable(){
+    const l = lignesFiltrees(), maxReq = Math.max.apply(null, (vue&&vue.vhosts||[]).map(v=>num(v.requetes)).concat([1]));
+    const lim = toutAfficher ? l.length : 25;
+    el('tb').innerHTML = l.length ? l.slice(0,lim).map(x=>{
+      const v = x.v, multi = v.membres && v.membres.length>1;
+      return '<tr class="cliq" tabindex="0" data-v="'+esc(v.vhost)+'"><td class="site" title="'+esc(multi ? v.membres.join(', ') : v.vhost)+'"><span class="dom">'+esc(v.vhost)+(multi?'<span class="fam">'+v.membres.length+' domaines</span>':'')+'</span><div class="mini"><i style="width:'+Math.max(2,100*num(v.requetes)/maxReq)+'%"></i></div></td>'
+        + '<td class="r">'+fmt(v.visites)+'</td><td class="r">'+fmt(v.visiteurs)+(v.visiteurs_minores?' +':'')+'</td><td class="r opt">'+fmt(v.requetes)+'</td><td class="r">'+pastErr(v)+'</td><td class="r opt">'+octets(v.octets)+'</td><td>'+pastCert(x.c)+'</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="vide">'+(vue ? 'Aucun site ne correspond.' : (session ? 'Aucune mesure disponible.' : 'Ouvre une session pour voir les sites.'))+'</td></tr>';
+    el('plus').innerHTML = l.length>25 ? (toutAfficher ? '<button type="button" class="bt" id="moins">Réduire</button>' : '<button type="button" class="bt" id="plusBt">Afficher les '+l.length+' sites</button>') : '';
+    document.querySelectorAll('th.tri').forEach(h=>{ h.classList.toggle('actuel', h.dataset.t===tri); });
+    el('tri').value = tri;
+    const t = vue && vue.total || {};
+    el('cnt').textContent = vue ? (l.length<(vue.vhosts||[]).length ? l.length+' sur ' : '') + (groupe ? (t.vhosts||0)+' familles · '+(t.domaines||0)+' domaines' : (t.vhosts||0)+' domaines actifs') : '';
+  }
+  function rend(){
+    el('demo').hidden = !DEMO;
+    el('session').hidden = !!(DEMO || session || vue);
+    const a = el('actif'), ok = !!(vue && vue.actif!==false);
+    a.textContent = ok ? 'COLLECTE ACTIVE' : (vue ? 'COLLECTE DÉSACTIVÉE' : (session ? 'HORS LIGNE' : 'SESSION REQUISE'));
+    a.classList.toggle('hors', !ok);
+    const vh = ok ? (vue.vhosts||[]) : [], t = ok ? (vue.total||{}) : {};
+    el('sous').textContent = ok ? ('Du '+vue.du+' au '+vue.au+(vue.maj ? ' · mesuré à '+new Date(vue.maj).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : ' · collecte en cours')) : 'Visites, visiteurs, erreurs, bande passante et certificats de chaque hôte virtuel.';
+    const N = v => v==null ? '—' : fmt(v), st = statutsDe(vh), e5 = ok ? classe(st,'5xx') : null;
+    const bw = ok && vh.some(v=>v.octets!=null) ? vh.reduce((s,v)=>s+num(v.octets),0) : null;
+    const serie = ok ? (vue.serie||[]) : [];
+    const cs = certs && certs.enabled!==false && certs.summary && certs.summary.total!=null ? certs.summary : null;
+    const renouv = cs ? num(cs.expiring_soon)+num(cs.expiring_critical)+num(cs.expired) : null;
+    el('tuiles').innerHTML =
+      tuile(IC.site, ok?N(t.vhosts):'—', groupe?'Familles de sites':'Sites actifs', ok?fmt(t.domaines)+' domaines':'', 'Hôtes virtuels ayant reçu du trafic sur la période (ou familles de domaines si elles sont rassemblées).')
+     +tuile(IC.req, ok?N(t.requetes):'—', 'Requêtes', ok?'tout compris':'', 'Toutes les requêtes servies par les sites, accessoires (images, styles) compris.', spark(serie.map(d=>d.requetes),'#29b6f6'))
+     +tuile(IC.vis, ok?N(t.visiteurs):'—', 'Visiteurs', ok?fmt(t.visites)+' visites':'', 'Somme des adresses IP distinctes par site : une IP vue sur deux sites compte deux fois. Si nginx journalise l’adresse du proxy amont et non celle du client, ce chiffre est sous-estimé (un site peut afficher 1).', spark(serie.map(d=>d.visites),'#2ecc71'))
+     +tuile(IC.err, e5==null?'—':fmt(e5), 'Erreurs 5xx', ok?fmt(t.erreurs)+' erreurs 4xx/5xx':'', 'Réponses d’erreur serveur (5xx) sur la période, tous sites. Le sous-titre donne toutes les erreurs, 4xx comprises.', spark(serie.map(d=>d.erreurs),'#ff4d5e'))
+     +tuile(IC.cert, renouv==null?'—':fmt(renouv), 'Certificats à renouveler', cs?'sur '+fmt(cs.total)+' certificats':'', 'Certificats expirés, critiques ou à renouveler bientôt (seuils du module). Source : cert-status.')
+     +tuile(IC.bw, octets(bw), 'Bande passante', ok&&bw!=null?'octets servis':'', 'Volume total d’octets servis par les sites sur la période (somme du champ octets de chaque site).');
+    rendTable();
+    // statuts
+    donut('donut','donutC','legS', listeStatuts(st),'réponses', ok?'Aucune réponse classée.':(session?'Aucune mesure disponible.':'Session requise.'));
+    // barres par site
+    const top = vh.slice().sort((a,b)=>num(b.requetes)-num(a.requetes)).slice(0,8).map(v=>[v.vhost, num(v.requetes)]);
+    el('barres').innerHTML = barresListe(top) || '<div class="vide">'+(ok?'Aucun trafic sur la période.':(session?'Aucune mesure disponible.':'Session requise.'))+'</div>';
+    // courbe
+    el('courbe').innerHTML = ok ? histo(serie) : '<div class="vide">'+(session?'Aucune mesure disponible.':'Session requise.')+'</div>';
+    el('legC').innerHTML = ok && serie.length ? '<span><i style="background:#29b6f6"></i>Visites</span><span><i style="background:#ff4d5e"></i>Sondes (chemins de scan connus)</span>' : '';
+    // hôtes en direct
+    if(live && live.enabled!==false){
+      const en = live.entries||[];
+      el('liveNote').textContent = 'fenêtre de '+fmt(live.window_minutes)+' min · '+fmt(live.total_requests)+' requêtes';
+      el('live').innerHTML = barresListe(en.map(e=>[e.host, num(e.count)]), 'var(--vert)') || '<div class="vide">Aucune requête dans la fenêtre.</div>';
+    }else{
+      el('liveNote').textContent = '';
+      el('live').innerHTML = '<div class="vide">'+(live ? 'Mesure en direct désactivée.' : (session?'Aucune mesure disponible.':'Session requise.'))+'</div>';
+    }
+    // certificats
+    if(cs){
+      const w = (certs.warnings||[]).slice(0,8);
+      el('certNote').textContent = 'générée à '+(certs.generated_at ? new Date(certs.generated_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—');
+      el('certs').innerHTML = '<div class="resume"><span class="past v">'+fmt(cs.valid)+' valides</span><span class="past o">'+fmt(cs.expiring_soon)+' bientôt</span><span class="past r">'+fmt(num(cs.expiring_critical)+num(cs.expired))+' critiques ou expirés</span></div>'
+        + (w.length ? w.map(c=>'<div class="cert"><span class="n" title="'+esc(c.host)+'">'+esc(c.host)+'</span>'+pastCert(c)+'</div>').join('') : '<div class="vide">Aucun certificat à renouveler.</div>');
+    }else{
+      el('certNote').textContent = '';
+      el('certs').innerHTML = '<div class="vide">'+(certs ? 'Surveillance des certificats désactivée.' : (session?'Aucune mesure disponible.':'Session requise.'))+'</div>';
+    }
+    hauteur();
+  }
+
+  // ── détail d’un site ──
+  function rendDetail(){
+    const d = det; if(!d) return;
+    const memb = d.membres || [];
+    el('dTitre').textContent = courant;
+    el('dSub').textContent = per + (memb.length>1 ? ' · '+memb.length+' domaines : '+memb.join(', ') : '') + (d.maj ? ' · mesuré à '+new Date(d.maj).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '');
+    const sr = d.serie||[];
+    el('dTuiles').innerHTML =
+      tuile(IC.vis, fmt(d.visites), 'Visites', 'pages, hors accessoires', 'Pages vues, hors images, styles et autres accessoires.', spark(sr.map(x=>x.visites),'#2ecc71'))
+     +tuile(IC.site, fmt(d.visiteurs)+(d.visiteurs_minores?' +':''), 'Visiteurs', 'IP distinctes', 'Adresses IP distinctes. Si nginx journalise l’adresse du proxy amont, ce nombre reste à 1 ou presque ; « + » signale des adresses au-delà de la limite de comptage.')
+     +tuile(IC.req, fmt(d.requetes), 'Requêtes', 'tout compris', 'Toutes les requêtes, accessoires compris.', spark(sr.map(x=>x.requetes),'#29b6f6'))
+     +tuile(IC.err, fmt(d.erreurs), 'Erreurs', 'codes 4xx et 5xx', 'Réponses en erreur, client (4xx) et serveur (5xx).', spark(sr.map(x=>x.erreurs),'#ff4d5e'))
+     +tuile(IC.bw, octets(d.octets), 'Bande passante', 'octets servis', 'Volume d’octets servis par ce site sur la période.')
+     +tuile(IC.cert, fmt(d.sondes), 'Sondes', 'chemins de scan', 'Requêtes vers des chemins de scan connus (wp-login, .env…).');
+    el('dCourbe').innerHTML = histo(sr);
+    const stl = listeStatuts(d.statuts), stt = stl.reduce((s,c)=>s+c[1],0);
+    el('dSt').innerHTML = stl.length ? stl.map(c=>'<div class="ligne"><span class="n" style="color:'+c[3]+'">'+esc(c[2])+'</span><span>'+fmt(c[1])+'</span><div class="barre"><i style="width:'+Math.max(2,100*c[1]/stt)+'%;background:'+c[3]+'"></i></div></div>').join('') : '<div class="vide">Aucun code de retour.</div>';
+    const nv = Object.keys(d.navigateurs||{}).slice(0,7).map(k=>[k, num(d.navigateurs[k])]);
+    const nt = nv.reduce((s,c)=>s+c[1],0) || 1;
+    el('dNav').innerHTML = nv.length ? nv.map((c,i)=>'<div class="ligne"><span class="n">'+esc(c[0])+'</span><span>'+(100*c[1]/nt).toFixed(1).replace('.',',')+' %</span><div class="barre"><i style="width:'+Math.max(3,100*c[1]/nt)+'%;background:'+PAL[i%7]+'"></i></div></div>').join('') : '<div class="vide">Aucun navigateur identifié.</div>';
+    const pays = (d.pays||[]).slice(0,8), pm = pays.length ? num(pays[0].n) || 1 : 1;
+    el('dPays').innerHTML = pays.length ? pays.map(p=>'<div class="ligne"><span class="n">'+esc((p.drapeau||'')+' '+p.code)+'</span><span>'+fmt(p.n)+'</span><div class="barre"><i style="width:'+Math.max(4,100*num(p.n)/pm)+'%;background:var(--violet)"></i></div></div>').join('') : '<div class="vide">Pas de géolocalisation.</div>';
+    el('dPaths').innerHTML = (d.top_chemins||[]).map(e=>'<div class="chemin"><code title="'+esc(e.chemin)+'">'+esc(e.chemin)+'</code><b>'+fmt(e.n)+'</b></div>').join('') || '<div class="vide">Aucune page.</div>';
+    el('dRef').innerHTML = (d.top_referents||[]).map(e=>'<div class="chemin"><code title="'+esc(e.hote)+'">'+esc(e.hote)+'</code><b>'+fmt(e.n)+'</b></div>').join('') || '<div class="vide">Aucun référent.</div>';
+    const cu = d.cumul||{};
+    el('dCumulNote').textContent = cu.depuis ? 'depuis le '+cu.depuis : 'depuis la première visite';
+    el('dCumul').innerHTML = cumulSvg(sr, cu.base);
+    hauteur();
+  }
+  async function ouvrirDetail(nom){
+    courant = nom;
+    try{
+      det = DEMO ? demoDetail(nom) : await api(`/vhost-stats/${encodeURIComponent(nom)}?periode=${per}`);
+    }catch(e){ toast('Détail indisponible : '+e.message, true); return; }
+    el('liste').style.display = 'none'; el('detail').style.display = 'grid';
+    rendDetail();
+    if(!EMBED) window.scrollTo(0,0);
+  }
+  function retour(){ el('detail').style.display = 'none'; el('liste').style.display = 'grid'; hauteur(); }
+  async function relire(){
+    const b = el('bVhost'); b.disabled = true; b.textContent = '⟳ Relecture…';
+    try{
+      if(DEMO){ toast('Démonstration : aucune relecture réelle'); }
+      else{
+        const r = await api(`/vhost-stats/${encodeURIComponent(courant)}/refresh`, {method: "POST"});
+        toast('Journaux relus : '+r.fichiers+' fichiers, '+fmt(r.lignes)+' lignes');
+        await ouvrirDetail(courant); await charge();
+      }
+    }catch(e){ toast('Relecture impossible : '+e.message, true); }
+    finally{ b.disabled = false; b.textContent = '⟳ Relire les journaux de ce site'; }
+  }
+
+  // ── rapport PDF ──
+  function ouvrirRapport(un){
+    el('modal').dataset.vhost = un ? courant : '';
+    el('mPortee').textContent = (un ? courant : 'Tous les sites')+' · rapport PDF';
+    el('mPer').value = per; el('modal').classList.add('on'); el('mDest').focus();
+  }
+  const fermer = () => el('modal').classList.remove('on');
+  async function rapport(envoyer){
+    const b = el(envoyer ? 'bEnv' : 'bDl'); b.disabled = true;
+    const vhost = el('modal').dataset.vhost || '';
+    const p = new URLSearchParams({periode: el('mPer').value, vhost: vhost, grouper: groupe, envoyer: envoyer, destinataire: el('mDest').value.trim()});
+    try{
+      if(DEMO){ fermer(); toast('Démonstration : aucun rapport généré'); return; }
+      const r = await fetch(`${API}/vhost-stats/rapport?${p}`, {method: "POST", headers: entetes(), credentials: 'same-origin'});
+      if(!r.ok) throw new Error(r.status+' '+(await r.text()).slice(0,140));
+      if(envoyer){ const d = await r.json(); fermer(); toast('Rapport expédié à '+d.destinataire); }
+      else{
+        const blob = await r.blob(), url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = 'secubox-frequentation-'+new Date().toISOString().slice(0,10)+'.pdf';
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 4000);
+        fermer(); toast('PDF généré');
+      }
+    }catch(e){ toast('Rapport impossible : '+e.message, true); }
+    finally{ b.disabled = false; }
+  }
+
+  // ── chargement ──
+  async function charge(){
+    const b = el('rafraichir'); b.disabled = true; session = true;
+    try{
+      if(DEMO){ vue = DEMO_VUE(); certs = DEMO_CERTS; live = DEMO_LIVE; }
+      else{
+        const r = await Promise.all([
+          sûr(api(`/vhost-stats?periode=${per}&grouper=${groupe}`)),
+          sûr(api('/cert-status')),
+          sûr(api('/live-hosts'))]);
+        vue = r[0]; certs = r[1]; live = r[2];
+      }
+      el('heure').textContent = new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      rend();
+      if(det && el('detail').style.display==='grid' && !DEMO){
+        try{ det = await api(`/vhost-stats/${encodeURIComponent(courant)}?periode=${per}`); rendDetail(); }catch(e){}
+      }
+    }finally{ b.disabled = false; hauteur(); }
+  }
+
+  // ── démonstration (exemple.test) ──
+  function DEMO_VUE(){
+    const nj = per==='jour'?1:per==='mois'?30:7, j = [], auj = new Date();
+    for(let i=nj-1;i>=0;i--){ const d = new Date(auj.getTime()-i*864e5), k = 1+((nj-i)*37%11)/10; j.push({jour:d.toISOString().slice(0,10), visites:Math.round(5200*k), requetes:Math.round(41000*k), sondes:Math.round(240*k), erreurs:Math.round(780*k)}); }
+    const m = nj/7;
+    const V = (vhost,visites,visiteurs,requetes,erreurs,e5,octets,sondes,membres)=>({vhost:vhost,visites:Math.round(visites*m),visiteurs:visiteurs,visiteurs_minores:false,requetes:Math.round(requetes*m),erreurs:Math.round(erreurs*m),sondes:sondes,octets:Math.round(octets*m),part_robots:12.5,membres:membres||[vhost],
+      statuts:{'2xx':Math.round((requetes-erreurs)*.86*m),'3xx':Math.round((requetes-erreurs)*.14*m),'4xx':Math.round((erreurs-e5)*m),'5xx':Math.round(e5*m)}});
+    const vhosts = [V('www.exemple.test',18400,5230,142000,2100,12,9.6e9,320),V('api.exemple.test',9100,412,98000,5400,380,2.1e9,95),V('blog.exemple.test',7600,3100,61000,640,0,4.2e9,40),
+      V('cloud.exemple.test',2300,48,35000,150,2,18.3e9,12),V('wiki.exemple.test',1800,640,22000,90,0,0.9e9,8),V('mail.exemple.test',950,1,16000,1200,45,0.4e9,610),
+      V('exemple-boutique',4200,1650,38000,420,3,3.4e9,70,['boutique.exemple.test','shop.exemple.test','pay.exemple.test'])];
+    if(groupe===false) vhosts.pop();
+    const tot = {vhosts:vhosts.length,domaines:7,visites:0,requetes:0,visiteurs:0,sondes:0,erreurs:0};
+    vhosts.forEach(v=>{ tot.visites+=v.visites; tot.requetes+=v.requetes; tot.visiteurs+=v.visiteurs; tot.sondes+=v.sondes; tot.erreurs+=v.erreurs; });
+    return {actif:true,periode:per,groupe:groupe,serie:j,du:j[0].jour,au:j[j.length-1].jour,maj:Date.now()-40000,total:tot,vhosts:vhosts};
+  }
+  const DEMO_CERTS = {enabled:true,generated_at:new Date().toISOString(),summary:{total:9,valid:6,expiring_soon:2,expiring_critical:1,expired:0,failed_renewal:0},next_renewal:{host:'mail.exemple.test',days:6},
+    warnings:[{host:'mail.exemple.test',days:6,state:'expiring_critical'},{host:'api.exemple.test',days:19,state:'expiring_soon'},{host:'wiki.exemple.test',days:27,state:'expiring_soon'}]};
+  const DEMO_LIVE = {enabled:true,window_minutes:60,total_requests:15840,entries:[{host:'www.exemple.test',count:7420},{host:'api.exemple.test',count:4310},{host:'blog.exemple.test',count:2150},{host:'cloud.exemple.test',count:1180},{host:'wiki.exemple.test',count:780}]};
+  function demoDetail(nom){
+    const v = (vue.vhosts||[]).filter(x=>x.vhost===nom)[0] || vue.vhosts[0], s = vue.serie, sv = v.requetes/Math.max(1,vue.total.requetes);
+    return Object.assign({}, v, {periode:per,maj:vue.maj,
+      serie:s.map(d=>({jour:d.jour,visites:Math.round(d.visites*sv),visiteurs:Math.round(v.visiteurs/s.length),requetes:Math.round(d.requetes*sv),sondes:Math.round(d.sondes*sv),erreurs:Math.round(d.erreurs*sv)})),
+      navigateurs:{Chrome:52,Firefox:21,Safari:14,Edge:8,Autres:5}, top_chemins:[{chemin:'/',n:4120},{chemin:'/docs/',n:1880},{chemin:'/tarifs',n:960},{chemin:'/api/v1/etat',n:540}],
+      top_referents:[{hote:'search.exemple.test',n:2100},{hote:'social.exemple.test',n:640}],
+      pays:[{code:'FR',drapeau:'🇫🇷',n:2400},{code:'DE',drapeau:'🇩🇪',n:620},{code:'US',drapeau:'🇺🇸',n:410},{code:'BE',drapeau:'🇧🇪',n:230}],
+      cumul:{depuis:'2026-03-02',visites:v.visites*9,base:v.visites*8}});
+  }
+
+  // ── hauteur transmise à la page parente ──
+  function hauteur(){ if(window.parent!==window){ try{ window.parent.postMessage({sbxMetricsVue:Math.ceil(el('cadre').getBoundingClientRect().height), onglet:'vhosts'}, location.origin); }catch(e){} } }
+  window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+  if(window.ResizeObserver) new ResizeObserver(hauteur).observe(el('cadre'));
+
+  // ── événements ──
+  if(EMBED){ const r = el('retourIndex'); if(r) r.href = 'index.html?embed=1'; }
+  el('rafraichir').addEventListener('click', charge);
+  el('bRapport').addEventListener('click', ()=>ouvrirRapport(false));
+  el('bRapportV').addEventListener('click', ()=>ouvrirRapport(true));
+  el('mAnnuler').addEventListener('click', fermer);
+  el('modal').addEventListener('click', e=>{ if(e.target===el('modal')) fermer(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') fermer(); });
+  el('bDl').addEventListener('click', ()=>rapport(false));
+  el('bEnv').addEventListener('click', ()=>rapport(true));
+  el('bVhost').addEventListener('click', relire);
+  el('retour').addEventListener('click', retour);
+  document.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click', ()=>{
+    per = b.dataset.p; document.querySelectorAll('[data-p]').forEach(x=>x.classList.toggle('on', x===b)); charge();
+  }));
+  function basculeGroupe(){ groupe = !groupe; el('swg').classList.toggle('on', groupe); el('swg').setAttribute('aria-checked', groupe); charge(); }
+  el('swg').addEventListener('click', basculeGroupe);
+  el('swg').addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); basculeGroupe(); } });
+  el('rech').addEventListener('input', e=>{ recherche = e.target.value; rendTable(); hauteur(); });
+  el('filtre').addEventListener('change', e=>{ filtre = e.target.value; rendTable(); hauteur(); });
+  el('tri').addEventListener('change', e=>{ tri = e.target.value; sens = tri==='vhost'||tri==='cert' ? 1 : -1; rendTable(); });
+  document.querySelectorAll('th.tri').forEach(h=>h.addEventListener('click', ()=>{
+    if(tri===h.dataset.t) sens = -sens; else{ tri = h.dataset.t; sens = tri==='vhost'||tri==='cert' ? 1 : -1; }
+    rendTable();
+  }));
+  el('tb').addEventListener('click', e=>{ const r = e.target.closest('tr[data-v]'); if(r) ouvrirDetail(r.dataset.v); });
+  el('tb').addEventListener('keydown', e=>{ if(e.key==='Enter'){ const r = e.target.closest('tr[data-v]'); if(r) ouvrirDetail(r.dataset.v); } });
+  el('plus').addEventListener('click', e=>{ if(e.target.id==='plusBt'){ toutAfficher = true; rendTable(); hauteur(); } else if(e.target.id==='moins'){ toutAfficher = false; rendTable(); hauteur(); } });
+
+  el('heure').textContent = new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  charge();
+  if(!DEMO) setInterval(()=>{ if(!document.hidden) charge(); }, 30000);
+})();
 </script>
 </body>
 </html>

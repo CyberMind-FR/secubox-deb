@@ -4,574 +4,327 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Metrics », métriques système et réseau de la box (profil projet Aurora). Une seule page, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : une colonne, sans menu latéral ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API du module : /overview, /health/summary, /memory/history, /connections, /waf_stats,
+  /waf/campaigns, /cert-status, /live-hosts, lues en session). Une mesure absente s'affiche « — », jamais 0.
+  Seule la mémoire a un historique côté API ; CPU, disque, température : valeur instantanée (ou « — »), aucune série inventée.
+  Page en LECTURE SEULE (l'ancienne page n'avait aucune action POST). `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Metrics Dashboard - SecuBox</title>
-    <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --bg-secondary: var(--tube-deep);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --text-muted: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); }
-        .logo span:nth-child(2) { color: var(--red); }
-        .logo span:nth-child(3) { color: var(--green); }
-        .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; transition: all 0.2s; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(51,255,102,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
-
-        /* Main content */
-        .main-content { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .top-bar { display: none; }
-        .content { max-width: 1400px; }
-
-        /* Metrics specific styles */
-        .mx-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .mx-title {
-            font-size: 22px;
-            font-weight: 600;
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-        }
-        .mx-live {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-        .mx-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--green);
-            border-radius: 50%;
-            box-shadow: 0 0 6px var(--green);
-            animation: blink 1.5s infinite;
-        }
-        @keyframes blink { 50% { opacity: 0.4; } }
-        @keyframes flash { 0% { background: rgba(51,255,102,0.3); } 100% { background: transparent; } }
-        .mx-changed { animation: flash 0.5s ease-out; }
-
-        /* Freshness indicators */
-        .mx-freshness {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 12px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-        }
-        .mx-freshness-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            transition: background 0.3s, box-shadow 0.3s;
-        }
-        .mx-freshness-dot.fresh { background: var(--green); box-shadow: 0 0 6px var(--green); }
-        .mx-freshness-dot.recent { background: var(--orange); box-shadow: 0 0 4px var(--orange); }
-        .mx-freshness-dot.stale { background: var(--red); box-shadow: 0 0 4px var(--red); }
-        .mx-age { color: var(--text-muted); transition: color 0.3s; }
-        .mx-age.fresh { color: var(--green); }
-        .mx-age.recent { color: var(--orange); }
-        .mx-age.stale { color: var(--red); }
-
-        /* Stats Grid */
-        .mx-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-        .mx-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px;
-            text-align: center;
-            transition: border-color 0.2s;
-        }
-        .mx-card:hover { border-color: var(--green); box-shadow: 0 0 10px rgba(51,255,102,0.2); }
-        .mx-icon { font-size: 24px; margin-bottom: 8px; }
-        .mx-val {
-            font-size: 28px;
-            font-weight: 700;
-            line-height: 1;
-            text-shadow: var(--bloom-soft);
-        }
-        .mx-val.green { color: var(--green); }
-        .mx-val.cyan { color: var(--cyan); }
-        .mx-val.orange { color: var(--orange); }
-        .mx-val.red { color: var(--red); }
-        .mx-val.purple { color: var(--purple); }
-        .mx-lbl {
-            font-size: 11px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-top: 4px;
-        }
-        .mx-sub {
-            font-size: 10px;
-            color: var(--text-muted);
-            margin-top: 4px;
-            opacity: 0.7;
-        }
-
-        /* Services bar */
-        .mx-svc {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            padding: 12px 16px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .mx-svc-title {
-            font-size: 11px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-        .mx-svc-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-        }
-        .mx-svc-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-        .mx-svc-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
-        .mx-svc-dot.off { background: var(--red); }
-
-        /* Panels */
-        .mx-panels {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-        @media (max-width: 768px) { .mx-panels { grid-template-columns: 1fr; } }
-        .mx-panel {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px;
-        }
-        .mx-panel-title {
-            font-size: 13px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--p31-hot);
-        }
-        .mx-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-        }
-        .mx-row:last-child { border-bottom: none; }
-        .mx-row-label { font-size: 12px; color: var(--text-muted); }
-        .mx-row-val { font-size: 16px; font-weight: 600; color: var(--cyan); text-shadow: var(--bloom-soft); }
-
-        @media (max-width: 900px) { .sidebar { display: none; } .main-content { margin-left: 0; } }
-    </style>
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Metrics, système et réseau de la box</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .principal{min-width:0}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  body.emb #sidebar{display:none}
+  @media (max-width:900px){body:not(.emb) .principal{margin-left:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.warn{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .droite button,.droite a{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .droite button:disabled{opacity:.5;cursor:default}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h1{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile .haut>div{min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tuile svg.sp{width:100%;height:26px}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr;align-items:start}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:4px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .jauges{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
+  .jauge{text-align:center;min-width:0} .jauge svg{width:100%;max-width:130px;height:auto;display:block;margin:0 auto}
+  .jauge .jl{color:var(--doux);font-size:.74rem;margin-top:-4px} .jauge .js{color:var(--faible);font-size:.66rem}
+  .ligne{display:grid;grid-template-columns:1fr auto 80px;gap:8px;align-items:center;font-size:.78rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .svc{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;font-size:.78rem;padding:4px 0;border-top:1px solid rgba(86,150,255,.10)}
+  .svc:first-of-type{border-top:0}
+  .svc i{width:9px;height:9px;border-radius:50%;background:var(--faible)} .svc .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .svc i.ok{background:var(--vert);box-shadow:0 0 6px rgba(46,204,113,.6)} .svc i.warn{background:var(--orange)} .svc i.err{background:var(--rouge);box-shadow:0 0 6px rgba(255,77,94,.6)}
+  .puce{border-radius:5px;padding:0 8px;font-weight:700;font-size:.68rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .puce.ok{background:rgba(46,204,113,.2);color:var(--vert)} .puce.warn{background:rgba(255,159,28,.2);color:var(--orange)} .puce.err{background:rgba(255,77,94,.2);color:var(--rouge)} .puce.na{background:rgba(159,179,214,.2);color:var(--doux)}
+  .kv{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+  .kv div{border:1px solid var(--trait);border-radius:9px;padding:6px 9px;background:rgba(8,18,38,.5);min-width:0} .kv b{display:block;font-size:1.1rem;font-variant-numeric:tabular-nums} .kv span{color:var(--doux);font-size:.7rem}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-variant-numeric:tabular-nums}
+  .scroll{overflow-x:auto}
+  .alerte{border:1px solid var(--orange);background:rgba(255,159,28,.1);color:var(--orange);border-radius:8px;padding:4px 9px;font-size:.74rem;margin-top:6px}
+  @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+  @container a (min-width:900px){.g1{grid-template-columns:1fr 1.3fr} .g3{grid-template-columns:1fr 1fr 1fr}}
+</style>
 </head>
-<body class="crt-light hybrid-dark">
-    <nav class="sidebar" id="sidebar"></nav>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="principal">
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3" fill="rgba(59,130,246,.16)"/><path d="M6.5 14.5l3-3.5 3 2.5 4.5-5.5"/></svg><span><b>Metrics</b><small>Système et réseau de la box</small></span></span>
+    <span class="actif" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><a href="/metrics/vhosts.html" id="lienSites">Sites (vhosts)</a><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h1>Vue d’ensemble</h1><div class="sous">Processeur, mémoire, disque, réseau, services, protection et certificats de la box, en lecture seule.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Ressources <i id="fraicheur"></i></h3><div class="jauges" id="jauges"></div><div id="alertes"></div></div>
+    <div class="pan"><h3>Mémoire et charge <i>24 dernières heures</i></h3><div id="courbeMem"></div><div class="legende" id="legMem"></div><div id="courbeLoad"></div><div class="legende" id="legLoad"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Services et conteneurs</h3><div id="services"></div></div>
+    <div class="pan"><h3>Connexions TCP établies</h3><div id="conns"></div></div>
+    <div class="pan"><h3>Trafic et protection WAF <i>sbxwaf</i></h3><div id="waf"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Campagnes récentes <i id="campNote"></i></h3><div class="scroll" id="camps"></div></div>
+    <div class="pan"><h3>Certificats <i id="certNote"></i></h3><div id="certs"></div></div>
+    <div class="pan"><h3>Santé des modules <i id="scoreNote"></i></h3><div id="modules"></div></div>
+  </div>
+  <div class="note">Mesures relevées sur la box et mises en cache côté serveur (quelques secondes). Aucune action n’est possible depuis cette page.</div>
+</div></div>
+</main>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function has(x){return x!==null&&x!==undefined&&x!==''&&isFinite(Number(x));}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  function N(v){return has(v)?fmt(v):'—';}
+  function P(v){return has(v)?Math.round(num(v))+' %':'—';}
+  var q=new URLSearchParams(location.search);
+  var EMB=!!q.get('embed');
+  if(EMB) document.body.classList.add('emb');
+  else{try{var s=document.createElement('script');s.src='/shared/sidebar.js';document.head.appendChild(s);}catch(e){}}
+  function couleur(p){return p>=85?'#ff4d5e':p>=70?'#ff9f1c':'#2ecc71';}
+  function duree(sec){if(!has(sec))return '—';sec=Math.floor(num(sec));var d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600),m=Math.floor(sec%3600/60);return d>0?d+' j '+h+' h':h>0?h+' h '+m+' min':m+' min';}
+  function mem(kb){return (num(kb)/1048576).toFixed(1).replace('.',',')+' Go';}
+  function hhmm(t){var d=new Date(num(t)*1000);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
+  function maj(){el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 
-    <main class="main-content">
-        <div class="content">
-            <!-- Header with freshness indicator -->
-            <div class="mx-header">
-                <div class="mx-title">Metrics Dashboard</div>
-                <div style="display:flex; align-items:center; gap:16px;">
-                    <a href="/metrics/vhosts.html" style="font-family:'Courier Prime',monospace;
-                       font-size:12px;padding:6px 11px;border:1px solid rgba(100,150,200,.35);
-                       border-radius:4px;color:#00d4ff;text-decoration:none;white-space:nowrap">
-                       📊 Statistiques vhosts</a>
-                    <div class="mx-freshness" id="mx-freshness">
-                        <span class="mx-freshness-dot fresh" id="mx-fresh-dot"></span>
-                        <span class="mx-age fresh" id="mx-age">just now</span>
-                    </div>
-                    <div class="mx-live">
-                        <span class="mx-dot"></span>
-                        <span id="mx-time">--:--:--</span>
-                    </div>
-                </div>
-            </div>
+  var IC={
+    cpu:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2" fill="rgba(59,130,246,.16)"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg>',
+    mem:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="7" width="18" height="9" rx="1.5" fill="rgba(167,139,250,.14)"/><path d="M7 16v3M11 16v3M15 16v3M7 10.5v2M11 10.5v2M15 10.5v2"/></svg>',
+    dsk:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><ellipse cx="12" cy="6" rx="7" ry="2.6" fill="rgba(41,182,246,.14)"/><path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6"/></svg>',
+    chg:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 4-7 5 5" /><path d="M3 20h18" /></svg>',
+    tmp:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><path d="M10 14V5a2 2 0 014 0v9a4 4 0 11-4 0z" fill="rgba(255,77,94,.14)"/><path d="M12 9v7"/></svg>',
+    up:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(46,204,113,.14)"/><path d="M12 7v5l3 2"/></svg>',
+    net:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M12 7v5M12 12L6 17M12 12l6 5"/></svg>',
+    req:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(59,130,246,.16)"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+    men:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(255,77,94,.14)"/><path d="M12 8v5M12 16.2v.1"/></svg>',
+    san:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z" fill="rgba(46,204,113,.14)"/></svg>'
+  };
+  function barre(p,c){return '<div class="barre" style="margin-top:2px"><i style="width:'+Math.max(2,Math.min(100,num(p)))+'%;background:'+c+'"></i></div>';}
+  function spark(a,c){
+    if(!a||a.length<2) return '';
+    var m=Math.max.apply(null,a.map(num).concat([0.0001])),n=a.length,pt=a.map(function(v,i){return (i*100/(n-1)).toFixed(1)+','+(28-26*num(v)/m).toFixed(1);});
+    return '<svg class="sp" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,30 '+pt.join(' ')+' 100,30" fill="'+c+'" opacity=".18"/><polyline points="'+pt.join(' ')+'" fill="none" stroke="'+c+'" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>';
+  }
+  function tuile(ic,v,l,s,def,extra){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'<div class="s">&nbsp;</div>')+(extra||'')+'</div>';}
 
-            <!-- Main stats grid -->
-            <div class="mx-grid">
-                <div class="mx-card">
-                    <div class="mx-icon">⏱</div>
-                    <div class="mx-val green" id="s-up">--</div>
-                    <div class="mx-lbl">Uptime</div>
-                    <div class="mx-sub" id="s-load">Load: --</div>
-                </div>
-                <div class="mx-card">
-                    <div class="mx-icon">🧠</div>
-                    <div class="mx-val green" id="s-mem">--%</div>
-                    <div class="mx-lbl">Memory</div>
-                    <div class="mx-sub" id="s-mem-detail">-- / --</div>
-                </div>
-                <div class="mx-card">
-                    <div class="mx-icon">🌐</div>
-                    <div class="mx-val cyan" id="s-vh">0</div>
-                    <div class="mx-lbl">vHosts</div>
-                </div>
-                <div class="mx-card">
-                    <div class="mx-icon">🔒</div>
-                    <div class="mx-val purple" id="s-cert">0</div>
-                    <div class="mx-lbl">SSL Certs</div>
-                </div>
-                <div class="mx-card">
-                    <div class="mx-icon">📄</div>
-                    <div class="mx-val cyan" id="s-meta">0</div>
-                    <div class="mx-lbl">MetaBlogs</div>
-                </div>
-                <div class="mx-card">
-                    <div class="mx-icon">🐍</div>
-                    <div class="mx-val green" id="s-stream">0</div>
-                    <div class="mx-lbl">Streamlits</div>
-                </div>
-                <div class="mx-card">
-                    <div class="mx-icon">📦</div>
-                    <div class="mx-val purple" id="s-lxc">0</div>
-                    <div class="mx-lbl">LXC</div>
-                </div>
-                <div class="mx-card">
-                    <div class="mx-icon">🔗</div>
-                    <div class="mx-val cyan" id="s-tcp">0</div>
-                    <div class="mx-lbl">TCP Conns</div>
-                </div>
-            </div>
+  // Jauge à 270° : cercle de longueur normalisée à 100, ouverture en bas.
+  function jauge(p,l,sub){
+    var ok=has(p),v=ok?Math.max(0,Math.min(100,num(p))):0,c=ok?couleur(v):'#6f84a8';
+    return '<div class="jauge"><svg viewBox="0 0 100 100" role="img" aria-label="'+esc(l)+' '+(ok?Math.round(v)+' %':'non mesuré')+'">'
+      +'<circle cx="50" cy="50" r="38" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="9" stroke-linecap="round" pathLength="100" stroke-dasharray="75 100" transform="rotate(135 50 50)"/>'
+      +(ok&&v>0?'<circle cx="50" cy="50" r="38" fill="none" stroke="'+c+'" stroke-width="9" stroke-linecap="round" pathLength="100" stroke-dasharray="'+(0.75*v).toFixed(1)+' 100" transform="rotate(135 50 50)"/>':'')
+      +'<text x="50" y="56" text-anchor="middle" font-size="19" font-weight="700" fill="#eaf1ff">'+(ok?Math.round(v)+'<tspan font-size="10" fill="#9fb3d6"> %</tspan>':'—')+'</text></svg>'
+      +'<div class="jl">'+esc(l)+'</div><div class="js">'+esc(sub||'')+'</div></div>';
+  }
 
-            <!-- Services bar -->
-            <div class="mx-svc">
-                <span class="mx-svc-title">Services</span>
-                <div class="mx-svc-item">
-                    <span class="mx-svc-dot off" id="sv-ha"></span>
-                    HAProxy
-                </div>
-                <div class="mx-svc-item">
-                    <span class="mx-svc-dot off" id="sv-waf"></span>
-                    WAF
-                </div>
-            </div>
+  // Aire / courbe : x = temps, y = valeur entre 0 et `haut` (échelle choisie parmi des paliers ronds).
+  function courbe(serie,cle,couleurC,fmtY,haut,legLabel){
+    var n=serie.length;if(n<2) return '';
+    var W=520,H=130,L=40,R=8,T=8,B=18,t0=serie[0].t,t1=serie[n-1].t||t0+1;
+    var x=function(t){return L+(t-t0)*(W-L-R)/Math.max(1,t1-t0);},y=function(v){return T+(H-T-B)*(1-Math.min(num(v),haut)/haut);};
+    var d='',i;for(i=0;i<n;i++)d+=(i?' L':'M')+x(serie[i].t).toFixed(1)+','+y(serie[i][cle]).toFixed(1);
+    var g='',k;for(k=0;k<=2;k++){var v=haut*k/2,Y=y(v);g+='<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-5)+'" y="'+(Y+3)+'" text-anchor="end">'+fmtY(v)+'</text>';}
+    var xs='';for(k=0;k<=4;k++){var tt=t0+(t1-t0)*k/4;xs+='<text x="'+x(tt).toFixed(1)+'" y="'+(H-4)+'" text-anchor="'+(k===0?'start':k===4?'end':'middle')+'">'+hhmm(tt)+'</text>';}
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(legLabel)+'">'+g+xs+'<path d="'+d+' L'+x(t1).toFixed(1)+','+y(0)+' L'+x(t0).toFixed(1)+','+y(0)+' Z" fill="'+couleurC+'" opacity=".16"/><path d="'+d+'" fill="none" stroke="'+couleurC+'" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+  }
+  function palier(m){var pas=[1,2,4,5,8,10,16,20,32,50,100,200,500,1000].filter(function(u){return u>=m;});return pas.length?pas[0]:Math.ceil(m);}
 
-            <!-- Panels -->
-            <div class="mx-panels">
-                <!-- WAF Panel -->
-                <div class="mx-panel">
-                    <div class="mx-panel-title">
-                        <span>🛡</span>
-                        WAF & Security
-                    </div>
-                    <div class="mx-row">
-                        <span class="mx-row-label">Active Bans</span>
-                        <span class="mx-row-val" id="w-bans">0</span>
-                    </div>
-                    <div class="mx-row">
-                        <span class="mx-row-label">Alerts (24h)</span>
-                        <span class="mx-row-val" id="w-alerts">0</span>
-                    </div>
-                    <div class="mx-row">
-                        <span class="mx-row-label">WAF Blocked</span>
-                        <span class="mx-row-val" id="w-blocked">0</span>
-                    </div>
-                </div>
+  function svc(nom,etat,txt,titre){return '<div class="svc" title="'+esc(titre||'')+'"><i class="'+(etat||'')+'"></i><span class="n">'+esc(nom)+'</span><span class="puce '+(etat||'na')+'">'+esc(txt)+'</span></div>';}
+  function ligne(n,v,m,c){return '<div class="ligne"><span class="n" style="text-align:left">'+esc(n)+'</span><span>'+N(v)+'</span>'+(has(v)?'<div class="barre"><i style="width:'+Math.max(has(v)&&num(v)>0?4:0,100*num(v)/Math.max(1,m))+'%;background:'+c+'"></i></div>':'<span></span>')+'</div>';}
+  var ETAT={ok:['ok','OK'],warn:['warn','ATTENTION'],error:['err','HORS SERVICE'],unknown:['na','INCONNU']};
 
-                <!-- Connections Panel -->
-                <div class="mx-panel">
-                    <div class="mx-panel-title">
-                        <span>🔗</span>
-                        Connections
-                    </div>
-                    <div class="mx-row">
-                        <span class="mx-row-label">HTTPS (443)</span>
-                        <span class="mx-row-val" id="c-https">0</span>
-                    </div>
-                    <div class="mx-row">
-                        <span class="mx-row-label">HTTP (80)</span>
-                        <span class="mx-row-val" id="c-http">0</span>
-                    </div>
-                    <div class="mx-row">
-                        <span class="mx-row-label">SSH (22)</span>
-                        <span class="mx-row-val" id="c-ssh">0</span>
-                    </div>
-                    <div class="mx-row">
-                        <span class="mx-row-label">Total TCP</span>
-                        <span class="mx-row-val" id="c-total" style="color:var(--purple)">0</span>
-                    </div>
-                </div>
-            </div>
+  function rend(d){
+    var ov=d.overview,hs=d.sante,hist=d.memoire,cn=d.conns,wf=d.waf,lv=d.hotes,ct=d.certs,cp=d.campagnes;
+    var rien=!(ov||hs||cn||wf||hist||ct||cp||lv);
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||!rien);
+    // état global : le score de santé de l'API
+    var a=el('actif'),sc=hs&&has(hs.score)?num(hs.score):null;
+    a.className='actif'+(sc===null?(ov?'':' hors'):sc>=85?'':sc>=60?' warn':' hors');
+    a.textContent=sc===null?(ov?'MESURES PARTIELLES':'HORS LIGNE'):sc>=85?'SANTÉ '+sc+'/100 · TOUT VA BIEN':sc>=60?'SANTÉ '+sc+'/100 · DÉGRADÉE':'SANTÉ '+sc+'/100 · CRITIQUE';
+    var sys=hs&&hs.system||{},ser=(hist&&hist.serie)||[];
+    var cpu=ov&&has(ov.cpu_pct)?num(ov.cpu_pct):(has(sys.cpu)?num(sys.cpu):null);
+    var memP=ov&&has(ov.mem_pct)?num(ov.mem_pct):(has(sys.memory)?num(sys.memory):null);
+    var dsk=has(sys.disk)?num(sys.disk):null;
+    var load=(ov&&ov.load)||sys.load||null,l1=load?parseFloat(String(load).split(' ')[0]):NaN;
+    var memS=ser.map(function(r){return num(r.total_mb)>0?100*num(r.used_mb)/num(r.total_mb):0;}),loadS=ser.map(function(r){return num(r.load1);});
+    var up=ov&&has(ov.uptime)?ov.uptime:(has(sys.uptime)?sys.uptime:null);
+    var tcp=cn&&has(cn.total_tcp)?cn.total_tcp:null;
+    var req=lv&&lv.enabled!==false&&has(lv.total_requests)?lv.total_requests:null;
+    var men=wf&&has(wf.alerts_today)?wf.alerts_today:null;
+    el('tuiles').innerHTML=
+      tuile(IC.san,sc===null?'—':sc+'<small style="font-size:.8rem;color:var(--doux)"> /100</small>','Santé globale',sc===null?'':(sc>=85?'sain':sc>=60?'dégradée':'critique'),'Note de santé de 0 à 100 calculée par le module : services en panne, mémoire, processeur, disque et taux de blocage du WAF.',sc===null?'':barre(sc,sc>=85?'#2ecc71':sc>=60?'#ff9f1c':'#ff4d5e'))
+     +tuile(IC.cpu,P(cpu),'Processeur','instantané','Utilisation du processeur au moment du relevé. L’API ne conserve pas d’historique du processeur.',cpu===null?'':barre(cpu,couleur(cpu)))
+     +tuile(IC.mem,P(memP),'Mémoire',ov&&has(ov.mem_total_kb)?mem(ov.mem_used_kb)+' / '+mem(ov.mem_total_kb):'','Mémoire utilisée (hors mémoire disponible rendue par le noyau) rapportée au total.',memS.length>1?spark(memS,'#a78bfa'):(memP===null?'':barre(memP,couleur(memP))))
+     +tuile(IC.dsk,P(dsk),'Disque','partition racine /','Occupation de la partition racine, relevée par df.',dsk===null?'':barre(dsk,couleur(dsk)))
+     +tuile(IC.chg,has(l1)?String(l1).replace('.',','):'—','Charge','1 min'+(load?' · '+String(load).split(' ').slice(0,3).join(' / '):''),'Charge moyenne du système (1, 5 et 15 minutes).',loadS.length>1?spark(loadS,'#ff9f1c'):'')
+     +tuile(IC.tmp,'—','Température','non fournie par l’API','La température n’est mesurée par aucune route du module : la page n’invente pas de valeur.','')
+     +tuile(IC.up,duree(up),'Disponibilité','depuis le dernier démarrage','Durée écoulée depuis le dernier démarrage de la box.','')
+     +tuile(IC.net,N(tcp),'Connexions actives',cn?'TCP établies':'','Connexions TCP à l’état établi, tous ports confondus.','')
+     +tuile(IC.req,N(req),'Requêtes web',lv&&lv.enabled!==false&&req!==null?'sur '+N(lv.window_minutes||60)+' min':'','Requêtes servies par nginx sur la fenêtre de mesure du module (live-hosts).','')
+     +tuile(IC.men,N(men),'Menaces',wf?'événements WAF aujourd’hui':'','Événements de menace comptés par le WAF depuis minuit.','');
 
-            <!-- Campagnes d'attaque corrélées (#1070 phase D) -->
-            <div class="mx-panel" id="campaigns-panel" style="margin-top:1.2rem">
-                <div class="mx-panel-title">
-                    <span>🎯</span>
-                    Campagnes d'attaque
-                    <span id="camp-summary" class="mx-row-val" style="margin-left:auto;color:var(--muted)"></span>
-                </div>
-                <div id="campaigns-body">
-                    <div class="mx-row"><span class="mx-row-label">chargement…</span></div>
-                </div>
-                <p style="color:var(--muted);font-size:.8rem;margin:.5rem 0 0">
-                    Attaquants regroupés par <b>même workflow</b> (mêmes sondes, même outil), à travers
-                    le temps et les IP — corrélés depuis le journal du WAF (sbxwaf #1070).
-                </p>
-            </div>
-        </div>
-    </main>
+    el('jauges').innerHTML=jauge(cpu,'Processeur',has(l1)?'charge '+String(l1).replace('.',','):'')+jauge(memP,'Mémoire',ov&&has(ov.mem_total_kb)?mem(ov.mem_used_kb)+' utilisés':'')+jauge(dsk,'Disque','partition /');
+    el('fraicheur').textContent=ov&&ov._freshness&&has(ov._freshness.age)?'relevé il y a '+Math.round(num(ov._freshness.age))+' s':'';
+    var al=(hist&&hist.alertes)||[];
+    el('alertes').innerHTML=al.map(function(m){return '<div class="alerte">'+esc(m)+'</div>';}).join('');
 
-    <script src="/shared/sidebar.js"></script>
-    <script>
-        const API = '/api/v1/metrics';
-        let prevValues = {};
+    var pas=(hist&&hist.pas_s)?Math.round(num(hist.pas_s)/60):5;
+    el('courbeMem').innerHTML=memS.length>1?courbe(ser.map(function(r,i){return {t:r.t,m:memS[i]};}),'m','#a78bfa',function(v){return Math.round(v)+' %';},100,'Mémoire utilisée en pourcentage'):'<div class="vide">Historique mémoire indisponible (relevé toutes les '+pas+' min, session requise).</div>';
+    el('legMem').innerHTML=memS.length>1?'<span><i style="background:#a78bfa"></i>Mémoire utilisée</span>'+(hist&&has(hist.croissance_noyau_mb_h)?'<span>Mémoire noyau non récupérable : '+(num(hist.croissance_noyau_mb_h)>=0?'+':'')+num(hist.croissance_noyau_mb_h).toFixed(1).replace('.',',')+' Mo/h</span>':''):'';
+    var mx=palier(Math.max.apply(null,loadS.concat([0.5])));
+    el('courbeLoad').innerHTML=loadS.length>1?courbe(ser.map(function(r){return {t:r.t,l:num(r.load1)};}),'l','#ff9f1c',function(v){return String(Math.round(v*10)/10).replace('.',',');},mx,'Charge à 1 minute'):'';
+    el('legLoad').innerHTML=loadS.length>1?'<span><i style="background:#ff9f1c"></i>Charge à 1 minute</span>':'';
 
-        function formatUptime(seconds) {
-            const d = Math.floor(seconds / 86400);
-            const h = Math.floor((seconds % 86400) / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            if (d > 0) return d + 'd ' + h + 'h';
-            if (h > 0) return h + 'h ' + m + 'm';
-            return m + 'm';
-        }
+    // services et conteneurs
+    var sv='';
+    if(ov){
+      sv+=svc('HAProxy · TLS en frontal',ov.haproxy?'ok':'err',ov.haproxy?'ACTIF':'ARRÊTÉ');
+      sv+=svc('sbxwaf · pare-feu applicatif',ov.mitmproxy?'ok':'err',ov.mitmproxy?'ACTIF':'ARRÊTÉ','Processus de filtrage devant nginx');
+    }
+    var mo=hs&&hs.modules||null;
+    if(mo&&mo.nginx){var e=ETAT[mo.nginx.status]||ETAT.unknown;sv+=svc('nginx',e[0],mo.nginx.running?'ACTIF':'ARRÊTÉ');}
+    if(ov){
+      sv+=svc('Conteneurs LXC en marche',has(ov.lxc_containers)?'ok':'na',N(ov.lxc_containers));
+      sv+=svc('Applications Streamlit',has(ov.streamlits)?'ok':'na',N(ov.streamlits));
+      sv+=svc('Sites publiés (Metablogizer)',has(ov.metablogs)?'ok':'na',N(ov.metablogs));
+      sv+=svc('Hôtes virtuels nginx',has(ov.vhosts)?'ok':'na',N(ov.vhosts),'Détail et trafic par site : page « Sites »');
+    }
+    el('services').innerHTML=sv||'<div class="vide">Session requise.</div>';
 
-        function formatMem(kb) {
-            return (kb / 1048576).toFixed(1) + ' GB';
-        }
+    // connexions
+    if(cn){var mc=Math.max(1,num(cn.total_tcp));
+      el('conns').innerHTML=ligne('HTTPS (443)',cn.https,mc,'#3b82f6')+ligne('HTTP (80)',cn.http,mc,'#29b6f6')+ligne('SSH (22)',cn.ssh,mc,'#a78bfa')+ligne('Total TCP',cn.total_tcp,mc,'#2ecc71');}
+    else el('conns').innerHTML='<div class="vide">Session requise.</div>';
 
-        function formatAge(seconds) {
-            if (seconds < 60) return seconds + 's ago';
-            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
-            return Math.floor(seconds / 3600) + 'h ago';
-        }
+    // WAF
+    if(wf||(hs&&hs.waf)){
+      var hw=hs&&hs.waf||{};
+      el('waf').innerHTML='<div class="kv">'
+        +'<div><b>'+N(wf&&wf.alerts_today)+'</b><span>menaces aujourd’hui</span></div>'
+        +'<div><b style="color:'+(wf&&num(wf.active_bans)>0?'var(--orange)':'inherit')+'">'+N(wf&&wf.active_bans)+'</b><span>bannissements actifs</span></div>'
+        +'<div><b>'+N(hw.blocks_1h)+'</b><span>blocages sur 1 h</span></div>'
+        +'<div><b>'+(has(hw.blocked_pct)?String(num(hw.blocked_pct)).replace('.',',')+' %':'—')+'</b><span>part du trafic bloquée (1 h)</span></div>'
+        +'<div style="grid-column:1/-1"><b>'+N(wf&&wf.waf_blocked)+'</b><span>menaces cumulées dans l’historique du WAF</span></div></div>';
+    }else el('waf').innerHTML='<div class="vide">Session requise.</div>';
 
-        function getFreshnessClass(age) {
-            if (age < 15) return 'fresh';
-            if (age < 45) return 'recent';
-            return 'stale';
-        }
+    // campagnes
+    var cl=cp&&cp.campagnes||null;
+    el('campNote').textContent=cp&&!cp._indisponible?fmt(cp.attaquants||0)+' attaquants · '+fmt(cl.length)+' campagnes':'';
+    el('camps').innerHTML=!cp?'<div class="vide">Session requise.</div>':cp._indisponible?'<div class="vide">En attente du premier passage du corrélateur.</div>':!cl.length?'<div class="vide">Aucune campagne détectée.</div>':
+      '<table><thead><tr><th>Outil</th><th>Attaquants</th><th>Sondes</th><th>Séquence-type</th></tr></thead><tbody>'+cl.slice(0,6).map(function(c){
+        var sq=(c.exemple_sequence||[]).join(' → ');
+        return '<tr><td>'+esc(c.outil||'—')+'</td><td style="color:var(--orange);font-weight:600">'+N(c.nb_attaquants)+'</td><td>'+N(c.sondes)+'</td><td title="'+esc(sq)+'" style="color:var(--faible)">'+esc(sq||'—')+'</td></tr>';}).join('')+'</tbody></table>';
 
-        async function api(endpoint) {
-            const token = localStorage.getItem('sbx_token');
-            try {
-                const res = await fetch(API + endpoint, {
-                    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-                });
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
-                    return {};
-                }
-                return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return {};
-            }
-        }
+    // certificats
+    var cs=ct&&ct.summary||{},tot=has(cs.total)?num(cs.total):null,html='';
+    el('certNote').textContent=ov&&has(ov.certificates)?fmt(ov.certificates)+' en service':'';
+    if(!ct)html='<div class="vide">Session requise.</div>';
+    else if(ct.enabled===false)html='<div class="vide">Surveillance des certificats désactivée.</div>';
+    else{
+      html+='<div class="kv">'
+        +'<div><b style="color:var(--vert)">'+N(cs.valid)+'</b><span>valides</span></div>'
+        +'<div><b style="color:var(--jaune)">'+N(cs.expiring_soon)+'</b><span>à renouveler bientôt</span></div>'
+        +'<div><b style="color:var(--orange)">'+N(cs.expiring_critical)+'</b><span>expiration imminente</span></div>'
+        +'<div><b style="color:var(--rouge)">'+N(cs.expired)+'</b><span>expirés</span></div></div>';
+      var w=ct.warnings||[];
+      if(w.length)html+='<div style="margin-top:8px">'+w.slice(0,5).map(function(x){var j=num(x.days);return svc(x.host,j<=0?'err':j<=7?'warn':'ok',j<=0?'EXPIRÉ':j+' j');}).join('')+'</div>';
+      else if(tot!==null)html+='<div class="note">Aucun certificat à surveiller de près.'+(ct.next_renewal?' Prochaine échéance : '+esc(ct.next_renewal.host)+' dans '+N(ct.next_renewal.days)+' j.':'')+'</div>';
+    }
+    el('certs').innerHTML=html;
 
-        function updateElement(id, value) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            const newVal = String(value);
-            if (prevValues[id] !== undefined && prevValues[id] !== newVal) {
-                el.classList.remove('mx-changed');
-                void el.offsetWidth;
-                el.classList.add('mx-changed');
-            }
-            el.textContent = newVal;
-            prevValues[id] = newVal;
-        }
+    // santé des modules
+    if(hs){
+      el('scoreNote').textContent=sc===null?'':'note '+sc+'/100';
+      var lignes='';
+      Object.keys(mo||{}).forEach(function(k){var m=mo[k],e=ETAT[m.status]||ETAT.unknown,nom={waf:'WAF (sbxwaf)',haproxy:'HAProxy',nginx:'nginx',system:'Système'}[k]||k;
+        lignes+=svc(nom,e[0],e[1],k==='system'&&has(m.mem_pct)?'Mémoire à '+m.mem_pct+' %':'');});
+      var se=hs.services||{};
+      if(has(se.total))lignes+=svc('Services critiques',num(se.down)>0?'err':'ok',(num(se.total)-num(se.down))+' / '+se.total+' actifs');
+      el('modules').innerHTML=lignes||'<div class="vide">Aucun module rapporté.</div>';
+    }else{el('scoreNote').textContent='';el('modules').innerHTML='<div class="vide">Session requise.</div>';}
+    hauteur();
+  }
 
-        async function loadMetrics() {
-            const [overview, waf, conns] = await Promise.all([
-                api('/overview'),
-                api('/waf_stats'),
-                api('/connections')
-            ]);
+  var DEMO={demo:true,
+    overview:{uptime:1234567,load:'0.62 0.48 0.41',cpu_pct:23,mem_total_kb:8388608,mem_used_kb:3250586,mem_pct:38,haproxy:true,mitmproxy:true,vhosts:42,metablogs:7,streamlits:3,certificates:38,lxc_containers:21,_freshness:{age:6}},
+    sante:{score:92,modules:{waf:{status:'ok',running:true},haproxy:{status:'ok',running:true},nginx:{status:'ok',running:true},system:{status:'ok',mem_pct:38}},system:{cpu:23,memory:38,disk:61,load:'0.62 0.48 0.41',uptime:1234567},waf:{blocked_pct:2.4,blocks_1h:318,active:true,active_bans:12,alerts_today:4421},services:{down:0,total:2,lxc_running:21}},
+    conns:{http:14,https:212,ssh:3,total_tcp:287},
+    waf:{mitmproxy_running:true,active_bans:12,alerts_today:4421,waf_blocked:136638},
+    hotes:{enabled:true,window_minutes:60,total_requests:12980},
+    campagnes:{attaquants:9,campagnes:[{outil:'sqlmap',nb_attaquants:4,sondes:1273,exemple_sequence:['/index.php?id=1','/admin','/login']},{outil:'nuclei',nb_attaquants:3,sondes:987,exemple_sequence:['/.env','/wp-login.php','/phpmyadmin/']},{outil:'masscan',nb_attaquants:2,sondes:402,exemple_sequence:['/','/robots.txt']}]},
+    certs:{enabled:true,summary:{total:38,valid:34,expiring_soon:3,expiring_critical:1,expired:0},next_renewal:{host:'mail.secubox.in',days:2},warnings:[{host:'mail.secubox.in',days:2},{host:'app.gk2.secubox.in',days:9},{host:'api.secubox.in',days:12},{host:'www.secubox.in',days:13}]},
+    memoire:(function(){var now=Math.floor(Date.now()/1000),s=[],i;for(i=288;i>=0;i--){var u=3000+Math.round(260*Math.sin(i/22)+90*Math.sin(i/5)+(288-i)*1.2);s.push({t:now-i*300,total_mb:8192,used_mb:u,avail_mb:8192-u,slab_unrecl_mb:310+(288-i)*0.2,swap_mb:0,load1:Math.round((0.5+0.35*Math.sin(i/17)+0.2*Math.abs(Math.sin(i/3)))*100)/100});}return {serie:s,alertes:[],croissance_noyau_mb_h:1.8,pas_s:300};})()
+  };
 
-            // Overview
-            if (overview.uptime !== undefined) {
-                updateElement('s-up', formatUptime(overview.uptime));
-                updateElement('s-load', 'Load: ' + (overview.load || '0'));
-
-                const memPct = overview.mem_pct || 0;
-                const memEl = document.getElementById('s-mem');
-                if (memEl) {
-                    memEl.textContent = memPct + '%';
-                    memEl.className = 'mx-val ' + (memPct > 85 ? 'red' : memPct > 70 ? 'orange' : 'green');
-                }
-                document.getElementById('s-mem-detail').textContent =
-                    formatMem(overview.mem_used_kb || 0) + ' / ' + formatMem(overview.mem_total_kb || 0);
-
-                updateElement('s-vh', overview.vhosts || 0);
-                updateElement('s-cert', overview.certificates || 0);
-                updateElement('s-meta', overview.metablogs || 0);
-                updateElement('s-stream', overview.streamlits || 0);
-                updateElement('s-lxc', overview.lxc_containers || 0);
-
-                // Service dots
-                document.getElementById('sv-ha').className = 'mx-svc-dot ' + (overview.haproxy ? 'on' : 'off');
-                document.getElementById('sv-waf').className = 'mx-svc-dot ' + (overview.mitmproxy ? 'on' : 'off');
-
-                // Freshness
-                if (overview._freshness) {
-                    const age = overview._freshness.age || 0;
-                    const freshClass = getFreshnessClass(age);
-                    document.getElementById('mx-fresh-dot').className = 'mx-freshness-dot ' + freshClass;
-                    const ageEl = document.getElementById('mx-age');
-                    ageEl.textContent = age < 5 ? 'just now' : formatAge(age);
-                    ageEl.className = 'mx-age ' + freshClass;
-                }
-            }
-
-            // WAF stats
-            if (waf.active_bans !== undefined) {
-                const bansEl = document.getElementById('w-bans');
-                bansEl.textContent = waf.active_bans;
-                bansEl.style.color = waf.active_bans > 0 ? 'var(--orange)' : '';
-
-                updateElement('w-alerts', waf.alerts_today || 0);
-
-                const blockedEl = document.getElementById('w-blocked');
-                blockedEl.textContent = waf.waf_blocked || 0;
-                blockedEl.style.color = waf.waf_blocked > 0 ? 'var(--orange)' : '';
-            }
-
-            // Connections
-            if (conns.total_tcp !== undefined) {
-                updateElement('c-https', conns.https || 0);
-                updateElement('c-http', conns.http || 0);
-                updateElement('c-ssh', conns.ssh || 0);
-                updateElement('c-total', conns.total_tcp || 0);
-                updateElement('s-tcp', conns.total_tcp || 0);
-            }
-        }
-
-        function escC(s) {
-            return String(s == null ? '' : s).replace(/[&<>]/g,
-                c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-        }
-
-        // Campagnes d'attaque corrélées (#1070 phase D)
-        async function loadCampaigns() {
-            let d;
-            try { d = await api('/waf/campaigns'); } catch (e) { return; }
-            const body = document.getElementById('campaigns-body');
-            const sum = document.getElementById('camp-summary');
-            if (!body) return;
-            const camps = (d && d.campagnes) || [];
-            if (d && d._indisponible) {
-                sum.textContent = 'en attente du 1er passage du corrélateur';
-                body.innerHTML = '<div class="mx-row"><span class="mx-row-label">—</span></div>';
-                return;
-            }
-            sum.textContent = (d.attaquants || 0) + ' attaquants · ' + camps.length + ' campagnes';
-            if (!camps.length) {
-                body.innerHTML = '<div class="mx-row"><span class="mx-row-label">aucune campagne détectée</span></div>';
-                return;
-            }
-            body.innerHTML =
-                '<table style="width:100%;border-collapse:collapse;font-size:.85rem">' +
-                '<thead><tr style="text-align:left;color:var(--muted)">' +
-                '<th style="padding:.3rem .4rem">Outil</th><th style="padding:.3rem .4rem">IP</th>' +
-                '<th style="padding:.3rem .4rem">Sondes</th><th style="padding:.3rem .4rem">Séquence-type</th>' +
-                '</tr></thead><tbody>' +
-                camps.map(c =>
-                    '<tr style="border-top:1px solid var(--border,#8882)">' +
-                    '<td style="padding:.3rem .4rem">' + escC(c.outil || '—') + '</td>' +
-                    '<td style="padding:.3rem .4rem;color:var(--orange);font-weight:600">' + (c.nb_attaquants || 0) + '</td>' +
-                    '<td style="padding:.3rem .4rem">' + (c.sondes || 0) + '</td>' +
-                    '<td style="padding:.3rem .4rem;font-family:monospace;color:var(--muted);font-size:.76rem;word-break:break-all">' +
-                    (c.exemple_sequence || []).map(escC).join(' → ') + '</td>' +
-                    '</tr>'
-                ).join('') + '</tbody></table>';
-        }
-
-        // Clock update
-        function updateClock() {
-            document.getElementById('mx-time').textContent = new Date().toLocaleTimeString();
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadMetrics();
-            loadCampaigns();
-            setInterval(loadMetrics, 5000);
-            setInterval(loadCampaigns, 30000);
-            setInterval(updateClock, 1000);
-            updateClock();
-        });
-    </script>
+  maj();
+  if(q.get('demo')){rend(DEMO);}
+  const API = '/api/v1/metrics';
+  var charge=function(){};
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function api(p){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(API+p,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
+      if(r.status===401){if(!EMB&&!/\/login\.html$/.test(location.pathname))window.location='/login.html?redirect='+encodeURIComponent(location.pathname+location.search);return null;}
+      return r.ok?r.json():null;}).catch(function(){return null;});}
+  // encadrée par une page hôte : on lui dit la hauteur du cadre pour qu'elle n'ait pas de défilement interne
+  function hauteur(){if(window.parent!==window){try{var c=document.querySelector('.cadre');window.parent.postMessage({sbxMetricsVue:Math.ceil(c.getBoundingClientRect().height),onglet:'index'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+  hauteur();
+  if(q.get('demo')){return;}
+  var bouton=el('rafraichir');
+  charge=function(){
+    bouton.disabled=true;
+    Promise.all([api('/overview'),api('/health/summary'),api('/memory/history?heures=24'),api('/connections'),api('/waf_stats'),api('/waf/campaigns'),api('/cert-status'),api('/live-hosts')]).then(function(r){
+      maj();rend({overview:r[0],sante:r[1],memoire:r[2],conns:r[3],waf:r[4],campagnes:r[5],certs:r[6],hotes:r[7]});
+    }).then(function(){bouton.disabled=false;},function(){bouton.disabled=false;});
+  };
+  bouton.addEventListener('click',charge);
+  charge();
+  setInterval(function(){if(!document.hidden)charge();},15000);
+})();
+</script>
 </body>
 </html>
