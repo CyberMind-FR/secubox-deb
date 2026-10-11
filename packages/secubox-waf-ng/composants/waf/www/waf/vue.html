@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « SBXWAF », le pare-feu applicatif : vue d'ensemble. Une seule page, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API du WAF : /stats, /status, /alerts, /campaigns, /history, /detections, lues en session). Une mesure absente s'affiche « — », jamais 0.
+  Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBXWAF — le pare-feu applicatif de SecuBox</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;min-height:100vh;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile svg.sp{width:100%;height:30px}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:4px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .carte{display:grid;gap:8px;grid-template-columns:1fr}
+  svg.monde{width:100%;height:auto;display:block;border-radius:8px}
+  .pays{display:grid;gap:3px;align-content:start;font-size:.78rem}
+  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .repart{display:grid;gap:12px;grid-template-columns:130px 1fr;align-items:center}
+  .donut{width:130px;height:130px;border-radius:50%;position:relative}
+  .donut span{position:absolute;inset:22px;border-radius:50%;background:#0b1830;display:grid;place-items:center;text-align:center;font-size:.7rem;color:var(--doux)} .donut span b{display:block;font-size:1.25rem;color:var(--texte)}
+  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .ligne{display:grid;grid-template-columns:1fr auto 80px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .site{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;font-size:.76rem;padding:3px 0} .site i{width:8px;height:8px;border-radius:50%;background:var(--cyan)} .site .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;font-variant-numeric:tabular-nums}
+  .scroll{overflow-x:auto}
+  .risque{display:inline-block;min-width:34px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;font-size:.72rem}
+  .act{font-weight:600} .act.b{color:var(--rouge)} .act.o{color:var(--orange)} .act.v{color:var(--vert)}
+  .prot{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;font-size:.78rem;padding:3px 0}
+  .on,.off,.inc{border-radius:5px;padding:0 8px;font-weight:700;font-size:.68rem}
+  .on{background:rgba(46,204,113,.2);color:var(--vert)} .off{background:rgba(255,77,94,.2);color:var(--rouge)} .inc{background:rgba(159,179,214,.2);color:var(--doux)}
+  .sec2{display:none}
+  @container a (max-width:599px){.sec{display:none}.repart{grid-template-columns:100px 1fr}.donut{width:100px;height:100px}.donut span{inset:18px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}.sec2{display:block}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.2fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr} .g4{grid-template-columns:1fr 1fr 1fr} .carte{grid-template-columns:1fr 130px}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg><span><b>SBXWAF</b><small>Web Application Firewall</small></span></span>
+    <span class="actif" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Vue d’ensemble</h2><div class="sous">Protection en temps réel de vos services web, API et applications.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan sec"><h3>Carte des attaques <i>pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="monde" viewBox="0 0 360 180" role="img" aria-label="Carte des pays d'origine des menaces"></svg><div class="pays" id="pays"></div></div><div class="note" id="geoNote"></div></div>
+    <div class="pan"><h3>Évolution des événements <i>par jour</i></h3><div id="courbe"></div><div class="legende" id="legCourbe"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Répartition par catégorie d’attaque <i>aujourd’hui</i></h3><div class="repart"><div class="donut" id="donut"><span id="donutC"></span></div><div class="leg" id="cats"></div></div></div>
+    <div class="pan sec"><h3>Trafic par type <i>aujourd’hui</i></h3><div id="types"></div></div>
+    <div class="pan sec"><h3>Sites les plus visés <i>événements</i></h3><div id="sites"></div></div>
+  </div>
+  <div class="pan"><h3>Derniers événements détectés <i id="evNote"></i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th>IP source</th><th>Pays</th><th>Événement</th><th>Cible</th><th>Gravité</th><th>Action</th></tr></thead><tbody id="events"></tbody></table></div></div>
+  <div class="grille g4 sec">
+    <div class="pan"><h3>Acteurs persistants <i>top 10, sur la rétention des journaux</i></h3><div id="persist"></div></div>
+    <div class="pan"><h3>Empreintes de campagnes <i>attaques au même mode opératoire</i></h3><div id="camps"></div></div>
+    <div class="pan"><h3>Ce qui protège</h3><div id="prot"></div></div>
+  </div>
+  <div class="note">Aucun blocage sur un seul signal · actions réversibles · chaque décision est écrite dans le journal d’audit.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var PAL=['#ff4d5e','#a78bfa','#3b82f6','#ff9f1c','#29b6f6','#2ecc71','#ffd23f'];
+  var IC={
+    req:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(59,130,246,.16)"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+    bloc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V5a1.5 1.5 0 013 0v5M11 10V4a1.5 1.5 0 013 0v6M14 10V5.5a1.5 1.5 0 013 0V13c0 4-2.5 7-6 7-3 0-4.5-2-6-5l-1-2.5a1.5 1.5 0 012.6-1.4L8 14" fill="rgba(255,77,94,.14)"/></svg>',
+    men:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7"><circle cx="12" cy="12" r="9" fill="rgba(167,139,250,.14)"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#a78bfa"/></svg>',
+    rob:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><rect x="5" y="8" width="14" height="11" rx="3" fill="rgba(41,182,246,.14)"/><path d="M12 8V4M9 13h.1M15 13h.1M9 17h6"/></svg>',
+    surf:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M12 7v5M12 12L6 17M12 12l6 5"/></svg>'
+  };
+  function spark(a,c){
+    if(!a||a.length<2) return '';
+    var m=Math.max.apply(null,a.map(num).concat([1])),n=a.length,w=100/n;
+    return '<svg class="sp" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">'+a.map(function(v,i){var h=Math.max(1,28*num(v)/m);return '<rect x="'+(i*w+w*.15).toFixed(2)+'" y="'+(30-h).toFixed(2)+'" width="'+(w*.7).toFixed(2)+'" height="'+h.toFixed(2)+'" fill="'+c+'" opacity=".85"/>';}).join('')+'</svg>';
+  }
+  function tuile(ic,v,l,s,def,sp){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+(sp||'')+'</div>';}
+  // Continents grossiers (lon, lat) : un habillage de carte en points, pas une cartographie. Les cercles sont posés au centre du PAYS.
+  var TERRES=[
+    [[-168,66],[-140,70],[-95,72],[-80,63],[-62,58],[-55,48],[-70,42],[-76,35],[-81,25],[-97,26],[-105,22],[-117,32],[-125,42],[-125,49],[-140,60]],
+    [[-55,60],[-45,60],[-20,70],[-25,82],[-60,82],[-70,76]],
+    [[-105,22],[-90,16],[-80,8],[-77,2],[-81,-5],[-70,-18],[-72,-40],[-68,-55],[-60,-52],[-52,-35],[-40,-22],[-35,-6],[-52,3],[-62,10],[-78,10],[-85,12],[-97,16]],
+    [[-10,36],[-9,43],[-2,48],[8,54],[10,58],[20,70],[40,68],[60,70],[100,78],[140,72],[170,68],[180,65],[160,58],[142,52],[135,44],[122,40],[122,30],[110,20],[106,10],[100,2],[98,16],[92,22],[80,10],[73,18],[67,25],[57,26],[56,18],[44,12],[35,28],[28,36],[24,38],[12,38],[3,43]],
+    [[-17,21],[-6,36],[10,37],[32,31],[43,12],[51,12],[40,-15],[35,-25],[20,-35],[12,-18],[9,4],[-8,5],[-17,14]],
+    [[114,-22],[130,-12],[142,-11],[153,-27],[146,-39],[130,-32],[115,-34]],
+    [[-5,50],[2,52],[-3,58],[-6,56]],[[130,32],[141,38],[142,45],[138,36]],[[95,5],[105,-6],[120,-8],[140,-5],[130,0],[110,2]]
+  ];
+  var CENTRES={US:[-98,39],CA:[-100,57],MX:[-102,23],BR:[-52,-10],AR:[-64,-34],GB:[-2,54],FR:[2,46],DE:[10,51],NL:[5,52],ES:[-4,40],IT:[12,42],RU:[90,60],UA:[31,49],PL:[19,52],TR:[35,39],IN:[79,22],CN:[104,35],HK:[114,22],SG:[104,1],JP:[138,37],KR:[128,36],VN:[106,15],TH:[101,15],ID:[113,-2],AU:[134,-25],ZA:[24,-29],EG:[30,27],NG:[8,9],IR:[53,32],SA:[45,24],AE:[54,24],PK:[69,30],BD:[90,24],IE:[-8,53],SE:[15,62],FI:[26,64],NO:[9,61],CH:[8,47],BE:[4,50],AT:[14,47],RO:[25,46],CZ:[15,50],TW:[121,24],MY:[102,4],PH:[122,13],CL:[-71,-30],CO:[-74,4]};
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  function monde(pays){
+    var pts=function(p){return p.map(function(c){return (c[0]+180)+','+(90-c[1]);}).join(' ');};
+    var s='<defs><pattern id="pt" width="3.4" height="3.4" patternUnits="userSpaceOnUse"><circle cx="1.7" cy="1.7" r="1" fill="#33507f"/></pattern><clipPath id="terres">'+TERRES.map(function(p){return '<polygon points="'+pts(p)+'"/>';}).join('')+'</clipPath><radialGradient id="lueur"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".95"/><stop offset="1" stop-color="#ff4d5e" stop-opacity="0"/></radialGradient></defs>';
+    s+='<rect width="360" height="180" fill="rgba(6,13,27,.5)"/><rect width="360" height="180" fill="url(#pt)" clip-path="url(#terres)"/>';
+    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+    pays.forEach(function(p){var c=CENTRES[p.code];if(!c)return;var r=4+10*Math.sqrt(num(p.n)/max);
+      s+='<circle cx="'+(c[0]+180)+'" cy="'+(90-c[1])+'" r="'+r+'" fill="url(#lueur)"><title>'+esc(p.code)+' : '+fmt(p.n)+'</title></circle>';});
+    return s;
+  }
+  function courbe(j){
+    var n=j.length;if(n<2) return '<div class="vide">Pas encore assez de jours mesurés.</div>';
+    var W=520,H=170,L=38,R=8,T=8,B=20,max=Math.max.apply(null,j.map(function(d){return num(d.total);}).concat([1]));
+    var pas=[10,20,25,50,100,200,250,500,1000,2000,5000,10000,20000,25000,50000,100000,200000,250000,500000,1000000].filter(function(u){return u*3>=max;})[0]||Math.ceil(max/3),haut=pas*3;
+    var x=function(i){return L+i*(W-L-R)/(n-1);},y=function(v){return T+(H-T-B)*(1-num(v)/haut);};
+    function ch(cle){var d='';j.forEach(function(p,i){var X=x(i),Y=y(p[cle]);if(!i)d='M'+X+','+Y;else{var cx=(x(i-1)+X)/2;d+=' C'+cx+','+y(j[i-1][cle])+' '+cx+','+Y+' '+X+','+Y;}});return d;}
+    var g='';for(var k=0;k<=3;k++){var v=pas*k,Y=y(v);g+='<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-5)+'" y="'+(Y+3)+'" text-anchor="end">'+fmt(v)+'</text>';}
+    var st=Math.max(1,Math.ceil(n/6)),xs='';j.forEach(function(p,i){if(i%st===0||i===n-1)xs+='<text x="'+x(i)+'" y="'+(H-5)+'" text-anchor="middle">'+esc(String(p.jour).slice(5))+'</text>';});
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Événements par jour">'+g+xs+'<path d="'+ch('total')+'" fill="none" stroke="#29b6f6" stroke-width="1.8" stroke-linecap="round"/><path d="'+ch('menaces')+'" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round"/><path d="'+ch('bloc')+'" fill="none" stroke="#ff4d5e" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  }
+  var GRAV={critical:['Critique','#ff4d5e',250],high:['Haute','#ff4d5e',200],medium:['Moyenne','#ff9f1c',120],low:['Faible','#ffd23f',60],info:['Info','#6f84a8',10],audit:['Audit','#6f84a8',10]};
+  var ACT={robot:['Robot','v'],banned:['Banni','b'],blocked:['Bloqué','b'],block:['Bloqué','b'],warning:['Alerte','o'],log:['Capturé','o'],captured:['Capturé','o'],limited:['Limité','o']};
+  function evenements(al){
+    el('evNote').textContent=al?'':'session requise';
+    el('events').innerHTML=al&&al.length?al.slice(0,8).map(function(a){var g=GRAV[a.severity]||[a.severity||'—','#6f84a8',0],ac=ACT[a.action]||[a.action||'—','o'],h=String(a.timestamp||'').slice(11,19);
+      return '<tr><td>'+esc(h)+'</td><td>'+esc(a.client_ip)+'</td><td>'+drapeau(a.country)+' '+esc(a.country)+'</td><td>'+esc(a.category)+'</td><td title="'+esc((a.host||'')+(a.path||''))+'">'+esc((a.host||'')+(a.path||''))+'</td><td><span class="risque" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span></td><td class="act '+ac[1]+'">'+esc(ac[0])+'</td></tr>';}).join(''):'<tr><td colspan="7" class="vide">'+(al?'Aucun événement.':'Ouvre une session pour voir les événements.')+'</td></tr>';
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo;
+    var s=d.stats,st=d.status,a=el('actif');
+    a.textContent=st?(st.enabled?'ACTIF · '+fmt(st.total_rules)+' RÈGLES EN SERVICE':'WAF DÉSACTIVÉ'):(s?'ACTIF':'HORS LIGNE');a.classList.toggle('hors',!(st?st.enabled:s));
+    var sev=s&&s.by_severity||{},men=s?num(sev.critical)+num(sev.high)+num(sev.medium):null;
+    var jr=(d.history&&d.history.jours)||{},dates=Object.keys(jr).sort().slice(-14);
+    var J=dates.map(function(k){var v=jr[k],sv=v.severites||{};return {jour:k,total:num(v.total),menaces:num(sv.critical)+num(sv.high)+num(sv.medium),bloc:num(sv.critical)+num(sv.high)};});
+    var N=function(v){return v==null?'—':fmt(v);},rob=s&&s.by_category?num(s.by_category.robots):null,pt=s&&s.par_type||null;
+    var surf=pt?Object.keys(pt).filter(function(k){return num(pt[k])>0;}):null;
+    el('tuiles').innerHTML=
+      tuile(IC.req,N(s&&s.par_origine&&s.par_origine.waf),'Requêtes analysées','aujourd’hui','Requêtes vues par le WAF depuis minuit (compteur du jour, source : journal du WAF).',spark(J.map(function(x){return x.total;}),'#3b82f6'))
+     +tuile(IC.bloc,N(s&&s.blocked_24h),'Requêtes bloquées','24 h','Menaces dont l’action est un ban ou un blocage, sur 24 h (source : journal du WAF). Une requête bloquée compte une fois.',spark(J.map(function(x){return x.bloc;}),'#ff4d5e'))
+     +tuile(IC.men,N(men),'Menaces détectées','gravité moyenne et plus · aujourd’hui','Événements de gravité moyenne, haute ou critique, aujourd’hui. Les robots (gravité info) n’y sont pas comptés.',spark(J.map(function(x){return x.menaces;}),'#a78bfa'))
+     +tuile(IC.rob,N(rob),'Robots connus','aujourd’hui','Requêtes de robots reconnus (catégorie « robots »). Contexte, pas verdict.','')
+     +tuile(IC.surf,surf?fmt(surf.length):'—','Surfaces observées',surf?surf.join(', '):'','Types de trafic ayant produit des événements aujourd’hui (http, smtp, ssh, leurres…).','');
+    var pays=s&&s.top_countries||[];pays=pays.map(function(p){return {code:p.country,n:p.count};});
+    el('monde').innerHTML=monde(pays);
+    el('pays').innerHTML=pays.length?pays.slice(0,8).map(function(p){return '<div><span>'+drapeau(p.code)+' '+esc(p.code)+'</span><b>'+fmt(p.n)+'</b></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    el('geoNote').textContent=pays.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':'';
+    el('courbe').innerHTML=J.length?courbe(J):'<div class="vide">Historique indisponible (session requise).</div>';
+    el('legCourbe').innerHTML=J.length?'<span><i style="background:#29b6f6"></i>Événements</span><span><i style="background:#a78bfa"></i>Menaces</span><span><i style="background:#ff4d5e"></i>Bloquées (haute et critique)</span>':'';
+    var bc=s&&s.by_category||{},cl=Object.keys(bc).filter(function(k){return k!=='robots';}).map(function(k){return [k,num(bc[k])];}).sort(function(x,y){return y[1]-x[1];}),tot=cl.reduce(function(t,c){return t+c[1];},0);
+    if(s&&tot>0){var top=cl.slice(0,6),rest=tot-top.reduce(function(t,c){return t+c[1];},0);if(rest>0)top.push(['autres',rest]);
+      var acc=0,seg=top.map(function(c,i){var p=100*c[1]/tot,b=acc;acc+=p;return PAL[i%7]+' '+b+'% '+acc+'%';});
+      el('donut').style.background='conic-gradient('+seg.join(',')+')';el('donutC').innerHTML='<div><b>'+fmt(tot)+'</b>menaces</div>';
+      el('cats').innerHTML=top.map(function(c,i){return '<div><i style="background:'+PAL[i%7]+'"></i><span title="'+esc(c[0])+'">'+esc(c[0])+'</span><b>'+Math.round(100*c[1]/tot)+'%</b></div>';}).join('');}
+    else{el('donut').style.background='rgba(159,179,214,.16)';el('donutC').textContent='—';el('cats').innerHTML='<div class="vide">'+(s?'Aucune menace hors robots.':'Session requise.')+'</div>';}
+    var tp=pt?Object.keys(pt).map(function(k){return [k,num(pt[k])];}).filter(function(x){return x[1]>0;}).sort(function(x,y){return y[1]-x[1];}):null,tm=tp&&tp.length?tp[0][1]:1;
+    el('types').innerHTML=tp&&tp.length?tp.map(function(t,i){return '<div class="ligne"><span class="n" style="text-align:left">'+esc(t[0].toUpperCase())+'</span><span>'+fmt(t[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*t[1]/tm)+'%;background:'+PAL[i%7]+'"></i></div></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    var tv=s&&s.top_vhosts||[];
+    el('sites').innerHTML=tv.length?tv.slice(0,7).map(function(v){return '<div class="site"><i></i><span class="n" title="'+esc(v.vhost)+'">'+esc(v.vhost)+'</span><b>'+fmt(v.count)+'</b></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    evenements(d.alerts);
+    var ti=d.history&&d.history.top_ips,pl=ti?Object.keys(ti).filter(function(k){return k!=='local';}).map(function(k){return [k,num(ti[k])];}).sort(function(x,y){return y[1]-x[1];}).slice(0,10):null,pm=pl&&pl.length?pl[0][1]:1;
+    el('persist').innerHTML=pl&&pl.length?'<div class="ligne" style="color:var(--faible);font-size:.68rem"><span style="text-align:left">IP / empreinte</span><span>Événements</span><span></span></div>'+pl.map(function(p){return '<div class="ligne"><span class="n">'+esc(p[0])+'</span><span>'+fmt(p[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*p[1]/pm)+'%;background:var(--rouge)"></i></div></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    var cp=d.campaigns&&d.campaigns.campagnes;
+    el('camps').innerHTML=cp&&cp.length?'<div class="ligne" style="color:var(--faible);font-size:.68rem"><span style="text-align:left">Empreinte · outil</span><span>Sondes</span><span></span></div>'+cp.slice(0,10).map(function(c){return '<div class="ligne"><span class="n" title="'+esc(c.signature)+'"><code>'+esc(String(c.signature).slice(0,8))+'</code> '+esc(c.outil||'')+'</span><span>'+fmt(c.sondes)+'</span><span></span></div>';}).join(''):'<div class="vide">'+(cp?'Aucune campagne corrélée.':'Session requise.')+'</div>';
+    var P=[];if(st){P.push(['Règles WAF ('+fmt(st.total_rules)+' chargées)',st.enabled?1:0]);P.push(['Bannissement automatique',st.autoban_enabled?1:0]);}
+    (d.detections&&d.detections.detections||[]).forEach(function(x){P.push([x.nom,x.actif===true?1:x.actif===false?0:null]);});
+    el('prot').innerHTML=P.length?P.map(function(p){return '<div class="prot"><span>'+(p[1]===1?'✅':p[1]===0?'⛔':'❔')+'</span><span>'+esc(p[0])+'</span><span class="'+(p[1]===1?'on':p[1]===0?'off':'inc')+'">'+(p[1]===1?'ON':p[1]===0?'OFF':'?')+'</span></div>';}).join(''):'<div class="vide">Session requise.</div>';
+  }
+  var DEMO={demo:true,status:{enabled:true,total_rules:382,autoban_enabled:true},
+    stats:{par_origine:{waf:1282856},blocked_24h:136638,by_severity:{critical:600,high:1800,medium:2021,info:90000},by_category:{robots:383,'Injection SQL':1180,'Fuzzer / scan':930,'Accès non autorisé':760,'Exécution de code':510,'Traversée de répertoires':340,'Bots malveillants':250,autres:240},par_type:{http:1228856,smtp:18151,ssh:17458,leurre:24581,autre:14916},
+      top_countries:[{country:'US',count:2224},{country:'DE',count:532},{country:'GB',count:421},{country:'CN',count:398},{country:'NL',count:310},{country:'FR',count:287},{country:'SG',count:198},{country:'RU',count:142}],
+      top_vhosts:[{vhost:'app.gk2.secubox.in',count:420},{vhost:'api.secubox.in',count:310},{vhost:'www.gk2.secubox.in',count:240},{vhost:'mail.secubox.in',count:90}]},
+    history:{jours:{'2026-10-04':{total:700,severites:{high:60,medium:150,critical:20}},'2026-10-05':{total:1100,severites:{high:90,medium:210,critical:30}},'2026-10-06':{total:900,severites:{high:70,medium:160,critical:25}},'2026-10-07':{total:1500,severites:{high:120,medium:260,critical:40}},'2026-10-08':{total:1300,severites:{high:100,medium:240,critical:35}},'2026-10-09':{total:1900,severites:{high:150,medium:300,critical:50}},'2026-10-10':{total:1700,severites:{high:140,medium:280,critical:45}}},top_ips:{'57.141.0.17':254,'57.141.0.57':243,'57.141.3.58':238,'57.141.3.42':227}},
+    alerts:[{timestamp:'2026-10-10T14:27:12',client_ip:'57.141.0.17',country:'US',category:'sql.injection',host:'app.gk2',path:'/index.php?id=1',severity:'critical',action:'banned'},{timestamp:'2026-10-10T14:26:58',client_ip:'185.220.101.3',country:'DE',category:'scan-ports',host:'app.gk2',path:'/',severity:'high',action:'banned'},{timestamp:'2026-10-10T14:25:50',client_ip:'192.168.33.12',country:'GB',category:'http.suspicious',host:'app.gk2',path:'/admin',severity:'medium',action:'warning'}],
+    campaigns:{campagnes:[{signature:'089b4a5e1234',outil:'sql.injection',sondes:1273},{signature:'1392fa1c9876',outil:'scanner',sondes:987}]},
+    detections:{detections:[{nom:'Hôtes non routés',actif:true},{nom:'Anti-robots',actif:true},{nom:'Leurres de service',actif:true}]}};
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  if(q.get('demo')){rend(DEMO);return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    var b='/api/v1/waf/';
+    Promise.all([jget(b+'stats'),jget(b+'status'),jget(b+'alerts?limit=8'),jget(b+'campaigns'),jget(b+'history'),jget(b+'detections')]).then(function(r){
+      rend({stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,campaigns:r[3],history:r[4],detections:r[5]});
+    });
+  }
+  // encadrée par la page /waf/ : on lui dit sa hauteur pour qu'elle n'ait pas de défilement interne
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxwafVue:document.documentElement.scrollHeight},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
+  el('rafraichir').addEventListener('click',charge);
+  charge();setInterval(charge,60000);
+})();
+</script>
