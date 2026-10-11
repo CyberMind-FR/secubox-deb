@@ -1,3 +1,9 @@
+secubox-autoload-agent (0.6.1-1~bookworm1) bookworm; urgency=high
+
+  * L'enrolement HTTPS levait TypeError (#2301) : client.py passait `context=` a OpenerDirector.open(), qui ne l'accepte pas — aucune box ne pouvait s'enroler. Trouve par le test VirtualBox de bout en bout (VM isp alpha.11, jeton emis, fichier signe, tunnel). Le contexte TLS est lie au gestionnaire HTTPS de l'ouvreur. Les anciens tests passaient parce que leur faux ouvreur acceptait `context=` : un test d'enrolement HTTPS de bout en bout avec l'ouvreur reel (serveur TLS local) les complete. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 01:30:00 +0200
+
 secubox-autoload-agent (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Auto-Load PHASE A (#2280) : une image flashee se provisionne seule au premier demarrage. secubox-autoload-agent.service (activee, conditionnelle : demarre seulement si /boot/secubox/autoload/reponses.toml existe, qu'un trousseau est installe et qu'aucun rapport n'existe — une box ordinaire n'est jamais touchee ; Restart=on-failure, 10 essais par heure, aucun delai de demarrage pour le delai de grace zero-touch, durcie autant que root le permet). autoload-agent-demarrage : installe le jeton depose sur /boot (0600 root, forme gk2_ + 32 hexa verifiee, lien symbolique jamais suivi, jeton d'un enrolement en cours jamais remplace) puis l'EFFACE de /boot. autoload-atelier : cle-init (cree la cle « SecuBox Provisioning » Ed25519, exporte la seule partie publique, ne remplace jamais une cle), preparer (validation stricte comme la box, signature, VERIFICATION contre le trousseau de la box avant d'ecrire quoi que ce soit, jeton jamais en argument ni affiche), verifier. Le paquet livre le trousseau (cle publique, empreinte 24A1C53D2FF8801E96FCD6F612DECD1EC1256F4B) : sans lui l'agent refusait tout. Depend de gpgv et gnupg. Guide : docs/AUTOLOAD-ATELIER.md. 22 tests dont signatures GPG reelles (fichier modifie, autre cle).

@@ -35,21 +35,29 @@ class _SansRedirection(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def ouvreur_sans_redirection() -> urllib.request.OpenerDirector:
-    return urllib.request.build_opener(_SansRedirection)
+def ouvreur_sans_redirection(contexte: Optional[ssl.SSLContext] = None) -> urllib.request.OpenerDirector:
+    """Ouvreur sans redirection. Le contexte TLS se lie au GESTIONNAIRE HTTPS : `OpenerDirector.open()` n'accepte pas `context=` (TypeError, #2301)."""
+    gestionnaires = [_SansRedirection]
+    if contexte is not None:
+        gestionnaires.append(urllib.request.HTTPSHandler(context=contexte))
+    return urllib.request.build_opener(*gestionnaires)
 
 
 class ClientInfra:
     def __init__(self, ouvrir=None, base_tunnel: str = BASE_TUNNEL, timeout: int = TIMEOUT_S):
-        self._ouvrir = ouvrir or ouvreur_sans_redirection().open
+        self._injecte = ouvrir                       # tests : un faux ouvreur ; sinon l'ouvreur réel, construit avec son contexte à chaque appel
         self.base_tunnel, self.timeout = base_tunnel, timeout
 
     def _appel(self, requete: urllib.request.Request, contexte: Optional[ssl.SSLContext] = None) -> Dict:
         try:
             kw = {"timeout": self.timeout}
-            if contexte is not None:
-                kw["context"] = contexte
-            with self._ouvrir(requete, **kw) as r:
+            if self._injecte is not None:
+                if contexte is not None:
+                    kw["context"] = contexte
+                ouvrir = self._injecte
+            else:
+                ouvrir = ouvreur_sans_redirection(contexte).open
+            with ouvrir(requete, **kw) as r:
                 brut = r.read(REPONSE_MAX + 1)
         except urllib.error.HTTPError as e:
             if e.code in (403, 429):
