@@ -77,8 +77,11 @@
   td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-variant-numeric:tabular-nums}
   .scroll{overflow-x:auto}
   .alerte{border:1px solid var(--orange);background:rgba(255,159,28,.1);color:var(--orange);border-radius:8px;padding:4px 9px;font-size:.74rem;margin-top:6px}
+  .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px}
+  .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;align-content:start;font-size:.78rem;margin-top:8px}
+  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1;padding:2px}
   @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
-  @container a (min-width:900px){.g1{grid-template-columns:1fr 1.3fr} .g3{grid-template-columns:1fr 1fr 1fr}}
+  @container a (min-width:900px){.g2{grid-template-columns:1fr 1fr} .g1{grid-template-columns:1fr 1.3fr} .g3{grid-template-columns:1fr 1fr 1fr}}
 </style>
 </head>
 <body>
@@ -102,6 +105,10 @@
     <div class="pan"><h3>Services et conteneurs</h3><div id="services"></div></div>
     <div class="pan"><h3>Connexions TCP établies</h3><div id="conns"></div></div>
     <div class="pan"><h3>Trafic et protection WAF <i>sbxwaf</i></h3><div id="waf"></div></div>
+  </div>
+  <div class="grille g2">
+    <div class="pan"><h3>Origine des attaques <i>pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="mondeAtt" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des attaques"></svg></div><div class="pays" id="paysAtt"></div><div class="note" id="noteAtt"></div></div>
+    <div class="pan"><h3>Origine des visiteurs <i id="visNote">pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="mondeVis" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des visiteurs"></svg></div><div class="pays" id="paysVis"></div><div class="note" id="noteVis"></div></div>
   </div>
   <div class="grille g3">
     <div class="pan"><h3>Campagnes récentes <i id="campNote"></i></h3><div class="scroll" id="camps"></div></div>
@@ -177,8 +184,28 @@
   function ligne(n,v,m,c){return '<div class="ligne"><span class="n" style="text-align:left">'+esc(n)+'</span><span>'+N(v)+'</span>'+(has(v)?'<div class="barre"><i style="width:'+Math.max(has(v)&&num(v)>0?4:0,100*num(v)/Math.max(1,m))+'%;background:'+c+'"></i></div>':'<span></span>')+'</div>';}
   var ETAT={ok:['ok','OK'],warn:['warn','ATTENTION'],error:['err','HORS SERVICE'],unknown:['na','INCONNU']};
 
+  var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+  var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  // Carte du monde (grille 60 × 120 points de 3° de la vue d'ensemble du WAF) ; cercle au centre du pays. `rgb` : teinte des cercles, `gid` : id du dégradé.
+  function monde(pays,rgb,gid){
+    var s='<defs><radialGradient id="'+gid+'"><stop offset="0" stop-color="'+rgb+'" stop-opacity=".95"/><stop offset="1" stop-color="'+rgb+'" stop-opacity="0"/></radialGradient></defs><rect width="120" height="60" fill="rgba(6,13,27,.5)"/>';
+    TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
+      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)s+='<circle cx="'+(x+i+.5)+'" cy="'+(j+.5)+'" r=".42" fill="#33507f"/>';}x+=n;cur=!cur;});});
+    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+    pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
+      s+='<circle cx="'+((c[1]+180)/3).toFixed(1)+'" cy="'+((90-c[0])/3).toFixed(1)+'" r="'+(1.4+3.4*Math.sqrt(num(p.n)/max)).toFixed(1)+'" fill="url(#'+gid+')"><title>'+esc(p.code)+' : '+fmt(p.n)+'</title></circle>';});
+    return s;
+  }
+  // Panneau carte : pays = [{code,n}] ou null (aucune donnée : carte vide, « — »).
+  function carteMonde(idSvg,idListe,idNote,pays,rgb,gid,vide,note){
+    el(idSvg).innerHTML=monde(pays||[],rgb,gid);
+    var p=(pays||[]).filter(function(x){return CENTRE[String(x.code).toUpperCase()];}).sort(function(a,b){return num(b.n)-num(a.n);});
+    el(idListe).innerHTML=p.length?p.slice(0,8).map(function(x){return '<div><span>'+drapeau(String(x.code).toUpperCase())+' '+esc(x.code)+'</span><b>'+fmt(x.n)+'</b></div>';}).join(''):'<div class="vide">— '+esc(vide)+'</div>';
+    el(idNote).textContent=p.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':note;
+  }
   function rend(d){
-    var ov=d.overview,hs=d.sante,hist=d.memoire,cn=d.conns,wf=d.waf,lv=d.hotes,ct=d.certs,cp=d.campagnes;
+    var ov=d.overview,hs=d.sante,hist=d.memoire,cn=d.conns,wf=d.waf,lv=d.hotes,ct=d.certs,cp=d.campagnes,vs=d.visites;
     var rien=!(ov||hs||cn||wf||hist||ct||cp||lv);
     el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||!rien);
     // état global : le score de santé de l'API
@@ -286,6 +313,16 @@
       if(has(se.total))lignes+=svc('Services critiques',num(se.down)>0?'err':'ok',(num(se.total)-num(se.down))+' / '+se.total+' actifs');
       el('modules').innerHTML=lignes||'<div class="vide">Aucun module rapporté.</div>';
     }else{el('scoreNote').textContent='';el('modules').innerHTML='<div class="vide">Session requise.</div>';}
+
+    // cartes du monde : attaques (rouge) puis visiteurs (cyan)
+    var tc=wf&&wf.top_countries&&typeof wf.top_countries==='object'?wf.top_countries:null,att=null;
+    if(tc)att=(Array.isArray(tc)?tc.map(function(p){return {code:p.country||p.code,n:p.count||p.n};}):Object.keys(tc).map(function(k){return {code:k,n:tc[k]};}));
+    carteMonde('mondeAtt','paysAtt','noteAtt',att,'#ff4d5e','lueurAtt','aucun pays d’attaque','La route /waf_stats ne fournit que des compteurs, aucun pays : la carte des attaques par pays est celle de la vue d’ensemble du WAF.');
+    var vp={};
+    ((vs&&vs.vhosts)||[]).forEach(function(v){(v.pays||[]).forEach(function(p){vp[p.code]=(vp[p.code]||0)+num(p.n);});});
+    var vl=Object.keys(vp).map(function(k){return {code:k,n:vp[k]};});
+    el('visNote').textContent=vs&&vs.du?'visites · du '+vs.du+' au '+vs.au:'pays déduit de l’adresse';
+    carteMonde('mondeVis','paysVis','noteVis',vl.length?vl:null,'#29b6f6','lueurVis','aucune visite géolocalisée',vs?'Aucune visite géolocalisée sur la période (base GeoLite2 absente ou trafic privé).':'La route /vhost-stats ne répond pas : session requise.');
     hauteur();
   }
 
@@ -293,7 +330,8 @@
     overview:{uptime:1234567,load:'0.62 0.48 0.41',cpu_pct:23,mem_total_kb:8388608,mem_used_kb:3250586,mem_pct:38,haproxy:true,mitmproxy:true,vhosts:42,metablogs:7,streamlits:3,certificates:38,lxc_containers:21,_freshness:{age:6}},
     sante:{score:92,modules:{waf:{status:'ok',running:true},haproxy:{status:'ok',running:true},nginx:{status:'ok',running:true},system:{status:'ok',mem_pct:38}},system:{cpu:23,memory:38,disk:61,load:'0.62 0.48 0.41',uptime:1234567},waf:{blocked_pct:2.4,blocks_1h:318,active:true,active_bans:12,alerts_today:4421},services:{down:0,total:2,lxc_running:21}},
     conns:{http:14,https:212,ssh:3,total_tcp:287},
-    waf:{mitmproxy_running:true,active_bans:12,alerts_today:4421,waf_blocked:136638},
+    waf:{mitmproxy_running:true,active_bans:12,alerts_today:4421,waf_blocked:136638,top_countries:{CN:1820,RU:960,US:640,BR:310,IN:270,NL:190,VN:150,DE:120,KR:90,IR:70}},
+    visites:{du:'2026-10-05',au:'2026-10-11',vhosts:[{vhost:'www.exemple.test',pays:[{code:'FR',n:9400},{code:'DE',n:1200},{code:'US',n:980},{code:'BE',n:640},{code:'CH',n:410},{code:'GB',n:380},{code:'CA',n:260},{code:'JP',n:140}]},{vhost:'blog.exemple.test',pays:[{code:'FR',n:4100},{code:'ES',n:520},{code:'IT',n:430},{code:'MA',n:300},{code:'BR',n:160},{code:'AU',n:90},{code:'ZA',n:70}]}]},
     hotes:{enabled:true,window_minutes:60,total_requests:12980},
     campagnes:{attaquants:9,campagnes:[{outil:'sqlmap',nb_attaquants:4,sondes:1273,exemple_sequence:['/index.php?id=1','/admin','/login']},{outil:'nuclei',nb_attaquants:3,sondes:987,exemple_sequence:['/.env','/wp-login.php','/phpmyadmin/']},{outil:'masscan',nb_attaquants:2,sondes:402,exemple_sequence:['/','/robots.txt']}]},
     certs:{enabled:true,summary:{total:38,valid:34,expiring_soon:3,expiring_critical:1,expired:0},next_renewal:{host:'mail.secubox.in',days:2},warnings:[{host:'mail.secubox.in',days:2},{host:'app.gk2.secubox.in',days:9},{host:'api.secubox.in',days:12},{host:'www.secubox.in',days:13}]},
@@ -317,8 +355,8 @@
   var bouton=el('rafraichir');
   charge=function(){
     bouton.disabled=true;
-    Promise.all([api('/overview'),api('/health/summary'),api('/memory/history?heures=24'),api('/connections'),api('/waf_stats'),api('/waf/campaigns'),api('/cert-status'),api('/live-hosts')]).then(function(r){
-      maj();rend({overview:r[0],sante:r[1],memoire:r[2],conns:r[3],waf:r[4],campagnes:r[5],certs:r[6],hotes:r[7]});
+    Promise.all([api('/overview'),api('/health/summary'),api('/memory/history?heures=24'),api('/connections'),api('/waf_stats'),api('/waf/campaigns'),api('/cert-status'),api('/live-hosts'),api('/vhost-stats?periode=semaine')]).then(function(r){
+      maj();rend({overview:r[0],sante:r[1],memoire:r[2],conns:r[3],waf:r[4],campagnes:r[5],certs:r[6],hotes:r[7],visites:r[8]});
     }).then(function(){bouton.disabled=false;},function(){bouton.disabled=false;});
   };
   bouton.addEventListener('click',charge);
