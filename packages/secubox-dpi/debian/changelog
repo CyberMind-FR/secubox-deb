@@ -1,3 +1,9 @@
+secubox-dpi (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Vue d'ensemble DPI (#2293), fidele a l'infographie : tuiles definies, flux appareils vers usages (rubans en octets mesures), carte des destinations, types de trafic, applications, protocoles, appareils, destinations, domaines a classer, etat du moteur. Page vue.html encadree en tete de /dpi/ ; l'ancien contenu reste dessous. Donnees de sbxdpi seulement : une mesure absente est un tiret ; menaces et blocages ne sont pas inventes (ils sont dans le WAF et Actor). 5 tests dont navigateur reel.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 23:00:00 +0200
+
 secubox-dpi (1.8.1-1~bookworm1) bookworm; urgency=medium
 
   * /ndpid/ : le pont sbxdpi comptait 12,9 millions de « risques » sur gk2, dont 12 M de « Known Proto on Non Std Port » (gravite Medium mais bruit). Les risques banals (Known Proto on Non Std Port, TCP Connection Issues, Missing SNI TLS Extn, Error Code, Unidirectional Traffic) ne sont plus comptes ni listes ; restent les vrais signaux (Probing Attempt, TLS Susp Extn, HTTP Susp User-Agent, Malicious Fingerprint...). 1 test.

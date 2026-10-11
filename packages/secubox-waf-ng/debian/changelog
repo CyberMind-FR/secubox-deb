@@ -1,3 +1,9 @@
+secubox-waf-ng (1.28.2-1~bookworm1) bookworm; urgency=low
+
+  * Vue d'ensemble : la carte du monde reprend la grille eprouvee de la page Actor (la ligne 7 etait deja corrigee la) au lieu de continents dessines a la main (#2293). Test de partage de la grille entre les pages.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 23:00:00 +0200
+
 secubox-waf-ng (1.28.1-1~bookworm1) bookworm; urgency=low
 
   * Vhost waf : la racine sert la vue d'ensemble SBXWAF (#2293) — c'etait l'ancien tableau.html qui s'affichait sur waf.gk2 ; l'ancien tableau reste a /tableau. Sans session, la vue invite a se connecter.

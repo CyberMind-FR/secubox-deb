@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — DPI : vue d'ensemble, carte du monde partagée (ref #2293)
+
+dpi 1.9.0 : `vue.html` (tuiles définies, flux appareils vers usages, carte, types, applications, protocoles, destinations, domaines à classer, état du moteur), encadrée en tête de `/dpi/`, carte du Hall `/dpi-vue/`. waf-ng 1.28.2, webos 1.9.2 : les trois pages reprennent la grille de carte éprouvée de la page Actor (ligne 7 corrigée), test de partage. Menaces et blocages non inventés côté DPI.
+
 ## 2026-10-11 — SBXWAF : vue d'ensemble fidèle à l'infographie (ref #2293)
 
 waf-ng 1.28.0 : nouvel onglet par défaut « Vue d'ensemble » de la page /waf/ (page vue.html encadrée, même origine) ; anciens onglets conservés. Données du WAF seulement ; mesure absente = tiret ; ?demo=1 annoncé.

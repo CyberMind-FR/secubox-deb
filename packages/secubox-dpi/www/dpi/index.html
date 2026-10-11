@@ -142,6 +142,9 @@
     <script src="/shared/sidebar.js"></script>
 
     <main class="main">
+        <!-- #2293 : la vue d'ensemble DPI (tableau de bord), page encadrée de même origine ; le contenu historique reste dessous -->
+        <div id="vueDpi" style="margin-bottom:1rem"><iframe id="vueDpiFrame" src="vue.html" title="SecuBox DPI — vue d'ensemble" style="width:100%;height:1300px;border:0;display:block;background:transparent"></iframe></div>
+
         <header class="header">
             <h1><span class="live-dot" id="engine-dot"></span>🔍 Deep Packet Inspection</h1>
             <div class="btn-group">
@@ -241,6 +244,11 @@
     </main>
 
     <script>
+        window.addEventListener('message', (e) => {
+            if (e.origin === location.origin && e.data && e.data.sbxdpiVue) {
+                const f = document.getElementById('vueDpiFrame'); if (f) f.style.height = Math.min(4000, Math.max(600, +e.data.sbxdpiVue + 4)) + 'px';
+            }
+        });
         const API = '/api/v1/dpi';
 
         // ── Affichage progressif : top-N par défaut + « Voir plus » ──────────
