@@ -1,3 +1,9 @@
+secubox-billets (0.11.2-1~bookworm1) bookworm; urgency=medium
+
+  * POST /service/ephemere accepte vignette_url, https seulement (ref #2343) : l'image du flux est rapatriee en local (SSRF-gardee, sans navigateur) comme vignette du billet, au lieu d'une capture de page que les sites d'actualite refusent. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 14:00:00 +0200
+
 secubox-billets (0.11.1-1~bookworm1) bookworm; urgency=medium
 
   * POST /service/ephemere accepte embed_url (ref #2343) : apres la reponse, tache de fond qui resout l'embed (oEmbed / carte OG) et capture la vignette locale, comme un billet cree a la main ; un echec reste sans effet sur la creation. 2 tests.
