@@ -16,7 +16,10 @@ from pathlib import Path
 DB_PATH = Path("/var/lib/secubox/hub/netstats.db")
 SNAP_PATH = Path("/var/lib/secubox/hub/netstats.json")
 DATA_DIR = DB_PATH.parent
-STALE_AFTER_S = 120  # snapshot older than this is flagged stale
+# Un instantané est « périmé » au-delà de ce seuil. Il DOIT dépasser la cadence du minuteur secubox-netstats (120 s + RandomizedDelaySec 30 s,
+# drop-in de secubox-core, incident de charge du 2026-08-12) : à 120 s l'instantané était en permanence plus vieux que le seuil au moment de la
+# lecture et « COLLECTEUR ARRÊTÉ ? » s'affichait collecteur en marche (#2388). deux cadences complètes (150 s chacune avec le délai aléatoire) plus 60 s de marge = 360 s.
+STALE_AFTER_S = 360
 
 # counter-name → category. Named counters live in the owning packages' tables.
 CATEGORY_MAP = {
