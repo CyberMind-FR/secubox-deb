@@ -31,6 +31,7 @@ HORS_PROFIL = {
     "secubox-led-heartbeat", "secubox-meshtastic", "secubox-daemon", "secubox-ui-manager",
     "secubox-voice-moteur", "secubox-zia-llm", "secubox-zkp", "secubox-clamav",
     "secubox-netboot", "secubox-vm", "secubox-soc-agent",
+    "secubox-jitsi",                                                            # visioconference optionnelle, LXC a provisionner : a la demande (#2322)
     "secubox-autoload",                                                         # infrastructure seulement (admin.gk2.secubox.in), jamais sur une box cliente (#2182)
 }
 PROTECTIONS = {f"secubox-{m}" for m in (
@@ -39,11 +40,11 @@ PROTECTIONS = {f"secubox-{m}" for m in (
     "cookies", "soc", "nac", "ipv6guard", "wan-link-guard", "hardening",
     "wireguard", "vault", "backup", "haproxy", "dns", "routes", "qos", "freebox", "certs", "tor")}
 HEBERGEMENT = {f"secubox-{m}" for m in (
-    "mail", "matrix", "jitsi", "nextcloud", "photoprism", "gitea", "metablogizer", "bbs",
+    "mail", "matrix", "nextcloud", "gitea", "metablogizer", "bbs",
     "billets", "socialrelay", "metanews", "messagerie", "cdn", "saas-relay")}
 HALL = {f"secubox-{m}" for m in (
     "webos", "sbxos", "surf", "ephemeride", "zia", "voice", "voicestudio", "radio", "podcaster",
-    "peertube", "jellyfin", "ytsas", "media", "lyrion", "mqtt", "ai-gateway", "streamlit",
+    "peertube", "jellyfin", "ytsas", "media", "photoprism", "lyrion", "mqtt", "ai-gateway", "streamlit",
     "avatar", "repo", "console", "assist")} | {"sbxos-audio-mood"}
 
 
@@ -140,3 +141,19 @@ def test_les_commentaires_du_control_de_chaque_profil_sont_en_colonne_zero():
     for profil in ("lite", "isp", "full"):
         for n, ligne in enumerate((RACINE / "packages" / f"secubox-{profil}" / "debian" / "control").read_text().splitlines(), 1):
             assert not ligne.startswith((" #", "\t#")), f"secubox-{profil}/debian/control:{n} : commentaire indenté dans un champ"
+
+
+
+# ── #2322 : les modules optionnels n'échouent plus à chaque démarrage d'une image isp ─────────────────────
+def test_photoprism_et_jitsi_ne_sont_plus_dans_isp_photoprism_est_dans_full():
+    """PhotoPrism échouait (226/NAMESPACE, /data/photoprism absent) et Jitsi aussi (LXC) à chaque démarrage d'une image isp : optionnels, « à la rigueur dans full seulement »."""
+    isp, full = _champ("isp", "Depends"), _champ("full", "Depends")
+    assert not ({"secubox-photoprism", "secubox-jitsi"} & isp)
+    assert "secubox-photoprism" in full and "secubox-jitsi" not in full
+    assert "secubox-jitsi" in _champ("full", "Suggests")
+
+
+def test_suricata_n_est_qu_une_suggestion_de_threats():
+    """Le paquet Debian démarre sans règles (suricata.rules absent) et échoue à chaque démarrage ; secubox-threats lit eve.json seulement s'il existe."""
+    ctl = (RACINE / "packages" / "secubox-threats" / "debian" / "control").read_text(encoding="utf-8")
+    assert "Suggests: suricata" in ctl and "Recommends: suricata" not in ctl

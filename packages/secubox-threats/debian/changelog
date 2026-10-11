@@ -1,3 +1,9 @@
+secubox-threats (1.3.1-1~bookworm1) bookworm; urgency=low
+
+  * Suricata n'est plus qu'une suggestion (#2322) : le paquet Debian demarre sans regles (/var/lib/suricata/rules/suricata.rules absent) et echouait a chaque demarrage ; il n'est ni installe ni actif sur gk2. secubox-threats lit eve.json seulement s'il existe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:30:00 +0200
+
 secubox-threats (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-ai-insights (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

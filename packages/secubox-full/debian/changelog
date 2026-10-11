@@ -1,3 +1,9 @@
+secubox-full (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Porte PhotoPrism (profil full ; plus dans isp) et suggere Jitsi (#2322). Depend de secubox-isp (>= 1.4.0) pour que la composition soit coherente.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:30:00 +0200
+
 secubox-full (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * isp + tout le contenu du Hall (webos, sbxos, assistant, medias, domotique, IA, depots) ; secubox-sentinelle-gsm n'est plus exige : full s'installe sur amd64 ; paquets transitionnels retires (#2146).
