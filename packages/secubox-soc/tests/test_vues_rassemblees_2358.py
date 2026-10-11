@@ -33,3 +33,25 @@ def test_les_pages_dpi_et_waf_mesurent_leur_cadre():
     for f in ("secubox-dpi/www/dpi/vue.html",):
         t = (P / f).read_text(encoding="utf-8")
         assert "documentElement.scrollHeight" not in t and "container-name:a;min-height:100vh" not in t
+
+
+def _deps(pkg):
+    c = P / f"secubox-{pkg}/debian/control"
+    if not c.is_file():            # composant livré par un autre paquet (ex. ndpid, agrégé dans dpi)
+        return set()
+    t = c.read_text(encoding="utf-8")
+    m = re.search(r"^Depends:(.*?)(?=^[A-Z][A-Za-z-]*:|\Z)", t, re.S | re.M)
+    return set(re.findall(r"secubox-([a-z0-9-]+)", m.group(1))) if m else set()
+
+
+def test_le_lite_embarque_les_vues_du_soc_avec_leurs_dependances():
+    """Une vue du SOC dont le paquet est absent est un onglet vide : la fermeture des Depends du lite doit les contenir."""
+    vu, pile = set(), ["lite"]
+    while pile:
+        x = pile.pop()
+        if x in vu:
+            continue
+        vu.add(x)
+        pile += list(_deps(x))
+    for requis in ("soc", "waf-ng", "dpi", "webos", "ndpid-engine"):
+        assert requis in vu, requis
