@@ -2856,6 +2856,19 @@ function ouvreSurf(url){
   // SEUL LE WEB SE SURFE (#1609) : javascript:, data: et les autres schémas
   // n'ouvrent rien.
   if(url && horsWeb(url)) return;
+  // UN SERVICE DE LA BOX NE SE SURFE PAS (#2349) : le relais refuse tout ce qui mène à la
+  // box ou à son réseau local (garde SSRF). Un lien vers bbs.<domaine> s'ouvre donc dans le
+  // Hall (service embarqué) s'il est au registre, sinon dans un onglet — jamais dans le surf.
+  if(url){
+    try{
+      const u = new URL(/^https?:\/\//i.test(url)?url:'https://'+url), h = u.hostname.toLowerCase();
+      const dom = window.SBX_DOMAINE, base = dom && dom.session;
+      if(base && (h===base || h.endsWith('.'+base))){
+        if(FEATURED.some(x => x.url===h || (dom.hote && dom.hote(x.url)===h))){ ouvreHote(h, u.href); return; }
+        window.open(u.href, '_blank', 'noopener'); return;
+      }
+    }catch(e){}
+  }
   const th = root.getAttribute('data-theme')
     || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   const f = document.getElementById('surf-ov-f');
@@ -3655,7 +3668,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
 // BBS pointe vers metanews.gk2.secubox.in/#<id> : on reste dans le Hall, on
 // embarque metanews a cette adresse profonde plutot que de partir en onglet.
 function ouvreHote(hote, url){
-  const f = FEATURED.find(x => x.url === hote);
+  const f = FEATURED.find(x => x.url === hote || (window.SBX_DOMAINE && SBX_DOMAINE.hote && SBX_DOMAINE.hote(x.url) === hote));
   if(!f){ ouvreSurf(url); return; }   // hote box inconnu du registre : par le surf
   fermeSurf && fermeSurf();
   openService(f.id, 'embed');
