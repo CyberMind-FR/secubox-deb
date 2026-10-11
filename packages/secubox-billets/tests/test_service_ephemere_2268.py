@@ -87,3 +87,37 @@ async def test_le_service_ne_peut_ni_modifier_ni_supprimer(client):
     assert (await client.delete("/admin/api/billets/x", headers=tok)).status_code in (401, 403)
     assert (await client.put("/admin/api/billets/x", json={"body": "y"}, headers=tok)).status_code in (401, 403, 404, 422)
     assert (await client.post("/admin/api/billets", json={"body": "durable"}, headers=tok)).status_code in (401, 403)
+
+
+async def test_embed_url_est_resolu_et_capture_apres_creation_2343(conn, client, monkeypatch):
+    """#2343 — le billet éphémère reçoit l'embed et la vignette de l'article principal, comme un billet créé à la main."""
+    import api.routes.admin as A
+    appels = []
+
+    async def fake_embed(request, billet_id, embed_url):
+        appels.append(("embed", billet_id, embed_url))
+
+    async def fake_snap(request, billet_id, embed_url, style, **kw):
+        appels.append(("snap", billet_id, embed_url, style))
+
+    monkeypatch.setattr(A, "_resolve_and_store_embed", fake_embed)
+    monkeypatch.setattr(A, "_maybe_capture_snapshot", fake_snap)
+    corps = {**CORPS, "embed_url": "https://exemple.org/article"}
+    r = await client.post("/service/ephemere", json=corps, headers=h(jeton()))
+    assert r.status_code == 201, r.text
+    row = await repo.get_by_id(conn, r.json()["id"])
+    assert row["embed_url"] == "https://exemple.org/article"
+    assert ("embed", row["id"], "https://exemple.org/article") in appels
+    assert ("snap", row["id"], "https://exemple.org/article", "communique") in appels
+
+
+async def test_un_echec_de_resolution_ne_casse_pas_la_creation_2343(client, monkeypatch):
+    import api.routes.admin as A
+
+    async def boom(*_a, **_k):
+        raise RuntimeError("réseau")
+
+    monkeypatch.setattr(A, "_resolve_and_store_embed", boom)
+    monkeypatch.setattr(A, "_maybe_capture_snapshot", boom)
+    r = await client.post("/service/ephemere", json={**CORPS, "embed_url": "https://exemple.org/a"}, headers=h(jeton()))
+    assert r.status_code == 201

@@ -43,7 +43,9 @@ type Charge struct {
 	Titre  string // n'est pas envoyé ; sert aux journaux et aux tests
 	Body   string
 	RefURL string
-	TTLs   int
+	// EmbedURL : l'article principal du sujet. Billets en tire l'aperçu et la vignette (#2343).
+	EmbedURL string
+	TTLs     int
 }
 
 type Reponse struct {
@@ -83,7 +85,9 @@ func (d *Diffuseur) Tour(now int64) (int, error) {
 	n := 0
 	for _, t := range sujets {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		rep, err := d.poster(ctx, Charge{Titre: t.Title, Body: Corps(t, d.cfg.SiteURL), RefURL: refURL(t, d.cfg.SiteURL), TTLs: int(d.cfg.TTL.Seconds())})
+		arts, _ := d.st.ArticlesDuSujet(t.ID) // sans articles lisibles, le billet reste un simple texte
+		rep, err := d.poster(ctx, Charge{Titre: t.Title, Body: Corps(t, d.cfg.SiteURL) + Sources(arts), RefURL: refURL(t, d.cfg.SiteURL),
+			EmbedURL: principal(arts), TTLs: int(d.cfg.TTL.Seconds())})
 		cancel()
 		if err != nil {
 			return n, fmt.Errorf("billets : %w", err) // on s'arrête : inutile d'insister sur un billets en panne
@@ -122,6 +126,54 @@ func Corps(t store.Topic, site string) string {
 	}
 	b.WriteString(fmt.Sprintf("\n\n_%d sources_", t.SourcesCount))
 	return b.String()
+}
+
+const maxSources = 5
+
+// lienSur rend l'adresse d'un article si elle est un https lisible ; les parenthèses et espaces sont encodés pour ne pas fermer le lien markdown.
+func lienSur(u string) string {
+	u = strings.TrimSpace(u)
+	if !strings.HasPrefix(u, "https://") || len(u) > 500 || strings.ContainsAny(u, "<>\"\n\r\t") {
+		return ""
+	}
+	return strings.NewReplacer("(", "%28", ")", "%29", " ", "%20").Replace(u)
+}
+
+// principal : l'article le plus récent à l'adresse https (ArticlesDuSujet les rend du plus récent au plus ancien), ou "".
+func principal(arts []store.Article) string {
+	for _, a := range arts {
+		if u := strings.TrimSpace(a.URL); lienSur(u) != "" {
+			return u
+		}
+	}
+	return ""
+}
+
+// Sources liste jusqu'à cinq articles du sujet en liens markdown (titre échappé, adresse https seulement, sans doublon) ; "" s'il n'y en a aucun.
+func Sources(arts []store.Article) string {
+	var b strings.Builder
+	vus := map[string]bool{}
+	n := 0
+	for _, a := range arts {
+		u := lienSur(a.URL)
+		if u == "" || vus[u] || n >= maxSources {
+			continue
+		}
+		vus[u] = true
+		titre := echapper(a.Title)
+		if titre == "" {
+			continue
+		}
+		if r := []rune(titre); len(r) > 90 {
+			titre = strings.TrimSpace(string(r[:90])) + "…"
+		}
+		b.WriteString("\n- [" + titre + "](" + u + ")")
+		n++
+	}
+	if n == 0 {
+		return ""
+	}
+	return "\n\nSources :" + b.String()
 }
 
 // ClientSocket rend un Poster qui appelle POST /service/ephemere de billets, directement sur sa socket Unix, avec un jeton de flotte de service.

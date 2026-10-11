@@ -200,3 +200,32 @@ func TestLeClientRemonteLeRefusDeBillets(t *testing.T) {
 		t.Fatalf("le refus remonte : %v", err)
 	}
 }
+
+func TestLeBilletPorteLesSourcesEnLiensEtLArticlePrincipalEnEmbed_2343(t *testing.T) {
+	st, f := base(t), &faux{}
+	sujet(t, st, "T9", "Un événement", 3, t0-60, 0.9)
+	sid, _ := st.AddSource(store.Source{Slug: "a", Name: "A", URL: "u", Enabled: true})
+	for i, a := range []store.Article{
+		{Ref: "1", Title: "Premier [titre]", URL: "https://a.example/un_(1)", PublishedAt: t0 - 10},
+		{Ref: "2", Title: "Second", URL: "http://pas-https.example/x", PublishedAt: t0 - 20},
+		{Ref: "3", Title: "Troisième", URL: "https://c.example/trois", PublishedAt: t0 - 30},
+	} {
+		a.SourceID = sid
+		id, _, _ := st.UpsertArticle(a)
+		_ = st.SetArticleSujet(id, "T9")
+		_ = i
+	}
+	if _, err := diffuseur(st, f).Tour(t0); err != nil || len(f.charges) != 1 {
+		t.Fatalf("err=%v charges=%d", err, len(f.charges))
+	}
+	c := f.charges[0]
+	if c.EmbedURL != "https://a.example/un_(1)" {
+		t.Errorf("embed = %q", c.EmbedURL)
+	}
+	if !strings.Contains(c.Body, "](https://a.example/un_%281%29)") || !strings.Contains(c.Body, "](https://c.example/trois)") {
+		t.Errorf("sources en liens absentes : %q", c.Body)
+	}
+	if strings.Contains(c.Body, "pas-https") {
+		t.Errorf("une source http ne doit pas devenir un lien : %q", c.Body)
+	}
+}

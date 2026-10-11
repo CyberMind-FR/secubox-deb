@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .. import repo
@@ -33,6 +33,7 @@ class EphemereIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     body: str
     ref_url: Optional[str] = None
+    embed_url: Optional[str] = None
     ttl_s: Annotated[int, Field(ge=30, le=TTL_MAX)]
 
 
@@ -48,16 +49,28 @@ def _jeton(request: Request) -> dict:
         raise HTTPException(401, "jeton invalide")
 
 
+async def _enrichir(request: Request, billet_id: str, embed_url: str) -> None:
+    """#2343 — même résolution qu'un billet créé à la main : embed (oEmbed / carte OG) puis vignette locale de l'article.
+    Après la réponse, et jamais bloquant : un site lent ou muet laisse le billet tel quel."""
+    from . import admin
+    for etape in (lambda: admin._resolve_and_store_embed(request, billet_id, embed_url),
+                  lambda: admin._maybe_capture_snapshot(request, billet_id, embed_url, "communique")):
+        try:
+            await etape()
+        except Exception:  # noqa: BLE001 — l'aperçu est un bonus
+            pass
+
+
 def register_service(app: FastAPI) -> None:
     @app.post("/service/ephemere", status_code=201)
-    async def creer_ephemere(request: Request, payload: EphemereIn):
+    async def creer_ephemere(request: Request, payload: EphemereIn, taches: BackgroundTasks):
         if request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for"):
             raise HTTPException(403, "route interne : appel direct sur la socket uniquement")
         claims = _jeton(request)
         if claims.get("sub") not in SERVICES:
             raise HTTPException(403, "service non autorisé")
         try:
-            data = BilletIn(body=payload.body, ref_url=payload.ref_url, publish=True, ttl_s=payload.ttl_s)
+            data = BilletIn(body=payload.body, ref_url=payload.ref_url, embed_url=payload.embed_url, publish=True, ttl_s=payload.ttl_s)
         except ValidationError as exc:
             raise HTTPException(422, f"billet invalide : {exc.errors()}")
         conn = request.app.state.conn
@@ -67,4 +80,6 @@ def register_service(app: FastAPI) -> None:
                 raise HTTPException(429, "plafond horaire de billets éphémères atteint")
         billet_id = await repo.create_billet(conn, data, now=repo._maintenant())
         row = await repo.get_by_id(conn, billet_id)
+        if data.embed_url:
+            taches.add_task(_enrichir, request, billet_id, data.embed_url)
         return {"id": row["id"], "slug": row["slug"], "expires_at": row["expires_at"], "published_at": row["published_at"]}

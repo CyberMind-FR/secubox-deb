@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — billets 0.11.1 + metanews 0.4.1 : billets éphémères avec sources, aperçu et vignette (ref #2343)
+
+Le billet éphémère de MetaNews n'avait ni lien, ni média, ni vignette. MetaNews liste maintenant jusqu'à 5 sources en liens (https seulement) et envoie l'article principal en `embed_url` ; `/service/ephemere` résout l'embed et capture la vignette en tâche de fond, sans jamais bloquer la création.
+
 ## 2026-10-12 — profiles 0.20.3 : le kiosque n'est plus arrêté par un profil (ref #2329)
 
 L'interface locale (module kiosk, dans aucun profil) était mise à OFF par `profilectl apply` : la VM finissait son Auto-Load sans interface. HORS_PLAN : ni stop, ni start.
