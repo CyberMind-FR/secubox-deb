@@ -204,3 +204,36 @@ def test_renommer_met_a_jour_hosts_et_secubox_conf(tmp_path, monkeypatch):
     assert 'hostname  = "gk3"' in conf.read_text()
     M._renomme("gk3", ancien="gk3")                     # idempotent
     assert hosts.read_text().count("127.0.1.1") == 1
+
+
+# ── #2306 : l'étape réseau sans `secubox-net-detect` ─────────────────────────────────────────────
+def test_lan_sans_l_outil_conserve_le_reseau_existant(complet, monkeypatch):
+    complet["reseau"] = {"mode": "lan"}
+    monkeypatch.setattr(M, "NET_DETECT", Path("/nonexistent/secubox-net-detect"))
+    r = [a for a in M.plan(complet) if a.etape == "reseau"][0]
+    assert r.argv is None and r.fn is M._reseau_existant_conserve and "conservé" in r.quoi
+
+
+def test_lan_avec_l_outil_garde_la_commande(complet, tmp_path, monkeypatch):
+    complet["reseau"] = {"mode": "lan"}
+    outil = tmp_path / "secubox-net-detect"
+    outil.write_text("#!/bin/sh\n")
+    outil.chmod(0o755)
+    monkeypatch.setattr(M, "NET_DETECT", outil)
+    assert ["secubox-net-detect", "apply", "single"] in [a.argv for a in M.plan(complet) if a.argv]
+
+
+def test_routeur_et_pont_sans_l_outil_echouent_en_le_disant(complet, isole, monkeypatch):
+    monkeypatch.setattr(M, "NET_DETECT", Path("/nonexistent/secubox-net-detect"))
+    def exe(argv):
+        return (127, "[Errno 2] No such file or directory: 'secubox-net-detect'") if argv[0] == "secubox-net-detect" else (0, "")
+    r = M.appliquer(complet, exe, CONNUS, isole / "fait")                       # `complet` = mode routeur
+    assert not r.ok and r.echec == "reseau" and "secubox-net-detect" in r.detail and not (isole / "fait").exists()
+
+
+def test_le_reseau_existant_exige_une_route_par_defaut():
+    M._reseau_existant_conserve("default via 10.0.2.2 dev enp0s3 proto dhcp\n")      # passe
+    with pytest.raises(RuntimeError, match="aucune route par défaut"):
+        M._reseau_existant_conserve("")
+    with pytest.raises(RuntimeError, match="aucune route par défaut"):
+        M._reseau_existant_conserve("10.0.2.0/24 dev enp0s3 scope link\n")

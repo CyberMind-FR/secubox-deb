@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — premier-pas 0.5.1 : l'étape réseau en mode lan sans secubox-net-detect (ref #2306)
+
+Suite du test VirtualBox : le parcours s'arrêtait à « Réseau et domaine » (code 127), l'outil n'étant livré par aucune image. Mode lan : réseau existant conservé après contrôle d'une route par défaut ; routeur et pont échouent clairement. Décision restante : livrer `secubox-net-detect` dans les images ou non.
+
 ## 2026-10-12 — Auto-Load : l'enrôlement HTTPS ne marchait pas, trouvé par le test VirtualBox (ref #2301)
 
 autoload-agent 0.6.1 : `TypeError: OpenerDirector.open() got an unexpected keyword argument 'context'` — le contexte TLS est lié au gestionnaire HTTPS. Les tests passaient par un faux ouvreur trop permissif ; un test de bout en bout (serveur TLS local, ouvreur réel) le couvre.
