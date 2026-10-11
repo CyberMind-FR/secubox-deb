@@ -75,3 +75,20 @@ def test_les_pages_du_hall_sont_des_lieux_2351():
 def test_un_chemin_hors_gabarit_n_est_pas_suivi_2351():
     assert sm._url({"id": "x", "chemin": "//evil.example/"}, "exemple.test") is None
     assert sm._url({"id": "x", "chemin": "/../x/"}, "exemple.test") is None
+
+
+def test_les_widgets_du_hall_sont_dans_le_manifeste_2351():
+    """#2351 — la carte (widget) du Hall est exposée avec sa hauteur ; une carte qui demande une session est cachée à l'invité."""
+    ad = mods(sm.construire("admin", True, "exemple.test", E, C))
+    assert ad["activite"]["carte"] == "/cardlets/activite.html" and 120 <= ad["activite"]["h"] <= 700
+    assert ad["guardian"]["carte"].startswith("/guardian/")
+    inv = mods(sm.construire("guest", False, "exemple.test", E, C))
+    assert all("carte" not in x for x in inv.values()) or all(x["id"] in {"radio", "billets", "peertube", "metanews"} for x in inv.values())
+
+
+def test_une_carte_hors_gabarit_est_ignoree_2351(tmp_path):
+    c = tmp_path / "c.json"
+    c.write_text(json.dumps({"lieux": [{"id": "zigbee", "label": "Z", "carte": "//evil.example/x"},
+                                       {"id": "zia", "label": "Z", "carte": "/cardlets/../../etc.html?x=1"}]}))
+    r = sm.construire("admin", True, "exemple.test", E, c)
+    assert all("carte" not in x for x in mods(r).values())

@@ -168,6 +168,20 @@ export function App() {
                 sous: `${a.qui ?? 'Quelqu’un'} · ${new Date(a.at * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`,
                 icone: a.kind.startsWith('bbs') ? 'bbs' : a.kind.includes('billet') ? 'billets' : 'activite',
                 lien: lienLocal(a.context?.lien) }))} />}
+              {man && (() => {
+                const ws = (man.espaces.find(x => x.id === espace)?.modules ?? [])
+                  .map(md => ({ md, u: md.carte ? urlSure(md.carte, man.domaine) : null }))
+                  .filter(w => w.u);
+                if (!ws.length || estEncadre()) return null;
+                return (<div className="widgets" data-aide="Widgets">
+                  {ws.map(({ md, u }) => <section key={md.id} className="widget">
+                    <h2>{md.label}</h2>
+                    <iframe src={u!} title={md.label} loading="lazy" style={{ height: md.h ?? 300 }}
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                            allow="autoplay" />
+                  </section>)}
+                </div>);
+              })()}
               <div className="cartes">
                 {(man?.espaces.find(x => x.id === espace)?.modules ?? []).map(md => {
                   const u = man ? urlSure(md.url, man.domaine) : null;

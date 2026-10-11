@@ -14,28 +14,40 @@
    "label": "Renseignement",
    "icon": "🧠",
    "color": "#2e6a5b",
-   "chemin": "/actor-intelligence/"
+   "chemin": "/actor-intelligence/",
+   "carte": "/actor-intelligence/?embed=1",
+   "h": 420,
+   "auth": true
   },
   {
    "id": "radar",
    "label": "Radar des acteurs",
    "icon": "📡",
    "color": "#7a3d5b",
-   "chemin": "/actor/"
+   "chemin": "/actor/",
+   "carte": "/cardlets/radar.html",
+   "h": 420,
+   "auth": true
   },
   {
    "id": "guardian",
    "label": "Guardian",
    "icon": "🛡️",
    "color": "#1d5fa8",
-   "chemin": "/guardian/"
+   "chemin": "/guardian/",
+   "carte": "/guardian/?embed=1",
+   "h": 420,
+   "auth": true
   },
   {
    "id": "mon-coffre",
    "label": "Coffre",
    "icon": "🔐",
    "color": "#6b4a2e",
-   "chemin": "/coffre/"
+   "chemin": "/coffre/",
+   "carte": "/coffre/",
+   "h": 380,
+   "auth": true
   },
   {
    "id": "contenu",
@@ -59,6 +71,14 @@
    "url": "bbs.gk2.secubox.in"
   },
   {
+   "id": "activite",
+   "label": "Activité",
+   "icon": "✦",
+   "color": "#6a4bb8",
+   "carte": "/cardlets/activite.html",
+   "h": 280
+  },
+  {
    "id": "bbs",
    "label": "BBS",
    "icon": "💬",
@@ -77,7 +97,9 @@
    "label": "PeerTube",
    "icon": "📹",
    "color": "#c0392b",
-   "url": "peertube.gk2.secubox.in"
+   "url": "peertube.gk2.secubox.in",
+   "carte": "/cardlets/peertube.html",
+   "h": 300
   },
   {
    "id": "lyrion",
@@ -85,7 +107,9 @@
    "icon": "🎚️",
    "color": "#128a6f",
    "url": "lyrion.gk2.secubox.in",
-   "lan": true
+   "lan": true,
+   "carte": "/cardlets/lyrion.html",
+   "h": 230
   },
   {
    "id": "zigbee",
@@ -93,7 +117,10 @@
    "icon": "💡",
    "color": "#c8791f",
    "url": "zigbee.gk2.secubox.in",
-   "lan": true
+   "lan": true,
+   "carte": "/cardlets/zigbee.html",
+   "h": 250,
+   "auth": true
   },
   {
    "id": "nextcloud",
@@ -128,14 +155,64 @@
    "label": "VoiceStudio",
    "icon": "🎙️",
    "color": "#c87832",
-   "url": "voicestudio.gk2.secubox.in"
+   "url": "voicestudio.gk2.secubox.in",
+   "carte": "/cardlets/voicestudio-admin.html",
+   "h": 160,
+   "auth": true
+  },
+  {
+   "id": "ytflux",
+   "label": "Flux YouTube",
+   "icon": "🎞️",
+   "color": "#c4302b",
+   "carte": "/cardlets/ytflux.html",
+   "h": 380,
+   "auth": true
+  },
+  {
+   "id": "ipv6guard",
+   "label": "IPv6 Guardian",
+   "icon": "🛡️",
+   "color": "#2c6e9b",
+   "carte": "/cardlets/ipv6guard.html",
+   "h": 540,
+   "auth": true
+  },
+  {
+   "id": "voix",
+   "label": "Voix",
+   "icon": "🗣️",
+   "color": "#c87832",
+   "carte": "/cardlets/voicestudio.html",
+   "h": 300,
+   "auth": true
+  },
+  {
+   "id": "freeboxtv",
+   "label": "Freebox TV",
+   "icon": "📺",
+   "color": "#2b6cb0",
+   "carte": "/cardlets/freeboxtv.html",
+   "h": 360
+  },
+  {
+   "id": "ephemeride",
+   "label": "Éphéméride",
+   "icon": "🌙",
+   "color": "#2b6cb0",
+   "carte": "/cardlets/ephemeride.html",
+   "h": 430,
+   "auth": true
   },
   {
    "id": "metablogizer",
    "label": "Mes sites",
    "icon": "🌐",
    "color": "#3d6b4a",
-   "chemin": "/metablogizer/"
+   "chemin": "/metablogizer/",
+   "carte": "/cardlets/metablog.html",
+   "h": 300,
+   "auth": true
   },
   {
    "id": "mood",
@@ -166,11 +243,22 @@
    "url": "socialrelay.gk2.secubox.in"
   },
   {
+   "id": "comptes",
+   "label": "Mes comptes",
+   "icon": "🗝️",
+   "color": "#6a4fb3",
+   "carte": "/cardlets/comptes.html",
+   "h": 272,
+   "auth": true
+  },
+  {
    "id": "messagerie",
    "label": "Messagerie",
    "icon": "💬",
    "color": "#0784a8",
-   "chemin": "/messagerie/"
+   "chemin": "/messagerie/",
+   "carte": "/messagerie/",
+   "h": 340
   },
   {
    "id": "mail",
@@ -205,14 +293,19 @@
    "label": "DPI · Trafic",
    "icon": "🔬",
    "color": "#d64545",
-   "chemin": "/dpi-vue/"
+   "chemin": "/dpi-vue/",
+   "carte": "/dpi-vue/?embed=1",
+   "h": 420,
+   "auth": true
   },
   {
    "id": "zia",
    "label": "ZIA",
    "icon": "🦊",
    "color": "#0a93a6",
-   "url": "hall.gk2.secubox.in/zia"
+   "url": "hall.gk2.secubox.in/zia",
+   "carte": "/zia/micro.html",
+   "h": 340
   },
   {
    "id": "acces",
@@ -220,6 +313,14 @@
    "icon": "🎟️",
    "color": "#f59e0b",
    "url": "acces.gk2.secubox.in"
+  },
+  {
+   "id": "surfviewer",
+   "label": "Surf & Viewer",
+   "icon": "🧭",
+   "color": "#3c6e8f",
+   "carte": "/cardlets/surfviewer.html",
+   "h": 250
   }
  ]
 }

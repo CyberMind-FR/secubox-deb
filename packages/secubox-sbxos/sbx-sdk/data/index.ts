@@ -41,7 +41,9 @@ export type Moi = { identite: { pseudo?: string; display_name?: string; user_uui
 export const moi = () => sbxFetch<Moi>('/api/v1/sbxid/moi');
 
 // ── Manifeste de session (#1610) : ce que la box déclare pour CET appelant ──
-export type Module = { id: string; label: string; url: string | null; lan: boolean; etat?: string };
+export type Module = { id: string; label: string; url: string | null; lan: boolean; etat?: string;
+  /** Widget du Hall (#2351) : chemin de la carte et hauteur, encadrés par SBX OS. */
+  carte?: string; h?: number };
 export type EspaceM = { id: string; nom: string; guide: string; modules: Module[] };
 export type Manifeste = {
   version: number; role: 'guest' | 'user' | 'admin'; lan: boolean; domaine: string;

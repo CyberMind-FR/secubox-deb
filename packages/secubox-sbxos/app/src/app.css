@@ -95,3 +95,9 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
 }
 .micro.ecoute { box-shadow: 0 0 0 calc(3px + var(--niveau, 0) * 10px) #f43f5e55; transition: box-shadow 80ms; }
 .etat-voix { color: var(--sbx-cyan); }
+
+/* Widgets du Hall (#2351) : les cartes du Hall, encadrées dans l'Espace, d'une colonne sur téléphone à trois en grand. */
+.widgets { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; margin: 16px 0; }
+.widget { min-width: 0; border-radius: 14px; overflow: hidden; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.widget h2 { margin: 0; padding: 8px 12px; font-size: .85rem; font-weight: 600; letter-spacing: .02em; opacity: .8; }
+.widget iframe { display: block; width: 100%; border: 0; background: transparent; }

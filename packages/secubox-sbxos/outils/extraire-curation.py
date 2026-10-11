@@ -32,6 +32,23 @@ from pathlib import Path
 _CHAMPS = ("id", "label", "icon", "color", "url", "lan")
 
 
+_CARTE = re.compile(r"/[a-z0-9][a-z0-9/_.-]{0,80}(\?embed=1)?")
+
+
+def _widget(brut: str) -> dict:
+    """Le widget du Hall (#2351) : la carte qu'il encadre, sa hauteur, et s'il demande une session."""
+    c = re.search(r'\bcarte\s*:\s*"([^"]*)"', brut)
+    if not c or not _CARTE.fullmatch(c.group(1)):
+        return {}
+    w = {"carte": c.group(1)}
+    h = re.search(r"\bh\s*:\s*(\d{2,3})\b", brut)
+    if h:
+        w["h"] = max(120, min(700, int(h.group(1))))
+    if re.search(r"\bauth\s*:\s*true", brut):
+        w["auth"] = True
+    return w
+
+
 def _chemin(brut: str) -> str | None:
     """Page du Hall (hôte hall.<domaine>) d'une carte sans hôte propre (#2351). On préfère une VRAIE page
     (carte hors /cardlets/, sinon la page d'administration) ; une carte qui n'est qu'un widget du Hall
@@ -70,7 +87,9 @@ def extrait(html: str) -> list[dict]:
             ch = _chemin(brut) if e["id"] != "sbxos" else None   # SBX OS ne se liste pas lui-même
             if ch:
                 e["chemin"] = ch
-        if e.get("id") and (e.get("url") or e.get("chemin")):
+        if e.get("id") and e["id"] != "sbxos":
+            e.update(_widget(brut))
+        if e.get("id") and (e.get("url") or e.get("chemin") or e.get("carte")):
             sortie.append(e)
     return sortie
 
