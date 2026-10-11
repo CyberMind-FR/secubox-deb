@@ -74,7 +74,6 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-publish** | ✅ | ✅ | ✅ | Unified publishing | ✅ |
 | **secubox-gitea** | ✅ | ✅ | ✅ | Git server LXC | ✅ |
 | **secubox-nextcloud** | ✅ | ✅ | ✅ | File sync LXC | ✅ |
-| **secubox-c3box** | ✅ | ✅ | ✅ | Services portal | ✅ |
 | **secubox-backup** | ✅ | ✅ | ✅ | config, container backup | ✅ |
 | **secubox-watchdog** | ✅ | ✅ | ✅ | containers, services, endpoints | ✅ |
 | **secubox-tor** | ✅ | ✅ | ✅ | circuits, hidden services | ✅ |
