@@ -1,3 +1,9 @@
+secubox-webos (1.9.3-1~bookworm1) bookworm; urgency=medium
+
+  * Actor Intelligence : les MODES disent la verite (#2291). Le bandeau affichait « OBSERVE » (mode d'analyse d'actord, shadow) alors que les bans sont appliques (mode global du WAF : ACTIVE). Il montre maintenant le mode d'application des decisions (PASSIVE / SIMULATION / ACTIVE = MITIGATE + BLOCK), le detail campagnes/acteurs, et dit que le changement se fait dans la console. Relais Hall : GET /api/v1/waf/enforcement/mode seulement (session). 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 23:30:00 +0200
+
 secubox-webos (1.9.2-1~bookworm1) bookworm; urgency=medium
 
   * Hall : la carte DPI est la vue d'ensemble DPI (#2293) via /dpi-vue/ (CSP propre) ; la carte du monde d'Actor Intelligence reprend la grille eprouvee de la page Actor.

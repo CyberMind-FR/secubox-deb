@@ -186,8 +186,14 @@
   function rend(d){
     el('demo').hidden=!d.demo;
     var s=d.stats,e=el('etat');e.textContent=s?'Système opérationnel':'Hors ligne';e.classList.toggle('hors',!s);
-    var md=s&&MAPMODE[String(s.mode||'').toLowerCase()];el('mode').textContent='MODE : '+(s&&s.mode?String(s.mode).toUpperCase():'—');
-    el('modes').innerHTML='Modes : '+MODES.map(function(m){return '<button type="button" aria-current="'+(m===md)+'">'+m+'</button>';}).join('')+'<span style="margin-left:6px">Le mode actif est celui d’actord.</span>';
+    // MODE D'EXPLOITATION = celui de l'application des décisions (mode global du WAF : PASSIVE_ONLY / SIMULATION / ACTIVE), pas le mode d'analyse d'actord (« observe » = shadow).
+    var em=d.enforcement&&d.enforcement.mode,act={PASSIVE_ONLY:['PASSIVE'],SIMULATION:['SIMULATION'],ACTIVE:['MITIGATE','BLOCK']}[em]||null;
+    if(!act&&s&&MAPMODE[String(s.mode||'').toLowerCase()]) act=[MAPMODE[String(s.mode).toLowerCase()]];
+    var lib=em?em.replace('_ONLY',''):(s&&s.mode?String(s.mode).toUpperCase():'—');
+    el('mode').textContent='MODE : '+lib;el('mode').title='Mode global d’application des décisions (WAF). Analyse d’actord : '+((s&&s.mode)||'—')+'.';
+    var det=d.enforcement&&d.enforcement.detail;
+    el('modes').innerHTML='Modes : '+MODES.map(function(m){return '<button type="button" aria-current="'+(!!act&&act.indexOf(m)>=0)+'">'+m+'</button>';}).join('')
+      +'<span style="margin-left:6px">'+(em?'ACTIVE = mesures graduées et bans temporaires réversibles'+(det?' (campagnes : '+esc(det.campagnes)+', acteurs : '+esc(det.acteurs)+')':'')+'. ':'')+'Le mode se change dans la console d’administration, jamais d’ici.</span>';
     var R=d.radar||[],crit=R.filter(function(a){return num(a.risque.valeur)>=70;}).length,susp=R.filter(function(a){var v=num(a.risque.valeur);return v>=40&&v<70;}).length,obs=R.length-crit-susp;
     var rob=d.robots||[],rh=rob.reduce(function(t,r){return t+num(r.hits);},0);
     var N=function(v){return v==null?'—':fmt(v);},sr=d.radar?'parmi les '+R.length+' suivis':'session requise';
@@ -229,16 +235,16 @@
     activite:[20,25,18,30,60,90,120,150,210,260,240,280,300,260,240,200,220,260,300,280,200,150,100,60],
     techniques:{x:[{nom:'outil moissonneur-secrets?',n:460},{nom:'outil client-automatise?',n:277},{nom:'recon-001',n:120},{nom:'scan-003',n:53},{nom:'fuzzer-repertoire?',n:39},{nom:'bruteforce-login',n:28},{nom:'exfiltration-volume?',n:17}]},
     appareils:[{nom:'TV Salon',type:'tv',req:1245,pct:30,c:'rouge'},{nom:'Smartphone',type:'tel',req:623,pct:19,c:'orange'},{nom:'PC Bureau',type:'pc',req:412,pct:7,c:'vert'}],
-    mesures:{par_niveau:{DELAY:0,CHALLENGE:1,TARPIT:6,DENY:2,QUARANTINE:0}}};
+    mesures:{par_niveau:{DELAY:0,CHALLENGE:1,TARPIT:6,DENY:2,QUARANTINE:0}},enforcement:{mode:'ACTIVE',detail:{campagnes:'ACTIVE',acteurs:'ACTIVE'}}};
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   if(q.get('demo')){rend(DEMO);return;}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
-    Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/overview'),jget('/api/v1/actor/radar?limit=30'),jget('/api/v1/actor/mesures'),jget('/api/v1/ad-guard/adblock-tv/gardien')]).then(function(r){
+    Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/overview'),jget('/api/v1/actor/radar?limit=30'),jget('/api/v1/actor/mesures'),jget('/api/v1/ad-guard/adblock-tv/gardien'),jget('/api/v1/waf/enforcement/mode')]).then(function(r){
       var ov=r[1],rd=r[2],g=r[4];
-      rend({stats:r[0],radar:rd&&rd.acteurs||null,robots:ov&&ov.robots||null,echantillon:ov&&ov.echantillon,pays:ov&&ov.top_pays||[],recents:ov&&ov.recents||null,activite:ov&&ov.activite_24h||null,techniques:ov&&ov.techniques||{},appareils:g&&g.top||null,mesures:r[3]});
+      rend({stats:r[0],radar:rd&&rd.acteurs||null,robots:ov&&ov.robots||null,echantillon:ov&&ov.echantillon,pays:ov&&ov.top_pays||[],recents:ov&&ov.recents||null,activite:ov&&ov.activite_24h||null,techniques:ov&&ov.techniques||{},appareils:g&&g.top||null,mesures:r[3],enforcement:r[5]});
     });
   }
   charge();setInterval(charge,60000);
