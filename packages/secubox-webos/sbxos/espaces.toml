@@ -6,22 +6,22 @@
 [espaces.hall]
 nom = "Hall"
 guide = "Lexie"
-modules = ["acces", "zia", "mood", "forums", "bbs", "mail", "messagerie"]
+modules = ["acces", "zia", "mood", "forums", "bbs", "mail", "messagerie", "activite", "comptes", "ephemeride"]
 
 [espaces.atelier]
 nom = "Atelier"
 guide = "Néo"
-modules = ["devwatch", "depot", "contenu", "cloud", "nextcloud", "nextcloud-super", "torrent", "voicestudio", "metablogizer"]
+modules = ["devwatch", "depot", "contenu", "cloud", "nextcloud", "nextcloud-super", "torrent", "voicestudio", "metablogizer", "surfviewer"]
 
 [espaces.securite]
 nom = "Sécurité"
 guide = "Actor"
-modules = ["securite", "acteurs", "radar", "guardian", "dpi", "coffre", "mon-coffre"]
+modules = ["securite", "acteurs", "radar", "guardian", "dpi", "ipv6guard", "coffre", "mon-coffre"]
 
 [espaces.media]
 nom = "Média"
 guide = "Lyrión"
-modules = ["radio", "peertube", "lyrion", "podcaster", "photoprism", "ytsas", "billets", "metanews", "socialrelay"]
+modules = ["radio", "peertube", "lyrion", "podcaster", "photoprism", "ytsas", "billets", "metanews", "socialrelay", "ytflux", "freeboxtv", "voix"]
 
 [espaces.maison]
 nom = "Maison"

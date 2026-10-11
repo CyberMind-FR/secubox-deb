@@ -29,6 +29,7 @@ CURATION = Path("/usr/share/secubox/www/sbxos/mine/curation.json")
 # PhotoPrism n'a pas de /sbx/entrer : il s'ouvre par le départ OIDC, qui renvoie à l'IdP du Hall ; le compte se crée à la première connexion (#2255).
 ENTREE_SSO = {"nextcloud": "/sbx/entrer", "peertube": "/sbx/entrer", "photoprism": "/api/v1/oidc/login"}
 _HOTE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+_CARTE = re.compile(r"/[a-z0-9][a-z0-9/_.-]{0,80}(\?embed=1)?")
 
 
 def _lis(espaces: Path, curation: Path) -> tuple[dict, list]:
@@ -74,6 +75,10 @@ def construire(role: str, lan: bool, domaine: str,
                 continue                      # un invité ne voit que le public
             m = {"id": mid, "label": str(l.get("label", mid))[:60],
                  "url": _url(l, domaine), "lan": bool(l.get("lan"))}
+            carte = str(l.get("carte") or "")
+            if _CARTE.fullmatch(carte) and not (l.get("auth") and role == "guest"):
+                m["carte"] = carte            # widget du Hall (#2351), encadré par SBX OS et l'APK
+                m["h"] = max(120, min(700, int(l.get("h") or 300)))
             if not restreint:
                 m["etat"] = "inconnu"         # registre : voir #1624
             modules.append(m)

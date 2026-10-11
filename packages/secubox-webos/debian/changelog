@@ -1,3 +1,9 @@
+secubox-webos (1.9.7-1~bookworm1) bookworm; urgency=medium
+
+  * SBX OS : les widgets du Hall dans le manifeste (ref #2351) : chaque module porte sa carte (chemin valide par gabarit) et sa hauteur ; une carte qui demande une session est cachee a l'invite. Activite, Mes comptes, Ephemeride, Flux YouTube, Freebox TV, Voix, IPv6 Guardian et Surf & Viewer sont places dans les Espaces. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 17:00:00 +0200
+
 secubox-webos (1.9.6-1~bookworm1) bookworm; urgency=medium
 
   * SBX OS : les pages du Hall deviennent des lieux (ref #2351). Une carte sans hote propre mais avec une vraie page (guardian, dpi, radar, messagerie, metablogizer) s'ouvre sur hall.<domaine>/<chemin> ; voicestudio et ces pages sont placees dans les Espaces. Chemin valide par gabarit, jamais suivi s'il en sort. 2 tests.

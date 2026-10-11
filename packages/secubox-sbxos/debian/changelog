@@ -1,3 +1,9 @@
+secubox-sbxos (0.6.0~aurora17-1~bookworm1) bookworm; urgency=medium
+
+  * Les widgets du Hall dans SBX OS et l'APK (ref #2351) : section Widgets de chaque Espace, cartes encadrees (hors d'un Hall qui les montre deja), une colonne sur telephone. Curation regeneree (widgets).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 17:00:00 +0200
+
 secubox-sbxos (0.6.0~aurora16-1~bookworm1) bookworm; urgency=medium
 
   * Curation regeneree depuis le Hall (ref #2351) : l'extracteur emet aussi les pages du Hall sans hote propre (chemin) ; SBX OS ne se liste pas lui-meme.
