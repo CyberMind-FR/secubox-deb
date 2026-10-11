@@ -53,6 +53,7 @@ if _ici not in _sys.path:
     _sys.path.insert(0, _ici)
 
 from visitor_origin import VisitorOriginAggregator
+from waf_etat import sbxwaf_actif
 from live_hosts import LiveHostsAggregator
 from cert_status import CertStatusAggregator
 from cookie_audit import CookieAuditAggregator
@@ -355,7 +356,8 @@ def build_overview() -> dict:
         return result == 'active'
 
     haproxy_up = check_lxc_running('haproxy') or check_systemd_service('haproxy')
-    mitmproxy_up = check_lxc_running('mitmproxy-in') or check_process('mitmdump')
+    # sbxwaf d'abord ; le contrôle de l'ancien mitmproxy reste en repli pour une box qui ne l'a pas migré (#2391)
+    mitmproxy_up = sbxwaf_actif() or check_lxc_running('mitmproxy-in') or check_process('mitmdump')
 
     # Counts - adapted for Debian (using config files instead of UCI)
     vhost_count = 0
@@ -428,7 +430,7 @@ def build_overview() -> dict:
 
 def build_waf_stats() -> dict:
     """Build WAF statistics."""
-    mitmproxy_running = bool(run_cmd(['pgrep', '-f', 'mitmdump']))
+    mitmproxy_running = sbxwaf_actif() or bool(run_cmd(['pgrep', '-f', 'mitmdump']))
 
     bans = alerts_today = waf_blocked = 0
 
