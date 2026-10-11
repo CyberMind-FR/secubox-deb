@@ -11,7 +11,7 @@ Depends: ${misc:Depends},
  secubox-core (>= 1.4.0),
  python3-tomli,
  python3 (>= 3.11)
-Recommends: suricata
+Suggests: suricata
 Replaces: secubox-ai-insights (<< 1.2.3~)
 Breaks: secubox-ai-insights (<< 1.2.3~)
 Description: SecuBox Unified Threats Dashboard

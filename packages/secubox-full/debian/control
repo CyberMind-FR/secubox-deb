@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-full
 Architecture: all
 Depends: ${misc:Depends},
- secubox-isp (>= 1.3.0),
+ secubox-isp (>= 1.4.0),
  secubox-webos,
  secubox-sbxos,
  secubox-surf,
@@ -28,15 +28,17 @@ Depends: ${misc:Depends},
  secubox-jellyfin (>= 1.0),
  secubox-ytsas (>= 0.3.0),
  secubox-media,
+ secubox-photoprism,
  secubox-lyrion (>= 1.0),
  secubox-mqtt,
  secubox-picobrew,
  secubox-ai-gateway,
  secubox-streamlit
 Recommends: wireguard-tools, secubox-voicestudio
+Suggests: secubox-jitsi
 Description: SecuBox Full — isp + tout le contenu du Hall
  Le profil secubox-isp PLUS tout ce que le Hall presente : le Hall lui-meme
  (webos, sbxos), l'assistant (zia, voice, voicestudio), les medias (radio,
- podcaster, PeerTube, Jellyfin, ytsas, Lyrion), la domotique (MQTT,
+ podcaster, PeerTube, Jellyfin, ytsas, Lyrion, photos PhotoPrism), la domotique (MQTT,
  picobrew), l'IA (ai-gateway, streamlit), les depots et l'assistance.
  Le materiel specifique (ecrans, capteurs) reste a la demande.
