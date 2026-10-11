@@ -43,4 +43,5 @@ def test_systemd_evalue_les_deux_conditions_comme_prevu(tmp_path):
 
 def test_le_kiosque_n_a_plus_d_echec_de_sentinelle_dans_les_dropins():
     for f in (CONSOLE / "debian" / "dropins").glob("*.conf"):
-        assert "exit 1" not in f.read_text(encoding="utf-8")
+        actives = [l for l in f.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")]      # les commentaires expliquent l'ancien test, ils ne comptent pas
+        assert not any("exit 1" in l or "ExecStartPre" in l for l in actives)
