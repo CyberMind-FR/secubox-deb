@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Guardian », le gardien du réseau domestique. Une seule page, deux mises en page :
+    · CARDLET du Hall / page embarquée (?embed=1) : en-tête, quatre tuiles, courbe DNS, répartition, appareils — compact ;
+    · TABLEAU DE BORD complet (largeur ≥ 860 px, ou agrandi par le Hall) : barre latérale, tuiles, courbe, donut, appareils principaux, catégories bloquées.
+  DONNÉES RÉELLES UNIQUEMENT (ad-guard `/adblock-tv/gardien`, NAC, WAF). Sans réponse : un état honnête, jamais un chiffre inventé.
+  `?demo=1` affiche des données de DÉMONSTRATION, annoncées comme telles par un bandeau — pour la maquette et les captures, jamais en service.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardian — le gardien du réseau domestique</title>
+<style>
+  :root{
+    --fond:#060d1b; --fond2:#0a1630; --panneau:#0d1a33; --panneau2:#0f2040; --trait:rgba(86,150,255,.22); --trait2:rgba(86,150,255,.38);
+    --texte:#eaf1ff; --doux:#9fb3d6; --faible:#6f84a8;
+    --cyan:#29b6f6; --bleu:#3b82f6; --vert:#2ecc71; --rouge:#ff4d5e; --orange:#ff9f1c; --violet:#a78bfa;
+    --rayon:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body.emb{scrollbar-width:none}
+  body.emb::-webkit-scrollbar{display:none}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(41,182,246,.18),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(59,130,246,.16),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:g;min-height:100vh;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
+       box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18),inset 0 1px 0 rgba(255,255,255,.05);overflow:hidden;display:grid;grid-template-columns:1fr}
+  .lateral{display:none}
+  .principal{padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+  /* en-tête */
+  .tete{display:flex;align-items:center;gap:10px}
+  .tete h1{margin:0;font-size:1.02rem;font-weight:700;letter-spacing:.01em}
+  .tete .marque{margin-left:auto;display:flex;align-items:center;gap:7px;font-weight:700;font-size:.82rem;color:var(--texte)}
+  .tete .marque b{color:var(--cyan)}
+  .actif{display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:700;letter-spacing:.04em;color:#0b2a18;background:var(--vert);border-radius:6px;padding:2px 9px}
+  .actif::before{content:"";width:6px;height:6px;border-radius:50%;background:#0b2a18}
+  .actif.hors{background:#5b6b86;color:#0c1426}
+  .bandeau{font-size:.68rem;color:#2b1b00;background:var(--orange);border-radius:8px;padding:3px 9px;font-weight:700;text-align:center}
+  /* tuiles */
+  .tuiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .tuile{background:linear-gradient(180deg,rgba(18,36,70,.9),rgba(11,23,46,.9));border:1px solid var(--trait);border-radius:var(--rayon);padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+  .tuile svg{width:30px;height:30px;margin-bottom:2px}
+  .tuile .v{font-size:1.55rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1.05}
+  .tuile .l{font-size:.74rem;color:var(--doux)}
+  .tuile .s{font-size:.66rem;color:var(--faible)}
+  /* panneaux */
+  .panneaux{display:grid;gap:8px;grid-template-columns:1fr}
+  .panneau{background:linear-gradient(180deg,rgba(15,30,60,.92),rgba(9,19,40,.92));border:1px solid var(--trait);border-radius:var(--rayon);padding:11px 12px;min-width:0}
+  .panneau h2{margin:0 0 8px;font-size:.86rem;font-weight:600;color:var(--texte);display:flex;align-items:center;gap:8px}
+  .panneau h2 .lg{margin-left:auto;display:flex;gap:10px;font-size:.66rem;color:var(--doux);font-weight:500}
+  .lg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:0}
+  .courbe{width:100%;height:150px;display:block}
+  .courbe text{fill:var(--faible);font-size:9px;font-family:inherit}
+  .courbe .grille{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .donut-zone{display:flex;align-items:center;gap:14px}
+  .donut{flex:0 0 118px;width:118px;height:118px;border-radius:50%;position:relative}
+  .donut::after{content:"";position:absolute;inset:24px;border-radius:50%;background:#0b1830;box-shadow:inset 0 0 0 1px rgba(86,150,255,.18)}
+  .legende{display:flex;flex-direction:column;gap:7px;flex:1;min-width:0}
+  .legende div{display:flex;align-items:center;gap:8px;font-size:.78rem}
+  .legende i{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+  .legende b{margin-left:auto;font-variant-numeric:tabular-nums}
+  /* appareils */
+  .ligne{display:grid;grid-template-columns:34px minmax(0,1.1fr) minmax(0,1fr);gap:8px;align-items:center;padding:7px 0;border-top:1px solid rgba(86,150,255,.12)}
+  .ligne:first-of-type{border-top:0}
+  .ligne .ic{width:30px;height:30px;border-radius:8px;background:rgba(41,182,246,.10);display:grid;place-items:center}
+  .ligne .ic svg{width:19px;height:19px}
+  .ligne .nom{font-weight:600;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ligne .req{font-size:.7rem;color:var(--doux)}
+  .ligne .bl{display:flex;align-items:center;gap:8px;font-size:.7rem}
+  .ligne .bl em{font-style:normal;color:var(--rouge);white-space:nowrap}
+  .ligne .bl span{color:var(--doux);font-variant-numeric:tabular-nums;margin-left:auto}
+  .barre{height:6px;border-radius:4px;background:rgba(159,179,214,.16);overflow:hidden;flex:1;min-width:34px}
+  .barre i{display:block;height:100%;border-radius:4px}
+  .cat{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) 38px;gap:8px;align-items:center;padding:6px 0;font-size:.78rem}
+  .cat span:last-child{text-align:right;color:var(--doux);font-variant-numeric:tabular-nums}
+  .vide{color:var(--faible);font-size:.76rem;padding:10px 4px;text-align:center}
+  .note{font-size:.64rem;color:var(--faible);margin-top:6px}
+  /* ─── tableau de bord complet ─────────────────────────────────────────────────────────── */
+  @container g (min-width: 860px){
+    .app{grid-template-columns:190px 1fr}
+    .lateral{display:flex;flex-direction:column;gap:3px;padding:14px 10px;border-right:1px solid var(--trait);background:linear-gradient(180deg,rgba(9,20,42,.9),rgba(6,13,28,.9))}
+    .lateral .logo{display:flex;align-items:center;gap:8px;padding:2px 8px 14px;font-weight:700;font-size:.95rem}
+    .lateral .logo b{color:var(--cyan)}
+    .nav{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;color:var(--doux);font-size:.8rem;text-decoration:none;cursor:default}
+    .nav svg{width:16px;height:16px;flex:0 0 auto;opacity:.9}
+    .nav.on{background:linear-gradient(90deg,#2f7cf6,#2a6ad9);color:#fff;box-shadow:0 4px 14px rgba(47,124,246,.35)}
+    .principal{padding:16px 18px;gap:12px}
+    .tete h1{font-size:1.18rem}
+    .tuiles{grid-template-columns:repeat(4,1fr);gap:10px}
+    .tuile{flex-direction:row;flex-wrap:wrap;align-items:center;column-gap:12px;padding:12px 14px}
+    .tuile svg{width:38px;height:38px;margin:0}
+    .tuile .txt{display:flex;flex-direction:column}
+    .tuile .v{font-size:1.9rem}
+    .panneaux{grid-template-columns:1.45fr 1fr;gap:10px}
+    .panneaux .large{grid-column:span 1}
+    .courbe{height:176px}
+    .donut{flex-basis:132px;width:132px;height:132px}
+    .donut::after{inset:27px}
+  }
+  @container g (max-width: 859px){ .tuile .txt{display:contents} }
+  body.emb .cadre{padding:0} body.emb .app{border-radius:0;border:0;box-shadow:none;min-height:100vh}
+  /* cardlet étroit : une colonne, appareils sous la courbe */
+  @container g (max-width: 520px){
+    .tuile .v{font-size:1.35rem}
+    .ligne{grid-template-columns:30px minmax(0,1fr)}
+    .ligne .bl{grid-column:1 / -1;padding-left:38px}
+  }
+</style>
+<div class="cadre"><div class="app" id="app">
+  <nav class="lateral" aria-label="Navigation">
+    <div class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Cyber<b>Mind</b></span></div>
+    <a class="nav on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Vue d’ensemble</a>
+    <a class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Appareils</a>
+    <a class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>DNS / Anti-pub</a>
+    <a class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.9.2 5 2.3 5 5.3"/></svg>Contrôle parental</a>
+    <a class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Règles réseau</a>
+    <a class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Statistiques</a>
+    <a class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 2h16z"/><path d="M10 21h4"/></svg>Alertes</a>
+    <a class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>Paramètres</a>
+  </nav>
+  <main class="principal">
+    <div class="tete"><h1>Tableau de bord SecuBox</h1>
+      <span class="marque"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Cyber<b>Mind</b></span></span>
+      <span class="actif" id="etat">Actif</span></div>
+    <div class="bandeau" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+    <section class="tuiles" id="tuiles"></section>
+    <section class="panneaux">
+      <div class="panneau"><h2>Requêtes DNS<span class="lg"><span><i style="background:var(--vert)"></i>Autorisées</span><span><i style="background:var(--rouge)"></i>Bloquées</span></span></h2><div id="courbe"></div></div>
+      <div class="panneau"><h2>Types de domaines bloqués</h2><div class="donut-zone"><div class="donut" id="donut"></div><div class="legende" id="legende"></div></div></div>
+      <div class="panneau"><h2>Appareils principaux</h2><div id="appareils"></div></div>
+      <div class="panneau"><h2>Catégories populaires bloquées</h2><div id="categories"></div></div>
+    </section>
+  </main>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var COUL={rouge:'#ff4d5e',orange:'#ff9f1c',vert:'#2ecc71',bleu:'#3b82f6',cyan:'#29b6f6',violet:'#a78bfa',gris:'#9fb3d6'};
+  var ICONES={
+    appareil:'<svg viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="12" rx="2"/><path d="M8 20h8M12 15v5"/><circle cx="12" cy="9" r="1.6" fill="#29b6f6" stroke="none"/></svg>',
+    dns:'<svg viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 20V9M12 20V4M19 20v-7"/><path d="M4 8l4-3 4 4 6-6" stroke="#2ecc71"/></svg>',
+    bloque:'<svg viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.15)"/><path d="M9 9l6 6M15 9l-6 6"/></svg>',
+    menace:'<svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" fill="rgba(46,204,113,.14)"/><path d="M9 12l2 2 4-4"/></svg>',
+    tv:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg>',
+    tel:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
+    pc:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>',
+    console:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="9" rx="4"/><path d="M8 10v5M5.5 12.5h5"/><circle cx="16" cy="11.5" r=".8" fill="#cfe3ff"/></svg>',
+    objet:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="4"/><path d="M8 20h8M12 14v6"/></svg>'
+  };
+  var DEMO={demo:true,actif:true,
+    appareils:{connectes:12,total:12},dns:{requetes:3245,bloquees:812,libelle:'Requêtes DNS (24h)'},menaces:{n:0},
+    serie:[{x:'00h',a:70,b:25},{x:'02h',a:90,b:30},{x:'04h',a:60,b:18},{x:'06h',a:85,b:30},{x:'08h',a:130,b:50},{x:'10h',a:175,b:70},{x:'12h',a:150,b:62},{x:'14h',a:210,b:84},{x:'16h',a:240,b:90},{x:'18h',a:200,b:75},{x:'20h',a:230,b:88},{x:'22h',a:180,b:70},{x:'24h',a:120,b:46}],
+    types:[{nom:'Publicité',pct:52,c:'bleu'},{nom:'Traqueurs',pct:24,c:'rouge'},{nom:'Malveillants',pct:12,c:'orange'},{nom:'Autres',pct:12,c:'cyan'}],
+    top:[{nom:'TV Salon',type:'tv',req:1245,blq:380,pct:30,c:'rouge'},{nom:'Smartphone',type:'tel',req:623,blq:120,pct:19,c:'orange'},{nom:'PC Bureau',type:'pc',req:412,blq:28,pct:7,c:'vert'},{nom:'Console',type:'console',req:210,blq:62,pct:29,c:'orange'}],
+    cats:[{nom:'Publicité',pct:52,c:'rouge'},{nom:'Réseaux sociaux',pct:18,c:'cyan'},{nom:'Traqueurs',pct:12,c:'bleu'},{nom:'Streaming (pubs)',pct:8,c:'bleu'},{nom:'Jeux',pct:5,c:'bleu'},{nom:'Autres',pct:5,c:'gris'}]};
+  function tuile(ic,v,l,s){return '<div class="tuile">'+ic+'<div class="txt"><div class="v">'+v+'</div><div class="l">'+esc(l)+'</div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div></div>';}
+  function courbe(serie){
+    var W=520,H=170,L=30,R=8,T=8,B=22,n=serie.length;
+    if(n<2) return '<div class="vide">Pas encore assez de mesures pour tracer la courbe.</div>';
+    var max=Math.max.apply(null,serie.map(function(p){return num(p.a)+0;}).concat([10])),pas0=[10,20,25,50,100,200,250,500,1000,2000,5000,10000,20000,50000,100000].filter(function(u){return u*3>=max;})[0]||Math.ceil(max/3),haut=pas0*3;
+    var x=function(i){return L+i*(W-L-R)/(n-1);},y=function(v){return T+(H-T-B)*(1-num(v)/haut);};
+    function chemin(cle){var d='';serie.forEach(function(p,i){var X=x(i),Y=y(p[cle]);if(!i){d='M'+X+','+Y;}else{var px=x(i-1),py=y(serie[i-1][cle]),cx=(px+X)/2;d+=' C'+cx+','+py+' '+cx+','+Y+' '+X+','+Y;}});return d;}
+    var g='';for(var k=0;k<=3;k++){var v=haut*k/3,Y=y(v);g+='<line class="grille" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-6)+'" y="'+(Y+3)+'" text-anchor="end">'+fmt(v)+'</text>';}
+    var pas=Math.max(1,Math.ceil(n/5)),xs='';serie.forEach(function(p,i){if(i%pas===0||i===n-1)xs+='<text x="'+x(i)+'" y="'+(H-6)+'" text-anchor="middle">'+esc(p.x)+'</text>';});
+    var da=chemin('a'),db=chemin('b');
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Requêtes DNS autorisées et bloquées"><defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2ecc71" stop-opacity=".30"/><stop offset="1" stop-color="#2ecc71" stop-opacity="0"/></linearGradient><linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".28"/><stop offset="1" stop-color="#ff4d5e" stop-opacity="0"/></linearGradient></defs>'
+      +g+xs+'<path d="'+da+' L'+x(n-1)+','+y(0)+' L'+x(0)+','+y(0)+'Z" fill="url(#ga)"/><path d="'+db+' L'+x(n-1)+','+y(0)+' L'+x(0)+','+y(0)+'Z" fill="url(#gb)"/>'
+      +'<path d="'+da+'" fill="none" stroke="#2ecc71" stroke-width="1.8" stroke-linecap="round"/><path d="'+db+'" fill="none" stroke="#ff4d5e" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo;
+    var e=el('etat');e.textContent=d.actif?'Actif':'Hors ligne';e.classList.toggle('hors',!d.actif);
+    el('tuiles').innerHTML=tuile(ICONES.appareil,d.appareils?fmt(d.appareils.connectes):'—','Appareils connectés',d.appareils&&d.appareils.total>d.appareils.connectes?('sur '+fmt(d.appareils.total)+' connus'):'')
+      +tuile(ICONES.dns,d.dns?fmt(d.dns.requetes):'—',(d.dns&&d.dns.libelle)||'Requêtes DNS',d.dns&&d.dns.sous?d.dns.sous:'')
+      +tuile(ICONES.bloque,d.dns?fmt(d.dns.bloquees):'—','Domaines bloqués',d.dns&&d.dns.taux!=null?(d.dns.taux+' % des requêtes'):'')
+      +tuile(ICONES.menace,d.menaces==null?'—':fmt(d.menaces.n),(d.menaces&&d.menaces.libelle)||'Menaces détectées',d.menaces==null?'mesure indisponible':'');
+    el('courbe').innerHTML=courbe(d.serie||[]);
+    var types=d.types||[],acc=0,seg=types.map(function(t){var a=acc;acc+=num(t.pct);return COUL[t.c]+' '+a+'% '+acc+'%';});
+    el('donut').style.background=types.length?'conic-gradient('+seg.join(',')+')':'rgba(159,179,214,.16)';
+    el('legende').innerHTML=types.length?types.map(function(t){return '<div><i style="background:'+COUL[t.c]+'"></i>'+esc(t.nom)+'<b>'+num(t.pct)+' %</b></div>';}).join(''):'<div class="vide">Aucun blocage mesuré.</div>';
+    var top=d.top;
+    el('appareils').innerHTML=top==null?'<div class="vide">Ouvre une session pour voir le détail des appareils.</div>':(top.length?top.map(function(a){
+      return '<div class="ligne"><div class="ic">'+(ICONES[a.type]||ICONES.objet)+'</div><div><div class="nom">'+esc(a.nom)+'</div><div class="req">'+fmt(a.req)+' requêtes</div></div>'
+        +'<div class="bl"><em>'+fmt(a.blq)+' bloquées</em><span>'+num(a.pct)+' %</span><div class="barre"><i style="width:'+Math.min(100,num(a.pct)*2.2)+'%;background:'+COUL[a.c]+'"></i></div></div></div>';}).join(''):'<div class="vide">Aucune requête mesurée.</div>');
+    var cats=d.cats||[];
+    el('categories').innerHTML=cats.length?cats.map(function(c){return '<div class="cat"><span>'+esc(c.nom)+'</span><div class="barre"><i style="width:'+Math.min(100,num(c.pct)*1.8)+'%;background:'+COUL[c.c]+'"></i></div><span>'+num(c.pct)+' %</span></div>';}).join(''):'<div class="vide">Aucune catégorie mesurée.</div>';
+  }
+  if(q.get('demo')){ rend(DEMO); return; }
+  el('tuiles').innerHTML=tuile(ICONES.appareil,'—','Appareils connectés','')+tuile(ICONES.dns,'—','Requêtes DNS','')+tuile(ICONES.bloque,'—','Domaines bloqués','')+tuile(ICONES.menace,'—','Menaces détectées','');
+  el('courbe').innerHTML='<div class="vide">Chargement…</div>';
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function hors(msg){rend({actif:false,appareils:null,dns:null,menaces:null,serie:[],types:[],cats:[],top:null});el('courbe').innerHTML='<div class="vide">'+esc(msg)+'</div>';}
+  function charge(){
+    var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    fetch('/api/v1/ad-guard/adblock-tv/gardien',{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
+      if(r.status===401||r.status===403){hors('Ouvre une session SecuBox pour voir le tableau de bord.');return null;}
+      if(!r.ok){hors('Le tableau de bord ne répond pas (HTTP '+r.status+').');return null;}
+      return r.json();
+    }).then(function(d){if(d)rend(d);}).catch(function(){hors('Le tableau de bord est injoignable.');});
+  }
+  charge();setInterval(charge,60000);
+})();
+</script>

@@ -371,6 +371,49 @@ def _etiqueter(lignes: List[dict]) -> List[dict]:
     return lignes
 
 
+# ── Guardian (#2287) : le tableau de bord du réseau domestique ───────────────────────────────────────────────────────────────────────────────
+_NAC_DB = "/var/lib/secubox/nac/devices.db"
+ACTOR_SOCK = "/run/secubox/actor.sock"
+_cache_gardien: dict = {}
+GARDIEN_TTL_S = 60
+
+
+def _menaces_actord() -> Optional[int]:
+    """Menaces bloquées sur 24 h, d'après les compteurs publics d'actord. Rend None si actord ne répond pas : jamais un zéro rassurant."""
+    import http.client
+    import socket
+
+    class _U(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.sock.settimeout(1.5)
+            self.sock.connect(ACTOR_SOCK)
+    try:
+        c = _U("actord", timeout=1.5)
+        c.request("GET", "/api/v1/actor/stats", headers={"Accept": "application/json"})
+        r = c.getresponse()
+        corps = r.read(1 << 16)
+        c.close()
+        return int(json.loads(corps)["blocked_24h"]) if r.status == 200 else None
+    except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
+        return None
+
+
+@router.get("/gardien", dependencies=[Depends(require_lecture)])
+async def gardien():
+    """Le résumé du réseau domestique pour la page Guardian : tuiles (aujourd'hui), courbe et répartitions (7 jours), appareils principaux. Lecture seule ; cache d'une minute."""
+    maintenant = int(time.time())
+    vu = _cache_gardien.get("v")
+    if vu and maintenant - vu[0] < GARDIEN_TTL_S:
+        return vu[1]
+    from . import dnstv_gardien as G
+    r = G.resume(_magasin(), now=maintenant, sources=_sources(), classer=_services().classer, nac=G.nac_resume(_NAC_DB, maintenant))
+    n = _menaces_actord()
+    r["menaces"] = {"n": n, "libelle": "Menaces bloquées (24 h)"} if n is not None else None
+    _cache_gardien["v"] = (maintenant, r)
+    return r
+
+
 @router.get("/sources", dependencies=[Depends(require_lecture)])
 async def sources(heures: int = 24):
     """Une ligne par APPAREIL : requêtes, blocages, taux, domaines uniques, répartition par type de service."""
