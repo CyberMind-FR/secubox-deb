@@ -1,3 +1,9 @@
+secubox-dpi (1.12.2-1~bookworm1) bookworm; urgency=low
+
+  * Empreintes (ndpid) : l'etat vide dit la vraie cause (ref #2363). « Le moteur nDPId doit etre actif pour relever JA3/JA4 » s'affichait alors que le moteur est actif (30 millions de flux) : il n'emet simplement aucune empreinte (0 evenement sur 2 260 echantillonnes porte un champ ja4 ; les flux TLS vus sont classes par port, sans ClientHello). Le message distingue moteur actif sans empreinte de moteur arrete. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 12:00:00 +0200
+
 secubox-dpi (1.12.1-1~bookworm1) bookworm; urgency=medium
 
   * La vue DPI ne dit plus « HORS LIGNE » a tort (ref #2368) : sur l'hote admin elle lisait /api/v1/dpi/stats, route legacy qui renvoie « retire » sans champ connected, alors que nDPId et sbxdpi tournent ; usage, countries, clients, suggestions et sessions n'existent pas hors du relais du Hall. Elle lit maintenant /pub/ d'abord (lectures agregees), avec repli sur le chemin direct. 1 test.

@@ -44,3 +44,13 @@ def test_ni_lorem_ni_secret():
 def test_actualisation_et_lecture_seule():
     assert "30000" in SRC and "visibilityState" in SRC
     assert "method:'POST'" not in SRC and 'method:"POST"' not in SRC
+
+
+def test_l_etat_vide_distingue_moteur_actif_et_moteur_arrete():
+    """Un moteur ACTIF qui ne relève aucune empreinte n'est pas « à activer » : le message dit la vraie cause (#2363)."""
+    src = (W / "empreintes.html").read_text(encoding="utf-8") if "W" in globals() else None
+    if src is None:
+        import pathlib
+        src = (pathlib.Path(__file__).resolve().parents[1] / "composants/ndpid/www/ndpid/empreintes.html").read_text(encoding="utf-8")
+    assert "D.run===true" in src and "n\\u2019a relevé aucune empreinte" in src
+    assert "doit être actif pour relever" not in src
