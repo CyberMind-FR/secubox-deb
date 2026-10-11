@@ -81,7 +81,6 @@ This document catalogs all SecuBox Debian modules, their features, and UI screen
 | Module | Icon | Path | Description |
 |--------|------|------|-------------|
 | secubox-vhost | `🏗️` | `/vhost/` | Virtual host manager |
-| secubox-c3box | `📦` | `/c3box/` | Services portal |
 | secubox-gitea | `🦊` | `/gitea/` | Git server (LXC) |
 | secubox-nextcloud | `☁️` | `/nextcloud/` | File sync (LXC) |
 

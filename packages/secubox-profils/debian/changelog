@@ -1,3 +1,9 @@
+secubox-profils (1.0.43-1~bookworm1) bookworm; urgency=medium
+
+  * Module secubox-c3box declasse (ref #2371) : le portail web /c3box/ (« C3Box Services Portal », service inactif) est retire du depot ; il quitte les dependances de secubox-profils et les suggestions de secubox-meta. La carte c3box du maillage n'est pas concernee.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 02:00:00 +0200
+
 secubox-profils (1.0.42-1~bookworm1) bookworm; urgency=medium
 
   * Vague 5 (#2050) : le profil « reseau » ne depend plus de secubox-vortex-dns ni de secubox-webmail, dont les transitoires sont retires du depot (webmail est dans secubox-mail, deja dependance).

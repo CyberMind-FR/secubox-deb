@@ -27,7 +27,7 @@ def _champ(profil, champ):
 # Meme regle que l'arbre : un module de l'arbre est dans un profil, ou declare
 # hors profil (materiel, vestige) et reste installable a la demande.
 HORS_PROFIL = {
-    "secubox-c3box", "secubox-daemon-c3box", "secubox-eye-remote", "secubox-rbs-sensor",
+    "secubox-daemon-c3box", "secubox-eye-remote", "secubox-rbs-sensor",
     "secubox-led-heartbeat", "secubox-meshtastic", "secubox-daemon", "secubox-ui-manager",
     "secubox-voice-moteur", "secubox-zia-llm", "secubox-zkp", "secubox-clamav",
     "secubox-netboot", "secubox-vm", "secubox-soc-agent",

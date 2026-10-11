@@ -79,6 +79,8 @@ HALL = os.path.join(RACINE, "..", "secubox-webos", "www", "hall", "index.html")
 # Entrée du Hall → paquet qui la sert, quand le nom ne suffit pas.
 PAQUET_DE = {
     "securite": "secubox-waf-ng", "acteurs": "secubox-waf-ng",
+    # Cartes-pages du Hall sans paquet du meme nom : Guardian est une page de secubox-ad-guard, le Radar des acteurs est servi par le WAF (actord).
+    "guardian": "secubox-ad-guard", "radar": "secubox-waf-ng",
     "contenu": "secubox-metablogizer", "depot": "secubox-metablogizer",
     "devwatch": "secubox-metanews", "freeboxtv": "secubox-media", "torrent": "secubox-ytsas", "ytflux": "secubox-ytsas",
     "cloud": "secubox-nextcloud", "nextcloud-super": "secubox-nextcloud",

@@ -54,7 +54,6 @@ on:
       - 'packages/secubox-freebox/**'
       - 'packages/secubox-soc/**'
       - 'packages/secubox-health/**'
-      - 'packages/secubox-c3box/**'
       - 'packages/secubox-hub/**'
       - 'packages/secubox-mqtt/**'
       - 'packages/secubox-metrics/sbin/**'
@@ -142,9 +141,6 @@ jobs:
           # Un seul systemctl par passage du prober (#1835) : ~310 en cinq minutes.
           - suite: secubox-health
             chemin: packages/secubox-health/tests
-          # Relevé systemd de c3box en un appel, hors de la boucle du groupe (#1835).
-          - suite: secubox-c3box
-            chemin: packages/secubox-c3box/tests
           # Hub : un list-units par cycle, boucles au repos sans lecteur (#1835) ;
           # toute la suite depuis que test_cache_warm suit le contrat actuel.
           - suite: secubox-hub
