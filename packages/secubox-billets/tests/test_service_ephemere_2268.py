@@ -121,3 +121,36 @@ async def test_un_echec_de_resolution_ne_casse_pas_la_creation_2343(client, monk
     monkeypatch.setattr(A, "_maybe_capture_snapshot", boom)
     r = await client.post("/service/ephemere", json={**CORPS, "embed_url": "https://exemple.org/a"}, headers=h(jeton()))
     assert r.status_code == 201
+
+
+async def test_la_vignette_du_flux_devient_la_vignette_locale_sans_navigateur_2343(conn, client, monkeypatch):
+    """#2343 — les sites d'actualité refusent les robots : la vignette vient de l'image du flux (https), pas d'une capture de page."""
+    import api.routes.admin as A
+    import api.services.snapshot as S
+    vus = {}
+
+    async def rien(*_a, **_k):
+        return None
+
+    def fake_capture(embed_url, og_image_url, media_id, **kw):
+        vus.update(embed=embed_url, og=og_image_url, navigateur=kw.get("enable_browser"))
+        return ("f.jpg", "t.jpg")
+
+    monkeypatch.setattr(A, "_resolve_and_store_embed", rien)
+    monkeypatch.setattr(S, "capture", fake_capture)
+    corps = {**CORPS, "embed_url": "https://exemple.org/a", "vignette_url": "https://img.exemple.org/v.jpg"}
+    r = await client.post("/service/ephemere", json=corps, headers=h(jeton()))
+    assert r.status_code == 201, r.text
+    import asyncio
+    for _ in range(50):
+        if vus:
+            break
+        await asyncio.sleep(0.02)
+    assert vus == {"embed": "https://exemple.org/a", "og": "https://img.exemple.org/v.jpg", "navigateur": False}
+    row = await repo.get_by_id(conn, r.json()["id"])
+    assert row["embed_snapshot"] == "f.jpg"
+
+
+async def test_une_vignette_http_est_ignoree_2343(client):
+    r = await client.post("/service/ephemere", json={**CORPS, "vignette_url": "http://x/v.jpg"}, headers=h(jeton()))
+    assert r.status_code == 422

@@ -44,8 +44,9 @@ type Charge struct {
 	Body   string
 	RefURL string
 	// EmbedURL : l'article principal du sujet. Billets en tire l'aperçu et la vignette (#2343).
-	EmbedURL string
-	TTLs     int
+	EmbedURL    string
+	VignetteURL string // image du flux (https) : billets la rapatrie, les sites d'actualité refusant ses robots
+	TTLs        int
 }
 
 type Reponse struct {
@@ -87,7 +88,7 @@ func (d *Diffuseur) Tour(now int64) (int, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		arts, _ := d.st.ArticlesDuSujet(t.ID) // sans articles lisibles, le billet reste un simple texte
 		rep, err := d.poster(ctx, Charge{Titre: t.Title, Body: Corps(t, d.cfg.SiteURL) + Sources(arts), RefURL: refURL(t, d.cfg.SiteURL),
-			EmbedURL: principal(arts), TTLs: int(d.cfg.TTL.Seconds())})
+			EmbedURL: principal(arts), VignetteURL: vignetteDe(t, arts), TTLs: int(d.cfg.TTL.Seconds())})
 		cancel()
 		if err != nil {
 			return n, fmt.Errorf("billets : %w", err) // on s'arrête : inutile d'insister sur un billets en panne
@@ -149,6 +150,19 @@ func principal(arts []store.Article) string {
 	return ""
 }
 
+// vignetteDe : l'image du sujet, sinon celle du premier article qui en a une ; https seulement.
+func vignetteDe(t store.Topic, arts []store.Article) string {
+	if lienSur(t.Vignette) != "" {
+		return strings.TrimSpace(t.Vignette)
+	}
+	for _, a := range arts {
+		if lienSur(a.Image) != "" {
+			return strings.TrimSpace(a.Image)
+		}
+	}
+	return ""
+}
+
 // Sources liste jusqu'à cinq articles du sujet en liens markdown (titre échappé, adresse https seulement, sans doublon) ; "" s'il n'y en a aucun.
 func Sources(arts []store.Article) string {
 	var b strings.Builder
@@ -193,6 +207,9 @@ func ClientSocket(socket, secret string) Poster {
 		}
 		if c.EmbedURL != "" {
 			charge["embed_url"] = c.EmbedURL
+		}
+		if c.VignetteURL != "" {
+			charge["vignette_url"] = c.VignetteURL
 		}
 		corps, _ := json.Marshal(charge)
 		req, err := http.NewRequestWithContext(ctx, "POST", "http://billets/service/ephemere", bytes.NewReader(corps))

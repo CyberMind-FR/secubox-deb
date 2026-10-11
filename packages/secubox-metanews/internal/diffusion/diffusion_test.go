@@ -251,3 +251,42 @@ func TestLeClientEnvoieEmbedURL_2343(t *testing.T) {
 		t.Fatalf("embed_url non envoyé : %v", corps)
 	}
 }
+
+func TestLaVignetteDuSujetPartAvecLeBillet_2343(t *testing.T) {
+	st, f := base(t), &faux{}
+	sujet(t, st, "T7", "Un événement", 3, t0-60, 0.9)
+	sid, _ := st.AddSource(store.Source{Slug: "a", Name: "A", URL: "u", Enabled: true})
+	id, _, _ := st.UpsertArticle(store.Article{SourceID: sid, Ref: "1", Title: "Un", URL: "https://a.example/un", PublishedAt: t0 - 10})
+	_ = st.SetArticleSujet(id, "T7")
+	if _, err := diffuseur(st, f).Tour(t0); err != nil || len(f.charges) != 1 {
+		t.Fatalf("err=%v", err)
+	}
+	if f.charges[0].VignetteURL != "" {
+		t.Fatalf("pas d'image connue : %q", f.charges[0].VignetteURL)
+	}
+	if got := vignetteDe(store.Topic{Vignette: "https://img.example/v.jpg"}, nil); got != "https://img.example/v.jpg" {
+		t.Errorf("vignette du sujet : %q", got)
+	}
+	if got := vignetteDe(store.Topic{Vignette: "http://img.example/v.jpg"}, []store.Article{{Image: "https://img.example/a.jpg"}}); got != "https://img.example/a.jpg" {
+		t.Errorf("repli sur l'image d'un article https : %q", got)
+	}
+}
+
+func TestLeClientEnvoieLaVignette_2343(t *testing.T) {
+	sock := filepath.Join(t.TempDir(), "v.sock")
+	ln, _ := net.Listen("unix", sock)
+	var corps map[string]any
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&corps)
+		w.WriteHeader(201)
+		w.Write([]byte(`{"id":"B1","slug":"s","expires_at":"x"}`))
+	})}
+	go srv.Serve(ln)
+	defer srv.Close()
+	if _, err := ClientSocket(sock, "s")(context.Background(), Charge{Body: "x", VignetteURL: "https://i/v.jpg", TTLs: 300}); err != nil {
+		t.Fatal(err)
+	}
+	if corps["vignette_url"] != "https://i/v.jpg" {
+		t.Fatalf("vignette_url non envoyée : %v", corps)
+	}
+}

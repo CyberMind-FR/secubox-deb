@@ -34,6 +34,7 @@ class EphemereIn(BaseModel):
     body: str
     ref_url: Optional[str] = None
     embed_url: Optional[str] = None
+    vignette_url: Optional[Annotated[str, Field(pattern=r"^https://\S{1,480}$")]] = None
     ttl_s: Annotated[int, Field(ge=30, le=TTL_MAX)]
 
 
@@ -49,12 +50,25 @@ def _jeton(request: Request) -> dict:
         raise HTTPException(401, "jeton invalide")
 
 
-async def _enrichir(request: Request, billet_id: str, embed_url: str) -> None:
-    """#2343 — même résolution qu'un billet créé à la main : embed (oEmbed / carte OG) puis vignette locale de l'article.
-    Après la réponse, et jamais bloquant : un site lent ou muet laisse le billet tel quel."""
+async def _enrichir(request: Request, billet_id: str, embed_url: str, vignette_url: str | None = None) -> None:
+    """#2343 — même résolution qu'un billet créé à la main : embed (oEmbed / carte OG) puis vignette locale.
+    Les sites d'actualité refusent les robots : quand MetaNews fournit l'image de son flux (https), c'est elle qu'on
+    rapatrie (SSRF-gardée, sans navigateur) au lieu d'une capture de page. Après la réponse, jamais bloquant."""
+    import asyncio
+
     from . import admin
+    from ..ids import new_ulid
+    from ..services import snapshot, ssrf
+
+    async def vignette():
+        resolver = getattr(request.app.state, "resolver", ssrf._default_resolver)
+        res = await asyncio.to_thread(snapshot.capture, embed_url, vignette_url, new_ulid(),
+                                      resolver=resolver, enable_browser=False)
+        if res:
+            await repo.set_embed_snapshot(request.app.state.conn, billet_id, res[0])
+
     for etape in (lambda: admin._resolve_and_store_embed(request, billet_id, embed_url),
-                  lambda: admin._maybe_capture_snapshot(request, billet_id, embed_url, "communique")):
+                  vignette if vignette_url else lambda: admin._maybe_capture_snapshot(request, billet_id, embed_url, "communique")):
         try:
             await etape()
         except Exception:  # noqa: BLE001 — l'aperçu est un bonus
@@ -81,5 +95,5 @@ def register_service(app: FastAPI) -> None:
         billet_id = await repo.create_billet(conn, data, now=repo._maintenant())
         row = await repo.get_by_id(conn, billet_id)
         if data.embed_url:
-            taches.add_task(_enrichir, request, billet_id, data.embed_url)
+            taches.add_task(_enrichir, request, billet_id, data.embed_url, payload.vignette_url)
         return {"id": row["id"], "slug": row["slug"], "expires_at": row["expires_at"], "published_at": row["published_at"]}
