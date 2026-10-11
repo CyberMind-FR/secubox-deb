@@ -4,427 +4,293 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Portail : entrée des services et de la session (profil projet référence Aurora, #2382).
+  Une seule page, deux mises en page : CARTE / page embarquée (?embed=1, une colonne) et TABLEAU DE BORD (≥ 900 px).
+  LECTURE SEULE, comme l'ancienne page : aucune action d'écriture, aucune route d'authentification touchée.
+  DONNÉES RÉELLES UNIQUEMENT (/api/v1/portal/* et /api/v1/metrics/*, /api/v1/cookie-audit/*). Mesure absente = « — », jamais 0.
+  Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox · Portal</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
-    <link rel="stylesheet" href="/shared/design-tokens.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        a { color: var(--cyber-cyan, #00d4ff); text-decoration: none; }
-        a:hover { color: var(--gold-hermetic, #c9a84c); }
-
-        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-
-        /* Hero */
-        .hero {
-            margin-bottom: 2rem;
-            padding: 1.5rem 2rem;
-            background: var(--panel, #13131c);
-            border: 1px solid var(--line, #2a2a3a);
-            border-radius: 4px;
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            align-items: center;
-            gap: 2rem;
-        }
-        .hero-score {
-            display: flex; flex-direction: column; align-items: center;
-            min-width: 140px;
-        }
-        .hero-score .num {
-            font-size: 3.5rem; font-weight: bold; line-height: 1;
-            color: var(--matrix-green, #00ff41);
-        }
-        .hero-score .label { font-size: 0.8rem; color: var(--text-muted, #6b6b7a); margin-top: 0.25rem; letter-spacing: 1px; }
-        .hero-score.warn .num { color: var(--gold-hermetic, #c9a84c); }
-        .hero-score.crit .num { color: var(--cinnabar, #e63946); }
-        .hero-info { font-size: 0.95rem; line-height: 1.6; }
-        .hero-info .kv { display: flex; gap: 1.5rem; flex-wrap: wrap; }
-        .hero-info .k { color: var(--text-muted, #6b6b7a); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
-        .hero-info .v { color: var(--text, #e8e6d9); font-weight: bold; }
-        .hero-refresh { font-size: 0.75rem; color: var(--text-muted, #6b6b7a); text-align: right; }
-
-        /* Section grid */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .card {
-            background: var(--panel, #13131c);
-            border: 1px solid var(--line, #2a2a3a);
-            border-radius: 4px;
-            padding: 1.25rem;
-            position: relative;
-        }
-        .card h3 {
-            font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px;
-            color: var(--gold-hermetic, #c9a84c); margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px dashed var(--line, #2a2a3a);
-        }
-        .card .row { display: flex; justify-content: space-between; padding: 0.25rem 0; font-size: 0.9rem; }
-        .card .row .k { color: var(--text-muted, #6b6b7a); }
-        .card .row .v { color: var(--text, #e8e6d9); font-weight: bold; }
-        .card .row .v.ok   { color: var(--matrix-green, #00ff41); }
-        .card .row .v.warn { color: var(--gold-hermetic, #c9a84c); }
-        .card .row .v.crit { color: var(--cinnabar, #e63946); }
-        .empty { color: var(--text-muted, #6b6b7a); font-style: italic; font-size: 0.85rem; padding: 0.5rem 0; }
-
-        /* Bar */
-        .bar {
-            height: 4px; background: var(--cosmos-black, #0a0a0f); border-radius: 2px;
-            overflow: hidden; margin: 0.25rem 0;
-        }
-        .bar > span { display: block; height: 100%; background: var(--matrix-green, #00ff41); }
-        .bar.warn > span { background: var(--gold-hermetic, #c9a84c); }
-        .bar.crit > span { background: var(--cinnabar, #e63946); }
-
-        /* Modules LED grid */
-        .modules { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
-        .module {
-            display: flex; flex-direction: column; align-items: center;
-            gap: 0.25rem; padding: 0.5rem; border-radius: 4px;
-            background: var(--cosmos-black, #0a0a0f); border: 1px solid var(--line, #2a2a3a);
-            font-size: 0.7rem;
-        }
-        .module .led {
-            width: 10px; height: 10px; border-radius: 50%;
-            background: var(--text-muted, #6b6b7a);
-        }
-        .module.ok   .led { background: var(--matrix-green, #00ff41); box-shadow: 0 0 6px var(--matrix-green, #00ff41); }
-        .module.warn .led { background: var(--gold-hermetic, #c9a84c); box-shadow: 0 0 6px var(--gold-hermetic, #c9a84c); }
-        .module.err  .led { background: var(--cinnabar, #e63946);      box-shadow: 0 0 6px var(--cinnabar, #e63946); }
-        .module .name { font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted, #6b6b7a); }
-
-        /* Tables — vhosts / ASNs */
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th, td { text-align: left; padding: 0.25rem 0.5rem; }
-        th { font-size: 0.7rem; color: var(--text-muted, #6b6b7a); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px dashed var(--line, #2a2a3a); }
-        td.num { text-align: right; color: var(--cyber-cyan, #00d4ff); font-variant-numeric: tabular-nums; }
-        tr:hover td { background: rgba(201,168,76,0.05); }
-
-        /* Big number tiles */
-        .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; }
-        .tile {
-            background: var(--cosmos-black, #0a0a0f); border: 1px solid var(--line, #2a2a3a);
-            border-radius: 4px; padding: 0.75rem; text-align: center;
-        }
-        .tile .v { font-size: 1.75rem; font-weight: bold; color: var(--matrix-green, #00ff41); }
-        .tile .v.warn { color: var(--gold-hermetic, #c9a84c); }
-        .tile .v.crit { color: var(--cinnabar, #e63946); }
-        .tile .l { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted, #6b6b7a); letter-spacing: 1px; }
-
-        .footer {
-            margin-top: 3rem; padding-top: 1.5rem;
-            border-top: 1px dashed var(--line, #2a2a3a);
-            text-align: center; font-size: 0.8rem; color: var(--text-muted, #6b6b7a);
-        }
-        .footer a { color: var(--cyber-cyan, #00d4ff); }
-        @media (max-width: 768px) {
-            .hero { grid-template-columns: 1fr; }
-            .modules { grid-template-columns: repeat(3, 1fr); }
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Portail, entrée des services et de la session</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z' fill='%233b82f6'/></svg>">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
+  .principal{min-width:0}
+  body:not(.emb):not(.dem) .principal{margin-left:220px;padding-top:48px}
+  body.emb #sidebar,body.dem #sidebar{display:none}
+  @media (max-width:900px){body:not(.emb):not(.dem) .principal{margin-left:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .actif.warn{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.na{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .actif.id{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+  .droite button:disabled{opacity:.5;cursor:default}
+  .droite button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo.info{background:var(--cyan)} .demo a{color:#001}
+  h1{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile .haut>div{min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr;align-items:start}
+  .grille>*{min-width:0}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .recherche{display:flex;gap:8px;align-items:center}
+  .recherche input{flex:1;min-width:0;font:inherit;font-size:.82rem;color:var(--texte);background:rgba(8,18,38,.7);border:1px solid var(--trait2);border-radius:9px;padding:6px 10px}
+  .recherche input::placeholder{color:var(--faible)}
+  .svcs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .svc{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--trait);border-radius:10px;padding:10px 6px;background:rgba(8,18,38,.55);text-align:center;min-width:0;color:var(--texte)}
+  a.svc:hover{border-color:var(--cyan);text-decoration:none;background:rgba(41,182,246,.07)}
+  .svc svg{width:28px;height:28px} .svc .n{font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+  .svc .d{color:var(--faible);font-size:.66rem}
+  .led{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--faible);margin-right:5px;vertical-align:middle}
+  .led.ok{background:var(--vert);box-shadow:0 0 6px rgba(46,204,113,.6)} .led.warn{background:var(--orange)} .led.err{background:var(--rouge);box-shadow:0 0 6px rgba(255,77,94,.6)}
+  .puce{border-radius:5px;padding:0 8px;font-weight:700;font-size:.68rem;white-space:nowrap}
+  .puce.ok{background:rgba(46,204,113,.2);color:var(--vert)} .puce.warn{background:rgba(255,159,28,.2);color:var(--orange)} .puce.err{background:rgba(255,77,94,.2);color:var(--rouge)} .puce.na{background:rgba(159,179,214,.2);color:var(--doux)}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.78rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--doux)} .ligne b{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden;margin-bottom:5px} .barre i{display:block;height:100%;border-radius:3px}
+  .liens{display:flex;flex-wrap:wrap;gap:8px}
+  .liens a{border:1px solid var(--trait2);border-radius:8px;padding:5px 11px;font-size:.78rem;background:rgba(59,130,246,.12);color:var(--texte)}
+  .liens a:hover{border-color:var(--cyan);text-decoration:none}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;font-variant-numeric:tabular-nums}
+  tbody tr:hover td{background:rgba(41,182,246,.07)}
+  td.r,th.r{text-align:right} .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  .scroll{overflow-x:auto}
+  [hidden]{display:none!important}
+  @container a (min-width:560px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr} .g1{grid-template-columns:1.4fr 1fr}}
+</style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
 <nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-
-<main class="main">
-<div class="container">
-
-<!-- Hero -->
-<section class="hero">
-    <div class="hero-score" id="hero-score">
-        <div class="num" id="hero-score-num">—</div>
-        <div class="label">HEALTH</div>
-    </div>
-    <div class="hero-info">
-        <div class="kv">
-            <div><div class="k">Hostname</div><div class="v" id="hero-hostname">—</div></div>
-            <div><div class="k">Uptime</div><div class="v" id="hero-uptime">—</div></div>
-            <div><div class="k">SSL</div><div class="v" id="hero-ssl">—</div></div>
-            <div><div class="k">VHosts</div><div class="v" id="hero-vhosts">—</div></div>
-            <div><div class="k">Certificates</div><div class="v" id="hero-certs">—</div></div>
-            <div><div class="k">Bans active</div><div class="v" id="hero-bans">—</div></div>
-        </div>
-    </div>
-    <div class="hero-refresh">
-        <div>last refresh</div>
-        <div id="hero-refresh">—</div>
-    </div>
-</section>
-
-<!-- Module status LEDs -->
-<section class="card" style="margin-bottom: 1.5rem;">
-    <h3>SERVICES</h3>
-    <div class="modules" id="modules-grid">
-        <div class="empty" style="grid-column: 1/-1;">Loading…</div>
-    </div>
-</section>
-
-<div class="grid">
-
-    <!-- System -->
-    <div class="card">
-        <h3>System</h3>
-        <div id="sys-rows"><div class="empty">Loading…</div></div>
-    </div>
-
-    <!-- Certs -->
-    <div class="card">
-        <h3>Certificates</h3>
-        <div id="cert-rows"><div class="empty">Loading…</div></div>
-    </div>
-
-    <!-- Cookie audit / RGPD -->
-    <div class="card">
-        <h3>Cookie Audit · RGPD</h3>
-        <div id="cookie-rows"><div class="empty">Loading…</div></div>
-    </div>
-
-    <!-- Bans (WAF-native ban count + WAF %) -->
-    <div class="card">
-        <h3>Attacks &amp; Bans</h3>
-        <div class="tiles" id="bans-tiles">
-            <div class="tile"><div class="v" id="t-bans">—</div><div class="l">Active bans</div></div>
-            <div class="tile"><div class="v" id="t-waf">—</div><div class="l">WAF blocked %</div></div>
-            <div class="tile"><div class="v" id="t-alerts">—</div><div class="l">Today alerts</div></div>
-        </div>
-    </div>
-
-</div>
-
-<div class="grid">
-
-    <!-- Vhosts (live-hosts top) -->
-    <div class="card">
-        <h3>Top Vhosts (last 60 min)</h3>
-        <div id="vhosts-table"><div class="empty">Loading…</div></div>
-    </div>
-
-    <!-- Attackers (visitor-origin top ASNs) -->
-    <div class="card">
-        <h3>Top Visitor ASN</h3>
-        <div id="asn-table"><div class="empty">Loading…</div></div>
-    </div>
-
-</div>
-
-<footer class="footer">
-    <p>SecuBox © 2024-2026 · <a href="https://cybermind.fr">CyberMind</a> · <a href="https://github.com/CyberMind-FR/secubox-deb">source</a></p>
-    <p style="margin-top: 0.5rem;">Public Portal · <span id="footer-hostname">—</span> · auto-refresh 30 s</p>
-</footer>
-
-</div>
+<main class="principal">
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><circle cx="12" cy="10" r="2.2"/><path d="M8.2 16.2c.9-1.7 2.2-2.4 3.8-2.4s2.9.7 3.8 2.4"/></svg><span><b>Portail</b><small>Entrée des services et de la session</small></span></span>
+    <span class="actif na" id="actif" title="Score de santé de la box (lecture /metrics/health/summary)">…</span>
+    <span class="actif id" id="ident" title="Identité de la session en cours (lecture /portal/verify)" hidden></span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h1>Services et session</h1><div class="sous">Les services de la box, l’identité de la session et l’état de la protection, en lecture seule.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="recherche"><input type="search" id="rech" placeholder="Rechercher un service, un lien, un site…" aria-label="Rechercher un service, un lien ou un site" autocomplete="off"><span class="sous" id="rechN"></span></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Services <i id="svcNote"></i></h3><div class="svcs" id="svcs"></div><div class="note">Les quatre services suivis par le relevé de santé de la box ; un lien n’est proposé que vers une page existante.</div></div>
+    <div class="pan"><h3>Accès rapides</h3><div class="liens" id="liens"></div>
+      <h3 style="margin-top:12px">Ressources <i id="sysNote"></i></h3><div id="sys"></div></div>
+  </div>
+  <div class="grille g2">
+    <div class="pan"><h3>Session et identité <i id="sesNote"></i></h3><div id="ses"></div></div>
+    <div class="pan"><h3>Sessions ouvertes <i id="sesListeNote">administrateur</i></h3><div class="scroll" id="sesListe"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Protection <i>aujourd’hui</i></h3><div id="waf"></div></div>
+    <div class="pan"><h3>Certificats <i id="certNote"></i></h3><div id="certs"></div></div>
+    <div class="pan"><h3>Cookies · RGPD <i id="cookNote"></i></h3><div id="cook"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Sites les plus visités <i>60 dernières minutes</i></h3><div class="scroll" id="hotes"></div></div>
+    <div class="pan"><h3>Réseaux d’origine des visiteurs <i>AS</i></h3><div class="scroll" id="asn"></div></div>
+    <div class="pan"><h3>Derniers événements du portail <i>5 derniers</i></h3><div class="scroll" id="evts"></div></div>
+  </div>
+  <div class="note">Page en lecture seule : aucune action n’est possible depuis le portail. Mesures relevées sur la box, actualisées toutes les 30 s lorsque la page est visible.</div>
+</div></div>
 </main>
-
-<script src="/shared/crt-engine.js"></script>
 <script>
-(function () {
-    'use strict';
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function has(x){return x!==null&&x!==undefined&&x!==''&&isFinite(Number(x));}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  function N(v){return has(v)?fmt(v):'—';}
+  function P(v){return has(v)?Math.round(num(v))+' %':'—';}
+  var q=new URLSearchParams(location.search);
+  var EMB=!!q.get('embed'),DEMO=!!q.get('demo');
+  if(EMB) document.body.classList.add('emb');
+  if(DEMO) document.body.classList.add('dem');
+  // menu latéral commun : hors ?embed=1 et hors démonstration
+  if(!EMB&&!DEMO){try{var sj=document.createElement('script');sj.src='/shared/sidebar.js';document.head.appendChild(sj);}catch(e){}}
+  function couleur(p){return p>=85?'#ff4d5e':p>=70?'#ff9f1c':'#2ecc71';}
+  function duree(sec){if(!has(sec))return '—';sec=Math.floor(num(sec));var d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600),m=Math.floor(sec%3600/60);return d>0?d+' j '+h+' h':h>0?h+' h '+m+' min':m+' min';}
+  function quand(ts){if(!ts)return '—';var d=new Date(typeof ts==='number'?ts*1000:ts);if(isNaN(d.getTime()))return '—';return d.toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
+  function maj(){el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 
-    const REFRESH_MS = 30000;
-    const ENDPOINTS = {
-        health:       '/api/v1/metrics/health/summary',
-        certs:        '/api/v1/metrics/cert-status',
-        vhosts:       '/api/v1/metrics/live-hosts',
-        asns:         '/api/v1/metrics/visitor-origin',
-        cookies:      '/api/v1/cookie-audit/summary',
-    };
+  var IC={
+    sante:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(46,204,113,.14)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg>',
+    svc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4" width="18" height="6" rx="2" fill="rgba(41,182,246,.14)"/><rect x="3" y="14" width="18" height="6" rx="2" fill="rgba(41,182,246,.14)"/><path d="M7 7h.1M7 17h.1"/></svg>',
+    ses:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="3.5" fill="rgba(59,130,246,.16)"/><path d="M5 20c.8-4 3.5-6 7-6s6.2 2 7 6"/></svg>',
+    conn:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h5a1 1 0 011 1v14a1 1 0 01-1 1h-5" fill="rgba(167,139,250,.12)"/><path d="M10 8l-4 4 4 4M6 12h10"/></svg>',
+    ban:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5" fill="rgba(255,77,94,.12)"/><path d="M6 6l12 12"/></svg>',
+    cert:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="12" rx="2" fill="rgba(255,159,28,.12)"/><path d="M8 9h8M8 12h5"/><path d="M9 16l-1 4 4-2 4 2-1-4"/></svg>'
+  };
+  var SVC={
+    waf:['WAF','<svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/></svg>','/waf/','Pare-feu applicatif sbxwaf'],
+    haproxy:['HAProxy','<svg viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.12)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>','/haproxy/','Frontal TLS 1.3'],
+    nginx:['nginx','<svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><path d="M4 8l8-4 8 4v8l-8 4-8-4z" fill="rgba(46,204,113,.12)"/><path d="M4 8l8 4 8-4M12 12v8"/></svg>','','Serveur web'],
+    system:['Système','<svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2" fill="rgba(167,139,250,.12)"/><path d="M8 20h8M12 16v4"/></svg>','/system/','Ressources de la box']
+  };
+  var LIENS=[['Métriques','/metrics/'],['WAF','/waf/'],['SOC','/soc/'],['Acteurs','/actor/'],['HAProxy','/haproxy/'],['Système','/system/']];
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'<div class="s">&nbsp;</div>')+'</div>';}
+  function ligne(n,v,c){return '<div class="ligne" data-q="'+esc(String(n).toLowerCase())+'"><span class="n">'+esc(n)+'</span><b'+(c?' style="color:'+c+'"':'')+'>'+v+'</b></div>';}
+  function jauge(n,p){if(!has(p))return '<div class="ligne"><span class="n">'+esc(n)+'</span><b>—</b></div>';var c=couleur(num(p));return '<div class="ligne"><span class="n">'+esc(n)+'</span><b style="color:'+c+'">'+Math.round(num(p))+' %</b></div><div class="barre"><i style="width:'+Math.min(100,num(p))+'%;background:'+c+'"></i></div>';}
 
-    function $(id) { return document.getElementById(id); }
-    function txt(id, v) { const e = $(id); if (e) e.textContent = (v === undefined || v === null) ? '—' : v; }
-    function fmtUptime(s) {
-        if (!s) return '—';
-        const d = Math.floor(s / 86400);
-        const h = Math.floor((s % 86400) / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        return `${d}d ${String(h).padStart(2,'0')}h${String(m).padStart(2,'0')}`;
-    }
-    function fmtPct(v) {
-        if (v === null || v === undefined) return '—';
-        return Number(v).toFixed(0) + '%';
-    }
-    function fmtTime(ts) {
-        if (!ts) return '—';
-        try { return new Date(ts).toLocaleTimeString('fr-FR'); } catch (e) { return '—'; }
-    }
+  var DEMOD={
+    sante:{score:94,timestamp:null,modules:{waf:{status:'ok'},haproxy:{status:'ok'},nginx:{status:'ok'},system:{status:'warn'}},system:{cpu:23,memory:61,disk:47,load:'0.42 0.38 0.35',uptime:1296000},ssl:{days_remaining:62,status:'ok'},counts:{vhosts:38,certificates:38},services:{lxc_running:11},waf:{active_bans:12,alerts_today:4421,blocked_pct:7}},
+    certs:{enabled:true,summary:{total:38,valid:34,expiring_soon:3,expiring_critical:1,expired:0},next_renewal:{host:'portail.exemple.test',days:9}},
+    cook:{enabled:true,summary:{host_count:21,violation_count:2,by_category:{strictly_necessary:41,functional:12,analytics:3,marketing:1,unclassified:2}}},
+    hotes:{enabled:true,entries:[{host:'www.exemple.test',count:5120},{host:'api.exemple.test',count:3380},{host:'portail.exemple.test',count:1840},{host:'blog.exemple.test',count:960},{host:'media.exemple.test',count:410}]},
+    asn:{enabled:true,entries:[{asn:64496,org:'Opérateur fictif A',count:2100},{asn:64497,org:'Opérateur fictif B',count:1330},{asn:64498,org:'Hébergeur fictif C',count:870},{asn:64499,org:'Réseau fictif D',count:320}]},
+    verif:{valid:true,username:'admin',role:'admin',expires:null,session:{login_time:'2026-10-11T08:12:00',ip:'192.0.2.10'}},
+    statut:{active_sessions:2,total_users:4},
+    resume:{users:{total:4,admins:2,regular:2},sessions:{active:2,users_online:['admin','demo']},activity_24h:{logins:7},webhooks_configured:1,recent_events:[{timestamp:'2026-10-11T08:12:00',event:'login',details:{}},{timestamp:'2026-10-11T07:40:00',event:'login_failed',details:{}},{timestamp:'2026-10-10T18:02:00',event:'logout',details:{}},{timestamp:'2026-10-10T09:15:00',event:'login',details:{}},{timestamp:'2026-10-09T21:30:00',event:'session_revoked',details:{}}]},
+    sessions:{count:2,sessions:[{username:'admin',role:'admin',ip:'192.0.2.10',login_time:'2026-10-11T08:12:00'},{username:'demo',role:'user',ip:'198.51.100.7',login_time:'2026-10-11T09:03:00'}]}
+  };
 
-    async function fetchSafe(url) {
-        try {
-            const r = await fetch(url, { credentials: 'omit' });
-            if (!r.ok) return null;
-            return await r.json();
-        } catch (e) { return null; }
+  var D=null;
+  function rend(d){
+    D=d;var h=d.sante,v=d.verif,st=d.statut,rs=d.resume;
+    var rien=!(h||d.certs||d.cook||d.hotes||v||st||rs);
+    el('session').hidden=DEMO||!rien;
+    el('demo').hidden=!DEMO;
+    // pastille d'état
+    var a=el('actif');
+    if(h&&has(h.score)){var sc=num(h.score);a.textContent='SANTÉ '+Math.round(sc)+' %';a.className='actif'+(sc<70?' hors':sc<85?' warn':'');}
+    else{a.textContent='SANS MESURE';a.className='actif na';}
+    // identité
+    var idn=el('ident');
+    if(v&&v.valid){idn.textContent='👤 '+(v.username||'—')+' · '+(v.role||'—');idn.hidden=false;}
+    else{idn.hidden=true;}
+    // tuiles
+    var mods=h&&h.modules?h.modules:null,ids=['waf','haproxy','nginx','system'],nOk=null,nTot=null;
+    if(mods){nTot=ids.length;nOk=ids.filter(function(k){return mods[k]&&mods[k].status==='ok';}).length;}
+    var sess=st&&has(st.active_sessions)?st.active_sessions:(rs&&rs.sessions&&has(rs.sessions.active)?rs.sessions.active:null);
+    var logins=rs&&rs.activity_24h&&has(rs.activity_24h.logins)?rs.activity_24h.logins:null;
+    var bans=h&&h.waf&&has(h.waf.active_bans)?h.waf.active_bans:null;
+    var cs=d.certs&&d.certs.summary?d.certs.summary:null;
+    el('tuiles').innerHTML=
+      tuile(IC.sante,h&&has(h.score)?Math.round(num(h.score))+' %':'—','Santé','uptime '+(h&&h.system?duree(h.system.uptime):'—'),'Score de santé global de la box, calculé par le relevé /metrics/health/summary.')+
+      tuile(IC.svc,nTot==null?'—':nOk+' / '+nTot,'Services en ligne','WAF, HAProxy, nginx, système','Services dont l’état est « ok » parmi les quatre suivis par le relevé de santé.')+
+      tuile(IC.ses,N(sess),'Sessions actives',rs&&rs.users?N(rs.users.total)+' comptes':'','Sessions de connexion ouvertes sur le portail (/portal/status). Les comptes sont ceux de /portal/summary.')+
+      tuile(IC.conn,N(logins),'Connexions 24 h',rs?'webhooks : '+N(rs.webhooks_configured):'','Connexions réussies sur les dernières 24 heures (/portal/summary, historique du portail).')+
+      tuile(IC.ban,N(bans),'Bans actifs',h&&h.waf&&has(h.waf.alerts_today)?N(h.waf.alerts_today)+' alertes aujourd’hui':'','Adresses actuellement bannies par le WAF (/metrics/health/summary).')+
+      tuile(IC.cert,cs?N(cs.valid)+' / '+N(cs.total):'—','Certificats valides',cs&&num(cs.expired)>0?N(cs.expired)+' expiré(s)':(d.certs&&d.certs.next_renewal?'prochain : '+d.certs.next_renewal.days+' j':''),'Certificats valides sur le total suivi (/metrics/cert-status).');
+    // services
+    var htm='',vus=0;
+    ids.forEach(function(k){var s=SVC[k],m=mods&&mods[k],stt=m?(m.status||'off'):null;
+      var cls=stt==='ok'?'ok':stt==='warn'?'warn':stt==='error'?'err':'',lib=stt==null?'—':stt==='ok'?'EN LIGNE':stt==='warn'?'DÉGRADÉ':stt==='error'?'EN ERREUR':'ARRÊTÉ';
+      var pc=cls||'na';if(stt!=null)vus++;
+      var inner=s[1]+'<span class="n">'+esc(s[0])+'</span><span><i class="led '+cls+'"></i><span class="puce '+pc+'">'+lib+'</span></span><span class="d">'+esc(s[3])+'</span>';
+      htm+=s[2]?'<a class="svc" data-q="'+esc((s[0]+' '+s[3]+' '+k).toLowerCase())+'" href="'+s[2]+'" target="_top" title="Ouvrir '+esc(s[0])+'">'+inner+'</a>':'<div class="svc" data-q="'+esc((s[0]+' '+s[3]+' '+k).toLowerCase())+'">'+inner+'</div>';});
+    el('svcs').innerHTML=htm;
+    el('svcNote').textContent=nTot==null?'état inconnu':nOk+' en ligne sur '+nTot;
+    el('liens').innerHTML=LIENS.map(function(l){return '<a data-q="'+esc(l[0].toLowerCase()+' '+l[1])+'" href="'+l[1]+'" target="_top">'+esc(l[0])+'</a>';}).join('');
+    // ressources
+    var s=h&&h.system;
+    el('sys').innerHTML=s?jauge('Processeur',s.cpu)+jauge('Mémoire',has(s.memory)?s.memory:s.mem_pct)+jauge('Disque',s.disk)+ligne('Charge',esc(s.load||'—'))+ligne('Conteneurs LXC actifs',N(h.services&&h.services.lxc_running))+ligne('Sites (vhosts)',N(h.counts&&h.counts.vhosts))+ligne('SSL',h.ssl&&has(h.ssl.days_remaining)?h.ssl.days_remaining+' j ('+esc(h.ssl.status||'?')+')':'—'):'<div class="vide">Aucune mesure de ressources.</div>';
+    el('sysNote').textContent=h?'hôte '+location.hostname:'';
+    // session
+    if(v&&v.valid){
+      var se=v.session||{};
+      el('ses').innerHTML=ligne('Utilisateur',esc(v.username||'—'))+ligne('Rôle',esc(v.role||'—'))+ligne('Connexion',quand(se.login_time))+ligne('Adresse',esc(se.ip||'—'))+ligne('Expire',quand(v.expires));
+      el('sesNote').textContent='cookie de session valide';
+    }else{
+      el('ses').innerHTML='<div class="vide">'+(v&&v.error?'Aucune session valide : '+esc(v.error)+'.':'Identité de session non disponible.')+'</div>';
+      el('sesNote').textContent='';
     }
+    var sl=d.sessions;
+    if(sl&&sl.sessions){
+      el('sesListe').innerHTML=sl.sessions.length?'<table><thead><tr><th>Utilisateur</th><th>Rôle</th><th>Adresse</th><th>Connexion</th></tr></thead><tbody>'+sl.sessions.map(function(x){return '<tr data-q="'+esc(String(x.username||'').toLowerCase())+'"><td>'+esc(x.username)+'</td><td>'+esc(x.role||'—')+'</td><td class="mono">'+esc(x.ip||'—')+'</td><td>'+quand(x.login_time)+'</td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Aucune session ouverte.</div>';
+      el('sesListeNote').textContent=N(sl.count)+' session(s)';
+    }else{el('sesListe').innerHTML='<div class="vide">Liste réservée aux administrateurs (session administrateur requise).</div>';el('sesListeNote').textContent='administrateur';}
+    // protection
+    var w=h&&h.waf;
+    el('waf').innerHTML=w?ligne('Bans actifs',N(w.active_bans))+ligne('Alertes aujourd’hui',N(w.alerts_today))+ligne('Part bloquée par le WAF',has(w.blocked_pct)?Math.round(num(w.blocked_pct))+' %':'—',has(w.blocked_pct)?(num(w.blocked_pct)>=25?'#ff4d5e':num(w.blocked_pct)>=10?'#ff9f1c':'#2ecc71'):''):'<div class="vide">Aucune mesure de protection.</div>';
+    // certificats
+    if(cs){
+      el('certs').innerHTML=ligne('Total',N(cs.total))+ligne('Valides',N(cs.valid),'#2ecc71')+ligne('Expirent bientôt',N(cs.expiring_soon),num(cs.expiring_soon)?'#ff9f1c':'')+ligne('Critiques',N(cs.expiring_critical),num(cs.expiring_critical)?'#ff4d5e':'')+ligne('Expirés',N(cs.expired),num(cs.expired)?'#ff4d5e':'')+(d.certs.next_renewal?ligne('Prochain renouvellement',esc(d.certs.next_renewal.host)+' · '+N(d.certs.next_renewal.days)+' j'):'');
+      el('certNote').textContent='';
+    }else{el('certs').innerHTML='<div class="vide">Suivi des certificats indisponible.</div>';}
+    // cookies
+    var ck=d.cook&&d.cook.enabled&&d.cook.summary?d.cook.summary:null;
+    if(ck){var bc=ck.by_category||{};
+      el('cook').innerHTML=ligne('Sites surveillés',N(ck.host_count))+ligne('Violations RGPD',N(ck.violation_count),num(ck.violation_count)?'#ff4d5e':'#2ecc71')+ligne('Strictement nécessaires',N(bc.strictly_necessary))+ligne('Fonctionnels',N(bc.functional))+ligne('Analytiques',N(bc.analytics),num(bc.analytics)?'#ff9f1c':'')+ligne('Marketing',N(bc.marketing),num(bc.marketing)?'#ff9f1c':'')+ligne('Non classés',N(bc.unclassified),num(bc.unclassified)?'#ff9f1c':'');
+    }else{el('cook').innerHTML='<div class="vide">Audit des cookies désactivé ou indisponible.</div>';}
+    // sites
+    var ho=d.hotes&&d.hotes.enabled&&d.hotes.entries&&d.hotes.entries.length?d.hotes.entries:null;
+    el('hotes').innerHTML=ho?'<table><thead><tr><th>Site</th><th class="r">Requêtes</th></tr></thead><tbody>'+ho.map(function(e){return '<tr data-q="'+esc(String(e.host).toLowerCase())+'"><td>'+esc(e.host)+'</td><td class="r">'+N(e.count)+'</td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Aucun site relevé sur la fenêtre.</div>';
+    var as=d.asn&&d.asn.enabled&&d.asn.entries&&d.asn.entries.length?d.asn.entries:null;
+    el('asn').innerHTML=as?'<table><thead><tr><th>AS</th><th>Organisation</th><th class="r">Requêtes</th></tr></thead><tbody>'+as.map(function(e){return '<tr data-q="'+esc(('as'+e.asn+' '+(e.org||'')).toLowerCase())+'"><td>AS'+esc(e.asn)+'</td><td>'+esc(e.org||'—')+'</td><td class="r">'+N(e.count)+'</td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Origine des visiteurs indisponible (base GeoLite2-ASN absente ?).</div>';
+    var ev=rs&&rs.recent_events&&rs.recent_events.length?rs.recent_events:null;
+    el('evts').innerHTML=ev?'<table><thead><tr><th>Quand</th><th>Événement</th></tr></thead><tbody>'+ev.slice().reverse().map(function(e){return '<tr><td>'+quand(e.timestamp)+'</td><td>'+esc(e.event)+'</td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Aucun événement récent.</div>';
+    filtre();hauteur();
+  }
 
-    function renderHero(h, c) {
-        if (!h) return;
-        const score = h.score || 0;
-        txt('hero-score-num', score + '%');
-        const sc = $('hero-score');
-        sc.classList.remove('warn', 'crit');
-        if (score < 70) sc.classList.add('crit');
-        else if (score < 85) sc.classList.add('warn');
-        txt('hero-hostname', location.hostname);
-        txt('nav-hostname', location.hostname);
-        txt('footer-hostname', location.hostname);
-        txt('hero-uptime', fmtUptime(h.system && h.system.uptime));
-        if (h.ssl) {
-            const d = h.ssl.days_remaining;
-            txt('hero-ssl', d == null ? '—' : `${d}j (${h.ssl.status || '?'})`);
-        }
-        txt('hero-vhosts', h.counts && h.counts.vhosts);
-        txt('hero-certs',  (c && c.summary && c.summary.total) || (h.counts && h.counts.certificates) || '—');
-        txt('hero-bans',   h.waf && h.waf.active_bans);
-        txt('hero-refresh', fmtTime(h.timestamp || new Date().toISOString()));
-    }
+  // recherche côté client
+  function filtre(){
+    var t=el('rech').value.trim().toLowerCase(),n=0,tot=0;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-q]'),function(x){
+      var ok=!t||x.getAttribute('data-q').indexOf(t)>=0;x.hidden=!ok;
+      if(x.classList.contains('svc')||x.parentNode.id==='liens'||x.tagName==='TR'){tot++;if(ok)n++;}
+    });
+    el('rechN').textContent=t?n+' / '+tot:'';
+  }
+  el('rech').addEventListener('input',filtre);
 
-    function renderModules(h) {
-        if (!h || !h.modules) return;
-        const order = ['waf', 'haproxy', 'nginx', 'system'];
-        const icons = { waf: '🛡️', haproxy: '🌐', nginx: '📡', system: '💻' };
-        const el = $('modules-grid');
-        el.innerHTML = order.map(m => {
-            const mod = h.modules[m] || {};
-            const status = mod.status || 'off';
-            const cls = status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : status === 'error' ? 'err' : '';
-            return `<div class="module ${cls}">
-                <span class="led"></span>
-                <span style="font-size:1.4rem;line-height:1">${icons[m]||'📦'}</span>
-                <span class="name">${m}</span>
-            </div>`;
-        }).join('');
-    }
+  maj();
+  // hauteur annoncée à l'hôte (iframe) : on mesure le cadre, jamais le document
+  function hauteur(){if(window.parent!==window){try{var c=document.querySelector('.cadre');window.parent.postMessage({sbxVue:Math.ceil(c.getBoundingClientRect().bottom+window.scrollY),onglet:'portal'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
+  hauteur();
+  if(DEMO){rend({sante:DEMOD.sante,certs:DEMOD.certs,cook:DEMOD.cook,hotes:DEMOD.hotes,asn:DEMOD.asn,verif:DEMOD.verif,statut:DEMOD.statut,resume:DEMOD.resume,sessions:DEMOD.sessions});
+    el('rafraichir').addEventListener('click',maj);return;}
 
-    function renderSystem(h) {
-        if (!h || !h.system) return;
-        const s = h.system;
-        const row = (k, v, pct) => {
-            const cls = pct == null ? '' : (pct >= 85 ? 'crit' : pct >= 60 ? 'warn' : 'ok');
-            return `<div class="row"><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>` +
-                (pct != null ? `<div class="bar ${cls}"><span style="width:${Math.min(100, pct)}%"></span></div>` : '');
-        };
-        $('sys-rows').innerHTML =
-            row('CPU',    fmtPct(s.cpu),    s.cpu) +
-            row('Memory', fmtPct(s.memory || s.mem_pct), (s.memory || s.mem_pct)) +
-            row('Disk',   fmtPct(s.disk),   s.disk) +
-            row('Load',   s.load || '—',   null) +
-            row('LXC',    (h.services && h.services.lxc_running) || 0, null);
-    }
-
-    function renderCerts(c) {
-        if (!c || !c.summary) {
-            $('cert-rows').innerHTML = '<div class="empty">cert-status disabled</div>';
-            return;
-        }
-        const s = c.summary;
-        const next = c.next_renewal
-            ? `<div class="row"><span class="k">next renewal</span><span class="v">${c.next_renewal.host} · ${c.next_renewal.days}d</span></div>`
-            : '';
-        $('cert-rows').innerHTML = `
-            <div class="row"><span class="k">Total</span><span class="v">${s.total || 0}</span></div>
-            <div class="row"><span class="k">Valid</span><span class="v ok">${s.valid || 0}</span></div>
-            <div class="row"><span class="k">Expiring soon</span><span class="v ${s.expiring_soon ? 'warn' : ''}">${s.expiring_soon || 0}</span></div>
-            <div class="row"><span class="k">Critical</span><span class="v ${s.expiring_critical ? 'crit' : ''}">${s.expiring_critical || 0}</span></div>
-            <div class="row"><span class="k">Expired</span><span class="v ${s.expired ? 'crit' : ''}">${s.expired || 0}</span></div>
-            ${next}
-        `;
-    }
-
-    function renderCookies(d) {
-        if (!d || !d.enabled || !d.summary) {
-            $('cookie-rows').innerHTML = '<div class="empty">cookie audit disabled</div>';
-            return;
-        }
-        const s = d.summary;
-        const byCat = s.by_category || {};
-        const violCls = s.violation_count > 0 ? 'crit' : 'ok';
-        $('cookie-rows').innerHTML = `
-            <div class="row"><span class="k">Vhosts surveillés</span><span class="v">${s.host_count || 0}</span></div>
-            <div class="row"><span class="k">RGPD violations</span><span class="v ${violCls}">${s.violation_count || 0}</span></div>
-            <div class="row"><span class="k">Strictly necessary</span><span class="v">${byCat.strictly_necessary || 0}</span></div>
-            <div class="row"><span class="k">Functional</span><span class="v">${byCat.functional || 0}</span></div>
-            <div class="row"><span class="k">Analytics</span><span class="v ${byCat.analytics ? 'warn' : ''}">${byCat.analytics || 0}</span></div>
-            <div class="row"><span class="k">Marketing</span><span class="v ${byCat.marketing ? 'warn' : ''}">${byCat.marketing || 0}</span></div>
-            <div class="row"><span class="k">Unclassified</span><span class="v ${byCat.unclassified ? 'warn' : ''}">${byCat.unclassified || 0}</span></div>
-        `;
-    }
-
-    function renderBans(h) {
-        // WAF-native ban / alert counts from health/summary.
-        const ban = h && h.waf ? h.waf.active_bans : null;
-        const alerts = h && h.waf && h.waf.alerts_today;
-        const wafPct = h && h.waf && h.waf.blocked_pct;
-        const wafCls = wafPct == null ? '' : (wafPct >= 25 ? 'crit' : wafPct >= 10 ? 'warn' : 'ok');
-        const banCls = ban == null ? '' : (ban >= 50 ? 'warn' : 'ok');
-        $('t-bans').textContent   = ban  != null ? ban  : '—';
-        $('t-bans').className     = 'v ' + banCls;
-        $('t-waf').textContent    = wafPct != null ? wafPct + '%' : '—';
-        $('t-waf').className      = 'v ' + wafCls;
-        $('t-alerts').textContent = alerts != null ? alerts : '—';
-        // Keep the hero "Bans active" consistent with the real blocked-IP count.
-        if (ban != null && $('hero-bans')) $('hero-bans').textContent = ban;
-    }
-
-    function renderVhosts(d) {
-        if (!d || !d.enabled || !d.entries || !d.entries.length) {
-            $('vhosts-table').innerHTML = '<div class="empty">live-hosts disabled or no data</div>';
-            return;
-        }
-        $('vhosts-table').innerHTML = `<table>
-            <thead><tr><th>Host</th><th style="text-align:right">Requests</th></tr></thead>
-            <tbody>${d.entries.map(e => `<tr><td>${escapeHtml(e.host)}</td><td class="num">${e.count}</td></tr>`).join('')}</tbody>
-        </table>`;
-    }
-
-    function renderAsns(d) {
-        if (!d || !d.enabled || !d.entries || !d.entries.length) {
-            $('asn-table').innerHTML = '<div class="empty">visitor-origin disabled (missing GeoLite2-ASN.mmdb)</div>';
-            return;
-        }
-        $('asn-table').innerHTML = `<table>
-            <thead><tr><th>ASN</th><th>Org</th><th style="text-align:right">Hits</th></tr></thead>
-            <tbody>${d.entries.map(e => `<tr><td>AS${e.asn}</td><td>${escapeHtml(e.org)}</td><td class="num">${e.count}</td></tr>`).join('')}</tbody>
-        </table>`;
-    }
-
-    function escapeHtml(s) {
-        const div = document.createElement('div');
-        div.textContent = s == null ? '' : String(s);
-        return div.innerHTML;
-    }
-
-    async function refresh() {
-        const [h, c, v, a, k] = await Promise.all([
-            fetchSafe(ENDPOINTS.health),
-            fetchSafe(ENDPOINTS.certs),
-            fetchSafe(ENDPOINTS.vhosts),
-            fetchSafe(ENDPOINTS.asns),
-            fetchSafe(ENDPOINTS.cookies),
-        ]);
-        renderHero(h, c);
-        renderModules(h);
-        renderSystem(h);
-        renderCerts(c);
-        renderCookies(k);
-        renderBans(h);
-        renderVhosts(v);
-        renderAsns(a);
-    }
-
-    refresh();
-    setInterval(refresh, REFRESH_MS);
+  var bouton=el('rafraichir');
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function api(u){var hd={'Accept':'application/json'},t=jeton();if(t)hd.Authorization='Bearer '+t;
+    return fetch(u,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    bouton.disabled=true;
+    Promise.all([api('/api/v1/metrics/health/summary'),api('/api/v1/metrics/cert-status'),api('/api/v1/cookie-audit/summary'),api('/api/v1/metrics/live-hosts'),api('/api/v1/metrics/visitor-origin'),api('/api/v1/portal/verify'),api('/api/v1/portal/status'),api('/api/v1/portal/summary'),api('/api/v1/portal/sessions')]).then(function(r){
+      maj();rend({sante:r[0],certs:r[1],cook:r[2],hotes:r[3],asn:r[4],verif:r[5],statut:r[6],resume:r[7],sessions:r[8]});
+    }).then(function(){bouton.disabled=false;},function(){bouton.disabled=false;});
+  }
+  bouton.addEventListener('click',charge);
+  charge();
+  // actualisation : page visible et aucune saisie en cours
+  setInterval(function(){if(!document.hidden&&document.activeElement!==el('rech'))charge();},30000);
 })();
 </script>
 </body>
