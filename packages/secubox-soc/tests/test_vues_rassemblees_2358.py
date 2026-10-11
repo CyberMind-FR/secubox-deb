@@ -13,10 +13,10 @@ VUES = {"menaces": "/waf/menaces.html", "attaquants": "/waf/attaquants.html", "c
 
 def test_chaque_vue_est_un_onglet_de_meme_origine():
     urls = re.findall(r'data-vue="([^"]+)"', SOC)
-    assert len(urls) == len(VUES)
+    assert len(urls) == len(VUES) + 1          # + « Réseau en direct » (#2364), page du SOC lui-même
     for u in VUES.values():
         assert any(x.startswith(u) for x in urls), u
-    assert all(x.startswith("/") and not x.startswith("//") for x in urls)   # jamais une autre origine
+    assert all(not x.startswith("//") and "://" not in x for x in urls)   # jamais une autre origine
 
 
 def test_les_onglets_existants_sont_conserves():
@@ -26,7 +26,7 @@ def test_les_onglets_existants_sont_conserves():
 
 def test_le_gestionnaire_ne_laisse_qu_un_ecran_visible():
     assert "e.hidden = e.id !== cible" in SOC          # plusieurs onglets pilotent le même écran
-    assert "sbxWafVue || e.data.sbxdpiVue" in SOC
+    assert "sbxWafVue || e.data.sbxdpiVue || e.data.sbxVue" in SOC
 
 
 def test_les_pages_dpi_et_waf_mesurent_leur_cadre():
