@@ -29,7 +29,7 @@
   function embedSrc(embed, muted, start) {
     start = Math.floor(start || 0); var mm = muted ? 1 : 0;
     var y = (embed.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/) || [])[1];
-    if (/youtu/.test(embed) && y) return "https://www.youtube-nocookie.com/embed/" + y + "?rel=0&playsinline=1&autoplay=1&mute=" + mm + "&start=" + start;
+    if (/youtu/.test(embed) && y) return "https://www.youtube-nocookie.com/embed/" + y + "?rel=0&playsinline=1&autoplay=1&mute=" + mm + "&start=" + start + "&enablejsapi=1&origin=" + encodeURIComponent(location.origin);
     var p = embed.match(/(https?:\/\/[^/]+)\/(?:w|videos\/(?:watch|embed))\/([0-9A-Za-z-]+)/);
     if (p) return p[1] + "/videos/embed/" + p[2] + "?autoplay=1&muted=" + mm + "&title=0&warningTitle=0&peertubeLink=0&p2p=0&controls=1&start=" + start;
     return null;
@@ -43,13 +43,46 @@
   var src0 = ifr ? (ifr.getAttribute("src") || ifr.getAttribute("data-src") || "") : "";
   var base = 0, t0 = 0, joue = false;
 
+  // POSITION DE LA VIDÉO, pour accrocher les commentaires à un INSTANT (#2397). Trois sources, de la plus sûre à la moins sûre :
+  //   · une vidéo HÉBERGÉE dans la scène : currentTime, réel ;
+  //   · le lecteur YouTube (API postMessage, enablejsapi) : currentTime + état lecture/pause, réels ;
+  //   · sinon (PeerTube, autre) : une ESTIMATION « base + temps écoulé » — qui dérive : onglet laissé ouvert, vidéo en pause ou finie.
+  //     Au-delà de MAX_EST elle n'est plus un instant : « inconnu » (NaN), et la ligne part SANS instant — un faux instant vaut pire qu'aucun.
+  var MAX_EST = 3 * 3600, reel = null, hv = null;
+  function pos() {
+    if (hv) return hv.currentTime;
+    if (reel) return reel.joue ? reel.t + (performance.now() - reel.quand) / 1000 : reel.t;
+    if (!joue) return base;
+    var e = base + (performance.now() - t0) / 1000;
+    return e - base > MAX_EST ? NaN : e;
+  }
+  function posValide() { var p = pos(); return isFinite(p) && p >= 0 ? Math.floor(p) : null; }
+  function suivreYT() {
+    if (!ifr || !/youtube/.test(ifr.getAttribute("src") || "")) return;
+    function annonce() { try { ifr.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*"); } catch (e) {} }
+    ifr.addEventListener("load", function () {
+      annonce(); var n = 0;
+      var tm = setInterval(function () { if (reel || ++n > 20) clearInterval(tm); else annonce(); }, 500);
+    });
+    addEventListener("message", function (e) {
+      if (!ifr || e.source !== ifr.contentWindow) return;
+      var d = e.data;
+      if (typeof d === "string") { try { d = JSON.parse(d); } catch (x) { return; } }
+      if (!d || d.event !== "infoDelivery" || !d.info) return;
+      var i = d.info, avant = reel ? reel.joue : false;
+      if (typeof i.currentTime === "number") reel = { t: i.currentTime, quand: performance.now(), joue: typeof i.playerState === "number" ? i.playerState === 1 : avant };
+      else if (typeof i.playerState === "number" && reel) { reel.t = pos(); reel.quand = performance.now(); reel.joue = i.playerState === 1; }
+    });
+  }
+
   function lance(muted, at) {
     if (!ifr || !src0) return;
     var u = embedSrc(src0, muted, at);
     if (!u) return;                        /* fournisseur inconnu : on n'y touche pas */
     ifr.setAttribute("allow", "autoplay; fullscreen; picture-in-picture");
     ifr.src = u;
-    base = at || 0; t0 = performance.now(); joue = true;
+    base = at || 0; t0 = performance.now(); joue = true; reel = null;
+    suivreYT();
     if (scene) scene.classList.add("playing");
   }
   // LE CLIC EST LE CONSENTEMENT. Tant qu'il n'a pas eu lieu, le lecteur voit
@@ -66,8 +99,26 @@
     });
   }
 
-  function pos() { return joue ? base + (performance.now() - t0) / 1000 : base; }
-  function retiens() { if (slug && joue) LS.set("bpos:" + slug, Math.max(0, Math.floor(pos()))); }
+  function retiens() { var p = posValide(); if (slug && joue && p !== null) LS.set("bpos:" + slug, p); }
+
+  // VIDÉO HÉBERGÉE (#2397) : un billet dont la pièce jointe est une vidéo (mp4, webm) a une scène avec sa vignette et ▶ ; le clic la joue
+  // EN GRAND dans la scène. `joue` suit lecture/pause réelles pour que les sous-titres ne défilent que pendant la lecture.
+  var urlHeberge = scene && scene.dataset.video;
+  if (urlHeberge && !ifr) {
+    scene.addEventListener("click", function (ev) {
+      if (hv || (ev.target.closest && ev.target.closest(".track, .pops, [data-act]"))) return;
+      var c = document.createElement("div"); c.className = "frame live";
+      hv = document.createElement("video");
+      hv.src = urlHeberge; hv.controls = true; hv.autoplay = true; hv.preload = "auto"; hv.setAttribute("playsinline", "");
+      hv.addEventListener("play", function () { joue = true; });
+      hv.addEventListener("pause", function () { joue = false; });
+      hv.addEventListener("ended", function () { joue = false; });
+      c.appendChild(hv);
+      scene.insertBefore(c, scene.querySelector(".crt"));
+      scene.classList.add("playing");
+      var q = hv.play(); if (q && q.catch) q.catch(function () {});
+    });
+  }
 
   if (ifr && src0 && embedSrc(src0, false, 0) && !differe) {
     // On REPREND là où le fil s'était arrêté, avec le son.
@@ -359,8 +410,9 @@
       if (m.length < 2) { quoi.focus(); return; }
       LS.set("nom", n);
       var champT = document.getElementById("mb-t");
-      if (champT) champT.value = joue ? String(Math.floor(pos())) : "";
-      envoi.disabled = true; dire("envoi…" + (joue ? " @" + mmss(pos()) : ""));
+      var pv = joue ? posValide() : null;
+      if (champT) champT.value = pv !== null ? String(pv) : "";
+      envoi.disabled = true; dire("envoi…" + (pv !== null ? " @" + mmss(pv) : ""));
       envoyer(n, m, dire).then(function (ok) {
         envoi.disabled = false;
         if (ok) { quoi.value = ""; quoi.focus(); }

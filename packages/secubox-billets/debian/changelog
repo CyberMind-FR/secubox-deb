@@ -1,3 +1,9 @@
+secubox-billets (0.11.4-1~bookworm1) bookworm; urgency=medium
+
+  * Video hebergee jouee en grand dans la scene du billet, et instant des commentaires juste (ref #2397). Un billet dont la piece jointe est une video (mp4, webm) montre sa vignette avec ▶ ; au clic, la video se joue dans la scene (plein cadre, fond noir). Sa position est REELLE (currentTime) et suit lecture/pause. Horodatage : « 359:44 » pour des lignes ecrites a quelques minutes d'intervalle venait de l'estimation « base + temps ecoule » depuis l'ouverture du lecteur, qui derive (onglet ouvert six heures, video en pause ou finie). YouTube donne maintenant sa position reelle (API postMessage : currentTime, lecture/pause) dans la page du billet et dans le theatre du fil ; sinon l'estimation est bornee a 3 h puis « inconnue » : la ligne part sans instant plutot qu'avec un faux instant, et rien n'est sauve en memoire locale en cas d'instant inconnu. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 14:00:00 +0200
+
 secubox-billets (0.11.3-1~bookworm1) bookworm; urgency=medium
 
   * Une video attachee a un billet a une vignette (ref #2395) : une image d'apercu extraite par ffmpeg (a 1 s, repli sur la premiere image, `<id>_t.jpg`) est enregistree comme vignette du media ; le fil et la carte du Hall montrent un apercu au lieu du placeholder, alors que la video se jouait deja sur la page du billet. La galerie d'images (page et fil classique) ne prend que les images : la video reste embarquee en ligne, sans doublon ni lightbox sur un mp4. Sans ffmpeg ou si l'extraction echoue : pas de vignette, jamais d'erreur. Rattrapage : `python -m api.manage backfill-posters`. 5 tests.

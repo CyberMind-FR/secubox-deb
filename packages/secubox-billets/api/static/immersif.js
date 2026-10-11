@@ -41,7 +41,7 @@
   function embedSrc(embed, muted, start) {
     start = Math.floor(start || 0); var mm = muted ? 1 : 0;
     var y = (embed.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/) || [])[1];
-    if (/youtu/.test(embed) && y) return "https://www.youtube-nocookie.com/embed/" + y + "?rel=0&playsinline=1&autoplay=1&mute=" + mm + "&start=" + start;
+    if (/youtu/.test(embed) && y) return "https://www.youtube-nocookie.com/embed/" + y + "?rel=0&playsinline=1&autoplay=1&mute=" + mm + "&start=" + start + "&enablejsapi=1&origin=" + encodeURIComponent(location.origin);
     var p = embed.match(/(https?:\/\/[^/]+)\/(?:w|videos\/(?:watch|embed))\/([0-9A-Za-z-]+)/);
     if (p) return p[1] + "/videos/embed/" + p[2] + "?autoplay=1&muted=" + mm + "&title=0&warningTitle=0&peertubeLink=0&p2p=0&controls=1&start=" + start;
     return embed;
@@ -80,7 +80,8 @@
         return '<button type="button" class="emo" tabindex="-1">' + e + '</button>'; }).join("")
       + '</span><button class="send" type="submit">envoyer ↗</button>'
       + '<span class="etat"></span></form></div>';
-    theater.hidden = false; playing = el; base = pos; t0 = performance.now();
+    theater.hidden = false; playing = el; base = pos; t0 = performance.now(); reel = null;
+    suivreYT(theater.querySelector("iframe"));
     incruste(slug);
     saisie(slug);
   }
@@ -92,7 +93,32 @@
   // et zéro écouteur ici. Les données sont celles déjà chargées pour les couloirs.
   var subTimer = null, ancreTimer = null;
   function mmss(t) { t = Math.max(0, Math.floor(t)); return Math.floor(t / 60) + ":" + ("0" + (t % 60)).slice(-2); }
-  function posTh() { return base + (performance.now() - t0) / 1000; }
+  // POSITION (#2397) : réelle quand le lecteur la dit (YouTube : API postMessage), sinon ESTIMATION « base + temps écoulé » qui dérive
+  // (onglet ouvert des heures, vidéo en pause ou finie) : au-delà de MAX_EST ce n'est plus un instant, NaN — la ligne part sans instant.
+  var MAX_EST = 3 * 3600, reel = null;
+  function posTh() {
+    if (reel) return reel.joue ? reel.t + (performance.now() - reel.quand) / 1000 : reel.t;
+    var e = base + (performance.now() - t0) / 1000;
+    return e - base > MAX_EST ? NaN : e;
+  }
+  function posThValide() { var p = posTh(); return isFinite(p) && p >= 0 ? Math.floor(p) : null; }
+  function suivreYT(frame) {
+    if (!frame || !/youtube/.test(frame.getAttribute("src") || "")) return;
+    function annonce() { try { frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*"); } catch (e) {} }
+    frame.addEventListener("load", function () {
+      annonce(); var n = 0;
+      var tm = setInterval(function () { if (reel || ++n > 20 || !frame.isConnected) clearInterval(tm); else annonce(); }, 500);
+    });
+    window.addEventListener("message", function (e) {
+      if (e.source !== frame.contentWindow) return;
+      var d = e.data;
+      if (typeof d === "string") { try { d = JSON.parse(d); } catch (x) { return; } }
+      if (!d || d.event !== "infoDelivery" || !d.info) return;
+      var i = d.info, avant = reel ? reel.joue : false;
+      if (typeof i.currentTime === "number") reel = { t: i.currentTime, quand: performance.now(), joue: typeof i.playerState === "number" ? i.playerState === 1 : avant };
+      else if (typeof i.playerState === "number" && reel) { reel.t = posTh(); reel.quand = performance.now(); reel.joue = i.playerState === 1; }
+    });
+  }
   function poseSub(c, attente) {
     var sub = theater.querySelector(".tsub"); if (!sub) return;
     sub.innerHTML = (c.t != null ? '<span class="at">' + mmss(c.t) + '</span>' : '<span class="k">▸</span>')
@@ -193,14 +219,14 @@
       if (n.length < 2) { dire("votre nom, d'abord", true); qui.focus(); return; }
       if (m.length < 2) { quoi.focus(); return; }
       LS.set("nom", n);
-      envoi.disabled = true; dire("envoi… @" + mmss(posTh()));
-      var vt = Math.floor(posTh());
+      envoi.disabled = true; var vt = posThValide();
+      dire("envoi…" + (vt !== null ? " @" + mmss(vt) : ""));
 
       function poste(dejaRejoue) {
         var fd = new FormData();
         fd.append("csrf", JET.csrf); fd.append("ts_token", JET.ts_token);
         fd.append("website", ""); fd.append("author_name", n); fd.append("body", m);
-        if (vt >= 0 && vt <= 86400) fd.append("video_t", String(vt));
+        if (vt !== null && vt >= 0 && vt <= 86400) fd.append("video_t", String(vt));
         return fetch("/b/" + encodeURIComponent(slug) + "/comment", {
           method: "POST", body: fd, credentials: "same-origin",
           headers: { "Accept": "application/json" }
@@ -235,8 +261,8 @@
   // aussi en partant, en masquant l'onglet, et régulièrement pendant la lecture.
   function retiens() {
     if (!playing || theater.hidden || !playing.dataset.embed) return;
-    var t = base + (performance.now() - t0) / 1000;
-    LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
+    var t = posThValide();
+    if (t !== null) LS.set("bpos:" + playing.dataset.id, t);
   }
   setInterval(retiens, 4000);
   window.addEventListener("pagehide", retiens);
@@ -253,9 +279,11 @@
     clearInterval(subTimer); subTimer = null;
     clearInterval(ancreTimer); ancreTimer = null;
     if (playing && playing.dataset.embed) {
-      var t = base + (performance.now() - t0) / 1000;
-      LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
-      var seen = playing.querySelector(".seen"); if (seen) seen.style.width = Math.min(100, t / 3) + "%";
+      var t = posThValide();
+      if (t !== null) {
+        LS.set("bpos:" + playing.dataset.id, t);
+        var seen = playing.querySelector(".seen"); if (seen) seen.style.width = Math.min(100, t / 3) + "%";
+      }
       playing = null;
     }
     theater.hidden = true; theater.innerHTML = "";
