@@ -77,3 +77,11 @@ def test_l_onglet_par_defaut_de_soc_est_guardian_et_l_encadre():
     h = (WWW / "index.html").read_text(encoding="utf-8")
     assert re.search(r'id="t0"[^>]*>.*?Guardian', h) and 'aria-selected="true" aria-controls="e0"' in h and 'src="guardian.html"' in h
     assert re.search(r'id="e1" role="tabpanel" aria-labelledby="t1" hidden', h)       # Vigie (l'ancienne page) reste, masquée par défaut
+
+
+def test_la_hauteur_envoyee_ne_depend_pas_de_la_hauteur_de_l_iframe():
+    """documentElement.scrollHeight >= hauteur de l'iframe : la page ne pouvait que grandir (vide de 3000 px)."""
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1] / "www/soc/guardian.html").read_text()
+    assert "sbxSocVue:document.documentElement.scrollHeight" not in src
+    assert "querySelector('.cadre').getBoundingClientRect()" in src

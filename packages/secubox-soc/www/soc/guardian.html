@@ -211,7 +211,7 @@
     usage:{usages:[{name:'streaming',bytes:32},{name:'web',bytes:18},{name:'social',bytes:12},{name:'dns',bytes:10}]},clients:[{name:'iPhone · 204',bytes:10.7e9},{name:'Android · 189',bytes:613e6},{name:'TV Salon',bytes:387e6}],
     dpiStats:{connected:true,total_flows:1551979,protocols:new Array(11).fill(0)},dpiPays:new Array(49).fill(0),gardien:{appareils:{connectes:14,total:38}},detections:{detections:[{nom:'Anti-robots',actif:true},{nom:'Leurres de service',actif:true}]}};
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxSocVue:document.documentElement.scrollHeight},location.origin);}catch(e){}}}
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxSocVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY)+12},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
   if(q.get('demo')){rend(DEMO);return;}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
