@@ -13,7 +13,7 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 autoload-agent 0.6.1 : `TypeError: OpenerDirector.open() got an unexpected keyword argument 'context'` — le contexte TLS est lié au gestionnaire HTTPS. Les tests passaient par un faux ouvreur trop permissif ; un test de bout en bout (serveur TLS local, ouvreur réel) le couvre.
 
-## 2026-10-12 — Rapport PDF quotidien de sécurité : WAF + Actor Intelligence + DPI (ref #2299)
+## 2026-10-12 — Rapport PDF quotidien de sécurité : WAF + Actor Intelligence + DPI : closes #2299
 
 metrics 1.18.0 : PDF sombre à trois volets (style des vues du Hall), données réelles seulement, définitions, mesures non disponibles listées ; ancien PDF WAF via `format = "waf"`. dpi 1.10.0 : résumé agrégé écrit par `secubox-dpi-resume.timer` (le rapport ne lit pas l'API à jeton).
 
