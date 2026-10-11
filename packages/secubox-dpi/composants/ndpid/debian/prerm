@@ -1,7 +1,4 @@
 #!/bin/sh
 set -e
-if [ "$1" = "remove" ]; then
-    systemctl stop secubox-ndpid.service || true
-    systemctl disable secubox-ndpid.service || true
-fi
+# L'API est servie par l'agrégateur (#2335) : plus d'unité propre à arrêter.
 exit 0

@@ -70,7 +70,7 @@ override_dh_auto_install:
 	[ -f composants/ndpid/nginx/ndpid.conf ] && install -m 644 composants/ndpid/nginx/ndpid.conf debian/secubox-dpi/etc/nginx/secubox.d/ || true
 	install -D -m 755 composants/ndpid/debian/postinst debian/secubox-dpi/usr/lib/secubox/dpi/maintscripts/ndpid.postinst
 	install -D -m 755 composants/ndpid/debian/prerm debian/secubox-dpi/usr/lib/secubox/dpi/maintscripts/ndpid.prerm
-	install -D -m 644 composants/ndpid/debian/secubox-ndpid.service debian/secubox-dpi/usr/lib/systemd/system/secubox-ndpid.service
+	# secubox-ndpid.service : plus livree, l'API est servie par l'agregateur (#2335)
 	# Composant absorbé : mediaflow (#2050)
 	install -d debian/secubox-dpi/usr/lib/secubox/mediaflow/
 	cp -r composants/mediaflow/api debian/secubox-dpi/usr/lib/secubox/mediaflow/
@@ -93,7 +93,7 @@ override_dh_auto_install:
 	install -D -m 755 composants/mediaflow/debian/prerm debian/secubox-dpi/usr/lib/secubox/dpi/maintscripts/mediaflow.prerm
 	install -D -m 644 composants/mediaflow/debian/secubox-mediaflow.secubox-yt-dlp-refresh.service debian/secubox-dpi/usr/lib/systemd/system/secubox-yt-dlp-refresh.service
 	install -D -m 644 composants/mediaflow/debian/secubox-mediaflow.secubox-yt-dlp-refresh.timer debian/secubox-dpi/usr/lib/systemd/system/secubox-yt-dlp-refresh.timer
-	install -D -m 644 composants/mediaflow/debian/secubox-mediaflow.service debian/secubox-dpi/usr/lib/systemd/system/secubox-mediaflow.service
+	# secubox-mediaflow.service : plus livree, l'API est servie par l'agregateur (#2335)
 
 override_dh_auto_clean:
 	rm -f collector/secubox-dpi-collector

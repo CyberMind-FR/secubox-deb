@@ -1098,8 +1098,19 @@ async def export_fingerprints(format: str = "json"):
 # Startup
 # ============================================================================
 
+def _assurer_donnees() -> None:
+    """Répertoire de données : à l'import ET au démarrage — l'agrégateur importe ce module sans déclencher le hook de démarrage (#2335)."""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass                                        # lecture seule / droits : les routes qui écrivent le diront
+
+
+_assurer_donnees()
+
+
 @app.on_event("startup")
 async def startup():
     """Initialize on startup."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _assurer_donnees()
     log.info("nDPId module started")
