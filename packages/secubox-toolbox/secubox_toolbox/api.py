@@ -5296,6 +5296,47 @@ async def admin_clients_reset_all(request: Request) -> dict:
     return _reset_all_clients()
 
 
+def _forget_one(mh: str) -> dict:
+    """#2379 — oublie UN client : sa ligne, ses événements/consentements/rapports et son graphe social."""
+    from . import social as _s
+    clients, rows = store.forget_client(mh)
+    if clients:
+        rows += _s.wipe_mac(mh)
+    return {"ok": True, "clients_forgotten": clients, "rows_deleted": rows}
+
+
+@router.post("/admin/clients/forget")
+async def admin_clients_forget(request: Request) -> dict:
+    """#2379 — OUBLIER des clients (retirer la ligne, pas seulement ses statistiques). Corps JSON {"inactive_days": N} :
+    N > 0 = ceux non vus depuis N jours ; 0 = TOUS. Toute autre valeur : 422, rien n'est supprimé. Bloqué sur le vhost public."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "forget disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+    days = body.get("inactive_days") if isinstance(body, dict) else None
+    if isinstance(days, bool) or not isinstance(days, int) or days < 0:
+        raise HTTPException(422, "inactive_days: entier >= 0 requis (0 = tous les clients)")
+    from . import social as _s
+    ids = [c["mac_hash"] for c in store.list_clients_all() if c.get("mac_hash")] if days == 0 else None
+    clients, rows = store.forget_clients(days)
+    # graphe social des clients retirés (un client oublié ne laisse rien derrière lui)
+    if ids is not None:
+        for mh in ids:
+            rows += _s.wipe_mac(mh)
+    log.info("admin forget clients (inactive_days=%s): %d clients, %d rows", days, clients, rows)
+    return {"ok": True, "clients_forgotten": clients, "rows_deleted": rows}
+
+
+@router.post("/admin/clients/{mac_hash}/forget")
+async def admin_client_forget(mac_hash: str, request: Request) -> dict:
+    """#2379 — oublier UN client."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "forget disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    return _forget_one(mac_hash)
+
+
 @router.get("/admin/clients/{mac_hash}/events")
 async def admin_client_events(mac_hash: str) -> dict:
     """Admin endpoint : per-source event summary for a specific client."""

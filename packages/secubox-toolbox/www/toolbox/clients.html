@@ -89,7 +89,7 @@
   <div class="tete">
     <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2" fill="rgba(59,130,246,.16)"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M17 14c2.4 0 4 1.9 4 4.5"/></svg><span><b>Clients</b><small>Passerelle MITM · appareils connectés</small></span></span>
     <span class="actif" id="actif">…</span>
-    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button><button type="button" id="razTous" class="danger">↺ Tout remettre à zéro</button></div>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button><button type="button" id="razTous" class="danger" title="Efface les statistiques de chaque client (événements, consentements, graphe social, score) ; les clients restent dans la liste">↺ RAZ des statistiques</button><button type="button" id="oublieInact" class="danger" title="Retire de la liste les clients non vus depuis 30 jours">🧹 Oublier les inactifs (30 j)</button><button type="button" id="oublieTous" class="danger" title="Vide la liste : tous les clients sont retirés et reviennent avec leur activité">🗑 Oublier tous</button></div>
   </div>
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
   <div class="demo info" id="session" hidden></div>
@@ -97,6 +97,10 @@
   <div class="conf" id="confTous" hidden>
     <div><b>Remettre à zéro TOUS les clients ?</b> Événements, consentements et graphes sociaux effacés, scores remis à zéro, clients conservés. Irréversible.</div>
     <div class="bt"><button type="button" class="danger" id="confTousOui">Oui, tout remettre à zéro</button><button type="button" id="confTousNon">Annuler</button></div>
+  </div>
+  <div class="conf" id="confOubli" hidden>
+    <div id="confOubliTxt"></div>
+    <div class="bt"><button type="button" class="danger" id="confOubliOui">Oui, oublier</button><button type="button" id="confOubliNon">Annuler</button></div>
   </div>
   <div><h2>Appareils clients</h2><div class="sous">Chaque appareil est identifié par un condensat de son adresse matérielle, jamais par l’adresse elle-même.</div></div>
   <div class="tuiles" id="tuiles"></div>
@@ -133,7 +137,7 @@
   var ORDRE=['r0','r1','r2','r3'];
   var ETAT={actif:['Actif','#2ecc71'],idle:['Inactif','#ffd23f'],'expiré':['Expiré','#6f84a8'],quarantine:['Quarantaine','#ff4d5e']};
 
-  var etat={clients:null,metrics:null,erreur:null,fNiv:'',fEtat:'',confirm:null,tous:false,detail:null};
+  var etat={clients:null,metrics:null,erreur:null,fNiv:'',fEtat:'',confirm:null,confirmOubli:null,oubli:null,tous:false,detail:null};
 
   function rel(ts){
     if(!ts) return '—';
@@ -184,7 +188,7 @@
   function carte(c){
     var l=niv(c),N=NIV[l],st=statut(c),E=ETAT[st]||[st||'—','#6f84a8'],h=String(c.mac_hash||''),sc=c.score==null?null:num(c.score);
     var sCol=sc==null?'#6f84a8':sc<30?'#2ecc71':sc<70?'#ffd23f':'#ff4d5e';
-    var cf=etat.confirm===h;
+    var cf=etat.confirm===h, cfo=etat.confirmOubli===h;
     var lien=function(t,href){return DEMO?'<a title="Désactivé en démonstration">'+t+'</a>':'<a href="'+API+'/admin/clients/'+esc(encodeURIComponent(h))+href+'" target="_blank" rel="noopener">'+t+'</a>';};
     var sw=ORDRE.filter(function(x){return x!==l;}).map(function(x){return '<button type="button" class="niv" data-niveau="'+x+'" data-h="'+esc(h)+'" title="Passer en '+NIV[x][0]+' — '+esc(NIV[x][3])+'" style="color:'+NIV[x][2]+'">'+NIV[x][0]+'</button>';}).join('');
     return '<div class="carte'+(st==='quarantine'?' q':'')+'" data-h="'+esc(h)+'">'
@@ -196,8 +200,8 @@
       +'<div title="'+esc(complet(c.first_seen))+'">Premier passage : <b>'+esc(rel(c.first_seen))+'</b></div></div>'
       +'<div title="Score de risque (0 à 100)"><div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--doux);margin-bottom:2px"><span>Score de risque</span><b style="color:var(--texte)">'+(sc==null?'—':fmt(sc))+'</b></div><div class="barre"><i style="width:'+(sc==null?0:Math.max(3,Math.min(100,sc)))+'%;background:'+sCol+'"></i></div></div>'
       +'<div class="acts"><span class="sep">Niveau :</span>'+sw+'</div>'
-      +'<div class="acts">'+lien('🕸️ Carto','/social')+lien('PDF','/report')+'<a href="#" data-ev="'+esc(h)+'">Events</a><a href="#" data-raz="'+esc(h)+'" style="color:var(--rouge)">↺ Reset</a></div>'
-      +(cf?'<div class="conf"><div>Remettre à zéro les statistiques du client <code>'+esc(h.slice(0,16))+'…</code> ? Cela efface sa cartographie sociale et ses événements. Irréversible.</div><div class="bt"><button type="button" class="danger" data-razoui="'+esc(h)+'">Oui, remettre à zéro</button><button type="button" data-razno="1">Annuler</button></div></div>':'')
+      +'<div class="acts">'+lien('🕸️ Carto','/social')+lien('PDF','/report')+'<a href="#" data-ev="'+esc(h)+'">Events</a><a href="#" data-raz="'+esc(h)+'" style="color:var(--rouge)" title="Efface ses statistiques, le client reste">↺ Reset</a><a href="#" data-oubli="'+esc(h)+'" style="color:var(--rouge)" title="Retire le client de la liste">🗑 Oublier</a></div>'
+      +(cfo?'<div class="conf"><div>Oublier le client <code>'+esc(h.slice(0,16))+'…</code> ? Sa ligne, ses événements et son graphe social sont supprimés ; il reviendra avec son activité (niveau R par défaut). Irréversible.</div><div class="bt"><button type="button" class="danger" data-oublioui="'+esc(h)+'">Oui, oublier ce client</button><button type="button" data-razno="1">Annuler</button></div></div>':'')+(cf?'<div class="conf"><div>Remettre à zéro les statistiques du client <code>'+esc(h.slice(0,16))+'…</code> ? Cela efface sa cartographie sociale et ses événements. Irréversible.</div><div class="bt"><button type="button" class="danger" data-razoui="'+esc(h)+'">Oui, remettre à zéro</button><button type="button" data-razno="1">Annuler</button></div></div>':'')
       +'</div>';
   }
 
@@ -214,7 +218,7 @@
     el('demo').hidden=!DEMO;
     var s=el('session');
     if(!DEMO&&C==null){s.textContent=etat.erreur?'Aucune mesure : '+etat.erreur:'Chargement…';s.hidden=false;}else s.hidden=true;
-    el('razTous').disabled=!C||!C.length;
+    el('razTous').disabled=!C||!C.length;el('oublieInact').disabled=!C||!C.length;el('oublieTous').disabled=!C||!C.length;
     var a=el('actif');a.textContent=C?'EN LIGNE':'HORS LIGNE';a.classList.toggle('hors',!C);
     var cnt={},act=0,qua=0,nou=0,now=Date.now()/1000;
     (C||[]).forEach(function(c){var l=niv(c);cnt[l]=(cnt[l]||0)+1;if(statut(c)==='actif')act++;if(statut(c)==='quarantine')qua++;if(c.first_seen&&now-c.first_seen<86400)nou++;});
@@ -289,6 +293,29 @@
       });
     }).catch(function(e){msg('Reset all erreur : '+e,'err');});
   }
+  /* #2379 — OUBLIER : retire la ligne du client (la RAZ, elle, garde la ligne). Mêmes gardes que la RAZ : confirmation intégrée, inerte en démonstration. */
+  function ecrire(url,corps,ok,ko){
+    if(bloque()) return;
+    var o={method:'POST',credentials:'same-origin'};
+    if(corps!==null){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(corps);}
+    fetch(url,o).then(function(r){return r.json().catch(function(){return {};}).then(function(d){
+      if(!r.ok){msg(ko+' : '+(d.detail||('HTTP '+r.status)),'err');return;}
+      msg(ok(d),'ok');charge();
+    });}).catch(function(e){msg(ko+' : '+e,'err');});
+  }
+  function forgetClient(h){
+    ecrire(API+'/admin/clients/'+encodeURIComponent(h)+'/forget',null,function(d){return d.clients_forgotten?'Client oublié : retiré de la liste ('+(d.rows_deleted||0)+' enregistrement'+((d.rows_deleted||0)>1?'s':'')+' supprimé'+((d.rows_deleted||0)>1?'s':'')+').':'Client introuvable (déjà oublié ?).';},'Échec de l’oubli');
+  }
+  function forgetClients(jours){
+    ecrire(API+'/admin/clients/forget',{inactive_days:jours},function(d){return d.clients_forgotten+' client'+(d.clients_forgotten>1?'s':'')+' oublié'+(d.clients_forgotten>1?'s':'')+' (retiré'+(d.clients_forgotten>1?'s':'')+' de la liste), '+(d.rows_deleted||0)+' enregistrement'+((d.rows_deleted||0)>1?'s':'')+' supprimé'+((d.rows_deleted||0)>1?'s':'')+'.';},'Échec de l’oubli');
+  }
+  function proposeOubli(jours){
+    etat.oubli=jours;
+    el('confOubliTxt').innerHTML=jours===0
+      ?'<b>Oublier TOUS les clients ?</b> La liste est vidée : chaque client, ses événements, consentements, rapports et son graphe social sont supprimés. Un client revient avec son activité, <b>avec le niveau R par défaut</b> (le niveau que vous lui aviez donné est perdu). L’accès réseau n’en dépend pas. Irréversible.'
+      :'<b>Oublier les clients inactifs ?</b> Les clients non vus depuis '+jours+' jours sont retirés de la liste, avec leurs données. Les clients récents et leur niveau R ne sont pas touchés. Irréversible.';
+    el('confOubli').hidden=false;hauteur();
+  }
   function events(h){
     el('detailPan').hidden=false;el('detailTitre').textContent='Détails client — '+h;
     var d=el('detail');
@@ -310,13 +337,19 @@
     if(t.dataset.ev){ev.preventDefault();events(t.dataset.ev);return;}
     if(t.dataset.raz){ev.preventDefault();etat.confirm=t.dataset.raz;rendListe();return;}
     if(t.dataset.razoui){var h=t.dataset.razoui;etat.confirm=null;rendListe();resetClient(h);return;}
-    if(t.dataset.razno){etat.confirm=null;rendListe();return;}
+    if(t.dataset.oubli){ev.preventDefault();etat.confirmOubli=t.dataset.oubli;etat.confirm=null;rendListe();return;}
+    if(t.dataset.oublioui){var ho=t.dataset.oublioui;etat.confirmOubli=null;rendListe();forgetClient(ho);return;}
+    if(t.dataset.razno){etat.confirm=null;etat.confirmOubli=null;rendListe();return;}
     if(t.dataset.fn!==undefined){etat.fNiv=t.dataset.fn;rend();return;}
     if(t.dataset.fe!==undefined){etat.fEtat=t.dataset.fe;rend();return;}
   });
   el('razTous').addEventListener('click',function(){etat.tous=true;el('confTous').hidden=false;hauteur();});
   el('confTousNon').addEventListener('click',function(){etat.tous=false;el('confTous').hidden=true;hauteur();});
   el('confTousOui').addEventListener('click',function(){etat.tous=false;el('confTous').hidden=true;resetAll();});
+  el('oublieInact').addEventListener('click',function(){proposeOubli(30);});
+  el('oublieTous').addEventListener('click',function(){proposeOubli(0);});
+  el('confOubliNon').addEventListener('click',function(){etat.oubli=null;el('confOubli').hidden=true;hauteur();});
+  el('confOubliOui').addEventListener('click',function(){var j=etat.oubli;etat.oubli=null;el('confOubli').hidden=true;if(j!==null)forgetClients(j);});
   el('rech').addEventListener('input',rendListe);
   el('tri').addEventListener('change',rendListe);
   el('rafraichir').addEventListener('click',charge);

@@ -365,6 +365,60 @@ def list_clients() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def list_clients_all() -> list[dict]:
+    """Tous les clients (sans le plafond de 200 de list_clients) : pour oublier la liste entière."""
+    with _conn() as c:
+        return [dict(r) for r in c.execute("SELECT mac_hash FROM clients").fetchall()]
+
+
+def forget_clients(inactive_days) -> tuple[int, int]:
+    """#2379 — OUBLIER des clients : retire la ligne du client ET ses événements, consentements, rapports et graphe social.
+
+    `reset_client` garde la ligne (statistiques effacées) : après une « RAZ » la liste restait pleine, ce qui n'est pas ce que l'on
+    attend d'un « vider ». Ici on retire. `inactive_days` : 0 = tous ; N > 0 = ceux non vus depuis N jours. Toute autre valeur
+    (négatif, non entier) ne supprime RIEN : une faute de frappe ne doit pas vider la liste. Un client qui revient réapparaît avec
+    son activité (niveau R par défaut) ; l'accès réseau ne dépend pas de cette table (nft). Rend (clients retirés, lignes supprimées).
+    """
+    if isinstance(inactive_days, bool) or not isinstance(inactive_days, int) or inactive_days < 0:
+        return 0, 0
+    cutoff = int(time.time()) - inactive_days * 86400
+    n_clients = n_rows = 0
+    try:
+        with _conn() as c:
+            if inactive_days == 0:
+                ids = [r[0] for r in c.execute("SELECT mac_hash FROM clients")]
+            else:
+                ids = [r[0] for r in c.execute("SELECT mac_hash FROM clients WHERE last_seen < ?", (cutoff,))]
+            for mh in ids:
+                n_rows += _oublier(c, mh)
+                n_clients += 1
+    except Exception as e:
+        log.warning("forget_clients failed: %s", e)
+    return n_clients, n_rows
+
+
+def forget_client(mac_hash: str) -> tuple[int, int]:
+    """Oublie UN client (voir forget_clients). (0, 0) si absent ou vide."""
+    if not mac_hash:
+        return 0, 0
+    try:
+        with _conn() as c:
+            if not c.execute("SELECT 1 FROM clients WHERE mac_hash = ?", (mac_hash,)).fetchone():
+                return 0, 0
+            return 1, _oublier(c, mac_hash)
+    except Exception as e:
+        log.warning("forget_client failed: %s", e)
+        return 0, 0
+
+
+def _oublier(c, mac_hash: str) -> int:
+    n = 0
+    for table in ("events", "consents", "reports"):
+        n += c.execute(f"DELETE FROM {table} WHERE mac_hash = ?", (mac_hash,)).rowcount or 0
+    n += c.execute("DELETE FROM clients WHERE mac_hash = ?", (mac_hash,)).rowcount or 0
+    return n
+
+
 def purge_expired() -> int:
     """Returns count of rows purged."""
     now = int(time.time())
