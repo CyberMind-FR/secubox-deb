@@ -21,9 +21,8 @@ if f.exists():
 TOML
 )
     # Ancien démon dédié (68 Mo, doublon : nginx route déjà /api/v1/mediaflow/ vers l'agrégateur) : arrêté et désactivé (#2335).
-    if systemctl cat secubox-mediaflow.service >/dev/null 2>&1; then
-        systemctl disable --now secubox-mediaflow.service >/dev/null 2>&1 || true
-    fi
+    # Sans condition : l'unite n'existe plus dans le paquet, mais le processus tourne encore (unite chargee en memoire, ou fournie par l'ancien paquet).
+    systemctl disable --now secubox-mediaflow.service >/dev/null 2>&1 || true
     systemctl daemon-reload
     if [ "$NOUVEAU" = "oui" ] && [ -d /run/systemd/system ]; then
         systemctl --no-block restart secubox-aggregator >/dev/null 2>&1 || true
