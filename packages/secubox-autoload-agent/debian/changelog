@@ -1,3 +1,9 @@
+secubox-autoload-agent (0.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Ecran du rapport final d'une box LAN : « reseau local seulement » au lieu d'une adresse vide (#2319). 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 07:00:00 +0200
+
 secubox-autoload-agent (0.7.0-1~bookworm1) bookworm; urgency=medium
 
   * L'agent abandonne apres 8 echecs et le dit (#2317) : marqueur /var/lib/secubox/autoload-agent/abandon.json (etape, detail, tentatives). L'assistant manuel de premier-pas, ferme tant qu'un fichier Auto-Load signe est present, reprend alors la main au demarrage suivant. 3 tests.

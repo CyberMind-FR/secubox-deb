@@ -188,3 +188,26 @@ def test_contact_invalide_refuse_par_l_api(tmp_path):
     m = Monde(tmp_path)
     assert m.c.post("/clients/client-042/contact", json={"email": "a@b.example\nBcc: x@y.example"}).status_code == 422
     assert m.c.post("/clients/client-042/contact", json={"email": None}).status_code == 200
+
+
+# ── #2319 : une box en mode LAN seul (domaine vide) envoie un rapport valide ──────────────────────────
+def _rapport_lan(**sur):
+    r = {"client": "test-vm-lite2", "profil": "lite", "paquets": [], "domaine": "", "comptes": ["admin"], "tunnel_adresse": "10.64.0.7/32",
+         "debut": 1791698034, "fin": 1791700837, "etapes": ["reponses", "cle", "enrolement", "tunnel", "plan", "validation", "installation", "application"]}
+    r.update(sur)
+    return r
+
+
+def test_le_rapport_d_une_box_lan_seul_est_accepte():
+    from autoload import rapport as R
+    assert R.valider(_rapport_lan())["domaine"] == ""
+    assert "réseau local seulement" in R.texte(_rapport_lan())
+
+
+def test_un_domaine_malforme_reste_refuse():
+    import pytest as _p
+    from autoload import rapport as R
+    for mauvais in ("pas un domaine", "a b.fr", "evil..com", None, 5):
+        with _p.raises(ValueError, match="domaine"):
+            R.valider(_rapport_lan(domaine=mauvais))
+    assert R.valider(_rapport_lan(domaine="client042.secubox.in"))["domaine"] == "client042.secubox.in"

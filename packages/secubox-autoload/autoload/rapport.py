@@ -55,8 +55,9 @@ def valider(rap) -> Dict:
     for champ in ("client", "profil"):
         if not isinstance(rap[champ], str) or not _NOM.match(rap[champ]):
             raise ValueError(f"{champ} : minuscules, chiffres et tirets")
-    if not isinstance(rap["domaine"], str) or not _DOMAINE.match(rap["domaine"]):
-        raise ValueError("domaine : un nom de domaine")
+    # Vide = box en mode « LAN seul » (aucun domaine public, #2319) : le rapport le porte tel quel, et l'exiger le faisait refuser (422) — aucun rapport, aucun courrier.
+    if not isinstance(rap["domaine"], str) or (rap["domaine"] != "" and not _DOMAINE.match(rap["domaine"])):
+        raise ValueError("domaine : un nom de domaine, ou vide (LAN seul)")
     _liste("paquets", rap["paquets"], _PAQUET, PAQUETS_MAX)
     _liste("comptes", rap["comptes"], _COMPTE, 20)
     _liste("etapes", rap["etapes"], _ETAPE, 20)
@@ -81,7 +82,7 @@ def texte(rap: Dict) -> str:
     paquets = rap["paquets"]
     lignes = ["Bonjour,", "", "Votre boîtier SecuBox est prêt.", "",
               f"  Profil installé : {PROFILS.get(rap['profil'], rap['profil'])}",
-              f"  Adresse du boîtier : {rap['domaine']}",
+              f"  Adresse du boîtier : {rap['domaine'] or 'réseau local seulement (aucun domaine)'}",
               f"  Comptes créés : {', '.join(rap['comptes']) or 'aucun'}",
               f"  Durée de la mise en service : environ {minutes} minute{'s' if minutes > 1 else ''}",
               f"  Composants installés : {len(paquets)} paquets", ""]
