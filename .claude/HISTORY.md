@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — SOC 1.1.10 : le contenu ne passe plus sous la barre de gauche (ref #2323)
+
+Barre partagée fixe de 220 px, contenu centré qui la supposait dans le flux : réserve de 220 px (0 sous 768 px).
+
 ## 2026-10-12 — Auto-Load : la liste des pré-rapports montre le nom de box saisi (autoload 0.5.2, ref #2314)
 
 Colonnes « Box (nom saisi) » et « Client (jeton) ».

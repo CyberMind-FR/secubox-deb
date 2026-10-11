@@ -1,3 +1,9 @@
+secubox-soc (1.1.10-1~bookworm1) bookworm; urgency=low
+
+  * Le contenu ne passe plus sous la barre de navigation de gauche (#2323) : la barre partagee est FIXE (220 px) et ne tient pas de place dans le flux, mais le corps etait un flex centre qui la supposait dedans ; sur toute fenetre de moins de ~1700 px le bord gauche etait cache. Reserve de 220 px (aucune sous 768 px), comme les autres pages. 4 tests en navigateur reel (rouges sans le correctif).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:00:00 +0200
+
 secubox-soc (1.1.9-1~bookworm1) bookworm; urgency=medium
 
   * Carte du monde : la ligne -15 degres etait entierement « terre » (defaut du generateur), une bande de points d'un bord a l'autre ; corrigee (#2146).

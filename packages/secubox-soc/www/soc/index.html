@@ -65,10 +65,13 @@
   }
 
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--nuit); color:var(--texte); display:flex;
+  /* La barre de navigation partagée est FIXE (220 px, sidebar-light.css) : elle ne tient pas de place dans le flux. Sans cette réserve, le contenu centré passait dessous
+     sur toute fenêtre de moins de ~1700 px (#2323). Même règle que les autres pages : 220 px de marge, aucune sous 768 px. */
+  body { padding-left:220px; margin:0; background:var(--nuit); color:var(--texte); display:flex;
          font-family:"Inter",system-ui,-apple-system,sans-serif; font-size:15px;
          line-height:1.5; -webkit-font-smoothing:antialiased; }
   .page { flex:1; min-width:0; max-width:1240px; margin:0 auto; padding:24px 22px 56px; }
+  @media (max-width:768px) { body { padding-left:0; } }
 
   .bandeau { display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap;
              padding-bottom:14px; position:relative; }
