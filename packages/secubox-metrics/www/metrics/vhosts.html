@@ -101,6 +101,9 @@
   .feuille{background:#0b1830;border:1px solid var(--cyan);border-radius:12px;max-width:440px;width:100%;padding:16px;display:grid;gap:10px}
   .feuille h3{margin:0;color:var(--cyan);font-size:1rem} .feuille label{display:block;font-size:.68rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
   .feuille input,.feuille select{width:100%}
+  svg.monde{width:100%;height:auto;display:block;border-radius:8px}
+  .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;align-content:start;font-size:.78rem;margin-top:8px}
+  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1;padding:2px}
   .toast{position:fixed;bottom:18px;left:50%;transform:translate(-50%,90px);background:#04070c;border:1px solid var(--vert);color:var(--vert);padding:8px 16px;border-radius:8px;font-size:.78rem;transition:.3s;z-index:60;max-width:90vw;visibility:hidden;opacity:0}
   .toast.on{transform:translate(-50%,0);visibility:visible;opacity:1} .toast.err{border-color:var(--rouge);color:var(--rouge)}
   @container a (max-width:599px){.opt{display:none}.repart{grid-template-columns:96px minmax(0,1fr)}.donut{width:96px;height:96px}.donut span{inset:17px}.ligne{grid-template-columns:minmax(0,1fr) auto 56px}td.site{max-width:112px}th,td{padding:5px 4px}}
@@ -154,6 +157,10 @@
       <div class="pan"><h3>Requêtes par site <i>les plus sollicités</i></h3><div id="barres"></div></div>
     </div>
     <div class="grille g21">
+      <div class="pan"><h3>Origine des visites <i id="mondeNote">pays déduit de l’adresse</i></h3><svg class="monde" id="mondeL" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des visites"></svg><div class="note" id="geoNoteL"></div></div>
+      <div class="pan"><h3>Pays des visites <i>tous sites</i></h3><div class="pays" id="paysL" style="grid-template-columns:1fr;margin-top:0"></div></div>
+    </div>
+    <div class="grille g21">
       <div class="pan"><h3>Fréquentation jour par jour <i>visites · sondes</i></h3><div id="courbe"></div><div class="legende" id="legC"></div></div>
       <div class="grille">
         <div class="pan"><h3>Hôtes en direct <i id="liveNote"></i></h3><div id="live"></div></div>
@@ -174,7 +181,7 @@
     </div>
     <div class="grille g2">
       <div class="pan"><h3>Navigateurs</h3><div id="dNav"></div></div>
-      <div class="pan"><h3>Pays des visiteurs <i>déduit de l’adresse</i></h3><div id="dPays"></div></div>
+      <div class="pan"><h3>Pays des visiteurs <i>déduit de l’adresse</i></h3><svg class="monde" id="mondeD" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des visites de ce site" style="margin-bottom:8px"></svg><div id="dPays"></div><div class="note" id="geoNoteD"></div></div>
     </div>
     <div class="grille g2">
       <div class="pan"><h3>Pages les plus vues</h3><div id="dPaths"></div></div>
@@ -263,6 +270,27 @@
     return '<svg class="sp" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">'+a.map((v,i)=>{ const h = Math.max(1, 28*num(v)/m); return '<rect x="'+(i*w+w*.15).toFixed(2)+'" y="'+(30-h).toFixed(2)+'" width="'+(w*.7).toFixed(2)+'" height="'+h.toFixed(2)+'" fill="'+c+'" opacity=".85"/>'; }).join('')+'</svg>';
   }
   const tuile = (ic,v,l,s,def,sp) => '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+(sp||'')+'</div>';
+
+  var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+  var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  // Carte du monde (grille 60 × 120 points de 3° de la vue d'ensemble du WAF) ; cercle au centre du pays. `rgb` : teinte des cercles, `gid` : id du dégradé.
+  function monde(pays,rgb,gid){
+    var s='<defs><radialGradient id="'+gid+'"><stop offset="0" stop-color="'+rgb+'" stop-opacity=".95"/><stop offset="1" stop-color="'+rgb+'" stop-opacity="0"/></radialGradient></defs><rect width="120" height="60" fill="rgba(6,13,27,.5)"/>';
+    TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
+      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)s+='<circle cx="'+(x+i+.5)+'" cy="'+(j+.5)+'" r=".42" fill="#33507f"/>';}x+=n;cur=!cur;});});
+    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+    pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
+      s+='<circle cx="'+((c[1]+180)/3).toFixed(1)+'" cy="'+((90-c[0])/3).toFixed(1)+'" r="'+(1.4+3.4*Math.sqrt(num(p.n)/max)).toFixed(1)+'" fill="url(#'+gid+')"><title>'+esc(p.code)+' : '+fmt(p.n)+'</title></circle>';});
+    return s;
+  }
+  // Panneau carte : pays = [{code,n}] ou null (aucune donnée : carte vide, « — »).
+  function carteMonde(idSvg,idListe,idNote,pays,rgb,gid,vide,note){
+    el(idSvg).innerHTML=monde(pays||[],rgb,gid);
+    var p=(pays||[]).filter(function(x){return CENTRE[String(x.code).toUpperCase()];}).sort(function(a,b){return num(b.n)-num(a.n);});
+    if(idListe)el(idListe).innerHTML=p.length?p.slice(0,8).map(function(x){return '<div><span>'+drapeau(String(x.code).toUpperCase())+' '+esc(x.code)+'</span><b>'+fmt(x.n)+'</b></div>';}).join(''):'<div class="vide">— '+esc(vide)+'</div>';
+    el(idNote).textContent=p.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':note;
+  }
 
   // histogramme SVG : visites (cyan) et sondes (rouge) empilées, jour par jour
   function histo(serie){
@@ -392,6 +420,10 @@
      +tuile(IC.bw, octets(bw), 'Bande passante', ok&&bw!=null?'octets servis':'', 'Volume total d’octets servis par les sites sur la période (somme du champ octets de chaque site).');
     rendTable();
     // statuts
+    const vp = {}; vh.forEach(v=>(v.pays||[]).forEach(p=>{ vp[p.code] = (vp[p.code]||0)+num(p.n); }));
+    const vl = Object.keys(vp).map(k=>({code:k,n:vp[k]}));
+    el('mondeNote').textContent = ok ? 'visites · somme des 15 premiers pays de chaque site' : 'pays déduit de l’adresse';
+    carteMonde('mondeL','paysL','geoNoteL', ok && vl.length ? vl : null, '#29b6f6', 'lueurL', 'aucune visite géolocalisée', ok ? 'Aucune visite géolocalisée sur la période (base GeoLite2 absente ou trafic privé).' : (session ? 'Aucune mesure disponible.' : 'Session requise.'));
     donut('donut','donutC','legS', listeStatuts(st),'réponses', ok?'Aucune réponse classée.':(session?'Aucune mesure disponible.':'Session requise.'));
     // barres par site
     const top = vh.slice().sort((a,b)=>num(b.requetes)-num(a.requetes)).slice(0,8).map(v=>[v.vhost, num(v.requetes)]);
@@ -443,6 +475,7 @@
     el('dNav').innerHTML = nv.length ? nv.map((c,i)=>'<div class="ligne"><span class="n">'+esc(c[0])+'</span><span>'+(100*c[1]/nt).toFixed(1).replace('.',',')+' %</span><div class="barre"><i style="width:'+Math.max(3,100*c[1]/nt)+'%;background:'+PAL[i%7]+'"></i></div></div>').join('') : '<div class="vide">Aucun navigateur identifié.</div>';
     const pays = (d.pays||[]).slice(0,8), pm = pays.length ? num(pays[0].n) || 1 : 1;
     el('dPays').innerHTML = pays.length ? pays.map(p=>'<div class="ligne"><span class="n">'+esc((p.drapeau||'')+' '+p.code)+'</span><span>'+fmt(p.n)+'</span><div class="barre"><i style="width:'+Math.max(4,100*num(p.n)/pm)+'%;background:var(--violet)"></i></div></div>').join('') : '<div class="vide">Pas de géolocalisation.</div>';
+    carteMonde('mondeD',null,'geoNoteD', (d.pays||[]).length ? d.pays : null, '#29b6f6', 'lueurD', 'aucune visite géolocalisée', 'Aucune visite géolocalisée pour ce site (base GeoLite2 absente ou trafic privé).');
     el('dPaths').innerHTML = (d.top_chemins||[]).map(e=>'<div class="chemin"><code title="'+esc(e.chemin)+'">'+esc(e.chemin)+'</code><b>'+fmt(e.n)+'</b></div>').join('') || '<div class="vide">Aucune page.</div>';
     el('dRef').innerHTML = (d.top_referents||[]).map(e=>'<div class="chemin"><code title="'+esc(e.hote)+'">'+esc(e.hote)+'</code><b>'+fmt(e.n)+'</b></div>').join('') || '<div class="vide">Aucun référent.</div>';
     const cu = d.cumul||{};
@@ -524,7 +557,8 @@
     const nj = per==='jour'?1:per==='mois'?30:7, j = [], auj = new Date();
     for(let i=nj-1;i>=0;i--){ const d = new Date(auj.getTime()-i*864e5), k = 1+((nj-i)*37%11)/10; j.push({jour:d.toISOString().slice(0,10), visites:Math.round(5200*k), requetes:Math.round(41000*k), sondes:Math.round(240*k), erreurs:Math.round(780*k)}); }
     const m = nj/7;
-    const V = (vhost,visites,visiteurs,requetes,erreurs,e5,octets,sondes,membres)=>({vhost:vhost,visites:Math.round(visites*m),visiteurs:visiteurs,visiteurs_minores:false,requetes:Math.round(requetes*m),erreurs:Math.round(erreurs*m),sondes:sondes,octets:Math.round(octets*m),part_robots:12.5,membres:membres||[vhost],
+    const PAYS = [['FR',.52],['DE',.11],['US',.09],['BE',.06],['GB',.05],['CH',.04],['CA',.03],['ES',.03],['IT',.02],['BR',.02],['JP',.015],['IN',.01],['AU',.01],['MA',.01]];
+    const V = (vhost,visites,visiteurs,requetes,erreurs,e5,octets,sondes,membres)=>({vhost:vhost,visites:Math.round(visites*m),visiteurs:visiteurs,visiteurs_minores:false,requetes:Math.round(requetes*m),erreurs:Math.round(erreurs*m),sondes:sondes,octets:Math.round(octets*m),part_robots:12.5,membres:membres||[vhost],pays:PAYS.map(p=>({code:p[0],drapeau:drapeau(p[0]),n:Math.round(visites*m*p[1])})),
       statuts:{'2xx':Math.round((requetes-erreurs)*.86*m),'3xx':Math.round((requetes-erreurs)*.14*m),'4xx':Math.round((erreurs-e5)*m),'5xx':Math.round(e5*m)}});
     const vhosts = [V('www.exemple.test',18400,5230,142000,2100,12,9.6e9,320),V('api.exemple.test',9100,412,98000,5400,380,2.1e9,95),V('blog.exemple.test',7600,3100,61000,640,0,4.2e9,40),
       V('cloud.exemple.test',2300,48,35000,150,2,18.3e9,12),V('wiki.exemple.test',1800,640,22000,90,0,0.9e9,8),V('mail.exemple.test',950,1,16000,1200,45,0.4e9,610),
@@ -543,7 +577,6 @@
       serie:s.map(d=>({jour:d.jour,visites:Math.round(d.visites*sv),visiteurs:Math.round(v.visiteurs/s.length),requetes:Math.round(d.requetes*sv),sondes:Math.round(d.sondes*sv),erreurs:Math.round(d.erreurs*sv)})),
       navigateurs:{Chrome:52,Firefox:21,Safari:14,Edge:8,Autres:5}, top_chemins:[{chemin:'/',n:4120},{chemin:'/docs/',n:1880},{chemin:'/tarifs',n:960},{chemin:'/api/v1/etat',n:540}],
       top_referents:[{hote:'search.exemple.test',n:2100},{hote:'social.exemple.test',n:640}],
-      pays:[{code:'FR',drapeau:'🇫🇷',n:2400},{code:'DE',drapeau:'🇩🇪',n:620},{code:'US',drapeau:'🇺🇸',n:410},{code:'BE',drapeau:'🇧🇪',n:230}],
       cumul:{depuis:'2026-03-02',visites:v.visites*9,base:v.visites*8}});
   }
 

@@ -1,3 +1,9 @@
+secubox-metrics (1.20.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport PDF de frequentation au profil projet reference Aurora et cartes du monde du WAF dans les pages (ref #2390). PDF : fond sombre, tuiles (visites, visiteurs, requetes, erreurs, bande passante), histogramme jour par jour, donut des statuts, carte du monde, barres des sites, navigateurs, referents, pays, detail par vhost ; primitives communes dans api/pdf_aurora.py, partagees avec le rapport de securite (rendu inchange) ; memes signatures. Pages : « Origine des visiteurs » (index) et « Origine des visites » (vhosts, et detail d'un site) avec la grille 60x120 de la vue du WAF ; la carte des attaques de l'index reste a « — » tant que l'API metrics ne fournit pas de pays d'attaque. 14 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 11:00:00 +0200
+
 secubox-metrics (1.19.1-1~bookworm1) bookworm; urgency=medium
 
   * « WAF HORS SERVICE » a tort (ref #2391) : l'etat du WAF de la sante globale (portail, bandeau) etait le controle d'avant la bascule — conteneur LXC mitmproxy-in ou processus mitmdump, qui n'existent plus — donc faux en permanence alors que sbxwaf tournait. Il suit maintenant secubox-waf-ng (service actif ET port 8085 qui repond) ; l'ancien controle reste en repli. 4 tests.

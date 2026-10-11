@@ -20,6 +20,7 @@ import io
 import json
 import smtplib
 import ssl
+import sys
 import tomllib
 from datetime import datetime
 from email.message import EmailMessage
@@ -30,6 +31,11 @@ import matplotlib
 matplotlib.use("Agg")            # aucun serveur X ici : backend fichier
 import matplotlib.pyplot as plt  # noqa: E402
 from fpdf import FPDF            # noqa: E402
+
+_ici = str(Path(__file__).resolve().parent)
+if _ici not in sys.path:
+    sys.path.insert(0, _ici)
+import pdf_aurora as A  # noqa: E402  primitives Aurora communes (#2390)
 
 CONF = Path("/etc/secubox/metrics.toml")
 
@@ -355,171 +361,273 @@ def _pays_de(source: dict) -> dict:
     return {}
 
 
+# ── rapport de fréquentation, langage Aurora (#2390) ─────────────────────
+_CLASSES = (("2", "2xx succes", A.VERT), ("3", "3xx redir.", A.CYAN),
+            ("4", "4xx client", A.ORANGE), ("5", "5xx serveur", A.ROUGE))
+BAS = 283.0     # ordonnée maximale d'un bloc (le pied est à 285)
+
+
+def _date_fr(iso) -> str:
+    try:
+        return datetime.strptime(str(iso)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return str(iso) if iso else "—"
+
+
+def _classes_statuts(statuts: Optional[dict]) -> dict:
+    """Codes de retour regroupés par classe (« 2xx »..« 5xx »), que l'API rende « 2xx » ou « 404 »."""
+    out: dict = {}
+    for code, v in (statuts or {}).items():
+        t = str(code)[:1]
+        out[t] = out.get(t, 0) + A.num(v)
+    return out
+
+
+def _somme_dicts(dicts) -> dict:
+    out: dict = {}
+    for d in dicts:
+        for k, v in (d or {}).items():
+            out[k] = out.get(k, 0) + A.num(v)
+    return out
+
+
+def _place(pdf, y: float, h: float) -> float:
+    """Ordonnée où poser un bloc de hauteur h : saute de page (retour en haut) s'il ne tient pas."""
+    if y + h > BAS:
+        pdf.add_page()
+        return 18.0
+    return y
+
+
+def _tuiles_aurora(source: dict, vhosts: list) -> list:
+    """Les cases de tête. Une mesure absente est « — », jamais 0."""
+    cl = _classes_statuts(source.get("statuts")) if source.get("statuts") else {}
+    n5 = cl.get("5") if cl else None
+    octs = source.get("octets")
+    if octs is None and vhosts and any("octets" in v for v in vhosts):
+        octs = sum(A.num(v.get("octets")) for v in vhosts)
+    req = source.get("requetes")
+    rob = None
+    if vhosts and req:
+        rob = sum(A.num(v.get("robots")) for v in vhosts) if any("robots" in v for v in vhosts) else None
+    elif source.get("robots") is not None and req:
+        rob = source.get("robots")
+    err = source.get("erreurs")
+    return [("Visites", A.n(source.get("visites")), "pages, hors accessoires", A.CYAN),
+            ("Visiteurs", A.n(source.get("visiteurs")), "adresses publiques", A.BLEU),
+            ("Requetes", A.n(req), (f"dont {100 * rob / req:.0f} % de robots" if rob is not None and req else "toutes requetes"), A.VIOLET),
+            ("Erreurs", A.n(err), ("4xx et 5xx" + (f", dont {A.n(n5)} 5xx" if n5 is not None else "")), A.ORANGE if not n5 else A.ROUGE),
+            ("Bande passante", A.octets(octs), "octets servis", A.VERT)]
+
+
+def _image_dans(pdf, png: bytes, x: float, y: float, w: float, hmax: float) -> None:
+    """Pose le PNG à la largeur w, réduite (et recentrée) pour que sa hauteur tienne dans hmax."""
+    h = A.hauteur_png(png, w)
+    if h > hmax:
+        w2 = w * hmax / h
+        x, w = x + (w - w2) / 2, w2
+    A.image(pdf, png, x, y, w)
+
+
+def _bloc_jours(pdf, y: float, serie: list) -> float:
+    y = _place(pdf, y, 56)
+    A.panneau(pdf, 10, y, 190, 52, "Visites jour par jour", "pages vues · hors sondes et attaques")
+    if len(serie or []) >= 2:
+        _image_dans(pdf, A.graphe_histogramme([A.num(s.get("visites")) for s in serie], [str(s["jour"])[5:] for s in serie], A.CYAN), 14, y + 8, 182, 42)
+    else:
+        pdf.set_xy(13, y + 24)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*A.FAIBLE)
+        pdf.cell(0, 5, A.txt("— historique insuffisant (moins de deux jours) —"))
+    return y + 56
+
+
+def _bloc_cumul(pdf, y: float, serie: list, cum: dict) -> float:
+    y = _place(pdf, y, 56)
+    base = int(A.num(cum.get("base")))
+    depuis = cum.get("depuis")
+    A.panneau(pdf, 10, y, 190, 52, "Visites cumulees depuis la premiere visite" + (f" ({_date_fr(depuis)})" if depuis else ""),
+              (f"dont {A.n(base)} avant la fenetre detaillee" if base else "sur la fenetre detaillee"))
+    if len(serie or []) >= 2:
+        tot, vals = base, []
+        for s in serie:
+            tot += A.num(s.get("visites"))
+            vals.append(tot)
+        _image_dans(pdf, A.graphe_courbes([("Cumul", vals, A.VERT)], [str(s["jour"])[5:] for s in serie]), 14, y + 8, 182, 42)
+    else:
+        pdf.set_xy(13, y + 24)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*A.FAIBLE)
+        pdf.cell(0, 5, A.txt("— historique insuffisant (moins de deux jours) —"))
+    return y + 56
+
+
+def _bloc_statuts_carte(pdf, y: float, statuts: dict, pays: dict, sous_carte: str) -> float:
+    """Gauche : anneau et barres des classes de statut HTTP. Droite : carte du monde (la grille de la page WAF)."""
+    y = _place(pdf, y, 64)
+    cl = _classes_statuts(statuts)
+    parts = [(lib, cl.get(t, 0), c) for t, lib, c in _CLASSES if cl.get(t)]
+    autres = sum(v for t, v in cl.items() if t not in "2345")
+    if autres:
+        parts.append(("autres", autres, A.DOUX))
+    tot = sum(p[1] for p in parts)
+    A.panneau(pdf, 10, y, 92, 60, "Codes de retour HTTP", "part des requetes")
+    if tot:
+        A.image(pdf, A.graphe_donut([(p[0], p[1]) for p in parts], A.n(tot), [p[2] for p in parts]), 12, y + 9, 36)
+        A.barres(pdf, 50, y + 14, 50, [(p[0], p[1], p[2]) for p in parts], fmt=lambda v: ("<1%" if 0 < 100 * A.num(v) / tot < 1 else f"{100 * A.num(v) / tot:.0f}%"), pas=7, max_l=5, part_libelle=0.50)
+    else:
+        pdf.set_xy(13, y + 26)
+        pdf.set_font("Helvetica", "", 8.5)
+        pdf.set_text_color(*A.FAIBLE)
+        pdf.cell(80, 5, A.txt("— indisponible —"))
+    A.panneau(pdf, 108, y, 92, 60, "Origine des visiteurs", sous_carte)
+    _image_dans(pdf, A.graphe_carte(pays, A.CYAN), 110, y + 9, 88, 49)
+    return y + 64
+
+
+def _bloc_deux(pdf, y: float, gauche, droite, rangs: int = 7) -> float:
+    """Deux panneaux de barres côte à côte : (titre, sous, lignes, couleur, fmt). Hauteur selon le plus long des deux (3 à `rangs` lignes)."""
+    h = 14 + 6.2 * min(rangs, max(3, *(sum(1 for l_ in g[2] if l_[1] is not None) for g in (gauche, droite))))
+    y = _place(pdf, y, h + 4)
+    for x, (titre, sous, lignes, couleur, fmt) in ((10, gauche), (108, droite)):
+        A.panneau(pdf, x, y, 92, h, titre, sous)
+        A.barres(pdf, x + 3, y + 10, 86, lignes, fmt=fmt, couleur=couleur, max_l=rangs, part_libelle=0.46)
+    return y + h + 4
+
+
+def _bloc_large(pdf, y: float, titre: str, sous: str, lignes: list, couleur, fmt=A.n, max_l: int = 8) -> float:
+    lignes = [l_ for l_ in lignes if l_[1] is not None][:max_l]
+    h = 14 + 6.2 * max(1, len(lignes))
+    y = _place(pdf, y, h + 4)
+    A.panneau(pdf, 10, y, 190, h, titre, sous)
+    A.barres(pdf, 13, y + 10, 184, lignes, fmt=fmt, couleur=couleur, max_l=max_l, part_libelle=0.46)
+    return y + h + 4
+
+
+def _tableau_vhosts(pdf, y: float, vhosts: list) -> float:
+    cols = (("Domaine", 66, "L"), ("Visites", 24, "R"), ("Visiteurs", 24, "R"), ("Robots", 20, "R"), ("Erreurs", 24, "R"), ("Octets", 32, "R"))
+
+    y = _place(pdf, y, 8 + 5 * 3 + 12)
+    pdf.set_xy(10, y)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(*A.TEXTE)
+    pdf.cell(0, 7, A.txt("Detail par vhost"), new_x="LMARGIN", new_y="NEXT")
+    y = pdf.get_y() + 1
+    liste = vhosts[:40]
+
+    def tete(yy):
+        pdf.set_fill_color(*A.PANNEAU)
+        pdf.set_draw_color(*A.TRAIT)
+        pdf.rect(10, yy, 190, 6.5, "DF")
+        pdf.set_xy(12, yy + 0.8)
+        pdf.set_font("Helvetica", "B", 6.8)
+        pdf.set_text_color(*A.DOUX)
+        for lib, w, al in cols:
+            pdf.cell(w - (3 if lib == "Octets" else 0), 4.8, A.txt(lib.upper()), align=al)
+        return yy + 6.5
+
+    y = tete(y)
+    for i, v in enumerate(liste):
+        if y + 5.2 > BAS:
+            pdf.add_page()
+            y = tete(18.0)
+        pdf.set_fill_color(*((10, 21, 42) if i % 2 else A.FOND))
+        pdf.rect(10, y, 190, 5.2, "F")
+        nom = v["vhost"] + (f"  ({len(v['membres'])} domaines)" if v.get("membres") and len(v["membres"]) > 1 else "")
+        pdf.set_xy(12, y + 0.4)
+        pdf.set_font("Helvetica", "", 7.2)
+        pdf.set_text_color(*A.TEXTE)
+        pdf.cell(66, 4.4, A.txt(nom)[:44])
+        pdf.set_text_color(*A.DOUX)
+        rob = v.get("part_robots")
+        for val, w in ((A.n(v.get("visites")), 24), (A.n(v.get("visiteurs")), 24), ("—" if rob is None else f"{rob} %", 20), (A.n(v.get("erreurs")), 24), (A.octets(v.get("octets")), 29)):
+            pdf.cell(w, 4.4, A.txt(val), align="R")
+        pdf.cell(3, 4.4, "")
+        y += 5.2
+    if len(vhosts) > len(liste):
+        pdf.set_xy(12, y + 1)
+        pdf.set_font("Helvetica", "", 6.8)
+        pdf.set_text_color(*A.FAIBLE)
+        pdf.cell(0, 4, A.txt(f"{len(vhosts) - len(liste)} vhost(s) de plus, non listes"))
+        y += 5
+    return y
+
+
+def _bloc_texte(pdf, y: float, titre: str, sous: str, texte: str) -> float:
+    pdf.set_font("Helvetica", "", 7.5)
+    lignes = pdf.multi_cell(184, 4, A.txt(texte), dry_run=True, output="LINES")
+    h = 12 + 4 * len(lignes)
+    y = _place(pdf, y, h + 4)
+    A.panneau(pdf, 10, y, 190, h, titre, sous)
+    pdf.set_xy(13, y + 9)
+    pdf.set_text_color(*A.DOUX)
+    pdf.multi_cell(184, 4, A.txt(texte))
+    return y + h + 4
+
+
 def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
-    """Assemble le PDF. Bloquant : a lancer dans un thread."""
-    pdf = _Page()
-    pdf.set_auto_page_break(True, margin=18)
+    """Assemble le PDF (A4, thème Aurora comme le rapport de sécurité). Bloquant : a lancer dans un thread."""
+    pdf = A.classe_page("SecuBox — rapport de fréquentation", "SecuBox — fréquentation · page {page}/{nb}")()
     pdf.alias_nb_pages()
+    pdf.set_auto_page_break(False)
     pdf.add_page()
 
     portee = detail["vhost"] if detail else "Tous les vhosts"
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, _txt(portee), new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", "", 8.5)
-    pdf.set_text_color(110, 125, 140)
-    pdf.cell(0, 5, _txt(f"periode : {vue.get('periode')} - du {vue.get('du')} "
-                        f"au {vue.get('au')}"), new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(3)
-    pdf.set_text_color(26, 36, 48)
+    pdf.set_xy(10, 20)
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.set_text_color(*A.TEXTE)
+    pdf.cell(0, 10, A.txt("Fréquentation"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(10)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(*A.CYAN)
+    pdf.cell(0, 6, A.txt(portee), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(10)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*A.FAIBLE)
+    pdf.cell(0, 5, A.txt(f"Période : {vue.get('periode') or '—'} · du {_date_fr(vue.get('du'))} au {_date_fr(vue.get('au'))} · généré le "
+                         f"{datetime.now().strftime('%d/%m/%Y à %H:%M')}"), new_x="LMARGIN", new_y="NEXT")
 
     source = detail or vue.get("total", {})
-    _tuiles(pdf, {k: source.get(k, 0) for k in
-                  ("visites", "visiteurs", "requetes", "erreurs")})
-
-    if detail and detail.get("serie"):
-        _titre(pdf, "Frequentation jour par jour")
-        pdf.image(io.BytesIO(_histogramme(detail["serie"])), w=190)
-        pdf.ln(3)
-
-        # #1190 — le cumul depuis la PREMIERE visite, pas depuis le debut de la
-        # fenetre : `base` porte les jours deja sortis de la retention.
-        cum = (detail.get("cumul") or {})
-        _titre(pdf, "Visites cumulees depuis la premiere visite")
-        pdf.image(io.BytesIO(_cumul(detail["serie"], cum.get("base", 0),
-                                    cum.get("depuis", ""))), w=190)
-        pdf.ln(3)
-
-    pays = (detail or {}).get("pays_cumul") or _pays_de(source)
-    if pays:
-        _titre(pdf, "Origine des visiteurs")
-        pdf.image(io.BytesIO(_camembert(pays)), w=92)
-        pdf.ln(3)
-
-    # Poses en ABSOLU (x, y) : le saut de page automatique ne les voit pas. Sans
-    # garde, deux graphiques hauts places en bas de page debordaient hors du
-    # cadre. On reserve leur hauteur avant de figer l'ordonnee (#1367).
-    _garde(pdf, 62)
-    y = pdf.get_y()
-    # Les deux graphiques sont poses cote a cote a la meme ordonnee, donc le
-    # curseur ne descend pas tout seul. On le replace sous le plus haut des
-    # deux — une valeur fixe laissait un grand vide quand ils etaient courts.
-    hauteurs = []
-    for donnees, titre, x in ((source.get("navigateurs", {}), "Navigateurs", 10),
-                              (source.get("plateformes", {}), "Plateformes", 108)):
-        info = pdf.image(io.BytesIO(_barres(donnees, titre)), x=x, y=y, w=92)
-        hauteurs.append(getattr(info, "rendered_height", 0) or 0)
-    pdf.set_y(y + (max(hauteurs) if any(hauteurs) else 55) + 6)
+    vhosts = vue.get("vhosts") or []
+    y = A.rangee_tuiles(pdf, 44, _tuiles_aurora(source, [] if detail else vhosts)) + 2
 
     if detail:
-        # Le PDF d'un domaine doit porter TOUT ce que la page web montre.
-        # Il lui manquait les codes de retour et les referents, alors que ce
-        # sont eux qui disent si le trafic est sain et d'ou il vient.
+        y = _bloc_jours(pdf, y, detail.get("serie") or [])
+        y = _bloc_cumul(pdf, y, detail.get("serie") or [], detail.get("cumul") or {})
+        pays = detail.get("pays_cumul") or _pays_de(detail)
+        y = _bloc_statuts_carte(pdf, y, detail.get("statuts") or {}, pays, "depuis la premiere visite" if detail.get("pays_cumul") else "visites par pays")
+        y = _bloc_large(pdf, y, "Pages les plus vues", "visites sur la periode",
+                        [(e.get("chemin"), e.get("n")) for e in (detail.get("top_chemins") or [])], A.CYAN, max_l=12)
+        directs = detail.get("directs_pct") or 0.0
+        y = _bloc_deux(pdf, y,
+                       ("Referents", f"{directs:.1f} % d'acces direct", [(e.get("hote"), e.get("n")) for e in (detail.get("top_referents") or [])], A.VIOLET, A.n),
+                       ("Pays des visiteurs", "geoip, adresses publiques", [(e.get("code") or "??", e.get("n")) for e in (detail.get("pays") or [])], A.VERT, A.n), rangs=8)
+        y = _bloc_deux(pdf, y,
+                       ("Navigateurs", "requetes", list((detail.get("navigateurs") or {}).items()), A.BLEU, A.n),
+                       ("Plateformes", "requetes", list((detail.get("plateformes") or {}).items()), A.ORANGE, A.n))
         membres = detail.get("membres") or []
         if len(membres) > 1:
-            _titre(pdf, "Domaines de la famille")
-            pdf.set_font("Helvetica", "", 8)
-            pdf.multi_cell(190, 5, _txt(" - ".join(membres)))
-            pdf.ln(2)
-
-        statuts = detail.get("statuts") or {}
-        if statuts:
-            _titre(pdf, "Codes de retour")
-            pdf.set_font("Helvetica", "", 8)
-            total = sum(statuts.values()) or 1
-            for code, n in sorted(statuts.items()):
-                _garde(pdf, 5)
-                pdf.cell(30, 5, _txt(code))
-                pdf.cell(40, 5, f"{n:,}".replace(",", " "), align="R")
-                pdf.cell(30, 5, f"{100 * n / total:.1f} %", align="R",
-                         new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(2)
-
-        _titre(pdf, "Pages les plus vues")
-        pdf.set_font("Helvetica", "", 8)
-        chemins = detail.get("top_chemins") or []
-        if not chemins:
-            pdf.cell(0, 5, _txt("aucune page enregistree sur la periode"),
-                     new_x="LMARGIN", new_y="NEXT")
-        for e in chemins[:12]:
-            _garde(pdf, 5)
-            pdf.cell(160, 5, _txt(e["chemin"])[:95])
-            pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
-                     new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(3)
-
-        # #1059 ①② — les referents regroupes (top des domaines d'ou vient le
-        # trafic) et, en clair, la PART D'ACCES DIRECT (visites sans referent)
-        # sur le total de la famille regroupee.
-        directs = detail.get("directs_pct", 0.0)
-        _titre(pdf, f"Referents  -  {directs:.1f} % d'acces direct (sans referent)")
-        pdf.set_font("Helvetica", "", 8)
-        referents = detail.get("top_referents") or []
-        if not referents:
-            pdf.cell(0, 5, _txt("aucun referent - trafic direct ou sans en-tete"),
-                     new_x="LMARGIN", new_y="NEXT")
-        for e in referents[:12]:
-            _garde(pdf, 5)
-            pdf.cell(160, 5, _txt(e["hote"])[:95])
-            pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
-                     new_x="LMARGIN", new_y="NEXT")
-
-        # #1176 — d'ou vient l'audience : pays des visiteurs (GeoIP, PUBLIC
-        # uniquement — le loopback/prive n'a pas de pays). Les codes ISO-2
-        # suffisent : les emoji-drapeaux ne rendent pas dans les polices
-        # coeur latin-1 de fpdf2, donc on affiche le code (+ visites).
-        pays = detail.get("pays") or []
-        pdf.ln(3)
-        _titre(pdf, "Pays des visiteurs")
-        pdf.set_font("Helvetica", "", 8)
-        if not pays:
-            pdf.cell(0, 5, _txt("aucun visiteur public geolocalise sur la periode"),
-                     new_x="LMARGIN", new_y="NEXT")
-        for e in pays[:15]:
-            _garde(pdf, 5)
-            pdf.cell(30, 5, _txt(e.get("code") or "??"))
-            pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
-                     new_x="LMARGIN", new_y="NEXT")
+            y = _bloc_texte(pdf, y, "Domaines de la famille", f"{len(membres)} domaines", " · ".join(membres))
     else:
-        _titre(pdf, "Detail par vhost")
+        y = _bloc_jours(pdf, y, vue.get("serie") or [])
+        pays = _somme_dicts({e.get("code", "?"): e.get("n", 0) for e in (v.get("pays") or []) if isinstance(e, dict)} for v in vhosts) or _pays_de(source)
+        statuts = _somme_dicts(v.get("statuts") for v in vhosts) or (source.get("statuts") or {})
+        y = _bloc_statuts_carte(pdf, y, statuts, pays, "visites par pays, tous vhosts")
+        y = _bloc_large(pdf, y, "Sites les plus visites", "visites sur la periode",
+                        [(v["vhost"], v.get("visites")) for v in vhosts], A.CYAN, max_l=8)
+        y = _bloc_deux(pdf, y,
+                       ("Navigateurs", "requetes", list((source.get("navigateurs") or {}).items()), A.BLEU, A.n),
+                       ("Plateformes", "requetes", list((source.get("plateformes") or {}).items()), A.ORANGE, A.n))
+        refs = source.get("top_referents") or []
+        if refs or source.get("directs_pct") is not None:
+            y = _bloc_deux(pdf, y,
+                           ("Referents", f"{A.num(source.get('directs_pct')):.1f} % d'acces direct", [(e.get("hote"), e.get("n")) for e in refs], A.VIOLET, A.n),
+                           ("Pays des visiteurs", "geoip, adresses publiques",
+                            sorted(pays.items(), key=lambda kv: -A.num(kv[1])), A.VERT, A.n))
+        _tableau_vhosts(pdf, y, vhosts)
 
-        # PLUS DE COLONNE « SONDES » (#1367) : une sonde est une attaque, pas
-        # une visite — elle appartient au rapport WAF. Le tableau de visite ne
-        # porte que la frequentation et sa qualite (robots, erreurs).
-        def _entete_vhost():
-            pdf.set_font("Helvetica", "B", 7.5)
-            pdf.set_fill_color(236, 244, 249)
-            for l, w in (("Domaine", 78), ("Visites", 28), ("Visiteurs", 28),
-                         ("Robots", 26), ("Erreurs", 30)):
-                pdf.cell(w, 6, _txt(l), fill=True, align="L" if w == 78 else "R")
-            pdf.ln()
-            pdf.set_font("Helvetica", "", 7.5)
-
-        _entete_vhost()
-        for v in vue.get("vhosts", [])[:40]:
-            # La ligne descend d'un bloc si elle ne tient pas — et l'entete est
-            # RE-TRACEE en haut de la nouvelle page, sinon la suite du tableau
-            # arrivait sans colonnes, illisible (#1367).
-            if _garde(pdf, 5):
-                _entete_vhost()
-            nom = v["vhost"]
-            if v.get("membres") and len(v["membres"]) > 1:
-                nom += f"  ({len(v['membres'])} domaines)"
-            pdf.cell(78, 5, _txt(nom)[:52])
-            for val, w in ((v["visites"], 28), (v["visiteurs"], 28)):
-                pdf.cell(w, 5, f"{val:,}".replace(",", " "), align="R")
-            pdf.cell(26, 5, f"{v['part_robots']} %", align="R")
-            pdf.cell(30, 5, f"{v['erreurs']:,}".replace(",", " "), align="R",
-                     new_x="LMARGIN", new_y="NEXT")
-
-    # LES DONNEES D'ATTAQUE NE SONT PLUS ICI (#1367). Menaces WAF, attaquants
-    # persistants, origine des requetes vues par le WAF et noms scannes que la
-    # box ne sert pas ont quitte le rapport de VISITE pour le rapport du WAF
-    # (rapport_waf.construire_pdf_waf) : le rapport de frequentation ne parle
-    # que de frequentation, celui du WAF que de menaces. Les helpers restent
-    # (_resume_waf, _lire_waf_stats, _noms_non_servis, _lire_waf_historique) :
-    # c'est le rapport WAF qui les appelle desormais.
-    sortie = pdf.output()
-    return bytes(sortie)
+    # LES DONNEES D'ATTAQUE NE SONT PLUS ICI (#1367) : menaces WAF, attaquants, noms scannes -> rapport WAF / securite.
+    return bytes(pdf.output())
 
 
 # ── expedition ───────────────────────────────────────────────────────────
