@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — profiles 0.20.3 : le kiosque n'est plus arrêté par un profil (ref #2329)
+
+L'interface locale (module kiosk, dans aucun profil) était mise à OFF par `profilectl apply` : la VM finissait son Auto-Load sans interface. HORS_PLAN : ni stop, ni start.
+
 ## 2026-10-12 — Suricata décommissionné : closes #2326
 
 Intégration retirée de threats (+ ai-insights), soc-agent, system-hub, metrics (tableau Grafana), core (répertoire de journal), scripts d'image et outil gen-gui ; test de non-retour. Il n'était ni installé ni actif sur gk2. Versions : secubox-threats 1.3.2, secubox-soc-agent 1.0.5, secubox-soc-gateway 1.1.4, secubox-system 1.7.1, secubox-metrics 1.18.3, secubox-core 1.7.3.

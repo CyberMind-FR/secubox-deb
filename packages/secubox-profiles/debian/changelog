@@ -1,3 +1,9 @@
+secubox-profiles (0.20.3-1~bookworm1) bookworm; urgency=medium
+
+  * Le kiosque n'est plus arrete par un profil (#2329) : l'interface locale de la box (module kiosk, absent de tous les profils) etait mise a OFF — stop + disable — par `profilectl apply`, et une box avec ecran finissait son Auto-Load sans interface (constate dans la VM : Session terminated, Deactivated). Nouveau HORS_PLAN : ni stop, ni start (l'ajouter aux profils le ferait demarrer sur une box sans tete, ou son ExecStartPre echoue et tout l'apply serait annule, comme #2315). 2 tests (rouges sans le correctif).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 11:00:00 +0200
+
 secubox-profiles (0.20.2-1~bookworm1) bookworm; urgency=high
 
   * Regression de 0.20.1 corrigee (#2315) : premier-pas, premier-pas-appliquer et premier-pas-console quittent PROTECTED_IDS. Un protege est DEMARRE par l'apply ; ces unites sont des oneshot (declenches par un .path ou conditionnes par un marqueur), jamais « actives » : « premier-pas-appliquer: etat non atteint (timeout) » annulait TOUT l'apply (rolled_back) et le parcours Auto-Load echouait a l'etape Services. Seul autoload-agent, service durable qui pilote l'apply, reste protege. Trouve par le test VirtualBox. 1 test.

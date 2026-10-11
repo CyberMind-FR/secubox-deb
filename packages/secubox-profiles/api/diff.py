@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .manifest import Manifest
+from .manifest import HORS_PLAN, Manifest
 from .observe import Actual, is_on
 from .state import OFF, ON, Profile, resolve
 
@@ -56,8 +56,8 @@ def plan_changes(manifests: dict[str, Manifest], profile: Profile | None,
     starts: list[Change] = []
     for mid, m in sorted(manifests.items()):
         actual = actuals.get(mid)
-        if actual is None:
-            continue  # module non observé : pas de changement fantôme
+        if actual is None or mid in HORS_PLAN:
+            continue  # module non observé : pas de changement fantôme ; hors plan : jamais touché (#2329)
         desired = resolve(m, profile, pins)
         currently_on = is_on(actual)
         if desired == ON and not currently_on:
