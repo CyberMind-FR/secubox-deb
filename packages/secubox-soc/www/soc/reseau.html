@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Réseau en direct » : le débit de chaque interface sur 24 h et les paquets écartés par le pare-feu (nftables), par catégorie.
+  Ces mesures vivaient au fond de l'onglet Réseau du Toolbox ; ici elles sont en première ligne du SOC (#2364).
+  Profil projet référence Aurora. DONNÉES RÉELLES UNIQUEMENT (/api/v1/hub/netstats/summary et /series, lues en session) ; une mesure absente s'affiche « — ».
+  `?embed=1` : page encadrée (une colonne). `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Réseau en direct — SecuBox</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque b{font-size:1.3rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem}
+  .etat{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .etat.vieux{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .etat.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .bandeau{text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo{background:var(--orange);color:#1a1000}
+  .info{background:rgba(41,182,246,.9);color:#00131f}
+  .info a{color:inherit}
+  h2{margin:0;font-size:1.1rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .l{color:var(--doux);font-size:.72rem} .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;margin-top:3px}
+  .tuile .s{color:var(--faible);font-size:.68rem;margin-top:2px}
+  .v.c{color:var(--cyan)} .v.o{color:var(--orange)} .v.r{color:var(--rouge)} .v.g{color:var(--vert)}
+  .grp{display:grid;gap:8px}
+  .grp>h3{margin:4px 0 0;font-size:.82rem;font-weight:700;color:var(--doux);letter-spacing:.04em;text-transform:uppercase;display:flex;gap:8px;align-items:baseline}
+  .grp>h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;text-transform:none;letter-spacing:0}
+  .cartes{display:grid;gap:8px;grid-template-columns:1fr}
+  .itf{border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:rgba(10,22,46,.6);min-width:0}
+  .itf .tt{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .itf .nom{font-weight:700;font-size:.92rem;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .itf .fl{font-size:.8rem;font-variant-numeric:tabular-nums;color:var(--doux)} .itf .fl b{color:var(--texte)}
+  .itf .in b{color:var(--cyan)} .itf .out b{color:var(--jaune)}
+  .itf .pic{margin-left:auto;color:var(--faible);font-size:.66rem}
+  svg.gr{width:100%;height:58px;display:block;margin-top:4px}
+  .repos{display:flex;flex-wrap:wrap;gap:6px}
+  .repos span{border:1px solid var(--trait);border-radius:999px;padding:2px 10px;font-size:.72rem;color:var(--faible);font-family:ui-monospace,Menlo,Consolas,monospace}
+  .drop{border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:rgba(10,22,46,.6);min-width:0}
+  .drop .tt{display:flex;gap:8px;align-items:baseline} .drop .nom{font-weight:700;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .drop .tot{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--rouge);font-weight:700}
+  .note{color:var(--faible);font-size:.66rem}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)} .cartes{grid-template-columns:repeat(2,1fr)}}
+  @container a (min-width:1100px){.cartes{grid-template-columns:repeat(3,1fr)}}
+</style>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <div class="marque"><b>Réseau en direct</b><small>Débit par interface · paquets écartés par le pare-feu</small></div>
+    <span class="etat" id="etat">…</span>
+    <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="bandeau demo" id="demo" hidden>Données de démonstration — aucune mesure réelle</div>
+  <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grp" id="ifaces"></div>
+  <div class="grp" id="drops"></div>
+  <div class="note">Fenêtre 24 h, un point toutes les 5 min. Débits en bits par seconde ; les paquets écartés viennent des compteurs nftables nommés (input_policy, blacklist, quarantaine, doh…).</div>
+</div></div>
+<script>
+(function(){
+  'use strict';
+  var Q = new URLSearchParams(location.search), DEMO = Q.has('demo'), EMB = Q.has('embed');
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function bps(b){ if (b == null) return '—'; if (b >= 1e9) return (b/1e9).toFixed(1)+' Gb/s'; if (b >= 1e6) return (b/1e6).toFixed(1)+' Mb/s'; if (b >= 1e3) return (b/1e3).toFixed(1)+' kb/s'; return Math.round(b)+' b/s'; }
+  function nb(n){ return n == null ? '—' : Number(n).toLocaleString('fr-FR'); }
+  var dernier = function(a){ var p = (a||[]).slice(-1)[0]; return p ? p[1] : null; };
+  var maxi = function(a){ var m = 0; (a||[]).forEach(function(p){ if (p[1] > m) m = p[1]; }); return m; };
+
+  function jeton(){ try { return localStorage.getItem('sbx_token'); } catch (e) { return null; } }
+  function api(chemin){
+    var h = {'Accept':'application/json'}, t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+    return fetch('/api/v1/hub' + chemin, {headers:h, credentials:'same-origin', cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; });
+  }
+
+  // DÉMONSTRATION : séries synthétiques, jamais confondues avec une mesure (bandeau).
+  function demoSeries(){
+    var n = 288, t0 = Math.floor(Date.now()/1000) - n*300, s = 7;
+    function rnd(){ s = (s*16807) % 2147483647; return s/2147483647; }
+    function serie(base, bruit, pics){ var o = []; for (var i=0;i<n;i++){ var v = base*(0.6+0.8*Math.abs(Math.sin(i/23))) + bruit*rnd()*base; if (pics && rnd() > 0.96) v *= 6; o.push([t0+i*300, Math.round(v)]); } return o; }
+    return {
+      in_bps: {eth2:serie(2.4e6,.5,true), 'br-lxc':serie(4e3,.8,true), 'wg-mesh':serie(3.4e5,.3), eth1:serie(1,0), 'veth-ytsas0':serie(240,1,true), eth0:serie(0,0), 'wg-admin':serie(0,0)},
+      out_bps:{eth2:serie(9e5,.6,true), 'br-lxc':serie(8e4,.5,true), 'wg-mesh':serie(1.8e5,.3), eth1:serie(90,.5), 'veth-ytsas0':serie(830,.8,true), eth0:serie(0,0), 'wg-admin':serie(0,0)},
+      drops:{input_policy:serie(3,1,true), blacklist:serie(0,0), quarantaine:serie(0,0), doh:serie(0,0)}
+    };
+  }
+
+  function graphe(entree, sortie, couleurs){
+    // deux courbes sur une MÊME échelle (celle du plus grand des deux), aires translucides, un repère au quart et au demi.
+    var W = 300, H = 56, m = Math.max(1, maxi(entree), maxi(sortie)), out = '';
+    [0.5].forEach(function(f){ out += '<line x1="0" x2="'+W+'" y1="'+(H*(1-f)).toFixed(1)+'" y2="'+(H*(1-f)).toFixed(1)+'" stroke="rgba(159,179,214,.14)"/>'; });
+    function trace(a, c){
+      if (!a || !a.length) return '';
+      var n = a.length, pts = a.map(function(p,i){ return (i/Math.max(1,n-1)*W).toFixed(1)+','+(H-1-p[1]/m*(H-3)).toFixed(1); });
+      return '<polygon points="0,'+H+' '+pts.join(' ')+' '+W+','+H+'" fill="'+c+'" fill-opacity=".14"/><polyline fill="none" stroke="'+c+'" stroke-width="1.4" vector-effect="non-scaling-stroke" points="'+pts.join(' ')+'"/>';
+    }
+    return '<svg class="gr" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img">'+out+trace(sortie, couleurs[1])+trace(entree, couleurs[0])+'</svg>';
+  }
+  function courbeSimple(a, c){
+    if (!a || !a.length) return '<svg class="gr" viewBox="0 0 300 40"></svg>';
+    var W = 300, H = 40, m = Math.max(1, maxi(a)), n = a.length;
+    var pts = a.map(function(p,i){ return (i/Math.max(1,n-1)*W).toFixed(1)+','+(H-1-p[1]/m*(H-3)).toFixed(1); });
+    return '<svg class="gr" style="height:40px" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><polygon points="0,'+H+' '+pts.join(' ')+' '+W+','+H+'" fill="'+c+'" fill-opacity=".16"/><polyline fill="none" stroke="'+c+'" stroke-width="1.4" vector-effect="non-scaling-stroke" points="'+pts.join(' ')+'"/></svg>';
+  }
+
+  function groupe(nom){ if (/^wg-/.test(nom)) return 'Tunnels'; if (/^(veth|lxcbr|br-lxc|lxdbr)/.test(nom)) return 'Conteneurs'; return 'Interfaces'; }
+
+  function rendu(sum, ser){
+    var vieux = !!(sum && sum.stale), ok = !!(ser && ser.in_bps);
+    $('session').hidden = DEMO || ok;
+    $('demo').hidden = !DEMO;
+    var e = $('etat'); e.className = 'etat' + (ok ? (vieux ? ' vieux' : '') : ' hors');
+    e.textContent = !ok ? 'AUCUNE MESURE' : (vieux ? 'DONNÉES PÉRIMÉES — COLLECTEUR ARRÊTÉ ?' : 'EN DIRECT');
+    $('heure').textContent = new Date().toLocaleString('fr-FR', {dateStyle:'medium', timeStyle:'short'});
+
+    var inb = (ser && ser.in_bps) || {}, outb = (ser && ser.out_bps) || {}, drops = (ser && ser.drops) || {};
+    var noms = Object.keys(inb).concat(Object.keys(outb).filter(function(k){ return !(k in inb); }));
+    var actives = [], repos = [];
+    noms.forEach(function(n){ (maxi(inb[n]) + maxi(outb[n]) > 0 ? actives : repos).push(n); });
+    actives.sort(function(a,b){ return (maxi(inb[b])+maxi(outb[b])) - (maxi(inb[a])+maxi(outb[a])); });
+    var totIn = 0, totOut = 0;
+    actives.forEach(function(n){ totIn += dernier(inb[n]) || 0; totOut += dernier(outb[n]) || 0; });
+    var cats = Object.keys(drops), sommeDrops = 0, principale = null, pmax = 0;
+    cats.forEach(function(c){ var s = 0; (drops[c]||[]).forEach(function(p){ s += p[1]; }); if (s > pmax){ pmax = s; principale = c; } sommeDrops += s; });
+    var total = sum && sum.network_drops != null ? sum.network_drops : (ok ? sommeDrops : null);
+
+    $('tuiles').innerHTML =
+      tuile('Entrant maintenant', ok ? bps(totIn) : '—', 'c', 'somme des interfaces actives') +
+      tuile('Sortant maintenant', ok ? bps(totOut) : '—', 'o', 'somme des interfaces actives') +
+      tuile('Interfaces actives', ok ? actives.length + ' / ' + noms.length : '—', 'g', ok ? repos.length + ' au repos sur 24 h' : '') +
+      tuile('Paquets écartés', total == null ? '—' : nb(total), total ? 'r' : 'g', principale ? 'surtout : ' + principale : 'pare-feu nftables');
+
+    var html = '', G = {Interfaces:[], Conteneurs:[], Tunnels:[]};
+    actives.forEach(function(n){ G[groupe(n)].push(n); });
+    ['Interfaces','Tunnels','Conteneurs'].forEach(function(g){
+      if (!G[g].length) return;
+      html += '<h3>' + g + ' <i>' + G[g].length + ' active' + (G[g].length>1?'s':'') + '</i></h3><div class="cartes">' + G[g].map(function(n){
+        var i = inb[n]||[], o = outb[n]||[];
+        return '<div class="itf" title="Fenêtre 24 h"><div class="tt"><span class="nom">'+esc(n)+'</span><span class="pic">pic '+bps(Math.max(maxi(i),maxi(o)))+'</span></div>'+
+          '<div class="tt"><span class="fl in">↓ <b>'+bps(dernier(i))+'</b></span><span class="fl out">↑ <b>'+bps(dernier(o))+'</b></span></div>'+graphe(i,o,['#29b6f6','#ffd23f'])+'</div>';
+      }).join('') + '</div>';
+    });
+    if (!ok) html = '<div class="vide">Aucune série de débit.</div>';
+    if (repos.length) html += '<h3>Au repos <i>aucun trafic sur 24 h</i></h3><div class="repos">' + repos.map(function(n){ return '<span>'+esc(n)+'</span>'; }).join('') + '</div>';
+    $('ifaces').innerHTML = html;
+
+    var dh = '';
+    if (cats.length){
+      dh = '<h3>Paquets écartés par catégorie <i>24 h</i></h3><div class="cartes">' + cats.map(function(c){
+        var s = 0; (drops[c]||[]).forEach(function(p){ s += p[1]; });
+        return '<div class="drop"><div class="tt"><span class="nom">'+esc(c)+'</span><span class="tot">'+nb(s)+'</span></div>'+courbeSimple(drops[c], '#ff4d5e')+'</div>';
+      }).join('') + '</div>';
+    } else if (ok) dh = '<h3>Paquets écartés par catégorie <i>24 h</i></h3><div class="vide">Aucune catégorie mesurée.</div>';
+    $('drops').innerHTML = dh;
+    hauteur();
+  }
+  function tuile(l, v, c, s){ return '<div class="tuile"><div class="l">'+esc(l)+'</div><div class="v '+c+'">'+esc(v)+'</div><div class="s">'+esc(s||'')+'</div></div>'; }
+
+  function hauteur(){
+    if (window.parent === window) return;
+    try { window.parent.postMessage({sbxVue: Math.ceil($('cadre').getBoundingClientRect().bottom + window.scrollY), onglet: 'reseau'}, location.origin); } catch (e) {}
+  }
+  function charge(){
+    if (DEMO){ rendu({stale:false, network_drops:92}, demoSeries()); return; }
+    Promise.all([api('/netstats/summary'), api('/netstats/series?window=86400&step=300')]).then(function(r){ rendu(r[0], r[1]); });
+  }
+  $('rafraichir').addEventListener('click', charge);
+  if (EMB) document.body.classList.add('emb');
+  charge();
+  setInterval(function(){ if (!document.hidden) charge(); }, 15000);
+  addEventListener('resize', hauteur);
+  if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.body);
+})();
+</script>

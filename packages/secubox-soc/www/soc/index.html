@@ -302,6 +302,7 @@
 
   <div class="onglets" role="tablist">
     <button class="onglet" role="tab" aria-selected="true" aria-controls="e0" id="t0"><span class="pt"></span>Guardian</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tn" data-vue="reseau.html?embed=1"><span class="pt"></span>Réseau en direct</button>
     <span class="grp" aria-hidden="true">Pare-feu</span>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tm" data-vue="/waf/menaces.html?embed=1"><span class="pt"></span>Menaces</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="ta" data-vue="/waf/attaquants.html?embed=1"><span class="pt"></span>Attaquants</button>
@@ -836,7 +837,7 @@
     }
     // Les vues rassemblées : WAF (sbxWafVue + onglet), DPI (sbxdpiVue) ; une page sans annonce garde la hauteur par défaut.
     if (e.origin === location.origin && e.data) {
-      var h = e.data.sbxWafVue || e.data.sbxdpiVue, v = $("vueFrame");
+      var h = e.data.sbxWafVue || e.data.sbxdpiVue || e.data.sbxVue, v = $("vueFrame");
       if (h && v) v.style.height = Math.min(4000, Math.max(400, +h + 4)) + "px";
     }
   });
