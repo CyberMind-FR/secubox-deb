@@ -229,3 +229,25 @@ func TestLeBilletPorteLesSourcesEnLiensEtLArticlePrincipalEnEmbed_2343(t *testin
 		t.Errorf("une source http ne doit pas devenir un lien : %q", c.Body)
 	}
 }
+
+func TestLeClientEnvoieEmbedURL_2343(t *testing.T) {
+	sock := filepath.Join(t.TempDir(), "e.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var corps map[string]any
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&corps)
+		w.WriteHeader(201)
+		w.Write([]byte(`{"id":"B1","slug":"s-1","expires_at":"x"}`))
+	})}
+	go srv.Serve(ln)
+	defer srv.Close()
+	if _, err := ClientSocket(sock, "s")(context.Background(), Charge{Body: "x", EmbedURL: "https://a.b/art", TTLs: 300}); err != nil {
+		t.Fatal(err)
+	}
+	if corps["embed_url"] != "https://a.b/art" {
+		t.Fatalf("embed_url non envoyé : %v", corps)
+	}
+}

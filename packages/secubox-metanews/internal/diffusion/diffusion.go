@@ -191,6 +191,9 @@ func ClientSocket(socket, secret string) Poster {
 		if c.RefURL != "" {
 			charge["ref_url"] = c.RefURL
 		}
+		if c.EmbedURL != "" {
+			charge["embed_url"] = c.EmbedURL
+		}
 		corps, _ := json.Marshal(charge)
 		req, err := http.NewRequestWithContext(ctx, "POST", "http://billets/service/ephemere", bytes.NewReader(corps))
 		if err != nil {
