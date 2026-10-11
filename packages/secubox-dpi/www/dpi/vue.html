@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « DPI », l'inspection profonde des paquets : vue d'ensemble de votre trafic (applications, protocoles, destinations).
+  Une seule page, deux mises en page : CARTE du Hall / page embarquée (?embed=1, une colonne) ; TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (sbxdpi : /stats, /usage, /countries, /clients, /suggestions, /sessions). Une mesure absente s'affiche « — », jamais 0.
+  Les menaces et les blocages ne sont PAS mesurés par le DPI : ils sont dans le WAF et Actor Intelligence, et ne sont pas inventés ici.
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox DPI — une vision claire de votre trafic réseau</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(41,182,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.12),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;min-height:100vh;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800} .marque b i{font-style:normal;color:var(--cyan)} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .badge{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:10px;padding:4px 12px;font-size:.7rem;font-weight:700;line-height:1.2}
+  .badge span{display:block;font-weight:500;color:var(--doux);font-size:.64rem}
+  .badge.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  svg.flux{width:100%;height:auto;display:block} svg.flux text{fill:var(--texte);font-size:9px} svg.flux .t2{fill:var(--faible);font-size:7.5px}
+  .carte{display:grid;gap:8px;grid-template-columns:1fr}
+  svg.monde{width:100%;height:auto;display:block;border-radius:8px}
+  .pays{display:grid;gap:3px;align-content:start;font-size:.78rem}
+  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .repart{display:grid;gap:12px;grid-template-columns:130px 1fr;align-items:center}
+  .donut{width:130px;height:130px;border-radius:50%;position:relative}
+  .donut span{position:absolute;inset:22px;border-radius:50%;background:#0b1830;display:grid;place-items:center;text-align:center;font-size:.7rem;color:var(--doux)} .donut span b{display:block;font-size:1.05rem;color:var(--texte)}
+  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .ligne{display:grid;grid-template-columns:1fr auto 80px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:6px;font-size:.78rem;padding:3px 0;color:var(--doux)} .kv b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .ok{color:var(--vert)!important} .ko{color:var(--rouge)!important}
+  @container a (max-width:599px){.sec{display:none}.repart{grid-template-columns:100px 1fr}.donut{width:100px;height:100px}.donut span{inset:18px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g1{grid-template-columns:1.25fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr} .carte{grid-template-columns:1fr 130px}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(41,182,246,.14)"/><circle cx="11" cy="11" r="3.2"/><path d="M13.4 13.4l3 3"/></svg><span><b>SecuBox <i>DPI</i></b><small>Deep Packet Inspection</small></span></span>
+    <span class="badge" id="etat">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan sec"><h3>Flux réseau <i>appareils → usages · volume</i></h3><div id="flux"></div><div class="note">Les rubans relient chaque appareil à ses usages (octets mesurés). Les destinations sont à droite, par pays.</div></div>
+    <div class="pan sec"><h3>Carte des destinations <i>pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="monde" viewBox="0 0 120 60" role="img" aria-label="Carte des pays contactés"></svg><div class="pays" id="pays"></div></div><div class="note">Cercle au centre du pays : un CDN ou un relais fausse la destination réelle.</div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Types de trafic <i>par volume</i></h3><div class="repart"><div class="donut" id="donut"><span id="donutC"></span></div><div class="leg" id="usages"></div></div></div>
+    <div class="pan sec"><h3>Applications principales <i>par volume</i></h3><div id="apps"></div></div>
+    <div class="pan sec"><h3>Protocoles détectés <i>part du volume</i></h3><div id="protos"></div></div>
+  </div>
+  <div class="grille g3 sec">
+    <div class="pan"><h3>Appareils les plus actifs <i>par volume</i></h3><div id="appareils"></div></div>
+    <div class="pan"><h3>Destinations les plus contactées <i>par volume</i></h3><div id="dests"></div></div>
+    <div class="pan"><h3>Domaines à classer <i>suggestions du moteur</i></h3><div id="sugg"></div><h3 style="margin-top:12px">État du moteur</h3><div id="moteur"></div></div>
+  </div>
+  <div class="note">Analyse des métadonnées seulement : aucun contenu n’est lu. Menaces et blocages : voir le WAF et Actor Intelligence.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  function oct(b){b=num(b);var u=['o','Ko','Mo','Go','To'],i=0;while(b>=1024&&i<4){b/=1024;i++;}return (i>1?b.toFixed(1):Math.round(b))+' '+u[i];}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var PAL=['#3b82f6','#ff4d5e','#ff9f1c','#a78bfa','#29b6f6','#2ecc71','#ffd23f','#9fb3d6'];
+  var IC={
+    vol:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7"><ellipse cx="12" cy="6" rx="7" ry="3" fill="rgba(41,182,246,.16)"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
+    flux:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><path d="M9 15l6-6M8 10l-2 2a3.5 3.5 0 005 5l2-2M16 14l2-2a3.5 3.5 0 00-5-5l-2 2"/></svg>',
+    prot:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1.5" fill="rgba(167,139,250,.2)"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
+    pays:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    sugg:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ffd23f" stroke-width="1.7" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.7.5 1 1.1 1 1.9V16h5v-.2c0-.8.3-1.4 1-1.9A6 6 0 0012 3z"/></svg>',
+    app:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="3" width="16" height="12" rx="2" fill="rgba(46,204,113,.14)"/><path d="M8 21h8M12 15v6"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  function num2(x){return num(x);}
+  // Carte du monde : la grille éprouvée de la page Actor (60 × 120 points de 3°, une série de longueurs par ligne). Les cercles sont posés au centre du PAYS.
+  var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+  var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  function monde(pays){
+    var s='<defs><radialGradient id="lueur"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".95"/><stop offset="1" stop-color="#ff4d5e" stop-opacity="0"/></radialGradient></defs><rect width="120" height="60" fill="rgba(6,13,27,.5)"/>';
+    TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
+      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)s+='<circle cx="'+(x+i+.5)+'" cy="'+(j+.5)+'" r=".42" fill="#33507f"/>';}x+=n;cur=!cur;});});
+    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+    pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
+      s+='<circle cx="'+((c[1]+180)/3).toFixed(1)+'" cy="'+((90-c[0])/3).toFixed(1)+'" r="'+(1.4+3.4*Math.sqrt(num(p.n)/max)).toFixed(1)+'" fill="url(#lueur)"><title>'+esc(p.code)+' : '+fmt(p.n)+'</title></circle>';});
+    return s;
+  }
+  // Flux : les appareils (gauche) reliés à leurs usages (milieu) par des rubans proportionnels aux octets ; les pays (droite) en barres.
+  function flux(clients,pays){
+    var D=clients.slice().sort(function(a,b){return num(b.bytes)-num(a.bytes);}).slice(0,6),U={},tot=0;
+    D.forEach(function(d){(d.usages||[]).forEach(function(u){U[u.name]=(U[u.name]||0)+num(u.bytes);});});
+    var ul=Object.keys(U).map(function(k){return [k,U[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,7);
+    if(!D.length||!ul.length) return '<div class="vide">Pas encore assez de flux classés.</div>';
+    var W=400,H=190,xa=108,xb=212,hl=H-16,sumD=D.reduce(function(t,d){return t+num(d.bytes);},0)||1,sumU=ul.reduce(function(t,u){return t+u[1];},0)||1,s='';
+    var yd={},y=8;D.forEach(function(d,i){var h=Math.max(10,hl*num(d.bytes)/sumD*.9);yd[i]=[y,h];y+=h+hl*.02;});
+    var yu={},y2=8;ul.forEach(function(u,i){var h=Math.max(10,hl*u[1]/sumU*.9);yu[u[0]]=[y2,h,0];y2+=h+hl*.02;});
+    D.forEach(function(d,i){(d.usages||[]).forEach(function(u){var t=yu[u.name];if(!t)return;var hh=Math.max(1,yd[i][1]*num(u.bytes)/(num(d.bytes)||1)),yo=yd[i][0],ho=t[1]*num(u.bytes)/(U[u.name]||1),yt=t[0]+t[2];
+      yd[i][0]+=hh;t[2]+=ho;var c=PAL[ul.findIndex(function(z){return z[0]===u.name})%8],mx=(xa+xb)/2;
+      s+='<path d="M'+xa+','+yo+' C'+mx+','+yo+' '+mx+','+yt+' '+xb+','+yt+' L'+xb+','+(yt+ho)+' C'+mx+','+(yt+ho)+' '+mx+','+(yo+hh)+' '+xa+','+(yo+hh)+'Z" fill="'+c+'" opacity=".45"/>';});});
+    var ys=8;D.forEach(function(d,i){var h=Math.max(10,hl*num(d.bytes)/sumD*.9),top=ys;ys+=h+hl*.02;s+='<rect x="'+(xa-6)+'" y="'+top+'" width="6" height="'+h+'" fill="#3b82f6"/><text x="'+(xa-10)+'" y="'+(top+h/2)+'" text-anchor="end" dominant-baseline="middle">'+esc(String(d.name||d.device).slice(0,16))+'</text><text class="t2" x="'+(xa-10)+'" y="'+(top+h/2+9)+'" text-anchor="end">'+oct(d.bytes)+'</text>';});
+    ul.forEach(function(u,i){var t=yu[u[0]],h=t[1];s+='<rect x="'+xb+'" y="'+t[0]+'" width="6" height="'+h+'" fill="'+PAL[i%8]+'"/><text x="'+(xb+10)+'" y="'+(t[0]+h/2)+'" dominant-baseline="middle">'+esc(u[0])+' <tspan class="t2">'+Math.round(100*u[1]/sumU)+'%</tspan></text>';});
+    var P=(pays||[]).slice(0,6),pm=P.length?num(P[0].bytes):1,py=8;
+    P.forEach(function(p){var bw=Math.max(3,44*num(p.bytes)/pm);s+='<text x="300" y="'+(py+7)+'" dominant-baseline="middle">'+esc(p.cc)+'</text><rect x="314" y="'+py+'" width="'+bw+'" height="8" rx="2" fill="#2ecc71" opacity=".8"/><text class="t2" x="'+(314+bw+4)+'" y="'+(py+4)+'" dominant-baseline="middle">'+oct(p.bytes)+'</text>';py+=26;});
+    return '<svg class="flux" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Flux entre appareils et usages">'+s+'</svg>';
+  }
+  function barres(el_,rows,fmtv,col){
+    var m=rows.length?rows[0][1]:1;
+    el_.innerHTML=rows.length?rows.map(function(r,i){return '<div class="ligne"><span class="n" style="text-align:left" title="'+esc(r[0])+'">'+esc(r[0])+'</span><span>'+fmtv(r[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*r[1]/m)+'%;background:'+(col||PAL[i%8])+'"></i></div></div>';}).join(''):'<div class="vide">Aucune donnée.</div>';
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.stats||d.clients);
+    var s=d.stats,e=el('etat'),vivant=s&&s.connected;
+    e.className='badge'+(s&&!vivant?' hors':'');e.innerHTML=s?(vivant?'DPI ACTIF<span>Analyse en temps réel</span>':'DPI HORS LIGNE<span>moteur non connecté</span>'):'—<span>session requise</span>';
+    var C=d.clients,P=d.pays,S=d.sugg;
+    var N=function(v){return v==null?'—':fmt(v);};
+    el('tuiles').innerHTML=
+      tuile(IC.vol,s?oct(s.total_bytes):'—','Trafic analysé','cumul du moteur','Octets vus par le moteur depuis son démarrage (cumul, pas une fenêtre de 24 h). Source : sbxdpi.')
+     +tuile(IC.flux,N(s&&s.total_flows),'Connexions (flux)','cumul du moteur','Flux réseau comptés depuis le démarrage du moteur. Source : sbxdpi.')
+     +tuile(IC.prot,s&&s.protocols?fmt(s.protocols.length):'—','Protocoles détectés','','Protocoles distincts identifiés par le moteur.')
+     +tuile(IC.pays,P?fmt(P.length):'—','Pays contactés','','Pays distincts des destinations (base GeoLite2 locale).')
+     +tuile(IC.sugg,S?fmt(S.length):'—','Domaines à classer','suggestions du moteur','Domaines que le moteur n’a pas su classer et propose d’examiner. Ce n’est pas une menace.')
+     +tuile(IC.app,C?fmt(C.length):'—','Appareils actifs','vus par le moteur','Appareils distincts ayant produit des flux.');
+    var pays=(P||[]).map(function(p){return {code:p.cc,n:p.bytes,cc:p.cc,bytes:p.bytes};});
+    el('monde').innerHTML=monde(pays);
+    el('pays').innerHTML=pays.length?pays.slice(0,8).map(function(p){return '<div><span>'+drapeau(p.code)+' '+esc(p.code)+'</span><b>'+oct(p.n)+'</b></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    el('flux').innerHTML=C&&P?flux(C,P):'<div class="vide">Session requise.</div>';
+    var U=d.usage&&d.usage.usages||null;
+    if(U&&U.length){var tt=U.reduce(function(t,u){return t+num(u.bytes);},0)||1,top=U.slice(0,7),acc=0,seg=top.map(function(u,i){var p=100*num(u.bytes)/tt,b=acc;acc+=p;return PAL[i%8]+' '+b+'% '+acc+'%';});
+      el('donut').style.background='conic-gradient('+seg.join(',')+')';el('donutC').innerHTML='<div><b>'+oct(tt)+'</b>total classé</div>';
+      el('usages').innerHTML=top.map(function(u,i){return '<div><i style="background:'+PAL[i%8]+'"></i><span>'+esc(u.name)+'</span><b>'+Math.round(100*num(u.bytes)/tt)+'%</b></div>';}).join('');}
+    else{el('donut').style.background='rgba(159,179,214,.16)';el('donutC').textContent='—';el('usages').innerHTML='<div class="vide">'+(d.usage?'Aucun usage classé.':'Session requise.')+'</div>';}
+    var A={};(d.sessions||[]).forEach(function(x){var k=x.application||x.infra||'?';A[k]=(A[k]||0)+num(x.bytes);});
+    var al=Object.keys(A).map(function(k){return [k,A[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+    if(d.sessions) barres(el('apps'),al,oct); else el('apps').innerHTML='<div class="vide">Applications : session d’administration requise.</div>';
+    barres(el('protos'),(s&&s.protocols||[]).slice(0,8).map(function(p){return [p.name,num(p.pct)];}),function(v){return (v>=10?Math.round(v):v.toFixed(1))+' %';});
+    if(!s) el('protos').innerHTML='<div class="vide">Session requise.</div>';
+    if(C) barres(el('appareils'),C.slice().sort(function(a,b){return num(b.bytes)-num(a.bytes);}).slice(0,8).map(function(c){return [c.name||c.device,num(c.bytes)];}),oct); else el('appareils').innerHTML='<div class="vide">Session requise.</div>';
+    var H={};(C||[]).forEach(function(c){(c.top_dst||[]).forEach(function(t){H[t.host]=(H[t.host]||0)+num(t.bytes);});});
+    var hl=Object.keys(H).map(function(k){return [k,H[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+    if(C) barres(el('dests'),hl,oct); else el('dests').innerHTML='<div class="vide">Session requise.</div>';
+    el('sugg').innerHTML=S&&S.length?S.slice(0,5).map(function(x){return '<div class="kv"><span title="'+esc(x.reason||'')+'">'+esc(x.domain)+'</span><b>'+oct(x.bytes)+'</b></div>';}).join(''):'<div class="vide">'+(S?'Rien à classer.':'Session requise.')+'</div>';
+    var age=s&&s.updated_at?Math.max(0,Math.round(Date.now()/1000-num(s.updated_at))):null;
+    el('moteur').innerHTML=s?'<div class="kv"><span>Moteur</span><b class="'+(vivant?'ok':'ko')+'">'+(vivant?'Opérationnel':'Hors ligne')+'</b></div><div class="kv"><span>Dernière mise à jour</span><b>'+(age==null?'—':(age<90?'il y a '+age+' s':Math.round(age/60)+' min'))+'</b></div><div class="kv"><span>Flux comptés</span><b>'+fmt(s.total_flows)+'</b></div>':'<div class="vide">Session requise.</div>';
+  }
+  var DEMO={demo:true,stats:{connected:true,total_flows:328451,total_bytes:45.9e9,updated_at:Math.floor(Date.now()/1000)-3,protocols:[{name:'TLS',pct:52},{name:'QUIC',pct:18},{name:'DNS',pct:10},{name:'HTTP',pct:7},{name:'BitTorrent',pct:4},{name:'SSH',pct:2}]},
+    usage:{usages:[{name:'streaming',bytes:14e9},{name:'web',bytes:8e9},{name:'social',bytes:5e9},{name:'dns',bytes:4e9},{name:'cloud',bytes:3e9},{name:'ai',bytes:2e9}]},
+    pays:[{cc:'FR',bytes:10e9},{cc:'US',bytes:12e9},{cc:'DE',bytes:3.4e9},{cc:'IE',bytes:2.6e9},{cc:'SG',bytes:2e9},{cc:'NL',bytes:1.6e9},{cc:'CN',bytes:1.2e9}],
+    clients:[{name:'PC Bureau',device:'a',bytes:12e9,usages:[{name:'web',bytes:6e9},{name:'cloud',bytes:3e9},{name:'social',bytes:3e9}],top_dst:[{host:'google.com',bytes:8.4e9}]},{name:'TV Salon',device:'b',bytes:10e9,usages:[{name:'streaming',bytes:10e9}],top_dst:[{host:'netflix.com',bytes:4.3e9}]},{name:'Smartphone',device:'c',bytes:6e9,usages:[{name:'social',bytes:3e9},{name:'web',bytes:3e9}],top_dst:[{host:'youtube.com',bytes:6.1e9}]}],
+    sessions:[{application:'YouTube',bytes:11.2e9},{application:'Netflix',bytes:5.8e9},{application:'Chrome',bytes:3.2e9}],sugg:[{domain:'maegia.tv',bytes:5e6,reason:'1 sous-domaine non classé'}]};
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxdpiVue:document.documentElement.scrollHeight},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
+  if(q.get('demo')){rend(DEMO);return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    var b='/api/v1/dpi/';
+    Promise.all([jget(b+'stats'),jget(b+'usage'),jget(b+'countries'),jget(b+'clients'),jget(b+'suggestions'),jget(b+'sessions')]).then(function(r){
+      rend({stats:r[0],usage:r[1],pays:Array.isArray(r[2])?r[2]:null,clients:Array.isArray(r[3])?r[3]:null,sugg:Array.isArray(r[4])?r[4]:null,sessions:Array.isArray(r[5])?r[5]:null});
+    });
+  }
+  el('rafraichir').addEventListener('click',charge);
+  charge();setInterval(charge,60000);
+})();
+</script>
