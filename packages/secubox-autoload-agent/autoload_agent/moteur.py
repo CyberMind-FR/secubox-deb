@@ -56,6 +56,9 @@ class EtapeEchec(Exception):
         self.etape, self.detail = etape, detail
 
 
+LIMITE_TENTATIVES = 8                                                         # échecs consécutifs avant d'abandonner ; le démarrage reprend toutes les minutes
+
+
 @dataclass
 class Config:
     reponses: Path
@@ -66,6 +69,7 @@ class Config:
     cle_wg: Path = T.CLE_DEFAUT
     conf_wg: Path = T.CONF_DEFAUT
     rapport: Path = Path("/var/lib/secubox/autoload-agent/rapport.json")
+    abandon: Path = Path("/var/lib/secubox/autoload-agent/abandon.json")     # posé après LIMITE_TENTATIVES échecs : l'assistant manuel de premier-pas reprend la main (#2317)
 
 
 @dataclass(frozen=True)
@@ -248,6 +252,10 @@ class Moteur:
                 self._rapporte(etape, len(etat["faites"]), False)
         except EtapeEchec as e:
             etat["erreur"] = {"etape": e.etape, "detail": e.detail}
+            etat["tentatives"] = int(etat.get("tentatives", 0)) + 1
+            if etat["tentatives"] >= LIMITE_TENTATIVES:
+                # L'agent abandonne : sans ce marqueur, l'assistant manuel resterait fermé pour toujours devant un fichier Auto-Load qui ne passe pas (#2317).
+                _ecrit_prive(self.cfg.abandon, json.dumps({"le": int(self._horloge()), "etape": e.etape, "detail": e.detail[:300], "tentatives": etat["tentatives"]}, ensure_ascii=False, indent=1))
             _ecrit_prive(self.cfg.etat, json.dumps(etat, ensure_ascii=False, indent=1))
             return Resultat(False, e.etape, e.detail)
         etat.pop("erreur", None)

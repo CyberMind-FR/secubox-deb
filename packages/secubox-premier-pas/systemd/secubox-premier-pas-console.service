@@ -2,6 +2,10 @@
 Description=SecuBox Premier Pas — assistant du premier démarrage, face console (tty1) (#1522)
 # Box neuve seulement ; le kiosque (tty7) et la console partagent le même profil.
 ConditionPathExists=!/var/lib/secubox/.premier-pas-fait
+# L'ASSISTANT MANUEL S'EFFACE DEVANT L'AUTO-LOAD (#2317) : une box qui porte un fichier de réponses signé se provisionne seule ; l'assistant en parallèle écrasait le nom et le réseau
+# signés. OU l'un OU l'autre (« | ») : pas de fichier Auto-Load, ou bien l'agent a ABANDONNÉ (marqueur posé après 8 échecs) — l'assistant reprend alors la main au démarrage suivant.
+ConditionPathExists=|!/boot/secubox/autoload/reponses.toml
+ConditionPathExists=|/var/lib/secubox/autoload-agent/abandon.json
 After=secubox-premier-pas.service
 Conflicts=getty@tty1.service secubox-console.service
 

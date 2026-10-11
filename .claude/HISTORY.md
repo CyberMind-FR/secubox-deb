@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — L'assistant manuel s'efface devant l'Auto-Load : premier-pas 0.5.3, autoload-agent 0.7.0 (ref #2317)
+
+Demandé par le propriétaire après le test VirtualBox (assistant en parallèle : routeur par défaut, nom écrasé). Faces fermées tant que le fichier signé est présent, sauf abandon de l'agent (8 échecs). Sans fichier Auto-Load : assistant, code de préparation et propositions du maître inchangés.
+
 ## 2026-10-12 — profiles 0.20.2 : régression de 0.20.1, premier-pas* ne sont plus protégés (ref #2315)
 
 Un protégé est démarré par l'apply ; les oneshot premier-pas-* ne sont jamais « actifs » → timeout → tout l'apply annulé, le parcours Auto-Load échouait à l'étape Services. Seul autoload-agent reste protégé.
