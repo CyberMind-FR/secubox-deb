@@ -1,3 +1,9 @@
+secubox-metanews (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le client envoie enfin embed_url a billets (ref #2343) : la 0.4.1 composait la charge mais ne la serialisait pas, le billet n'avait donc ni apercu ni vignette. 1 test sur le corps reellement envoye.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 13:30:00 +0200
+
 secubox-metanews (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Billets ephemeres enrichis (ref #2343) : le corps liste jusqu'a 5 sources en liens (titre echappe, https seulement, adresse encodee, sans doublon) et l'article principal le plus recent est envoye en embed_url pour que billets en tire l'apercu et la vignette. 1 test.
