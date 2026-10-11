@@ -1,3 +1,9 @@
+secubox-hub (1.9.54-1~bookworm1) bookworm; urgency=low
+
+  * webui.conf : /api/v1/ndpid/ vise l'agregateur (#2335) ; la socket /run/secubox/ndpid.sock disparait avec le demon dedie de nDPId.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 13:00:00 +0200
+
 secubox-hub (1.9.53-1~bookworm1) bookworm; urgency=medium
 
   * Page /appareil/ : lit l'OS, sa PREUVE (os_source) et le type detaille du NAC (#2236), signale une adresse MAC aleatoire (le fabricant n'est alors pas significatif) et masque les entrees que le NAC marque conteneur ; la deduction cote page reste le repli. 4 tests.

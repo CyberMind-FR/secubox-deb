@@ -12,6 +12,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-12 — profiles 0.20.3 : le kiosque n'est plus arrêté par un profil (ref #2329)
 
 L'interface locale (module kiosk, dans aucun profil) était mise à OFF par `profilectl apply` : la VM finissait son Auto-Load sans interface. HORS_PLAN : ni stop, ni start.
+## 2026-10-12 — mediaflow et ndpid agrégés : dpi 1.11.0, hub 1.9.54 (ref #2335)
+
+Plus de démon dédié (~150 Mo), API servie par l'agrégateur ; hub route /api/v1/ndpid/ vers lui.
+
 ## 2026-10-12 — Kiosque WebUI et console headless dans tous les profils (ref #2332)
 
 secubox-console 1.2.2, secubox-lite 1.7.0, secubox-full 1.7.0, secubox-profiles 0.20.4. Le kiosque démarre sur condition d'unité (sentinelle) au lieu d'échouer ; la console ne démarre que sans kiosque.

@@ -1,3 +1,9 @@
+secubox-dpi (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * mediaflow et ndpid sont AGREGES (#2335) : l'API est servie par l'agregateur, plus de demon uvicorn dedie (~68 Mo pour mediaflow, ~83 Mo pour ndpid) ni de socket dediee. mediaflow l'etait deja cote nginx (son demon dedie etait un doublon inutilise) ; ndpid est declare dans aggregator.toml (redemarrage de l'agregateur seulement a la premiere declaration) et nginx le route vers aggregator.sock. Les unites secubox-mediaflow.service et secubox-ndpid.service ne sont plus livrees ; le postinst arrete et desactive les anciens demons. Le repertoire de donnees de ndpid ne depend plus du hook de demarrage. La minuterie yt-dlp reste. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 13:00:00 +0200
+
 secubox-dpi (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Resume DPI pour le rapport quotidien (#2299) : api/resume_rapport.py ecrit atomiquement /var/cache/secubox/dpi/resume-rapport.json (stats, usages, pays, appareils, suggestions, tronques, 0640), lance par secubox-dpi-resume.timer toutes les 30 minutes (unite durcie : User=secubox, ProtectSystem=strict, seul le cache DPI en ecriture). Une source muette reste absente. 5 tests.

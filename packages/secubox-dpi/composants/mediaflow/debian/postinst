@@ -9,9 +9,25 @@ case "$1" in
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     # R4 Discovered Media clone library (#736)
     install -d -o secubox -g secubox -m 775 /var/lib/secubox/mediaflow/library
+    # API servie par l'AGRÉGATEUR (#2335) : un seul processus pour ~110 modules au lieu d'un démon uvicorn dédié par module (~70-80 Mo chacun). Déclaration idempotente.
+    NOUVEAU=$(python3 - <<'TOML' 2>/dev/null || true
+import pathlib, re
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    s = f.read_text()
+    if '"mediaflow"' not in s:
+        f.write_text(re.sub(r'modules\s*=\s*\[', 'modules = [\n    "mediaflow",', s, count=1))
+        print("oui")
+TOML
+)
+    # Ancien démon dédié (68 Mo, doublon : nginx route déjà /api/v1/mediaflow/ vers l'agrégateur) : arrêté et désactivé (#2335).
+    if systemctl cat secubox-mediaflow.service >/dev/null 2>&1; then
+        systemctl disable --now secubox-mediaflow.service >/dev/null 2>&1 || true
+    fi
     systemctl daemon-reload
-    systemctl enable secubox-mediaflow.service
-    systemctl start  secubox-mediaflow.service || true
+    if [ "$NOUVEAU" = "oui" ] && [ -d /run/systemd/system ]; then
+        systemctl --no-block restart secubox-aggregator >/dev/null 2>&1 || true
+    fi
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
     # R4 cloner (#736): the .timer is enabled by the dh_installsystemd block
