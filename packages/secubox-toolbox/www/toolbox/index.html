@@ -93,6 +93,9 @@
         <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
     </nav>
 
+    <!-- #2373 : chaque onglet est une page autonome du profil projet reference Aurora, encadree de meme origine ; les anciens panneaux restent dans le DOM (masques) pour le reste du script -->
+    <div id="pageCard" style="display:none"><iframe id="pageFrame" title="Toolbox" style="width:100%;height:1200px;border:0;display:block;background:transparent"></iframe></div>
+
     <!-- Overview -->
     <section class="panel active" id="panel-overview">
         <div class="toolbar">
@@ -399,18 +402,26 @@
 <script>
 const API = '/api/v1/toolbox';
 
+// onglet -> page autonome (#2373). « Réseau » encadre la page « Réseau en direct » du SOC (une seule source).
+const TB_PAGES = { overview: 'apercu.html', clients: 'clients.html', filtres: 'filtres.html', social: 'social.html', ads: 'pubs.html',
+                   reseau: '/soc/reseau.html', tor: 'tor.html', sentinel: 'sentinelle.html', config: 'config.html' };
 function switchTab(name) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
-    // Lazy-load the heavier tabs only when first opened.
-    if (name === 'filtres') loadFilters();
-    if (name === 'social') loadSocial();
-    if (name === 'ads') loadAds();
-    if (name === 'reseau') loadNetstats();
-    if (name === 'tor') refreshTorTab();
-    if (name === 'sentinel') loadSentinel();
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    const page = TB_PAGES[name], card = document.getElementById('pageCard'), f = document.getElementById('pageFrame');
+    if (page && card && f) {
+        card.style.display = '';
+        const src = page + (page.includes('?') ? '&' : '?') + 'embed=1';
+        if (f.dataset.p !== name) { f.dataset.p = name; f.style.height = '1200px'; f.src = src; }
+    }
     location.hash = name;
 }
+// hauteur annoncee par la page encadree : sbxToolboxVue (pages du Toolbox), sbxVue (page du SOC)
+window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin || !e.data) return;
+    const h = e.data.sbxToolboxVue || e.data.sbxVue, f = document.getElementById('pageFrame');
+    if (h && f) f.style.height = Math.min(4000, Math.max(300, +h + 4)) + 'px';
+});
 
 async function J(path) {
     try {
@@ -1399,6 +1410,7 @@ document.getElementById('tor-emancipate-btn')?.addEventListener('click', emancip
 // Deep-link : open the tab named in the URL hash on load.
 const initial = (location.hash || '').replace('#', '');
 if (['overview','clients','filtres','social','ads','reseau','tor','sentinel','config'].includes(initial)) switchTab(initial);
+else switchTab('overview');
 
 refreshAll();
 setInterval(() => {

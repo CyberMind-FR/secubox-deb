@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Toolbox, « Cartographie sociale » : qui parle à qui, trackers et plateformes détectés. Une seule page, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/toolbox/admin/social-aggregate?hours=24 et GET /api/v1/toolbox/admin/device-blocks?hours=24 (lues en session).
+  L'API ne fournit pas les paires appareil → tracker : le graphe relie donc le réseau local aux fournisseurs observés (arête = volume mesuré), il n'invente aucune relation.
+  Action conservée à l'identique : POST /api/v1/toolbox/admin/quarantine/{ip} (mise en quarantaine d'un appareil, 6 h), confirmation intégrée à la page.
+  Une mesure absente s'affiche « — », jamais 0. Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox — cartographie sociale</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;cursor:pointer}
+  .droite button{font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  svg.graphe{width:100%;height:auto;display:block;border-radius:8px;background:rgba(6,13,27,.45)}
+  svg.graphe text{fill:var(--doux);font-size:9px;font-family:inherit;paint-order:stroke;stroke:#060d1b;stroke-width:3px;stroke-linejoin:round}
+  svg.graphe .noeud{cursor:default}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:6px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .filtres{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .filtres input{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;min-width:0;flex:1 1 130px}
+  .filtres input:focus,button:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{text-align:left!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .entete{color:var(--faible);font-size:.68rem}
+  .plus{margin-top:6px;background:none;border:0;color:var(--cyan);font-size:.76rem;padding:2px 0}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;font-variant-numeric:tabular-nums}
+  code{font-size:.8rem}
+  .btn{font-size:.72rem;color:var(--rouge);background:rgba(255,77,94,.12);border:1px solid var(--rouge);border-radius:7px;padding:2px 8px}
+  .btn.ok{color:var(--texte);background:rgba(255,77,94,.4)} .btn.non{color:var(--doux);border-color:var(--trait2);background:none}
+  .conf{display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap;color:var(--orange);font-size:.7rem;white-space:normal}
+  .res{border-radius:8px;padding:5px 9px;font-size:.76rem;border:1px solid var(--trait2)}
+  .res.bien{border-color:var(--vert);color:var(--vert)} .res.mal{border-color:var(--rouge);color:var(--rouge)}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g1{grid-template-columns:1.25fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.4" fill="rgba(59,130,246,.3)"/><circle cx="5" cy="6" r="1.8"/><circle cx="19" cy="6" r="1.8"/><circle cx="5" cy="18" r="1.8"/><circle cx="19" cy="18" r="1.8"/><path d="M10.2 10.4L6.3 7.3M13.8 10.4l3.9-3.1M10.2 13.6l-3.9 3.1M13.8 13.6l3.9 3.1"/></svg><span><b>Cartographie sociale</b><small>Toolbox · trackers et plateformes observés</small></span></span>
+    <span class="actif neutre" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Qui parle à qui</h2><div class="sous">Trackers, réseaux d’acheminement et surfaces opérateur vus dans le trafic des appareils protégés, sur 24 h.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="res" id="res" hidden role="status"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Graphe des relations <i>arête = volume mesuré</i></h3><div id="graphe"></div><div class="legende" id="legGraphe"></div><div class="note">L’API n’indique pas quel appareil contacte quel tracker : le graphe relie le réseau local à chaque fournisseur observé, l’épaisseur de l’arête suit le volume réel (hits, événements ou hôtes).</div></div>
+    <div class="pan"><h3>Trackers les plus actifs <i id="trkNote"></i></h3><div class="filtres"><input type="search" id="rech" placeholder="Filtrer un domaine…" aria-label="Filtrer les trackers"></div><div id="trackers"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Réseaux CDN / edge <i>hôtes</i></h3><div id="cdn"></div></div>
+    <div class="pan"><h3>Anti-bot « prouvez que vous êtes humain » <i id="abNote"></i></h3><div id="antibot"></div></div>
+    <div class="pan"><h3>Opérateur-grade / proche-État <i id="opNote"></i></h3><div id="opgrade"></div></div>
+  </div>
+  <div class="pan"><h3>Appareils les plus exposés <i id="devNote"></i></h3><div class="scroll" id="appareils"></div></div>
+  <div class="pan"><h3>Clients anonymisés <i>triés par nombre de trackers</i></h3><div class="scroll" id="clients"></div></div>
+  <div class="note">Les appareils sont identifiés par une empreinte, jamais par leur adresse matérielle. Mise en quarantaine : tout le trafic de l’appareil est coupé 6 h.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var API='/api/v1/toolbox';
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var N=function(v){return v==null?'—':fmt(v);};
+  var q=new URLSearchParams(location.search);
+  var DEMOMODE=!!q.get('demo');
+  if(q.get('embed')) document.body.classList.add('emb');
+  var COL={tracker:'#ff4d5e',op:'#a78bfa',bot:'#ff9f1c',cdn:'#29b6f6',res:'#3b82f6'};
+  var IC={
+    cli:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><rect x="7" y="3" width="10" height="18" rx="2" fill="rgba(59,130,246,.16)"/><path d="M11 18h2"/></svg>',
+    trk:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.5" fill="#ff4d5e"/></svg>',
+    eu:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,159,28,.14)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    op:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><path d="M5 19V9M10 19V5M15 19v-8M20 19V7" /><rect x="3" y="3" width="18" height="18" rx="3" fill="rgba(167,139,250,.12)"/></svg>',
+    bot:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><rect x="5" y="8" width="14" height="11" rx="3" fill="rgba(41,182,246,.14)"/><path d="M12 8V4M9 13h.1M15 13h.1M9 17h6"/></svg>',
+    blo:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(255,77,94,.14)"/><path d="M9 9l6 6M15 9l-6 6"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  function trunc(s,n){s=String(s==null?'':s);return s.length>n?s.slice(0,n-1)+'…':s;}
+
+  /* Graphe : disposition déterministe. Le réseau local au centre, deux couronnes : les trackers (intérieure, du plus au moins actif) et les autres fournisseurs (extérieure). */
+  function graphe(agg){
+    var T=(agg.by_tracker_domain||[]).slice(0,10).map(function(r){return {id:r.tracker_domain,v:num(r.hits),k:'tracker',u:fmt(r.hits)+' hits · '+fmt(r.clients)+' client(s)'};});
+    var O=[];
+    (agg.by_opgrade||[]).slice(0,4).forEach(function(r){O.push({id:r.opgrade_vendor,v:num(r.events),k:'op',u:fmt(r.events)+' événements · '+fmt(r.clients)+' client(s)'});});
+    (agg.by_antibot||[]).slice(0,3).forEach(function(r){O.push({id:r.antibot_vendor,v:num(r.challenges),k:'bot',u:fmt(r.challenges)+' défis · '+fmt(r.clients)+' client(s)'});});
+    (agg.by_cdn||[]).slice(0,4).forEach(function(r){O.push({id:r.cdn_vendor,v:num(r.hosts),k:'cdn',u:fmt(r.hosts)+' hôte(s)'});});
+    if(!T.length&&!O.length) return '<div class="vide">Aucune relation observée dans la fenêtre.</div>';
+    var W=520,H=380,cx=W/2,cy=H/2,tm=Math.max.apply(null,T.map(function(n){return n.v;}).concat([1])),om=Math.max.apply(null,O.map(function(n){return n.v;}).concat([1]));
+    var s='<defs><radialGradient id="lc"><stop offset="0" stop-color="#3b82f6" stop-opacity=".9"/><stop offset="1" stop-color="#3b82f6" stop-opacity=".1"/></radialGradient></defs>';
+    var noeuds='',aretes='';
+    function pose(liste,rayon,dec,max){
+      liste.forEach(function(n,i){
+        var a=dec+2*Math.PI*i/liste.length,x=cx+rayon*1.45*Math.cos(a),y=cy+rayon*Math.sin(a);
+        x=Math.max(34,Math.min(W-34,x));
+        var r=4+7*Math.sqrt(n.v/max),w=0.8+4.5*Math.sqrt(n.v/max),c=COL[n.k];
+        aretes+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="'+c+'" stroke-opacity=".5" stroke-width="'+w.toFixed(1)+'" stroke-linecap="round"/>';
+        var dx=x>=cx?1:-1,anc=dx>0?'start':'end';
+        noeuds+='<g class="noeud"><title>'+esc(n.id+' — '+n.u)+'</title><circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+c+'" fill-opacity=".85" stroke="#060d1b" stroke-width="1"/><text x="'+(x+dx*(r+3)).toFixed(1)+'" y="'+(y+3).toFixed(1)+'" text-anchor="'+anc+'">'+esc(trunc(n.id,15))+'</text></g>';
+      });
+    }
+    pose(T,95,-Math.PI/2,tm);pose(O,150,-Math.PI/2+0.5*Math.PI/Math.max(O.length,1)+0.12,om);
+    s+=aretes+'<circle cx="'+cx+'" cy="'+cy+'" r="26" fill="url(#lc)" stroke="#3b82f6" stroke-width="1.5"/><text x="'+cx+'" y="'+(cy-1)+'" text-anchor="middle" style="fill:#eaf1ff;font-size:9px;font-weight:700">Réseau</text><text x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" style="font-size:8px">'+(agg.active_clients!=null?fmt(agg.active_clients)+' appareil(s)':'')+'</text>'+noeuds;
+    return '<svg class="graphe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Graphe des fournisseurs observés autour du réseau local">'+s+'</svg>';
+  }
+  function barres(liste,col,libelle,valeur,sous){
+    if(!liste.length) return '';
+    var m=Math.max.apply(null,liste.map(valeur).concat([1]));
+    return liste.map(function(r){var v=valeur(r);return '<div class="ligne"><span class="n" style="text-align:left" title="'+esc(libelle(r))+'">'+esc(libelle(r))+(sous?' <small style="color:var(--faible)">'+esc(sous(r))+'</small>':'')+'</span><span>'+fmt(v)+'</span><div class="barre"><i style="width:'+Math.max(4,100*v/m)+'%;background:'+col+'"></i></div></div>';}).join('');
+  }
+  var ETAT={agg:null,db:null,tous:false,conf:null};
+  function trackers(){
+    var agg=ETAT.agg;if(!agg){el('trackers').innerHTML='<div class="vide">Session requise.</div>';el('trkNote').textContent='';return;}
+    var f=el('rech').value.trim().toLowerCase(),td=(agg.by_tracker_domain||[]).filter(function(r){return !f||String(r.tracker_domain).toLowerCase().indexOf(f)>=0;});
+    el('trkNote').textContent=fmt(td.length)+' domaine(s)';
+    if(!td.length){el('trackers').innerHTML='<div class="vide">Aucun tracker dans la fenêtre.</div>';return;}
+    var vis=ETAT.tous||f?td:td.slice(0,8);
+    el('trackers').innerHTML='<div class="ligne entete"><span style="text-align:left">Domaine</span><span>Hits · clients</span><span></span></div>'+
+      vis.map(function(r){var m=num(td[0].hits)||1;return '<div class="ligne"><span class="n" title="'+esc(r.tracker_domain)+'"><code>'+esc(r.tracker_domain)+'</code></span><span>'+fmt(r.hits)+' · '+fmt(r.clients)+'</span><div class="barre"><i style="width:'+Math.max(4,100*num(r.hits)/m)+'%;background:var(--rouge)"></i></div></div>';}).join('')+
+      (td.length>8&&!f?'<button type="button" class="plus" id="plus">'+(ETAT.tous?'▴ réduire':'▾ tout afficher ('+fmt(td.length)+')')+'</button>':'');
+    var p=el('plus');if(p)p.addEventListener('click',function(){ETAT.tous=!ETAT.tous;trackers();});
+  }
+  function appareils(){
+    var db=ETAT.db;
+    if(!db){el('appareils').innerHTML='<div class="vide">Session requise.</div>';el('devNote').textContent='';return;}
+    var bd=(db.by_device||[]).slice(0,10);
+    el('devNote').textContent=fmt(db.devices)+' appareil(s) · '+fmt(db.total_hits)+' blocages 24 h';
+    if(!bd.length){el('appareils').innerHTML='<div class="vide">Aucun blocage attribué (24 h).</div>';return;}
+    el('appareils').innerHTML='<table><thead><tr><th>Appareil (empreinte)</th><th>IP</th><th>Liste noire</th><th>DoH</th><th>Total</th><th>Action</th></tr></thead><tbody>'+bd.map(function(r){
+      var ip=r.ip||'',ouvert=ETAT.conf===ip&&ip;
+      var act=!ip?'—':ouvert?'<span class="conf">Couper tout le trafic de '+esc(ip)+' pendant 6 h ? <button type="button" class="btn ok" data-oui="'+esc(ip)+'">Confirmer</button><button type="button" class="btn non" data-non="1">Annuler</button></span>'
+        :'<button type="button" class="btn" data-quar="'+esc(ip)+'">⛔ Quarantaine</button>';
+      return '<tr><td><code>'+esc(String(r.mac_hash||'').slice(0,16))+'</code></td><td>'+esc(ip||'—')+'</td><td>'+N(r.blacklist)+'</td><td>'+N(r.doh)+'</td><td><b>'+N(r.total)+'</b></td><td>'+act+'</td></tr>';}).join('')+'</tbody></table>';
+  }
+  function clients(){
+    var agg=ETAT.agg;if(!agg){el('clients').innerHTML='<div class="vide">Session requise.</div>';return;}
+    var bc=(agg.by_client||[]).slice().sort(function(a,b){return num(b.trackers)-num(a.trackers);}).slice(0,10);
+    if(!bc.length){el('clients').innerHTML='<div class="vide">Aucun client.</div>';return;}
+    el('clients').innerHTML='<table><thead><tr><th>Client (empreinte)</th><th>Sites</th><th>Trackers</th><th>Vu il y a</th></tr></thead><tbody>'+bc.map(function(r){
+      var min=r.last_seen?Math.max(0,Math.round((Date.now()/1000-num(r.last_seen))/60)):null;
+      return '<tr><td><code>'+esc(String(r.client_mac_hash||'').slice(0,16))+'</code></td><td>'+N(r.sites)+'</td><td><b>'+N(r.trackers)+'</b></td><td>'+(min==null?'—':min<120?min+' min':Math.round(min/60)+' h')+'</td></tr>';}).join('')+'</tbody></table>';
+  }
+  function rend(d){
+    var agg=d.agg,db=d.db;ETAT.agg=agg;ETAT.db=db;
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||agg||db);
+    var a=el('actif');a.textContent=agg?'SUIVI ACTIF · '+fmt(agg.window_hours||24)+' H':(db?'PARTIEL':'SESSION REQUISE');a.className='actif'+(agg||db?'':' hors');
+    var op=agg&&agg.by_opgrade||[];
+    el('tuiles').innerHTML=
+      tuile(IC.cli,N(agg&&agg.active_clients),'Appareils actifs','dans la fenêtre','Appareils protégés distincts ayant généré au moins un lien vers un tracker sur la fenêtre (empreintes, pas d’adresses matérielles).')
+     +tuile(IC.trk,N(agg&&agg.total_trackers_seen),'Trackers vus','domaines distincts','Domaines de pistage distincts (regroupés par domaine enregistrable, adresses IP exclues) vus sur la fenêtre.')
+     +tuile(IC.eu,N(agg&&agg.extra_eu_trackers),'Trackers hors UE','destination','Trackers dont l’hôte est situé hors de l’Union européenne. « — » quand le calcul n’est pas fourni.')
+     +tuile(IC.op,agg?fmt(op.length):'—','Surfaces opérateur',agg?fmt(agg.opgrade_clients)+' client(s) exposé(s)':'','Fournisseurs de type opérateur ou proche-État détectés dans le trafic.')
+     +tuile(IC.bot,agg?fmt((agg.by_antibot||[]).length):'—','Anti-bot',agg?fmt(agg.antibot_clients)+' client(s) défié(s)':'','Services « prouvez que vous êtes humain » rencontrés par les appareils.')
+     +tuile(IC.blo,N(db&&db.total_hits),'Blocages attribués',db?fmt(db.devices)+' appareil(s)':'','Tentatives bloquées (liste noire, DoH) attribuées à un appareil sur la fenêtre.');
+    el('graphe').innerHTML=agg?graphe(agg):'<div class="vide">Session requise.</div>';
+    el('legGraphe').innerHTML=agg?'<span><i style="background:'+COL.res+'"></i>Réseau local</span><span><i style="background:'+COL.tracker+'"></i>Tracker</span><span><i style="background:'+COL.op+'"></i>Opérateur</span><span><i style="background:'+COL.bot+'"></i>Anti-bot</span><span><i style="background:'+COL.cdn+'"></i>CDN</span>':'';
+    trackers();
+    var cdn=agg&&agg.by_cdn||[];
+    el('cdn').innerHTML=agg?(cdn.length?barres(cdn.slice(0,8),COL.cdn,function(r){return r.cdn_vendor;},function(r){return num(r.hosts);}):'<div class="vide">Aucun CDN détecté.</div>'):'<div class="vide">Session requise.</div>';
+    var ab=agg&&agg.by_antibot||[];
+    el('abNote').textContent=agg?fmt(agg.antibot_clients)+' client(s) défié(s)':'';
+    el('antibot').innerHTML=agg?(ab.length?barres(ab.slice(0,8),COL.bot,function(r){return r.antibot_vendor;},function(r){return num(r.challenges);},function(r){return r.sites+' site(s)';}):'<div class="vide">Aucun anti-bot détecté.</div>'):'<div class="vide">Session requise.</div>';
+    el('opNote').textContent=agg?fmt(agg.opgrade_clients)+' client(s) exposé(s)':'';
+    el('opgrade').innerHTML=agg?(op.length?barres(op.slice(0,8),COL.op,function(r){return r.opgrade_vendor;},function(r){return num(r.events);},function(r){return r.category||'';}):'<div class="vide">Aucune surface opérateur-grade détectée.</div>'):'<div class="vide">Session requise.</div>';
+    appareils();clients();
+  }
+  var DEMO={demo:true,agg:{window_hours:24,active_clients:7,total_trackers_seen:48,extra_eu_trackers:21,
+    by_tracker_domain:[{tracker_domain:'doubleclick.net',hits:1840,clients:6},{tracker_domain:'facebook.net',hits:1320,clients:5},{tracker_domain:'google-analytics.com',hits:1105,clients:7},{tracker_domain:'tiktokcdn.com',hits:760,clients:3},{tracker_domain:'criteo.com',hits:540,clients:4},{tracker_domain:'adnxs.com',hits:410,clients:4},{tracker_domain:'hotjar.com',hits:260,clients:2},{tracker_domain:'scorecardresearch.com',hits:190,clients:3},{tracker_domain:'snapchat.com',hits:120,clients:1},{tracker_domain:'linkedin.com',hits:90,clients:2}],
+    by_client:[{client_mac_hash:'a41f9c02d7be3a10',sites:34,trackers:27,last_seen:Math.floor(Date.now()/1000)-300},{client_mac_hash:'7be2c9d014aa55f3',sites:22,trackers:19,last_seen:Math.floor(Date.now()/1000)-1500},{client_mac_hash:'c0de11aa09f4b7e2',sites:9,trackers:8,last_seen:Math.floor(Date.now()/1000)-7200}],
+    by_cdn:[{cdn_vendor:'Cloudflare',hosts:14},{cdn_vendor:'Akamai',hosts:9},{cdn_vendor:'Fastly',hosts:5}],
+    by_antibot:[{antibot_vendor:'Cloudflare Turnstile',sites:6,clients:3,challenges:42},{antibot_vendor:'hCaptcha',sites:2,clients:2,challenges:11}],antibot_clients:4,
+    by_opgrade:[{opgrade_vendor:'Orange Business',category:'opérateur',sites:3,clients:2,events:88},{opgrade_vendor:'Thales',category:'défense',sites:1,clients:1,events:12}],opgrade_clients:3},
+    db:{devices:3,total_hits:312,by_device:[{mac_hash:'a41f9c02d7be3a10',ip:'10.64.0.7',blacklist:140,doh:62,total:202},{mac_hash:'7be2c9d014aa55f3',ip:'10.64.0.12',blacklist:80,doh:9,total:89},{mac_hash:'c0de11aa09f4b7e2',ip:'10.64.0.21',blacklist:21,doh:0,total:21}]}};
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function entetes(extra){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;for(var k in (extra||{}))h[k]=extra[k];return h;}
+  function jget(u){return fetch(API+u,{headers:entetes(),credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    if(DEMOMODE){rend(DEMO);return;}
+    Promise.all([jget('/admin/social-aggregate?hours=24'),jget('/admin/device-blocks?hours=24')]).then(function(r){rend({agg:r[0],db:r[1]});});
+  }
+  function annonce(ok,txt){var r=el('res');r.hidden=false;r.className='res '+(ok?'bien':'mal');r.textContent=txt;}
+  /* Action conservée : POST /api/v1/toolbox/admin/quarantine/{ip} (même appel que l'ancien onglet). Confirmation intégrée, jamais de boîte du navigateur. */
+  function quarantaine(ip){
+    ETAT.conf=null;
+    if(DEMOMODE){annonce(false,'Démonstration : aucune action envoyée.');appareils();return;}
+    fetch(API+'/admin/quarantine/'+encodeURIComponent(ip),{method:'POST',headers:entetes(),credentials:'same-origin'}).then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      annonce(true,'Appareil '+ip+' en quarantaine (6 h).');charge();
+    }).catch(function(e){annonce(false,'Échec de la quarantaine : '+e.message);appareils();});
+  }
+  el('appareils').addEventListener('click',function(ev){
+    var t=ev.target.closest?ev.target.closest('button'):null;if(!t)return;
+    if(t.hasAttribute('data-quar')){ETAT.conf=t.getAttribute('data-quar');appareils();}
+    else if(t.hasAttribute('data-oui')){quarantaine(t.getAttribute('data-oui'));}
+    else if(t.hasAttribute('data-non')){ETAT.conf=null;appareils();}
+  });
+  el('rech').addEventListener('input',trackers);
+  /* Encadrée par l'index du Toolbox : on lui dit sa hauteur pour qu'il n'y ait pas de défilement interne. */
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxToolboxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().height),onglet:'social'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);
+  if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  /* Actualisation 12 s : jamais page masquée, ni pendant une saisie ou une confirmation ouverte. */
+  setInterval(function(){if(document.hidden||ETAT.conf||document.activeElement===el('rech'))return;charge();},12000);
+})();
+</script>

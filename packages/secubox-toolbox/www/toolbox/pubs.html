@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Toolbox, onglet « Pubs » : blocage publicitaire (DNS + moteur MITM), auto-apprentissage des régies.
+  Une seule page, deux mises en page : encadrée (?embed=1) une colonne, ou tableau de bord (largeur >= 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API du Toolbox : /admin/ad-stats, /admin/ad-stats/client/<hash>, /admin/filters).
+  Une mesure absente s'affiche « — », jamais 0. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+  Seule action d'écriture de l'onglet : le commutateur Ad-Guard (POST /admin/filters {ad_guard}), avec confirmation intégrée.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox — Pubs et régies publicitaires</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.inc{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  button:hover{background:rgba(59,130,246,.3)} button.danger{border-color:var(--rouge);background:rgba(255,77,94,.16)} button.ok{border-color:var(--vert);background:rgba(46,204,113,.16)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .ligne{display:grid;grid-template-columns:1fr auto 80px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .ligne.cl{cursor:pointer} .ligne.cl:hover .n{color:var(--cyan)}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .puce{display:inline-block;border-radius:5px;padding:0 8px;font-weight:700;font-size:.68rem;margin:2px 4px 2px 0;border:1px solid transparent}
+  .puce.on{background:rgba(46,204,113,.2);color:var(--vert)} .puce.off{background:rgba(255,77,94,.2);color:var(--rouge)} .puce.inc{background:rgba(159,179,214,.2);color:var(--doux)} .puce.att{background:rgba(255,159,28,.18);color:var(--orange)}
+  .prot{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:.78rem;padding:3px 0}
+  input[type=search]{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;width:100%;margin-bottom:6px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 10px;font-size:.78rem;display:grid;gap:6px}
+  .conf .bt{display:flex;gap:8px;flex-wrap:wrap}
+  .retour{font-size:.76rem;padding:4px 8px;border-radius:8px} .retour.ok{background:rgba(46,204,113,.14);color:var(--vert)} .retour.ko{background:rgba(255,77,94,.14);color:var(--rouge)}
+  .detail{margin-top:8px;border-top:1px solid var(--trait);padding-top:6px}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g2{grid-template-columns:1.3fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><path d="M5.6 5.6l12.8 12.8"/><path d="M8.5 15.5l1.4-7h4.2l1.4 7M10 12.5h4"/></svg><span><b>Pubs</b><small>Ad-Guard · blocage DNS et moteur MITM</small></span></span>
+    <span class="actif inc" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Blocage publicitaire et régies</h2><div class="sous">La plupart des pubs sont tuées au DNS, avant le moteur MITM ; le compteur « 204 » ne mesure que ce qui passe le DNS.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="pan"><h3>Ad-Guard <i>commutateur général, indépendant des niveaux R0 à R4</i></h3>
+    <div class="prot"><span id="agTxt" class="sous">Blocage pub (sinkhole DNS + cosmétique R3)</span><button type="button" id="agBtn" hidden>…</button></div>
+    <div id="agConf"></div><div id="agRet"></div>
+  </div>
+  <div class="grille g2">
+    <div class="pan"><h3>Pubs bloquées par heure <i>moteur MITM (204), moyenne par tranche sur 24 h</i></h3><div id="courbe"></div></div>
+    <div class="pan"><h3>Listes et protections actives <i>lecture seule</i></h3><div id="listes"></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Classement des régies <i>hôtes publicitaires bloqués</i></h3><div id="hotes"></div></div>
+    <div class="pan"><h3>Sites les plus concernés <i>pubs et trackers bloqués</i></h3><div id="sites"></div></div>
+    <div class="pan"><h3>Visiteurs <i>cliquer pour le détail</i></h3><div id="visiteurs"></div><div class="detail" id="detail" hidden></div></div>
+  </div>
+  <div class="pan"><h3>Candidats à l’apprentissage <i id="candNote"></i></h3>
+    <input type="search" id="filtre" placeholder="Filtrer les hôtes…" aria-label="Filtrer les candidats">
+    <div id="cands"></div>
+    <div class="note">Un candidat est observé mais pas encore promu au blocage actif : la promotion est automatique (auto-apprentissage), sans action manuelle sur cet onglet.</div>
+  </div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var API='/api/v1/toolbox';
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  function N(v){return v==null?'—':fmt(v);}
+  var q=new URLSearchParams(location.search), DEMO_ON=!!q.get('demo');
+  if(q.get('embed')) document.body.classList.add('emb');
+  var D=null, F=null, SERIE=null, cur={}, enAttente=false;
+  var IC={
+    bloc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+    taux:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><path d="M12 3a9 9 0 109 9" fill="rgba(46,204,113,.12)"/><path d="M12 3v9h9"/></svg>',
+    reg:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="5" width="16" height="11" rx="2" fill="rgba(167,139,250,.14)"/><path d="M8 20h8M12 16v4"/></svg>',
+    dom:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    cand:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6" fill="rgba(255,159,28,.14)"/><path d="M16 16l4 4"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  function liste(rows,cle,val,coul,clic){
+    if(!rows||!rows.length) return '<div class="vide">Rien dans la fenêtre.</div>';
+    var m=Math.max.apply(null,rows.map(function(r){return num(r[val]);}).concat([1]));
+    return rows.map(function(r){var id=esc(r[cle]);return '<div class="ligne'+(clic?' cl':'')+'"'+(clic?' data-mh="'+id+'"':'')+'><span class="n" style="text-align:left" title="'+id+'"><code>'+id+'</code></span><span>'+fmt(r[val])+'</span><div class="barre"><i style="width:'+Math.max(4,100*num(r[val])/m)+'%;background:'+coul+'"></i></div></div>';}).join('');
+  }
+  function courbe(s){
+    var n=s.length,W=520,H=170,L=38,R=8,T=8,B=22,max=Math.max.apply(null,s.map(function(d){return d.v;}).concat([1])),haut=Math.max(3,Math.ceil(max*1.1/3)*3);
+    var x=function(i){return L+i*(W-L-R)/(n-1);},y=function(v){return T+(H-T-B)*(1-v/haut);};
+    var g='',k;for(k=0;k<=3;k++){var v=haut*k/3,Y=y(v);g+='<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-5)+'" y="'+(Y+3)+'" text-anchor="end">'+(Math.round(v*10)/10)+'</text>';}
+    var d='',a='',xs='';
+    s.forEach(function(p,i){var X=x(i),Y=y(p.v);d+=(i?' L':'M')+X+','+Y;xs+='<text x="'+X+'" y="'+(H-6)+'" text-anchor="middle">'+esc(p.lib)+'</text><circle cx="'+X+'" cy="'+Y+'" r="3" fill="#ff4d5e"><title>'+esc(p.lib)+' : '+(Math.round(p.v*10)/10)+' / h</title></circle>';});
+    a=d+' L'+x(n-1)+','+y(0)+' L'+x(0)+','+y(0)+' Z';
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Pubs bloquées par heure"><defs><linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".35"/><stop offset="1" stop-color="#ff4d5e" stop-opacity="0"/></linearGradient></defs>'+g+'<path d="'+a+'" fill="url(#gd)"/><path d="'+d+'" fill="none" stroke="#ff4d5e" stroke-width="1.8" stroke-linejoin="round"/>'+xs+'</svg><div class="note">Pubs bloquées par heure, moyenne sur chaque tranche (il y a 24 h, 12 h, 6 h, 3 h, 1 h jusqu’à maintenant).</div>';
+  }
+  function puce(on,t){return '<span class="puce '+(on===true?'on':on===false?'off':'inc')+'">'+esc(t)+(on===true?' · ON':on===false?' · OFF':' · ?')+'</span>';}
+  function rend(){
+    var d=D, f=F, dns=d&&d.dns_sinkhole||null;
+    el('demo').hidden=!DEMO_ON; el('session').hidden=!!(DEMO_ON||d||f);
+    var on=f?!(f.ad_guard===false):null, a=el('actif');
+    a.textContent=on==null?'ÉTAT INCONNU':(on?'AD-GUARD ACTIF':'AD-GUARD DÉSACTIVÉ'); a.className='actif'+(on==null?' inc':on?'':' hors');
+    var tb=d?num(d.total_blocked):null, sil=d&&d.by_action?num(d.by_action.silent):null;
+    var taux=(d&&d.by_action&&(tb+sil)>0)?Math.round(100*tb/(tb+sil))+' %':'—';
+    el('tuiles').innerHTML=
+      tuile(IC.bloc,N(tb),'Pubs bloquées','24 h · moteur MITM (204)','Contenus publicitaires bloqués (réponse 204) par le moteur MITM sur 24 h. Les pubs tuées plus tôt, au DNS, ne sont pas comptées ici.')
+     +tuile(IC.taux,taux,'Taux de blocage',d&&d.by_action?'bloquées sur observées':'','Part des hôtes publicitaires bloqués parmi ceux observés (bloqués + observés en silence) sur 24 h. « — » sans observation.')
+     +tuile(IC.reg,d?fmt((d.top_hosts||[]).length):'—','Régies connues',d&&(d.top_hosts||[]).length>=25?'25 premières affichées':'hôtes bloqués sur 24 h','Hôtes publicitaires distincts bloqués par le moteur sur 24 h (plafonné au top 25 de l’API).')
+     +tuile(IC.dom,N(dns&&dns.enabled!=null?dns.domains:null),'Domaines appris',dns&&dns.enabled===false?'sinkhole désactivé':'sinkholés au DNS','Domaines publicitaires et trackers sinkholés par le résolveur DNS (listes + apprentissage).')
+     +tuile(IC.cand,N(d?d.total_candidates:null),'Candidats',d&&d.candidates_cumulative?'cumul en attente':'détectés sur 24 h','Hôtes observés comme pub ou tracker, en attente de promotion au blocage actif.');
+    // Ad-Guard
+    var b=el('agBtn'); b.hidden=(on==null)||DEMO_ON; b.textContent=on?'⏸ Désactiver':'▶ Activer';
+    el('agTxt').innerHTML='Blocage pub (sinkhole DNS + cosmétique R3) : '+(on==null?'<span class="puce inc">état inconnu</span>':on?'<span class="puce on">ON</span>':'<span class="puce off">OFF</span>')+(DEMO_ON?' <span class="sous">(lecture seule en démo)</span>':'');
+    // courbe
+    el('courbe').innerHTML=SERIE&&SERIE.length>=2?courbe(SERIE):'<div class="vide">'+(DEMO_ON||d?'Pas assez de mesures pour tracer la courbe.':'Session requise.')+'</div>';
+    // listes
+    var h='';
+    if(dns){
+      h+='<div class="prot"><span>Blocage DNS (sinkhole Unbound)</span>'+(dns.enabled===true?'<span class="puce on">ACTIF</span>':dns.enabled===false?'<span class="puce off">DÉSACTIVÉ</span>':'<span class="puce inc">INDISPONIBLE</span>')+'</div>';
+      h+='<div class="prot"><span>Domaines sinkholés</span><b>'+N(dns.domains)+'</b></div><div class="prot"><span>Règles réseau</span><b>'+N(dns.net_rules)+'</b></div>';
+      if(dns.cosmetic_domains!=null) h+='<div class="prot"><span>Domaines cosmétiques</span><b>'+N(dns.cosmetic_domains)+'</b></div>';
+      h+='<div style="margin-top:4px" class="sous">Sources de listes</div><div>'+((dns.sources||[]).length?dns.sources.map(function(s){return '<span class="puce on">'+esc(s)+'</span>';}).join(''):'<span class="vide">—</span>')+'</div>';
+    }
+    if(f){
+      h+='<div style="margin-top:6px" class="sous">Protections du moteur</div><div>'
+       +puce(f.ad_ghost,'Ghosting pubs')+puce(f.ad_ghost_block,'Blocage 204')+puce(f.autolearn,'Auto-apprentissage')+puce(f.ad_learn,'Apprentissage d’URL de pubs')+'</div>';
+      var gc=f.ad_ghost_categories||{},ks=Object.keys(gc);
+      if(ks.length) h+='<div style="margin-top:4px" class="sous">Catégories cosmétiques</div><div>'+ks.map(function(k){return puce(gc[k],k);}).join('')+'</div>';
+    }
+    el('listes').innerHTML=h||'<div class="vide">Session requise.</div>';
+    // classements
+    var hs=d&&(d.top_hosts||[]).slice(0,10), ss=d&&(d.top_sites||[]).slice(0,10), vs=d&&(d.top_visitors||[]).slice(0,10);
+    el('hotes').innerHTML=d?liste(hs,'host','hits','var(--rouge)'):'<div class="vide">Session requise.</div>';
+    el('sites').innerHTML=d?liste(ss,'site','hits','var(--violet)'):'<div class="vide">Session requise.</div>';
+    el('visiteurs').innerHTML=d?liste(vs,'mac_hash','hits','var(--cyan)',true):'<div class="vide">Session requise.</div>';
+    cands();
+    el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+  function cands(){
+    var d=D, t=(el('filtre').value||'').toLowerCase().trim();
+    if(!d){el('cands').innerHTML='<div class="vide">Session requise.</div>';el('candNote').textContent='';return;}
+    el('candNote').textContent=d.candidates_cumulative?'cumul — rien de neuf dans la fenêtre':'détectés dans la fenêtre de 24 h';
+    var rows=(d.top_candidates||[]).filter(function(r){return !t||String(r.host).toLowerCase().indexOf(t)>=0;});
+    if(!rows.length){el('cands').innerHTML='<div class="vide">'+((d.top_candidates||[]).length?'Aucun hôte ne correspond.':'Aucun tracker ou pub détecté (backlog vide).')+'</div>';return;}
+    var m=Math.max.apply(null,rows.map(function(r){return num(r.hits);}).concat([1])),et=d.candidates_cumulative?'En attente (cumul)':'Observé';
+    el('cands').innerHTML='<div class="ligne" style="color:var(--faible);font-size:.68rem"><span style="text-align:left">Hôte détecté · état</span><span>Observations</span><span></span></div>'+rows.map(function(r){
+      return '<div class="ligne"><span class="n" style="text-align:left" title="'+esc(r.host)+'"><code>'+esc(r.host)+'</code> <span class="puce att">'+et+'</span></span><span>'+fmt(r.hits)+'</span><div class="barre"><i style="width:'+Math.max(4,100*num(r.hits)/m)+'%;background:var(--orange)"></i></div></div>';}).join('');
+  }
+  // ---- détail visiteur (GET /admin/ad-stats/client/<hash>) ----
+  function detail(mh){
+    var z=el('detail');z.hidden=false;z.innerHTML='<div class="vide">Chargement…</div>';
+    var fin=function(c){
+      if(!c){z.innerHTML='<div class="vide">Détail indisponible.</div>';return;}
+      var rows=(c.top_hosts||[]).slice(0,5).map(function(r){return {host:r.host,hits:r.hits};});
+      z.innerHTML='<div class="sous"><code>'+esc(c.mac_hash||mh)+'</code> — '+fmt(c.total)+' trackers/pubs bloqués</div>'+(rows.length?liste(rows,'host','hits','var(--rouge)'):'<div class="vide">Aucune pub bloquée pour ce visiteur.</div>');
+    };
+    if(DEMO_ON) return fin({mac_hash:mh,total:312,top_hosts:[{host:'ads.doubleclick.net',hits:140},{host:'pagead2.googlesyndication.com',hits:96},{host:'tracker.example-adtech.net',hits:52}]});
+    jget(API+'/admin/ad-stats/client/'+encodeURIComponent(mh)).then(fin);
+  }
+  el('visiteurs').addEventListener('click',function(e){var n=e.target.closest&&e.target.closest('[data-mh]');if(n)detail(n.getAttribute('data-mh'));});
+  el('filtre').addEventListener('input',cands);
+  // ---- commutateur Ad-Guard : POST /admin/filters {ad_guard}, confirmation intégrée ----
+  el('agBtn').addEventListener('click',function(){
+    if(!F||DEMO_ON) return;
+    var on=!(F.ad_guard===false);enAttente=true;el('agRet').innerHTML='';
+    el('agConf').innerHTML='<div class="conf"><div>'+(on?'Désactiver Ad-Guard coupe le sinkhole DNS et le blocage cosmétique R3 pour tous les clients. Confirmer ?':'Réactiver Ad-Guard (sinkhole DNS + cosmétique R3) pour tous les clients ?')+'</div><div class="bt"><button type="button" class="'+(on?'danger':'ok')+'" id="agOui">Confirmer</button><button type="button" id="agNon">Annuler</button></div></div>';
+    el('agOui').addEventListener('click',bascule);
+    el('agNon').addEventListener('click',function(){enAttente=false;el('agConf').innerHTML='';});
+  });
+  function bascule(){
+    var on=!(F&&F.ad_guard===false);
+    el('agConf').innerHTML='<div class="vide">Envoi…</div>';
+    var h={'content-type':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    fetch(API+'/admin/filters',{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify({ad_guard:!on})})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(function(){el('agRet').innerHTML='<div class="retour ok">Ad-Guard '+(on?'désactivé':'activé')+'.</div>';})
+      .catch(function(e){el('agRet').innerHTML='<div class="retour ko">Échec : '+esc(e.message)+'</div>';})
+      .then(function(){enAttente=false;el('agConf').innerHTML='';setTimeout(charge,400);});
+  }
+  // ---- données ----
+  var DEMOD={
+    ad:{window_hours:24,total_blocked:18420,by_action:{block:18420,silent:2210},total_candidates:37,candidates_cumulative:false,trackers_seen:412,pages_cleaned:1530,network_drops:880,
+      dns_sinkhole:{enabled:true,domains:214380,net_rules:61240,cosmetic_domains:9120,sources:['easylist','easyprivacy','hagezi-pro','oisd']},
+      top_hosts:[{host:'ads.doubleclick.net',hits:5210},{host:'pagead2.googlesyndication.com',hits:3980},{host:'securepubads.g.doubleclick.net',hits:2740},{host:'tracker.example-adtech.net',hits:1630},{host:'cdn.taboola.com',hits:1210},{host:'ib.adnxs.com',hits:890}],
+      top_sites:[{site:'www.exemple-actu.fr',hits:4200},{site:'video.exemple-tv.fr',hits:3100},{site:'forum.exemple.net',hits:1900}],
+      top_visitors:[{mac_hash:'a3f9c1d27b04',hits:6120},{mac_hash:'9be0447ac5d1',hits:4470},{mac_hash:'17d2e8f06a39',hits:2210}],
+      top_candidates:[{host:'metrics.new-adtech.io',hits:84},{host:'px.regie-inconnue.com',hits:61},{host:'sync.pubmatic-clone.net',hits:37},{host:'beacon.unknown-ads.org',hits:12}]},
+    f:{ad_guard:true,ad_ghost:true,ad_ghost_block:true,autolearn:true,ad_learn:true,ad_ghost_categories:{ads:true,consent_nag:true,newsletter:true,social_widgets:false}},
+    serie:[{lib:'-24 h',v:610},{lib:'-12 h',v:880},{lib:'-6 h',v:1020},{lib:'-3 h',v:760},{lib:'-1 h',v:540}]
+  };
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    if(DEMO_ON){D=DEMOD.ad;F=DEMOD.f;SERIE=DEMOD.serie;rend();return;}
+    var W=[1,3,6,12,24];
+    Promise.all([jget(API+'/admin/filters')].concat(W.map(function(h){return jget(API+'/admin/ad-stats?hours='+h);}))).then(function(r){
+      F=r[0]; var w=r.slice(1); D=w[4];
+      // tranches successives : blocs(24 h) - blocs(12 h), ... puis débit horaire moyen
+      var bl=w.map(function(x){return x?num(x.total_blocked):null;}),lib=['-24 h','-12 h','-6 h','-3 h','-1 h'],dur=[12,6,3,2,1],sr=[];
+      if(bl.every(function(v){return v!=null;})){
+        var top=[bl[4]-bl[3],bl[3]-bl[2],bl[2]-bl[1],bl[1]-bl[0],bl[0]];
+        top.forEach(function(v,i){sr.push({lib:lib[i],v:Math.max(0,v)/dur[i]});});
+      }
+      SERIE=sr; rend();
+    });
+  }
+  // ---- cadre parent ----
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxToolboxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().height),onglet:'pubs'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+  el('rafraichir').addEventListener('click',charge);
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  charge();
+  setInterval(function(){
+    if(document.hidden||enAttente||(document.activeElement&&document.activeElement.id==='filtre')) return;
+    charge();
+  },30000);
+})();
+</script>

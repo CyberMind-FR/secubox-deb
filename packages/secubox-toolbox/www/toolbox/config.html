@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Toolbox, onglet « Config » : la configuration ACTUELLE de la cabine numérique, en lecture.
+    · niveau R par défaut, mode (R1 métadonnées / R2 TLS-break), version ;
+    · options (point d'accès, DHCP, portail, relais), certificats (empreintes, jamais de clé privée), politiques (quarantaine, niveaux R) ;
+    · exportations : configuration brute et certificat public (aucune écriture).
+  L'ancien onglet n'avait AUCUNE action d'écriture : aucune n'est donc proposée ici. Aucun secret affiché (ni clé privée, ni chemin de clé, ni sel).
+  DONNÉES RÉELLES UNIQUEMENT : /api/v1/toolbox/admin/config, /health, /rlevel/peers, /ca/fingerprint. Une mesure absente s'affiche « — », jamais 0.
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau. `?embed=1` : version encadrée (hauteur postée au parent).
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox — configuration</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile .haut>div{min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.35rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .kv{display:grid;grid-template-columns:minmax(80px,auto) 1fr;gap:5px 12px;font-size:.78rem}
+  .kv .k{color:var(--faible)} .kv .v{color:var(--texte);overflow-wrap:anywhere;font-variant-numeric:tabular-nums;min-width:0}
+  code{font-family:ui-monospace,"IBM Plex Mono",Menlo,monospace;font-size:.72rem;color:var(--cyan)}
+  .on,.off,.inc{border-radius:5px;padding:0 8px;font-weight:700;font-size:.68rem;display:inline-block}
+  .on{background:rgba(46,204,113,.2);color:var(--vert)} .off{background:rgba(255,77,94,.2);color:var(--rouge)} .inc{background:rgba(159,179,214,.2);color:var(--doux)}
+  .ca{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;margin-bottom:8px;background:rgba(8,18,38,.5)}
+  .ca:last-child{margin-bottom:0}
+  .ca h4{margin:0 0 6px;font-size:.8rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .ca .kv{grid-template-columns:78px 1fr}
+  .pal{display:grid;gap:6px}
+  .niv{display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:start;font-size:.76rem;color:var(--doux)}
+  .niv b{display:inline-block;text-align:center;border-radius:5px;padding:1px 0;font-size:.7rem;color:#06101f}
+  .exp{display:flex;flex-wrap:wrap;gap:8px}
+  .exp a{color:var(--texte);text-decoration:none;font-size:.76rem;background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 10px}
+  .exp a:hover{border-color:var(--cyan)}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  svg.gauge{width:100%;max-width:420px;height:auto;display:block} svg.gauge text{fill:var(--doux);font-size:10px}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="rgba(59,130,246,.16)"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg><span><b>Configuration</b><small>Toolbox · cabine numérique</small></span></span>
+    <span class="actif" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Configuration actuelle</h2><div class="sous">Lecture seule : niveau par défaut, certificats, options et politiques de la passerelle.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g2">
+    <div class="pan"><h3>Options <i>configuration en service</i></h3><div id="options"></div></div>
+    <div class="pan"><h3>Certificats <i>empreintes, jamais de clé privée</i></h3><div id="certs"></div></div>
+  </div>
+  <div class="grille g2">
+    <div class="pan"><h3>Politiques <i>quarantaine et niveaux R</i></h3><div id="politiques"></div></div>
+    <div class="pan"><h3>Services reliés <i>modules appelés par la passerelle</i></h3><div id="addons"></div></div>
+  </div>
+  <div class="pan"><h3>Exportations <i>lecture seule</i></h3><div class="exp" id="exports"></div><div class="note">La configuration brute est servie par l’API d’administration (session requise). Seul le certificat public est exportable ; la clé privée ne quitte jamais la boîte.</div></div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function V(x){return x==null||x===''||x==='?'?'—':esc(x);}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var API='/api/v1/toolbox';
+  var IC={
+    niv:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="14" width="4" height="6" fill="rgba(41,182,246,.16)"/><rect x="10" y="9" width="4" height="11" fill="rgba(41,182,246,.16)"/><rect x="16" y="4" width="4" height="16" fill="rgba(41,182,246,.16)"/></svg>',
+    ca:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="13" rx="2" fill="rgba(46,204,113,.14)"/><circle cx="12" cy="9" r="2.5"/><path d="M9 21l3-3 3 3v-5h-6z"/></svg>',
+    mode:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(167,139,250,.14)"/></svg>',
+    ver:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="rgba(59,130,246,.16)"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>',
+    qua:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,159,28,.14)"/><path d="M12 7v6M12 16.5v.1"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';}
+  function kv(rows){return '<div class="kv">'+rows.map(function(r){return '<span class="k">'+esc(r[0])+'</span><span class="v">'+r[1]+'</span>';}).join('')+'</div>';}
+  function bool(b){return b==null?'<span class="inc">?</span>':b?'<span class="on">ACTIF</span>':'<span class="off">INACTIF</span>';}
+  var NIV={off:['#6f84a8','Off — aucune interception pour ce pair'],passive:['#2ecc71','Passif — métadonnées seulement (SNI, volumes), TLS intact'],active:['#ff9f1c','Actif — TLS ouvert avec le consentement, filtres appliqués'],reel:['#ff4d5e','Réel — interception complète, bannière et journalisation maximales']};
+  function nivLabel(m){return m?String(m).charAt(0).toUpperCase()+String(m).slice(1):'—';}
+  function court(fp){fp=String(fp||'');return fp&&fp!=='?'?fp.split(':').slice(0,6).join(':')+'…':'—';}
+  // Jauge des seuils de quarantaine : 0 — débit limité — quarantaine — 100
+  function jauge(t,qn){
+    if(t==null||qn==null) return '<div class="vide">Seuils indisponibles.</div>';
+    var W=300,x=function(v){return 10+Math.max(0,Math.min(100,v))*(W-20)/100;};
+    return '<svg class="gauge" viewBox="0 0 '+W+' 46" role="img" aria-label="Seuils de score : limitation à '+t+', quarantaine à '+qn+'">'
+      +'<rect x="10" y="12" width="'+(x(t)-10)+'" height="12" rx="3" fill="#2ecc71" opacity=".8"/>'
+      +'<rect x="'+x(t)+'" y="12" width="'+(x(qn)-x(t))+'" height="12" fill="#ff9f1c" opacity=".85"/>'
+      +'<rect x="'+x(qn)+'" y="12" width="'+(W-10-x(qn))+'" height="12" rx="3" fill="#ff4d5e" opacity=".85"/>'
+      +'<text x="10" y="40">0</text><text x="'+x(t)+'" y="40" text-anchor="middle">'+t+'</text><text x="'+x(qn)+'" y="40" text-anchor="middle">'+qn+'</text><text x="'+(W-10)+'" y="40" text-anchor="end">100</text>'
+      +'<text x="'+(10+(x(t)-10)/2)+'" y="8" text-anchor="middle">libre</text><text x="'+((x(t)+x(qn))/2)+'" y="8" text-anchor="middle">limité</text><text x="'+((x(qn)+W-10)/2)+'" y="8" text-anchor="middle">quarantaine</text></svg>';
+  }
+  function carte(titre,f,dl){
+    if(!f) return '<div class="ca"><h4>'+esc(titre)+'</h4><div class="vide">Empreinte indisponible.</div></div>';
+    return '<div class="ca"><h4>'+esc(titre)+' <span class="inc">PUBLIC</span></h4>'+kv([['Sujet','<code>'+V(f.subject)+'</code>'],['SHA-256','<code title="'+esc(f.sha256)+'">'+V(f.sha256)+'</code>'],['SHA-1','<code>'+V(f.sha1)+'</code>'],['Valide jusqu’au',V(f.valide_jusqu)]])
+      +(dl?'<div class="note">'+dl+'</div>':'')+'</div>';
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo;
+    var c=d.cfg,h=d.health,rl=d.rlevel,fd=d.fpDef,fw=d.fpWg;
+    el('session').hidden=!!(d.demo||c||h||rl||fd);
+    var a=el('actif');a.textContent=c?(c.r2&&c.r2.enabled?'R2 ACTIF':'R1 MÉTADONNÉES'):(h?'EN LIGNE':'HORS LIGNE');a.classList.toggle('hors',!(c||h));
+    var def=rl&&rl.defaults||null;
+    el('tuiles').innerHTML=
+      tuile(IC.niv,def?esc(nivLabel(def.mode)):'—','Niveau R par défaut',def?'plancher : '+esc(nivLabel(def.floor)):'','Mode appliqué à un pair WireGuard sans réglage propre (off, passif, actif, réel) ; le plancher est le niveau minimal qu’un pair ne peut pas descendre.')
+     +tuile(IC.ca,fd&&fd.valide_jusqu?esc(fd.valide_jusqu):'—','CA valide jusqu’au',fd?'SHA-256 '+esc(court(fd.sha256)):'','Date de fin de validité du certificat racine de la cabine (fournie si l’API la publie).')
+     +tuile(IC.mode,c?(c.r2&&c.r2.enabled?'R2':'R1'):'—','Mode',c?(c.r2&&c.r2.enabled?'TLS-break sur consentement':'métadonnées seules'):'','R2 : le trafic chiffré est ouvert pour les clients consentants ; R1 : métadonnées seulement.')
+     +tuile(IC.ver,h&&h.version?'v'+esc(h.version):'—','Version',h&&h.module?esc(h.module):'','Version du module Toolbox annoncée par son contrôle de santé.')
+     +tuile(IC.qua,c&&c.quarantine?esc(c.quarantine.score_quarantine):'—','Seuil de quarantaine',c&&c.quarantine?'limitation dès '+esc(c.quarantine.score_throttle):'','Score de risque d’un client à partir duquel il est mis en quarantaine.');
+    if(c){
+      el('options').innerHTML=kv([
+        ['Point d’accès','<b>'+V(c.ap&&c.ap.ssid)+'</b> · '+V(c.ap&&c.ap.band)+' · canal '+V(c.ap&&c.ap.channel)],
+        ['Interface','<code>'+V(c.ap&&c.ap.iface)+'</code>'],
+        ['DHCP',V(c.dhcp&&c.dhcp.range_start)+' → '+V(c.dhcp&&c.dhcp.range_end)],
+        ['Bail',V(c.dhcp&&c.dhcp.lease_ttl)],
+        ['Passerelle / DNS',V(c.dhcp&&c.dhcp.gateway)+' · '+((c.dhcp&&c.dhcp.dns||[]).map(esc).join(', ')||'—')],
+        ['Portail',V(c.portal&&c.portal.listen_host)+':'+V(c.portal&&c.portal.listen_port)],
+        ['Rapports conservés',V(c.portal&&c.portal.report_ttl)],
+        ['R2 (TLS-break)',bool(c.r2?!!c.r2.enabled:null)],
+        ['Relais MITM','<code>'+V(c.r2&&c.r2.mitm_listen)+'</code>']]);
+      var ad=c.addons||{},ks=Object.keys(ad);
+      el('addons').innerHTML=ks.length?kv(ks.map(function(k){return [k,'<code>'+esc(ad[k]).replace(/^http\+unix:\/\//,'')+'</code>'];})):'<div class="vide">Aucun service relié.</div>';
+    }else{
+      el('options').innerHTML='<div class="vide">Configuration indisponible (session requise).</div>';
+      el('addons').innerHTML='<div class="vide">—</div>';
+    }
+    el('certs').innerHTML=carte('CA captive R1 / R2',fd,'Installée sur l’appareil via le portail ; ne se confond pas avec la CA du tunnel.')+carte('CA du tunnel R3 (WireGuard)',fw&&fw.ca==='r3'?fw:null,fw&&fw.ca!=='r3'?'Aucune CA R3 distincte sur cette boîte.':'');
+    var q2=c&&c.quarantine;
+    el('politiques').innerHTML='<div class="pal">'
+      +'<div>'+jauge(q2?Number(q2.score_throttle):null,q2?Number(q2.score_quarantine):null)+'</div>'
+      +(def?kv([['Mode par défaut',V(nivLabel(def.mode))],['Plancher par défaut',V(nivLabel(def.floor))]]):'<div class="vide">Niveaux par défaut indisponibles (session requise).</div>')
+      +['off','passive','active','reel'].map(function(m){return '<div class="niv"><b style="background:'+NIV[m][0]+'">'+m.charAt(0).toUpperCase()+'</b><span>'+esc(NIV[m][1])+'</span></div>';}).join('')
+      +'</div>';
+    el('exports').innerHTML='<a href="'+API+'/admin/config" target="_blank" rel="noopener">⚙ Configuration brute (JSON)</a>'
+      +'<a href="'+API+'/ca/android.crt" target="_blank" rel="noopener">⬇ Certificat public (PEM)</a>'
+      +'<a href="'+API+'/ca/android.der" target="_blank" rel="noopener">⬇ Certificat public (DER)</a>'
+      +'<a href="'+API+'/ca/mobileconfig" target="_blank" rel="noopener">⬇ Profil iOS (.mobileconfig)</a>';
+  }
+  var DEMO={demo:true,
+    cfg:{ap:{ssid:'VILLAGE3B',iface:'wlan0',channel:6,band:'2g'},dhcp:{range_start:'10.99.0.10',range_end:'10.99.0.250',lease_ttl:'1h',gateway:'10.99.0.1',dns:['10.99.0.1']},portal:{listen_host:'10.99.0.1',listen_port:8088,report_ttl:'24h'},r2:{enabled:true,mitm_listen:'10.99.0.1:8080'},addons:{cookies:'http+unix:///run/secubox/cookies.sock/inject',dpi:'http+unix:///run/secubox/dpi.sock/classify',ja4:'http+unix:///run/secubox/threat-analyst.sock/ja4',soc_relay:'http+unix:///run/secubox/soc.sock/event'},quarantine:{score_throttle:30,score_quarantine:70}},
+    health:{status:'ok',module:'toolbox',version:'1.0.0'},
+    rlevel:{defaults:{mode:'passive',floor:'passive'}},
+    fpDef:{ca:'default',subject:'CN = Gondwana Toolbox CA',sha256:'4A:1F:9C:02:7B:E3:55:D0:AA:18:6C:91:0E:42:B7:F3:19:8D:C4:6A:30:E5:77:2B:90:D1:5F:A8:03:BC:61:E9',sha1:'9B:03:AA:41:6E:D2:17:C8:5D:F0:22:7A:B4:19:E6:3C:80:55:D9:01',valide_jusqu:'2036-04-12'},
+    fpWg:{ca:'r3',subject:'CN = sbxmitm CA',sha256:'C1:7E:20:B9:44:D8:0A:63:F5:9E:12:AB:7D:38:C0:56:E1:84:2F:9A:B3:60:1D:F7:48:CE:05:72:A9:3B:D6:80',sha1:'2D:90:EB:11:67:A3:F4:08:5C:BE:79:D2:30:A1:4F:86:E7:15:CB:62',valide_jusqu:'2036-01-03'}};
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxToolboxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().height),onglet:'config'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+  if(q.get('demo')){rend(DEMO);hauteur();return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    Promise.all([jget(API+'/admin/config'),jget(API+'/health'),jget(API+'/rlevel/peers'),jget(API+'/ca/fingerprint?ca=default'),jget(API+'/ca/fingerprint?ca=wg')]).then(function(r){
+      rend({cfg:r[0],health:r[1],rlevel:r[2],fpDef:r[3],fpWg:r[4]});hauteur();
+    });
+  }
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  setInterval(function(){if(!document.hidden) charge();},30000);
+})();
+</script>
