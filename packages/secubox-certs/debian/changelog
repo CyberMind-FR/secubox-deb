@@ -1,3 +1,9 @@
+secubox-certs (1.2.8-1~bookworm1) bookworm; urgency=high
+
+  * Des certificats VALIDES n'apparaissent plus « expired » (ref #2383). 14 fichiers de /data/haproxy/certs etaient root 0600, illisibles pour l'utilisateur secubox qui sert l'API : l'illisible valait -999 jours, donc « expired ». Un certificat illisible est maintenant « unknown » (jours nuls, resume « unknown », emoji ❔, « illisible » dans la page) ; un echec de lecture n'est plus memorise (le fichier devient lisible sans changer de taille ni de date) ; le renouvellement groupe ignore les inconnus. 6 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 07:00:00 +0200
+
 secubox-certs (1.2.7-1~bookworm1) bookworm; urgency=medium
 
   * Un openssl par certificat MODIFIÉ (#1835). Le scan lançait -enddate puis

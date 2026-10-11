@@ -365,6 +365,7 @@
 
         // Emoji mappings
         function getTTDEmoji(days) {
+            if (Number.isNaN(days)) return '❔';
             if (days < 0) return '💀';
             if (days === 0) return '☠️';
             if (days <= 3) return '🔴';
@@ -396,6 +397,7 @@
         }
 
         function getCertClass(days) {
+            if (Number.isNaN(days)) return 'warning';   // inconnu : à regarder, ni mort ni sain (#2383)
             if (days < 0) return 'dead';
             if (days <= 7) return 'critical';
             if (days <= 30) return 'warning';
@@ -436,7 +438,7 @@
                 var res = await fetch(API + '/list');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 var data = await res.json();
-                allCerts = data.certificates || [];
+                allCerts = (data.certificates || []).map(c => c.days == null ? Object.assign({}, c, { days: NaN, unknown: true }) : c);   // illisible : « inconnu », jamais « expiré » (#2383)
                 effacePanne();
                 renderCerts();
             } catch (e) {
@@ -525,7 +527,7 @@
                 var cls = getCertClass(c.days);
                 var ttd = getTTDEmoji(c.days);
                 var origin = getOriginEmoji(c.domain);
-                var daysText = c.days < 0 ? Math.abs(c.days) + 'd ago' : c.days + 'd';
+                var daysText = Number.isNaN(c.days) ? 'illisible' : (c.days < 0 ? Math.abs(c.days) + 'd ago' : c.days + 'd');
                 var attacks = c.attacks || 0;
                 var visits = c.visits || 0;
 

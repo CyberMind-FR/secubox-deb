@@ -1,3 +1,9 @@
+secubox-haproxy (1.10.3-1~bookworm1) bookworm; urgency=high
+
+  * cert sync et l'installation acme.sh ecrivent les .pem en 0640 haproxy:secubox, comme certsctl deploy (ref #2383) : en 0600 root, le module certs ne pouvait pas les lire et les montrait « expired ». 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 07:00:00 +0200
+
 secubox-haproxy (1.10.2-1~bookworm1) bookworm; urgency=medium
 
   * Composant exposure : les services onion vivent dans /etc/tor/torrc.d/70-secubox-hs-<nom>.conf (un fichier par service, ecriture atomique) au lieu d'etre ajoutes au torrc de Debian et retires par une expression reguliere `.*?` en DOTALL. Les services deja poses dans le torrc restent lus ; retirer un ancien bloc se fait ligne a ligne et n'emporte plus un autre service (#2050, ecrivains concurrents de torrc).
