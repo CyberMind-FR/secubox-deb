@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Toolbox, onglet « Tor » : service, circuit, sortie rapide, nouvelle identité, vérification de fuite,
+  pays de sortie, clients Tor-VPN, ponts obfs4, émancipation du webui en .onion, services cachés.
+  Une seule page, deux mises en page : encadrée (?embed=1, une colonne) ou tableau de bord (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API /api/v1/toolbox, /api/v1/nac, /api/v1/tor). Une mesure absente s'affiche « — », jamais 0.
+  Les ACTIONS d'écriture de l'ancien onglet sont conservées à l'identique (mêmes routes, mêmes corps, mêmes entêtes),
+  chacune avec une confirmation intégrée à la page. `?demo=1` : données de DÉMONSTRATION, aucune écriture.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox — Tor</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(167,139,250,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(167,139,250,.10),0 0 38px rgba(167,139,250,.16);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--violet);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.mid{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button,select,input{font:inherit}
+  button{font-size:.76rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 11px;cursor:pointer}
+  button:hover:not(:disabled){background:rgba(59,130,246,.32)} button:disabled{opacity:.45;cursor:default}
+  button.ok{background:rgba(46,204,113,.18);border-color:rgba(46,204,113,.55);color:var(--vert)}
+  button.dang{background:rgba(255,77,94,.14);border-color:rgba(255,77,94,.5);color:var(--rouge)}
+  button.lien{background:none;border:0;padding:2px 6px;color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:8px 2px}
+  .note{color:var(--faible);font-size:.68rem;margin-top:6px}
+  .alerte{border:1px solid rgba(255,159,28,.5);background:rgba(255,159,28,.1);color:#ffd9a0;border-radius:8px;padding:6px 9px;font-size:.72rem;margin:0 0 8px}
+  svg.circuit{width:100%;height:auto;display:block} svg.circuit text{fill:var(--doux);font-size:10px}
+  .jauge{height:7px;border-radius:4px;background:rgba(159,179,214,.16);overflow:hidden;margin:6px 0 2px} .jauge i{display:block;height:100%;border-radius:4px;background:var(--violet)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:.78rem;margin:6px 0}
+  .kv .k{color:var(--faible)} .kv .v{color:var(--texte);min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+  .barre-act{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .barre-act label{color:var(--doux);font-size:.74rem;display:flex;align-items:center;gap:5px}
+  select,input[type=text]{background:rgba(6,13,27,.7);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 8px;font-size:.78rem;min-width:0}
+  input[type=text]{flex:1;min-width:140px}
+  .zone{margin-top:8px;min-height:0} .zone:empty{display:none}
+  .conf{border:1px solid rgba(255,159,28,.6);background:rgba(255,159,28,.1);border-radius:8px;padding:8px 10px;font-size:.78rem}
+  .conf .bt{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .res{border-radius:8px;padding:6px 10px;font-size:.78rem;border:1px solid var(--trait)}
+  .res.ok{border-color:rgba(46,204,113,.55);background:rgba(46,204,113,.1);color:var(--vert)}
+  .res.ko{border-color:rgba(255,77,94,.55);background:rgba(255,77,94,.1);color:#ffb3bb}
+  .res.cours{color:var(--doux)}
+  .pays{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:4px;max-height:210px;overflow-y:auto;padding:2px}
+  .pays button{background:rgba(159,179,214,.08);border-color:var(--trait);color:var(--doux);text-align:left;font-size:.72rem;padding:3px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pays button[aria-pressed=true]{background:rgba(167,139,250,.28);border-color:var(--violet);color:var(--texte);font-weight:700}
+  .puces{display:flex;flex-wrap:wrap;gap:5px}
+  .puce{border-radius:999px;padding:1px 9px;font-size:.7rem;font-weight:700;background:rgba(167,139,250,.22);color:var(--violet)}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;font-variant-numeric:tabular-nums}
+  td.fin{text-align:right;max-width:none}
+  .scroll{overflow-x:auto}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;color:#cfe0ff}
+  .on,.off,.inc{border-radius:5px;padding:0 8px;font-weight:700;font-size:.68rem}
+  .on{background:rgba(46,204,113,.2);color:var(--vert)} .off{background:rgba(255,77,94,.2);color:var(--rouge)} .inc{background:rgba(159,179,214,.2);color:var(--doux)}
+  .sec3{margin-top:10px;padding-top:8px;border-top:1px dashed var(--trait)} .sec3 h4{margin:0 0 4px;font-size:.78rem}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g2{grid-template-columns:1fr 1fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(167,139,250,.14)"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2"/></svg><span><b>Tor</b><small>Sortie anonyme de la cabine</small></span></span>
+    <span class="actif" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
+  <div><h2>Réseau Tor</h2><div class="sous">Fait sortir le trafic des clients par Tor, sans perdre l’inspection (blocage des pubs, bannière, navigation sûre). Fail-closed : jamais de repli en clair.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+
+  <div class="grille g2">
+    <div class="pan"><h3>Circuit et sortie rapide <i id="presetNote"></i></h3>
+      <div id="circuit"></div>
+      <div class="jauge" title="Progression du démarrage de Tor"><i id="boot" style="width:0%"></i></div>
+      <div class="kv" id="etat"></div>
+      <div class="barre-act">
+        <label>Préréglage <select id="preset"><option value="anonymous">anonymous</option><option value="stealth">stealth (ponts)</option><option value="minimal">minimal (SOCKS)</option></select></label>
+        <button type="button" class="ok" id="bOn">🛡 Activer le mode Tor</button>
+        <button type="button" id="bOff">⏹ Désactiver</button>
+      </div>
+      <div class="barre-act">
+        <button type="button" id="bNewnym">🔄 Nouvelle identité</button>
+        <button type="button" id="bLeaks">🔍 Vérifier l’IP de sortie</button>
+      </div>
+      <div class="zone" id="z-mode"></div>
+      <div class="note">L’armement est asynchrone : le tunnel se monte quelques secondes après l’activation (réconciliateur).</div>
+    </div>
+    <div class="pan"><h3>Vérification de fuite <i>sonde SOCKS 9050</i></h3>
+      <div class="kv" id="fuite"></div>
+      <div class="note">La sonde interroge un service d’écho d’adresse à travers Tor. Le pays de sortie et la fuite DNS ne sont pas fournis par cette sonde : « — ». Un vrai test depuis l’extérieur reste la référence.</div>
+    </div>
+  </div>
+
+  <div class="grille g2">
+    <div class="pan"><h3>Pays de sortie <i>ExitNodes</i></h3>
+      <div class="alerte">⚠ <b>Fail-closed :</b> StrictNodes 1 est forcé. Si aucun nœud de sortie n’existe dans les pays choisis, plus aucun trafic Tor ne circule. Aucune sélection = tous les pays.</div>
+      <div class="kv" id="ccActuel"></div>
+      <div class="pays" id="ccListe"></div>
+      <div class="barre-act">
+        <button type="button" class="ok" id="bCcApply">✔ Appliquer la sélection</button>
+        <button type="button" id="bCcClear">✖ Effacer (tous pays)</button>
+      </div>
+      <div class="zone" id="z-pays"></div>
+    </div>
+    <div class="pan"><h3>Clients Tor-VPN <i>routage sélectif 80/443</i></h3>
+      <div class="alerte">⚠ <b>IPv6 non tunnelé (phase 1) :</b> seul l’IPv4 passe par Tor ; les sélecteurs IPv6 sont refusés (400). Désactivez l’IPv6 sur les clients routés.</div>
+      <div class="barre-act" style="margin:0 0 6px">
+        <select id="vpnKind"><option value="ip">IP</option><option value="cidr">CIDR</option><option value="mac">MAC</option></select>
+        <input type="text" id="vpnSel" placeholder="ex : 192.168.1.42" autocomplete="off">
+        <button type="button" id="bVpnAdd">➕ Ajouter</button>
+      </div>
+      <div class="zone" id="z-vpn"></div>
+      <div class="scroll" id="vpnListe"></div>
+      <div class="sec3"><h4>🖧 Clients du réseau local (NAC)</h4><div class="sous" style="margin-bottom:4px">En ligne et autorisés : on route tout leur trafic 80/443 par Tor sans saisir l’adresse.</div>
+        <div class="scroll" id="nacListe"></div></div>
+    </div>
+  </div>
+
+  <div class="grille g2">
+    <div class="pan"><h3>Ponts obfs4 <i>anti-censure</i></h3>
+      <div class="sous" style="margin-bottom:6px">Colle une ligne <code>Bridge obfs4 …</code> (moat de Tor Browser ou bridges.torproject.org). Dès qu’un pont valide est présent, Tor passe en UseBridges 1 ; liste vide = Tor direct.</div>
+      <div class="barre-act" style="margin:0 0 6px"><input type="text" id="brLine" placeholder="Bridge obfs4 1.2.3.4:443 EMPREINTE cert=… iat-mode=0" autocomplete="off" spellcheck="false"><button type="button" id="bBrAdd">➕ Ajouter</button></div>
+      <div class="zone" id="z-bridge"></div>
+      <div class="scroll" id="brListe"></div>
+    </div>
+    <div class="pan"><h3>Émancipation <i>tableau de bord en .onion</i></h3>
+      <div class="sous" style="margin-bottom:6px">Crée (ou réutilise) un service caché Tor qui pointe vers cette interface (via nginx :9080). Persistant aux redémarrages de Tor.</div>
+      <div class="barre-act"><button type="button" class="ok" id="bEman">🚀 Publier en .onion</button></div>
+      <div class="zone" id="z-onion"></div>
+      <div id="onionRes"></div>
+      <div class="sec3"><h4>🕸 Services cachés et DNS .onion</h4><div class="kv" id="dnsOnion"></div><div class="scroll" id="hsListe"></div></div>
+    </div>
+  </div>
+  <div class="note">Chaque action demande une confirmation dans la page et affiche son résultat à côté du bouton. Les changements sont journalisés côté serveur.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  var q=new URLSearchParams(location.search), DEMO_ON=!!q.get('demo'), API='/api/v1/toolbox';
+  if(q.get('embed')) document.body.classList.add('emb');
+  var S={st:null,cc:null,vpn:null,nac:null,br:null,hs:null,dns:null,leak:null,onion:null,sel:{},selInit:false,pending:null,session:true};
+
+  var ISO_COUNTRIES=[['US','États-Unis'],['DE','Allemagne'],['FR','France'],['GB','Royaume-Uni'],['NL','Pays-Bas'],['CH','Suisse'],['SE','Suède'],['NO','Norvège'],['FI','Finlande'],['DK','Danemark'],['AT','Autriche'],['BE','Belgique'],['IE','Irlande'],['IS','Islande'],['LU','Luxembourg'],['CZ','Tchéquie'],['PL','Pologne'],['RO','Roumanie'],['ES','Espagne'],['IT','Italie'],['PT','Portugal'],['CA','Canada'],['AU','Australie'],['NZ','Nouvelle-Zélande'],['JP','Japon'],['SG','Singapour'],['HK','Hong Kong'],['KR','Corée du Sud'],['BR','Brésil'],['MX','Mexique'],['AR','Argentine'],['CL','Chili'],['IN','Inde'],['ZA','Afrique du Sud'],['UA','Ukraine'],['EE','Estonie'],['LV','Lettonie'],['LT','Lituanie'],['GR','Grèce'],['HU','Hongrie'],['BG','Bulgarie'],['HR','Croatie'],['SI','Slovénie'],['SK','Slovaquie'],['RS','Serbie'],['MD','Moldavie'],['MT','Malte'],['CY','Chypre'],['IL','Israël'],['TR','Turquie'],['TW','Taïwan'],['TH','Thaïlande'],['ID','Indonésie'],['MY','Malaisie'],['PH','Philippines'],['VN','Vietnam'],['AE','Émirats arabes unis'],['SA','Arabie saoudite'],['EG','Égypte'],['MA','Maroc'],['NG','Nigeria'],['KE','Kenya'],['CO','Colombie'],['PE','Pérou'],['UY','Uruguay'],['PA','Panama'],['LI','Liechtenstein'],['AD','Andorre'],['MC','Monaco'],['GE','Géorgie'],['AM','Arménie'],['AZ','Azerbaïdjan']];
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  function isIPv4(ip){return /^(\d{1,3}\.){3}\d{1,3}$/.test(String(ip||''));}
+
+  /* ---- appels (identiques à l'ancien onglet) ---- */
+  function Tj(path,opts){
+    return fetch(API+path,Object.assign({credentials:'same-origin'},opts||{})).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(d){
+        if(r.status===401||r.status===403) S.session=false;
+        if(!r.ok) return {__error:(d&&d.detail)||('HTTP '+r.status)};
+        return d;});
+    }).catch(function(e){return {__error:String((e&&e.message)||e)};});
+  }
+  function Xj(base,path,opts){
+    var tok='';try{tok=localStorage.getItem('sbx_token')||'';}catch(e){}
+    var headers=Object.assign({'Content-Type':'application/json'},(opts&&opts.headers)||{},tok?{'Authorization':'Bearer '+tok}:{});
+    return fetch(base+path,Object.assign({credentials:'same-origin'},opts||{},{headers:headers})).then(function(r){
+      if(r.status===401){S.session=false;return {__error:'session requise (401)'};}
+      return r.json().catch(function(){return {};}).then(function(d){
+        if(!r.ok) return {__error:(d&&d.detail)||('HTTP '+r.status)};
+        return d;});
+    }).catch(function(e){return {__error:String((e&&e.message)||e)};});
+  }
+
+  /* ---- confirmation et résultat intégrés à la page ---- */
+  function say(slot,txt,kind){el(slot).innerHTML='<div class="res '+kind+'">'+esc(txt)+'</div>';}
+  function cancel(){if(S.pending){el(S.pending.slot).innerHTML='';S.pending=null;}}
+  function ask(slot,txt,label,fn,dang){
+    cancel();S.pending={slot:slot,fn:fn};
+    el(slot).innerHTML='<div class="conf">'+esc(txt)+'<div class="bt"><button type="button" class="'+(dang?'dang':'ok')+'" data-go="1">'+esc(label)+'</button><button type="button" data-no="1">Annuler</button></div></div>';
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target;if(!t||!t.closest)return;
+    if(t.closest('[data-no]')){cancel();return;}
+    if(t.closest('[data-go]')&&S.pending){var p=S.pending;S.pending=null;
+      if(DEMO_ON){say(p.slot,'Démonstration : aucune écriture effectuée.','cours');return;}
+      say(p.slot,'En cours…','cours');p.fn(p.slot);}
+  });
+  function fin(slot,d,okTxt,apres){
+    if(d&&d.__error) say(slot,'Échec : '+d.__error+(/403|admin/.test(String(d.__error))?' (réservé à l’administration)':''),'ko');
+    else {say(slot,okTxt,'ok');}
+    if(apres) setTimeout(apres,1200);
+  }
+
+  /* ---- actions (noms de l'ancien onglet) ---- */
+  function torSet(on){
+    var preset=el('preset').value||'anonymous';
+    ask('z-mode',on?'Activer le mode Tor (préréglage « '+preset+' ») ? Le trafic des clients sortira par Tor.':'Désactiver le mode Tor ? Le trafic repartira par la sortie normale.',on?'Activer':'Désactiver',function(slot){
+      var body=on?JSON.stringify({tor_preset:preset}):'{}';
+      fetch(API+'/admin/tor/'+(on?'on':'off'),{method:'POST',headers:{'content-type':'application/json'},body:body,credentials:'same-origin'}).then(function(r){
+        if(!r.ok) throw new Error('HTTP '+r.status+(r.status===403?' (admin.gk2 seulement)':''));
+        say(slot,on?'Armé (le tunnel se monte dans quelques secondes).':'Désarmé.','ok');setTimeout(charge,1500);
+      }).catch(function(e){say(slot,'Échec : '+e.message,'ko');});
+    },!on);
+  }
+  function torNewnym(){
+    ask('z-mode','Demander un nouveau circuit Tor ? L’adresse de sortie va changer et les connexions en cours peuvent être coupées.','Nouvelle identité',function(slot){
+      fetch(API+'/admin/tor/newnym',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json().then(function(d){
+        if(r.ok&&d.success){say(slot,'Nouvelle identité obtenue.','ok');setTimeout(charge,1500);}else say(slot,'Échec NEWNYM.','ko');});
+      }).catch(function(e){say(slot,'Échec : '+e.message,'ko');});
+    });
+  }
+  function torLeaks(){
+    ask('z-mode','Lancer la sonde de sortie ? Une requête est envoyée à un service d’écho d’adresse à travers Tor (SOCKS 9050).','Vérifier',function(slot){
+      fetch(API+'/admin/tor/check-leaks',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json().then(function(d){
+        S.leak={ok:!!d.ok,ip:d.tor_ip||null,err:d.error||null,t:new Date()};rendFuite();
+        say(slot,d.ok?'IP de sortie : '+d.tor_ip:'Échec : '+(d.error||'Tor arrêté'),d.ok?'ok':'ko');setTimeout(charge,800);});
+      }).catch(function(e){say(slot,'Échec : '+e.message,'ko');});
+    });
+  }
+  function applyExitCountry(){
+    var liste=Object.keys(S.sel).filter(function(k){return S.sel[k];});
+    ask('z-pays',liste.length?'Restreindre les sorties à : '+liste.join(', ')+' ? Remplace toute la liste actuelle (fail-closed).':'Effacer la restriction ? Tous les pays seront de nouveau autorisés.','Appliquer',function(slot){
+      Tj('/exit_country',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({countries:liste})}).then(function(d){
+        fin(slot,d,'Appliqué (réconciliation asynchrone).',function(){S.selInit=false;charge();});});
+    },liste.length>0);
+  }
+  function clearExitCountry(){S.sel={};rendPays();applyExitCountry();}
+  function addVpnClient(){
+    var kind=el('vpnKind').value,selector=el('vpnSel').value.trim();
+    if(!selector){say('z-vpn','Sélecteur requis.','ko');return;}
+    if(kind!=='mac'&&selector.indexOf(':')>=0){say('z-vpn','IPv6 non supporté (phase 1, routage IPv4 uniquement) : utilise une adresse IPv4.','ko');return;}
+    ask('z-vpn','Router TOUT le trafic 80/443 de « '+selector+' » ('+kind+') par Tor ?','Ajouter',function(slot){
+      Tj('/vpn/client',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:kind,selector:selector})}).then(function(d){
+        if(!d.__error) el('vpnSel').value='';
+        fin(slot,d,'Client ajouté.',charge);if(d.__error&&selector.indexOf(':')>=0)say(slot,'Échec : IPv6 refusé (routage IPv4 uniquement, phase 1).','ko');});
+    });
+  }
+  function removeVpnClient(kind,selector){
+    ask('z-vpn','Retirer « '+selector+' » ('+kind+') du routage Tor ? Son trafic repart par la sortie normale.','Retirer',function(slot){
+      Tj('/vpn/client',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:kind,selector:selector})}).then(function(d){fin(slot,d,'Client retiré.',charge);});
+    },true);
+  }
+  function toggleNac(ip,turnOn){
+    ask('z-vpn',(turnOn?'Router par Tor':'Ne plus router par Tor')+' le client '+ip+' ?',turnOn?'Router':'Retirer',function(slot){
+      Tj('/vpn/client',{method:turnOn?'POST':'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'ip',selector:ip})}).then(function(d){
+        fin(slot,d,turnOn?'Client routé par Tor.':'Client retiré du routage Tor.',charge);});
+    },!turnOn);
+  }
+  function addBridge(){
+    var line=el('brLine').value.trim();
+    if(!line){say('z-bridge','Ligne requise.','ko');return;}
+    ask('z-bridge','Ajouter ce pont ? Tor passera en UseBridges 1.','Ajouter',function(slot){
+      Tj('/tor/bridge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({line:line})}).then(function(d){
+        if(!d.__error) el('brLine').value='';
+        fin(slot,d,'Pont ajouté.',charge);});
+    });
+  }
+  function removeBridge(line){
+    ask('z-bridge','Retirer ce pont ? S’il était le dernier, Tor repasse en mode direct.','Retirer',function(slot){
+      Tj('/tor/bridge',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({line:line})}).then(function(d){fin(slot,d,'Pont retiré.',charge);});
+    },true);
+  }
+  function emancipateWebui(){
+    ask('z-onion','Publier cette interface comme service caché .onion ? Elle devient joignable depuis le réseau Tor (jusqu’à 10 s).','Publier',function(slot){
+      el('bEman').disabled=true;
+      Xj('/api/v1/exposure','/tor/emancipate_webui',{method:'POST'}).then(function(d){
+        el('bEman').disabled=false;
+        if(d.__error){say(slot,'Échec : '+d.__error,'ko');return;}
+        var onion=(d.output&&d.output.onion)||(d.tor&&d.tor.onion)||'';
+        say(slot,'Publié.','ok');S.onion=onion||'';rendOnion();loadHS();
+      });
+    });
+  }
+  function refreshTorTab(){charge();}
+
+  /* ---- rendu ---- */
+  function N(v){return v==null?'—':String(v);}
+  var IC={
+    srv:function(c){return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="'+c+'" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="'+c+'22"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="'+c+'"/></svg>';},
+    circ:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 11l3.5-3.5M14 7.5L17.5 11M17 13.5L13.5 16.5M10.5 16.5L7 13"/></svg>',
+    pays:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    pont:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><path d="M3 17c3-8 15-8 18 0M3 17h18M8 17v-5M12 17v-6M16 17v-5" fill="none"/></svg>',
+    cli:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="5" width="18" height="11" rx="2" fill="rgba(46,204,113,.14)"/><path d="M8 20h8M12 16v4"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+
+  function rendHaut(){
+    var st=S.st,a=el('actif'),ok=st&&!st.__error;
+    var on=ok&&!!st.tor_mode,run=ok&&!!st.running,boot=ok?Number(st.bootstrap):NaN;
+    a.className='actif';
+    if(!ok){a.textContent='HORS LIGNE';a.classList.add('hors');}
+    else if(on&&run&&boot>=100) a.textContent='TOR ACTIF · 100 %';
+    else if(on){a.textContent='MODE TOR ARMÉ · '+(run?(isFinite(boot)?boot:0)+' %':'DAEMON ARRÊTÉ');a.classList.add('mid');}
+    else {a.textContent=run?'MODE TOR DÉSACTIVÉ · DAEMON ACTIF':'MODE TOR DÉSACTIVÉ';a.classList.add('mid');}
+    var cc=S.cc&&!S.cc.__error?S.cc.countries||[]:null, br=S.br&&!S.br.__error?S.br.bridges||[]:null, vp=S.vpn&&!S.vpn.__error?S.vpn.clients||[]:null;
+    el('tuiles').innerHTML=
+      tuile(IC.srv(run?'#2ecc71':'#ff4d5e'),ok?(run?'Actif':'Arrêté'):'—','Service Tor',ok?('mode '+(on?'armé':'désactivé')+(isFinite(boot)&&run?' · démarrage '+boot+' %':'')):'','Démon Tor local et état du mode Tor (indicateur du filtre).')
+      +tuile(IC.circ,ok&&run?N(st.circuits):'—','Circuits',ok&&run?'ouverts':'','Nombre de circuits Tor ouverts (port de contrôle). « — » si Tor est arrêté.')
+      +tuile(IC.pays,cc?(cc.length?String(cc.length):'Tous'):'—','Pays de sortie',cc?(cc.length?cc.join(', '):'aucune restriction'):'','Pays autorisés pour les nœuds de sortie (ExitNodes). Aucune restriction = tous.')
+      +tuile(IC.pont,br?String(br.length):'—','Ponts obfs4',br?(br.length?'UseBridges actif':'Tor direct'):'','Ponts configurés pour contourner la censure.')
+      +tuile(IC.cli,vp?String(vp.length):'—','Clients Tor',vp?'routés par Tor':'','Clients dont tout le trafic 80/443 est routé via Tor (routage sélectif).');
+    el('session').hidden=!!(DEMO_ON||S.session);
+    el('demo').hidden=!DEMO_ON;
+    var ps=ok&&st.tor_preset?st.tor_preset:null;el('presetNote').textContent=ps?'préréglage : '+ps:'';
+    if(ps&&!el('preset').matches(':focus')) el('preset').value=ps;
+  }
+  function rendCircuit(){
+    var st=S.st,ok=st&&!st.__error,run=ok&&st.running,on=ok&&st.tor_mode,boot=ok&&isFinite(Number(st.bootstrap))?Number(st.bootstrap):0;
+    var col=run&&boot>=100?'#2ecc71':(run?'#ff9f1c':'#6f84a8'),noeuds=['Vous','Garde','Relais','Sortie','Internet'],cx=[40,130,220,310,400],s='';
+    s+='<svg class="circuit" viewBox="0 0 440 78" role="img" aria-label="Schéma d’un circuit Tor à trois relais">';
+    for(var i=0;i<4;i++) s+='<line x1="'+(cx[i]+14)+'" y1="32" x2="'+(cx[i+1]-14)+'" y2="32" stroke="'+col+'" stroke-width="2" '+(run?'':'stroke-dasharray="4 4"')+' opacity=".8"/>';
+    noeuds.forEach(function(n,i){var f=(i===0||i===4)?'#3b82f6':col;
+      s+='<circle cx="'+cx[i]+'" cy="32" r="13" fill="'+f+'33" stroke="'+f+'" stroke-width="1.6"/><circle cx="'+cx[i]+'" cy="32" r="3.2" fill="'+f+'"/><text x="'+cx[i]+'" y="62" text-anchor="middle">'+n+'</text>';});
+    s+='</svg>';
+    el('circuit').innerHTML=s;
+    el('boot').style.width=(run?boot:0)+'%';
+    el('etat').innerHTML=ok?
+      '<span class="k">Mode Tor</span><span class="v">'+(on?'🧅 activé':'⚪ désactivé')+'</span>'
+      +'<span class="k">Démon</span><span class="v">'+(run?'🟢 en marche':'⚪ arrêté')+'</span>'
+      +'<span class="k">Démarrage</span><span class="v">'+(run?boot+' %':'—')+'</span>'
+      +'<span class="k">Circuits</span><span class="v">'+(run?N(st.circuits):'—')+'</span>'
+      +'<span class="k">IP de sortie</span><span class="v">'+(st.exit_ip?esc(st.exit_ip):'— (lance la vérification)')+'</span>'
+      :'<span class="k">État</span><span class="v">'+esc(st&&st.__error?st.__error:'—')+'</span>';
+    el('bOn').disabled=!ok;el('bOff').disabled=!ok;el('bNewnym').disabled=!ok;el('bLeaks').disabled=!ok;
+  }
+  function rendFuite(){
+    var L=S.leak,st=S.st,ip=L&&L.ok?L.ip:(st&&!st.__error&&st.exit_ip?st.exit_ip:null),d=S.dns&&!S.dns.__error?S.dns:null;
+    var h='<span class="k">IP de sortie</span><span class="v">'+(ip?'<code>'+esc(ip)+'</code>':'—')+'</span>'
+      +'<span class="k">Pays de sortie</span><span class="v">—</span>'
+      +'<span class="k">Fuite DNS</span><span class="v">'+(d?(d.dnsport_up&&d.forward_zone_installed?'🟢 DNS via Tor (DNSPort + zone Unbound)':'🟠 DNSPort '+(d.dnsport_up?'actif':'inactif')+' · zone '+(d.forward_zone_installed?'installée':'absente')):'—')+'</span>'
+      +'<span class="k">Dernière sonde</span><span class="v">'+(L?(L.ok?'réussie':'échec : '+esc(L.err||'Tor arrêté'))+' · '+L.t.toLocaleTimeString('fr-FR'):'aucune dans cette session')+'</span>';
+    el('fuite').innerHTML=h;
+  }
+  function rendPays(){
+    var cc=S.cc&&!S.cc.__error?S.cc.countries||[]:null;
+    if(cc&&!S.selInit){S.sel={};cc.forEach(function(c){S.sel[c]=true;});S.selInit=true;}
+    el('ccActuel').innerHTML='<span class="k">Sélection actuelle</span><span class="v">'+(cc?(cc.length?'<span class="puces">'+cc.map(function(c){return '<span class="puce">'+drapeau(c)+' '+esc(c)+'</span>';}).join('')+'</span>':'tous pays (aucune restriction)'):'—')+'</span>';
+    var tri=ISO_COUNTRIES.slice().sort(function(a,b){return a[1].localeCompare(b[1],'fr');});
+    el('ccListe').innerHTML=tri.map(function(p){return '<button type="button" data-cc="'+esc(p[0])+'" aria-pressed="'+(S.sel[p[0]]?'true':'false')+'" title="'+esc(p[1])+'">'+drapeau(p[0])+' '+esc(p[1])+'</button>';}).join('');
+    el('bCcApply').disabled=!cc;el('bCcClear').disabled=!cc;
+  }
+  function rendVpn(){
+    var d=S.vpn;
+    if(!d||d.__error){el('vpnListe').innerHTML='<div class="vide">'+esc(d&&d.__error||'—')+'</div>';}
+    else {var r=d.clients||[];
+      el('vpnListe').innerHTML=r.length?'<table><thead><tr><th>Type</th><th>Sélecteur</th><th></th></tr></thead><tbody>'+r.map(function(c){return '<tr><td>'+esc(c.kind)+'</td><td><code>'+esc(c.selector)+'</code></td><td class="fin"><button type="button" class="lien" data-vrm="1" data-kind="'+esc(c.kind)+'" data-selector="'+esc(c.selector)+'">🗑 retirer</button></td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Aucun client routé par Tor.</div>';}
+    var n=S.nac;
+    if(!n||n.__error){el('nacListe').innerHTML='<div class="vide">'+esc(n&&n.__error||'—')+'</div>';return;}
+    var routed={};((d&&d.clients)||[]).forEach(function(c){if(c.kind==='ip')routed[c.selector]=true;});
+    var all=(n.clients||[]).filter(function(c){return c.online===true&&c.zone!=='quarantine'&&c.status!=='quarantine';}),v4=all.filter(function(c){return isIPv4(c.ip);}),v6=all.length-v4.length;
+    el('nacListe').innerHTML=v4.length?'<table><thead><tr><th>Nom</th><th>IP</th><th>MAC</th><th>Tor</th></tr></thead><tbody>'+v4.map(function(c){var on=!!routed[c.ip];
+      return '<tr><td title="'+esc(c.custom_hostname||c.hostname||'')+'">'+esc(c.custom_hostname||c.hostname||'(sans nom)')+'</td><td><code>'+esc(c.ip)+'</code></td><td><code>'+esc(c.mac||'—')+'</code></td><td><button type="button" data-nac="'+esc(c.ip)+'" data-on="'+(on?'0':'1')+'" class="'+(on?'ok':'')+'">'+(on?'🟢 routé — retirer':'⚪ router')+'</button></td></tr>';}).join('')+'</tbody></table>'+(v6?'<div class="note">'+v6+' client(s) IPv6 seul masqué(s) : routage IPv4 uniquement.</div>':''):'<div class="vide">Aucun client en ligne et autorisé'+(v6?' ('+v6+' IPv6 seul masqué(s))':'')+'.</div>';
+  }
+  function bridgeCourt(l){
+    var p=String(l).trim().split(/\s+/);if(p[0]&&p[0].toLowerCase()==='bridge')p.shift();
+    var fp=p.filter(function(x){return /^[0-9A-Fa-f]{40}$/.test(x);})[0];
+    return {type:p[0]||'—',addr:p[1]||'—',fp:fp?fp.slice(0,8)+'…':'—'};
+  }
+  function rendBridges(){
+    var d=S.br;
+    if(!d||d.__error){el('brListe').innerHTML='<div class="vide">'+esc(d&&d.__error||'—')+'</div>';return;}
+    var r=d.bridges||[];
+    el('brListe').innerHTML=r.length?'<table><thead><tr><th>Type</th><th>Adresse</th><th>Empreinte</th><th></th></tr></thead><tbody>'+r.map(function(l){var b=bridgeCourt(l);
+      return '<tr><td>'+esc(b.type)+'</td><td><code>'+esc(b.addr)+'</code></td><td><code>'+esc(b.fp)+'</code></td><td class="fin"><button type="button" class="lien" data-brm="1" data-line="'+esc(l)+'">🗑 retirer</button></td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Aucun pont configuré (Tor direct).</div>';
+  }
+  function rendOnion(){
+    el('onionRes').innerHTML=S.onion?'<div class="kv"><span class="k">.onion</span><span class="v"><code>'+esc(S.onion)+'</code></span></div><div class="barre-act"><button type="button" id="bCopy">📋 Copier</button></div>'
+      :(S.onion===''?'<div class="vide">Publié, mais aucune adresse .onion retournée pour l’instant : voir la liste ci-dessous.</div>':'');
+    var b=el('bCopy');if(b)b.onclick=function(){(navigator.clipboard?navigator.clipboard.writeText(S.onion):Promise.reject()).then(function(){b.textContent='✓ copié';}).catch(function(){b.textContent='copie impossible';});};
+  }
+  function rendHS(){
+    var d=S.dns,h=S.hs;
+    function oui(v){return v?'<span class="on">oui</span>':'<span class="off">non</span>';}
+    el('dnsOnion').innerHTML=d&&!d.__error?'<span class="k">DNSPort (9053)</span><span class="v">'+oui(d.dnsport_up)+'</span><span class="k">Zone Unbound</span><span class="v">'+oui(d.forward_zone_installed)+'</span><span class="k">Résolution .onion</span><span class="v">'+oui(d.resolves)+'</span>':'<span class="k">DNS .onion</span><span class="v">'+esc(d&&d.__error||'—')+'</span>';
+    if(!h||h.__error){el('hsListe').innerHTML='<div class="vide">'+esc(h&&h.__error||'—')+'</div>';return;}
+    var r=h.services||[];
+    el('hsListe').innerHTML=r.length?'<table><thead><tr><th>Nom</th><th>.onion</th><th>Port</th><th>État</th></tr></thead><tbody>'+r.map(function(s){return '<tr><td>'+esc(s.name)+'</td><td>'+(s.has_address?'<code title="'+esc(s.onion_address)+'">'+esc(s.onion_address)+'</code>':'<span class="vide">en attente…</span>')+'</td><td>'+(s.local_port!=null?esc(s.local_port):'—')+'</td><td>'+(s.enabled===false?'<span class="inc">désactivé</span>':'<span class="on">actif</span>')+'</td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Aucun service caché détecté.</div>';
+  }
+  function rendTout(){rendHaut();rendCircuit();rendFuite();rendPays();rendVpn();rendBridges();rendHS();el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+
+  /* ---- données ---- */
+  var DEMO={st:{running:true,bootstrap:100,circuits:7,tor_mode:true,tor_preset:'anonymous',exit_ip:'185.220.101.45'},cc:{countries:['DE','NL','CH']},
+    vpn:{clients:[{kind:'ip',selector:'192.168.1.42'},{kind:'cidr',selector:'192.168.50.0/24'},{kind:'mac',selector:'aa:bb:cc:11:22:33'}]},
+    nac:{clients:[{hostname:'portable-alice',ip:'192.168.1.42',mac:'aa:bb:cc:11:22:33',online:true},{hostname:'tv-salon',ip:'192.168.1.57',mac:'aa:bb:cc:44:55:66',online:true},{hostname:'imprimante',ip:'192.168.1.80',mac:'aa:bb:cc:77:88:99',online:true},{hostname:'tablette',ip:'fe80::1',mac:'aa:bb:cc:00:00:01',online:true}]},
+    br:{bridges:['obfs4 193.11.166.194:27015 2D82C2E354D531A68469ADF7F878FA6060C6BACA cert=DEMOCERT iat-mode=0','obfs4 85.31.186.98:443 011F2599C0E9B27EE74B353155E244813763C3E5 cert=DEMOCERT iat-mode=0']},
+    hs:{services:[{name:'secubox-webui',onion_address:'demoabcdefghijklmnopqrstuvwxyz234567demoabcdefghijklmnopqr.onion',has_address:true,local_port:9080,enabled:true},{name:'blog',has_address:false,local_port:8910,enabled:true}]},
+    dns:{dnsport_up:true,forward_zone_installed:true,resolves:true}};
+  function charge(){
+    if(DEMO_ON){S.st=DEMO.st;S.cc=DEMO.cc;S.vpn=DEMO.vpn;S.nac=DEMO.nac;S.br=DEMO.br;S.hs=DEMO.hs;S.dns=DEMO.dns;S.session=true;rendTout();return;}
+    S.session=true;
+    Promise.all([Tj('/admin/tor/state'),Tj('/exit_country'),Tj('/vpn/clients'),Xj('/api/v1/nac','/clients'),Tj('/tor/bridges'),Xj('/api/v1/tor','/hidden_services'),Xj('/api/v1/tor','/onion_dns')]).then(function(r){
+      if(r[0]&&r[0].__error)S.session=false;S.st=r[0];S.cc=r[1];S.vpn=r[2];S.nac=r[3];S.br=r[4];S.hs=r[5];S.dns=r[6];rendTout();
+    });
+  }
+  function loadHS(){Promise.all([Xj('/api/v1/tor','/hidden_services'),Xj('/api/v1/tor','/onion_dns')]).then(function(r){S.hs=r[0];S.dns=r[1];rendHS();rendFuite();});}
+
+  /* ---- événements ---- */
+  el('bOn').onclick=function(){torSet(true);};el('bOff').onclick=function(){torSet(false);};
+  el('bNewnym').onclick=torNewnym;el('bLeaks').onclick=torLeaks;
+  el('bCcApply').onclick=applyExitCountry;el('bCcClear').onclick=clearExitCountry;
+  el('bVpnAdd').onclick=addVpnClient;el('bBrAdd').onclick=addBridge;el('bEman').onclick=emancipateWebui;
+  el('rafraichir').onclick=refreshTorTab;
+  el('ccListe').addEventListener('click',function(e){var b=e.target.closest('[data-cc]');if(!b)return;var c=b.getAttribute('data-cc');S.sel[c]=!S.sel[c];b.setAttribute('aria-pressed',S.sel[c]?'true':'false');});
+  el('vpnListe').addEventListener('click',function(e){var b=e.target.closest('[data-vrm]');if(b)removeVpnClient(b.getAttribute('data-kind'),b.getAttribute('data-selector'));});
+  el('nacListe').addEventListener('click',function(e){var b=e.target.closest('[data-nac]');if(b)toggleNac(b.getAttribute('data-nac'),b.getAttribute('data-on')==='1');});
+  el('brListe').addEventListener('click',function(e){var b=e.target.closest('[data-brm]');if(b)removeBridge(b.getAttribute('data-line'));});
+
+  /* ---- hauteur pour la page parente ---- */
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxToolboxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().height),onglet:'tor'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);
+  if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+  var rend0=rendTout;rendTout=function(){rend0();hauteur();};
+
+  charge();
+  if(!DEMO_ON) setInterval(function(){
+    var a=document.activeElement,saisie=a&&(a.tagName==='INPUT'||a.tagName==='SELECT');
+    if(document.hidden||S.pending||saisie) return;
+    charge();
+  },20000);
+})();
+</script>

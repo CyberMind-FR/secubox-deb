@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Toolbox, onglet « Clients » (profil Aurora). Page autonome, deux mises en page :
+    · embarquée dans l'onglet du Toolbox (?embed=1) : une colonne ;
+    · pleine largeur (>= 900 px) : plusieurs colonnes.
+  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/toolbox/admin/clients/rich et /admin/metrics. Une mesure absente s'affiche « — », jamais 0.
+  Le Toolbox ne mesure ni débit ni requêtes bloquées par client : ces champs n'existent pas, ils ne sont pas inventés.
+  Actions conservées à l'identique de l'ancien onglet : niveau R (POST .../level, FormData), RAZ client, RAZ de tous, Carto, PDF, Events.
+  ?demo=1 : données de DÉMONSTRATION annoncées par un bandeau, aucune écriture.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox — Clients</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  button:hover{background:rgba(59,130,246,.3)} button:disabled{opacity:.45;cursor:not-allowed}
+  button.danger{color:var(--rouge);border-color:rgba(255,77,94,.5);background:rgba(255,77,94,.1)} button.danger:hover{background:rgba(255,77,94,.22)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo.info{background:var(--cyan)} .demo.err{background:var(--rouge);color:#fff}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
+  .repart svg{width:120px;height:120px;display:block}
+  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .outils input[type=search]{flex:1 1 180px;min-width:0;font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:5px 10px}
+  .outils select{font:inherit;font-size:.78rem;color:var(--texte);background:rgba(6,13,27,.9);border:1px solid var(--trait2);border-radius:8px;padding:5px 8px}
+  .puces{display:flex;flex-wrap:wrap;gap:6px}
+  .puce{border-radius:999px;padding:2px 10px;font-size:.72rem}
+  .puce.on{background:rgba(41,182,246,.28);border-color:var(--cyan)}
+  .cartes{display:grid;gap:8px;grid-template-columns:1fr}
+  .carte{border:1px solid var(--trait);border-radius:12px;padding:10px 11px;background:linear-gradient(160deg,rgba(18,40,78,.55),rgba(8,18,38,.6));display:grid;gap:7px;min-width:0;align-content:start}
+  .carte.q{border-color:rgba(255,77,94,.6)}
+  .ch{display:flex;gap:9px;align-items:center;min-width:0}
+  .emo{flex:none;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:1.3rem;background:rgba(59,130,246,.16);border:1px solid var(--trait)}
+  .nom{min-width:0;flex:1} .nom b{display:block;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nom span{display:block;color:var(--faible);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pastille{flex:none;border-radius:999px;padding:2px 10px;font-weight:800;font-size:.72rem;border:1px solid}
+  .etat{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--doux)} .etat i{width:8px;height:8px;border-radius:50%}
+  .infos{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:.74rem;color:var(--doux)}
+  .infos div{min-width:0;overflow-wrap:anywhere} .infos b{color:var(--texte);font-weight:600;font-variant-numeric:tabular-nums}
+  .acts{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  .acts a{color:var(--cyan);font-size:.74rem;text-decoration:none;padding:3px 6px;border-radius:6px} .acts a:hover{background:rgba(41,182,246,.14)}
+  .acts .sep{color:var(--faible);font-size:.7rem}
+  button.niv{padding:2px 8px;font-weight:700}
+  .conf{border:1px solid rgba(255,159,28,.6);background:rgba(255,159,28,.1);border-radius:8px;padding:7px 9px;font-size:.76rem;display:grid;gap:6px}
+  .conf .bt{display:flex;gap:6px;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .scroll{overflow-x:auto}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}.cartes{grid-template-columns:1fr 1fr}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)}.cartes{grid-template-columns:repeat(3,1fr)}.g1{grid-template-columns:1fr 1.4fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2" fill="rgba(59,130,246,.16)"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M17 14c2.4 0 4 1.9 4 4.5"/></svg><span><b>Clients</b><small>Passerelle MITM · appareils connectés</small></span></span>
+    <span class="actif" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button><button type="button" id="razTous" class="danger">↺ Tout remettre à zéro</button></div>
+  </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
+  <div class="demo info" id="session" hidden></div>
+  <div class="demo" id="msg" hidden></div>
+  <div class="conf" id="confTous" hidden>
+    <div><b>Remettre à zéro TOUS les clients ?</b> Événements, consentements et graphes sociaux effacés, scores remis à zéro, clients conservés. Irréversible.</div>
+    <div class="bt"><button type="button" class="danger" id="confTousOui">Oui, tout remettre à zéro</button><button type="button" id="confTousNon">Annuler</button></div>
+  </div>
+  <div><h2>Appareils clients</h2><div class="sous">Chaque appareil est identifié par un condensat de son adresse matérielle, jamais par l’adresse elle-même.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Répartition par niveau R <i>tous les clients</i></h3><div class="repart"><div id="donut"></div><div class="leg" id="leg"></div></div></div>
+    <div class="pan">
+      <h3>Liste des clients <i id="compte"></i></h3>
+      <div class="outils">
+        <input type="search" id="rech" placeholder="Rechercher un client…" title="Empreinte, IP, appareil, opérateur, pays" aria-label="Rechercher un client">
+        <select id="tri" aria-label="Trier"><option value="recent">Plus récents</option><option value="score">Score décroissant</option><option value="niveau">Niveau R</option><option value="ancien">Plus anciens</option></select>
+      </div>
+      <div class="puces" id="puces" style="margin-top:8px"></div>
+    </div>
+  </div>
+  <div class="cartes" id="cartes"></div>
+  <div class="pan" id="detailPan" hidden><h3 id="detailTitre">Détails client</h3><div id="detail"></div></div>
+  <div class="note">Les niveaux R0 à R3 règlent la profondeur d’inspection. Changer un niveau met à jour le magasin du Toolbox ; les ensembles nft ne sont pas modifiés automatiquement.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var API='/api/v1/toolbox';
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search), DEMO=!!q.get('demo');
+  if(q.get('embed')) document.body.classList.add('emb');
+
+  var NIV={r0:['R0','Direct','#9fb3d6','Sans inspection : trafic transmis tel quel.'],
+           r1:['R1','Protégé','#2ecc71','Protection de base : filtrage sans déchiffrement.'],
+           r2:['R2','Inspecté','#29b6f6','Inspection du trafic (SNI / DPI).'],
+           r3:['R3','Déchiffré','#a78bfa','Interception TLS complète par le moteur MITM.']};
+  var ORDRE=['r0','r1','r2','r3'];
+  var ETAT={actif:['Actif','#2ecc71'],idle:['Inactif','#ffd23f'],'expiré':['Expiré','#6f84a8'],quarantine:['Quarantaine','#ff4d5e']};
+
+  var etat={clients:null,metrics:null,erreur:null,fNiv:'',fEtat:'',confirm:null,tous:false,detail:null};
+
+  function rel(ts){
+    if(!ts) return '—';
+    var s=Math.max(0,Date.now()/1000-ts);
+    if(s<60) return 'à l’instant';
+    if(s<3600) return 'il y a '+Math.round(s/60)+' min';
+    if(s<86400) return 'il y a '+Math.round(s/3600)+' h';
+    return 'il y a '+Math.round(s/86400)+' j';
+  }
+  function complet(ts){return ts?new Date(ts*1000).toLocaleString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';}
+  function niv(c){var l=String(c.level||'r1').toLowerCase();return NIV[l]?l:'r1';}
+  function statut(c){return c.status_label||(c.state==='quarantine'?'quarantine':'');}
+
+  function msg(t,type){var m=el('msg');if(!t){m.hidden=true;return;}m.textContent=t;m.className='demo'+(type==='err'?' err':type==='ok'?' info':'');m.hidden=false;hauteur();}
+
+  var IC={
+    cli:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2" fill="rgba(59,130,246,.16)"/><path d="M8 21h8M12 17v4"/></svg>',
+    act:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(46,204,113,.14)"/><path d="M7 12h2.5l1.5-4 2.5 8 1.5-4H17"/></svg>',
+    niv:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(167,139,250,.14)"/></svg>',
+    nou:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M12 7v10M7 12h10"/></svg>',
+    evt:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><path d="M4 18V9M10 18V5M16 18v-7M21 18H3" /></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+
+  function donut(cnt,tot){
+    if(!tot) return '<svg viewBox="0 0 120 120" role="img" aria-label="Aucun client"><circle cx="60" cy="60" r="44" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="18"/><text x="60" y="66" text-anchor="middle" fill="#9fb3d6" font-size="18">—</text></svg>';
+    var R=44,C=2*Math.PI*R,off=0,s='<svg viewBox="0 0 120 120" role="img" aria-label="Répartition des clients par niveau R"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(159,179,214,.1)" stroke-width="18"/>';
+    ORDRE.forEach(function(l){var n=cnt[l]||0;if(!n)return;var len=C*n/tot;
+      s+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+NIV[l][2]+'" stroke-width="18" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+NIV[l][0]+' : '+n+'</title></circle>';off+=len;});
+    return s+'<text x="60" y="58" text-anchor="middle" fill="#eaf1ff" font-size="22" font-weight="700">'+fmt(tot)+'</text><text x="60" y="73" text-anchor="middle" fill="#9fb3d6" font-size="9">clients</text></svg>';
+  }
+
+  function visibles(){
+    var L=(etat.clients||[]).slice(),r=(el('rech').value||'').trim().toLowerCase();
+    if(etat.fNiv) L=L.filter(function(c){return niv(c)===etat.fNiv;});
+    if(etat.fEtat) L=L.filter(function(c){return statut(c)===etat.fEtat;});
+    if(r) L=L.filter(function(c){return [c.mac_hash,c.ip,c.device,c.asn_org,c.country_iso].join(' ').toLowerCase().indexOf(r)>=0;});
+    var t=el('tri').value;
+    L.sort(function(a,b){
+      if(t==='score') return num(b.score)-num(a.score);
+      if(t==='niveau') return ORDRE.indexOf(niv(b))-ORDRE.indexOf(niv(a));
+      if(t==='ancien') return num(a.first_seen)-num(b.first_seen);
+      return num(b.last_seen)-num(a.last_seen);
+    });
+    return L;
+  }
+
+  function carte(c){
+    var l=niv(c),N=NIV[l],st=statut(c),E=ETAT[st]||[st||'—','#6f84a8'],h=String(c.mac_hash||''),sc=c.score==null?null:num(c.score);
+    var sCol=sc==null?'#6f84a8':sc<30?'#2ecc71':sc<70?'#ffd23f':'#ff4d5e';
+    var cf=etat.confirm===h;
+    var lien=function(t,href){return DEMO?'<a title="Désactivé en démonstration">'+t+'</a>':'<a href="'+API+'/admin/clients/'+esc(encodeURIComponent(h))+href+'" target="_blank" rel="noopener">'+t+'</a>';};
+    var sw=ORDRE.filter(function(x){return x!==l;}).map(function(x){return '<button type="button" class="niv" data-niveau="'+x+'" data-h="'+esc(h)+'" title="Passer en '+NIV[x][0]+' — '+esc(NIV[x][3])+'" style="color:'+NIV[x][2]+'">'+NIV[x][0]+'</button>';}).join('');
+    return '<div class="carte'+(st==='quarantine'?' q':'')+'" data-h="'+esc(h)+'">'
+      +'<div class="ch"><div class="emo">'+esc(c.device_emoji||'📱')+'</div><div class="nom"><b title="'+esc(c.device||'Appareil non identifié')+'">'+esc(c.device||'Appareil non identifié')+'</b><span title="'+esc(h)+'"><code>'+esc(h.slice(0,16))+'</code> · '+esc(c.ip||'—')+'</span></div>'
+      +'<span class="pastille" title="'+esc(N[1]+' — '+N[3])+'" style="color:'+N[2]+';border-color:'+N[2]+';background:'+N[2]+'22">'+N[0]+'</span></div>'
+      +'<div class="infos"><div><span class="etat"><i style="background:'+E[1]+'"></i>'+esc(E[0])+'</span></div>'
+      +'<div title="'+esc(complet(c.last_seen))+'">Dernière activité : <b>'+esc(rel(c.last_seen))+'</b></div>'
+      +'<div title="'+esc(c.asn_org||'')+'">'+esc((c.flag||'')+' '+(c.country_iso||''))+' <b>'+esc(c.asn_org||'—')+'</b></div>'
+      +'<div title="'+esc(complet(c.first_seen))+'">Premier passage : <b>'+esc(rel(c.first_seen))+'</b></div></div>'
+      +'<div title="Score de risque (0 à 100)"><div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--doux);margin-bottom:2px"><span>Score de risque</span><b style="color:var(--texte)">'+(sc==null?'—':fmt(sc))+'</b></div><div class="barre"><i style="width:'+(sc==null?0:Math.max(3,Math.min(100,sc)))+'%;background:'+sCol+'"></i></div></div>'
+      +'<div class="acts"><span class="sep">Niveau :</span>'+sw+'</div>'
+      +'<div class="acts">'+lien('🕸️ Carto','/social')+lien('PDF','/report')+'<a href="#" data-ev="'+esc(h)+'">Events</a><a href="#" data-raz="'+esc(h)+'" style="color:var(--rouge)">↺ Reset</a></div>'
+      +(cf?'<div class="conf"><div>Remettre à zéro les statistiques du client <code>'+esc(h.slice(0,16))+'…</code> ? Cela efface sa cartographie sociale et ses événements. Irréversible.</div><div class="bt"><button type="button" class="danger" data-razoui="'+esc(h)+'">Oui, remettre à zéro</button><button type="button" data-razno="1">Annuler</button></div></div>':'')
+      +'</div>';
+  }
+
+  function rendListe(){
+    var L=visibles(),tot=(etat.clients||[]).length;
+    el('compte').textContent=etat.clients?L.length+' / '+tot:'';
+    el('cartes').innerHTML=etat.clients==null?'<div class="vide">'+esc(etat.erreur||'Chargement…')+'</div>'
+      :!tot?'<div class="vide">Aucun client.</div>':!L.length?'<div class="vide">Aucun client ne correspond au filtre.</div>':L.map(carte).join('');
+    hauteur();
+  }
+
+  function rend(){
+    var C=etat.clients,M=etat.metrics;
+    el('demo').hidden=!DEMO;
+    var s=el('session');
+    if(!DEMO&&C==null){s.textContent=etat.erreur?'Aucune mesure : '+etat.erreur:'Chargement…';s.hidden=false;}else s.hidden=true;
+    el('razTous').disabled=!C||!C.length;
+    var a=el('actif');a.textContent=C?'EN LIGNE':'HORS LIGNE';a.classList.toggle('hors',!C);
+    var cnt={},act=0,qua=0,nou=0,now=Date.now()/1000;
+    (C||[]).forEach(function(c){var l=niv(c);cnt[l]=(cnt[l]||0)+1;if(statut(c)==='actif')act++;if(statut(c)==='quarantine')qua++;if(c.first_seen&&now-c.first_seen<86400)nou++;});
+    var N=function(v){return C?fmt(v):'—';};
+    var evs=M&&M.events_24h_total!=null?fmt(M.events_24h_total):'—';
+    var parN=C?ORDRE.map(function(l){return NIV[l][0]+' '+(cnt[l]||0);}).join(' · '):'';
+    el('tuiles').innerHTML=
+       tuile(IC.cli,N((C||[]).length),'Clients','connus de la passerelle','Nombre d’appareils enregistrés dans le magasin du Toolbox.')
+      +tuile(IC.act,N(act),'Actifs maintenant','vus il y a moins de 5 min','Clients dont la dernière activité date de moins de 5 minutes.')
+      +tuile(IC.niv,C?(qua?fmt(qua):'0'):'—','En quarantaine',parN,'Clients dont l’état est « quarantaine » (trafic coupé). Sous le chiffre : répartition par niveau R.')
+      +tuile(IC.nou,N(nou),'Nouveaux','premier passage < 24 h','Clients vus pour la première fois il y a moins de 24 h.')
+      +tuile(IC.evt,evs,'Événements 24 h','toutes sources','Événements enregistrés sur 24 h, toutes sources confondues (DPI, cookies, JA4…). Source : /admin/metrics.');
+    el('donut').innerHTML=donut(cnt,(C||[]).length);
+    el('leg').innerHTML=ORDRE.map(function(l){var n=cnt[l]||0,t=(C||[]).length;return '<div title="'+esc(NIV[l][3])+'"><i style="background:'+NIV[l][2]+'"></i><span>'+NIV[l][0]+' · '+NIV[l][1]+'</span><b>'+(C?n+' ('+(t?Math.round(100*n/t):0)+'%)':'—')+'</b></div>';}).join('');
+    var p='<button type="button" class="puce'+(etat.fNiv?'':' on')+'" data-fn="">Tous niveaux</button>'+ORDRE.map(function(l){return '<button type="button" class="puce'+(etat.fNiv===l?' on':'')+'" data-fn="'+l+'">'+NIV[l][0]+'</button>';}).join('')
+      +'<span style="width:10px"></span><button type="button" class="puce'+(etat.fEtat?'':' on')+'" data-fe="">Tous états</button>'+['actif','idle','expiré','quarantine'].map(function(k){return '<button type="button" class="puce'+(etat.fEtat===k?' on':'')+'" data-fe="'+k+'">'+ETAT[k][0]+'</button>';}).join('');
+    el('puces').innerHTML=p;
+    el('confTous').hidden=!etat.tous;
+    el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    rendListe();
+  }
+
+  /* ---- lecture ---- */
+  var D_NOW=Date.now()/1000;
+  function dm(h,ip,dev,emo,lvl,sc,st,seen,first,flag,iso,asn){return {mac_hash:h,ip:ip,device:dev,device_emoji:emo,level:lvl,score:sc,status_label:st,state:st==='quarantine'?'quarantine':'active',last_seen:D_NOW-seen,first_seen:D_NOW-first,flag:flag,country_iso:iso,asn_org:asn};}
+  var DEMO_D={clients:[
+    dm('3f9a1c7e5b2d8a40','10.99.1.12','iPhone (Safari)','📱','r3',12,'actif',45,86400*9,'🇫🇷','FR','Free SAS'),
+    dm('a81d04c9e7f3b562','10.99.1.15','Portable Windows (Edge)','💻','r2',34,'actif',120,86400*20,'🇫🇷','FR','Orange'),
+    dm('c2e5b7194a0d6f83','10.99.1.21','Android (Chrome)','📱','r3',58,'idle',1500,3600*30,'🇧🇪','BE','Proximus'),
+    dm('7b0e93d2c6a8f145','10.99.1.8','Tablette iPad','📱','r1',8,'idle',2400,86400*40,'🇫🇷','FR','Bouygues Telecom'),
+    dm('e46a2f8b1d9c0753','10.99.1.33','Mac (Firefox)','💻','r2',76,'quarantine',600,86400*3,'🇩🇪','DE','Deutsche Telekom'),
+    dm('1d7c58a3f0e2b694','10.99.1.40','Téléviseur connecté','📺','r0',22,'expiré',86400*2,86400*60,'🇫🇷','FR','Free SAS'),
+    dm('5a3e9b1c8d7f2046','10.99.1.44','Linux (Chromium)','💻','r3',41,'actif',200,7200,'🇨🇭','CH','Swisscom'),
+    dm('9c0f4e6a2b8d3175','10.99.1.51','Android (Firefox)','📱','r1',15,'expiré',86400*5,86400*15,'🇫🇷','FR','SFR')],count:8};
+  var DEMO_M={events_24h_total:18432,clients_active:5};
+
+  function jget(u){return fetch(API+u,{credentials:'same-origin'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
+  function charge(){
+    if(DEMO){etat.clients=DEMO_D.clients;etat.metrics=DEMO_M;rend();return Promise.resolve();}
+    return Promise.all([
+      jget('/admin/clients/rich').catch(function(e){return {__error:e.message};}),
+      jget('/admin/metrics').catch(function(){return null;})
+    ]).then(function(r){
+      var d=r[0],rows=d&&d.clients?d.clients:(Array.isArray(d)?d:null);
+      etat.clients=rows;etat.erreur=rows?null:(d&&d.__error)||'pas de données';etat.metrics=r[1];rend();
+    });
+  }
+
+  /* ---- écriture : appels identiques à l'ancien onglet ---- */
+  function bloque(){if(DEMO){msg('Démonstration : aucune écriture.','');return true;}return false;}
+  function setLevel(h,l){
+    if(bloque()) return;
+    var fd=new FormData();fd.append('level',l);
+    fetch(API+'/admin/clients/'+h+'/level',{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      msg('Niveau du client '+h.slice(0,8)+'… passé en '+l.toUpperCase()+'.','ok');charge();
+    }).catch(function(e){msg('Échec changement niveau : '+e.message,'err');});
+  }
+  function resetClient(h){
+    if(bloque()) return;
+    fetch(API+'/admin/clients/'+h+'/reset',{method:'POST',credentials:'same-origin'}).then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);return r.json();
+    }).then(function(j){msg('RAZ effectuée : '+(j.rows_deleted||0)+' enregistrements supprimés.','ok');charge();})
+    .catch(function(e){msg('Échec RAZ : '+e.message,'err');});
+  }
+  function resetAll(){
+    if(bloque()) return;
+    fetch(API+'/admin/clients/reset-all',{method:'POST',credentials:'same-origin'}).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(d){
+        if(!r.ok){msg('Reset all refusé : '+(d.detail||('HTTP '+r.status)),'err');return;}
+        msg('RAZ de tous les clients effectuée : '+(d.clients_reset||0)+' clients, '+(d.rows_deleted||0)+' enregistrements.','ok');return charge();
+      });
+    }).catch(function(e){msg('Reset all erreur : '+e,'err');});
+  }
+  function events(h){
+    el('detailPan').hidden=false;el('detailTitre').textContent='Détails client — '+h;
+    var d=el('detail');
+    if(DEMO){d.innerHTML='<p><b>ja4</b> : 412 · <b>cookies</b> : 133 · <b>dpi</b> : 87</p><div class="vide">Détail non disponible en démonstration.</div>';hauteur();return;}
+    d.innerHTML='<div class="vide">Chargement…</div>';hauteur();
+    jget('/admin/clients/'+h+'/events').then(function(x){
+      var ev=x.events_by_source||{},k=Object.keys(ev);
+      var sum=k.length?k.map(function(s){return '<span style="margin-right:1rem"><b>'+esc(s)+'</b> : '+fmt(ev[s])+'</span>';}).join(''):'<i style="color:var(--faible)">aucun événement</i>';
+      var rec=(x.recent||[]);
+      var tb=rec.length?'<div class="scroll"><table><thead><tr><th>Heure</th><th>Source</th><th>Détail</th></tr></thead><tbody>'+rec.map(function(e){return '<tr><td>'+esc(new Date(e.ts*1000).toLocaleTimeString('fr-FR'))+'</td><td><b>'+esc(e.source)+'</b></td><td title="'+esc(e.host||e.url||e.sni||e.kind||'?')+'"><code>'+esc(e.host||e.url||e.sni||e.kind||'?')+'</code></td></tr>';}).join('')+'</tbody></table></div>':'';
+      d.innerHTML='<p style="margin:0 0 8px">'+sum+'</p>'+tb+'<p style="margin:8px 0 0"><a href="'+API+'/admin/clients/'+esc(encodeURIComponent(h))+'/report" target="_blank" rel="noopener" style="color:var(--cyan)">⬇ Télécharger le PDF complet</a></p>';hauteur();
+    }).catch(function(e){d.innerHTML='<div class="vide">'+esc(e.message)+'</div>';hauteur();});
+  }
+
+  /* ---- interactions ---- */
+  document.addEventListener('click',function(ev){
+    var t=ev.target.closest&&ev.target.closest('button,a');if(!t) return;
+    if(t.dataset.niveau){setLevel(t.dataset.h,t.dataset.niveau);return;}
+    if(t.dataset.ev){ev.preventDefault();events(t.dataset.ev);return;}
+    if(t.dataset.raz){ev.preventDefault();etat.confirm=t.dataset.raz;rendListe();return;}
+    if(t.dataset.razoui){var h=t.dataset.razoui;etat.confirm=null;rendListe();resetClient(h);return;}
+    if(t.dataset.razno){etat.confirm=null;rendListe();return;}
+    if(t.dataset.fn!==undefined){etat.fNiv=t.dataset.fn;rend();return;}
+    if(t.dataset.fe!==undefined){etat.fEtat=t.dataset.fe;rend();return;}
+  });
+  el('razTous').addEventListener('click',function(){etat.tous=true;el('confTous').hidden=false;hauteur();});
+  el('confTousNon').addEventListener('click',function(){etat.tous=false;el('confTous').hidden=true;hauteur();});
+  el('confTousOui').addEventListener('click',function(){etat.tous=false;el('confTous').hidden=true;resetAll();});
+  el('rech').addEventListener('input',rendListe);
+  el('tri').addEventListener('change',rendListe);
+  el('rafraichir').addEventListener('click',charge);
+
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxToolboxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY),onglet:'clients'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);
+  if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
+
+  charge();
+  if(!DEMO) setInterval(function(){
+    if(document.hidden||etat.confirm||etat.tous||document.activeElement===el('rech')) return;
+    charge();
+  },15000);
+})();
+</script>

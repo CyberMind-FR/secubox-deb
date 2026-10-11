@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Toolbox », la cabine numérique : onglet « Vue d'ensemble » (aperçu). Une seule page, deux mises en page :
+    · page embarquée (?embed=1) ou largeur < 900 px : une colonne ;
+    · tableau de bord complet (largeur ≥ 900 px) : plusieurs colonnes.
+  DONNÉES RÉELLES UNIQUEMENT (API Toolbox /api/v1/toolbox/… et Hub /api/v1/hub/netstats/…, lues avec le jeton sbx_token ou la session).
+  Une mesure absente s'affiche « — », jamais 0. Page en lecture seule : l'ancien onglet n'avait aucune action d'écriture (POST).
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox — la cabine numérique de SecuBox</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(46,204,113,.09),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.3rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.inc{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .tuile svg.sp{width:100%;height:30px}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:4px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
+  svg.donut{width:120px;height:120px;display:block}
+  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 80px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;font-variant-numeric:tabular-nums}
+  .scroll{overflow-x:auto}
+  .risque{display:inline-block;min-width:34px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;font-size:.72rem}
+  .prot{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.78rem;padding:3px 0}
+  .prot .pt{width:10px;height:10px;border-radius:50%}
+  .prot .nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .prot small{display:block;color:var(--faible);font-size:.66rem;overflow:hidden;text-overflow:ellipsis}
+  .on,.off,.inc{border-radius:5px;padding:0 8px;font-weight:700;font-size:.68rem}
+  .on{background:rgba(46,204,113,.2);color:var(--vert)} .off{background:rgba(255,77,94,.2);color:var(--rouge)} .inc{background:rgba(159,179,214,.2);color:var(--doux)}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g1{grid-template-columns:1.3fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr} .g2{grid-template-columns:1fr 1.4fr}}
+  @container a (max-width:599px){.opt{display:none} td{max-width:150px}}
+  @container a (max-width:430px){.repart{grid-template-columns:1fr;justify-items:center} .leg{width:100%}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2" fill="rgba(41,182,246,.14)"/><path d="M8 21h8M12 17v4"/><path d="M7 11h2l1.5-3 2 6 1.5-3H17"/></svg><span><b>Toolbox — cabine numérique</b><small>Passerelle MITM · clients WireGuard · filtres · Tor</small></span></span>
+    <span class="actif inc" id="actif" title="Niveau d'interception en service : R2 (TLS-break sur consentement), R3 (interception complète par pair)">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Vue d’ensemble</h2><div class="sous">État de la cabine numérique : clients, flux interceptés, filtrage et services.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Débit réseau <i>total des interfaces · 24 h</i></h3><div id="debit"></div><div class="legende" id="legDebit"></div></div>
+    <div class="pan"><h3>Clients par niveau <i>R0 à R3</i></h3><div class="repart"><div id="donut"></div><div class="leg" id="niveaux"></div></div></div>
+  </div>
+  <div class="grille g3">
+    <div class="pan"><h3>Événements par source <i id="evFen">24 h</i></h3><div id="sources"></div></div>
+    <div class="pan"><h3>Pubs et pisteurs bloqués <i id="adFen">24 h</i></h3><div id="adhotes"></div></div>
+    <div class="pan"><h3>Pertes réseau <i>paquets rejetés par catégorie</i></h3><div id="drops"></div></div>
+  </div>
+  <div class="grille g2">
+    <div class="pan"><h3>État des services</h3><div id="services"></div></div>
+    <div class="pan"><h3>Dernières détections <i id="evNote">Sentinelle</i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th class="opt">Classe</th><th>Cible</th><th>Gravité</th><th class="opt">Action</th></tr></thead><tbody id="events"></tbody></table></div></div>
+  </div>
+  <div class="pan"><h3>Derniers clients vus <i id="cliNote"></i></h3><div class="scroll"><table><thead><tr><th>Appareil</th><th class="opt">Empreinte</th><th class="opt">Niveau</th><th>État</th><th class="opt">Score</th><th>Activité</th></tr></thead><tbody id="clients"></tbody></table></div></div>
+  <div class="note">Lecture seule · identifiants de clients pseudonymisés (empreinte, jamais l’adresse MAC) · chaque décision de sécurité est écrite dans le journal d’audit.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function isnum(x){return x!=null&&x!==''&&isFinite(Number(x));}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  function N(v){return isnum(v)?fmt(v):'—';}
+  function bps(b){b=num(b);return b>=1e9?(b/1e9).toFixed(1)+' Gb/s':b>=1e6?(b/1e6).toFixed(1)+' Mb/s':b>=1e3?(b/1e3).toFixed(1)+' kb/s':Math.round(b)+' b/s';}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var PAL=['#29b6f6','#a78bfa','#3b82f6','#ff9f1c','#2ecc71','#ff4d5e','#ffd23f'];
+  function ico(c,body,fill){return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="'+c+'" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+body.replace('@',fill)+'</svg>';}
+  var IC={
+    cli:ico('#3b82f6','<circle cx="9" cy="8" r="3" fill="@"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.2"/><path d="M17 14c2.3 0 4 1.8 4 4"/>','rgba(59,130,246,.16)'),
+    flux:ico('#29b6f6','<path d="M3 8h14l-3-3M21 16H7l3 3"/><rect x="9" y="10.5" width="6" height="3" rx="1" fill="@"/>','rgba(41,182,246,.16)'),
+    pub:ico('#ff4d5e','<circle cx="12" cy="12" r="9" fill="@"/><path d="M6 6l12 12"/>','rgba(255,77,94,.14)'),
+    pis:ico('#a78bfa','<circle cx="12" cy="12" r="9" fill="@"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#a78bfa"/>','rgba(167,139,250,.14)'),
+    tun:ico('#ff9f1c','<path d="M12 3a9 9 0 019 9M12 7a5 5 0 015 5M12 11a1 1 0 011 1" /><circle cx="12" cy="12" r="1.2" fill="#ff9f1c"/><path d="M3 12a9 9 0 009 9" fill="@"/>','rgba(255,159,28,.12)'),
+    san:ico('#2ecc71','<path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="@"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/>','rgba(46,204,113,.16)')
+  };
+  function spark(a,c){
+    if(!a||a.length<2) return '';
+    var m=Math.max.apply(null,a.map(num).concat([1])),n=a.length,w=100/n;
+    return '<svg class="sp" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">'+a.map(function(v,i){var h=Math.max(1,28*num(v)/m);return '<rect x="'+(i*w+w*.15).toFixed(2)+'" y="'+(30-h).toFixed(2)+'" width="'+(w*.7).toFixed(2)+'" height="'+h.toFixed(2)+'" fill="'+c+'" opacity=".85"/>';}).join('')+'</svg>';
+  }
+  function tuile(ic,v,l,s,def,sp){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+(sp||'')+'</div>';}
+  function lignes(rows,coul){
+    if(!rows.length) return '';
+    var m=Math.max.apply(null,rows.map(function(r){return r[1];}).concat([1]));
+    return rows.map(function(r,i){return '<div class="ligne"><span class="n" style="text-align:left" title="'+esc(r[0])+'">'+esc(r[0])+'</span><span>'+fmt(r[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*r[1]/m)+'%;background:'+(coul||PAL[i%7])+'"></i></div></div>';}).join('');
+  }
+  function heureDe(ts){ts=num(ts);if(!ts) return '—';var d=new Date(ts*1000),p=function(x){return (x<10?'0':'')+x;};return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
+  function ilya(ts){ts=num(ts);if(!ts) return '—';var s=Math.max(0,Math.round(Date.now()/1000-ts));return s<90?s+' s':s<5400?Math.round(s/60)+' min':s<172800?Math.round(s/3600)+' h':Math.round(s/86400)+' j';}
+
+  /* Courbe : somme des interfaces par instant, entrant et sortant */
+  function somme(par){var m={};Object.keys(par||{}).forEach(function(k){(par[k]||[]).forEach(function(p){m[p[0]]=(m[p[0]]||0)+num(p[1]);});});
+    return Object.keys(m).map(Number).sort(function(a,b){return a-b;}).map(function(t){return [t,m[t]];});}
+  function courbe(ent,sor){
+    var n=Math.max(ent.length,sor.length);if(n<2) return '<div class="vide">Pas encore assez de mesures de débit.</div>';
+    var W=520,H=170,L=52,R=8,T=8,B=20,max=Math.max.apply(null,ent.concat(sor).map(function(p){return p[1];}).concat([1]));
+    var t0=Math.min((ent[0]||sor[0])[0],(sor[0]||ent[0])[0]),t1=Math.max((ent[ent.length-1]||sor[sor.length-1])[0],(sor[sor.length-1]||ent[ent.length-1])[0]);if(t1<=t0)t1=t0+1;
+    var x=function(t){return L+(t-t0)*(W-L-R)/(t1-t0);},y=function(v){return T+(H-T-B)*(1-num(v)/max);};
+    function ch(a){var d='';a.forEach(function(p,i){d+=(i?' L':'M')+x(p[0]).toFixed(1)+','+y(p[1]).toFixed(1);});return d;}
+    var g='';for(var k=0;k<=3;k++){var v=max*k/3,Y=y(v);g+='<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-5)+'" y="'+(Y+3)+'" text-anchor="end">'+bps(v)+'</text>';}
+    var xs='';for(var j=0;j<=4;j++){var tt=t0+(t1-t0)*j/4;xs+='<text x="'+x(tt).toFixed(1)+'" y="'+(H-5)+'" text-anchor="'+(j===4?'end':j===0?'start':'middle')+'">'+heureDe(tt).slice(0,5)+'</text>';}
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Débit réseau entrant et sortant">'+g+xs+(ent.length?'<path d="'+ch(ent)+'" fill="none" stroke="#29b6f6" stroke-width="1.6" stroke-linejoin="round"/>':'')+(sor.length?'<path d="'+ch(sor)+'" fill="none" stroke="#ff9f1c" stroke-width="1.6" stroke-linejoin="round"/>':'')+'</svg>';
+  }
+  function donut(parts,total){
+    var r=44,c=2*Math.PI*r,acc=0,s='<svg class="donut" viewBox="0 0 120 120" role="img" aria-label="Clients par niveau"><circle cx="60" cy="60" r="'+r+'" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="16"/>';
+    if(total>0) parts.forEach(function(p){if(p[1]<=0)return;var l=c*p[1]/total;s+='<circle cx="60" cy="60" r="'+r+'" fill="none" stroke="'+p[2]+'" stroke-width="16" stroke-dasharray="'+l.toFixed(2)+' '+(c-l).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 60 60)"/>';acc+=l;});
+    return s+'<text x="60" y="58" text-anchor="middle" fill="#eaf1ff" font-size="20" font-weight="700">'+(total>0?fmt(total):'—')+'</text><text x="60" y="74" text-anchor="middle" fill="#9fb3d6" font-size="10">clients</text></svg>';
+  }
+  var NIV={r0:['R0 · direct','#6f84a8'],r1:['R1 · filtré','#2ecc71'],r2:['R2 · TLS-break','#ff9f1c'],r3:['R3 · interception','#a78bfa']};
+  var ETAT={validated:['Validé','#2ecc71'],throttle:['Ralenti','#ff9f1c'],quarantine:['Quarantaine','#ff4d5e']};
+  var GRAV=function(s){s=num(s);return s>=8?['Critique','#ff4d5e']:s>=5?['Haute','#ff9f1c']:s>=3?['Moyenne','#ffd23f']:['Faible','#6f84a8'];};
+
+  function rend(d){
+    el('demo').hidden=!d.demo;
+    el('session').hidden=!!(d.demo||d.metrics||d.cfg||d.clients||d.ads||d.hub);
+    var m=d.metrics,cfg=d.cfg,cl=d.clients,ad=d.ads,tor=d.tor,sen=d.sentinel,hub=d.hub,ser=d.series,h=d.health;
+    var liste=(cl&&cl.clients)||null;
+    /* pastille du niveau R actif */
+    var niv={r0:0,r1:0,r2:0,r3:0};if(liste)liste.forEach(function(c){var l=String(c.level||'r1').toLowerCase();if(niv[l]!=null)niv[l]++;});
+    var a=el('actif'),r2=cfg&&cfg.r2?!!cfg.r2.enabled:null;
+    a.classList.remove('hors','inc');
+    if(liste&&niv.r3>0){a.textContent='NIVEAU R3 ACTIF';}
+    else if(r2===true){a.textContent='NIVEAU R2 ACTIF';}
+    else if(r2===false){a.textContent='R2 DÉSACTIVÉ · R1';a.classList.add('inc');}
+    else{a.textContent=h?'EN LIGNE':'HORS LIGNE';a.classList.add(h?'inc':'hors');}
+    /* tuiles */
+    var ev=(m&&m.events_by_source)||{},evl=Object.keys(ev).map(function(k){return [k,num(ev[k])];}).filter(function(x){return x[1]>0;}).sort(function(x,y){return y[1]-x[1];});
+    var ser_in=ser?somme(ser.in_bps):null,ser_out=ser?somme(ser.out_bps):null;
+    var drs=(ser&&ser.drops)||{},dtot=Object.keys(drs).map(function(k){return (drs[k]||[]).map(function(p){return num(p[1]);});});
+    var sparkDrops=dtot.length?(dtot[0].map(function(_,i){return dtot.reduce(function(t,s){return t+(s[i]||0);},0);})):null;
+    var sv=services(d);
+    var okN=sv.filter(function(x){return x.etat===1;}).length,inc=sv.filter(function(x){return x.etat==null;}).length,mesures=sv.length-inc;
+    el('tuiles').innerHTML=
+      tuile(IC.cli,N(m&&m.clients_active),'Clients connectés',liste?fmt(liste.length)+' enregistrés':'','Clients vus sur les dernières 24 h (source : base de la Toolbox).','')
+     +tuile(IC.flux,N(m&&m.mitm&&m.mitm.connections),'Flux interceptés',m&&m.mitm?fmt(m.mitm.unique_hosts)+' hôtes distincts':'','Connexions TLS inspectées par le moteur d’interception (une empreinte JA4 = un flux).','')
+     +tuile(IC.pub,N(ad&&ad.total_blocked),'Pubs bloquées',ad&&ad.dns_sinkhole&&isnum(ad.dns_sinkhole.domains)&&ad.dns_sinkhole.enabled?fmt(ad.dns_sinkhole.domains)+' domaines au DNS':(ad?'fenêtre '+ad.window_hours+' h':''),'Requêtes publicitaires refusées par le moteur sur la fenêtre. Le blocage au DNS (sinkhole) s’ajoute en amont.','')
+     +tuile(IC.pis,N(m&&m.events_by_source?m.events_by_source.cookies:null),'Pisteurs repérés','cookies et traceurs','Événements de pistage (cookies tiers, traceurs) observés sur la fenêtre.','')
+     +tuile(IC.tun,tor?(tor.running?N(tor.circuits):'0'):'—','Tunnels Tor',tor?(tor.running?'amorçage '+fmt(tor.bootstrap)+' %':'démon arrêté'):'','Circuits Tor ouverts par le démon de la Toolbox.','')
+     +tuile(IC.san,mesures?okN+' / '+mesures:'—','Santé des services',inc?inc+' non mesuré(s)':'','Services dont l’état a pu être mesuré et qui répondent correctement.','');
+    /* débit */
+    var dEl=el('debit');
+    if(ser_in&&(ser_in.length>1||ser_out.length>1)){dEl.innerHTML=courbe(ser_in,ser_out);
+      var li=ser_in[ser_in.length-1],lo=ser_out[ser_out.length-1];
+      el('legDebit').innerHTML='<span><i style="background:#29b6f6"></i>Entrant '+(li?bps(li[1]):'—')+'</span><span><i style="background:#ff9f1c"></i>Sortant '+(lo?bps(lo[1]):'—')+'</span>';
+    }else{dEl.innerHTML='<div class="vide">Débit indisponible (session requise ou collecteur arrêté).</div>';el('legDebit').innerHTML='';}
+    /* niveaux */
+    var parts=Object.keys(NIV).map(function(k){return [NIV[k][0],niv[k],NIV[k][1]];});
+    el('donut').innerHTML=donut(parts,liste?liste.length:0);
+    el('niveaux').innerHTML=liste?parts.map(function(p){return '<div><i style="background:'+p[2]+'"></i><span title="'+esc(p[0])+'">'+esc(p[0])+'</span><b>'+fmt(p[1])+'</b></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    /* sources d'événements */
+    el('evFen').textContent=m&&m.events_window?m.events_window:'24 h';
+    el('sources').innerHTML=m?(evl.length?lignes(evl):'<div class="vide">Aucun événement sur la fenêtre.</div>'):'<div class="vide">Session requise.</div>';
+    /* pubs */
+    el('adFen').textContent=ad?ad.window_hours+' h':'24 h';
+    var th=(ad&&ad.top_hosts||[]).slice(0,7).map(function(x){return [x.host,num(x.hits)];});
+    el('adhotes').innerHTML=ad?(th.length?lignes(th,'#ff4d5e'):'<div class="vide">Aucune pub bloquée par le moteur sur la fenêtre.</div>'):'<div class="vide">Session requise.</div>';
+    /* pertes réseau */
+    var cats=(hub&&hub.categories)||{},cr=Object.keys(cats).map(function(k){return [k,num(cats[k].packets)];}).filter(function(x){return x[1]>0;}).sort(function(x,y){return y[1]-x[1];}).slice(0,7);
+    el('drops').innerHTML=hub?((cr.length?lignes(cr,'#a78bfa'):'<div class="vide">Aucun paquet rejeté.</div>')+(hub.network_drops!=null?'<div class="note">Total : '+fmt(hub.network_drops)+(hub.stale?' · collecteur en retard (valeurs anciennes)':'')+'</div>':'')):'<div class="vide">Session requise.</div>';
+    /* services */
+    el('services').innerHTML=sv.map(function(s){var c=s.etat===1?'#2ecc71':s.etat===0?'#ff4d5e':'#6f84a8';
+      return '<div class="prot"><span class="pt" style="background:'+c+'"></span><span class="nom">'+esc(s.nom)+(s.det?'<small>'+esc(s.det)+'</small>':'')+'</span><span class="'+(s.etat===1?'on':s.etat===0?'off':'inc')+'">'+(s.etat===1?'OK':s.etat===0?'KO':'?')+'</span></div>';}).join('');
+    /* détections */
+    var dets=sen&&sen.verdicts?sen.verdicts.detections:null;
+    el('evNote').textContent=sen&&sen.verdicts?(sen.verdicts.assess?'bilan : '+({clean:'sain',suspicious:'suspect',compromised:'compromis'}[sen.verdicts.assess.tier]||'—'):'Sentinelle'):'Sentinelle';
+    el('events').innerHTML=dets&&dets.length?dets.slice(0,8).map(function(x){var g=GRAV(x.severity);
+      return '<tr><td>'+esc(heureDe(x.ts))+'</td><td class="opt">'+esc(x['class']||'—')+'</td><td title="'+esc(x.host||x.domain||x.sni||'')+'">'+esc(x.host||x.domain||x.sni||'—')+'</td><td><span class="risque" style="background:'+g[1]+'33;color:'+g[1]+'">'+g[0]+'</span></td><td class="opt">'+esc(x.action==='block'?'Bloquée':'Observée')+'</td></tr>';}).join(''):'<tr><td colspan="5" class="vide">'+(sen&&sen.verdicts?'Aucune détection récente.':'Sentinelle indisponible ou session requise.')+'</td></tr>';
+    /* clients */
+    el('cliNote').textContent=liste?fmt(liste.length)+' au total':'';
+    el('clients').innerHTML=liste&&liste.length?liste.slice(0,8).map(function(c){var e=ETAT[c.state]||[c.state||'—','#6f84a8'],nv=NIV[String(c.level||'').toLowerCase()];
+      return '<tr><td>'+esc((c.device_emoji||'')+' '+(c.device||'—'))+' '+esc(c.flag||'')+'</td><td class="opt"><code>'+esc(String(c.mac_hash||'').slice(0,10))+'</code></td><td class="opt">'+esc(nv?nv[0]:(c.level||'—'))+'</td><td><span class="risque" style="background:'+e[1]+'33;color:'+e[1]+'">'+esc(e[0])+'</span></td><td class="opt">'+N(c.score)+'</td><td>'+esc(ilya(c.last_seen))+'</td></tr>';}).join(''):'<tr><td colspan="6" class="vide">'+(liste?'Aucun client.':'Session requise.')+'</td></tr>';
+    haut();
+  }
+  function services(d){
+    var cfg=d.cfg,tor=d.tor,sen=d.sentinel,hub=d.hub,ad=d.ads,S=[];
+    S.push({nom:'Portail Toolbox',det:d.health&&d.health.version?'version '+d.health.version:'',etat:d.health?(d.health.status==='ok'?1:0):null});
+    S.push({nom:'Interception R2 (TLS-break)',det:cfg&&cfg.r2?cfg.r2.mitm_listen:'',etat:cfg&&cfg.r2?(cfg.r2.enabled?1:0):null});
+    S.push({nom:'Tor',det:tor?(tor.running?'circuits : '+fmt(tor.circuits):'arrêté'):'',etat:tor?(tor.running?1:0):null});
+    S.push({nom:'Sentinelle',det:sen?(sen.stats&&sen.stats.active?fmt(sen.stats.detections)+' détections':'démon inactif'):'',etat:sen&&sen.stats?(sen.stats.active?1:0):null});
+    S.push({nom:'Blocage DNS (sinkhole)',det:ad&&ad.dns_sinkhole&&ad.dns_sinkhole.enabled?fmt(ad.dns_sinkhole.domains)+' domaines':'',etat:ad&&ad.dns_sinkhole&&ad.dns_sinkhole.enabled!=null?(ad.dns_sinkhole.enabled?1:0):null});
+    S.push({nom:'Collecteur réseau (Hub)',det:hub&&hub.stale?'mesures anciennes':'',etat:hub?(hub.stale?0:1):null});
+    return S;
+  }
+  var DEMO=(function(){
+    var now=Math.floor(Date.now()/1000),inb=[],outb=[],i;
+    for(i=0;i<96;i++){var t=now-(95-i)*900;inb.push([t,4e6+3e6*Math.sin(i/9)+1.5e6*Math.sin(i/2.3)+2e6]);outb.push([t,1.2e6+.8e6*Math.sin(i/7+1)+.5e6]);}
+    var dr=[];for(i=0;i<96;i++)dr.push([now-(95-i)*900,20+15*Math.abs(Math.sin(i/5))]);
+    return {demo:true,health:{status:'ok',version:'1.0.0'},cfg:{r2:{enabled:true,mitm_listen:'127.0.0.1:8080'}},
+      metrics:{clients_active:14,events_24h_total:18420,events_by_source:{ja4:9120,cookies:4310,dpi:2870,soc:1560,avatar:560},mitm:{connections:9120,unique_hosts:642,tls_pinned:37}},
+      clients:{count:17,clients:[
+        {mac_hash:'a41c9e07d2b8',state:'validated',level:'r3',score:12,last_seen:now-40,device_emoji:'📱',device:'iPhone',flag:'🇫🇷'},
+        {mac_hash:'7be20f13c9a4',state:'validated',level:'r2',score:21,last_seen:now-190,device_emoji:'💻',device:'Portable Linux',flag:'🇫🇷'},
+        {mac_hash:'03d9a6e4b1f7',state:'throttle',level:'r2',score:48,last_seen:now-1260,device_emoji:'📱',device:'Android',flag:'🇧🇪'},
+        {mac_hash:'c85f02a97e31',state:'validated',level:'r1',score:8,last_seen:now-3300,device_emoji:'📺',device:'TV connectée',flag:'🇫🇷'},
+        {mac_hash:'91ae4b7c06d2',state:'quarantine',level:'r1',score:83,last_seen:now-7200,device_emoji:'📷',device:'Caméra IP',flag:''}].concat([1,2,3,4,5,6,7,8,9,10,11,12].map(function(k){return {mac_hash:'ff0'+k+'00000000',state:'validated',level:k%4===0?'r0':'r1',score:5,last_seen:now-9000-k*600,device_emoji:'📱',device:'',flag:''};}))},
+      ads:{window_hours:24,total_blocked:6842,total_candidates:51,dns_sinkhole:{enabled:true,domains:182340},
+        top_hosts:[{host:'googleads.g.doubleclick.net',hits:1820},{host:'ads.pubmatic.com',hits:1104},{host:'securepubads.g.doubleclick.net',hits:876},{host:'pagead2.googlesyndication.com',hits:640},{host:'ib.adnxs.com',hits:412}]},
+      tor:{running:true,bootstrap:100,circuits:7},sentinel:{stats:{active:true,detections:23,blocked:4,spyware:1},verdicts:{active:true,assess:{tier:'suspicious'},detections:[
+        {ts:now-300,'class':'beaconing',host:'telemetry.example-cdn.net',severity:6,action:'observe'},
+        {ts:now-1800,'class':'dga',host:'xq7ptl2.example.biz',severity:8,action:'block'},
+        {ts:now-5400,'class':'spyware',host:'api.stalker-demo.io',severity:9,action:'block'}]}},
+      hub:{network_drops:4180,stale:false,categories:{scan:{packets:2410},bruteforce:{packets:980},blacklist:{packets:560},invalid:{packets:230}}},
+      series:{in_bps:{wan:inb},out_bps:{wan:outb},drops:{scan:dr}}};
+  })();
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  function haut(){if(window.parent!==window){try{window.parent.postMessage({sbxToolboxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY),onglet:'apercu'},location.origin);}catch(e){}}}
+  window.addEventListener('load',haut);window.addEventListener('resize',haut);if(window.ResizeObserver)new ResizeObserver(haut).observe(document.body);
+  if(q.get('demo')){rend(DEMO);el('rafraichir').addEventListener('click',function(){rend(DEMO);});return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var hd={'Accept':'application/json'},t=jeton();if(t)hd.Authorization='Bearer '+t;
+    return fetch(u,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  var enCours=false;
+  function charge(){
+    if(enCours) return;enCours=true;
+    var T='/api/v1/toolbox/',H='/api/v1/hub/';
+    Promise.all([jget(T+'health'),jget(T+'admin/config'),jget(T+'admin/metrics'),jget(T+'admin/clients/rich'),jget(T+'admin/ad-stats'),jget(T+'admin/tor/state'),
+      jget(T+'admin/sentinel/stats'),jget(T+'admin/sentinel/verdicts?limit=8'),jget(H+'netstats/summary'),jget(H+'netstats/series?window=86400&step=900')]).then(function(r){
+      rend({health:r[0],cfg:r[1],metrics:r[2],clients:r[3],ads:r[4],tor:r[5],sentinel:(r[6]||r[7])?{stats:r[6],verdicts:r[7]}:null,hub:r[8],series:r[9]});
+      el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      enCours=false;
+    });
+  }
+  el('rafraichir').addEventListener('click',charge);
+  charge();
+  setInterval(function(){if(document.visibilityState==='visible')charge();},15000);
+})();
+</script>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Toolbox, onglet « Sentinelle » : détection de compromission des appareils de la flotte (#2373). Une seule page, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px).
+  DONNÉES RÉELLES UNIQUEMENT (API de la Toolbox : GET /api/v1/toolbox/admin/sentinel/{stats,verdicts,c2}, lues en session). Une mesure absente s'affiche « — », jamais 0.
+  Action conservée à l'identique de l'ancien onglet : POST /api/v1/toolbox/admin/sentinel/c2/allow (« Ignorer » un hôte C2 appris), avec confirmation intégrée à la page.
+  `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau ; aucun appel d'écriture.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox — la Sentinelle</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.inc{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  button.dg{background:rgba(255,77,94,.2);border-color:var(--rouge)}
+  button:disabled{opacity:.5;cursor:default}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo a{color:#001}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .jauge{height:5px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden;margin-top:2px} .tuile .jauge i{display:block;height:100%;border-radius:3px}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto;text-align:right}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:4px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
+  .donut{width:120px;height:120px;border-radius:50%;position:relative;background:rgba(159,179,214,.16)}
+  .donut span{position:absolute;inset:21px;border-radius:50%;background:#0b1830;display:grid;place-items:center;text-align:center;font-size:.7rem;color:var(--doux)} .donut span b{display:block;font-size:1.25rem;color:var(--texte)}
+  .leg div{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px}
+  .leg b{color:var(--texte);font-variant-numeric:tabular-nums} .leg em{font-style:normal;color:var(--faible);min-width:34px;text-align:right}
+  .leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .verdict{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .verdict .gros{font-size:1.05rem;font-weight:700}
+  .filtres{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .filtres button.on{background:rgba(41,182,246,.35);border-color:var(--cyan)}
+  .det{border-top:1px solid rgba(86,150,255,.12);padding:6px 0}
+  .det:first-child{border-top:0}
+  .det .l1{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.78rem}
+  .det .nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .det .l2{display:flex;gap:10px;flex-wrap:wrap;color:var(--faible);font-size:.68rem;margin-top:2px;font-variant-numeric:tabular-nums}
+  .det details summary{cursor:pointer;color:var(--cyan);font-size:.7rem;margin-top:2px}
+  .det pre{white-space:pre-wrap;word-break:break-word;font-size:.7rem;color:var(--doux);background:rgba(6,13,27,.6);border-radius:8px;padding:6px 8px;margin:4px 0 0;max-height:220px;overflow:auto}
+  .risque{display:inline-block;min-width:60px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;font-size:.7rem}
+  .act{font-weight:600;font-size:.72rem} .act.b{color:var(--rouge)} .act.o{color:var(--orange)}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;font-variant-numeric:tabular-nums}
+  td.act-c{overflow:visible;max-width:none}
+  .scroll{overflow-x:auto}
+  .msg{border-radius:8px;padding:5px 9px;font-size:.76rem;margin-top:6px}
+  .msg.ok{background:rgba(46,204,113,.16);color:var(--vert)} .msg.ko{background:rgba(255,77,94,.16);color:var(--rouge)}
+  .conf{display:inline-flex;gap:6px;align-items:center;color:var(--orange);font-size:.72rem}
+  @container a (max-width:599px){.repart{grid-template-columns:100px 1fr}.donut{width:100px;height:100px}.donut span{inset:18px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g1{grid-template-columns:1.3fr 1fr} .g2{grid-template-columns:1.4fr 1fr}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><circle cx="12" cy="11" r="3"/><path d="M12 8V6M12 16v-2M9 11H7M17 11h-2"/></svg><span><b>Sentinelle</b><small>Détection de compromission · Toolbox</small></span></span>
+    <span class="actif inc" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Détections de la flotte</h2><div class="sous">Spywares, canaux de commande (C2) et logiciels malveillants repérés sur le trafic des appareils de la Toolbox.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Verdict de la flotte <i id="verdictNote"></i></h3><div id="verdict"></div></div>
+    <div class="pan"><h3>Répartition par type de menace <i>détections récentes</i></h3><div class="repart"><div class="donut" id="donut"><span id="donutC"></span></div><div class="leg" id="cats"></div></div></div>
+  </div>
+  <div class="pan"><h3>Chronologie des détections <i id="chronoNote"></i></h3><div id="chrono"></div><div class="legende" id="legChrono"></div></div>
+  <div class="grille g2">
+    <div class="pan"><h3>Détections et alertes récentes <i id="detNote"></i></h3><div class="filtres" id="filtres"></div><div id="dets"></div></div>
+    <div class="pan"><h3>C2 appris et candidats <i id="c2Note"></i></h3><div id="c2"></div><div id="c2msg"></div></div>
+  </div>
+  <div class="note">Gravité = sévérité de la détection (0 à 100) : critique ≥ 80, haute ≥ 60, moyenne ≥ 40, faible en dessous. Les empreintes d’appareils sont tronquées ; aucune preuve brute n’est affichée. L’API de la Sentinelle ne fournit ni cellules GSM, ni matériel radio branché : ces mesures ne sont donc pas affichées.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  var DEMOMODE=!!q.get('demo');
+  if(q.get('embed')) document.body.classList.add('emb');
+  var API='/api/v1/toolbox';
+  var PAL=['#ff4d5e','#a78bfa','#3b82f6','#ff9f1c','#29b6f6','#2ecc71','#ffd23f'];
+  var IC={
+    etat:function(c){return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="'+c+'" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.14)"/><path d="M8.5 12l2.4 2.4 4.6-4.8"/></svg>';},
+    det:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19z" fill="rgba(255,159,28,.14)"/><path d="M12 10v4M12 17h.1"/></svg>',
+    bloc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><path d="M6 6l12 12"/></svg>',
+    spy:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="rgba(167,139,250,.14)"/><circle cx="12" cy="12" r="3"/></svg>',
+    sev:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><path d="M4 18a8 8 0 0116 0" fill="rgba(255,77,94,.12)"/><path d="M12 18l4-6"/></svg>',
+    c2:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="2.5" fill="rgba(41,182,246,.2)"/><circle cx="5" cy="6" r="1.8"/><circle cx="19" cy="6" r="1.8"/><circle cx="5" cy="18" r="1.8"/><circle cx="19" cy="18" r="1.8"/><path d="M6.4 7.2l4 3.4M17.6 7.2l-4 3.4M6.4 16.8l4-3.4M17.6 16.8l-4-3.4"/></svg>'
+  };
+  function tuile(ic,v,l,s,def,jauge){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div style="min-width:0"><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+(jauge||'')+'</div>';}
+  function pcd(d){if(!isFinite(d))return '—';var a=Math.abs(d);if(a<60)return 'il y a '+Math.round(a)+' s';if(a<3600)return 'il y a '+Math.round(a/60)+' min';if(a<86400)return 'il y a '+Math.round(a/3600)+' h';return 'il y a '+Math.round(a/86400)+' j';}
+  function quand(ts){if(!isFinite(Number(ts))||ts==null)return '—';return new Date(ts*1000).toISOString().replace('T',' ').slice(0,19);}
+  var TIER={clean:['Aucune compromission détectée','#2ecc71'],suspicious:['Activité suspecte','#ff9f1c'],compromised:['Compromission confirmée','#ff4d5e']};
+  function grav(s){s=num(s);return s>=80?['Critique','#ff4d5e']:s>=60?['Haute','#ff4d5e']:s>=40?['Moyenne','#ff9f1c']:['Faible','#ffd23f'];}
+  function bloque(d){return d&&d.action==='block';}
+  var FILT='tous',LAST=null,BUSY=false;
+
+  function chrono(dets){
+    var ts=dets.map(function(d){return Number(d.ts);}).filter(function(t){return isFinite(t)&&t>0;});
+    if(!ts.length) return '<div class="vide">Aucune détection datée.</div>';
+    var now=Date.now()/1000,N=24,start=Math.min.apply(null,ts);
+    if(now-start<86400) start=now-86400;
+    var pas=(now-start)/N,b=[];for(var i=0;i<N;i++)b.push({o:0,k:0});
+    dets.forEach(function(d){var t=Number(d.ts);if(!isFinite(t)||t<=0)return;var i=Math.min(N-1,Math.max(0,Math.floor((t-start)/pas)));(bloque(d)?b[i].k++:b[i].o++);});
+    var max=Math.max.apply(null,b.map(function(x){return x.o+x.k;}).concat([1])),W=Math.max(300,Math.round(el('chrono').clientWidth||520)),H=150,L=30,R=6,T=8,B=20,bw=(W-L-R)/N;
+    var haut=max<4?4:Math.ceil(max/4)*4,g='';
+    for(var k=0;k<=4;k++){var v=haut*k/4,Y=T+(H-T-B)*(1-v/haut);g+='<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-4)+'" y="'+(Y+3)+'" text-anchor="end">'+fmt(v)+'</text>';}
+    var bars='',xs='';
+    b.forEach(function(x,i){var X=L+i*bw+bw*.12,w=bw*.76,hk=(H-T-B)*x.k/haut,ho=(H-T-B)*x.o/haut,y0=H-B;
+      if(x.k){bars+='<rect x="'+X.toFixed(1)+'" y="'+(y0-hk).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+hk.toFixed(1)+'" rx="2" fill="#ff4d5e"><title>'+x.k+' bloquée(s)</title></rect>';}
+      if(x.o){bars+='<rect x="'+X.toFixed(1)+'" y="'+(y0-hk-ho).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+ho.toFixed(1)+'" rx="2" fill="#ff9f1c"><title>'+x.o+' observée(s)</title></rect>';}
+      if(i%4===0||i===N-1){var d=new Date((start+pas*(i+.5))*1000);xs+='<text x="'+(L+i*bw+bw/2).toFixed(1)+'" y="'+(H-5)+'" text-anchor="middle">'+(pas*N>172800?String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0'):String(d.getHours()).padStart(2,'0')+' h')+'</text>';}});
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Détections dans le temps">'+g+xs+bars+'</svg>';
+  }
+
+  function listeDets(dets){
+    var types={};dets.forEach(function(d){var c=String(d.class||'?');types[c]=1;});
+    var fl=['tous','bloquées','observées'];
+    el('filtres').innerHTML=fl.map(function(f){return '<button type="button" data-f="'+f+'" class="'+(FILT===f?'on':'')+'">'+f+'</button>';}).join('');
+    Array.prototype.forEach.call(el('filtres').querySelectorAll('button'),function(b){b.addEventListener('click',function(){FILT=b.dataset.f;listeDets(dets);haut();});});
+    var l=dets.slice().sort(function(a,b){return num(b.ts)-num(a.ts);}).filter(function(d){return FILT==='tous'||(FILT==='bloquées'?bloque(d):!bloque(d));});
+    el('detNote').textContent=l.length+' sur '+dets.length;
+    el('dets').innerHTML=l.length?l.slice(0,30).map(function(d){var g=grav(d.severity),b=bloque(d);
+      return '<div class="det"><div class="l1"><span class="risque" style="background:'+g[1]+'33;color:'+g[1]+'">'+g[0]+'</span><span class="nom" title="'+esc(d.class)+'">'+esc(d.class||'—')+'</span><span class="act '+(b?'b':'o')+'">'+(b?'Bloquée':'Détectée — observée')+'</span></div>'
+        +'<div class="l2"><span>sévérité '+(d.severity==null?'—':fmt(d.severity))+' / confiance '+(d.confidence==null?'—':fmt(d.confidence))+'</span><span>'+esc(quand(d.ts))+'</span>'+(d.mac_hash?'<span>appareil '+esc(String(d.mac_hash).slice(0,8))+'</span>':'')+'</div>'
+        +(d.report?'<details><summary>rapport</summary><pre>'+esc(d.report)+'</pre></details>':'')+'</div>';}).join(''):'<div class="vide">'+(dets.length?'Aucune détection dans ce filtre.':'Aucune détection récente.')+'</div>';
+  }
+
+  function rendC2(c2){
+    var m=el('c2');
+    if(!c2||!c2.active){el('c2Note').textContent=c2?'inactif':'session requise';m.innerHTML='<div class="vide">'+(c2?'Pas de données C2 : sentinelle inactive.':'Ouvre une session pour voir les C2.')+'</div>';return;}
+    var L=c2.learned||[],C=c2.candidates||[];
+    el('c2Note').textContent=L.length+' appris · '+C.length+' candidats';
+    function ligne(h,appris){return '<tr><td title="'+esc(h.host)+'">'+esc(h.host)+'</td><td title="'+esc((h.signals||[]).join(', '))+'">'+esc((h.signals||[]).join(', ')||'—')+'</td><td>'+(h.interval_s?Math.round(h.interval_s)+' s':'—')+'</td><td>'+(h.devices?fmt(h.devices):(h.windows?'w'+fmt(h.windows):'—'))+'</td><td class="act-c" data-h="'+esc(h.host)+'">'+(appris?'<button type="button" class="c2-ign" data-host="'+esc(h.host)+'">Ignorer</button>':'<span class="sous">candidat</span>')+'</td></tr>';}
+    var rows=L.map(function(h){return ligne(h,true);}).join('')+C.map(function(h){return ligne(h,false);}).join('');
+    m.innerHTML=rows?'<div class="scroll"><table><thead><tr><th>Hôte</th><th>Signaux</th><th>Intervalle</th><th>Vu</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="vide">Aucun C2 appris ni candidat.</div>';
+    Array.prototype.forEach.call(m.querySelectorAll('.c2-ign'),function(b){b.addEventListener('click',function(){demande(b.parentNode,b.dataset.host);});});
+  }
+  // Confirmation intégrée (pas de dialogue natif) : la cellule devient « Confirmer ? Oui / Non ».
+  function demande(td,host){
+    BUSY=true;
+    td.innerHTML='<span class="conf" title="Ignorer '+esc(host)+'">Sûr ? <button type="button" class="dg oui">Oui</button> <button type="button" class="non">Non</button></span>';
+    td.querySelector('.non').addEventListener('click',function(){BUSY=false;rendC2(LAST&&LAST.c2);haut();});
+    td.querySelector('.oui').addEventListener('click',function(){ignorer(host);});
+  }
+  function ignorer(host){
+    var m=el('c2msg');
+    if(DEMOMODE){BUSY=false;m.innerHTML='<div class="msg ko">Démonstration : aucune action envoyée.</div>';rendC2(LAST&&LAST.c2);haut();return;}
+    fetch(API+'/admin/sentinel/c2/allow',{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'host='+encodeURIComponent(host)
+    }).then(function(r){return r.json().catch(function(){return null;}).then(function(j){return {ok:r.ok,j:j,s:r.status};});})
+      .then(function(x){BUSY=false;
+        if(x.ok&&x.j&&x.j.ok){m.innerHTML='<div class="msg ok">'+esc(host)+' ajouté à la liste blanche : il ne sera plus appris comme C2.</div>';}
+        else m.innerHTML='<div class="msg ko">Échec'+(x.ok?'':' (HTTP '+x.s+(x.j&&x.j.detail?' — '+esc(x.j.detail):'')+')')+' : '+esc(host)+' n’a pas été ignoré.</div>';
+        charge();})
+      .catch(function(e){BUSY=false;m.innerHTML='<div class="msg ko">Échec réseau : '+esc(e.message)+'</div>';rendC2(LAST&&LAST.c2);haut();});
+  }
+
+  function rend(d){
+    LAST=d;
+    var st=d.stats,vd=d.verdicts,sans=!st&&!vd;
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||!sans);
+    var a=el('actif'),actif=st?st.active:null;
+    a.textContent=actif==null?'ÉTAT INCONNU':(actif?'SENTINELLE ACTIVE':'SENTINELLE INACTIVE');
+    a.className='actif'+(actif==null?' inc':(actif?'':' hors'));
+    var dets=vd&&vd.detections?vd.detections:[],as=vd&&vd.assess?vd.assess:null,N=function(v){return v==null?'—':fmt(v);};
+    var ok=st&&st.active;
+    var tier=as&&TIER[as.tier]?TIER[as.tier]:null,couleurEtat=actif==null?'#6f84a8':(actif?'#2ecc71':'#ff4d5e');
+    var rec=dets.map(function(x){return num(x.ts);}).filter(function(t){return t>0;}),der=rec.length?Math.max.apply(null,rec):null;
+    var c2=d.c2&&d.c2.active?d.c2:null,nl=c2?(c2.learned||[]).length:null,nc=c2?(c2.candidates||[]).length:null;
+    el('tuiles').innerHTML=
+      tuile(IC.etat(couleurEtat),actif==null?'—':(actif?'Active':'Inactive'),'État du capteur',actif==null?'':(actif?'démon de détection joint':'démon muet : aucune donnée'),'État du démon Sentinelle de la Toolbox. Inactive = le démon ne répond pas ou n’a aucune détection à rapporter.')
+     +tuile(IC.det,ok?N(st.detections):'—','Alertes','détections cumulées','Nombre de détections cumulées rapportées par la Sentinelle.')
+     +tuile(IC.bloc,ok?N(st.blocked):'—','Bloquées','trafic coupé','Détections dont l’action est un blocage.',ok&&num(st.detections)>0?'<div class="jauge"><i style="width:'+Math.min(100,100*num(st.blocked)/num(st.detections))+'%;background:#ff4d5e"></i></div>':'')
+     +tuile(IC.spy,ok?N(st.spyware):'—','Spywares','détections de type spyware','Détections classées spyware (Pegasus et assimilés).')
+     +tuile(IC.sev,as&&as.count?fmt(as.worst_severity)+'<span style="font-size:.8rem;color:var(--faible)"> /100</span>':'—','Sévérité maximale',as&&as.count?'confiance '+fmt(as.worst_confidence)+' / 100':'','Sévérité la plus haute parmi les détections récentes.')
+     +tuile(IC.c2,c2?fmt(nl):'—','C2 appris',c2?nc+' candidat(s)':'','Hôtes de commande et contrôle appris par la Sentinelle, et candidats en observation.');
+    // verdict
+    var dnow=Date.now()/1000;
+    if(as){var t=tier||TIER.clean;
+      el('verdict').innerHTML='<div class="verdict"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="'+t[1]+'" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="'+t[1]+'22"/>'+(as.tier==='clean'?'<path d="M8.5 12l2.4 2.4 4.6-4.8"/>':'<path d="M12 8v5M12 16h.1"/>')+'</svg><div><div class="gros" style="color:'+t[1]+'">'+esc(t[0])+'</div><div class="sous">'+(as.count?fmt(as.count)+' détection(s) · type dominant : '+esc(as.dominant_class||'—'):'Aucune détection récente')+'</div><div class="sous">Dernière détection : '+(der?esc(quand(der))+' ('+pcd(dnow-der)+')':'—')+'</div></div></div>';
+      el('verdictNote').textContent=ok?'':'sentinelle inactive';}
+    else{el('verdict').innerHTML='<div class="vide">'+(sans?'Session requise.':'Sentinelle inactive — aucune donnée de détection réseau.')+'</div>';el('verdictNote').textContent='';}
+    // répartition par type
+    var cl={};dets.forEach(function(x){var c=String(x.class||'inconnu');cl[c]=(cl[c]||0)+1;});
+    var cs=Object.keys(cl).map(function(k){return [k,cl[k]];}).sort(function(x,y){return y[1]-x[1];}),tot=dets.length;
+    if(tot>0){var top=cs.slice(0,6),rest=tot-top.reduce(function(t,c){return t+c[1];},0);if(rest>0)top.push(['autres',rest]);
+      var acc=0,seg=top.map(function(c,i){var p=100*c[1]/tot,b=acc;acc+=p;return PAL[i%7]+' '+b+'% '+acc+'%';});
+      el('donut').style.background='conic-gradient('+seg.join(',')+')';el('donutC').innerHTML='<div><b>'+fmt(tot)+'</b>détections</div>';
+      el('cats').innerHTML=top.map(function(c,i){return '<div><i style="background:'+PAL[i%7]+'"></i><span title="'+esc(c[0])+'">'+esc(c[0])+'</span><b>'+fmt(c[1])+'</b><em>'+Math.round(100*c[1]/tot)+'%</em></div>';}).join('');}
+    else{el('donut').style.background='rgba(159,179,214,.16)';el('donutC').textContent='—';el('cats').innerHTML='<div class="vide">'+(sans?'Session requise.':'Aucune détection récente.')+'</div>';}
+    el('chrono').innerHTML=sans?'<div class="vide">Session requise.</div>':chrono(dets);
+    el('chronoNote').textContent=sans?'':'24 tranches, jusqu’à maintenant';
+    el('legChrono').innerHTML=sans?'':'<span><i style="background:#ff9f1c"></i>Observées</span><span><i style="background:#ff4d5e"></i>Bloquées</span>';
+    if(sans){el('dets').innerHTML='<div class="vide">Ouvre une session pour voir les détections.</div>';el('filtres').innerHTML='';el('detNote').textContent='session requise';}
+    else listeDets(dets);
+    if(!BUSY) rendC2(d.c2);
+    haut();
+  }
+
+  var DEMO=(function(){var n=Math.floor(Date.now()/1000);return {demo:true,
+    stats:{active:true,detections:14,blocked:5,spyware:3},
+    verdicts:{active:true,assess:{tier:'suspicious',worst_severity:92,worst_confidence:88,count:9,dominant_class:'spyware_pegasus'},
+      detections:[
+        {class:'spyware_pegasus',severity:92,confidence:88,action:'report',mac_hash:'a41f9c20d7e1',ts:n-2100,report:'Domaine contacté: updates-cdn.example.test\nMotif: balise HTTPS toutes les 300 s\nAppareil placé en observation.'},
+        {class:'c2_beacon',severity:81,confidence:76,action:'block',mac_hash:'7be03d19aa42',ts:n-5400,report:'Connexion bloquée vers 203.0.113.44:443 (balise périodique).'},
+        {class:'malware_generic',severity:63,confidence:60,action:'block',mac_hash:'7be03d19aa42',ts:n-9000,report:'Téléchargement bloqué : signature de chargeur connue.'},
+        {class:'zero_click',severity:74,confidence:55,action:'report',mac_hash:'c8a2b611f0e3',ts:n-15500,report:'Messagerie : charge inhabituelle avant toute interaction.'},
+        {class:'dga_domain',severity:46,confidence:51,action:'report',mac_hash:'0d9e7a55b3c4',ts:n-26000,report:'Rafale de noms de domaine générés (taux NXDOMAIN élevé).'},
+        {class:'c2_beacon',severity:70,confidence:72,action:'block',mac_hash:'c8a2b611f0e3',ts:n-41000,report:'Connexion bloquée vers 198.51.100.9:8443.'},
+        {class:'spyware_pegasus',severity:88,confidence:81,action:'report',mac_hash:'a41f9c20d7e1',ts:n-52000,report:'Premier signal : requête vers un domaine connu de la famille.'},
+        {class:'dga_domain',severity:38,confidence:44,action:'report',mac_hash:'0d9e7a55b3c4',ts:n-61000,report:'Noms de domaine pseudo-aléatoires.'},
+        {class:'malware_generic',severity:55,confidence:49,action:'block',mac_hash:'91c4f0aa28d6',ts:n-76000,report:'Paquet d’installation altéré, bloqué.'}]},
+    c2:{active:true,learned:[{host:'updates-cdn.example.test',signals:['beacon','rare_domain'],interval_s:300,devices:2,windows:null},{host:'sync.edge-node.example.test',signals:['beacon'],interval_s:120.4,devices:1,windows:null}],
+        candidates:[{host:'api.metrics-feed.example.test',signals:['rare_domain'],interval_s:null,devices:null,windows:3}]}};})();
+
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  function haut(){
+    if(window.parent!==window){try{window.parent.postMessage({sbxToolboxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().height),onglet:'sentinelle'},location.origin);}catch(e){}}
+  }
+  window.addEventListener('load',haut);window.addEventListener('resize',haut);
+  if(window.ResizeObserver)new ResizeObserver(haut).observe(document.querySelector('.cadre'));
+  if(DEMOMODE){rend(DEMO);el('rafraichir').addEventListener('click',function(){rend(DEMO);});return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(API+u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    Promise.all([jget('/admin/sentinel/stats'),jget('/admin/sentinel/verdicts'),jget('/admin/sentinel/c2')]).then(function(r){
+      rend({stats:r[0],verdicts:r[1],c2:r[2]});
+    });
+  }
+  el('rafraichir').addEventListener('click',function(){if(!BUSY)charge();});
+  charge();
+  setInterval(function(){if(!document.hidden&&!BUSY)charge();},20000);
+})();
+</script>
