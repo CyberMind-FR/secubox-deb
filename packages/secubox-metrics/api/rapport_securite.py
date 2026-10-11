@@ -533,10 +533,10 @@ def _volet_waf(pdf, d: dict) -> None:
     _image(pdf, graphe_carte(pays_waf(c)), 110, y + 9, 88)
     y += 64
     _panneau(pdf, 10, y, 92, 52, "Sites les plus visés", "événements, aujourd'hui")
-    _barres(pdf, 13, y + 10, 86, vhosts(c), couleur=CYAN)
+    _barres(pdf, 13, y + 10, 86, vhosts(c), couleur=CYAN, max_l=6)
     _panneau(pdf, 108, y, 92, 52, "Acteurs persistants", "adresses, sur la rétention des journaux")
     ti = {k: v for k, v in (hist.get("top_ips") or {}).items() if k != "local"}
-    _barres(pdf, 111, y + 10, 86, sorted(ti.items(), key=lambda kv: -_num(kv[1])), couleur=ROUGE)
+    _barres(pdf, 111, y + 10, 86, sorted(ti.items(), key=lambda kv: -_num(kv[1])), couleur=ROUGE, max_l=6)
     y += 56
     _panneau(pdf, 10, y, 190, 38, "Empreintes de campagnes", "attaques au même mode opératoire")
     cl = (camps.get("campagnes") or [])[:5] if isinstance(camps, dict) else []

@@ -142,3 +142,13 @@ def test_le_pdf_se_produit_avec_les_formes_du_cache_disque():
     w = donnees()["waf"]
     w["compteurs"] = {"total_threats": 14703, "par_origine": {"waf": 5}, "top_vhosts": {"x.test": 4}, "top_countries": {"US": 3}, "by_severity": {"high": 1}, "by_category": {"robots": 9, "lfi": 2}}
     assert RS.construire_pdf_securite(donnees(waf=w))[:5] == b"%PDF-"
+
+
+def test_les_listes_ne_debordent_pas_de_leur_panneau():
+    """Huit lignes de 6,2 mm ne tiennent pas dans un panneau de 52 mm (titre compris) : la page WAF plafonne ses listes à 6 lignes."""
+    src = (Path(__file__).resolve().parents[1] / "api" / "rapport_securite.py").read_text(encoding="utf-8")
+    assert "vhosts(c), couleur=CYAN, max_l=6)" in src and "couleur=ROUGE, max_l=6)" in src
+    w = donnees()["waf"]
+    w["compteurs"]["top_vhosts"] = {f"s{i}.test": 100 - i for i in range(12)}
+    w["hist"]["top_ips"] = {f"1.2.3.{i}": 50 - i for i in range(12)}
+    assert RS.construire_pdf_securite(donnees(waf=w))[:5] == b"%PDF-"
