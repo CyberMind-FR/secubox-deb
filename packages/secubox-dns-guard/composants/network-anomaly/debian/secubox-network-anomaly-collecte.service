@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Collecte périodique de network-anomaly (#2328) : un passage, lancé par le minuteur voisin. Sans lui, aucune métrique ne remontait (la collecte n'existait que derrière POST /detect).
+[Unit]
+Description=SecuBox network-anomaly — collecte des métriques et détection (#2328)
+After=secubox-core.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/network-anomaly
+ExecStart=/usr/bin/python3 -m api.collecte
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=90
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/secubox/network-anomaly
