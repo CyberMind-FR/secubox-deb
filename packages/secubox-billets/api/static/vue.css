@@ -315,3 +315,7 @@ body.lb-lock{overflow:hidden}
   .crt .sl{animation:none}
   .pop,.track .line{animation:none}
 }
+
+/* Vidéo HÉBERGÉE dans la scène (#2397) : plein cadre, sur fond noir, sans rogner l'image. */
+.vue .frame video{width:100%;height:100%;display:block;background:#05080c;object-fit:contain}
+.vue-stage[data-video]:not(.playing) .glyph{cursor:pointer}
