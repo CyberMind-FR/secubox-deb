@@ -4,420 +4,393 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — NAC, contrôle d'accès réseau : les appareils vus sur le réseau, leur état (autorisé, inconnu, quarantaine, bloqué), leur système
+  d'exploitation déduit (DHCP, User-Agent, DNS, mDNS : l'API fournit la conclusion et sa source) et leur zone.
+  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/nac/status, /clients, /quarantine, /policy, /history (lues en session). L'API ne fournit pas de numéro de
+  VLAN : la page montre la zone NAC (lan, iot, guest, lxc, quarantaine). Une mesure absente s'affiche « — », jamais 0.
+  Actions conservées à l'identique de l'ancienne page : POST /quarantine {mac} et POST /unquarantine {mac}, avec confirmation intégrée.
+  `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, actions inertes. `?embed=1` : une colonne, sans menu latéral.
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Client Guardian</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.online .value { color: var(--green); }
-        .stat-card.quarantine .value { color: var(--red); }
-        .stat-card.total .value { color: var(--cyan); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
-        .badge.online { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.offline { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .badge.quarantine { background: rgba(248,81,73,0.2); color: var(--red); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — NAC, contrôle d'accès réseau</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .principal{min-width:0}
+  body:not(.emb):not(.dem) .principal{margin-left:220px;padding-top:48px}
+  body.emb #sidebar,body.dem #sidebar{display:none}
+  @media (max-width:900px){body:not(.emb):not(.dem) .principal{margin-left:0;padding-top:0}}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;cursor:pointer}
+  .droite button{font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo.info{background:var(--cyan)}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .filtres{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .filtres input,.filtres select{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:5px 8px;min-width:0}
+  .filtres input{flex:1 1 130px} .filtres select{flex:0 1 auto;max-width:100%}
+  .filtres input:focus,.filtres select:focus,button:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  .rang{display:grid;gap:6px}
+  .app-c{display:grid;gap:5px 10px;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid rgba(86,150,255,.14);border-radius:10px;padding:8px 10px;background:rgba(14,30,60,.5);min-width:0}
+  .app-c:hover{border-color:var(--trait2)}
+  .app-c.q{border-color:rgba(255,77,94,.4)}
+  .id{display:flex;align-items:center;gap:8px;min-width:0}
+  .id .ty{font-size:1.15rem;flex:none}
+  .id b{font-size:.88rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .id .fab{color:var(--faible);font-size:.68rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .id>div{min-width:0}
+  .tags{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;align-items:center}
+  .pil{border-radius:999px;padding:1px 9px;font-size:.66rem;border:1px solid;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .meta{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:3px 12px;color:var(--doux);font-size:.7rem}
+  .meta span{white-space:nowrap} code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem}
+  .act{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
+  .btn{font-size:.72rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 11px;min-height:28px}
+  .btn.dg{background:rgba(255,77,94,.14);border-color:var(--rouge);color:var(--rouge)}
+  .btn.ok{background:rgba(46,204,113,.14);border-color:var(--vert);color:var(--vert)}
+  .btn[disabled]{opacity:.5;cursor:default}
+  .conf{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.08);border-radius:8px;padding:6px 9px;font-size:.76rem}
+  .conf span{flex:1 1 180px;min-width:0}
+  .msg{border-radius:8px;padding:5px 9px;font-size:.76rem;margin-bottom:8px;border:1px solid var(--vert);background:rgba(46,204,113,.1);color:var(--vert)}
+  .msg.err{border-color:var(--rouge);background:rgba(255,77,94,.1);color:var(--rouge)}
+  .msg[hidden]{display:none}
+  .plus[hidden]{display:none}
+  .plus{display:block;margin:8px auto 0;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 12px}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .repart{display:grid;gap:12px;grid-template-columns:110px minmax(0,1fr);align-items:center}
+  .donut{width:110px;height:110px;display:block}
+  .donut text{fill:var(--texte);text-anchor:middle} .donut .ct{font-size:20px;font-weight:700} .donut .cl{font-size:8px;fill:var(--doux)}
+  .leg div{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)}
+  .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .leg div.clic{cursor:pointer} .leg div.clic:hover{color:var(--texte)}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span.v{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
+  .evt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;font-size:.74rem;padding:4px 0;border-bottom:1px solid rgba(86,150,255,.12)}
+  .evt:last-child{border-bottom:0} .evt small{color:var(--faible);font-size:.66rem;white-space:nowrap}
+  .evt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pol{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;font-size:.78rem}
+  .pol div{padding:4px 0;border-bottom:1px solid rgba(86,150,255,.12)} .pol b{font-variant-numeric:tabular-nums;text-align:right}
+  .cote{display:grid;gap:10px;align-content:start;min-width:0}
+  @container a (max-width:599px){.repart{grid-template-columns:96px minmax(0,1fr)}.donut{width:96px;height:96px}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}
+    .app-c .meta{grid-column:1;grid-row:2} .app-c .tags{grid-column:2;grid-row:1}
+    .app-c .act{grid-column:2;grid-row:2} .app-c .conf{grid-column:1/-1}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} body:not(.emb) .g1{grid-template-columns:1.7fr 1fr}}
+  body.emb .g1{grid-template-columns:1fr}
+</style>
 </head>
-<body class="crt-light">
-    <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>👥 Client Guardian (NAC)</h1>
-            <button class="btn" onclick="refresh()">Refresh</button>
-        </header>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="principal">
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(59,130,246,.16)"/><circle cx="12" cy="10" r="2.2"/><path d="M8 16c.8-2 2.4-3 4-3s3.2 1 4 3"/></svg><span><b>NAC</b><small>Contrôle d’accès réseau</small></span></span>
+    <span class="actif neutre" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+  <div><h2>Appareils du réseau</h2><div class="sous">Qui est connecté, depuis quand, sur quel système d’exploitation, et ce que le NAC en a décidé.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Appareils <i id="nbAff"></i></h3>
+      <div class="msg" id="msg" role="status" hidden></div>
+      <div class="filtres">
+        <input type="search" id="fq" placeholder="Nom, IP, fabricant, OS…" aria-label="Rechercher un appareil" autocomplete="off">
+        <select id="fe" aria-label="Filtrer par état"><option value="">Tous états</option><option value="autorise">Autorisés</option><option value="inconnu">Inconnus</option><option value="quarantaine">En quarantaine</option><option value="bloque">Bloqués</option></select>
+        <select id="fo" aria-label="Filtrer par système d’exploitation"><option value="">Tous OS</option></select>
+        <select id="fc" aria-label="Filtrer par connexion"><option value="">Connectés ou non</option><option value="on">Connectés</option><option value="off">Hors ligne</option></select>
+        <select id="ft" aria-label="Trier"><option value="recent">Tri : dernière vue</option><option value="nom">Tri : nom</option><option value="ip">Tri : adresse IP</option><option value="etat">Tri : état</option></select>
+      </div>
+      <div class="rang" id="rang"></div><button type="button" class="plus" id="plus" hidden></button></div>
+    <div class="cote">
+      <div class="pan"><h3>Répartition par système <i>déduit côté NAC</i></h3><div class="repart"><div id="donutO"></div><div class="leg" id="legO"></div></div><div class="note">Famille lue dans l’OS déduit (« Android 14 » compte avec Android). L’OS vient d’une preuve (DHCP, User-Agent, DNS) ; sans preuve, « non identifié ».</div></div>
+      <div class="pan"><h3>Répartition par état <i>appareils</i></h3><div id="parEtat"></div></div>
+      <div class="pan"><h3>Zones <i>VLAN / zone NAC</i></h3><div id="parZone"></div><div class="note">L’API fournit la zone NAC, pas de numéro de VLAN.</div></div>
+      <div class="pan"><h3>Nouveaux appareils <i>premiers vus sur 24 h</i></h3><div id="nouveaux"></div></div>
+      <div class="pan"><h3>Politique d’admission <i>lecture seule</i></h3><div id="politique"></div></div>
+      <div class="pan"><h3>Historique récent <i>événements NAC</i></h3><div id="histo"></div></div>
+    </div>
+  </div>
+  <div class="note">Les actions sont réversibles · chaque décision de sécurité est écrite dans le journal d’audit · les conteneurs LXC sont des appareils du pont br-lxc.</div>
+</div></div>
+</main>
+<script>
+(function(){
+  "use strict";
+  var API='/api/v1/nac';
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function has(x){return x!==null&&x!==undefined&&x!==''&&isFinite(Number(x));}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  var EMB=!!q.get('embed'),DEMOMODE=!!q.get('demo');
+  if(EMB) document.body.classList.add('emb');
+  if(DEMOMODE) document.body.classList.add('dem');
+  if(!EMB&&!DEMOMODE){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
 
-        <div class="grid">
-            <div class="stat-card total">
-                <div class="value" id="total">-</div>
-                <div class="label">Total Clients</div>
-            </div>
-            <div class="stat-card online">
-                <div class="value" id="online">-</div>
-                <div class="label">Online</div>
-            </div>
-            <div class="stat-card quarantine">
-                <div class="value" id="quarantine">-</div>
-                <div class="label">Quarantined</div>
-            </div>
-        </div>
+  var ETATS={autorise:['Autorisé','#2ecc71'],inconnu:['Inconnu','#ff9f1c'],quarantaine:['Quarantaine','#ff4d5e'],bloque:['Bloqué','#ff4d5e']};
+  var ORDRE_ETAT={quarantaine:0,bloque:1,inconnu:2,autorise:3};
+  var ZONES={lan:['LAN','#2ecc71'],lxc:['Conteneurs LXC','#29b6f6'],iot:['IoT isolé','#ff9f1c'],guest:['Invités','#3b82f6'],quarantine:['Quarantaine','#ff4d5e'],blocked:['Bloqué','#ff4d5e']};
+  var TYPE_ICON={router:'📡',phone:'📱',mobile:'📱',computer:'💻',laptop:'💻',tablet:'📱',camera:'📷',smart_tv:'📺',tv:'📺',media:'📺',smart_speaker:'🔊',speaker:'🔊',smart_home:'🏡',game_console:'🎮',printer:'🖨️',nas:'🗄️',iot:'🔌',wearable:'⌚',unknown:'❔'};
+  var EVT={client_joined:'Appareil apparu',client_banned:'Appareil banni',client_unbanned:'Appareil débanni',client_denied:'Appareil refusé',client_allowed:'Appareil autorisé',client_moved:'Zone changée',client_updated:'Appareil modifié',policy_changed:'Politique modifiée'};
+  var PAL=['#3b82f6','#2ecc71','#a78bfa','#ffd23f','#29b6f6','#ff9f1c','#ff4d5e'];
+  var IC={
+    nb:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="5" width="18" height="11" rx="2" fill="rgba(59,130,246,.16)"/><path d="M8 20h8M12 16v4"/></svg>',
+    on:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round"><path d="M4 9c4.7-4.2 11.3-4.2 16 0M7 12.5c3-2.6 7-2.6 10 0M10 16c1.2-.9 2.8-.9 4 0" /><circle cx="12" cy="19" r="1.2" fill="#2ecc71"/></svg>',
+    inc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,159,28,.14)"/><path d="M9.6 9.4a2.5 2.5 0 114 2c-.9.6-1.6 1.1-1.6 2.2M12 16.8v.1"/></svg>',
+    qua:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2" fill="rgba(255,77,94,.14)"/><path d="M8 10.5V8a4 4 0 018 0v2.5"/></svg>',
+    ok:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(46,204,113,.14)"/><path d="M8 12.3l2.7 2.7 5.3-5.6"/></svg>',
+    os:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2" fill="rgba(167,139,250,.14)"/><path d="M7 9l2.5 2L7 13M12 13h4"/></svg>'
+  };
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
 
-        <div class="card">
-            <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-                <span>Connected Clients</span>
-                <label style="font-size:0.75rem;font-weight:400;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:6px;cursor:pointer">
-                    <input type="checkbox" id="onlineOnly" checked onchange="refresh()"> 🟢 Online only
-                </label>
-            </h2>
-            <table>
-                <thead><tr><th>MAC</th><th>IP</th><th>Device</th><th>Zone</th><th>Risk</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="clientsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
-            </table>
-        </div>
+  function ts(v){ // epoch en secondes (ou ms) ou ISO ; null si absent
+    if(v==null||v==='') return null;
+    if(has(v)){var n=Number(v);return n>1e12?n:n*1000;}
+    var s=String(v);if(!/(Z|[+-]\d\d:?\d\d)$/.test(s)) s=s.replace(' ','T');
+    var d=new Date(s);return isNaN(d.getTime())?null:d.getTime();
+  }
+  function rel(t){
+    if(t==null) return '—';var s=Math.round((Date.now()-t)/1000);if(s<0)s=0;
+    if(s<60) return 'à l’instant';if(s<3600) return 'il y a '+Math.floor(s/60)+' min';
+    if(s<86400) return 'il y a '+Math.floor(s/3600)+' h';return 'il y a '+Math.floor(s/86400)+' j';
+  }
+  function plein(t){return t==null?'':new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+  function macCourt(m){m=String(m||'');var p=m.split(':');return p.length===6?p[0]+':'+p[1]+':'+p[2]+':…:'+p[5]:(m?m.slice(0,8)+'…':'—');}
+  function famille(os){return os?String(os).split(/[\s/]+/)[0]:'';}
+  function couleurOs(f){
+    var s=String(f).toLowerCase();
+    if(/windows/.test(s)) return '#3b82f6'; if(/android/.test(s)) return '#2ecc71';
+    if(/ios|ipados|mac|apple/.test(s)) return '#a78bfa'; if(/linux|openwrt|secubox|debian|ubuntu/.test(s)) return '#ffd23f';
+    return '#29b6f6';
+  }
 
-        <div class="card">
-            <h2>Quarantine List</h2>
-            <table>
-                <thead><tr><th>MAC</th><th>Reason</th><th>Since</th><th>Actions</th></tr></thead>
-                <tbody id="quarantineTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-        </div>
-    </main>
+  var DONNEES=null,LISTE=[],ETAT={n:30,conf:null,occupe:false};
+  function etatDe(c){
+    var z=String(c.zone||'').toLowerCase(),a=String(c.allow_state||'').toLowerCase();
+    if(z==='quarantine'||c.status==='quarantine') return 'quarantaine';
+    if(z==='blocked'||a==='deny') return 'bloque';
+    if(a==='allow') return 'autorise';
+    return 'inconnu';
+  }
+  function normalise(d){
+    return ((d&&d.clients&&d.clients.clients)||[]).map(function(c,i){
+      var nom=c.custom_hostname||c.hostname||'';
+      return {i:i,mac:String(c.mac||''),ip:String(c.ip||''),nom:nom,fab:c.oui_vendor||'',os:c.os||'',src:c.os_source||'',sub:c.device_subtype||'',
+        type:String(c.device_type||'unknown'),zone:String(c.zone||''),on:!!c.online,a:ts(c.first_seen),b:ts(c.last_seen),
+        etat:etatDe(c),alea:!!c.mac_random,lxc:!!c.conteneur};
+    });
+  }
 
-    <script>
-        const API = '/api/v1/nac';
+  function donut(parts,total){
+    var R=40,C=2*Math.PI*R,acc=0,s='<svg class="donut" viewBox="0 0 110 110" role="img" aria-label="Répartition par système d’exploitation"><circle cx="55" cy="55" r="'+R+'" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="13"/>';
+    if(total>0) parts.forEach(function(p){var l=C*p[1]/total;s+='<circle cx="55" cy="55" r="'+R+'" fill="none" stroke="'+p[2]+'" stroke-width="13" stroke-dasharray="'+l.toFixed(2)+' '+(C-l).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 55 55)"><title>'+esc(p[0])+' : '+fmt(p[1])+'</title></circle>';acc+=l;});
+    return s+'<text class="ct" x="55" y="57">'+(total>0?fmt(total):'—')+'</text><text class="cl" x="55" y="70">appareils</text></svg>';
+  }
+  function lignesBarres(items,total,vide){
+    if(!items.length) return '<div class="vide">'+vide+'</div>';
+    var mx=Math.max.apply(null,items.map(function(x){return x[1];}).concat([1]));
+    return items.map(function(x){return '<div class="ligne"><span class="n" title="'+esc(x[0])+'">'+esc(x[0])+'</span><span class="v">'+fmt(x[1])+(total?' · '+Math.round(100*x[1]/total)+' %':'')+'</span><div class="barre"><i style="width:'+Math.max(4,100*x[1]/mx)+'%;background:'+x[2]+'"></i></div></div>';}).join('');
+  }
 
-        // #817/#820 — icon/emoji maps for the consolidated device fields.
-        const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-        // device_type from classify_device_type: camera/smart_tv/smart_speaker/
-        // smart_home/printer/router/phone/unknown (+ forward-compat aliases).
-        const TYPE_ICON = {router:'📡',phone:'📱',mobile:'📱',computer:'💻',laptop:'💻',tablet:'📱',camera:'📷',smart_tv:'📺',tv:'📺',media:'📺',smart_speaker:'🔊',speaker:'🔊',smart_home:'🏡',game_console:'🎮',printer:'🖨️',nas:'🗄️',iot:'🔌',wearable:'⌚',unknown:'❔'};
-        const SOURCE_ICON = {dnsmasq:'📶',isc:'📶',dhcp:'📶',arp:'🔎','mac-guard':'🏷️','device-intel':'🔬','iot-guard':'🔌',mesh:'🕸️',nmap:'🛰️',mdns:'📣',manual:'✍️',imported:'📦'};
-        // zone = SHORT ZONES keys from /clients (lan/iot/guest/quarantine) + blocked.
-        const ZONE_ICON = {lan:'🏠',iot:'🤖',guest:'👥',quarantine:'🚧',blocked:'⛔',unknown:'❔'};
-        const ZONE_LABEL = {lan:'LAN',iot:'IoT',guest:'Invités',quarantine:'Quarantaine',blocked:'Bloqué',unknown:'—'};
-        const RISK_ICON = {low:'🟢',medium:'🟡',high:'🔴'};
-        const typeIcon = t => TYPE_ICON[t] || '🔌';
-        const srcBadge = s => s ? `${SOURCE_ICON[s]||'❔'} ${esc(s)}` : '<span style="color:var(--text-dim)">—</span>';
-        const zoneBadge = z => `${ZONE_ICON[z]||'❔'} ${ZONE_LABEL[z]||esc(z||'—')}`;
-        const riskBadge = r => r ? `${RISK_ICON[String(r).toLowerCase()]||'⚪'} ${esc(r)}` : '<span style="color:var(--text-dim)">—</span>';
+  function filtrer(L){
+    var t=el('fq').value.trim().toLowerCase(),e=el('fe').value,o=el('fo').value,c=el('fc').value,s=el('ft').value;
+    var R=L.filter(function(r){
+      if(e&&r.etat!==e) return false; if(o&&(o==='_aucun'?!!r.os:famille(r.os)!==o)) return false;
+      if(c&&(c==='on')!==r.on) return false;
+      if(t){var h=[r.nom,r.ip,r.fab,r.os,r.sub,r.type,macCourt(r.mac)].join(' ').toLowerCase();if(h.indexOf(t)<0) return false;}
+      return true;});
+    R.sort(function(x,y){
+      if(s==='nom') return (x.nom||'~').toLowerCase()<(y.nom||'~').toLowerCase()?-1:1;
+      if(s==='ip'){var a=x.ip.split('.').map(Number),b=y.ip.split('.').map(Number);for(var k=0;k<4;k++){if((a[k]||0)!==(b[k]||0)) return (a[k]||0)-(b[k]||0);}return 0;}
+      if(s==='etat') return (ORDRE_ETAT[x.etat]-ORDRE_ETAT[y.etat])||(num(y.b)-num(x.b));
+      return (y.on-x.on)||(num(y.b)-num(x.b));});
+    return R;
+  }
+  function carte(r){
+    var et=ETATS[r.etat],z=ZONES[r.zone]||[r.zone||'—','#9fb3d6'],oc=r.os?couleurOs(famille(r.os)):'#6f84a8';
+    var nom=r.nom||(r.lxc?'Conteneur LXC':'Appareil sans nom');
+    var cn=ETAT.conf&&ETAT.conf.i===r.i;
+    var act=r.etat==='quarantaine'?{lib:'🔓 Libérer',cls:'ok',v:'unq'}:{lib:'🔒 Mettre en quarantaine',cls:'dg',v:'qua'};
+    return '<div class="app-c'+(r.etat==='quarantaine'?' q':'')+'"><div class="id"><span class="ty" title="Type : '+esc(r.type)+'">'+(TYPE_ICON[r.type]||'🔌')+'</span><div><b title="'+esc(nom)+'">'+esc(nom)+'</b><span class="fab">'+esc(r.fab||'Fabricant inconnu')+(r.alea?' · MAC aléatoire':'')+'</span></div></div>'
+      +'<div class="meta"><span>IP <code>'+esc(r.ip||'—')+'</code></span><span title="Adresse MAC tronquée">MAC <code>'+esc(macCourt(r.mac))+'</code></span><span>Zone : '+esc(z[0])+'</span><span title="'+esc(plein(r.b))+'">Vu : '+esc(rel(r.b))+'</span></div>'
+      +'<div class="tags"><span class="pil" style="color:'+et[1]+';border-color:'+et[1]+';background:'+et[1]+'1f">'+esc(et[0])+'</span>'
+      +'<span class="pil" style="color:'+(r.on?'#2ecc71':'#9fb3d6')+';border-color:'+(r.on?'#2ecc71':'#6f84a8')+';background:'+(r.on?'rgba(46,204,113,.12)':'rgba(159,179,214,.1)')+'">'+(r.on?'Connecté':'Hors ligne')+'</span>'
+      +'<span class="pil" style="color:'+oc+';border-color:'+oc+';background:'+oc+'1f" title="'+esc(r.os?('OS déduit'+(r.src?' — preuve : '+r.src:'')):'Aucune preuve d’OS : non identifié')+'">'+esc(r.os||'OS non identifié')+(r.sub?' · '+esc(r.sub):'')+'</span></div>'
+      +(cn?'<div class="conf" role="alertdialog" aria-label="Confirmation"><span>'+(ETAT.conf.v==='qua'?'Mettre en quarantaine « '+esc(nom)+' » ? Il perd l’accès au LAN.':'Libérer « '+esc(nom)+' » de la quarantaine ? Il retourne sur le LAN.')+'</span><button type="button" class="btn '+act.cls+'" data-ok="'+r.i+'">Confirmer</button><button type="button" class="btn" data-ko="1">Annuler</button></div>'
+        :'<div class="act"><button type="button" class="btn '+act.cls+'" data-act="'+act.v+'" data-i="'+r.i+'" title="'+(DEMOMODE?'Inerte en démonstration':'')+'">'+act.lib+'</button></div>')
+      +'</div>';
+  }
+  function liste(){
+    if(!DONNEES){el('rang').innerHTML='<div class="vide">Session requise pour voir les appareils.</div>';el('nbAff').textContent='';el('plus').hidden=true;return;}
+    var R=filtrer(LISTE);
+    el('nbAff').textContent=LISTE.length?(R.length===LISTE.length?fmt(LISTE.length)+' appareils':fmt(R.length)+' sur '+fmt(LISTE.length)):'';
+    el('rang').innerHTML=!LISTE.length?'<div class="vide">Aucun appareil connu pour le moment.</div>':!R.length?'<div class="vide">Aucun appareil ne correspond aux filtres.</div>':R.slice(0,ETAT.n).map(carte).join('');
+    var reste=R.length-ETAT.n;el('plus').hidden=reste<=0;if(reste>0)el('plus').textContent='Afficher '+fmt(Math.min(reste,30))+' de plus ('+fmt(reste)+' restants)';
+  }
+  function majFiltreOs(L){
+    var s=el('fo'),cur=s.value,fam={},aucun=0;
+    L.forEach(function(r){if(r.os) fam[famille(r.os)]=1;else aucun++;});
+    var h='<option value="">Tous OS</option>'+Object.keys(fam).sort().map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('')+(aucun?'<option value="_aucun">Non identifié</option>':'');
+    if(s.getAttribute('data-h')!==h){s.innerHTML=h;s.setAttribute('data-h',h);s.value=cur;}
+  }
+  function rend(d){
+    DONNEES=d.data;var ok=!!d.data;
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||ok);
+    LISTE=ok?normalise(d.data):[];var L=LISTE,n=L.length,st=(ok&&d.data.status)||null;
+    var a=el('actif');
+    if(!ok){a.textContent='SESSION REQUISE';a.className='actif neutre';}
+    else if(st&&st.nftables_ok===false){a.textContent='PARE-FEU NAC NON APPLIQUÉ';a.className='actif hors';}
+    else if(st&&st.nftables_ok===true){a.textContent='NAC ACTIF';a.className='actif';}
+    else {a.textContent='ÉTAT NAC INCONNU';a.className='actif neutre';}
+    var N=function(v){return ok?fmt(v):'—';},cnt=function(f){return L.filter(f).length;};
+    var nos=cnt(function(r){return !!r.os;});
+    el('tuiles').innerHTML=
+      tuile(IC.nb,N(n),'Appareils','connus du NAC','Appareils enregistrés par le NAC (base locale alimentée par le collecteur : DHCP, ARP, mDNS, scans). Les conteneurs LXC y figurent aussi.')
+     +tuile(IC.on,N(cnt(function(r){return r.on;})),'Connectés','maintenant','Appareils présents dans le dernier cycle du collecteur (vus sur le réseau à l’instant).')
+     +tuile(IC.inc,N(cnt(function(r){return r.etat==='inconnu';})),'Inconnus','sans décision','Appareils ni autorisés explicitement, ni en quarantaine, ni bloqués : le NAC n’a encore pris aucune décision à leur sujet.')
+     +tuile(IC.qua,N(cnt(function(r){return r.etat==='quarantaine';})),'En quarantaine','isolés','Appareils placés dans la zone de quarantaine : accès réseau restreint en attendant une décision.')
+     +tuile(IC.ok,N(cnt(function(r){return r.etat==='autorise';})),'Autorisés','décision explicite','Appareils explicitement autorisés (état « allow »). Un appareil du LAN sans décision est compté parmi les inconnus.')
+     +tuile(IC.os,N(nos),'OS identifiés',ok&&n?Math.round(100*nos/n)+' % · '+fmt(n-nos)+' sans OS':'','Appareils dont l’OS a été déduit d’une preuve (classe DHCP, User-Agent, DNS, nom, mDNS). Le fabricant seul ne donne jamais d’OS.');
+    majFiltreOs(L);
+    // OS
+    var fam={};L.forEach(function(r){var f=r.os?famille(r.os):'';fam[f]=(fam[f]||0)+1;});
+    var fl=Object.keys(fam).filter(function(k){return k;}).sort(function(x,y){return fam[y]-fam[x];}),parts=fl.slice(0,6).map(function(k,i){return [k,fam[k],couleurOs(k),k];});
+    var autres=fl.slice(6).reduce(function(t,k){return t+fam[k];},0);if(autres) parts.push(['Autres',autres,'#6f84a8','']);
+    if(fam['']) parts.push(['Non identifié',fam[''],'#3b4a68','_aucun']);
+    el('donutO').innerHTML=donut(parts,n);
+    el('legO').innerHTML=parts.length?parts.map(function(p){return '<div'+(p[3]?' class="clic" data-os="'+esc(p[3])+'" title="Filtrer sur ce système"':'')+'><i style="background:'+p[2]+'"></i><span>'+esc(p[0])+'</span><b>'+fmt(p[1])+' · '+Math.round(100*p[1]/n)+'%</b></div>';}).join(''):'<div class="vide">'+(ok?'Aucun appareil.':'Session requise.')+'</div>';
+    // état / zone
+    var ce={};L.forEach(function(r){ce[r.etat]=(ce[r.etat]||0)+1;});
+    el('parEtat').innerHTML=ok?lignesBarres(['autorise','inconnu','quarantaine','bloque'].filter(function(k){return ce[k];}).map(function(k){return [ETATS[k][0],ce[k],ETATS[k][1]];}),n,'Aucun appareil.'):'<div class="vide">Session requise.</div>';
+    var cz={};L.forEach(function(r){var k=r.zone||'—';cz[k]=(cz[k]||0)+1;});
+    el('parZone').innerHTML=ok?lignesBarres(Object.keys(cz).sort(function(x,y){return cz[y]-cz[x];}).map(function(k){return [(ZONES[k]||[k])[0],cz[k],(ZONES[k]||[0,'#9fb3d6'])[1]];}),n,'Aucun appareil.'):'<div class="vide">Session requise.</div>';
+    // nouveaux
+    var nv=L.filter(function(r){return r.a!=null&&Date.now()-r.a<86400e3;}).sort(function(x,y){return y.a-x.a;}).slice(0,6);
+    el('nouveaux').innerHTML=!ok?'<div class="vide">Session requise.</div>':nv.length?nv.map(function(r){return '<div class="evt"><span title="'+esc(r.nom||r.ip)+'">'+(TYPE_ICON[r.type]||'🔌')+' '+esc(r.nom||'Sans nom')+' <code>'+esc(r.ip)+'</code></span><small title="'+esc(plein(r.a))+'">'+esc(rel(r.a))+'</small></div>';}).join(''):'<div class="vide">Aucun nouvel appareil sur les dernières 24 h.</div>';
+    // politique
+    var p=ok?d.data.policy:null;
+    el('politique').innerHTML=p?'<div class="pol"><div>Zone par défaut d’un appareil neuf</div><div><b>'+esc((ZONES[p.default_zone]||[p.default_zone||'—'])[0])+'</b></div><div>Approbation automatique</div><div><b>'+(p.auto_approve===true?'Oui':p.auto_approve===false?'Non':'—')+'</b></div><div>Délai de quarantaine</div><div><b>'+(has(p.quarantine_timeout)&&num(p.quarantine_timeout)>0?fmt(p.quarantine_timeout)+' s':'aucun')+'</b></div></div><div class="note">La politique est affichée en lecture seule.</div>':'<div class="vide">'+(ok?'Politique indisponible.':'Session requise.')+'</div>';
+    // historique
+    var ev=ok&&d.data.history&&Array.isArray(d.data.history.events)?d.data.history.events.slice(-8).reverse():null;
+    el('histo').innerHTML=!ok?'<div class="vide">Session requise.</div>':!ev?'<div class="vide">Historique indisponible.</div>':!ev.length?'<div class="vide">Aucun événement récent.</div>':ev.map(function(e){var t=ts(e.timestamp),m=e.details&&e.details.mac?macCourt(e.details.mac):'';return '<div class="evt"><span title="'+esc(e.event)+'">'+esc(EVT[e.event]||e.event||'—')+(m?' <code>'+esc(m)+'</code>':'')+'</span><small title="'+esc(plein(t))+'">'+esc(rel(t))+'</small></div>';}).join('');
+    liste();
+  }
 
-        async function api(path, opts = {}) {
-            const token = localStorage.getItem('sbx_token');
-            const headers = token ? { 'Authorization': 'Bearer ' + token, ...(opts.headers || {}) } : (opts.headers || {});
-            opts = { ...opts, headers };
-            try {
-                const res = await fetch(API + path, { credentials: 'include', ...opts });
-                return res.json();
-            } catch { return {}; }
-        }
+  // ---- démonstration : adresses de documentation (RFC 5737), noms fictifs, MAC factices
+  var DEMO=(function(){
+    var n=Math.floor(Date.now()/1000),m=function(x){return n-x*60;};
+    function c(mac,ip,nom,fab,os,src,type,zone,allow,on,first,last,extra){return Object.assign({mac:mac,ip:ip,hostname:nom,oui_vendor:fab,os:os,os_source:src,device_type:type,zone:zone,allow_state:allow,online:on,first_seen:m(first),last_seen:m(last),status:zone==='quarantine'?'quarantine':'enabled',mac_random:0,conteneur:false},extra||{});}
+    var cl=[
+      c('02:00:5e:10:00:01','192.0.2.21','poste-compta','Dell','Windows','dhcp-vendor-class','computer','lan','allow',true,60*24*40,1),
+      c('02:00:5e:10:00:02','192.0.2.22','portable-alice','Lenovo','Windows','user-agent','laptop','lan','allow',true,60*24*30,3),
+      c('02:00:5e:10:00:03','192.0.2.30','tel-alice','','Android 14','dhcp-vendor-class','phone','lan','allow',true,60*24*20,2,{mac_random:1}),
+      c('02:00:5e:10:00:04','192.0.2.31','iphone-bob','Apple','iOS','user-agent','phone','lan','allow',true,60*24*15,8),
+      c('02:00:5e:10:00:05','192.0.2.40','salon-tv','Samsung','','','smart_tv','iot','unknown',true,60*24*60,5),
+      c('02:00:5e:10:00:06','192.0.2.41','imprimante-bureau','Brother','','','printer','iot','allow',false,60*24*90,60*30),
+      c('02:00:5e:10:00:07','192.0.2.50','nas-atelier','Synology','Linux','dns-domaines','nas','lan','allow',true,60*24*120,1),
+      c('02:00:5e:10:00:08','198.51.100.12','','Espressif','','','iot','iot','unknown',true,40,4),
+      c('02:00:5e:10:00:09','198.51.100.14','','','Android 13','dhcp-vendor-class','phone','quarantine','unknown',true,95,6,{mac_random:1}),
+      c('02:00:5e:10:00:0a','198.51.100.20','pc-invite','HP','Windows','user-agent','laptop','guest','unknown',false,60*24*2,60*20),
+      c('02:00:5e:10:00:0b','192.0.2.60','cam-entree','Hikvision','','','camera','iot','deny',false,60*24*70,60*50),
+      c('02:00:5e:10:00:0c','192.0.2.1','routeur-atelier','GL.iNet','Linux','empreinte-openwrt','router','lan','allow',true,60*24*200,1),
+      c('02:00:5e:10:00:0d','192.0.2.24','mac-dev','Apple','macOS','user-agent','computer','lan','allow',false,60*24*10,60*9)
+    ];
+    cl[10].zone='blocked';
+    var ev=function(e,mac,x){return {timestamp:new Date((n-x*60)*1000).toISOString(),event:e,details:{mac:mac}};};
+    return {demo:true,data:{status:{nftables_ok:true,dnsmasq_ok:true},clients:{clients:cl},quarantine:{clients:[]},policy:{default_zone:'quarantine',auto_approve:false,quarantine_timeout:0},
+      history:{events:[ev('client_banned','02:00:5e:10:00:0b',3000),ev('client_joined','02:00:5e:10:00:0a',2800),ev('client_joined','02:00:5e:10:00:08',40),ev('client_moved','02:00:5e:10:00:09',90),ev('client_joined','02:00:5e:10:00:09',95)]}}};
+  })();
 
-        async function refresh() {
-            const status = await api('/status');
-            document.getElementById('total').textContent = status.total_clients || 0;
-            document.getElementById('online').textContent = status.online || 0;
-            document.getElementById('quarantine').textContent = status.quarantined || 0;
+  // ---- hauteur annoncée à l'hôte
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY),onglet:'nac'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
 
-            const clients = await api('/clients');
-            const tbody = document.getElementById('clientsTable');
-            const onlineOnly = (document.getElementById('onlineOnly') || {}).checked !== false;
-            let list = clients.clients || [];
-            if (onlineOnly) list = list.filter(c => c.online);
-            if (list.length > 0) {
-                // Sort: online/alive devices first, then most-recently-detected
-                // (last_seen desc) at the top of each group.
-                const rows = list.slice().sort((a, b) => {
-                    const ao = a.online ? 1 : 0, bo = b.online ? 1 : 0;
-                    if (ao !== bo) return bo - ao;                 // alive first
-                    return (b.last_seen || 0) - (a.last_seen || 0); // newest detected first
-                });
-                tbody.innerHTML = rows.map(c => {
-                    const statusEmoji = c.status === 'online' ? '🟢' : c.status === 'offline' ? '🔴' : c.status === 'quarantine' ? '🟠' : '⚪';
-                    const statusLabel = c.status === 'online' ? 'Online' : c.status === 'offline' ? 'Offline' : c.status === 'quarantine' ? 'Quarantine' : c.status;
-                    const vendor = c.oui_vendor ? `<br><span style="color:var(--text-dim);font-size:.85em">${esc(c.oui_vendor)}</span>` : '';
-                    return `<tr>
-                        <td style="font-family:monospace">${esc(c.mac)}</td>
-                        <td style="font-family:monospace">${esc(c.ip)}</td>
-                        <td>${typeIcon(c.device_type)} ${esc(c.hostname || '-')}${vendor}</td>
-                        <td><span class="badge">${zoneBadge(c.zone)}</span></td>
-                        <td>${riskBadge(c.risk_level)}</td>
-                        <td>${srcBadge(c.source)}</td>
-                        <td><span class="badge ${c.status}">${statusEmoji} ${statusLabel}</span></td>
-                        <td>
-                            ${c.status === 'quarantine'
-                                ? '<button class="btn" onclick="unquarantine(\'' + c.mac + '\')">🔓 Release</button>'
-                                : '<button class="btn danger" onclick="quarantine(\'' + c.mac + '\')">🔒 Quarantine</button>'}
-                        </td>
-                    </tr>`;
-                }).join('');
-            } else {
-                const msg = onlineOnly
-                    ? 'No online devices — untick “Online only” to show all ' + ((clients.clients || []).length) + ' known devices'
-                    : 'No clients connected';
-                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">' + msg + '</td></tr>';
-            }
+  function heure(){el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+  function msg(t,err){var m=el('msg');m.textContent=t||'';m.className='msg'+(err?' err':'');m.hidden=!t;}
 
-            const quarantine = await api('/quarantine');
-            const qbody = document.getElementById('quarantineTable');
-            if (quarantine.clients && quarantine.clients.length > 0) {
-                qbody.innerHTML = quarantine.clients.map(c => `
-                    <tr>
-                        <td style="font-family:monospace">${c.mac}</td>
-                        <td>${c.reason || '-'}</td>
-                        <td>${c.since || '-'}</td>
-                        <td><button class="btn" onclick="unquarantine('${c.mac}')">Release</button></td>
-                    </tr>
-                `).join('');
-            } else {
-                qbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No quarantined clients</td></tr>';
-            }
-        }
+  // ---- accès aux données et actions (mêmes appels que l'ancienne page)
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function api(path,opts){
+    opts=opts||{};var t=jeton(),h=Object.assign({'Accept':'application/json'},opts.headers||{});
+    if(t) h['Authorization']='Bearer '+t;
+    return fetch(API+path,Object.assign({credentials:'include',cache:'no-store'},opts,{headers:h}));
+  }
+  function jget(path){return api(path).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    if(DEMOMODE){return;}
+    Promise.all([jget('/status'),jget('/clients'),jget('/quarantine'),jget('/policy'),jget('/history?limit=30')]).then(function(r){
+      var ok=r[1]&&Array.isArray(r[1].clients);
+      rend({data:ok?{status:r[0],clients:r[1],quarantine:r[2],policy:r[3],history:r[4]}:null});
+      heure();hauteur();
+    });
+  }
+  function agir(v,r){
+    if(DEMOMODE){msg('Démonstration : action inerte.',false);return;}
+    var corps=JSON.stringify({mac:r.mac}),h={'Content-Type':'application/json'};
+    var p=v==='qua'
+      ?api('/quarantine',{method:'POST',headers:h,body:corps}).then(function(x){
+          // la route d'origine de l'ancienne page n'existe pas sur toutes les versions de l'API : repli sur la route documentée
+          return (x.status===404||x.status===405)?api('/quarantine_client?mac='+encodeURIComponent(r.mac),{method:'POST'}):x;})
+      :api('/unquarantine',{method:'POST',headers:h,body:corps});
+    p.then(function(x){
+      if(x.ok){msg(v==='qua'?'Appareil mis en quarantaine.':'Appareil libéré de la quarantaine.',false);}
+      else{msg('Action refusée (HTTP '+x.status+')'+(x.status===401?' : session requise.':'.'),true);}
+      charge();
+    }).catch(function(){msg('Action impossible : le service ne répond pas.',true);});
+  }
 
-        async function quarantine(mac) {
-            if (!confirm(`Quarantine client ${mac}?`)) return;
-            await api('/quarantine', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
-            refresh();
-        }
+  // ---- événements
+  ['fq','fe','fo','fc','ft'].forEach(function(i){el(i).addEventListener(i==='fq'?'input':'change',function(){ETAT.n=30;liste();hauteur();});});
+  el('plus').addEventListener('click',function(){ETAT.n+=30;liste();hauteur();});
+  el('rafraichir').addEventListener('click',function(){msg('');charge();if(DEMOMODE){rend(DEMO);}});
+  el('legO').addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-os]');if(!t)return;var v=t.getAttribute('data-os');el('fo').value=el('fo').value===v?'':v;ETAT.n=30;liste();hauteur();});
+  el('rang').addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('data-act')){ETAT.conf={i:Number(b.getAttribute('data-i')),v:b.getAttribute('data-act')};liste();hauteur();return;}
+    if(b.hasAttribute('data-ko')){ETAT.conf=null;liste();hauteur();return;}
+    if(b.hasAttribute('data-ok')){var r=LISTE[Number(b.getAttribute('data-ok'))],v=ETAT.conf&&ETAT.conf.v;ETAT.conf=null;liste();if(r&&v) agir(v,r);}
+  });
 
-        async function unquarantine(mac) {
-            await api('/unquarantine', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
-            refresh();
-        }
-
-        refresh();
-        setInterval(refresh, 15000);
-    </script>
-    <script src="/shared/crt-engine.js"></script>
+  heure();
+  if(DEMOMODE){rend(DEMO);hauteur();return;}
+  charge();
+  // actualisation toutes les 15 s : visible seulement, jamais pendant une saisie ou une confirmation ouverte
+  function saisie(){var a=document.activeElement;return !!(a&&(a.tagName==='INPUT'||a.tagName==='SELECT'||a.tagName==='TEXTAREA'));}
+  setInterval(function(){if(document.visibilityState==='visible'&&!ETAT.conf&&!saisie()) charge();},15000);
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&!ETAT.conf&&!saisie()) charge();});
+})();
+</script>
 </body>
 </html>
