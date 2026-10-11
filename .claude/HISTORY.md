@@ -12,6 +12,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-12 — profiles 0.20.3 : le kiosque n'est plus arrêté par un profil (ref #2329)
 
 L'interface locale (module kiosk, dans aucun profil) était mise à OFF par `profilectl apply` : la VM finissait son Auto-Load sans interface. HORS_PLAN : ni stop, ni start.
+## 2026-10-12 — dpi 1.11.1 : l'ancien démon est arrêté sans condition (ref #2337)
+
+Le postinst conditionnel laissait ndpid actif. Corrigé et testé.
+
 ## 2026-10-12 — mediaflow et ndpid agrégés : dpi 1.11.0, hub 1.9.54 (ref #2335)
 
 Plus de démon dédié (~150 Mo), API servie par l'agrégateur ; hub route /api/v1/ndpid/ vers lui.

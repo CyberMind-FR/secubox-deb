@@ -47,3 +47,11 @@ def test_ndpid_cree_son_repertoire_de_donnees_a_l_import(tmp_path, monkeypatch):
     """L'agrégateur importe le module sans déclencher le hook de démarrage : le répertoire ne doit plus en dépendre."""
     src = _lire(DPI / "composants" / "ndpid" / "api" / "main.py")
     assert re.search(r"^_assurer_donnees\(\)$", src, re.M) and "except OSError" in src
+
+
+def test_l_ancien_demon_est_arrete_sans_condition():
+    """#2337 : `systemctl cat` échoue quand l'unité n'est plus livrée alors que le processus tourne encore — l'arrêt ne doit dépendre de rien."""
+    for nom in ("ndpid", "mediaflow"):
+        s = _lire(DPI / "composants" / nom / "debian" / "postinst")
+        assert f"systemctl disable --now secubox-{nom}.service" in s
+        assert f"if systemctl cat secubox-{nom}.service" not in s

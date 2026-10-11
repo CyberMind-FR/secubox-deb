@@ -16,9 +16,8 @@ if f.exists():
 TOML
 )
     # Ancien démon dédié (paquet secubox-ndpid, puis unité du paquet dpi) : arrêté et désactivé, l'agrégateur sert l'API.
-    if systemctl cat secubox-ndpid.service >/dev/null 2>&1; then
-        systemctl disable --now secubox-ndpid.service >/dev/null 2>&1 || true
-    fi
+    # Sans condition : l'unite n'existe plus dans le paquet, mais le processus tourne encore (unite chargee en memoire, ou fournie par l'ancien paquet).
+    systemctl disable --now secubox-ndpid.service >/dev/null 2>&1 || true
     systemctl daemon-reload >/dev/null 2>&1 || true
     # L'agrégateur n'importe un module qu'à son démarrage : redémarrage SEULEMENT si ndpid vient d'y être déclaré.
     if [ "$NOUVEAU" = "oui" ] && [ -d /run/systemd/system ]; then
