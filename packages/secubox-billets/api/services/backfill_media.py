@@ -130,3 +130,26 @@ def bbs_resolver(bbs_db: str, files_root: str) -> Resolver:
         return fp.read_bytes(), (mime or "application/octet-stream")
 
     return resolve
+
+
+async def rattraper_posters(conn, directory=None) -> dict:
+    """#2395 — donne une vignette aux VIDÉOS déjà stockées sans (thumb vide, mime video/*). Idempotent : une vidéo qui a sa vignette est
+    ignorée ; une extraction qui échoue laisse la ligne telle quelle (rien n'est écrit). Rend {"vues": N, "faites": M}."""
+    import asyncio
+
+    from . import media as _m
+    d = directory or _m.media_dir()
+    vues = faites = 0
+    async with conn.execute("SELECT id, filename FROM media WHERE mime LIKE 'video/%' AND (thumb IS NULL OR thumb = '')") as cur:
+        lignes = await cur.fetchall()
+    for r in lignes:
+        vues += 1
+        src = d / r["filename"]
+        if not src.is_file():
+            continue
+        nom = await asyncio.to_thread(_m.poster_video, str(r["id"]), src.read_bytes(), src.suffix.lstrip("."), d)
+        if nom:
+            await conn.execute("UPDATE media SET thumb = ? WHERE id = ?", (nom, r["id"]))
+            faites += 1
+    await conn.commit()
+    return {"vues": vues, "faites": faites}

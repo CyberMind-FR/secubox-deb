@@ -524,7 +524,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             v["quand"] = _depuis(v.get("published_at") or v.get("created_at"))
             # Une vignette seulement si le billet en a une : un cadre gris a la
             # place d'une image absente ferait croire a un chargement en panne.
-            img = next((m for m in v.get("media", []) if str(m.get("mime", "")).startswith("image/")), None)
+            img = next((m for m in v.get("media", []) if str(m.get("mime", "")).startswith(("image/", "video/")) and m.get("thumb")), None)   # image, ou vidéo avec vignette (#2395)
             # `/media/<thumb>`, ET NON `m["url"]` : la table `media` porte
             # `filename` et `thumb`, jamais d'`url` — `_billet_view` y verse les
             # colonnes brutes. `.get("url")` rendait donc TOUJOURS None, et la

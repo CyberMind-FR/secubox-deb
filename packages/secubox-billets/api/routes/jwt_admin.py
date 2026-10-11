@@ -231,10 +231,13 @@ def register_jwt_admin(app: FastAPI) -> None:
         # Audio/vidéo (#1094) : stockés tels quels, sans vignette. Ils s'affichent
         # EN LIGNE dans le corps (render embarque les refs /media/), pas en galerie.
         fn = await asyncio.to_thread(media.store_raw, mid, processed["ext"], processed["data"])
-        await repo.add_media(conn, billet_id, filename=fn, thumb="",
+        # vignette d'une VIDÉO (#2395) : le fil montre une image d'aperçu, pas un placeholder
+        poster = (await asyncio.to_thread(media.poster_video, mid, processed["data"], processed["ext"])
+                  if processed["kind"] == "video" else "")
+        await repo.add_media(conn, billet_id, filename=fn, thumb=poster,
                              mime=processed["mime"], width=0, height=0,
                              alt="", now=_now(), ulid=mid)
-        return {"success": True, "id": mid, "url": f"/media/{fn}", "thumb": ""}
+        return {"success": True, "id": mid, "url": f"/media/{fn}", "thumb": f"/media/{poster}" if poster else ""}
 
     @app.get("/admin/api/comments")
     async def api_comments(request: Request, status: str = "pending",

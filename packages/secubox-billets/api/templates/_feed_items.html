@@ -20,7 +20,9 @@
       {% endif %}
     </div>
   </div>
-  {% set imgs = (b.media | selectattr('thumb') | list) if b.media else [] %}
+  {#- #2395 : une vidéo porte désormais une vignette ; galerie = images seulement, la vidéo reste dans « av » (embarquée) -#}
+  {% set imgs = [] %}
+  {% for m in (b.media or []) if m.thumb and m.mime.startswith('image/') %}{% set _ = imgs.append(m) %}{% endfor %}
   {% if imgs %}
   <div class="prev"><div class="gallery" data-lightbox>
     {% for m in imgs %}
@@ -33,7 +35,8 @@
   {# a/v/pdf : embarqués dans le corps pour un billet court (#1094). Pour un
      billet LONG, seul le résumé s'affiche — on montre alors le média ici, sinon
      il disparaîtrait de la vitrine. #}
-  {% set av = (b.media | rejectattr('thumb') | list) if b.media else [] %}
+  {% set av = [] %}
+  {% for m in (b.media or []) if not m.mime.startswith('image/') %}{% set _ = av.append(m) %}{% endfor %}
   {% if b.is_long and av %}
   <div class="prev"><div class="smedias">
     {% for m in av %}{% set ext = m.filename.rsplit('.', 1)[-1] | lower %}

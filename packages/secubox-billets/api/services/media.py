@@ -211,6 +211,39 @@ def process_upload(raw: bytes, content_type: str = "") -> dict:
     return d
 
 
+def poster_video(media_id: str, data: bytes, ext: str, directory: Path | None = None) -> str:
+    """#2395 — vignette d'une vidéo : une image d'aperçu extraite par ffmpeg, stockée `<id>_t.jpg`. Rend le nom du fichier, ou "" si
+    ffmpeg manque, si le contenu n'est pas décodable ou si l'extraction échoue : une vignette est un bonus, jamais un point de rupture
+    (le fil montrait un placeholder, la vidéo se jouait pourtant). Aucune écriture si rien n'est produit."""
+    import shutil
+    import subprocess
+    import tempfile
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg or not data or not ext.isalnum():
+        return ""
+    d = directory or media_dir()
+    nom = f"{media_id}_t.jpg"
+    try:
+        with tempfile.TemporaryDirectory(prefix="sbx-poster-") as tmp:
+            src = Path(tmp) / f"v.{ext}"
+            src.write_bytes(data)
+            sortie = Path(tmp) / "p.jpg"
+            # une seconde dans la vidéo (la première image est souvent noire), repli sur la toute première image
+            for instant in ("1", "0"):
+                subprocess.run([ffmpeg, "-nostdin", "-y", "-loglevel", "error", "-ss", instant, "-i", str(src), "-frames:v", "1",
+                                "-vf", "scale='min(480,iw)':-2", "-q:v", "4", str(sortie)],
+                               capture_output=True, timeout=30)
+                if sortie.exists() and sortie.stat().st_size > 0:
+                    break
+            if not sortie.exists() or sortie.stat().st_size == 0:
+                return ""
+            d.mkdir(parents=True, exist_ok=True)
+            (d / nom).write_bytes(sortie.read_bytes())
+    except Exception:  # noqa: BLE001 — une vignette est un bonus
+        return ""
+    return nom
+
+
 def store_raw(media_id: str, ext: str, data: bytes, directory: Path | None = None) -> str:
     """Écrit un média audio/vidéo tel quel (pas de vignette). Retourne le nom."""
     d = directory or media_dir()
