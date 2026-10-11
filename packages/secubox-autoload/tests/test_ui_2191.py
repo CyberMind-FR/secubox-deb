@@ -22,7 +22,7 @@ JETONS = [{"id": 1, "client": "boulangerie-dupont", "profil": "lite", "lot": "lo
            "abonnement_expire_le": 1_830_000_000, "emis_le": 1, "expire_le": 2, "reclame_le": 3},
           {"id": 3, "client": "atelier-martin", "profil": "lite", "lot": None, "serie": None, "etat": "emis", "abonnement": "suspendu", "formule": None,
            "abonnement_expire_le": None, "emis_le": 1, "expire_le": 2, "reclame_le": None}]
-PRE = [{"empreinte": "a" * 64, "client": "boulangerie-dupont", "profil": "lite", "mode": "auto", "paquets": 3, "recu_le": 1_800_000_050, "refuse": False, "motif": None}]
+PRE = [{"empreinte": "a" * 64, "client": "boulangerie-dupont", "box": "essai-vm-lite", "profil": "lite", "mode": "auto", "paquets": 3, "recu_le": 1_800_000_050, "refuse": False, "motif": None}]
 RAPPORTS = [{"id": 5, "client": "boulangerie-dupont", "profil": "lite", "paquets": 3, "recu_le": 1_800_000_900, "envoye": True}]
 RAPPORT = {"client": "boulangerie-dupont", "profil": "lite", "paquets": ["secubox-core", PIEGE], "domaine": "c.secubox.in", "comptes": ["admin"], "tunnel_adresse": "10.64.0.2/32",
            "debut": 1_800_000_000, "fin": 1_800_000_900, "etapes": ["plan"]}
@@ -233,3 +233,17 @@ def test_le_menu_pointe_la_page_et_est_installe():
     assert m["id"] == "autoload" and m["path"] == "/autoload/" and (ICI / "www" / "autoload" / "index.html").is_file()
     rules = (ICI / "debian" / "rules").read_text()
     assert "usr/share/secubox/www/autoload" in rules and "usr/share/secubox/menu.d" in rules
+
+
+def test_la_liste_des_pre_rapports_montre_le_nom_de_box_saisi_et_le_client_du_jeton(navigateur):
+    """#2314 : le nom saisi pour la box (box.nom du fichier de réponses) est ce que l'opérateur reconnaît ; le client du jeton reste visible à côté."""
+    ctx, p, erreurs = ouvre(navigateur, [])
+    p.click("button[data-tab=prerapports]")
+    p.wait_for_selector("#lignesPre tr")
+    en_tete = p.inner_text("#prerapports thead").lower()                                   # la feuille de style met les en-têtes en capitales
+    ligne = p.inner_text("#lignesPre tr")
+    assert "box (nom saisi)" in en_tete and "client (jeton)" in en_tete
+    assert "essai-vm-lite" in ligne and "boulangerie-dupont" in ligne
+    assert ligne.index("essai-vm-lite") < ligne.index("boulangerie-dupont")                      # la box d'abord
+    assert not erreurs
+    ctx.close()

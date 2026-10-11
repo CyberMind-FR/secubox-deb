@@ -124,7 +124,7 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
 
   <section id="prerapports" class="tab-content">
     <div class="card"><div class="tbl-wrap"><table>
-      <thead><tr><th>Reçu</th><th>Client</th><th>Profil</th><th>Mode</th><th class="num">Paquets</th><th>Décision</th><th></th></tr></thead>
+      <thead><tr><th>Reçu</th><th>Box (nom saisi)</th><th>Client (jeton)</th><th>Profil</th><th>Mode</th><th class="num">Paquets</th><th>Décision</th><th></th></tr></thead>
       <tbody id="lignesPre"></tbody></table></div><div class="vide" id="videPre" hidden>Aucun pré-rapport reçu.</div></div>
   </section>
   <section id="rapports" class="tab-content">
@@ -218,7 +218,7 @@ ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
     $('videPre').hidden = CACHE.pre.length > 0;
     $('lignesPre').innerHTML = CACHE.pre.map(function (p) {
       var dec = p.refuse ? '<span class="pill revoque">refusé</span>' : '<span class="pill actif">en attente</span>';
-      return '<tr><td class="dim">' + heure(p.recu_le) + '</td><td><span class="nom">' + esc(p.client) + '</span></td><td>' + esc(PROFILS[p.profil] || p.profil) + '</td>'
+      return '<tr><td class="dim">' + heure(p.recu_le) + '</td><td><span class="nom">' + esc(p.box || '—') + '</span></td><td class="dim">' + esc(p.client) + '</td><td>' + esc(PROFILS[p.profil] || p.profil) + '</td>'
         + '<td>' + esc(p.mode) + '</td><td class="num">' + num(p.paquets) + '</td><td>' + dec + '</td>'
         + '<td><button class="btn sm" data-act="voir-pre" data-id="' + esc(p.empreinte) + '">🔍 Voir</button> '
         + (p.refuse ? '' : '<button class="btn sm danger" data-act="refuser-pre" data-id="' + esc(p.empreinte) + '">✋ Refuser</button>') + '</td></tr>';

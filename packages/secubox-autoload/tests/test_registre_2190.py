@@ -156,3 +156,11 @@ def test_la_refus_d_un_pre_rapport_inconnu_est_une_erreur(reg):
     with pytest.raises(ValueError):
         reg.refuser_prerapport("0" * 64, "x")
     assert reg.prerapport_refuse("0" * 64) is False
+
+
+def test_la_liste_des_pre_rapports_porte_le_nom_de_box_saisi(reg):
+    """#2314 : `box` (nom saisi dans le fichier de réponses) est exposé à côté du client du jeton."""
+    reg.reclamer(reg.emettre("test-vm-lite2", "lite").valeur, CLE_A)
+    reg.recevoir_prerapport(CLE_A, pre_rapport(box="essai-vm-lite"))
+    lig = reg.prerapports()[0]
+    assert lig["box"] == "essai-vm-lite" and lig["client"] == "test-vm-lite2"

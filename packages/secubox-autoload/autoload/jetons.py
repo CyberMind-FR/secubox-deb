@@ -411,6 +411,7 @@ class Registre:
     def prerapports(self) -> List[dict]:
         with self._cx() as cx:
             return [{"empreinte": r["empreinte"], "client": r["client"], "profil": json.loads(r["contenu"]).get("profil", ""), "mode": json.loads(r["contenu"]).get("mode", ""),
+                     "box": json.loads(r["contenu"]).get("box", ""),
                      "paquets": len(json.loads(r["contenu"]).get("paquets", [])), "recu_le": r["recu_le"], "refuse": bool(r["refuse"]), "motif": r["motif"]}
                     for r in cx.execute("SELECT p.empreinte, p.contenu, p.recu_le, p.refuse, p.motif, j.client FROM prerapports p "
                                         "JOIN jetons j ON j.cle_pub=p.cle_pub ORDER BY p.recu_le DESC")]
