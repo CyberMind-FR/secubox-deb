@@ -128,3 +128,17 @@ def test_envoyer_accepte_objet_nom_et_intro_sans_changer_les_anciens_appels(monk
     assert ancien["Subject"] == "SecuBox — frequentation Menaces WAF (quotidien)"
     assert nouveau["Subject"] == "OBJ" and "INTRO" in nouveau.get_body().get_content()
     assert next(nouveau.iter_attachments()).get_filename().startswith("s-")
+
+
+def test_les_formes_du_cache_disque_du_waf_sont_lues_comme_celles_de_l_api():
+    cache = {"total_threats": 14703, "top_vhosts": {"b.test": 5, "a.test": 9}, "top_countries": {"US": 3, "FR": 1}, "by_severity": {"high": 1}}
+    api = {"blocked_24h": 7, "top_vhosts": [{"vhost": "c.test", "count": 2}, {"vhost": "d.test", "count": 6}], "pays": {"DE": 4}}
+    assert RS.vhosts(cache) == [("a.test", 9), ("b.test", 5)] and RS.vhosts(api)[0] == ("d.test", 6) and RS.vhosts({}) == []
+    assert RS.pays_waf(cache) == {"US": 3, "FR": 1} and RS.pays_waf(api) == {"DE": 4} and RS.pays_waf({"top_countries": [{"country": "US", "count": 2}]}) == {"US": 2}
+    assert RS.total_menaces(cache) == 14703 and RS.total_menaces(api) == 7 and RS.total_menaces({}) is None
+
+
+def test_le_pdf_se_produit_avec_les_formes_du_cache_disque():
+    w = donnees()["waf"]
+    w["compteurs"] = {"total_threats": 14703, "par_origine": {"waf": 5}, "top_vhosts": {"x.test": 4}, "top_countries": {"US": 3}, "by_severity": {"high": 1}, "by_category": {"robots": 9, "lfi": 2}}
+    assert RS.construire_pdf_securite(donnees(waf=w))[:5] == b"%PDF-"
