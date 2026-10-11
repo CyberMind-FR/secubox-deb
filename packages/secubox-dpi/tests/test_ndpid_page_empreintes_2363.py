@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Onglet « Empreintes » du webui nDPId au profil Aurora : page autonome, sans librairie externe, démo annoncée."""
+import re
+from pathlib import Path
+
+PAGE = Path(__file__).resolve().parents[1] / "composants" / "ndpid" / "www" / "ndpid" / "empreintes.html"
+SRC = PAGE.read_text(encoding="utf-8")
+
+
+def test_spdx():
+    assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in SRC
+
+
+def test_poste_la_hauteur_au_parent():
+    assert "sbxNdpidVue" in SRC and "onglet:'empreintes'" in SRC
+    assert "min-height:100vh" not in SRC
+
+
+def test_mode_demo_annonce():
+    assert "demo" in SRC and "DONNÉES DE DÉMONSTRATION" in SRC
+
+
+def test_aucune_ressource_externe():
+    assert not re.search(r"<script[^>]+src=", SRC, re.I)
+    assert not re.search(r"""(href|src)=["']https?://""", SRC, re.I)
+
+
+def test_routes_lues():
+    assert "/api/v1/ndpid/" in SRC
+    for r in ("status", "fingerprints", "flows"):
+        assert r in SRC
+
+
+def test_ni_lorem_ni_secret():
+    bas = SRC.lower()
+    assert "lorem" not in bas
+    for mot in ("password", "passwd", "api_key", "secret=", "bearer eyj"):
+        assert mot not in bas
+
+
+def test_actualisation_et_lecture_seule():
+    assert "30000" in SRC and "visibilityState" in SRC
+    assert "method:'POST'" not in SRC and 'method:"POST"' not in SRC

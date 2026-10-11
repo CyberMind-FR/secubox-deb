@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — nDPId, onglet « Protocoles » (profil projet référence Aurora). Lecture seule.
+    · une colonne en page embarquée (?embed=1) ou sous 900 px ; plusieurs colonnes au-delà ;
+    · DONNÉES RÉELLES UNIQUEMENT : /api/v1/ndpid/top/protocols, /top/applications, /status (24 h). Une mesure absente s'affiche « — », jamais 0.
+    · La catégorie (web, streaming, messagerie, jeux, tunnel…) et la marque « chiffré » sont DÉDUITES DU NOM du protocole : l'API ne les fournit pas.
+    · `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nDPId — protocoles détectés</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.inc{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button,select,input{font:inherit}
+  .droite button{font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .demo.info{background:var(--cyan)} .demo a{color:#001}
+  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile .haut>div{min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  .repart{display:grid;gap:12px;grid-template-columns:1fr;justify-items:center;align-items:center}
+  svg.donut{width:100%;max-width:220px;height:auto;display:block}
+  svg.donut text{fill:var(--texte);text-anchor:middle}
+  .leg{width:100%} .leg div{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)}
+  .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums} .leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 90px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span.c{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .bascule{display:inline-flex;border:1px solid var(--trait2);border-radius:8px;overflow:hidden}
+  .bascule button{border:0;background:transparent;color:var(--doux);font-size:.68rem;padding:2px 9px;cursor:pointer}
+  .bascule button.on{background:rgba(59,130,246,.3);color:var(--texte)}
+  .outils{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .outils input,.outils select{background:rgba(6,13,27,.7);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;font-size:.76rem;min-width:0;flex:1 1 140px}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap;cursor:pointer;user-select:none}
+  th.num,td.num{text-align:right}
+  th.tri{color:var(--cyan)}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;font-variant-numeric:tabular-nums}
+  .scroll{overflow-x:auto}
+  .pastille{display:inline-block;border-radius:5px;padding:0 7px;font-weight:700;font-size:.66rem}
+  .chiffre{color:var(--vert)} .clair{color:var(--faible)}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1fr 1.2fr} .g2{grid-template-columns:1.2fr 1fr}
+    .repart{grid-template-columns:200px 1fr;justify-items:stretch}}
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M12 3v9l6.4 6.4"/><path d="M3.5 12H12"/></svg><span><b>nDPId</b><small>Inspection des protocoles</small></span></span>
+    <span class="actif inc" id="actif">…</span>
+    <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="demo info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div><h2>Protocoles détectés</h2><div class="sous" id="source">Protocoles et applications reconnus par l’inspection des paquets, sur 24 h.</div></div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan"><h3>Protocoles par trafic <i>octets, 24 h</i></h3><div class="repart"><div id="donut"></div><div class="leg" id="leg"></div></div></div>
+    <div class="pan"><h3>Applications <i><span class="bascule" id="bascule"><button type="button" data-m="bytes" class="on">Octets</button><button type="button" data-m="flows">Flux</button></span></i></h3><div id="apps"></div></div>
+  </div>
+  <div class="grille g2">
+    <div class="pan"><h3>Répartition par catégorie <i>déduite du nom du protocole</i></h3><div id="cats"></div></div>
+    <div class="pan"><h3>Chiffré ou en clair <i>déduit du nom du protocole</i></h3><div id="chiff"></div></div>
+  </div>
+  <div class="pan"><h3>Tous les protocoles <i id="cpt"></i></h3>
+    <div class="outils"><input type="search" id="filtre" placeholder="Filtrer par nom…" aria-label="Filtrer par nom"><select id="selcat" aria-label="Catégorie"><option value="">Toutes les catégories</option></select></div>
+    <div class="scroll"><table><thead><tr><th data-k="nom">Protocole</th><th data-k="cat">Catégorie</th><th data-k="chiffre">Transport</th><th data-k="flux" class="num">Flux</th><th data-k="octets" class="num tri">Octets</th><th data-k="part" class="num">Part</th></tr></thead><tbody id="tab"></tbody></table></div>
+    <div class="note">Lecture seule · la catégorie et le transport chiffré sont déduits du nom (ex. TLS, QUIC, SSH, WireGuard = chiffré) : un protocole inconnu reste « Autre ».</div>
+  </div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  function octets(b){b=num(b);var u=['o','Ko','Mo','Go','To'],i=0;while(b>=1024&&i<4){b/=1024;i++;}return (i?b.toFixed(b<10?2:1):String(Math.round(b))).replace('.',',')+' '+u[i];}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var PAL=['#3b82f6','#29b6f6','#a78bfa','#2ecc71','#ff9f1c','#ff4d5e','#ffd23f','#6f84a8'];
+  var IC={
+    prot:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="2" fill="rgba(59,130,246,.16)"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.1M7 17h.1"/></svg>',
+    app:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5" fill="rgba(41,182,246,.16)"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
+    cat:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l8-4 8 4-8 4z" fill="rgba(167,139,250,.16)"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/></svg>',
+    chif:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2" fill="rgba(46,204,113,.16)"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
+    top:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z" fill="rgba(255,159,28,.16)"/></svg>'
+  };
+  // Catégorie et chiffrement DÉDUITS du nom (jamais mesurés) : premier motif qui correspond.
+  var CATS=[
+    ['Tunnel / VPN',/wireguard|openvpn|ipsec|isakmp|ike|vpn|l2tp|pptp|gre|tor|tunnel|socks|tailscale|zerotier|ssh/i],
+    ['Messagerie',/whatsapp|telegram|signal|messenger|skype|teams|zoom|webex|discord|slack|matrix|xmpp|sip|rtp|stun|imap|pop3|smtp|mail|irc/i],
+    ['Streaming',/youtube|netflix|spotify|twitch|disney|prime|deezer|dailymotion|hls|rtsp|rtmp|video|stream|audio|music|dash|hulu|vimeo|plex|jellyfin/i],
+    ['Jeux',/steam|xbox|playstation|epic|fortnite|minecraft|riot|blizzard|nintendo|game|roblox/i],
+    ['Cloud / stockage',/dropbox|onedrive|gdrive|icloud|nextcloud|google_?drive|s3|amazon|aws|azure|cloud|webdav|smb|nfs|ftp|backup/i],
+    ['Réseau / infra',/dns|dhcp|ntp|icmp|arp|mdns|ssdp|netbios|llmnr|snmp|syslog|ldap|kerberos|radius|bgp|ospf|stp|lldp|igmp|upnp|capwap|raw|unknown/i],
+    ['Web',/http|tls|ssl|quic|google|facebook|instagram|twitter|linkedin|apple|microsoft|cloudflare|akamai|web|amazon|wikipedia|reddit|tiktok|ads|cdn/i]
+  ];
+  var CLAIR=/^(http|dns|dhcp|ntp|ftp|telnet|smtp|pop3|imap|snmp|ssdp|mdns|netbios|llmnr|icmp|arp|rtp|rtsp|sip|irc|smb|nfs|ldap|syslog|radius|unknown)(\b|_|\.|$)/i;
+  var CHIF=/tls|ssl|quic|ssh|wireguard|openvpn|ipsec|isakmp|dtls|https|smtps|imaps|pop3s|ldaps|tor|signal|whatsapp|telegram|vpn|l2tp/i;
+  function nature(n){n=String(n||'');var c='Autre';for(var i=0;i<CATS.length;i++){if(CATS[i][1].test(n)){c=CATS[i][0];break;}}
+    return {cat:c,chiffre:CHIF.test(n)&&!CLAIR.test(n)};}
+  var D=null,mode='bytes',tri={k:'octets',sens:-1};
+
+  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+
+  function donut(parts,tot){
+    var R=80,r=50,C=100,a0=-Math.PI/2,s='<svg class="donut" viewBox="0 0 200 200" role="img" aria-label="Protocoles par octets">';
+    if(!parts.length||tot<=0) return s+'<circle cx="100" cy="100" r="65" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="30"/><text x="100" y="106" font-size="16">—</text></svg>';
+    parts.forEach(function(p,i){
+      var f=p.v/tot,a1=a0+2*Math.PI*f;if(f>=.9999)a1=a0+2*Math.PI-.0001;
+      var lg=(a1-a0)>Math.PI?1:0,x=function(rr,a){return (C+rr*Math.cos(a)).toFixed(2);},y=function(rr,a){return (C+rr*Math.sin(a)).toFixed(2);};
+      s+='<path d="M'+x(R,a0)+','+y(R,a0)+' A'+R+','+R+' 0 '+lg+' 1 '+x(R,a1)+','+y(R,a1)+' L'+x(r,a1)+','+y(r,a1)+' A'+r+','+r+' 0 '+lg+' 0 '+x(r,a0)+','+y(r,a0)+'Z" fill="'+PAL[i%PAL.length]+'"><title>'+esc(p.n)+' : '+octets(p.v)+' ('+Math.round(100*f)+' %)</title></path>';
+      a0=a1;});
+    return s+'<text x="100" y="98" font-size="20" font-weight="700">'+esc(octets(tot))+'</text><text x="100" y="116" font-size="10" style="fill:#9fb3d6">24 h</text></svg>';
+  }
+  function barres(lst,cle,unite,couleur){
+    var m=Math.max.apply(null,lst.map(function(x){return x[cle];}).concat([1]));
+    return lst.map(function(x,i){return '<div class="ligne"><span class="n" title="'+esc(x.nom)+'">'+esc(x.nom)+'</span><span class="c">'+unite(x[cle])+'</span><div class="barre"><i style="width:'+Math.max(3,100*x[cle]/m)+'%;background:'+(couleur||PAL[i%PAL.length])+'"></i></div></div>';}).join('');
+  }
+
+  function rend(d){
+    D=d;var P=d.protocols,A=d.applications,st=d.status;
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||P||A||st);
+    var a=el('actif');
+    if(st&&st.daemon){var on=!!st.daemon.running;a.textContent=on?'MOTEUR ACTIF':'MOTEUR ARRÊTÉ';a.className='actif'+(on?'':' hors');}
+    else if(P||A){a.textContent='DONNÉES REÇUES';a.className='actif';}
+    else{a.textContent=d.demo?'MOTEUR ACTIF':'ÉTAT INCONNU';a.className='actif'+(d.demo?'':' inc');}
+    if(st&&st.daemon&&st.daemon.source==='ndpiReader/dpi') el('source').textContent='Source : ndpiReader (fenêtres de 60 s). Le moteur nDPId n’est pas actif ; les chiffres sont cumulés par ce collecteur.';
+    var pl=(P||[]).map(function(p){var n=nature(p.protocol);return {nom:String(p.protocol||'—'),cat:n.cat,chiffre:n.chiffre,flux:num(p.flow_count),octets:num(p.bytes_total)};}).filter(function(x){return x.flux>0||x.octets>0;});
+    var al=(A||[]).map(function(x){return {nom:String(x.application||'—'),flux:num(x.flow_count),octets:num(x.bytes_total)};}).filter(function(x){return x.flux>0||x.octets>0;});
+    d.pl=pl;d.al=al;
+    var tot=pl.reduce(function(t,x){return t+x.octets;},0),ok=!!P&&pl.length>0;
+    pl.forEach(function(x){x.part=tot>0?100*x.octets/tot:0;});
+    var cats={};pl.forEach(function(x){cats[x.cat]=(cats[x.cat]||0)+x.octets;});
+    var cl=Object.keys(cats).map(function(k){return {nom:k,octets:cats[k]};}).sort(function(x,y){return y.octets-x.octets;});
+    var chif=pl.filter(function(x){return x.chiffre;}).reduce(function(t,x){return t+x.octets;},0);
+    var dom=pl.slice().sort(function(x,y){return y.octets-x.octets;})[0];
+    el('tuiles').innerHTML=
+      tuile(IC.prot,ok?fmt(pl.length):'—','Protocoles détectés','sur 24 h','Nombre de protocoles distincts reconnus par l’inspection des paquets sur 24 h (source : /top/protocols).')
+     +tuile(IC.app,al.length?fmt(al.length):'—','Applications','sur 24 h','Nombre d’applications distinctes reconnues sur 24 h (source : /top/applications).')
+     +tuile(IC.cat,ok?fmt(cl.length):'—','Catégories','déduites du nom','Catégories représentées (web, streaming, messagerie, jeux, tunnel…). Déduites du nom du protocole : l’API ne les fournit pas.')
+     +tuile(IC.chif,ok&&tot>0?Math.round(100*chif/tot)+' %':'—','Trafic chiffré','part des octets, déduite','Part des octets portés par des protocoles chiffrés (TLS, QUIC, SSH, WireGuard…). Déduite du nom du protocole.')
+     +tuile(IC.top,dom?esc(dom.nom):'—','Protocole dominant',dom&&tot>0?Math.round(dom.part)+' % des octets':'','Protocole qui porte le plus d’octets sur 24 h.');
+    // donut : 7 premiers + « autres »
+    var ord=pl.slice().sort(function(x,y){return y.octets-x.octets;}),top=ord.slice(0,7).map(function(x){return {n:x.nom,v:x.octets};}),rest=ord.slice(7).reduce(function(t,x){return t+x.octets;},0);
+    if(rest>0) top.push({n:'autres ('+(ord.length-7)+')',v:rest});
+    el('donut').innerHTML=donut(top,tot);
+    el('leg').innerHTML=ok&&tot>0?top.map(function(p,i){return '<div><i style="background:'+PAL[i%PAL.length]+'"></i><span title="'+esc(p.n)+'">'+esc(p.n)+'</span><span>'+octets(p.v)+'</span><b>'+Math.round(100*p.v/tot)+' %</b></div>';}).join(''):'<div class="vide" style="display:block">'+(P?'Aucun protocole mesuré.':'Session requise.')+'</div>';
+    rendApps();
+    el('cats').innerHTML=ok&&tot>0?barres(cl.map(function(c){return {nom:c.nom,octets:c.octets};}),'octets',function(v){return octets(v)+' · '+Math.round(100*v/tot)+' %';}):'<div class="vide">'+(P?'Aucune mesure.':'Session requise.')+'</div>';
+    var cc=[{nom:'Chiffré',octets:chif},{nom:'En clair',octets:tot-chif}];
+    el('chiff').innerHTML=ok&&tot>0?[['Chiffré',chif,'var(--vert)'],['En clair',tot-chif,'var(--orange)']].map(function(c){return '<div class="ligne"><span class="n">'+c[0]+'</span><span class="c">'+octets(c[1])+' · '+Math.round(100*c[1]/tot)+' %</span><div class="barre"><i style="width:'+Math.max(3,100*c[1]/tot)+'%;background:'+c[2]+'"></i></div></div>';}).join('')+'<div class="note">Un protocole inconnu est compté « en clair » : la part chiffrée est un minimum.</div>':'<div class="vide">'+(P?'Aucune mesure.':'Session requise.')+'</div>';
+    // filtre catégories
+    var sel=el('selcat'),cur=sel.value;sel.innerHTML='<option value="">Toutes les catégories</option>'+cl.map(function(c){return '<option value="'+esc(c.nom)+'">'+esc(c.nom)+'</option>';}).join('');sel.value=cur;
+    rendTab();
+    el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    hauteur();
+  }
+  function rendApps(){
+    if(!D) return;var al=D.al.slice().sort(function(x,y){return mode==='flows'?y.flux-x.flux:y.octets-x.octets;}).slice(0,10);
+    el('apps').innerHTML=al.length?(mode==='flows'?barres(al,'flux',function(v){return fmt(v)+' flux';}):barres(al,'octets',octets)):'<div class="vide">'+(D.applications?'Aucune application mesurée.':'Session requise.')+'</div>';
+  }
+  function rendTab(){
+    if(!D) return;var f=el('filtre').value.trim().toLowerCase(),c=el('selcat').value;
+    var l=D.pl.filter(function(x){return (!f||x.nom.toLowerCase().indexOf(f)>=0)&&(!c||x.cat===c);});
+    l.sort(function(x,y){var a=x[tri.k],b=y[tri.k];if(typeof a==='boolean'){a=a?1:0;b=b?1:0;}
+      return (typeof a==='string'?a.localeCompare(b,'fr'):a-b)*tri.sens;});
+    el('cpt').textContent=D.protocols?l.length+' sur '+D.pl.length:'';
+    el('tab').innerHTML=l.length?l.map(function(x){return '<tr><td title="'+esc(x.nom)+'">'+esc(x.nom)+'</td><td>'+esc(x.cat)+'</td><td class="'+(x.chiffre?'chiffre':'clair')+'">'+(x.chiffre?'Chiffré':'En clair')+'</td><td class="num">'+fmt(x.flux)+'</td><td class="num">'+octets(x.octets)+'</td><td class="num">'+(x.part>=.1?x.part.toFixed(1).replace('.',','):'< 0,1')+' %</td></tr>';}).join(''):'<tr><td colspan="6" class="vide">'+(D.protocols?'Aucun protocole ne correspond.':'—')+'</td></tr>';
+    Array.prototype.forEach.call(document.querySelectorAll('th[data-k]'),function(h){h.classList.toggle('tri',h.dataset.k===tri.k);});
+    hauteur();
+  }
+  var DEMO={demo:true,status:{daemon:{running:true,source:'ndpid'}},
+    protocols:[{protocol:'TLS',flow_count:18420,bytes_total:42100000000},{protocol:'QUIC',flow_count:9310,bytes_total:31800000000},{protocol:'HTTP',flow_count:4120,bytes_total:6200000000},{protocol:'DNS',flow_count:61200,bytes_total:310000000},{protocol:'SSH',flow_count:210,bytes_total:2900000000},{protocol:'WireGuard',flow_count:48,bytes_total:5400000000},{protocol:'RTP',flow_count:340,bytes_total:1900000000},{protocol:'NTP',flow_count:2100,bytes_total:3000000},{protocol:'SMTP',flow_count:150,bytes_total:260000000},{protocol:'Steam',flow_count:75,bytes_total:3700000000},{protocol:'MDNS',flow_count:5400,bytes_total:21000000},{protocol:'IMAPS',flow_count:880,bytes_total:420000000},{protocol:'Unknown',flow_count:320,bytes_total:90000000}],
+    applications:[{application:'YouTube',flow_count:2210,bytes_total:28400000000},{application:'Netflix',flow_count:310,bytes_total:19200000000},{application:'Google',flow_count:9400,bytes_total:8100000000},{application:'WireGuard',flow_count:48,bytes_total:5400000000},{application:'Steam',flow_count:75,bytes_total:3700000000},{application:'Microsoft',flow_count:3300,bytes_total:2400000000},{application:'WhatsApp',flow_count:1900,bytes_total:1100000000},{application:'Spotify',flow_count:420,bytes_total:900000000},{application:'Cloudflare',flow_count:5100,bytes_total:700000000},{application:'Zoom',flow_count:60,bytes_total:640000000}]};
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxNdpidVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY),onglet:'protocoles'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
+  Array.prototype.forEach.call(document.querySelectorAll('#bascule button'),function(b){b.addEventListener('click',function(){mode=b.dataset.m;Array.prototype.forEach.call(document.querySelectorAll('#bascule button'),function(x){x.classList.toggle('on',x===b);});rendApps();hauteur();});});
+  Array.prototype.forEach.call(document.querySelectorAll('th[data-k]'),function(h){h.addEventListener('click',function(){var k=h.dataset.k;tri=tri.k===k?{k:k,sens:-tri.sens}:{k:k,sens:(k==='nom'||k==='cat')?1:-1};rendTab();});});
+  el('filtre').addEventListener('input',rendTab);el('selcat').addEventListener('change',rendTab);
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  if(q.get('demo')){rend(DEMO);return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    var b='/api/v1/ndpid/';
+    Promise.all([jget(b+'top/protocols?hours=24&limit=100'),jget(b+'top/applications?hours=24&limit=100'),jget(b+'status')]).then(function(r){
+      rend({protocols:r[0]&&r[0].protocols||null,applications:r[1]&&r[1].applications||null,status:r[2]});
+    });
+  }
+  el('rafraichir').addEventListener('click',charge);
+  charge();setInterval(function(){if(!document.hidden)charge();},30000);
+})();
+</script>
