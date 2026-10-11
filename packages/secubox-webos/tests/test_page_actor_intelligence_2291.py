@@ -77,3 +77,19 @@ def test_le_mode_demo_est_annonce(nav):
 
 def test_aucune_ressource_externe_dans_la_source():
     assert not re.search(r"(src|href)=[\"']https?://|url\(\s*[\"']?https?://|@import", PAGE.read_text(encoding="utf-8"))
+
+
+def test_le_mode_affiche_est_celui_de_l_application_des_decisions_pas_celui_de_l_analyse(nav):
+    p, _, _ = ouvre(nav, {"/api/v1/actor/stats": STATS, "/api/v1/waf/enforcement/mode": {"mode": "ACTIVE", "detail": {"campagnes": "ACTIVE", "acteurs": "ACTIVE"}}})
+    assert p.inner_text("#mode") == "MODE : ACTIVE"                                   # actord dit « observe » (analyse), mais les bans sont réellement appliqués
+    actifs = p.eval_on_selector_all("#modes button[aria-current=true]", "bs => bs.map(b => b.textContent)")
+    assert actifs == ["MITIGATE", "BLOCK"]
+    assert "jamais d’ici" in p.inner_text("#modes")
+    p.context.close()
+
+
+def test_sans_mode_du_waf_on_retombe_sur_celui_d_actord(nav):
+    p, _, _ = ouvre(nav, {"/api/v1/actor/stats": STATS})
+    assert p.inner_text("#mode") == "MODE : OBSERVE"
+    assert p.eval_on_selector_all("#modes button[aria-current=true]", "bs => bs.map(b => b.textContent)") == ["PASSIVE"]
+    p.context.close()
