@@ -32,3 +32,9 @@ def test_protected_core_present_in_every_profile():
     for path in PROFILE_FILES:
         on = load_profile(path).on
         assert {"core", "auth", "aggregator"} <= on, f"{path.stem} missing protected"
+
+
+@pytest.mark.parametrize("path", PROFILE_FILES, ids=lambda p: p.stem)
+def test_chaque_profil_porte_le_kiosque_et_la_console(path):
+    """#2332 : le kiosque WebUI (écran) et la console TUI (sa partie headless) sont les deux visages locaux de la box : dans tous les profils."""
+    assert {"kiosk", "console"} <= load_profile(path).on, path.stem

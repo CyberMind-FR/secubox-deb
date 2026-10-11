@@ -24,6 +24,10 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-console/usr/lib/systemd/system
 	install -m 644 $(CURDIR)/debian/secubox-console.service $(CURDIR)/debian/secubox-console/usr/lib/systemd/system/
 
+	# Interface locale (#2332) : le kiosque ne demarre qu'avec sa sentinelle, la console seulement sans kiosque
+	install -D -m 644 $(CURDIR)/debian/dropins/kiosk-sentinelle.conf $(CURDIR)/debian/secubox-console/usr/lib/systemd/system/secubox-kiosk.service.d/10-sentinelle.conf
+	install -D -m 644 $(CURDIR)/debian/dropins/console-sans-kiosque.conf $(CURDIR)/debian/secubox-console/usr/lib/systemd/system/secubox-console.service.d/10-sans-kiosque.conf
+
 	# Install menu.d entry
 	install -d $(CURDIR)/debian/secubox-console/usr/share/secubox/menu.d
 	install -m 644 $(CURDIR)/menu.d/*.json $(CURDIR)/debian/secubox-console/usr/share/secubox/menu.d/

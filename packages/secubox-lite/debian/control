@@ -21,6 +21,8 @@ Depends: ${misc:Depends},
 # Auto-Load phase A (#2280) : l'agent est dans CHAQUE image, donc une box flashée se provisionne seule au premier démarrage — mais seulement si /boot porte un
 # fichier de réponses SIGNÉ ; sans lui l'unité ne démarre pas.
  secubox-autoload-agent,
+# Interface locale (#2332) : la console TUI est la partie headless du kiosque WebUI (tty1 quand le kiosque est absent ou desactive).
+ secubox-console,
  secubox-health,
  secubox-profiles,
  secubox-appstore,

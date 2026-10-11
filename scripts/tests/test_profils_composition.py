@@ -45,11 +45,17 @@ HEBERGEMENT = {f"secubox-{m}" for m in (
 HALL = {f"secubox-{m}" for m in (
     "webos", "sbxos", "surf", "ephemeride", "zia", "voice", "voicestudio", "radio", "podcaster",
     "peertube", "jellyfin", "ytsas", "media", "photoprism", "lyrion", "mqtt", "ai-gateway", "streamlit",
-    "avatar", "repo", "console", "assist")} | {"sbxos-audio-mood"}
+    "avatar", "repo", "assist")} | {"sbxos-audio-mood"}
 
 
 def test_lite_porte_toutes_les_protections():
     assert PROTECTIONS <= _champ("lite", "Depends")
+
+
+def test_lite_porte_la_console_partie_headless_de_l_interface_locale():
+    """#2332 : la console TUI (tty1, sans kiosque) est dans toute image ; elle n'est plus réservée à full."""
+    assert "secubox-console" in _champ("lite", "Depends")
+    assert "secubox-console" not in _champ("full", "Depends") | _champ("full", "Recommends")
 
 
 def test_lite_ne_heberge_rien():
