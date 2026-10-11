@@ -298,3 +298,12 @@ propager `?theme=` vers `admin.gk2.secubox.in`.
 ---
 
 *© 2026 CyberMind · Notre-Dame-du-Cruet, Savoie · LicenseRef-CMSD-1.0*
+
+## 8. Profil projet référence Aurora (#2354)
+
+Nom retenu pour le style commun des pages d'administration refondues (vue d'ensemble WAF, Guardian, DPI, SOC, Actor Intelligence).
+Référence vivante : le bloc « PROFIL PROJET RÉFÉRENCE AURORA » de `packages/secubox-waf-ng/composants/waf/www/waf/index.html`
+et les jetons de `vue.html`. Règles : fond `#060d1b` à dégradés radiaux, traits `rgba(86,150,255,.22)`, texte `#eaf1ff`,
+cyan `#29b6f6`, vert `#2ecc71`, rouge `#ff4d5e`, orange `#ff9f1c`, violet `#a78bfa` ; police IBM Plex Sans / Inter (système en repli),
+chiffres tabulaires ; cartes à rayon 12 px et dégradé sombre ; onglets en pastilles ; tableaux à en-tête en petites capitales ;
+données réelles seulement (« — » sans mesure). Une page existante prend ce profil par une couche de style, sans toucher à sa logique.
