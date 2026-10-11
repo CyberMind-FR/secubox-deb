@@ -1,3 +1,9 @@
+secubox-webos (1.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la carte « Renseignement » EST maintenant la page Actor Intelligence (#2291) — elle remplace l'ancienne cardlet au lieu de la doubler d'une carte à part. Agrandie, elle montre la page entière (disposition complète) ; l'url du vhost actor n'est plus ouverte à sa place. Aide : celle de « Renseignement » (id acteurs) reste.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 21:00:00 +0200
+
 secubox-webos (1.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Hall : carte et page « Actor Intelligence » fidèles à l'infographie (#2291). Page /actor-intelligence/ (tableau de bord complet, ou carte ?embed=1 ; ?demo=1 annoncé) : tuiles définies en infobulle (unité, fenêtre, source), courbe 24 h, carte en points (pays déduit de l'adresse, limites dites), derniers événements filtrables par capteur, acteurs avec RISQUE et CONFIANCE séparés, techniques, appareils, mesures en cours, chaîne de détection, mode d'actord. Données réelles seulement : une mesure absente est « — ». nginx : /actor-intelligence/ (CSP propre). Aide de la carte. 5 tests dont navigateur réel.
