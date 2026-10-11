@@ -1,3 +1,9 @@
+secubox-dpi (1.12.1-1~bookworm1) bookworm; urgency=medium
+
+  * La vue DPI ne dit plus « HORS LIGNE » a tort (ref #2368) : sur l'hote admin elle lisait /api/v1/dpi/stats, route legacy qui renvoie « retire » sans champ connected, alors que nDPId et sbxdpi tournent ; usage, countries, clients, suggestions et sessions n'existent pas hors du relais du Hall. Elle lit maintenant /pub/ d'abord (lectures agregees), avec repli sur le chemin direct. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 01:00:00 +0200
+
 secubox-dpi (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Les onglets du webui ndpid refaits au profil projet reference Aurora (ref #2363) : Flux, Protocoles, Empreintes, Risques et Reglages sont des pages autonomes encadrees (/ndpid/), avec tuiles, graphiques SVG, filtres et tris, ?embed=1, ?demo=1 annonce, « — » sans mesure, hauteur annoncee (sbxNdpidVue). Lecture seule, sauf Reglages qui garde a l'identique ses actions (demarrer, arreter, redemarrer, mirred) avec confirmation integree a la page. Famille, categorie et confiance des empreintes et protocoles sont deduites cote page et annoncees comme telles. 28 tests.
