@@ -1,3 +1,9 @@
+secubox-premier-pas (0.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * L'assistant manuel s'efface devant l'Auto-Load (#2317) : secubox-premier-pas.service (qui cree le jeton du kiosque) et la face console restent fermes tant que /boot/secubox/autoload/reponses.toml existe — ils ecrasaient le nom et le reseau signes (erreur secubox-net-detect, nom change) —, SAUF si l'agent a abandonne (abandon.json) : ils reprennent alors la main. Une box SANS fichier Auto-Load garde l'assistant, le code de preparation et les propositions du maitre comme avant. 3 tests, dont la logique OU evaluee par systemd-analyze.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 06:00:00 +0200
+
 secubox-premier-pas (0.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Console : on peut enfin CHOISIR une option (#2312). La liste des profils s'affichait en colonne mais seules gauche/droite changeaient l'option ; haut/bas deplacaient le focus (il n'y a qu'un champ : rien ne se passait). Haut/bas choisissent quand la page n'a qu'un champ ; plus/moins, espace et les chiffres 1..n marchent partout ; le pied de page est en ASCII (la console Linux ne dessinait pas les fleches : « +/+ choix »). 5 tests (rouges sans le correctif).

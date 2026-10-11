@@ -5,6 +5,10 @@ After=network-online.target secubox-firstboot.service
 Wants=network-online.target
 Before=secubox-kiosk.service secubox-console.service
 ConditionPathExists=!/var/lib/secubox/.premier-pas-fait
+# L'ASSISTANT MANUEL S'EFFACE DEVANT L'AUTO-LOAD (#2317) : une box qui porte un fichier de réponses signé se provisionne seule ; l'assistant en parallèle écrasait le nom et le réseau
+# signés. OU l'un OU l'autre (« | ») : pas de fichier Auto-Load, ou bien l'agent a ABANDONNÉ (marqueur posé après 8 échecs) — l'assistant reprend alors la main au démarrage suivant.
+ConditionPathExists=|!/boot/secubox/autoload/reponses.toml
+ConditionPathExists=|/var/lib/secubox/autoload-agent/abandon.json
 
 [Service]
 Type=oneshot

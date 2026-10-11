@@ -90,7 +90,7 @@ jeton = "ref:/etc/secubox/secrets/autoload-jeton"
     monkeypatch.setattr(V, "verifier_signature", lambda f, s, t, gpgv="gpgv": None)               # la signature a ses propres tests (#2184)
     ex, en = FauxExecuteur(), FauxEnroleur()
     cfg = M.Config(reponses=reponses, signature=sig, trousseau=ring, racine_secrets=secrets, etat=tmp_path / "etat" / "etat.json",
-                   cle_wg=secrets / "wg.key", conf_wg=tmp_path / "wg.conf", rapport=tmp_path / "rapport.json")
+                   cle_wg=secrets / "wg.key", conf_wg=tmp_path / "wg.conf", rapport=tmp_path / "rapport.json", abandon=tmp_path / "abandon.json")
     monkeypatch.setattr(T, "assurer_cle", lambda *a, **k: CLE_BOX)
     monkeypatch.setattr(T, "monter", lambda reponse, *a, **k: ex(["wg-monter", json.dumps(reponse)], timeout=30))
     return type("Monde", (), {"cfg": cfg, "ex": ex, "en": en, "tmp": tmp_path, "secrets": secrets})
@@ -258,3 +258,25 @@ def test_un_valideur_explicite_prime_sur_la_fabrique(monde):
     appels = []
     assert not M.Moteur(monde.cfg, executeur=monde.ex, enroleur=monde.en, valideur=lambda p: False, fabrique_valideur=lambda r: appels.append(1) or (lambda p: True)).run().ok
     assert appels == []
+
+
+
+# ── #2317 : l'agent abandonne après 8 échecs, et le dit (l'assistant manuel reprend alors la main) ─────────
+def test_l_agent_n_abandonne_pas_avant_la_huitieme_tentative(monde):
+    for _ in range(M.LIMITE_TENTATIVES - 1):
+        assert not moteur(monde, valideur=lambda plan: False).run().ok
+    assert not monde.cfg.abandon.exists()
+    assert json.loads(monde.cfg.etat.read_text())["tentatives"] == M.LIMITE_TENTATIVES - 1
+
+
+def test_l_agent_pose_le_marqueur_d_abandon_a_la_huitieme(monde):
+    for _ in range(M.LIMITE_TENTATIVES):
+        moteur(monde, valideur=lambda plan: False).run()
+    a = json.loads(monde.cfg.abandon.read_text())
+    assert a["tentatives"] == M.LIMITE_TENTATIVES and a["etape"] == "validation" and "plan non validé" in a["detail"]
+    assert oct(monde.cfg.abandon.stat().st_mode & 0o777) == "0o600"
+
+
+def test_un_parcours_reussi_ne_pose_pas_de_marqueur_d_abandon(monde):
+    assert moteur(monde).run().ok
+    assert not monde.cfg.abandon.exists()
