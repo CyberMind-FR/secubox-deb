@@ -1,3 +1,9 @@
+secubox-dpi (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Resume DPI pour le rapport quotidien (#2299) : api/resume_rapport.py ecrit atomiquement /var/cache/secubox/dpi/resume-rapport.json (stats, usages, pays, appareils, suggestions, tronques, 0640), lance par secubox-dpi-resume.timer toutes les 30 minutes (unite durcie : User=secubox, ProtectSystem=strict, seul le cache DPI en ecriture). Une source muette reste absente. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 00:30:00 +0200
+
 secubox-dpi (1.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Vue d'ensemble DPI (#2293), fidele a l'infographie : tuiles definies, flux appareils vers usages (rubans en octets mesures), carte des destinations, types de trafic, applications, protocoles, appareils, destinations, domaines a classer, etat du moteur. Page vue.html encadree en tete de /dpi/ ; l'ancien contenu reste dessous. Donnees de sbxdpi seulement : une mesure absente est un tiret ; menaces et blocages ne sont pas inventes (ils sont dans le WAF et Actor). 5 tests dont navigateur reel.

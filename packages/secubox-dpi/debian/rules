@@ -52,6 +52,9 @@ override_dh_auto_install:
 	install -d debian/secubox-dpi/usr/lib/systemd/system
 	install -m 0644 systemd/secubox-dpi-flowcap.service \
 	  debian/secubox-dpi/usr/lib/systemd/system/secubox-dpi-flowcap.service
+	# Résumé DPI du rapport quotidien (#2299)
+	install -m 0644 systemd/secubox-dpi-resume.service debian/secubox-dpi/usr/lib/systemd/system/secubox-dpi-resume.service
+	install -m 0644 systemd/secubox-dpi-resume.timer debian/secubox-dpi/usr/lib/systemd/system/secubox-dpi-resume.timer
 	# Composant absorbé : ndpid (#2050)
 	install -d debian/secubox-dpi/usr/lib/secubox/ndpid
 	cp -r composants/ndpid/api debian/secubox-dpi/usr/lib/secubox/ndpid/

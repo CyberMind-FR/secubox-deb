@@ -43,6 +43,9 @@ DEFAUTS = {
     "destinataire": "",
     "jours": 7,
     "periode": "quotidien",
+    # « securite » (defaut, #2299) : PDF a trois volets WAF + Actor Intelligence + DPI, au style des vues du Hall.
+    # « waf » : l'ancien PDF WAF seul, clair, conserve pour qui le prefere.
+    "format": "securite",
 }
 
 
@@ -389,8 +392,12 @@ def main(argv=None) -> int:
         return 0
     import rapport
     try:
-        res = executer_waf(rapport._lire_waf_historique, construire_pdf_waf,
-                           rapport.envoyer, cfg)
+        if cfg.get("format", "securite") == "securite":
+            import rapport_securite as RS
+            res = RS.executer_securite(RS.collecter, RS.construire_pdf_securite, rapport.envoyer, cfg)
+        else:
+            res = executer_waf(rapport._lire_waf_historique, construire_pdf_waf,
+                               rapport.envoyer, cfg)
     except Exception as e:  # noqa: BLE001 — une tâche planifiée journalise et sort
         print(f"rapport WAF : échec : {e}", file=sys.stderr)
         return 1
