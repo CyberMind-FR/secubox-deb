@@ -1,3 +1,9 @@
+secubox-waf-ng (1.28.1-1~bookworm1) bookworm; urgency=low
+
+  * Vhost waf : la racine sert la vue d'ensemble SBXWAF (#2293) — c'etait l'ancien tableau.html qui s'affichait sur waf.gk2 ; l'ancien tableau reste a /tableau. Sans session, la vue invite a se connecter.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 22:00:00 +0200
+
 secubox-waf-ng (1.28.0-1~bookworm1) bookworm; urgency=low
 
   * Page /waf/ : nouvelle « Vue d'ensemble » SBXWAF (#2293), onglet par défaut, fidèle à l'infographie — tuiles définies en infobulle, carte en points, évolution par jour, répartition par catégorie, trafic par type, sites les plus visés, derniers événements, acteurs persistants, empreintes de campagnes, ce qui protège (état mesuré des détections). Page vue.html encadrée de même origine ; les anciens onglets (Menaces, Attaquants, Visites, Surfaces, Historique, Campagnes) restent. Données réelles seulement : une mesure absente est « — ». 5 tests dont navigateur réel.

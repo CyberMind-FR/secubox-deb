@@ -79,6 +79,7 @@
     <span class="actif" id="actif">…</span>
     <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
   </div>
+  <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
   <div><h2>Vue d’ensemble</h2><div class="sous">Protection en temps réel de vos services web, API et applications.</div></div>
   <div class="tuiles" id="tuiles"></div>
@@ -161,7 +162,7 @@
       return '<tr><td>'+esc(h)+'</td><td>'+esc(a.client_ip)+'</td><td>'+drapeau(a.country)+' '+esc(a.country)+'</td><td>'+esc(a.category)+'</td><td title="'+esc((a.host||'')+(a.path||''))+'">'+esc((a.host||'')+(a.path||''))+'</td><td><span class="risque" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span></td><td class="act '+ac[1]+'">'+esc(ac[0])+'</td></tr>';}).join(''):'<tr><td colspan="7" class="vide">'+(al?'Aucun événement.':'Ouvre une session pour voir les événements.')+'</td></tr>';
   }
   function rend(d){
-    el('demo').hidden=!d.demo;
+    el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.stats||d.status);
     var s=d.stats,st=d.status,a=el('actif');
     a.textContent=st?(st.enabled?'ACTIF · '+fmt(st.total_rules)+' RÈGLES EN SERVICE':'WAF DÉSACTIVÉ'):(s?'ACTIF':'HORS LIGNE');a.classList.toggle('hors',!(st?st.enabled:s));
     var sev=s&&s.by_severity||{},men=s?num(sev.critical)+num(sev.high)+num(sev.medium):null;
