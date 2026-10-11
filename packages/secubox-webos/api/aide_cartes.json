@@ -30,6 +30,12 @@
       ]
     },
     {
+      "id": "guardian", "ic": "🛡️", "nom": "Guardian", "service": "ad-guard", "acces": "session",
+      "role": "Le gardien du réseau domestique : combien d'appareils sont connectés, combien de requêtes DNS ont été faites et lesquelles ont été bloquées, les menaces des dernières 24 h, les appareils qui sollicitent le plus et les catégories les plus bloquées.",
+      "usage": ["Les quatre tuiles du haut sont celles d'aujourd'hui ; la courbe et les répartitions couvrent sept jours.", "Une mesure indisponible s'affiche « — » : jamais un zéro rassurant.", "La pastille de couleur d'un appareil (vert, orange, rouge) suit la part de ses requêtes bloquées."],
+      "metriques": []
+    },
+    {
       "id": "mon-coffre", "ic": "🔐", "nom": "Coffre", "service": "vault", "acces": "session",
       "role": "Votre compartiment dans le Coffre de la box : des secrets à vous (clé OpenPGP, codes, notes), ouverts par VOTRE serrure — votre connexion, une phrase ou une clé d'appareil. Le badge dit l'état du Coffre de la box (scellé ou ouvert) ; un administrateur, même Coffre ouvert, n'y lit rien.",
       "usage": ["La première fois : créer sa serrure. Ensuite : l'ouvrir, ranger, voir, retirer ; la serrure n'est tenue que par l'onglet et s'oublie après cinq minutes sans geste.", "Le compartiment n'est lisible que lorsque le Coffre de la box est ouvert par un administrateur.", "Le ⚙️ ouvre la console du Coffre (administrateurs) : ouvrir, sceller, compteurs, journal, clés d'appareil."],

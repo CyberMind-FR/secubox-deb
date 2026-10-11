@@ -1,3 +1,9 @@
+secubox-ad-guard (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Guardian (#2287) : le tableau de bord du réseau domestique. GET /adblock-tv/gardien (require_lecture, cache 60 s) rend appareils connectés (NAC, lecture seule, conteneurs LXC exclus), requêtes DNS du jour et d'hier, domaines bloqués, menaces 24 h (compteurs publics d'actord ; indisponible = null, jamais 0), courbe 7 jours, types de domaines bloqués, catégories, appareils principaux. Page www/guardian/index.html (une seule page : tableau de bord complet ou cardlet ?embed=1 ; ?demo=1 annoncé par bandeau) : données réelles uniquement, états honnêtes sans session ou sans réponse, tout échappé, aucune ressource externe. 17 tests dont navigateur réel.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 11 Oct 2026 18:00:00 +0200
+
 secubox-ad-guard (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Detournement d'un domaine normal (#2240) : un domaine connu (>= 3 jours) qui resout soudain vers un reseau inattendu est signale. Source : instantane des reponses A/AAAA du cache d'Unbound (log-replies ne les contient pas), pris toutes les 5 min par secubox-ad-guard-dnsdump (User=secubox) via `sudo -n secubox-adguard-tv cache-dump` (argument exact, lecture seule, root n'ecrit rien). Reference apprise en silence pendant 3 jours (reponses.db), ASN via GeoLite2-ASN sinon prefixe /16 ou /32. Regles : dns.hijack.new_net (reseau jamais vu, domaine stable de <= 5 reseaux, source = l'adresse inattendue) et dns.hijack.special (nom public vers adresse non routable, source = l'appareil demandeur). Une adresse suspecte n'entre pas dans la reference ; --accepter DOMAINE apprend un changement legitime ; --dry-run ne persiste rien. Recommends python3-maxminddb (repli sur les prefixes sans lui). 39 tests dont collecte, depot et controleur root.

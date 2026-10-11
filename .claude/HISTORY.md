@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-11 — Guardian : le gardien du réseau domestique (ref #2287)
+
+ad-guard 1.11.0 : route `GET /adblock-tv/gardien` + page unique `/guardian/` (tableau de bord complet ou cardlet `?embed=1`, `?demo=1` annoncé). Données réelles seulement (NAC, DNS, actord) ; une mesure absente s'affiche « — », jamais 0. webos 1.8.0 : carte Hall, relais nginx, aide. Vhost public dédié : décision du propriétaire (DNS, ACME, HAProxy, route WAF).
+
 ## 2026-10-11 — Tag alpha.11 : l'agent Auto-Load refusé par verify-profile (ref #2285)
 Le tag a construit les paquets (121 jobs) et l'installateur sans écran, mais 7 images disque ont échoué : `scripts/verify-profile.sh` refuse un module absent du working-set de gk2, et l'agent (ajouté au profil `lite` par #2280)
 y était absent. Entrée manuelle dans `image/profiles/working-set.gk2.txt` et test qui lance la porte sur lite, isp et full. Leçon : lancer `verify-profile.sh` avant tout changement de profil.
