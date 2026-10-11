@@ -44,6 +44,7 @@ MARQUEUR = Path("/var/lib/secubox/.premier-pas-fait")
 ETAT = Path("/run/secubox-premier-pas/etat.json")
 JOURNAL = Path("/var/log/secubox/premier-pas.log")
 SECUBOX_CONF = Path("/etc/secubox/secubox.conf")
+NET_DETECT = Path("/usr/sbin/secubox-net-detect")
 USERS_FILE = Path("/etc/secubox/users.json")
 MAJAUTO_DROPIN = Path("/etc/systemd/system/secubox-majauto.timer.d/heure.conf")
 
@@ -205,6 +206,18 @@ def _majauto(auto: bool, heure: str) -> None:
         MAJAUTO_DROPIN.unlink()
 
 
+def _reseau_existant_conserve(sortie_route: Optional[str] = None) -> None:
+    """Mode « lan » sans `secubox-net-detect` (#2306) : une seule carte, rien à reconfigurer. On CONSERVE le réseau en place, à condition qu'il ait une route par défaut :
+    sans elle l'étape suivante (apt, tunnel) n'ira nulle part, et on le dit ici plutôt que plus loin."""
+    if sortie_route is None:
+        try:
+            sortie_route = subprocess.run(["ip", "route", "show", "default"], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise RuntimeError(f"réseau existant : route par défaut illisible ({e})") from None
+    if "default" not in (sortie_route or ""):
+        raise RuntimeError("réseau existant : aucune route par défaut — branchez la box ou corrigez la configuration réseau, puis reprenez")
+
+
 def plan(profil: Dict[str, Any]) -> List[Action]:
     """Les actions exactes, dans l'ordre. Suppose un profil complet."""
     box, reseau = profil.get("box") or {}, profil.get("reseau") or {}
@@ -226,7 +239,12 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     out.append(Action("admin", "TOTP : enrôlé à la première connexion (écran de la box)"))
     mode = reseau["mode"]
     dom = None if mode == "lan" else str(reseau["domaine"]).strip().lower()
-    out.append(Action("reseau", f"mode réseau {mode}", ["secubox-net-detect", "apply", P.MODES_RESEAU[mode]]))
+    if mode == "lan" and not os.access(NET_DETECT, os.X_OK):
+        # L'outil n'est livré par aucune image (#2306). Une seule carte : le réseau en place (DHCP ou statique) EST la configuration. Routeur et pont, eux, ne peuvent pas
+        # s'appliquer sans l'outil : ils gardent la commande, qui échoue en le disant.
+        out.append(Action("reseau", "mode réseau lan : réseau existant conservé (secubox-net-detect absent de cette image)", fn=_reseau_existant_conserve))
+    else:
+        out.append(Action("reseau", f"mode réseau {mode}", ["secubox-net-detect", "apply", P.MODES_RESEAU[mode]]))
     out.append(Action("reseau", f"domaine {dom}" if dom else "LAN seul, sans domaine", fn=lambda: _ecrit_conf(dom)))
     sp = profil["services"]["profil"]
     if sp == P.GARDER:
