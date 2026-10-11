@@ -53,6 +53,7 @@ if _ici not in _sys.path:
     _sys.path.insert(0, _ici)
 
 from visitor_origin import VisitorOriginAggregator
+from waf_etat import sbxwaf_actif
 from live_hosts import LiveHostsAggregator
 from cert_status import CertStatusAggregator
 from cookie_audit import CookieAuditAggregator
@@ -223,20 +224,6 @@ def run_cmd(cmd: list, default: str = "") -> str:
         return result.stdout.strip() if result.returncode == 0 else default
     except Exception:
         return default
-
-def sbxwaf_actif() -> bool:
-    """Le WAF est sbxwaf (service secubox-waf-ng, 127.0.0.1:8085) depuis la bascule ; l'ancien contrôle (conteneur LXC
-    mitmproxy-in, processus mitmdump) n'existe plus et affichait « WAF HORS SERVICE » alors que sbxwaf tournait (#2391).
-    Actif = le service systemd est actif ET le port répond ; l'un sans l'autre n'est pas un WAF qui protège."""
-    if run_cmd(['systemctl', 'is-active', 'secubox-waf-ng']) != 'active':
-        return False
-    try:
-        import socket
-        with socket.create_connection(("127.0.0.1", 8085), timeout=1.5):
-            return True
-    except OSError:
-        return False
-
 
 def get_cache_age() -> int:
     """Get cache age in seconds."""

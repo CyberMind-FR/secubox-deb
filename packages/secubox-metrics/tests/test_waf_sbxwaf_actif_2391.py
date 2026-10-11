@@ -6,11 +6,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common"))
-from api import main as M  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
+import waf_etat as M  # noqa: E402
 
 
 def test_actif_quand_le_service_est_actif_et_le_port_repond(monkeypatch):
-    monkeypatch.setattr(M, "run_cmd", lambda cmd, default="": "active")
+    monkeypatch.setattr(M, "_systemctl_actif", lambda unite: True)
     import socket
 
     class _C:
@@ -21,12 +22,12 @@ def test_actif_quand_le_service_est_actif_et_le_port_repond(monkeypatch):
 
 
 def test_inactif_si_le_service_est_arrete(monkeypatch):
-    monkeypatch.setattr(M, "run_cmd", lambda cmd, default="": "inactive")
+    monkeypatch.setattr(M, "_systemctl_actif", lambda unite: False)
     assert M.sbxwaf_actif() is False
 
 
 def test_inactif_si_le_port_ne_repond_pas(monkeypatch):
-    monkeypatch.setattr(M, "run_cmd", lambda cmd, default="": "active")
+    monkeypatch.setattr(M, "_systemctl_actif", lambda unite: True)
     import socket
 
     def _refuse(*a, **k):
@@ -36,7 +37,7 @@ def test_inactif_si_le_port_ne_repond_pas(monkeypatch):
 
 
 def test_la_sante_ne_depend_plus_de_mitmdump():
-    import inspect
-    src = inspect.getsource(M)
+    src = (Path(__file__).resolve().parents[1] / "api/main.py").read_text(encoding="utf-8")
     assert "mitmproxy_up = sbxwaf_actif() or" in src
     assert "mitmproxy_running = sbxwaf_actif() or" in src
+    assert "from waf_etat import sbxwaf_actif" in src
