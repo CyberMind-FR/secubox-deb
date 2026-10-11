@@ -1,3 +1,9 @@
+secubox-metrics (1.18.2-1~bookworm1) bookworm; urgency=low
+
+  * Rapport de securite (#2299) : sur la box, la liste des sites les plus vises (8 lignes) debordait de son panneau et mordait sur le suivant ; les listes de la page WAF sont plafonnees a 6 lignes. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 02:00:00 +0200
+
 secubox-metrics (1.18.1-1~bookworm1) bookworm; urgency=medium
 
   * Rapport de securite (#2299) : lit les formes REELLES du cache disque du WAF (top_vhosts et top_countries en dict, total_threats) comme celles de l'API ; sur la box il levait KeyError et ne produisait rien. La tuile « bloquees » devient « menaces journalisees » (tous les evenements du journal du jour, robots compris) : le cache disque ne dit pas ce qui a ete bloque, et le rapport ne l'affirme plus. 2 tests.
