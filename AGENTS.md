@@ -85,7 +85,7 @@ Code partagé : `common/secubox_core/`. Suivi de projet : `.claude/`.
 | Patterns RPCD→FastAPI, LXC | `.claude/PATTERNS.md` | en codant (grep) |
 | État de migration des modules | `.claude/MIGRATION-MAP.md` | statut |
 | Commandes de build / déploiement | `.claude/QUICKSHEET-REFERENCE.md`, `docs/TOOLS.md`, `.claude/reference/COMMANDES.md` | builder |
-| Charte UI, panels admin | `.claude/DESIGN-CHARTER.md`, `.claude/WEBUI-PANEL-GUIDELINES.md` | frontend |
+| Charte UI, panels admin | `.claude/DESIGN-CHARTER.md`, `.claude/WEBUI-PANEL-GUIDELINES.md`, **`.claude/AURORA-REFERENCE.md`** (style des pages refondues) | frontend |
 | Style des docs | `.claude/WIKI-STYLE-GUIDE.md` | docs |
 | Stack, conventions, ANSSI, ZKP | `.claude/reference/PROJET-CONNAISSANCES.md` | contexte de fond |
 | Structure du dépôt, priorités | `.claude/reference/PROJET-STRUCTURE.md` | s'orienter |
