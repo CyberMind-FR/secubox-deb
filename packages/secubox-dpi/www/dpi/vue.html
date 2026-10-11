@@ -192,7 +192,10 @@
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     var b='/api/v1/dpi/';
-    Promise.all([jget(b+'stats'),jget(b+'usage'),jget(b+'countries'),jget(b+'clients'),jget(b+'suggestions'),jget(b+'sessions')]).then(function(r){
+    // Lectures agrégées d'abord (/pub/, la seule porte qui existe sur l'hôte admin : /stats y renvoie l'erreur « legacy retiré », sans
+    // `connected`, d'où « DPI HORS LIGNE » alors que le moteur tourne — #2368). Repli sur le chemin direct : le relais du Hall le sert.
+    var lis=function(n){return jget(b+'pub/'+n).then(function(x){return x!==null?x:jget(b+n);});};
+    Promise.all([lis('stats'),lis('usage'),lis('countries'),lis('clients'),lis('suggestions'),lis('sessions')]).then(function(r){
       rend({stats:r[0],usage:r[1],pays:Array.isArray(r[2])?r[2]:null,clients:Array.isArray(r[3])?r[3]:null,sugg:Array.isArray(r[4])?r[4]:null,sessions:Array.isArray(r[5])?r[5]:null});
     });
   }
