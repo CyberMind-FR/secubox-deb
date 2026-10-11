@@ -169,6 +169,32 @@ def seuils_actors(radar: Optional[dict]) -> Optional[dict]:
     return {"suivis": len(r), "critiques": sum(v >= 70 for v in r), "suspects": sum(40 <= v < 70 for v in r), "observes": sum(v < 40 for v in r)}
 
 
+def vhosts(c: dict) -> list:
+    """Sites les plus visés : le cache disque du WAF les range en dict {site: n}, l'API en liste de {vhost, count}. Les deux sont lus, triés."""
+    v = c.get("top_vhosts")
+    if isinstance(v, dict):
+        out = list(v.items())
+    elif isinstance(v, list):
+        out = [(x.get("vhost"), x.get("count")) for x in v if isinstance(x, dict)]
+    else:
+        out = []
+    return sorted(out, key=lambda kv: -_num(kv[1]))
+
+
+def pays_waf(c: dict) -> dict:
+    """Pays des menaces : dict {code: n} (cache disque : `top_countries`, ou `pays` de l'API) ou liste de {country, count}."""
+    v = c.get("pays") or c.get("top_countries")
+    if isinstance(v, list):
+        return {x.get("country"): x.get("count") for x in v if isinstance(x, dict)}
+    return dict(v) if isinstance(v, dict) else {}
+
+
+def total_menaces(c: dict) -> Optional[int]:
+    """Événements du journal des menaces aujourd'hui, robots compris (`total_threats` ; l'API les expose aussi sous `blocked_24h`)."""
+    v = c.get("total_threats", c.get("blocked_24h"))
+    return None if v is None else int(_num(v))
+
+
 def indisponibles(d: dict) -> list:
     """Les sources absentes, dites telles quelles."""
     m = []
@@ -411,7 +437,7 @@ def _synthese(pdf, d: dict) -> None:
     y = 44
     y = _rangee_tuiles(pdf, y, [
         ("WAF · requêtes analysées", n((c.get("par_origine") or {}).get("waf")) if c.get("par_origine") else "—", "aujourd'hui", BLEU),
-        ("WAF · bloquées", n(c.get("blocked_24h")) if "blocked_24h" in c else "—", "24 h", ROUGE),
+        ("WAF · menaces journalisées", n(total_menaces(c)), "aujourd'hui, robots compris", ROUGE),
         ("WAF · menaces", n(gravite_menaces(c.get("by_severity"))), "gravité moyenne et plus", VIOLET),
         ("WAF · robots connus", n((c.get("by_category") or {}).get("robots")) if c.get("by_category") else "—", "aujourd'hui", CYAN)])
     y = _rangee_tuiles(pdf, y, [
@@ -427,9 +453,9 @@ def _synthese(pdf, d: dict) -> None:
         ("DPI · pays contactés", n(len((p or {}).get("pays") or []) or None), "destinations", ORANGE)])
     y += 2
     lignes = []
-    tv = (c.get("top_vhosts") or [])
+    tv = vhosts(c)
     if tv:
-        lignes.append(f"Site le plus visé par le WAF : {tv[0].get('vhost')} ({n(tv[0].get('count'))} événements).")
+        lignes.append(f"Site le plus visé par le WAF : {tv[0][0]} ({n(tv[0][1])} événements).")
     if sa:
         lignes.append(f"Actor Intelligence suit {n(sa['suivis'])} acteurs au radar : {sa['critiques']} critiques, {sa['suspects']} suspects, {sa['observes']} observés.")
     ms = (a.get("mesures") or {}).get("par_niveau")
@@ -457,7 +483,7 @@ def _synthese(pdf, d: dict) -> None:
         pdf.cell(184, 5, _txt("-  " + l), new_x="LMARGIN", new_y="NEXT")
     y3 = y2 + 12 + 5 * max(1, len(manque)) + 4
     defs = [("Requêtes analysées, robots", "compteurs du WAF depuis minuit ; un robot reconnu n'est pas une menace."),
-            ("Menaces, bloquées", "gravité moyenne, haute ou critique ; bloquées = ban ou blocage sur 24 h, une requête comptée une fois."),
+            ("Menaces, journalisées", "menaces = gravité moyenne, haute ou critique ; journalisées = tous les événements du journal du jour, robots compris."),
             ("Risque / confiance", "risque = gravité si l'hypothèse est vraie ; confiance = solidité des preuves. Deux mesures séparées."),
             ("Acteurs", "regroupent des adresses, une empreinte, des cibles : corrélation, pas attribution."),
             ("DPI", "cumul du moteur depuis son démarrage, métadonnées seulement ; ne mesure ni menaces ni blocages.")]
@@ -480,13 +506,13 @@ def _volet_waf(pdf, d: dict) -> None:
     c, hist, camps = w.get("compteurs") or {}, w.get("hist") or {}, w.get("campagnes") or {}
     y = _titre_volet(pdf, 18, "WAF — pare-feu applicatif", "Menaces vues par sbxwaf. Requêtes analysées et robots : compteurs du jour ; courbes : historique par jour des journaux (rétention) ; gravité « info » = robots.")
     jours = sorted((hist.get("jours") or {}).keys())[-14:]
-    _panneau(pdf, 10, y, 190, 54, "Évolution par jour", "événements · menaces · bloquées (haute et critique)")
+    _panneau(pdf, 10, y, 190, 54, "Évolution par jour", "événements · menaces · haute et critique")
     if len(jours) >= 2:
         tot = [_num(hist["jours"][j].get("total")) for j in jours]
         sv = [hist["jours"][j].get("severites") or {} for j in jours]
         men = [_num(s.get("critical")) + _num(s.get("high")) + _num(s.get("medium")) for s in sv]
         blo = [_num(s.get("critical")) + _num(s.get("high")) for s in sv]
-        _image(pdf, graphe_courbes([("Événements", tot, CYAN), ("Menaces", men, VIOLET), ("Bloquées", blo, ROUGE)], [j[5:] for j in jours]), 14, y + 9, 176)
+        _image(pdf, graphe_courbes([("Événements", tot, CYAN), ("Menaces", men, VIOLET), ("Haute et critique", blo, ROUGE)], [j[5:] for j in jours]), 14, y + 9, 176)
     else:
         pdf.set_xy(13, y + 25)
         pdf.set_font("Helvetica", "", 9)
@@ -504,11 +530,10 @@ def _volet_waf(pdf, d: dict) -> None:
     _image(pdf, graphe_donut(top, n(tot) if tot else "—"), 12, y + 9, 36)
     _barres(pdf, 50, y + 12, 50, [(k, v) for k, v in top], fmt=lambda v: f"{100 * _num(v) / tot:.0f}%" if tot else "—", pas=6.6, max_l=7)
     _panneau(pdf, 108, y, 92, 60, "Carte des attaques", "pays déduit de l'adresse")
-    pays = c.get("pays") or {}
-    _image(pdf, graphe_carte(pays), 110, y + 9, 88)
+    _image(pdf, graphe_carte(pays_waf(c)), 110, y + 9, 88)
     y += 64
     _panneau(pdf, 10, y, 92, 52, "Sites les plus visés", "événements, aujourd'hui")
-    _barres(pdf, 13, y + 10, 86, [(v.get("vhost"), v.get("count")) for v in (c.get("top_vhosts") or [])], couleur=CYAN)
+    _barres(pdf, 13, y + 10, 86, vhosts(c), couleur=CYAN)
     _panneau(pdf, 108, y, 92, 52, "Acteurs persistants", "adresses, sur la rétention des journaux")
     ti = {k: v for k, v in (hist.get("top_ips") or {}).items() if k != "local"}
     _barres(pdf, 111, y + 10, 86, sorted(ti.items(), key=lambda kv: -_num(kv[1])), couleur=ROUGE)
