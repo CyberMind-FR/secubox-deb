@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Actor Intelligence », observer, corréler, expliquer, défendre. Une seule page, deux mises en page :
+    · CARTE du Hall / page embarquée (?embed=1) : compacte, une colonne ;
+    · TABLEAU DE BORD complet (largeur ≥ 900 px) : tuiles, courbe, carte, événements, acteurs, techniques, appareils, chaîne de détection.
+  DONNÉES RÉELLES UNIQUEMENT (sbx-actord /stats, /overview, /radar, /mesures ; ad-guard pour les appareils). Une mesure absente s'affiche « — », jamais 0.
+  Chaque tuile porte sa définition (unité, fenêtre, source) en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Actor Intelligence — observer, corréler, expliquer, défendre</title>
+<style>
+  :root{
+    --fond:#060d1b; --panneau:#0d1a33; --trait:rgba(86,150,255,.22); --trait2:rgba(86,150,255,.38);
+    --texte:#eaf1ff; --doux:#9fb3d6; --faible:#6f84a8;
+    --cyan:#29b6f6; --bleu:#3b82f6; --vert:#2ecc71; --rouge:#ff4d5e; --orange:#ff9f1c; --violet:#a78bfa; --jaune:#ffd23f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(41,182,246,.18),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.14),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{container-type:inline-size;container-name:a;min-height:100vh;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
+       box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18),inset 0 1px 0 rgba(255,255,255,.05);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .tete .marque{display:flex;align-items:center;gap:8px;font-weight:700;font-size:1.05rem}
+  .tete .marque b{color:var(--cyan);font-weight:600}
+  .mode{border:1px solid var(--vert);color:var(--vert);border-radius:6px;padding:2px 8px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .onglets{display:flex;flex-wrap:wrap;gap:4px;margin-left:8px}
+  .onglets button{background:none;border:0;color:var(--doux);font:inherit;font-size:.7rem;font-weight:700;letter-spacing:.06em;padding:4px 8px;border-radius:6px;cursor:pointer}
+  .onglets button[aria-pressed=true]{background:rgba(59,130,246,.25);color:var(--texte)}
+  .tete .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  .etat{background:rgba(46,204,113,.16);border:1px solid rgba(46,204,113,.5);color:var(--vert);border-radius:999px;padding:2px 10px;font-weight:700;font-size:.72rem}
+  .etat.hors{background:rgba(255,77,94,.14);border-color:rgba(255,77,94,.5);color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{display:flex;gap:10px;align-items:center;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile svg{flex:none;width:30px;height:30px}
+  .tuile .v{font-size:1.4rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tuile .l{color:var(--doux);font-size:.74rem;margin-top:3px}
+  .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.crit{border-color:rgba(255,77,94,.5)} .tuile.crit .v{color:var(--rouge)}
+  .tuile.susp{border-color:rgba(255,159,28,.5)} .tuile.susp .v{color:var(--orange)}
+  .tuile.obs{border-color:rgba(41,182,246,.5)} .tuile.obs .v{color:var(--cyan)}
+  .tuile.spark{display:none;grid-column:span 2;align-items:stretch;flex-direction:column;gap:4px}
+  .tuile.spark .l{font-size:.7rem;color:var(--doux)} .tuile.spark svg{width:100%;height:46px}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem} .legende i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+  .carte{display:grid;gap:8px;grid-template-columns:1fr}
+  svg.monde{width:100%;height:auto;display:block;border-radius:8px}
+  .pays{display:grid;gap:3px;align-content:start;font-size:.78rem}
+  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)}
+  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
+  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;font-variant-numeric:tabular-nums}
+  td.act{color:var(--cyan)} td i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+  .scroll{overflow-x:auto}
+  .acteur{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:5px 0;border-top:1px solid rgba(86,150,255,.12)}
+  .acteur:first-child{border-top:0}
+  .bague{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.8rem;font-variant-numeric:tabular-nums}
+  .acteur .id{font-weight:600;font-size:.82rem} .acteur .sub{color:var(--faible);font-size:.68rem}
+  .acteur .dn{text-align:right;font-size:.7rem;color:var(--doux);font-variant-numeric:tabular-nums} .acteur .dn b{color:var(--texte)}
+  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
+  .tech{display:grid;grid-template-columns:1fr 38px 70px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+  .tech .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .tech span{text-align:right;color:var(--doux);font-variant-numeric:tabular-nums}
+  .app2{display:grid;grid-template-columns:30px 1fr 44px 70px;gap:8px;align-items:center;font-size:.76rem;padding:4px 0}
+  .app2 .sub{color:var(--faible);font-size:.66rem}
+  .chaine{display:none;gap:4px;grid-template-columns:repeat(8,1fr)}
+  .etape{border:1px solid var(--trait);border-radius:10px;padding:7px 8px;font-size:.66rem;color:var(--doux);background:rgba(18,40,78,.5);min-width:0}
+  .etape b{display:block;color:var(--texte);font-size:.72rem;letter-spacing:.04em;margin-bottom:2px}
+  .modes{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:.7rem;color:var(--faible)}
+  .modes button{font:inherit;font-size:.68rem;font-weight:700;border-radius:5px;border:1px solid var(--trait2);background:none;color:var(--doux);padding:2px 9px;cursor:default}
+  .modes button[aria-current=true]{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+  .pied{color:var(--faible);font-size:.66rem}
+  @container a (max-width:599px){.sec{display:none}.tuile.sec2{display:none}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (min-width:900px){
+    .tuiles{grid-template-columns:repeat(6,1fr)} .tuile.spark{display:flex}
+    .grille.g1{grid-template-columns:1.25fr 1fr} .grille.g2{grid-template-columns:1.2fr 1fr 1fr}
+    .carte{grid-template-columns:1fr 130px} .chaine{display:grid}
+  }
+</style>
+<div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><circle cx="12" cy="11" r="2.4"/><path d="M12 8.6V7M12 15v-1.6"/></svg><span>SecuBox <b>Actor Intelligence</b></span></span>
+    <span class="mode" id="mode" title="Mode d'exploitation lu d'actord">MODE : —</span>
+    <div class="onglets" id="onglets" role="group" aria-label="Filtrer les derniers événements par capteur"></div>
+    <div class="droite"><span id="heure"></span><span class="etat" id="etat">…</span></div>
+  </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="grille g1">
+    <div class="pan sec"><h3>Origine des événements <i id="geoSrc"></i></h3><div class="carte"><svg class="monde" id="monde" viewBox="0 0 360 180" role="img" aria-label="Carte des pays d'origine des événements"></svg><div class="pays" id="pays"></div></div><div class="note" id="geoNote"></div></div>
+    <div class="pan"><h3>Derniers événements <i id="evNote"></i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th>Acteur</th><th>Événement</th><th>Module</th><th>Risque</th><th>Confiance</th></tr></thead><tbody id="events"></tbody></table></div></div>
+  </div>
+  <div class="grille g1"><div class="pan"><h3>Évolution des événements <i>24 h, par heure</i></h3><div id="courbe"></div><div class="legende"><span><i style="background:#29b6f6"></i>Événements</span></div></div>
+    <div class="pan"><h3>Acteurs principaux <i>risque et confiance séparés</i></h3><div id="acteurs"></div></div></div>
+  <div class="grille g2"><div class="pan sec"><h3>Techniques observées</h3><div id="techs"></div></div>
+    <div class="pan sec"><h3>Appareils concernés <i>requêtes bloquées</i></h3><div id="appareils"></div></div>
+    <div class="pan sec"><h3>Mesures en cours <i>échelle de réponse</i></h3><div id="mesures"></div></div></div>
+  <div class="pan sec"><h3>Chaîne de détection et de défense adaptative</h3><div class="chaine" id="chaine"></div><div class="modes" id="modes" style="margin-top:8px">Modes :</div></div>
+  <div class="pied sec">Aucun blocage sur un seul signal · Apprentissage contrôlé · Actions réversibles · Respect de la vie privée — SecuBox, plus de sécurité, plus de contrôle, plus de liberté.</div>
+</div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function num(x){x=Number(x);return isFinite(x)?x:0;}
+  function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+  var q=new URLSearchParams(location.search);
+  if(q.get('embed')) document.body.classList.add('emb');
+  var COUL=function(v){return v>=70?'#ff4d5e':v>=40?'#ff9f1c':'#2ecc71';};
+  var IC={
+    bouclier:'<svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" fill="rgba(46,204,113,.14)"/><path d="M9 12l2 2 4-4"/></svg>',
+    bloque:'<svg viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.15)"/><path d="M6 6l12 12"/></svg>',
+    pouls:'<svg viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>',
+    acteurs:'<svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3" fill="rgba(59,130,246,.2)"/><circle cx="17" cy="9" r="2.4"/><path d="M3 20c0-3.5 3-6 6-6s6 2.5 6 6M15.5 14.4c3 0 5.5 2 5.5 5"/></svg>',
+    cible:'<svg viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#ff9f1c"/></svg>',
+    doc:'<svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(167,139,250,.16)"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+    alerte:'<svg viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z" fill="rgba(255,77,94,.15)"/><path d="M12 10v5M12 18v.1"/></svg>',
+    warn:'<svg viewBox="0 0 24 24" fill="none" stroke="#ff9f1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z" fill="rgba(255,159,28,.15)"/><path d="M12 10v5M12 18v.1"/></svg>',
+    oeil:'<svg viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3" fill="rgba(41,182,246,.3)"/></svg>',
+    robot:'<svg viewBox="0 0 24 24" fill="none" stroke="#9fb3d6" stroke-width="1.7" stroke-linecap="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4M9 13h.1M15 13h.1M9 17h6"/></svg>',
+    tv:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg>',
+    tel:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
+    pc:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>',
+    objet:'<svg viewBox="0 0 24 24" fill="none" stroke="#cfe3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="4"/><path d="M8 20h8M12 14v6"/></svg>'
+  };
+  // Continents grossiers (lon, lat) : un habillage de carte en points, pas une cartographie. Les cercles sont posés au centre du PAYS.
+  var TERRES=[
+    [[-168,66],[-140,70],[-95,72],[-80,63],[-62,58],[-55,48],[-70,42],[-76,35],[-81,25],[-97,26],[-105,22],[-117,32],[-125,42],[-125,49],[-140,60]],
+    [[-55,60],[-45,60],[-20,70],[-25,82],[-60,82],[-70,76]],
+    [[-105,22],[-90,16],[-80,8],[-77,2],[-81,-5],[-70,-18],[-72,-40],[-68,-55],[-60,-52],[-52,-35],[-40,-22],[-35,-6],[-52,3],[-62,10],[-78,10],[-85,12],[-97,16]],
+    [[-10,36],[-9,43],[-2,48],[8,54],[10,58],[20,70],[40,68],[60,70],[100,78],[140,72],[170,68],[180,65],[160,58],[142,52],[135,44],[122,40],[122,30],[110,20],[106,10],[100,2],[98,16],[92,22],[80,10],[73,18],[67,25],[57,26],[56,18],[44,12],[35,28],[28,36],[24,38],[12,38],[3,43]],
+    [[-17,21],[-6,36],[10,37],[32,31],[43,12],[51,12],[40,-15],[35,-25],[20,-35],[12,-18],[9,4],[-8,5],[-17,14]],
+    [[114,-22],[130,-12],[142,-11],[153,-27],[146,-39],[130,-32],[115,-34]],
+    [[-5,50],[2,52],[-3,58],[-6,56]],[[130,32],[141,38],[142,45],[138,36]],[[95,5],[105,-6],[120,-8],[140,-5],[130,0],[110,2]]
+  ];
+  var CENTRES={US:[-98,39],CA:[-100,57],MX:[-102,23],BR:[-52,-10],AR:[-64,-34],GB:[-2,54],FR:[2,46],DE:[10,51],NL:[5,52],ES:[-4,40],IT:[12,42],RU:[90,60],UA:[31,49],PL:[19,52],TR:[35,39],IN:[79,22],CN:[104,35],HK:[114,22],SG:[104,1],JP:[138,37],KR:[128,36],VN:[106,15],TH:[101,15],ID:[113,-2],AU:[134,-25],ZA:[24,-29],EG:[30,27],NG:[8,9],IR:[53,32],SA:[45,24],AE:[54,24],PK:[69,30],BD:[90,24],IE:[-8,53],SE:[15,62],FI:[26,64],NO:[9,61],CH:[8,47],BE:[4,50],AT:[14,47],RO:[25,46],CZ:[15,50],TW:[121,24],MY:[102,4],PH:[122,13],CL:[-71,-30],CO:[-74,4]};
+  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  function monde(pays){
+    var pts=function(p){return p.map(function(c){return (c[0]+180)+','+(90-c[1]);}).join(' ');};
+    var s='<defs><pattern id="pt" width="3.4" height="3.4" patternUnits="userSpaceOnUse"><circle cx="1.7" cy="1.7" r="1" fill="#33507f"/></pattern><clipPath id="terres">'+TERRES.map(function(p){return '<polygon points="'+pts(p)+'"/>';}).join('')+'</clipPath><radialGradient id="lueur"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".95"/><stop offset="1" stop-color="#ff4d5e" stop-opacity="0"/></radialGradient></defs>';
+    s+='<rect width="360" height="180" fill="rgba(6,13,27,.5)"/><rect width="360" height="180" fill="url(#pt)" clip-path="url(#terres)"/>';
+    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+    pays.forEach(function(p){var c=CENTRES[p.code];if(!c)return;var r=4+10*Math.sqrt(num(p.n)/max);
+      s+='<circle cx="'+(c[0]+180)+'" cy="'+(90-c[1])+'" r="'+r+'" fill="url(#lueur)"><title>'+esc(p.code)+' : '+fmt(p.n)+'</title></circle>';});
+    return s;
+  }
+  function tuile(cls,ic,v,l,s,def){return '<div class="tuile '+cls+'" title="'+esc(def)+'">'+ic+'<div><div class="v">'+v+'</div><div class="l">'+esc(l)+'</div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div></div>';}
+  function spark(a){
+    if(!a||a.length<2) return '';
+    var m=Math.max.apply(null,a.map(num).concat([1])),n=a.length,pts=a.map(function(v,i){return (i*200/(n-1)).toFixed(1)+','+(44-40*num(v)/m).toFixed(1);}).join(' ');
+    return '<div class="tuile spark" title="Événements par heure sur 24 h, source actord."><div class="l">Évolution des événements (24 h)</div><svg viewBox="0 0 200 46" preserveAspectRatio="none" role="img" aria-label="Événements par heure"><polyline points="'+pts+'" fill="none" stroke="#29b6f6" stroke-width="1.6" stroke-linejoin="round"/><polyline points="0,44 '+pts+' 200,44" fill="rgba(41,182,246,.18)" stroke="none"/></svg></div>';
+  }
+  function courbe(serie){
+    var n=serie.length;if(n<2) return '<div class="vide">Pas encore assez de mesures.</div>';
+    var W=520,H=150,L=34,R=8,T=8,B=20,max=Math.max.apply(null,serie.map(num).concat([1]));
+    var pas=[10,20,25,50,100,200,250,500,1000,2000,5000,10000,20000,50000,100000].filter(function(u){return u*3>=max;})[0]||Math.ceil(max/3),haut=pas*3;
+    var x=function(i){return L+i*(W-L-R)/(n-1);},y=function(v){return T+(H-T-B)*(1-num(v)/haut);};
+    var d='';serie.forEach(function(v,i){var X=x(i),Y=y(v);if(!i)d='M'+X+','+Y;else{var cx=(x(i-1)+X)/2;d+=' C'+cx+','+y(serie[i-1])+' '+cx+','+Y+' '+X+','+Y;}});
+    var g='';for(var k=0;k<=3;k++){var v=pas*k,Y=y(v);g+='<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-5)+'" y="'+(Y+3)+'" text-anchor="end">'+fmt(v)+'</text>';}
+    var xs='';[0,6,12,18,23].forEach(function(i){if(i<n)xs+='<text x="'+x(i)+'" y="'+(H-5)+'" text-anchor="middle">'+(i<10?'0':'')+i+'h</text>';});
+    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Événements par heure sur 24 heures"><defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#29b6f6" stop-opacity=".32"/><stop offset="1" stop-color="#29b6f6" stop-opacity="0"/></linearGradient></defs>'+g+xs
+      +'<path d="'+d+' L'+x(n-1)+','+y(0)+' L'+x(0)+','+y(0)+'Z" fill="url(#gc)"/><path d="'+d+'" fill="none" stroke="#29b6f6" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  }
+  var ETAPES=[['OBSERVE','Collecter des métadonnées réseau et des événements locaux.'],['BASELINE','Apprendre le comportement normal par appareil ou service.'],['DETECT','Repérer les écarts et les signatures pertinentes.'],['CORRELATE','Rapprocher les signaux indépendants dans le temps.'],['SCORE','Calculer le risque et la confiance séparément.'],['DECIDE','Appliquer la politique et le mode autorisé.'],['CONTAIN','Mesure limitée, réversible et expirante.'],['PROVE','Conserver la justification et la trace d’audit.']];
+  el('chaine').innerHTML=ETAPES.map(function(e){return '<div class="etape"><b>'+e[0]+'</b>'+esc(e[1])+'</div>';}).join('');
+  var MODES=['PASSIVE','SIMULATION','MITIGATE','BLOCK'],MAPMODE={observe:'PASSIVE',passive:'PASSIVE',simulation:'SIMULATION',mitigate:'MITIGATE',block:'BLOCK'};
+  var ETAT={recents:[],radar:{},filtre:'TOUS'};
+  var MODULES=[['TOUS',null],['WAF','waf'],['DPI','dpi'],['DNS','dns'],['PARE-FEU','firewall']];
+  el('onglets').innerHTML=MODULES.map(function(m){return '<button type="button" data-f="'+m[0]+'" aria-pressed="'+(m[0]==='TOUS')+'">'+m[0]+'</button>';}).join('');
+  el('onglets').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;ETAT.filtre=b.getAttribute('data-f');
+    Array.prototype.forEach.call(el('onglets').children,function(x){x.setAttribute('aria-pressed',x===b);});evenements();});
+  function evenements(){
+    var m=MODULES.filter(function(x){return x[0]===ETAT.filtre;})[0][1],r=ETAT.recents.filter(function(e){return !m||e.module===m;}).slice(0,8);
+    el('events').innerHTML=r.length?r.map(function(e){var a=ETAT.radar[e.acteur],rk=num(e.score);
+      return '<tr><td>'+esc(e.heure)+'</td><td class="act">'+esc(e.acteur)+'</td><td title="'+esc(e.type)+'">'+esc(e.type)+'</td><td>'+esc(e.module)+'</td><td style="color:'+COUL(rk)+'"><i style="background:'+COUL(rk)+'"></i>'+fmt(rk)+'</td><td>'+(a?(num(a.confiance.valeur)/100).toFixed(2):'—')+'</td></tr>';}).join(''):'<tr><td colspan="6" class="vide">Aucun événement pour ce capteur.</td></tr>';
+  }
+  function bague(v){var c=COUL(v);return '<div class="bague" style="background:conic-gradient('+c+' '+Math.min(100,num(v))+'%,rgba(159,179,214,.18) 0);position:relative"><span style="position:absolute;inset:4px;border-radius:50%;background:#0b1830;display:grid;place-items:center">'+fmt(v)+'</span></div>';}
+  function rend(d){
+    el('demo').hidden=!d.demo;
+    var s=d.stats,e=el('etat');e.textContent=s?'Système opérationnel':'Hors ligne';e.classList.toggle('hors',!s);
+    var md=s&&MAPMODE[String(s.mode||'').toLowerCase()];el('mode').textContent='MODE : '+(s&&s.mode?String(s.mode).toUpperCase():'—');
+    el('modes').innerHTML='Modes : '+MODES.map(function(m){return '<button type="button" aria-current="'+(m===md)+'">'+m+'</button>';}).join('')+'<span style="margin-left:6px">Le mode actif est celui d’actord.</span>';
+    var R=d.radar||[],crit=R.filter(function(a){return num(a.risque.valeur)>=70;}).length,susp=R.filter(function(a){var v=num(a.risque.valeur);return v>=40&&v<70;}).length,obs=R.length-crit-susp;
+    var rob=d.robots||[],rh=rob.reduce(function(t,r){return t+num(r.hits);},0);
+    var N=function(v){return v==null?'—':fmt(v);},sr=d.radar?'parmi les '+R.length+' suivis':'session requise';
+    el('tuiles').innerHTML=
+      tuile('',IC.bouclier,s?esc(s.posture||'—'):'—','Réseau protégé','Posture globale','Posture déclarée par actord (un mot) : mode, bans actifs et compteurs.')
+     +tuile('',IC.bloque,N(s&&s.blocked_24h),'Bloquées','24 h','Événements dont l’action est BLOCK ou QUARANTINE. Fenêtre : 24 h glissantes. Source : actord. Un événement bloqué compte une fois.')
+     +tuile('',IC.pouls,N(s&&s.attempts_24h),'Tentatives','24 h','Événements hostiles non bloqués (observés ou atténués). Fenêtre : 24 h. Source : actord. N’est pas un nombre d’attaques distinctes.')
+     +tuile('',IC.acteurs,N(s&&s.actors),'Acteurs identifiés','uniques, au total','Acteurs corrélés (IP, empreinte, cibles) ; un acteur peut regrouper plusieurs adresses. Corrélation, pas attribution.')
+     +tuile('',IC.cible,N(s&&s.campaigns),'Campagnes actives','','Groupes d’acteurs partageant une signature de cibles. Source : actord.')
+     +tuile('',IC.doc,N(s&&s.events_24h),'Événements analysés','24 h','Tous les événements ingérés par actord sur 24 h, après déduplication à l’ingestion.')
+     +tuile('crit',IC.alerte,d.radar?fmt(crit):'—','Acteurs critiques','risque ≥ 70 · '+sr,'Acteurs suivis (radar) dont le RISQUE est ≥ 70/100. Le risque dit la gravité si l’hypothèse est vraie ; la confiance est séparée.')
+     +tuile('susp',IC.warn,d.radar?fmt(susp):'—','Acteurs suspects','risque 40–69 · à vérifier','Acteurs suivis dont le risque est entre 40 et 69. Suspect n’est pas malveillant.')
+     +tuile('obs',IC.oeil,d.radar?fmt(obs):'—','Acteurs observés','risque < 40','Acteurs suivis dont le risque est inférieur à 40.')
+     +tuile('',IC.robot,d.robots?fmt(rh):'—','Robots connus',d.robots?rob.length+' familles':'','Requêtes de robots reconnus (familles connues) sur la période d’échantillonnage. Contexte, pas verdict.')
+     +spark(d.activite);
+    el('geoSrc').textContent='pays par adresse';
+    var pays=d.pays||[];
+    el('monde').innerHTML=monde(pays);
+    el('pays').innerHTML=pays.length?pays.slice(0,7).map(function(p){return '<div><span>'+drapeau(p.code)+' '+esc(p.code)+'</span><b>'+fmt(p.n)+'</b></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    el('geoNote').textContent=pays.length?'Pays déduit de l’adresse (base GeoLite2 locale), cercle au centre du pays — un VPN, un relais ou un nuage fausse l’origine réelle. Événements bruts sur '+fmt(d.echantillon||0)+' échantillons.':'';
+    ETAT.recents=d.recents||[];ETAT.radar={};R.forEach(function(a){ETAT.radar[a.id]=a;});
+    el('evNote').textContent=d.recents?'robots exclus':'session requise';
+    evenements();
+    el('courbe').innerHTML=d.activite?courbe(d.activite):'<div class="vide">Session requise pour la courbe.</div>';
+    el('acteurs').innerHTML=R.length?R.slice(0,5).map(function(a){var r=num(a.risque.valeur),c=num(a.confiance.valeur);
+      return '<div class="acteur">'+bague(r)+'<div><div class="id">'+esc(a.id)+'</div><div class="sub">'+fmt(a.evenements)+' événements · '+esc(a.niveau)+'</div></div><div class="dn">Risque <b>'+fmt(r)+'</b><br>Confiance <b>'+(c/100).toFixed(2)+'</b></div></div>';}).join(''):'<div class="vide">Ouvre une session pour voir les acteurs.</div>';
+    var T={};Object.keys(d.techniques||{}).forEach(function(k){d.techniques[k].forEach(function(t){T[t.nom]=(T[t.nom]||0)+num(t.n);});});
+    var tl=Object.keys(T).map(function(k){return [k,T[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,7),tm=tl.length?tl[0][1]:1;
+    el('techs').innerHTML=tl.length?tl.map(function(t){return '<div class="tech"><span class="n" style="text-align:left;color:var(--texte)" title="'+esc(t[0])+'">'+esc(t[0])+'</span><span>'+fmt(t[1])+'</span><div class="barre"><i style="width:'+Math.max(6,100*t[1]/tm)+'%;background:var(--orange)"></i></div></div>';}).join(''):'<div class="vide">Aucune technique observée.</div>';
+    var A=d.appareils;
+    el('appareils').innerHTML=A==null?'<div class="vide">Appareils indisponibles (session ou ad-guard).</div>':(A.length?A.slice(0,5).map(function(a){return '<div class="app2"><div>'+(IC[a.type]||IC.objet)+'</div><div><div>'+esc(a.nom)+'</div><div class="sub">'+fmt(a.req)+' requêtes</div></div><b style="color:'+(a.c==='rouge'?'#ff4d5e':a.c==='orange'?'#ff9f1c':'#2ecc71')+'">'+num(a.pct)+' %</b><div class="barre"><i style="width:'+Math.min(100,num(a.pct)*2.2)+'%;background:'+(a.c==='rouge'?'#ff4d5e':a.c==='orange'?'#ff9f1c':'#2ecc71')+'"></i></div></div>';}).join(''):'<div class="vide">Aucune requête mesurée.</div>');
+    var M=d.mesures&&d.mesures.par_niveau;
+    el('mesures').innerHTML=M?['DELAY','CHALLENGE','TARPIT','DENY','QUARANTINE'].map(function(k){var v=num(M[k]);return '<div class="tech"><span class="n" style="text-align:left;color:var(--texte)">'+k+'</span><span>'+fmt(v)+'</span><div class="barre"><i style="width:'+Math.min(100,v*12)+'%;background:var(--violet)"></i></div></div>';}).join('')+'<div class="note">Acteurs sous mesure ; chaque mesure expire et est réversible.</div>':'<div class="vide">Session requise.</div>';
+  }
+  var DEMO={demo:true,stats:{posture:'Protégée',mode:'observe',blocked_24h:1304,attempts_24h:29787,actors:1168,campaigns:59,events_24h:31091},
+    radar:[{id:'ff830d9d',risque:{valeur:82},confiance:{valeur:84},niveau:'BLOCK',evenements:823},{id:'12edbb25',risque:{valeur:78},confiance:{valeur:76},niveau:'MITIGATE',evenements:131},{id:'70042500',risque:{valeur:75},confiance:{valeur:71},niveau:'MITIGATE',evenements:68},{id:'4f1ec7df',risque:{valeur:44},confiance:{valeur:62},niveau:'OBSERVE',evenements:24},{id:'1c3d7d4b',risque:{valeur:23},confiance:{valeur:60},niveau:'OBSERVE',evenements:23}],
+    robots:[{famille:'a',hits:30000},{famille:'b',hits:18314}],echantillon:5000,pays:[{code:'US',n:109},{code:'SG',n:67},{code:'GB',n:13},{code:'NL',n:9},{code:'FR',n:6},{code:'DE',n:5},{code:'HK',n:12}],
+    recents:[{heure:'14:21',acteur:'ff830d9d',type:'dpi.risk.malicious_fingerprint',module:'dpi',score:67},{heure:'14:20',acteur:'12edbb25',type:'util.client-automatise',module:'waf',score:59},{heure:'14:19',acteur:'70042500',type:'tentative.fuzzer-repertoire',module:'waf',score:75},{heure:'14:18',acteur:'4f1ec7df',type:'http.suspicious_user_agent',module:'dpi',score:59},{heure:'14:17',acteur:'1c3d7d4b',type:'recon-001',module:'dpi',score:40}],
+    activite:[20,25,18,30,60,90,120,150,210,260,240,280,300,260,240,200,220,260,300,280,200,150,100,60],
+    techniques:{x:[{nom:'outil moissonneur-secrets?',n:460},{nom:'outil client-automatise?',n:277},{nom:'recon-001',n:120},{nom:'scan-003',n:53},{nom:'fuzzer-repertoire?',n:39},{nom:'bruteforce-login',n:28},{nom:'exfiltration-volume?',n:17}]},
+    appareils:[{nom:'TV Salon',type:'tv',req:1245,pct:30,c:'rouge'},{nom:'Smartphone',type:'tel',req:623,pct:19,c:'orange'},{nom:'PC Bureau',type:'pc',req:412,pct:7,c:'vert'}],
+    mesures:{par_niveau:{DELAY:0,CHALLENGE:1,TARPIT:6,DENY:2,QUARANTINE:0}}};
+  el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  if(q.get('demo')){rend(DEMO);return;}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  function charge(){
+    Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/overview'),jget('/api/v1/actor/radar?limit=30'),jget('/api/v1/actor/mesures'),jget('/api/v1/ad-guard/adblock-tv/gardien')]).then(function(r){
+      var ov=r[1],rd=r[2],g=r[4];
+      rend({stats:r[0],radar:rd&&rd.acteurs||null,robots:ov&&ov.robots||null,echantillon:ov&&ov.echantillon,pays:ov&&ov.top_pays||[],recents:ov&&ov.recents||null,activite:ov&&ov.activite_24h||null,techniques:ov&&ov.techniques||{},appareils:g&&g.top||null,mesures:r[3]});
+    });
+  }
+  charge();setInterval(charge,60000);
+})();
+</script>

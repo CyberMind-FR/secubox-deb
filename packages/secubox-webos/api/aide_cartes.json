@@ -30,6 +30,12 @@
       ]
     },
     {
+      "id": "actor-intelligence", "ic": "🧠", "nom": "Actor Intelligence", "service": "actor", "acces": "session",
+      "role": "Le tableau de bord d'Actor Intelligence : événements, acteurs, techniques et appareils concernés, avec le risque (gravité si l'hypothèse est vraie) et la confiance (solidité des preuves) toujours séparés.",
+      "usage": ["Passez la souris sur une tuile : sa définition (unité, fenêtre, source) s'affiche.", "Les onglets WAF, DPI, DNS, PARE-FEU filtrent les derniers événements par capteur.", "La carte place un cercle au centre du pays déduit de l'adresse : un VPN ou un relais fausse l'origine réelle.", "Une mesure indisponible s'affiche « — », jamais zéro."],
+      "metriques": []
+    },
+    {
       "id": "guardian", "ic": "🛡️", "nom": "Guardian", "service": "ad-guard", "acces": "session",
       "role": "Le gardien du réseau domestique : combien d'appareils sont connectés, combien de requêtes DNS ont été faites et lesquelles ont été bloquées, les menaces des dernières 24 h, les appareils qui sollicitent le plus et les catégories les plus bloquées.",
       "usage": ["Les quatre tuiles du haut sont celles d'aujourd'hui ; la courbe et les répartitions couvrent sept jours.", "Une mesure indisponible s'affiche « — » : jamais un zéro rassurant.", "La pastille de couleur d'un appareil (vert, orange, rouge) suit la part de ses requêtes bloquées."],
