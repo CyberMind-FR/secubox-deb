@@ -14,7 +14,7 @@ STATUS = {"module": "dns-guard", "queries_24h": 38000, "blocked_24h": 7109, "mal
           "fenetre": "aujourd'hui (UTC)", "sources": {"dns": True, "puits": True}, "blocklist_count": 0, "alerts_24h": 1}
 TOP = {"domains": [{"domain": "pub.example.com", "category": "advertising", "hits": 1234}, {"domain": "trk.example.net", "category": "tracking", "hits": 7}],
        "fenetre": "aujourd'hui (UTC)"}
-MENACES = {"threats": [{"timestamp": "2026-10-04T05:00:00Z", "domain": "xkqzp.example.com", "type": "dga", "client_ip": "192.168.1.5", "blocked": True}]}
+ALERTES = {"alerts": [{"id": "a1", "type": "dga", "severity": "high", "domain": "xkqzp.example.com", "client_ip": "192.0.2.5", "description": "d", "details": {}, "timestamp": "2026-10-04T05:00:00Z", "blocked": True}], "count": 1}
 
 
 @pytest.fixture(scope="module")
@@ -26,7 +26,7 @@ def navigateur():
 
 
 def _page(navigateur, rep=None):
-    rep = {("GET", "/status"): STATUS, ("GET", "/top-blocked"): TOP, ("GET", "/threats"): MENACES, **(rep or {})}
+    rep = {("GET", "/status"): STATUS, ("GET", "/top-blocked"): TOP, ("GET", "/alerts"): ALERTES, **(rep or {})}
     ctx = navigateur.new_context()
     p = ctx.new_page()
     erreurs, requetes = [], []
@@ -48,73 +48,58 @@ def chiffres(texte):
     return re.sub(r"\s| ", "", texte)
 
 
-def test_les_cartes_montrent_les_vrais_chiffres(navigateur):
+def test_les_tuiles_montrent_les_vrais_chiffres(navigateur):
     ctx, p, erreurs, _ = _page(navigateur)
-    p.wait_for_function("document.getElementById('queries-24h').textContent.trim() !== '-'")
-    assert chiffres(p.inner_text("#queries-24h")) == "38000" and chiffres(p.inner_text("#blocked-24h")) == "7109" and chiffres(p.inner_text("#blocklist-size")) == "656704"
+    p.wait_for_function("document.querySelector('.tuile .v') && document.querySelector('.tuile .v').textContent.trim() !== '—'")
+    t = chiffres(p.inner_text("#tuiles"))
+    assert "38000" in t and "7109" in t
     assert not erreurs
     ctx.close()
 
 
-def test_malware_et_phishing_absents_sont_un_tiret_pas_un_zero(navigateur):
+def test_aucune_source_donne_des_tirets(navigateur):
+    ctx, p, _, _ = _page(navigateur, rep={("GET", "/status"): dict(STATUS, queries_24h=None, blocked_24h=None)})
+    p.wait_for_selector("#suspects code, #suspects td")
+    assert p.locator(".tuile .v").first.inner_text().strip() == "—"
+    ctx.close()
+
+
+def test_top_et_suspects(navigateur):
     ctx, p, _, _ = _page(navigateur)
-    p.wait_for_function("document.getElementById('malware-blocked').textContent.trim() !== '-'")
-    assert p.inner_text("#malware-blocked") == "—" and p.inner_text("#phishing-blocked") == "—"
-    note = p.inner_text("#stats-note")
-    assert "ad-guard" in note and "aujourd'hui" in note and "ne distingue pas" in note
+    p.wait_for_selector("#suspects td.m")
+    assert "xkqzp.example.com" in p.text_content("#suspects")
+    assert "pub.example.com" in p.text_content("#top") and chiffres(p.text_content("#top")).count("1234") == 1
     ctx.close()
 
 
-def test_aucune_source_donne_des_tirets_partout(navigateur):
-    vide = dict(STATUS, queries_24h=None, blocked_24h=None, blocklist_size=0, sources={"dns": False, "puits": False})
-    ctx, p, _, _ = _page(navigateur, rep={("GET", "/status"): vide})
-    p.wait_for_function("document.getElementById('queries-24h').textContent.trim() !== '-'")
-    assert p.inner_text("#queries-24h") == "—" and p.inner_text("#blocked-24h") == "—" and "indisponibles" in p.inner_text("#stats-note")
-    ctx.close()
-
-
-def test_top_des_domaines_bloques(navigateur):
-    ctx, p, _, _ = _page(navigateur)
-    p.wait_for_selector("#top-blocked-table code")
-    texte = p.text_content("#top-blocked-table")
-    assert "pub.example.com" in texte and "advertising" in texte and chiffres(texte).count("1234") == 1
-    assert "192.168" not in texte
-    ctx.close()
-
-
-def test_top_vide_dit_aucune_donnee(navigateur):
-    ctx, p, _, _ = _page(navigateur, rep={("GET", "/top-blocked"): {"domains": []}})
-    p.wait_for_selector("#top-blocked-table .empty-state")
-    assert "Aucune donnée" in p.inner_text("#top-blocked-table")
-    ctx.close()
-
-
-def test_menaces_recentes_et_bouton_allow(navigateur):
+def test_autoriser_demande_confirmation_puis_poste_la_vraie_route(navigateur):
     ctx, p, _, requetes = _page(navigateur)
-    p.on("dialog", lambda d: d.accept())
-    p.wait_for_selector("#threats-table code")
-    assert "xkqzp.example.com" in p.text_content("#threats-table") and "dga" in p.text_content("#threats-table")
-    p.click("#threats-table button")
+    p.wait_for_selector("#suspects button[data-act=allow]")
+    p.click("#suspects button[data-act=allow]")
+    p.wait_for_timeout(200)
+    assert not [r for r in requetes if r[0] == "POST"]                                  # rien avant la confirmation
+    p.click("#confOui")
     p.wait_for_timeout(300)
-    assert ("POST", "/whitelist?domain=xkqzp.example.com") in requetes                  # la VRAIE route du module
+    assert ("POST", "/whitelist?domain=xkqzp.example.com") in requetes
     ctx.close()
 
 
-def test_aucune_menace_garde_le_message(navigateur):
-    ctx, p, _, _ = _page(navigateur, rep={("GET", "/threats"): {"threats": []}})
-    p.wait_for_selector("#threats-table .empty-state")
-    assert "No threats detected" in p.inner_text("#threats-table")
+def test_annuler_ne_poste_rien(navigateur):
+    ctx, p, _, requetes = _page(navigateur)
+    p.wait_for_selector("#suspects button[data-act=allow]")
+    p.click("#suspects button[data-act=allow]")
+    p.click("#confNon")
+    p.wait_for_timeout(200)
+    assert not [r for r in requetes if r[0] == "POST"]
     ctx.close()
 
 
 def test_aucun_html_venu_de_l_api_n_est_execute(navigateur):
     mal = "<img src=x onerror=window.__pwned=1>"
-    top = {"domains": [{"domain": mal, "category": mal, "hits": 1}]}
-    men = {"threats": [{"timestamp": "2026-10-04T05:00:00Z", "domain": mal, "type": mal, "client_ip": mal, "blocked": True}]}
-    ctx, p, _, _ = _page(navigateur, rep={("GET", "/top-blocked"): top, ("GET", "/threats"): men})
-    p.wait_for_selector("#top-blocked-table code")
-    p.wait_for_selector("#threats-table code")
+    al = {"alerts": [{"id": "a", "type": mal, "severity": mal, "domain": mal, "client_ip": mal, "description": "", "details": {}, "timestamp": "2026-10-04T05:00:00Z", "blocked": True}]}
+    ctx, p, _, _ = _page(navigateur, rep={("GET", "/alerts"): al, ("GET", "/top-blocked"): {"domains": [{"domain": mal, "category": mal, "hits": 1}]}})
+    p.wait_for_selector("#suspects td.m")
     p.wait_for_timeout(300)
-    assert p.evaluate("window.__pwned") is None and p.locator("#top-blocked-table img, #threats-table img").count() == 0
-    assert mal in p.text_content("#top-blocked-table") and mal in p.text_content("#threats-table")
+    assert p.evaluate("window.__pwned") is None and p.locator("#suspects img, #top img, #clients img").count() == 0
+    assert mal in p.text_content("#suspects")
     ctx.close()
