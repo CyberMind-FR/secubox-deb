@@ -73,3 +73,39 @@ def test_magasin_garde_les_services_et_les_remplace(tmp_path):
     assert r["services"] == '["AirPlay"]' and r["bonjour_name"] == "Apple TV du salon"
     s.set_services("aa:bb:cc:00:00:01", [], None)
     assert s.get("aa:bb:cc:00:00:01")["services"] in (None, "[]")
+
+
+def test_la_commande_demande_les_types_bruts_2444(monkeypatch):
+    """Sans -k avahi traduit les types (« AirTunes Remote Audio ») et plus rien n'est reconnu."""
+    vu = {}
+    monkeypatch.setattr(bonjour.shutil, "which", lambda n: "/usr/bin/avahi-browse")
+    monkeypatch.setattr(bonjour.subprocess, "run", lambda cmd, **k: vu.setdefault("cmd", cmd) and type("R", (), {"stdout": ""})())
+    bonjour._lancer()
+    assert "-k" in vu["cmd"]
+
+
+def test_inventaire_lxc_nom_par_adresse_et_refus_des_noms_hostiles_2445(tmp_path, monkeypatch):
+    import importlib.machinery, importlib.util, pathlib, json
+    src = pathlib.Path(__file__).resolve().parents[1] / "sbin" / "secubox-nac-lxc-names"
+    loader = importlib.machinery.SourceFileLoader("lxcnoms", str(src))
+    spec = importlib.util.spec_from_loader("lxcnoms", loader); mod = importlib.util.module_from_spec(spec); loader.exec_module(mod)
+    (tmp_path / "gitea").mkdir(); (tmp_path / "gitea" / "config").write_text("lxc.uts.name = gitea\nlxc.net.0.ipv4.address = 192.0.2.40/24\nlxc.net.0.hwaddr = 00:16:3E:AA:BB:CC\n")
+    (tmp_path / "mal").mkdir(); (tmp_path / "mal" / "config").write_text("lxc.uts.name = <b>x</b>\nlxc.net.0.ipv4.address = 192.0.2.99/24\n")
+    inv = mod.inventaire(str(tmp_path))
+    assert inv["ips"] == {"192.0.2.40": "gitea", "192.0.2.99": "mal"}          # le nom hostile est ignoré, le nom du dossier garde
+    assert inv["macs"] == {"00:16:3e:aa:bb:cc": "gitea"}
+    sortie = tmp_path / "out.json"
+    mod.ecrire(inv, str(sortie))
+    from api import lxcnames
+    assert lxcnames.nom("192.0.2.40", "", str(sortie)) == "gitea" and lxcnames.nom("", "00:16:3E:AA:BB:CC", str(sortie)) == "gitea"
+    assert lxcnames.nom("192.0.2.1", "", str(tmp_path / "absent.json")) is None
+
+
+def test_discover_nomme_un_conteneur_sans_nom_2445(monkeypatch, tmp_path):
+    import json
+    from api import discovery, lxcnames
+    f = tmp_path / "c.json"; f.write_text(json.dumps({"ips": {"10.100.0.40": "gitea"}, "macs": {}}))
+    monkeypatch.setattr(lxcnames, "CHEMIN", str(f)); lxcnames._CACHE.update(mtime=None)
+    monkeypatch.setattr(bonjour, "snapshot", lambda: {}); monkeypatch.setattr(discovery, "resolve_hostname", lambda ip: None)
+    res = discovery.discover(dnsmasq_leases="/nonexistent", isc_leases="/nonexistent", arp_cmd=lambda: "10.100.0.40 dev br-lxc lladdr 00:16:3e:00:00:09 REACHABLE\n")
+    assert res[0]["hostname"] == "gitea" and res[0]["lxc_module"] == "gitea"

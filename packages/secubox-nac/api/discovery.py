@@ -399,4 +399,16 @@ def discover(*, dnsmasq_leases=DEFAULT_DNSMASQ_LEASES, isc_leases=DEFAULT_ISC_LE
         device["bonjour_types"] = list(e["types"])
         device["bonjour_name"] = e["name"]
 
+    # #2445 : les conteneurs LXC sont nos modules : on sait qui est qui, même sans DNS ni bail. Le nom du module complète un nom vide.
+    try:
+        from . import lxcnames
+        for device in result:
+            n = lxcnames.nom(device.get("ip") or "", device.get("mac") or "")
+            if n:
+                device["lxc_module"] = n
+                if not device.get("hostname"):
+                    device["hostname"] = n
+    except Exception:  # noqa: BLE001
+        pass
+
     return result

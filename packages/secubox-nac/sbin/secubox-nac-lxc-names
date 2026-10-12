@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Inventaire des conteneurs LXC pour le NAC (#2445) : adresse -> nom du module.
+
+Les dossiers des conteneurs sont fermés au compte du service (0770, propriétaire de l'espace de noms) : seul root lit leur `config`. Ce petit
+service root n'écrit que `/var/lib/secubox/nac/conteneurs.json` (noms et adresses, rien de secret), en écriture atomique."""
+import glob
+import json
+import os
+import re
+import sys
+
+LXC = os.environ.get("SBX_LXC_DIR", "/var/lib/lxc")
+SORTIE = os.environ.get("SBX_LXC_SORTIE", "/var/lib/secubox/nac/conteneurs.json")
+_NOM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_IPV4 = re.compile(r"^\s*lxc\.net\.\d+\.ipv4\.address\s*=\s*(\d{1,3}(?:\.\d{1,3}){3})")
+_MAC = re.compile(r"^\s*lxc\.net\.\d+\.hwaddr\s*=\s*([0-9A-Fa-f:]{17})\s*$")
+_UTS = re.compile(r"^\s*lxc\.uts\.name\s*=\s*(\S+)\s*$")
+
+
+def inventaire(racine: str = LXC) -> dict:
+    ips, macs = {}, {}
+    for conf in sorted(glob.glob(os.path.join(racine, "*", "config"))):
+        nom = os.path.basename(os.path.dirname(conf))
+        adresses, mac = [], None
+        try:
+            with open(conf, encoding="utf-8", errors="replace") as f:
+                for ligne in f:
+                    m = _UTS.match(ligne)
+                    if m and _NOM.match(m.group(1)):
+                        nom = m.group(1)
+                    m = _IPV4.match(ligne)
+                    if m:
+                        adresses.append(m.group(1))
+                    m = _MAC.match(ligne)
+                    if m:
+                        mac = m.group(1).lower()
+        except OSError:
+            continue
+        if not _NOM.match(nom):
+            continue
+        for a in adresses:
+            ips[a] = nom
+        if mac:
+            macs[mac] = nom
+    return {"ips": ips, "macs": macs}
+
+
+def ecrire(data: dict, chemin: str = SORTIE) -> None:
+    tmp = chemin + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, sort_keys=True)
+    os.chmod(tmp, 0o644)
+    try:
+        import pwd
+        u = pwd.getpwnam("secubox")
+        os.chown(tmp, u.pw_uid, u.pw_gid)
+    except (KeyError, PermissionError):
+        pass
+    os.replace(tmp, chemin)
+
+
+if __name__ == "__main__":
+    try:
+        ecrire(inventaire())
+    except OSError as e:
+        print(f"secubox-nac-lxc-names : {e}", file=sys.stderr)
+        sys.exit(1)

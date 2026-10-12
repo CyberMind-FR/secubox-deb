@@ -16,4 +16,6 @@ systemctl disable secubox-nac.service 2>/dev/null || true
 # for it here).
 systemctl stop    secubox-presence-report.timer 2>/dev/null || true
 systemctl disable secubox-presence-report.timer 2>/dev/null || true
+systemctl stop    secubox-nac-lxc-names.timer 2>/dev/null || true
+systemctl disable secubox-nac-lxc-names.timer 2>/dev/null || true
 #DEBHELPER#

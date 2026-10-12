@@ -42,6 +42,11 @@ case "$1" in
     systemctl enable secubox-presence-report.timer 2>/dev/null || true
     systemctl start  secubox-presence-report.timer 2>/dev/null || true
 
+    # #2445 : inventaire des conteneurs LXC (noms par adresse) ; un premier passage tout de suite, puis toutes les 5 minutes
+    systemctl enable secubox-nac-lxc-names.timer 2>/dev/null || true
+    systemctl start  secubox-nac-lxc-names.timer 2>/dev/null || true
+    systemctl start  secubox-nac-lxc-names.service 2>/dev/null || true
+
     # #1766 : la table `inet secubox_nac`, ses règles et ses éléments sont portés par
     # /etc/nftables.d/secubox-nac.nft et appliqués par secubox-nac-apply (root, étroit) à
     # partir de /var/lib/secubox/nac/nft-desired.json. Avant : table créée à chaud ici,
