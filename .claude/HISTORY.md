@@ -735,3 +735,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Threats, bannir 30 jours (closes #2465)
 - secubox-threats 1.5.0 : bouton Bannir 30 j par adresse publique (alertes et IOC IP), confirmation intégrée, POST /api/v1/waf/ban (30d) validé par wafctl ; erreurs réelles rendues. 6 tests navigateur.
+
+## 2026-10-12 — CDN, supervision des caches réels (closes #2467)
+- secubox-cdn 1.4.0 : GET /caches (taille, fichiers, activité de chaque cache de /var/cache/secubox, illisible = null) ; page Aurora ; politiques CDN signalées non appliquées. 10 tests.

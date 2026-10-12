@@ -45,3 +45,7 @@ Configuration file: `/etc/secubox/cdn.toml`
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Caches de la box (1.4.0)
+
+`GET /api/v1/cdn/caches` (lecture seule, JWT) : taille, nombre de fichiers et dernière activité de chaque cache de `/var/cache/secubox`. Un dossier fermé au service rend `lisible: false` et des mesures `null`. Les politiques CDN de `/etc/secubox/cdn.json` sont enregistrées mais lues par aucun moteur : elles ne changent rien au trafic.

@@ -574,4 +574,28 @@ async def remove_exclusion(domain: str, user=Depends(require_jwt)):
     return {"status": "ok", "exclude_domains": cfg["exclude_domains"]}
 
 
+# ── Supervision des caches réels (#2467) ────────────────────────────────────────────────────────────────────────────────────────────────────
+_caches_cache: dict = {"t": 0.0, "v": None}
+_caches_verrou = None
+
+
+@router.get("/caches")
+async def caches_reels(user=Depends(require_jwt)):
+    """Taille, fichiers et âge des caches de /var/cache/secubox (lecture seule), plus l'état des politiques CDN enregistrées. Le parcours part dans un thread (la boucle de
+    l'agrégateur n'attend jamais le disque), avec un cache de 30 s et un seul vol."""
+    global _caches_verrou
+    from . import caches as _c
+    if _caches_verrou is None:
+        _caches_verrou = asyncio.Lock()
+    async with _caches_verrou:
+        if _caches_cache["v"] is None or time.monotonic() - _caches_cache["t"] > 30:
+            _caches_cache["v"] = await asyncio.to_thread(_c.lister)
+            _caches_cache["t"] = time.monotonic()
+        v = _caches_cache["v"]
+    conf = _conf()
+    return {**v, "politiques": {"nombre": len(conf.get("policies", [])), "regles": len(conf.get("rules", [])), "actif": bool(conf.get("enabled")),
+                                "appliquees": False,
+                                "note": "Enregistrées dans /etc/secubox/cdn.json mais lues par aucun moteur de cache : elles ne changent rien au trafic."}}
+
+
 app.include_router(router)
