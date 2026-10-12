@@ -753,3 +753,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Automesh en lite (closes #2475)
 - secubox-p2p 1.13.0 : code d'invitation unique (adresse + jeton + somme), join-with-code, jonction automatique au démarrage (secubox-automesh, appel sortant, code supprimé après usage). secubox-lite 1.8.0 : embarque secubox-p2p et secubox-assist. Dossier docs/dossiers/automesh.md. À valider de bout en bout sur deux box ; dépôt du code par Auto-Load et découverte mDNS : phase suivante.
+
+## 2026-10-12 — Surf, vidéo d'un article BFM (closes #2479)
+- secubox-surf 1.0.33 : le conteneur Bitmovin sans `<video>` est ranimé à partir de son `data-video-url` (HLS via hls.js, relayé par l'origine surf) ; jamais un autre média. 7 tests.

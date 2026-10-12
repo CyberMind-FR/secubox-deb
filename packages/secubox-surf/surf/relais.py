@@ -1049,12 +1049,53 @@ _LECTEUR = """
 """
 
 
+# ── LE CONTENEUR SANS <video> (#2479) ───────────────────────────────────────────────────────────────────────────────────────────────────────
+# Autre cas, même symptôme : sur un article vidéo BFM, le rendu headless n'a JAMAIS construit le `<video>` (le lecteur Bitmovin attend un geste de l'utilisateur).
+# Il reste le conteneur `player_bitmovin_<id>` avec son image d'attente. Mais la page porte l'URL du manifeste, avec son jeton, dans `data-video-url` du conteneur : c'est
+# la page elle-même qui désigne CE média, pour CE lecteur. On ranime donc ce conteneur à partir de cet attribut, et de lui seul : ni la radio du pied de page, ni une
+# réclame. Une URL qui n'est pas un média (javascript:, data:, une page HTML) est refusée.
+_RE_CONTENEUR = re.compile(
+    r'(<div\b(?=[^>]*\bclass\s*=\s*(["\'])[^"\']*\bbitmovin-player-container\b)[^>]*>)', re.IGNORECASE)
+_RE_A_VIDEO_URL = re.compile(r'\sdata-video-url\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
+_RE_A_PLACEHOLDER = re.compile(r'<img\b[^>]*\bclass\s*=\s*["\'][^"\']*bitmovin-placeholder[^"\']*["\'][^>]*>', re.IGNORECASE)
+
+
+def _ranime_conteneurs(corps: str, base: str, sur_hote) -> tuple[str, bool]:
+    trouve = [False]
+
+    def _div(m):
+        balise = m.group(1)
+        v = _RE_A_VIDEO_URL.search(balise)
+        if not v:
+            return balise
+        u = html.unescape(v.group(2)).strip()
+        if not re.match(r"https?://", u, re.IGNORECASE) or not _RE_URL_MEDIA.fullmatch(u):
+            return balise
+        suite = corps[m.end():m.end() + 1500]
+        if "<video" in suite.split("</div>", 1)[0].lower():
+            return balise                                  # un lecteur est déjà là (cas `blob:` ou page déjà ranimée)
+        relaye, _ = _map_url(u, base, sur_hote)
+        img = _RE_A_PLACEHOLDER.search(suite)
+        poster = ""
+        if img:
+            s = _RE_A_SRC.search(img.group(0))
+            poster = s.group(2) if s else ""
+        trouve[0] = True
+        return (balise + '<video data-sbx-media="%s" data-sbx-src="%s" controls preload="metadata" playsinline poster="%s"></video>'
+                % ("hls" if _hls(u) else "direct", html.escape(relaye, quote=True), html.escape(poster, quote=True)))
+
+    return _RE_CONTENEUR.sub(_div, corps), trouve[0]
+
+
 def ranime_media(corps: str, base: str, sur_hote, observes=()) -> str:
     """Rend une source jouable aux médias d'une copie carbone (cf. ci-dessus)."""
+    corps, conteneur = _ranime_conteneurs(corps, base, sur_hote)
     cands = [u for u in observes if u] or _medias_du_dom(corps)
     if not cands:
+        if conteneur:
+            return corps.replace("</body>", _LECTEUR + "</body>", 1) if "</body>" in corps else corps + _LECTEUR
         return corps
-    trouve = [False]
+    trouve = [conteneur]
 
     def _balise(m):
         balise, attrs = m.group(1), m.group(2)

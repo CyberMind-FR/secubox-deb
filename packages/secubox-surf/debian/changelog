@@ -1,3 +1,15 @@
+secubox-surf (1.0.33-1~bookworm1) bookworm; urgency=medium
+
+  * Vidéo d'un article BFM absente de la copie figée (#2479) : le rendu headless ne construit pas
+    le `<video>` (le lecteur Bitmovin attend un geste) ; il reste le conteneur player_bitmovin_<id>
+    et son image d'attente. La page porte pourtant l'URL du manifeste, avec son jeton, dans
+    `data-video-url` : le conteneur est ranimé à partir de cet attribut seulement (HLS via hls.js
+    ou fichier direct, URL relayée par l'origine surf, image d'attente en affiche). Jamais un
+    autre média de la page (direct radio, réclame) ; une URL qui n'est pas un média est refusée ;
+    le cas historique `blob:` est inchangé. 7 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 11:08:24 +0200
+
 secubox-surf (1.0.32-1~bookworm1) bookworm; urgency=medium
 
   * Socket Unix /run/secubox/surf.sock a la place du port TCP 127.0.0.1:9082 (regle du projet, #2050) : socket retiree a la main avant le demarrage (ExecStartPre=+), chmod 660 apres le bind, Group=secubox, ReadWritePaths /run/secubox. Le vhost nginx vise le socket ; la mise a jour redemarre le service avant de recharger nginx.
