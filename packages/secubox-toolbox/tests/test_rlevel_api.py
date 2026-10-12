@@ -350,3 +350,16 @@ def test_post_me_ctl_failure_surfaces_502(tmp_path, monkeypatch):
     }, rc=1)
     r = client.post("/rlevel/me", headers={"X-R3-Peer": "10.99.1.5"}, json={"chosen": "active"})
     assert r.status_code == 502
+
+
+def test_peers_porte_l_empreinte_de_la_table_des_clients_2432(tmp_path, monkeypatch):
+    """#2432 : l'onglet Clients joint la profondeur d'inspection par `mac_hash` = sha256(clé publique)[:16], la clé de la table des clients."""
+    import hashlib
+    _write_wg_peers(tmp_path, monkeypatch, {PK1: {"ip": "10.99.1.5", "label": "phone-A"}})
+    _stub_ctl(monkeypatch, doc={"defaults": {"mode": "passive", "floor": "passive"},
+                                "peers": {PK1: {"chosen": "reel", "forced": "active", "floor": "passive"}}})
+    r = client.get("/rlevel/peers", headers={"host": "admin.gk2.secubox.in"})
+    assert r.status_code == 200
+    p = r.json()["peers"][0]
+    assert p["mac_hash"] == hashlib.sha256(PK1.encode()).hexdigest()[:16]
+    assert (p["chosen"], p["forced"], p["effective"]) == ("reel", "active", "active")     # forcé l'emporte

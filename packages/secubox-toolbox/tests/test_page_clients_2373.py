@@ -69,3 +69,44 @@ def test_oublier_des_clients_est_branche_et_confirme_dans_la_page_2379():
     for ident in ("oublieInact", "oublieTous", "confOubli", "data-oubli", "data-oublioui"):
         assert ident in SRC, ident
     assert "confirm(" not in SRC and "alert(" not in SRC
+
+
+def test_profondeur_d_inspection_dans_l_onglet_clients_2432():
+    """#2432 : un client R3 montre et règle sa profondeur (plancher, forcé) ; plus intrusif demande une confirmation INTÉGRÉE ; annuler n'écrit rien."""
+    import concurrent.futures
+    import pathlib
+    import pytest
+    sync_api = pytest.importorskip("playwright.sync_api")
+    page = pathlib.Path(__file__).resolve().parents[1] / "www" / "toolbox" / "clients.html"
+
+    def tache():
+        with sync_api.sync_playwright() as p:
+            try:
+                nav = p.chromium.launch()
+            except Exception as e:
+                return ("skip", str(e))
+            pg = nav.new_page()
+            erreurs = []
+            pg.on("pageerror", lambda e: erreurs.append(str(e)))
+            pg.goto("file://" + str(page) + "?demo=1")
+            pg.wait_for_timeout(500)
+            r = {"blocs": pg.evaluate("document.querySelectorAll('.rl').length"),
+                 "effectifs": pg.evaluate("[...document.querySelectorAll('.rl .pastille')].map(e => e.textContent)")}
+            h = "3f9a1c7e5b2d8a40"
+            pg.select_option(f'select[data-rl-forced="{h}"]', "reel")
+            pg.click(f'[data-rl-apply="{h}"]')
+            r["confirmation"] = pg.evaluate("(document.querySelector('.rl .conf') || {}).textContent || ''")
+            pg.click('[data-rl-ko="1"]')
+            r["apres_annuler"] = pg.evaluate("!!document.querySelector('.rl .conf')")
+            r["aucune_confirm_native"] = True
+            nav.close()
+            return ("ok", r, erreurs)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        res = ex.submit(tache).result(timeout=60)
+    if res[0] == "skip":
+        pytest.skip(res[1])
+    r, erreurs = res[1], res[2]
+    assert erreurs == [], erreurs
+    assert r["blocs"] == 2 and r["effectifs"] == ["Passive", "Active"]
+    assert "PLUS profonde" in r["confirmation"] and "Réelle" in r["confirmation"]
+    assert r["apres_annuler"] is False

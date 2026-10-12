@@ -58,6 +58,7 @@
   .outils input[type=search]{flex:1 1 180px;min-width:0;font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:5px 10px}
   .outils select{font:inherit;font-size:.78rem;color:var(--texte);background:rgba(6,13,27,.9);border:1px solid var(--trait2);border-radius:8px;padding:5px 8px}
   .hw{font-size:.72rem;color:var(--doux);margin:2px 0 4px;overflow-wrap:anywhere} .hw b{color:var(--cyan);font-weight:600}
+  .rl{margin-top:6px;padding:6px 8px;border:1px dashed var(--trait2);border-radius:8px} .rlt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.76rem}
   .puces{display:flex;flex-wrap:wrap;gap:6px}
   .puce{border-radius:999px;padding:2px 10px;font-size:.72rem}
   .puce.on{background:rgba(41,182,246,.28);border-color:var(--cyan)}
@@ -138,7 +139,7 @@
   var ORDRE=['r0','r1','r2','r3'];
   var ETAT={actif:['Actif','#2ecc71'],idle:['Inactif','#ffd23f'],'expiré':['Expiré','#6f84a8'],quarantine:['Quarantaine','#ff4d5e']};
 
-  var etat={fant:false,clients:null,metrics:null,erreur:null,fNiv:'',fEtat:'',confirm:null,confirmOubli:null,oubli:null,tous:false,detail:null};
+  var etat={rl:null,confRl:null,fant:false,clients:null,metrics:null,erreur:null,fNiv:'',fEtat:'',confirm:null,confirmOubli:null,oubli:null,tous:false,detail:null};
 
   function rel(ts){
     if(!ts) return '—';
@@ -193,6 +194,44 @@
     return R;
   }
 
+  /* ---- profondeur d'inspection (R-level, #2432) ----
+     Le niveau R0 à R3 d'un client est son MODE D'ACCÈS ; ceci est la profondeur d'inspection à l'INTÉRIEUR du tunnel (clients R3).
+     Effectif = forcé s'il existe, sinon le choix du client ramené entre le plancher et « réel » (calculé par le serveur). */
+  var RL={off:['Aucune','Pas d’interception : le trafic ne passe pas par l’inspection.','#6f84a8'],passive:['Passive','Ne déchiffre jamais : le trafic passe tel quel, seul ce qui est visible sans déchiffrer est observé.','#29b6f6'],
+          active:['Active','Déchiffre et inspecte, mais ne bloque rien (un blocage est seulement noté). Un hôte épinglé n’est jamais déchiffré.','#ff9f1c'],reel:['Réelle','Inspection complète avec application des blocages.','#ff4d5e']};
+  var RL_ORDRE=['off','passive','active','reel'];
+  function indexRl(d){
+    if(!d||!Array.isArray(d.peers)) return null;
+    var m={};d.peers.forEach(function(p){if(p.mac_hash) m[p.mac_hash]=p;});return m;
+  }
+  function rlBloc(h){
+    var p=etat.rl&&etat.rl[h];if(!p) return '';
+    var ef=RL[p.effective]||[p.effective||'—','',''],cf=etat.confRl&&etat.confRl.h===h,br=function(k){return (RL[k]||[k||'—'])[0];};
+    var opt=function(sel,vide){return (vide?'<option value="">'+vide+'</option>':'')+RL_ORDRE.map(function(k){return '<option value="'+k+'"'+(k===sel?' selected':'')+'>'+esc(RL[k][0])+'</option>';}).join('');};
+    return '<div class="rl" data-rl="'+esc(h)+'"><div class="rlt"><b>Profondeur d’inspection</b><span class="pastille" title="'+esc(ef[1])+'" style="color:'+ef[2]+';border-color:'+ef[2]+';background:'+ef[2]+'22">'+esc(ef[0])+'</span>'
+      +(p.live?'<span class="sep">tunnel actif</span>':'')+'</div>'
+      +'<div class="sep">Choisi : '+esc(br(p.chosen))+' · plancher : '+esc(br(p.floor))+' · forcé : '+esc(p.forced?br(p.forced):'aucun')+' — '+esc(ef[1])+'</div>'
+      +(cf?'<div class="conf"><div>'+esc(etat.confRl.msg)+'</div><div class="b"><button type="button" class="btn dg" data-rl-ok="'+esc(h)+'">Confirmer</button><button type="button" class="btn" data-rl-ko="1">Annuler</button></div></div>'
+         :'<div class="acts"><span class="sep">Plancher :</span><select data-rl-floor="'+esc(h)+'" aria-label="Plancher">'+opt(p.floor)+'</select>'
+          +'<span class="sep">Forcer :</span><select data-rl-forced="'+esc(h)+'" aria-label="Profondeur forcée">'+opt(p.forced||'','aucun')+'</select>'
+          +'<button type="button" class="btn" data-rl-apply="'+esc(h)+'">Appliquer</button></div>')+'</div>';
+  }
+  function rlDemande(h){
+    var p=etat.rl&&etat.rl[h];if(!p) return;
+    var fl=document.querySelector('select[data-rl-floor="'+h+'"]'),fo=document.querySelector('select[data-rl-forced="'+h+'"]');if(!fl||!fo) return;
+    var plancher=fl.value,force=fo.value||null,rang=function(k){return RL_ORDRE.indexOf(k);};
+    var cible=force||p.effective;
+    var plus=rang(cible)>rang(p.effective)&&rang(cible)>=rang('active');            // plus intrusif qu'aujourd'hui, au moins « active »
+    var msg='Régler la profondeur de ce client : plancher « '+RL[plancher][0]+' », forcé « '+(force?RL[force][0]:'aucun')+' ».'+(plus?' L’inspection devient PLUS profonde : '+RL[cible][1]:'');
+    if(plus){etat.confRl={h:h,plancher:plancher,force:force,msg:msg};rend();return;}
+    rlAppliquer(h,plancher,force);
+  }
+  function rlAppliquer(h,plancher,force){
+    var p=etat.rl&&etat.rl[h];etat.confRl=null;if(!p){rend();return;}
+    if(DEMO){msg('Démonstration : aucune écriture.','');rend();return;}
+    ecrire(API+'/rlevel/peer',{pubkey:p.pubkey,floor:plancher,forced:force},function(){return 'Profondeur d’inspection enregistrée.';},'Profondeur refusée');
+    rend();
+  }
   function carte(c){
     var l=niv(c),N=NIV[l],st=statut(c),E=ETAT[st]||[st||'—','#6f84a8'],h=String(c.mac_hash||''),sc=c.score==null?null:num(c.score);
     var sCol=sc==null?'#6f84a8':sc<30?'#2ecc71':sc<70?'#ffd23f':'#ff4d5e';
@@ -209,6 +248,7 @@
       +'<div title="'+esc(complet(c.first_seen))+'">Premier passage : <b>'+esc(rel(c.first_seen))+'</b></div></div>'
       +'<div title="Score de risque (0 à 100)"><div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--doux);margin-bottom:2px"><span>Score de risque</span><b style="color:var(--texte)">'+(sc==null?'—':fmt(sc))+'</b></div><div class="barre"><i style="width:'+(sc==null?0:Math.max(3,Math.min(100,sc)))+'%;background:'+sCol+'"></i></div></div>'
       +'<div class="acts"><span class="sep">Niveau :</span>'+sw+'</div>'
+      +rlBloc(h)
       +'<div class="acts">'+lien('🕸️ Carto','/social')+lien('PDF','/report')+'<a href="#" data-ev="'+esc(h)+'">Events</a><a href="#" data-raz="'+esc(h)+'" style="color:var(--rouge)" title="Efface ses statistiques, le client reste">↺ Reset</a><a href="#" data-oubli="'+esc(h)+'" style="color:var(--rouge)" title="Retire le client de la liste">🗑 Oublier</a></div>'
       +(cfo?'<div class="conf"><div>Oublier le client <code>'+esc(h.slice(0,16))+'…</code> ? Sa ligne, ses événements et son graphe social sont supprimés ; il reviendra avec son activité (niveau R par défaut). Irréversible.</div><div class="bt"><button type="button" class="danger" data-oublioui="'+esc(h)+'">Oui, oublier ce client</button><button type="button" data-razno="1">Annuler</button></div></div>':'')+(cf?'<div class="conf"><div>Remettre à zéro les statistiques du client <code>'+esc(h.slice(0,16))+'…</code> ? Cela efface sa cartographie sociale et ses événements. Irréversible.</div><div class="bt"><button type="button" class="danger" data-razoui="'+esc(h)+'">Oui, remettre à zéro</button><button type="button" data-razno="1">Annuler</button></div></div>':'')
       +'</div>';
@@ -268,15 +308,18 @@
   DEMO_D.clients.push(Object.assign(dm('0b6e1f7d3a95c248','10.99.1.13','iPhone (Safari)','📱','r3',9,'expiré',86400*2,86400*30,'🇫🇷','FR','Free SAS'),{appareil:'iphone-exemple',appareil_fabricant:'Apple',appareil_os:'iOS',appareil_cle:'demo-iphone',tunnel:'inactif'}));
   DEMO_D.clients.push(Object.assign(dm('98129641d0e7a3b5','?','','📱','r3',0,'expiré',86400,86400*3,'','','—'),{tunnel:'aucun'}));
   DEMO_D.count=DEMO_D.clients.length;
+  var DEMO_RL={peers:[{pubkey:'cle-publique-exemple-1',mac_hash:'3f9a1c7e5b2d8a40',chosen:'passive',floor:'passive',forced:null,effective:'passive',live:true},{pubkey:'cle-publique-exemple-2',mac_hash:'c2e5b7194a0d6f83',chosen:'reel',floor:'passive',forced:'active',effective:'active',live:false}],defaults:{mode:'passive',floor:'passive'}};
   var DEMO_M={events_24h_total:18432,clients_active:5};
 
   function jget(u){return fetch(API+u,{credentials:'same-origin'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
   function charge(){
-    if(DEMO){etat.clients=DEMO_D.clients;etat.metrics=DEMO_M;rend();return Promise.resolve();}
+    if(DEMO){etat.clients=DEMO_D.clients;etat.metrics=DEMO_M;etat.rl=indexRl(DEMO_RL);rend();return Promise.resolve();}
     return Promise.all([
       jget('/admin/clients/rich').catch(function(e){return {__error:e.message};}),
-      jget('/admin/metrics').catch(function(){return null;})
+      jget('/admin/metrics').catch(function(){return null;}),
+      jget('/rlevel/peers').catch(function(){return null;})
     ]).then(function(r){
+      etat.rl=indexRl(r[2]);
       var d=r[0],rows=d&&d.clients?d.clients:(Array.isArray(d)?d:null);
       etat.clients=rows;etat.erreur=rows?null:(d&&d.__error)||'pas de données';etat.metrics=r[1];rend();
     });
@@ -348,6 +391,9 @@
   /* ---- interactions ---- */
   document.addEventListener('click',function(ev){
     var t=ev.target.closest&&ev.target.closest('button,a');if(!t) return;
+    if(t.dataset.rlApply){rlDemande(t.dataset.rlApply);return;}
+    if(t.dataset.rlKo){etat.confRl=null;rend();return;}
+    if(t.dataset.rlOk&&etat.confRl&&etat.confRl.h===t.dataset.rlOk){rlAppliquer(etat.confRl.h,etat.confRl.plancher,etat.confRl.force);return;}
     if(t.dataset.niveau){setLevel(t.dataset.h,t.dataset.niveau);return;}
     if(t.dataset.ev){ev.preventDefault();events(t.dataset.ev);return;}
     if(t.dataset.raz){ev.preventDefault();etat.confirm=t.dataset.raz;rendListe();return;}

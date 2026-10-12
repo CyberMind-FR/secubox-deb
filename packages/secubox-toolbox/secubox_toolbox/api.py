@@ -4623,6 +4623,8 @@ async def rlevel_peers(request: Request) -> dict:
         chosen, forced, floor = _rlevel_peer_entry(doc, pk)
         peers.append({
             "pubkey": pk,
+            # #2432 : la même empreinte que la table des clients (sha256(clé publique)[:16]) : l'onglet Clients y joint la profondeur.
+            "mac_hash": __import__("hashlib").sha256(pk.encode()).hexdigest()[:16],
             "label": meta.get("label"),
             "chosen": chosen,
             "forced": forced,
