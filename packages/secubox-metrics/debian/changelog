@@ -1,3 +1,9 @@
+secubox-metrics (1.21.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix: la carte « Origine des attaques » lit les pays sur /api/v1/waf/stats (comme la vue d ensemble du WAF) : la route /waf_stats de metrics ne donne que des compteurs, la carte restait vide (ref #2404)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:28:07 +0200
+
 secubox-metrics (1.21.1-1~bookworm1) bookworm; urgency=medium
 
   * feat: visiteurs du reseau local comptes a part des visiteurs publics (adresses privees distinctes, hors boucle locale et adresses propres de la box), affiches sous les visiteurs uniques (ref #2404)
