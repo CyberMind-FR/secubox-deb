@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — secubox-kiosk 1.0.1 et premier-pas 0.5.5 : session du kiosque (ref #2506)
+
+Sur la RPi400, le lanceur démarrait Xorg puis affichait « This account is currently not available » : `secubox-kiosk-setup` créait `secubox-kiosk` en `nologin` et le lanceur ouvre la session par `su -l`. Le setup crée (et répare) le compte en `/bin/bash`, comme `build-live-usb.sh` ; le lanceur passe `su -s /bin/bash` et ne dépend plus du shell du compte. Tests `packages/secubox-kiosk/tests/test_paquet_2504.py`.
+
 ## 2026-10-12 — secubox-kiosk 1.0.0 : l'outil d'installation du kiosque devient un paquet (ref #2504)
 
 `secubox-kiosk-setup` vivait dans `image/sbin/` et seul `build-image.sh` le copiait ; sur une box déjà flashée (RPi400 alpha12 sans kiosque) l'outil manquait et `apt-get install secubox-kiosk` répondait « paquet introuvable ». Nouveau paquet `secubox-kiosk` (arch all) : `/usr/sbin/secubox-kiosk-setup`, une seule copie (`build-image.sh` et `build-live-usb.sh` la prennent dans le paquet). Le lanceur appelé par l'unité générée reste celui de `secubox-premier-pas` (dépendance, pas de second exemplaire). Tests `packages/secubox-kiosk/tests/test_paquet_2504.py`.

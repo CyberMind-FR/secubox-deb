@@ -126,11 +126,19 @@ setup_kiosk_user() {
     # Create kiosk user with UID 1000 if not exists
     if ! id "$KIOSK_USER" &>/dev/null; then
         # Use UID 1000 to match XDG_RUNTIME_DIR in service file
-        useradd -r -u 1000 -m -d "$KIOSK_HOME" -s /usr/sbin/nologin \
+        useradd -r -u 1000 -m -d "$KIOSK_HOME" -s /bin/bash \
             -G video,audio,input,render "$KIOSK_USER" 2>/dev/null || \
-        useradd -r -m -d "$KIOSK_HOME" -s /usr/sbin/nologin \
+        useradd -r -m -d "$KIOSK_HOME" -s /bin/bash \
             -G video,audio,input,render "$KIOSK_USER"
         ok "Created kiosk user: $KIOSK_USER"
+    fi
+
+    # Le lanceur ouvre la session par `su -l` : un compte en nologin repond
+    # « This account is currently not available » (#2506). Repare aussi les
+    # comptes crees avant ce correctif.
+    if [[ "$(getent passwd "$KIOSK_USER" | cut -d: -f7)" == */nologin ]]; then
+        usermod -s /bin/bash "$KIOSK_USER"
+        ok "Shell of $KIOSK_USER set to /bin/bash"
     fi
 
     # Get actual UID

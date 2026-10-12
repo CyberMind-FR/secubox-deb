@@ -787,7 +787,7 @@ start_display() {
 
     # Run the session as kiosk user
     # exec replaces this process - systemd keeps tracking the session
-    exec su -l "$KIOSK_USER" -c "
+    exec su -s /bin/bash -l "$KIOSK_USER" -c "
         export DISPLAY=:0
         export XAUTHORITY='$xauth_file'
         export XDG_RUNTIME_DIR='$runtime_dir'
