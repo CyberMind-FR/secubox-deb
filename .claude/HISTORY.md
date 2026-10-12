@@ -720,3 +720,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Hall, états de la vue d'ensemble (closes #2455)
 - secubox-webos 1.9.10 : modules montés par l'agrégateur comptés en service (HAProxy, DNS Guard, Hardening, Exposure, IP Blocklist, Interceptor) ; R-Level suit le Toolbox.
+
+## 2026-10-12 — Modes réseau, page Aurora et corrections (closes #2457)
+- secubox-netmodes 1.3.0 : page Aurora sur données réelles ; formulaires factices et routes inexistantes retirés ; mode jamais inventé (« inconnu » sans état) ; WAN lu dans la route par défaut ; confirmations intégrées. 12 tests.

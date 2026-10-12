@@ -19,7 +19,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from secubox_core.auth   import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
-import subprocess, shutil, json
+import asyncio, subprocess, shutil, json
 from datetime import datetime
 
 app = FastAPI(title="secubox-netmodes", version="1.0.0",
@@ -58,7 +58,9 @@ AVAILABLE_MODES = {
 def _state() -> dict:
     if STATE_FILE.exists():
         return json.loads(STATE_FILE.read_text())
-    return {"current_mode": "router", "pending_mode": None, "last_change": None}
+    # Aucun état enregistré : on NE SAIT PAS quel mode tourne (la box n'a jamais changé de mode par ce module). « router » n'est pas une
+    # vérité par défaut, c'était une valeur inventée qui s'affichait comme un fait (#2457).
+    return {"current_mode": None, "pending_mode": None, "last_change": None}
 
 
 def _save_state(s: dict):
@@ -103,18 +105,36 @@ def _ifaces() -> list[dict]:
 
 # ── GET ───────────────────────────────────────────────────────────
 
+def _route_defaut() -> dict:
+    """Interface et passerelle de la route par défaut de plus petite métrique (le WAN réel), lues dans `ip -j route`."""
+    try:
+        r = subprocess.run(["ip", "-j", "-4", "route", "show", "default"], capture_output=True, text=True, timeout=3)
+        routes = [x for x in json.loads(r.stdout) if x.get("dev")]
+        if not routes:
+            return {"interface": None, "passerelle": None}
+        best = min(routes, key=lambda x: int(x.get("metric", 0) or 0))
+        return {"interface": best.get("dev"), "passerelle": best.get("gateway")}
+    except Exception:
+        return {"interface": None, "passerelle": None}
+
+
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     s = _state()
     cfg = get_config("global")
     uptime = int(float(Path("/proc/uptime").read_text().split()[0]))
+    # Les appels `ip` sont bloquants : hors de la boucle (le module est servi dans l'agrégateur, une boucle prise bloque tout le parc).
+    ifaces = await asyncio.to_thread(_ifaces)
+    wan = await asyncio.to_thread(_route_defaut)
     return {
+        "mode_connu":    s["current_mode"] is not None,
+        "wan":           wan,
         "current_mode":  s["current_mode"],
         "pending_mode":  s.get("pending_mode"),
         "last_change":   s.get("last_change"),
         "hostname":      cfg.get("hostname", "secubox"),
         "uptime_sec":    uptime,
-        "interfaces":    _ifaces(),
+        "interfaces":    ifaces,
         "wireguard_ok":  bool(shutil.which("wg")),
     }
 
@@ -123,6 +143,8 @@ async def status(user=Depends(require_jwt)):
 async def get_current_mode(user=Depends(require_jwt)):
     s = _state()
     mode = s["current_mode"]
+    if mode is None:
+        return {"mode": None, "inconnu": True}
     info = AVAILABLE_MODES.get(mode, {})
     return {"mode": mode, **info}
 
@@ -134,7 +156,7 @@ async def get_available_modes(user=Depends(require_jwt)):
 
 @router.get("/get_interfaces")
 async def get_interfaces(user=Depends(require_jwt)):
-    return _ifaces()
+    return await asyncio.to_thread(_ifaces)
 
 
 @router.get("/preview_changes")

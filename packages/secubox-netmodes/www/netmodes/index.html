@@ -4,693 +4,289 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  SecuBox — Modes réseau, profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES : GET /api/v1/netmodes/status, /get_available_modes, /preview_changes?mode=, /validate_config, /detect.
+  Actions (confirmation INTÉGRÉE, jamais confirm()) : POST /apply_mode, /rollback. Le mode n'est jamais inventé : sans état enregistré, « inconnu ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Network Modes</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Modes réseau</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
-        .main { flex: 1; margin-left: 220px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
-        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
-        .header-actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn.warning { background: rgba(210,153,34,0.1); border-color: var(--yellow); color: var(--yellow); }
-        .content { padding: 1.5rem; }
-        .warning-box { background: rgba(210,153,34,0.1); border: 1px solid var(--yellow); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
-        .warning-box p { color: var(--yellow); font-size: 0.9rem; }
-        .mode-selector { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .mode-card { background: var(--bg-card); border: 2px solid var(--border); border-radius: 8px; padding: 1.25rem; cursor: pointer; transition: all 0.2s; text-align: center; }
-        .mode-card:hover { border-color: var(--primary); }
-        .mode-card.active { border-color: var(--green); background: rgba(63,185,80,0.05); }
-        .mode-card .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
-        .mode-card h3 { color: var(--cyan); margin-bottom: 0.5rem; font-size: 1rem; }
-        .mode-card p { color: var(--text-dim); font-size: 0.8rem; line-height: 1.4; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 1rem; font-weight: 600; }
-        .interface-item { background: rgba(255,255,255,0.02); border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem; }
-        .interface-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .interface-header h4 { font-size: 0.95rem; }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
-        .badge.up { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.down { background: rgba(248,81,73,0.2); color: var(--red); }
-        .interface-details { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-dim); font-size: 0.9rem; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .diagram { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; text-align: center; }
-        .scroll-list { max-height: 300px; overflow-y: auto; }
-        @media (max-width: 1200px) { .mode-selector { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
     
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        /* Stat cards for auto-detect */
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .stat-card .label {
-            font-size: 0.7rem;
-            letter-spacing: 0.15em;
-            color: var(--p31-dim);
-            margin-bottom: 0.5rem;
-        }
-        .stat-card .value {
-            font-size: 1.1rem;
-            font-weight: bold;
-            font-family: 'Courier Prime', monospace;
-        }
-        .stat-card.cyan .value { color: var(--p31-peak); text-shadow: 0 0 8px var(--p31-peak); }
-        .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.purple .value { color: #a371f7; }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            #detect-result { grid-template-columns: repeat(2, 1fr) !important; }
-        }
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
+            .modes{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        .mode{border:1px solid var(--trait);border-radius:10px;padding:10px;background:rgba(8,18,38,.5);display:grid;gap:6px;align-content:start} .mode.cur{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(41,182,246,.3)}
+        .mode b{font-size:.9rem} .mode small{color:var(--doux);font-size:.74rem;line-height:1.35} .mode .row{display:flex;gap:6px;flex-wrap:wrap}
+        table.t{width:100%;border-collapse:collapse;font-size:.78rem} table.t th{color:var(--faible);font-weight:600;text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px}
+        table.t td{padding:5px 8px;border-top:1px solid rgba(86,150,255,.12);overflow-wrap:anywhere} .tw{overflow-x:auto}
+        .pill.neutre{color:var(--doux);border-color:var(--faible);background:rgba(159,179,214,.1)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title"><h1>🌐 Network Modes</h1></div>
-            <div class="header-actions">
-                <button class="btn primary" onclick="autoDetect()" id="btn-autodetect">⚡ Auto-Detect</button>
-                <button class="btn success" onclick="applyConfig()">✓ Apply</button>
-                <button class="btn" onclick="testConfig()">🔍 Test</button>
-                <button class="btn warning" onclick="resetNetwork()">↺ Reset</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.4" fill="rgba(41,182,246,.14)"/><circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="19" r="2.4"/><path d="M12 7.5v5M12 12.5l-6 4.5M12 12.5l6 4.5"/></svg>
+                <div><b>Modes réseau</b><small id="subline">Mode de la box, interfaces et connexion</small></div>
             </div>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, actions inertes</div>
+        <div class="info" id="inconnu" hidden>Le mode réseau de cette box n’est pas enregistré : elle n’a jamais changé de mode par ce module. Ce qui tourne réellement est lu dans les interfaces et la route par défaut ci-dessous.</div>
+        <div id="dialogue" role="alertdialog" aria-label="Confirmation" hidden></div>
 
-        <div class="content">
-            <!-- Auto-Detect Card -->
-            <div class="card" id="detect-card" style="margin-bottom: 1.5rem; display: none;">
-                <div class="card-header">
-                    <h2>⚡ Auto-Detection</h2>
-                    <span class="badge badge-green" id="detect-status">READY</span>
-                </div>
-                <div id="detect-result" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem;">
-                    <div class="stat-card cyan">
-                        <div class="label">BOARD</div>
-                        <div class="value" id="detect-board">-</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="label">WAN</div>
-                        <div class="value" id="detect-wan">-</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="label">LAN</div>
-                        <div class="value" id="detect-lan">-</div>
-                    </div>
-                    <div class="stat-card purple">
-                        <div class="label">SFP</div>
-                        <div class="value" id="detect-sfp">-</div>
-                    </div>
-                </div>
-                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-                    <button class="btn success" onclick="autoApply(false)">✓ Apply Detected Config</button>
-                    <button class="btn" onclick="autoApply(true)">👁 Preview YAML</button>
-                    <button class="btn" onclick="hideDetectCard()">✕ Dismiss</button>
-                </div>
-            </div>
-
-            <div class="warning-box">
-                <p>⚠️ Changing network mode will restart network services. Connection may be temporarily lost.</p>
-            </div>
-
-            <div class="mode-selector">
-                <div class="mode-card" id="mode-router" onclick="selectMode('router')">
-                    <div class="icon">🔀</div>
-                    <h3>Router Mode</h3>
-                    <p>NAT, DHCP server, firewall protection</p>
-                </div>
-                <div class="mode-card" id="mode-bridge" onclick="selectMode('bridge')">
-                    <div class="icon">🌉</div>
-                    <h3>Bridge Mode</h3>
-                    <p>Transparent bridge, same network segment</p>
-                </div>
-                <div class="mode-card" id="mode-gateway" onclick="selectMode('gateway')">
-                    <div class="icon">🚪</div>
-                    <h3>Gateway Mode</h3>
-                    <p>Multiple LAN segments, complex topologies</p>
-                </div>
-                <div class="mode-card" id="mode-ap" onclick="selectMode('ap')">
-                    <div class="icon">📡</div>
-                    <h3>Access Point</h3>
-                    <p>WiFi to wired bridge</p>
-                </div>
-            </div>
-
-            <div class="grid-2">
-                <div class="card">
-                    <div class="card-header"><h2>📡 Network Interfaces</h2></div>
-                    <div class="scroll-list" id="interfaces">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>⚙️ WAN Configuration</h2></div>
-                    <div class="form-group">
-                        <label>WAN Interface</label>
-                        <select id="wan-iface"><option value="eth0">eth0</option><option value="enp0s3">enp0s3</option></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Connection Type</label>
-                        <select id="wan-type" onchange="updateWanForm()">
-                            <option value="dhcp">DHCP (Automatic)</option>
-                            <option value="static">Static IP</option>
-                            <option value="pppoe">PPPoE</option>
-                        </select>
-                    </div>
-                    <div id="wan-static-form" style="display: none;">
-                        <div class="form-row">
-                            <div class="form-group"><label>IP Address</label><input type="text" id="wan-ip" placeholder="192.168.1.2"></div>
-                            <div class="form-group"><label>Netmask</label><input type="text" id="wan-netmask" value="255.255.255.0"></div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group"><label>Gateway</label><input type="text" id="wan-gateway" placeholder="192.168.1.1"></div>
-                            <div class="form-group"><label>DNS</label><input type="text" id="wan-dns" value="8.8.8.8, 1.1.1.1"></div>
-                        </div>
-                    </div>
-                    <button class="btn primary" onclick="saveWan()">Save WAN</button>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>🏠 LAN Configuration</h2></div>
-                    <div class="form-group">
-                        <label>LAN Interfaces</label>
-                        <select id="lan-ifaces" multiple style="height: 80px;"><option value="eth1" selected>eth1</option><option value="enp0s8">enp0s8</option></select>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>LAN IP</label><input type="text" id="lan-ip" value="192.168.10.1"></div>
-                        <div class="form-group"><label>Netmask</label><input type="text" id="lan-netmask" value="255.255.255.0"></div>
-                    </div>
-                    <div class="form-group">
-                        <label><input type="checkbox" id="dhcp-enabled" checked> Enable DHCP Server</label>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>DHCP Start</label><input type="text" id="dhcp-start" value="192.168.10.100"></div>
-                        <div class="form-group"><label>DHCP End</label><input type="text" id="dhcp-end" value="192.168.10.200"></div>
-                    </div>
-                    <button class="btn primary" onclick="saveLan()">Save LAN</button>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>📊 Network Diagram</h2></div>
-                    <div class="diagram">
-                        <svg viewBox="0 0 400 150" style="max-width: 100%;">
-                            <rect x="10" y="55" width="70" height="40" rx="5" fill="#1e3a5f" stroke="var(--cyan)"/>
-                            <text x="45" y="80" fill="#fff" text-anchor="middle" font-size="11">Internet</text>
-                            <rect x="165" y="35" width="70" height="80" rx="5" fill="var(--bg-card)" stroke="var(--cyan)" stroke-width="2"/>
-                            <text x="200" y="70" fill="var(--cyan)" text-anchor="middle" font-size="11">SecuBox</text>
-                            <text x="200" y="90" fill="var(--text-dim)" text-anchor="middle" font-size="9" id="mode-label">Router</text>
-                            <rect x="320" y="30" width="70" height="30" rx="5" fill="var(--bg-dark)" stroke="var(--green)"/>
-                            <text x="355" y="50" fill="#fff" text-anchor="middle" font-size="10">LAN 1</text>
-                            <rect x="320" y="70" width="70" height="30" rx="5" fill="var(--bg-dark)" stroke="var(--green)"/>
-                            <text x="355" y="90" fill="#fff" text-anchor="middle" font-size="10">LAN 2</text>
-                            <rect x="320" y="110" width="70" height="30" rx="5" fill="var(--bg-dark)" stroke="var(--purple)"/>
-                            <text x="355" y="130" fill="#fff" text-anchor="middle" font-size="10">WiFi</text>
-                            <line x1="80" y1="75" x2="165" y2="75" stroke="var(--cyan)" stroke-width="2"/>
-                            <line x1="235" y1="55" x2="320" y2="45" stroke="var(--green)" stroke-width="2"/>
-                            <line x1="235" y1="75" x2="320" y2="85" stroke="var(--green)" stroke-width="2"/>
-                            <line x1="235" y1="95" x2="320" y2="125" stroke="var(--purple)" stroke-width="2"/>
-                        </svg>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>🌉 Bridge Settings</h2></div>
-                    <div class="form-group"><label>Bridge Name</label><input type="text" id="bridge-name" value="br0"></div>
-                    <div class="form-group">
-                        <label>Bridge Members</label>
-                        <select id="bridge-members" multiple style="height: 80px;"><option value="eth0">eth0</option><option value="eth1">eth1</option></select>
-                    </div>
-                    <div class="form-group"><label><input type="checkbox" id="stp-enabled"> Enable STP</label></div>
-                    <button class="btn primary" onclick="saveBridge()">Create Bridge</button>
-                    <button class="btn danger" onclick="deleteBridge()">Delete Bridge</button>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>🔧 Actions</h2></div>
-                    <button class="btn success" onclick="applyConfig()" style="width: 100%; margin-bottom: 0.5rem;">✓ Apply Configuration</button>
-                    <button class="btn" onclick="testConfig()" style="width: 100%; margin-bottom: 0.5rem;">🔍 Test Configuration</button>
-                    <button class="btn" onclick="reloadNetplan()" style="width: 100%; margin-bottom: 0.5rem;">🔄 Reload Netplan</button>
-                    <button class="btn warning" onclick="resetNetwork()" style="width: 100%;">↺ Reset to Defaults</button>
-                </div>
-            </div>
+        <div class="tuiles">
+            <div class="tuile"><div class="l">Mode</div><div class="v" id="sMode" style="font-size:1.1rem">—</div><div class="s" id="sModeS">enregistré par ce module</div></div>
+            <div class="tuile"><div class="l">Interfaces</div><div class="v" id="sIf">—</div><div class="s">montées / total</div></div>
+            <div class="tuile"><div class="l">Sortie Internet (WAN)</div><div class="v" id="sWan" style="font-size:1.1rem">—</div><div class="s" id="sWanS">route par défaut</div></div>
+            <div class="tuile"><div class="l">Détection matérielle</div><div class="v" id="sDet" style="font-size:1.1rem">—</div><div class="s" id="sDetS">secubox-net-detect</div></div>
+            <div class="tuile"><div class="l">Dernier changement</div><div class="v" id="sLast" style="font-size:1.1rem">—</div><div class="s">par ce module</div></div>
         </div>
-    </main>
 
+        <div class="pan"><h3>Modes disponibles <i>appliquer remplace la configuration réseau : une sauvegarde est faite avant</i></h3><div class="modes" id="modes"><div class="vide">Chargement…</div></div>
+            <div class="row" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+                <button class="btn sm" id="btnValider">✓ Valider la configuration actuelle</button>
+                <button class="btn danger sm" id="btnRestaurer">↺ Restaurer la dernière sauvegarde</button>
+            </div>
+            <div class="peer-note" id="resultat" role="status"></div>
+        </div>
+
+        <div class="grille g2">
+            <div class="pan"><h3>Interfaces réseau <i>lues sur la box</i></h3><div class="tw" id="interfaces"><div class="vide">—</div></div></div>
+            <div class="pan"><h3>Détection du matériel</h3><div id="detection"><div class="vide">—</div></div></div>
+        </div>
+
+        <div class="pan" id="aperc" hidden><h3>Aperçu <i id="aperN"></i></h3><pre id="yaml"></pre></div>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
         const API = '/api/v1/netmodes';
-        let currentMode = 'router';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        let etat = null, modes = [];
+        function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(x) { const h = Object.assign({}, x || {}), t = token(); if (t) h['Authorization'] = 'Bearer ' + t; return h; }
+        const fmtDate = s => { try { return new Date(s).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return '—'; } };
+        function vide(el, msg) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'vide'; d.textContent = msg; el.append(d); }
 
-        function getToken() {
-            // Try multiple storage keys for JWT token
-            return localStorage.getItem('sbx_token') ||
-                   localStorage.getItem('jwt') ||
-                   sessionStorage.getItem('sbx_token') ||
-                   document.cookie.split('; ').find(c => c.startsWith('jwt='))?.split('=')[1] || '';
+        // Tous les appels passent ici. 401 = session requise ; en démonstration, lectures fictives et écritures inertes.
+        async function appeler(chemin, methode, corps) {
+            if (DEMO) return demo(chemin, methode);
+            try {
+                const r = await fetch(API + chemin, { method: methode || 'GET', headers: entetes(corps ? { 'Content-Type': 'application/json' } : null), body: corps ? JSON.stringify(corps) : undefined });
+                if (r.status === 401) return { _session: true };
+                let j = null; try { j = await r.json(); } catch (e) { /* pas de JSON */ }
+                if (!r.ok) return { _erreur: (j && (j.detail || j.error)) || ('erreur ' + r.status) };
+                return j;
+            } catch (e) { return { _erreur: e.message }; }
         }
 
-        async function api(endpoint, method = 'GET', data = null) {
-            const token = getToken();
-            const opts = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` })
-                }
-            };
-            if (data) opts.body = JSON.stringify(data);
-            try {
-                const res = await fetch(API + endpoint, opts);
-                if (res.status === 401) {
-                    // Try to get fresh token via login
-                    const loginRes = await fetch('/api/v1/hub/auth/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: 'admin', password: 'secubox' })
-                    });
-                    if (loginRes.ok) {
-                        const loginData = await loginRes.json();
-                        localStorage.setItem('sbx_token', loginData.access_token);
-                        // Retry original request with new token
-                        opts.headers['Authorization'] = `Bearer ${loginData.access_token}`;
-                        const retry = await fetch(API + endpoint, opts);
-                        return retry.json();
-                    }
-                }
-                return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return { error: e.message };
+        function rendreEtat(s) {
+            const ok = s && !s._session && !s._erreur;
+            etat = ok ? s : null;
+            const pa = $('pastille');
+            if (!ok) { pa.textContent = s && s._session ? 'SESSION REQUISE' : 'ÉTAT ILLISIBLE'; pa.className = 'actif hors'; vide($('interfaces'), s && s._session ? 'Session requise : connectez-vous.' : 'Interfaces illisibles.'); ['sMode', 'sIf', 'sWan', 'sLast'].forEach(i => $(i).textContent = '—'); $('inconnu').hidden = true; return; }
+            const up = (s.interfaces || []).filter(i => i.state === 'up').length;
+            $('sIf').textContent = up + ' / ' + (s.interfaces || []).length;
+            const m = modes.find(x => x.id === s.current_mode);
+            $('sMode').textContent = s.mode_connu ? (m ? m.name : s.current_mode) : 'Inconnu';
+            $('sModeS').textContent = s.mode_connu ? 'enregistré par ce module' : 'jamais changé par ce module';
+            $('inconnu').hidden = !!s.mode_connu;
+            const w = s.wan || {};
+            $('sWan').textContent = w.interface || 'aucune';
+            $('sWanS').textContent = w.passerelle ? 'passerelle ' + w.passerelle : 'pas de route par défaut';
+            $('sLast').textContent = s.last_change ? fmtDate(s.last_change) : '—';
+            pa.textContent = w.interface ? 'EN LIGNE · ' + w.interface : 'SANS ROUTE PAR DÉFAUT'; pa.className = 'actif' + (w.interface ? '' : ' hors');
+            $('subline').textContent = (s.hostname || 'box') + ' · ' + up + ' interface' + (up > 1 ? 's' : '') + ' montée' + (up > 1 ? 's' : '');
+            // tableau des interfaces : texte brut uniquement
+            const tb = $('interfaces'); tb.replaceChildren();
+            if (!(s.interfaces || []).length) { vide(tb, 'Aucune interface.'); return; }
+            const t = document.createElement('table'); t.className = 't';
+            const th = document.createElement('tr'); ['Nom', 'État', 'Adresses'].forEach(x => { const h = document.createElement('th'); h.textContent = x; th.append(h); }); t.append(th);
+            for (const i of s.interfaces) {
+                const r = document.createElement('tr'), a = document.createElement('td'), b = document.createElement('td'), c = document.createElement('td');
+                a.textContent = i.name + (w.interface === i.name ? ' (WAN)' : ''); const p = document.createElement('span'); p.className = 'pill ' + (i.state === 'up' ? 'up' : 'down'); p.textContent = i.state === 'up' ? '● monté' : '○ descendu'; b.append(p);
+                c.textContent = (i.addrs || []).join(', ') || '—'; r.append(a, b, c); t.append(r);
+            }
+            tb.append(t);
+        }
+
+        function rendreModes() {
+            const z = $('modes'); z.replaceChildren();
+            if (!modes.length) { vide(z, 'Modes illisibles.'); return; }
+            for (const m of modes) {
+                const c = document.createElement('div'); c.className = 'mode' + (etat && etat.current_mode === m.id ? ' cur' : '');
+                const b = document.createElement('b'); b.textContent = m.name + (etat && etat.current_mode === m.id ? ' · actuel' : '');
+                const d = document.createElement('small'); d.textContent = m.desc;
+                const r = document.createElement('div'); r.className = 'row';
+                const ap = document.createElement('button'); ap.className = 'btn sm'; ap.textContent = '👁 Aperçu du YAML'; ap.addEventListener('click', () => apercu(m));
+                const ok = document.createElement('button'); ok.className = 'btn danger sm'; ok.textContent = '▶ Appliquer'; ok.addEventListener('click', () => appliquer(m));
+                r.append(ap, ok); c.append(b, d, r); z.append(c);
             }
         }
 
-        function selectMode(mode) {
-            document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
-            document.getElementById('mode-' + mode)?.classList.add('active');
-            document.getElementById('mode-label').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
-            currentMode = mode;
+        async function apercu(m) {
+            const r = await appeler('/preview_changes?mode=' + encodeURIComponent(m.id));
+            $('aperc').hidden = false; $('aperN').textContent = m.name;
+            $('yaml').textContent = r && r.yaml ? r.yaml : (r && r._erreur ? 'Aperçu indisponible : ' + r._erreur : (r && r._session ? 'Session requise.' : 'Aperçu indisponible.'));
+            hauteur(); $('aperc').scrollIntoView({ block: 'nearest' });
         }
-
-        function updateWanForm() {
-            const type = document.getElementById('wan-type').value;
-            document.getElementById('wan-static-form').style.display = type === 'static' ? 'block' : 'none';
+        async function appliquer(m) {
+            if (!await confirmer('Appliquer le mode « ' + m.name + ' » ?\n\nLa configuration réseau est remplacée (une sauvegarde est faite avant) puis « netplan apply » est lancé. Si vous êtes connecté par le réseau, la connexion peut être coupée : n’appliquez que depuis la console ou en ayant un autre accès.', true)) return;
+            msg('Application du mode ' + m.name + '…');
+            const r = await appeler('/apply_mode', 'POST', { mode: m.id });
+            if (r && r.success) { msg('✅ Mode « ' + m.name + ' » appliqué.'); await charger(); } else msg('❌ ' + (r && (r.stderr || r._erreur || r.error)) || 'échec');
         }
-
-        async function loadInterfaces() {
-            const data = await api('/interfaces');
-            const list = document.getElementById('interfaces');
-            const interfaces = data.interfaces || [];
-
-            list.innerHTML = interfaces.map(iface => `
-                <div class="interface-item">
-                    <div class="interface-header">
-                        <h4>${iface.name}</h4>
-                        <span class="badge ${iface.up ? 'up' : 'down'}">${iface.up ? 'UP' : 'DOWN'}</span>
-                    </div>
-                    <div class="interface-details">
-                        <span>MAC: ${iface.mac || '-'}</span>
-                        <span>IP: ${iface.addresses?.[0] || 'No IP'}</span>
-                        <span>Speed: ${iface.speed || '-'}</span>
-                        <span>Type: ${iface.type || 'ethernet'}</span>
-                    </div>
-                </div>
-            `).join('') || '<p style="color: var(--text-dim);">No interfaces</p>';
+        async function valider() {
+            const r = await appeler('/validate_config');
+            msg(r && r.valid ? '✅ Configuration actuelle valide.' : '❌ ' + ((r && (r.output || r._erreur)) || (r && r._session ? 'session requise' : 'échec')));
         }
-
-        async function loadCurrentMode() {
-            const data = await api('/current_mode');
-            if (data.mode) selectMode(data.mode);
+        async function restaurer() {
+            if (!await confirmer('Restaurer la dernière sauvegarde de la configuration réseau ?\n\nElle est réappliquée aussitôt : la connexion peut être coupée.', true)) return;
+            const r = await appeler('/rollback', 'POST');
+            if (r && r.success) { msg('✅ Sauvegarde restaurée (' + r.restored_from + ').'); await charger(); } else msg('❌ ' + ((r && (r._erreur || r.detail)) || 'échec'));
         }
+        function msg(t) { $('resultat').textContent = t; hauteur(); }
 
-        async function saveWan() { alert('WAN configuration saved'); }
-        async function saveLan() { alert('LAN configuration saved'); }
-        async function saveBridge() { alert('Bridge created'); loadInterfaces(); }
-        async function deleteBridge() { if (confirm('Delete bridge?')) { alert('Bridge deleted'); loadInterfaces(); } }
-        async function applyConfig() { if (confirm('Apply configuration?')) { await api('/apply_mode', 'POST', { mode: currentMode }); alert('Configuration applied'); } }
-        async function testConfig() { const result = await api('/validate_config'); alert(result.valid ? 'Configuration valid' : 'Errors: ' + result.output); }
-        async function reloadNetplan() { await api('/apply_mode', 'POST', { mode: currentMode }); alert('Netplan reloaded'); }
-        async function resetNetwork() { if (confirm('Reset to defaults?')) { await api('/rollback', 'POST'); loadInterfaces(); } }
-
-        // ══════════════════════════════════════════════════════════════
-        // Auto-Detection Functions
-        // ══════════════════════════════════════════════════════════════
-        let detectResult = null;
-
-        async function autoDetect() {
-            const btn = document.getElementById('btn-autodetect');
-            const card = document.getElementById('detect-card');
-            const status = document.getElementById('detect-status');
-
-            btn.disabled = true;
-            btn.textContent = '⏳ Detecting...';
-            status.textContent = 'SCANNING';
-            status.className = 'badge badge-yellow';
-            card.style.display = 'block';
-
-            try {
-                detectResult = await api('/detect');
-
-                if (detectResult.error) {
-                    status.textContent = 'ERROR';
-                    status.className = 'badge badge-red';
-                    document.getElementById('detect-board').textContent = detectResult.error;
-                } else {
-                    status.textContent = 'DETECTED';
-                    status.className = 'badge badge-green';
-
-                    const ifaces = detectResult.interfaces || {};
-                    document.getElementById('detect-board').textContent = detectResult.board || 'unknown';
-                    document.getElementById('detect-wan').textContent = ifaces.wan || '-';
-                    document.getElementById('detect-lan').textContent = ifaces.lan || '-';
-                    document.getElementById('detect-sfp').textContent = ifaces.sfp || '-';
-
-                    // Pre-fill WAN/LAN selectors
-                    if (ifaces.wan) {
-                        const wanSelect = document.getElementById('wan-iface');
-                        if (wanSelect) {
-                            // Add option if not exists
-                            if (!Array.from(wanSelect.options).find(o => o.value === ifaces.wan)) {
-                                wanSelect.add(new Option(ifaces.wan, ifaces.wan));
-                            }
-                            wanSelect.value = ifaces.wan;
-                        }
-                    }
-                }
-            } catch (e) {
-                status.textContent = 'ERROR';
-                status.className = 'badge badge-red';
-                document.getElementById('detect-board').textContent = e.message;
-            }
-
-            btn.disabled = false;
-            btn.textContent = '⚡ Auto-Detect';
-        }
-
-        async function autoApply(dryRun = false) {
-            if (!detectResult || detectResult.error) {
-                alert('Run Auto-Detect first');
+        function rendreDetection(d) {
+            const z = $('detection'); z.replaceChildren();
+            const dispo = d && !d._session && !d._erreur && !d.error;
+            $('sDet').textContent = dispo ? (d.board || 'détecté') : 'indisponible';
+            $('sDetS').textContent = dispo ? 'secubox-net-detect' : 'secubox-net-detect absent';
+            if (!dispo) {
+                vide(z, d && d._session ? 'Session requise.' : 'La détection automatique du matériel n’est pas disponible : l’outil secubox-net-detect n’est pas installé sur cette box. Les interfaces ci-contre sont lues directement.');
                 return;
             }
+            const kv = document.createElement('div'); kv.className = 'kv';
+            const lignes = [['Carte', d.board], ['WAN', (d.interfaces || {}).wan], ['LAN', (d.interfaces || {}).lan], ['SFP', (d.interfaces || {}).sfp]];
+            for (const [k, v] of lignes) { const a = document.createElement('div'), b = document.createElement('div'); a.className = 'k'; a.textContent = k; b.textContent = v || '—'; kv.append(a, b); }
+            z.append(kv);
+        }
 
-            const result = await api('/auto_apply', 'POST', {
-                mode: currentMode,
-                dry_run: dryRun
+        let tConf = null;
+        function confirmer(message, grave) {
+            return new Promise(resolve => {
+                const z = $('dialogue'); z.replaceChildren(); z.className = grave ? 'grave' : '';
+                const m = document.createElement('span'); m.textContent = message; m.style.whiteSpace = 'pre-line';
+                const oui = document.createElement('button'), non = document.createElement('button');
+                oui.type = non.type = 'button'; oui.className = 'btn danger'; non.className = 'btn'; oui.textContent = 'Confirmer'; non.textContent = 'Annuler';
+                const fin = v => { z.hidden = true; z.replaceChildren(); hauteur(); resolve(v); };
+                oui.addEventListener('click', () => fin(true)); non.addEventListener('click', () => fin(false));
+                z.append(m, oui, non); z.hidden = false; hauteur(); z.scrollIntoView({ block: 'nearest' }); non.focus();
             });
-
-            if (dryRun) {
-                // Show YAML preview
-                const yaml = result.yaml || 'No YAML generated';
-                alert('Generated netplan config:\n\n' + yaml);
-            } else {
-                if (result.success) {
-                    alert('Configuration applied successfully!\nBoard: ' + result.board + '\nMode: ' + result.mode);
-                    loadInterfaces();
-                } else {
-                    alert('Apply failed: ' + (result.error || 'Unknown error'));
-                }
-            }
         }
 
-        function hideDetectCard() {
-            document.getElementById('detect-card').style.display = 'none';
+        async function charger() {
+            const [mm, s, d] = await Promise.all([appeler('/get_available_modes'), appeler('/status'), appeler('/detect')]);
+            modes = Array.isArray(mm) ? mm : [];
+            rendreEtat(s); rendreModes(); rendreDetection(d);
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            hauteur();
         }
-
-        // Check for cached board info on load
-        async function loadBoardInfo() {
-            try {
-                const info = await api('/board_info');
-                if (info.board && info.board !== 'unknown') {
-                    detectResult = info;
-                    // Optionally show card with cached info
-                }
-            } catch (e) {}
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'netmodes' }, location.origin); } catch (e) { /* hors cadre */ }
         }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('btn-refresh').addEventListener('click', charger); $('btnValider').addEventListener('click', valider); $('btnRestaurer').addEventListener('click', restaurer);
 
-        loadInterfaces();
-        loadCurrentMode();
-        loadBoardInfo();
-        setInterval(loadInterfaces, 30000);
+        // ── Démonstration : lectures fictives, écritures inertes ─────────────────────────────────────────────────────────────────────────
+        function demo(chemin, methode) {
+            const rep = d => Promise.resolve(d), e = chemin.split('?')[0];
+            if (methode && methode !== 'GET') return rep({ success: false, _erreur: 'démonstration : action inerte' });
+            if (e === '/get_available_modes') return rep([{ id: 'router', name: 'Routeur', desc: 'Mode routeur NAT complet avec DHCP, NAC, DPI' }, { id: 'sniffer-inline', name: 'Sniffer Inline', desc: 'Bridge transparent avec DPI dual-stream' }, { id: 'sniffer-passive', name: 'Sniffer Passif', desc: 'Monitoring hors-bande via port SPAN/TAP' }, { id: 'access-point', name: 'Point d’accès', desc: 'AP Wi-Fi avec band steering' }, { id: 'relay', name: 'Relay/Extender', desc: 'Relay réseau avec WireGuard VPN' }]);
+            if (e === '/status') return rep({ mode_connu: true, current_mode: 'router', last_change: '2026-10-10T09:12:00', hostname: 'box-exemple', wan: { interface: 'eth2', passerelle: '192.0.2.1' }, interfaces: [{ name: 'eth1', state: 'up', addrs: ['192.0.2.10/24'] }, { name: 'eth2', state: 'up', addrs: ['198.51.100.7/24'] }, { name: '<img src=x onerror=alert(1)>', state: 'down', addrs: [] }] });
+            if (e === '/detect') return rep({ error: 'secubox-net-detect not installed', board: 'unknown' });
+            if (e === '/preview_changes') return rep({ yaml: 'network:\n  version: 2\n  renderer: networkd\n' });
+            if (e === '/validate_config') return rep({ valid: true, output: 'OK' });
+            return rep(null);
+        }
+        if (DEMO) $('demo').hidden = false;
+        charger();
+        setInterval(charger, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
