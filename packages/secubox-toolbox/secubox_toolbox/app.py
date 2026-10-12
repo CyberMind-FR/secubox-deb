@@ -130,5 +130,14 @@ async def _startup() -> None:
                 _log.error("social.purge_older_than failed: %s", e)
             await asyncio.sleep(3600)
 
+    async def clients_wg_loop() -> None:
+        from . import clients_wg
+        while True:
+            try:
+                await asyncio.to_thread(clients_wg.synchroniser)
+            except Exception as e:  # la boucle ne meurt jamais
+                _log.warning("clients_wg: %s", e)
+            await asyncio.sleep(clients_wg.PERIODE_S)
+    asyncio.create_task(clients_wg_loop())
     asyncio.create_task(social_fold_loop())
     asyncio.create_task(social_purge_loop())

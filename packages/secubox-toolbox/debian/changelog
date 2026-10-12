@@ -1,3 +1,9 @@
+secubox-toolbox (2.11.1-1~bookworm1) bookworm; urgency=high
+
+  * fix: apres Oublier tous la table des clients restait vide alors que des pairs WireGuard echangeaient du trafic : une boucle (60 s) recree la ligne de tout pair dont la poignee de main a moins de 15 min, niveau r3 par defaut, sans jamais toucher au niveau R d un client connu (ref #2413)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 06:02:06 +0200
+
 secubox-toolbox (2.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Oublier des clients (ref #2379) : la « RAZ » du Toolbox efface les statistiques mais GARDE la ligne de chaque client (92 clients, dont 82 non vus depuis plus de 30 jours, restaient apres la RAZ). Nouvelles actions explicites : oublier les clients inactifs (30 jours), oublier tous les clients (avertissement : le niveau R choisi est perdu, le client reapparait avec son activite), oublier un client. API : POST /admin/clients/forget {inactive_days: N, 0 = tous ; toute autre valeur : 422, rien de supprime} et POST /admin/clients/{h}/forget, fermees sur le vhost public ; supprime la ligne, les evenements, consentements, rapports et le graphe social. L'acces reseau ne depend pas de cette table. 15 tests.

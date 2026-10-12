@@ -320,3 +320,35 @@ def wg_endpoints() -> dict[str, str]:
     _ENDPOINTS_CACHE = out
     _ENDPOINTS_TS = now
     return out
+
+
+def wg_actifs(fenetre_s: int = 900) -> dict[str, tuple[str, int]]:
+    """{mac_hash: (ip_tunnel, dernier_handshake)} des pairs WG dont la dernière
+    poignée de main date de moins de `fenetre_s` secondes (#2413).
+
+    Un pair qui échange des paquets est un client, qu'une ligne existe ou non
+    dans la table : c'est de là que la table se reconstruit après un « oublier ».
+    mac_hash = sha256(pubkey)[:16], comme à l'enregistrement du profil. Vide si
+    `wg` est absent ou refuse (best-effort, jamais d'exception)."""
+    out: dict[str, tuple[str, int]] = {}
+    try:
+        proc = subprocess.run(["wg", "show", WG_INTERFACE, "dump"],
+                              capture_output=True, text=True, timeout=3, check=False)
+        now = _now_ts()
+        for line in proc.stdout.splitlines()[1:]:
+            f = line.split("\t")
+            if len(f) < 5:
+                continue
+            try:
+                hs = int(f[4])
+            except ValueError:
+                continue
+            if hs <= 0 or now - hs > fenetre_s:
+                continue
+            ip = (f[3].split(",")[0].split("/")[0] or "").strip()
+            if not f[0].strip() or not ip or ip == "(none)":
+                continue
+            out[_hashlib.sha256(f[0].strip().encode()).hexdigest()[:16]] = (ip, hs)
+    except Exception as e:  # wg absent, délai dépassé, droit refusé
+        log.debug("wg_actifs indisponible: %s", e)
+    return out
