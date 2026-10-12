@@ -705,3 +705,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — NAC, Bonjour corrigé (-k) et conteneurs LXC nommés (closes #2444, closes #2445)
 - secubox-nac 3.9.1 : avahi-browse -k (types bruts, sinon aucun service reconnu) ; service root secubox-nac-lxc-names + minuterie 5 min -> conteneurs.json, nom des conteneurs sans DNS ni bail.
+
+## 2026-10-12 — Interceptor, fin de la maquette (closes #2447)
+- secubox-interceptor 2.0.0 : l'API supervise en lecture seule la chaîne d'inspection réelle (moteurs sbxmitm/sbxwaf, activité tirée du journal, niveaux par pair, exclusions) ; instantané root pour le dossier fermé du Toolbox ; page Aurora ; ancien démon root et CA inutilisée retirés. 14 tests.
