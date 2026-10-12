@@ -1,3 +1,18 @@
+secubox-p2p (1.12.1-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (#2476) : /master-link/invite-local et /master-link/cleanup-local étaient accessibles
+    sans authentification depuis l'extérieur. Elles jugeaient la provenance de la requête
+    (is_local_request) : un client sans adresse (socket unix, le chemin de nginx) comptait
+    comme local, et X-Real-IP / X-Forwarded-For ne prouvent rien. N'importe qui obtenait un
+    jeton de jonction (auto-approuvé par défaut), suffisant pour /master-link/join (sans
+    authentification) : approbation et identité WireGuard du maillage. Les deux routes exigent
+    maintenant le JWT d'un administrateur ; is_local_request est supprimée ; la page
+    d'administration du maillage envoie le jeton de session. 9 tests.
+  * À faire sur toute box exposée avant cette version : révoquer les jetons de jonction et
+    vérifier les pairs approuvés (/master-link/peers) ; aucune exploitation constatée sur gk2.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:51:19 +0200
+
 secubox-p2p (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-meshname (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

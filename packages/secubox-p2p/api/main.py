@@ -1880,43 +1880,18 @@ Expires: {result['expires']}
     }
 
 
-def is_local_request(request: Request) -> bool:
-    """Check if request originates from localhost (direct or via proxy)."""
-    # Check X-Real-IP header (set by nginx)
-    real_ip = request.headers.get("X-Real-IP", "")
-    if real_ip in ("127.0.0.1", "::1"):
-        return True
-
-    # Check X-Forwarded-For header
-    forwarded_for = request.headers.get("X-Forwarded-For", "")
-    if forwarded_for:
-        first_ip = forwarded_for.split(",")[0].strip()
-        if first_ip in ("127.0.0.1", "::1"):
-            return True
-
-    # Check direct client IP (for Unix socket connections)
-    client_host = request.client.host if request.client else None
-    if client_host in ("127.0.0.1", "::1", "localhost", None):
-        # None can happen with Unix socket connections
-        return True
-
-    return False
-
-
 @app.post("/master-link/invite-local")
 async def ml_generate_invite_local(
-    request: Request,
     ttl: int = 3600,
-    auto_approve: bool = True
+    auto_approve: bool = True,
+    user: dict = Depends(require_jwt)
 ):
-    """Generate invite from localhost only (no auth required).
+    """Generate an invite for the admin dashboard (JWT required).
 
-    This endpoint is for local admin dashboard access only.
-    It rejects requests that don't originate from localhost.
+    SÉCURITÉ (#2476) : cette route s'appelait « locale » et se fiait à la provenance de la requête. Or un client sans adresse (socket unix, le chemin de nginx)
+    comptait comme local, et X-Real-IP / X-Forwarded-For ne prouvent rien : n'importe qui fabriquait un jeton de jonction auto-approuvé. Elle exige maintenant le
+    JWT d'un administrateur, comme /master-link/invite.
     """
-    # Check if request is from localhost
-    if not is_local_request(request):
-        raise HTTPException(status_code=403, detail="This endpoint only accepts local requests")
 
     config = get_ml_config()
     role = config.get("role", "master")
@@ -2085,10 +2060,8 @@ async def ml_cleanup(user: dict = Depends(require_jwt)):
 
 
 @app.post("/master-link/cleanup-local")
-async def ml_cleanup_local(request: Request):
-    """Cleanup expired tokens from localhost only (no auth required)."""
-    if not is_local_request(request):
-        raise HTTPException(status_code=403, detail="This endpoint only accepts local requests")
+async def ml_cleanup_local(user: dict = Depends(require_jwt)):
+    """Cleanup expired tokens (JWT required — plus de confiance dans la provenance, #2476)."""
     return ml_cleanup_tokens()
 
 

@@ -301,8 +301,12 @@
     <script>
     const API = '/api/v1/p2p';
 
+    // Les routes d'administration du maillage exigent le JWT de l'administrateur (#2476).
+    function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
     async function api(endpoint, options = {}) {
-        const r = await fetch(API + endpoint, options);
+        const opts = Object.assign({}, options), t = jeton();
+        if (t) opts.headers = Object.assign({}, opts.headers || {}, { 'Authorization': 'Bearer ' + t });
+        const r = await fetch(API + endpoint, opts);
         return r.json();
     }
 
