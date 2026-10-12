@@ -1,3 +1,15 @@
+secubox-autoload (0.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2489) : le journal d'audit passe dans un sous-dossier
+    (/var/log/secubox/autoload/audit.log). Dans le dossier commun, sa règle logrotate chevauchait
+    celle de secubox-core (/var/log/secubox/*.log) : logrotate refusait (« duplicate log entry »),
+    logrotate.service échouait chaque nuit, et la règle générale recréait le journal en
+    secubox:secubox, que le service (compte secubox-autoload) ne pouvait plus écrire. Le
+    postinst crée le dossier, migre l'ancien journal s'il porte des lignes, et donne le bon
+    propriétaire ; service, profil AppArmor et rotation suivent. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 13:05:00 +0200
+
 secubox-autoload (0.5.2-1~bookworm1) bookworm; urgency=low
 
   * Pre-rapports : la liste montre le NOM DE BOX saisi (box.nom du fichier de reponses) a cote du client du jeton (#2314). Avant, seul le client du jeton s'affichait (test-vm-lite2) alors que l'operateur a saisi essai-vm-lite. `box` est expose par l'API ; colonnes « Box (nom saisi) » et « Client (jeton) ». 2 tests (rouges sans le correctif).

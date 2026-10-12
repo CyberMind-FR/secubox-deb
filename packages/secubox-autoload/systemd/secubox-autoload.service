@@ -12,7 +12,7 @@ Group=secubox-autoload
 SupplementaryGroups=secubox
 WorkingDirectory=/usr/lib/secubox/autoload
 Environment=PYTHONDONTWRITEBYTECODE=1
-Environment=SECUBOX_AUTOLOAD_AUDIT=/var/log/secubox/autoload-audit.log
+Environment=SECUBOX_AUTOLOAD_AUDIT=/var/log/secubox/autoload/audit.log
 # En root (« + ») : une socket périmée d'un autre utilisateur dans /run/secubox (sticky) ne se retire pas autrement.
 ExecStartPre=+/bin/rm -f /run/secubox/autoload.sock
 ExecStart=/usr/sbin/secubox-autoload-api
@@ -31,7 +31,7 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH
-ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload-audit.log /run/secubox /etc/wireguard
+ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload /run/secubox /etc/wireguard
 
 [Install]
 WantedBy=multi-user.target

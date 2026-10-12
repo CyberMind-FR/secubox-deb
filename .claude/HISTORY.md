@@ -768,3 +768,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Flotte Aurora (closes #2487)
 - secubox-annuaire 0.11.1 : /fleet/ au profil Aurora (XSS-stricte conservée) ; GET /fleet signale une lecture en échec (`erreur: true`) au lieu de rendre une flotte vide. 8 tests ; 15 échecs préexistants de la suite inchangés.
+
+## 2026-10-12 — autoload, journal d'audit hors du chevauchement logrotate (closes #2489)
+- secubox-autoload 0.5.3 : journal dans /var/log/secubox/autoload/audit.log (la règle générale de secubox-core ne le voit plus) ; logrotate.service ne doit plus échouer chaque nuit ; le service peut de nouveau écrire son audit. Constaté sur gk2 : échec 00:52, journal recréé en secubox:secubox.

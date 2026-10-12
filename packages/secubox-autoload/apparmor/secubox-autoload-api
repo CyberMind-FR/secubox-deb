@@ -37,7 +37,8 @@
   # Données du module : base des jetons, clé publique du hub, demande et accusé de synchronisation.
   /var/lib/secubox/autoload/ r,
   /var/lib/secubox/autoload/** rwk,
-  /var/log/secubox/autoload-audit.log w,
+  /var/log/secubox/autoload/ r,
+  /var/log/secubox/autoload/audit.log w,
 
   /run/secubox/ r,
   /run/secubox/autoload.sock rwk,

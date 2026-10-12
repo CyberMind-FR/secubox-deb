@@ -7,7 +7,15 @@ if [ "$1" = "configure" ]; then
     # Le groupe secubox : la socket lui appartient (nginx la traverse) et la lecture des sessions d'authentification en dépend.
     getent group secubox >/dev/null && adduser secubox-autoload secubox >/dev/null 2>&1 || true
     install -d -o secubox-autoload -g secubox-autoload -m 0750 /var/lib/secubox/autoload
-    [ -e /var/log/secubox/autoload-audit.log ] || install -m 0640 -o secubox-autoload -g secubox /dev/null /var/log/secubox/autoload-audit.log
+    # Journal d'audit dans SON sous-dossier (#2489) : la règle logrotate générale de secubox-core ne s'applique qu'au dossier plat. Migration : l'ancien fichier (plat)
+    # est déplacé tel quel s'il porte des lignes ; vide ou absent, un journal neuf.
+    install -d -o secubox-autoload -g secubox -m 0750 /var/log/secubox/autoload
+    if [ -s /var/log/secubox/autoload-audit.log ] && [ ! -e /var/log/secubox/autoload/audit.log ]; then
+        mv /var/log/secubox/autoload-audit.log /var/log/secubox/autoload/audit.log
+    fi
+    rm -f /var/log/secubox/autoload-audit.log
+    [ -e /var/log/secubox/autoload/audit.log ] || install -m 0640 -o secubox-autoload -g secubox /dev/null /var/log/secubox/autoload/audit.log
+    chown secubox-autoload:secubox /var/log/secubox/autoload/audit.log
 
     # AppArmor : profil ENFORCE, chargé seulement si le noyau le permet.
     if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
