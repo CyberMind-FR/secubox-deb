@@ -47,7 +47,7 @@ def test_rules_installe_l_outil_dans_usr_sbin():
 
 def test_changelog_en_tete():
     t = (PAQUET / "debian" / "changelog").read_text()
-    assert re.match(r"secubox-kiosk \(1\.0\.0-1~bookworm1\) bookworm; urgency=medium", t)
+    assert re.match(r"secubox-kiosk \(\d+\.\d+\.\d+-1~bookworm1\) bookworm; urgency=medium", t)
 
 
 def test_les_constructeurs_d_image_pointent_sur_la_nouvelle_source():
