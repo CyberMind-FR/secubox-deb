@@ -502,6 +502,7 @@ class AnomalyDetector:
 
     def run_detection(self) -> List[Alert]:
         """Run all anomaly detections."""
+        self._load_baselines()      # écrites par le passage planifié, autre processus (#2459)
         alerts = []
         metrics = self.collect_metrics()
 
@@ -528,6 +529,7 @@ class AnomalyDetector:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get detection statistics."""
+        self._load_baselines()      # écrites par le passage planifié, autre processus (#2459)
         alerts = self.get_alerts(24)
 
         by_type = {}
@@ -615,6 +617,8 @@ async def acknowledge_alert(alert_id: str):
 @app.get("/baselines", dependencies=[Depends(require_jwt)])
 async def list_baselines():
     """List all baselines."""
+    # Les lignes sont écrites par le passage planifié (autre processus) : on relit le fichier, sinon l'API garde celles du démarrage (#2459).
+    detector._load_baselines()
     return {"baselines": list(detector.baselines.values())}
 
 
