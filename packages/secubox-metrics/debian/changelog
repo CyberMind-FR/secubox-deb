@@ -1,3 +1,9 @@
+secubox-metrics (1.20.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:09:47 +0200
+
 secubox-metrics (1.20.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport PDF de frequentation au profil projet reference Aurora et cartes du monde du WAF dans les pages (ref #2390). PDF : fond sombre, tuiles (visites, visiteurs, requetes, erreurs, bande passante), histogramme jour par jour, donut des statuts, carte du monde, barres des sites, navigateurs, referents, pays, detail par vhost ; primitives communes dans api/pdf_aurora.py, partagees avec le rapport de securite (rendu inchange) ; memes signatures. Pages : « Origine des visiteurs » (index) et « Origine des visites » (vhosts, et detail d'un site) avec la grille 60x120 de la vue du WAF ; la carte des attaques de l'index reste a « — » tant que l'API metrics ne fournit pas de pays d'attaque. 14 tests.

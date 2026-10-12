@@ -29,7 +29,8 @@
   .principal{min-width:0}
   body:not(.emb):not(.dem) .principal{margin-left:220px;padding-top:48px}
   body.emb #sidebar,body.dem #sidebar{display:none}
-  @media (max-width:900px){body:not(.emb):not(.dem) .principal{margin-left:0;padding-top:0}}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.dem) .principal{margin-left:0;padding-top:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
   .cadre{container-type:inline-size;container-name:a;padding:10px}
   .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
   .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}

@@ -1,3 +1,9 @@
+secubox-threats (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:09:48 +0200
+
 secubox-threats (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Webui refait au profil projet reference Aurora (ref #2362) : tuiles (alertes 24 h, IOC actifs, incidents ouverts, sources, score de risque), chronologie 24 h par gravite, jauge et classement du score, alertes recentes, IOC, incidents, sources en anneau, flux de renseignement, rapports. Lecture seule comme avant ; suit les champs reels de l'API (events, last_refresh) que l'ancienne page lisait sous d'autres noms. ?embed=1, ?demo=1 annonce, « — » sans mesure, hauteur annoncee (sbxThreatsVue). 6 tests.
