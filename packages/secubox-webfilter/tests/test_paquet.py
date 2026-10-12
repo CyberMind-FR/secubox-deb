@@ -179,3 +179,12 @@ def test_postinst_demande_une_synchronisation_quand_les_listes_brutes_manquent()
     s = lire("debian/postinst")
     assert "*.lst" in s and "sync.demande" in s                              # après une mise à jour 0.1.0 → 0.2.0 : aucune .lst avant la prochaine synchronisation
     assert 'listes/adulte' not in s                                          # l'ancien critère (le dossier existe) ne suffit plus
+
+
+def test_profil_du_controleur_peut_consommer_la_demande_d_application_2441():
+    """Le contrôleur efface appliquer.demande dès le début ; sans `w` AppArmor refuse, le service échoue, l'unité .path atteint sa limite et « Appliquer » répond 409."""
+    p = lire("apparmor/secubox-webfilter")
+    ctl = p[p.index("/usr/sbin/secubox-webfilter-ctl {"):]
+    assert re.search(r"^\s*/var/lib/secubox/webfilter/appliquer\.demande\s+rw,", ctl, re.M)
+    # la demande de synchronisation reste hors de portée du contrôleur
+    assert "sync.demande" not in ctl

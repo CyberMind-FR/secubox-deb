@@ -700,3 +700,5 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — NAC, noms et services par Bonjour (closes #2440)
 - secubox-nac 3.9.0 : passe avahi-browse en cache (120 s), nom des appareils sans bail, nom annoncé, pastilles de services, types de service injectés dans la détection du type fin ; colonnes services/bonjour_name. 10 tests.
+## 2026-10-12 — webfilter, « Appliquer maintenant » refusé (closes #2441)
+- secubox-webfilter 0.4.1 : le profil AppArmor du contrôleur root peut effacer appliquer.demande ; sans cela le service apply échouait, l'unité .path atteignait sa limite et chaque demande répondait 409. Constaté et corrigé sur gk2 (version 13 appliquée).
