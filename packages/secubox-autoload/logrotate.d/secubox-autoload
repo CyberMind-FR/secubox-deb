@@ -1,4 +1,8 @@
-/var/log/secubox/autoload-audit.log {
+# Journal d'audit de secubox-autoload : SOUS-DOSSIER, donc hors de la portée plate de la règle générale de secubox-core (/var/log/secubox/*.log, su secubox).
+# Dans le dossier commun, les deux règles se chevauchaient : logrotate refusait (« duplicate log entry »), logrotate.service échouait chaque nuit, et la règle
+# générale recréait le journal en secubox:secubox, que le service (compte secubox-autoload) ne pouvait plus écrire (#2489).
+/var/log/secubox/autoload/*.log {
+    su secubox-autoload secubox
     weekly
     rotate 52
     compress

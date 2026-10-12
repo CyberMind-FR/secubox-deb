@@ -54,11 +54,11 @@ Deux applications dans un processus (`/usr/sbin/secubox-autoload-api`), utilisat
 
 Le service n'est pas root, et aucune nouvelle unité root n'existe : il applique le tunnel par **un argv exact** (`sudo -n /usr/sbin/autoloadctl tunnel-sync`, `sudoers.d/secubox-autoload`). `NoNewPrivileges=no` est requis pour cela (exception notée dans `.claude/RULES-CODE.md`) ; le profil AppArmor reste en enforce.
 
-Pare-feu : `udp/51830` en entrée et `tcp/8470` depuis `wg-autoload` seulement (`/etc/nftables.d/zz-secubox-autoload.nft`). La **redirection udp/51830 de la Freebox vers gk2** est à faire à la main. Journal d'audit : `/var/log/secubox/autoload-audit.log`.
+Pare-feu : `udp/51830` en entrée et `tcp/8470` depuis `wg-autoload` seulement (`/etc/nftables.d/zz-secubox-autoload.nft`). La **redirection udp/51830 de la Freebox vers gk2** est à faire à la main. Journal d'audit : `/var/log/secubox/autoload/audit.log`.
 
 ## Audit
 
-Chaque émission, réclamation, refus (avec la raison), révocation et changement d'abonnement est ajouté à `/var/log/secubox/autoload-audit.log` (JSON, module `autoload`, logrotate hebdomadaire sur 52 semaines). **Jamais la valeur d'un jeton.**
+Chaque émission, réclamation, refus (avec la raison), révocation et changement d'abonnement est ajouté à `/var/log/secubox/autoload/audit.log` (JSON, module `autoload`, logrotate hebdomadaire sur 52 semaines). **Jamais la valeur d'un jeton.**
 
 ## Commandes (root)
 
