@@ -694,3 +694,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-03 — Test des méta-paquets : cartes Coffre (ref #1743)
 - `test_sbxos_pose_tout_le_hall` échouait (avant mes changements aussi) sur « coffre → secubox-coffre, mon-coffre → secubox-mon-coffre ». Cause : la table `PAQUET_DE` du test ne connaissait pas ces deux cartes et devinait des paquets qui n'existent pas. Réalité vérifiée : les deux cartes sont des pages de `secubox-vault` (`/vault/`, `/coffre/`), la carte est livrée par `secubox-webos` (`www/hall/cardlets/coffre.html`) ; gk2 ET gk3 ont vault 2.0.16 et webos 1.0.397 par apt, la page `/coffre/` répond 200 sur les deux ; `sbxos` installe `secubox-vault` (Recommends du service Identité). Rien n'était propre à gk2. Correction : mapping ajouté au test ; 6 tests verts. J'avais d'abord écarté cet échec comme « préexistant » sans l'examiner — à ne plus faire : un test rouge qui touche un module est une question, pas un bruit.
+
+## 2026-10-12 — WireGuard, interface Aurora (closes #2438)
+- secubox-wireguard 1.2.0 : page /wireguard/ au profil Aurora (tuiles, tunnels dépliables, trafic par tunnel, démo/embed) ; les deux `confirm()` natifs remplacés par une confirmation intégrée (avertissement de coupure d'accès admin/mesh conservé). 6 tests navigateur. Déployé gk2, dépôt apt à jour.
