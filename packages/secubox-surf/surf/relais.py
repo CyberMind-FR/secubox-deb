@@ -293,6 +293,13 @@ ins.adsbygoogle,[id^="google_ads_"],[class*="advert" i],[class*="-ads" i],
 [class*="sponsored" i][class*="widget" i]{
   display:none !important;visibility:hidden !important;height:0 !important;
 }
+/* APPAT DES DETECTEURS D'ANTI-ADBLOCK (#2516). Le theme Foxiz (zataz...) cree un
+   appat #rb-adcheck > #google_ads_iframe_test (300x250) et dresse son mur si on
+   l'a masque. Il est temporaire (retire apres 100 ms), hors ecran et aria-hidden :
+   le laisser visible ne montre aucune pub. Selecteurs par id, apres la regle de
+   masquage : ils l'emportent. */
+#rb-adcheck,#rb-adcheck *{display:block !important;visibility:visible !important;opacity:1 !important}
+#google_ads_iframe_test{width:300px !important;height:250px !important}
 html,body{overflow:auto !important}
 </style>
 <script id="sbx-surf-js">

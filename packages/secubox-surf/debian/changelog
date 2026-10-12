@@ -1,3 +1,9 @@
+secubox-surf (1.0.34-1~bookworm1) bookworm; urgency=medium
+
+  * zataz.com (« Bloqueur de publicités détecté ! », #2516) : le détecteur du thème Foxiz crée un appât #rb-adcheck > #google_ads_iframe_test (300x250) et dresse son mur si on l'a masqué ; notre feuille cosmétique ([id^="google_ads"], [class*="ad-slot"]…) le masquait. Une règle de protection par id, après la règle de masquage, le laisse visible (appât temporaire, hors écran, aria-hidden). Reproduit avec Chromium sur la vraie page. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 21:00:00 +0200
+
 secubox-surf (1.0.33-1~bookworm1) bookworm; urgency=medium
 
   * Vidéo d'un article BFM absente de la copie figée (#2479) : le rendu headless ne construit pas

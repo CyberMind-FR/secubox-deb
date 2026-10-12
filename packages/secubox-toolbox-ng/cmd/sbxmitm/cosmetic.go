@@ -131,7 +131,15 @@ const cosmeticProtect = `#sbx-banner,[id*="sbx-banner"],[class*="sbx-banner"],` 
 	`[id*="sbx-toolbox"],[class*="sbx-toolbox"],` +
 	`[id*="sbx-ghost"],[id*="__toolbox"],[class*="__toolbox"]` +
 	`{display:revert!important;visibility:visible!important;opacity:1!important;` +
-	`z-index:2147483647!important;}`
+	`z-index:2147483647!important;}` +
+	// #2516 : appât des détecteurs d'anti-adblock (thème Foxiz, zataz) —
+	// #rb-adcheck > #google_ads_iframe_test, 300x250, hors écran, retiré par la
+	// page après 100 ms. Masqué, il déclenche le mur « bloqueur détecté » ; visible,
+	// il ne montre aucune pub. Sélecteurs par id : plus spécifiques que les
+	// règles de masquage par attribut, et placés après elles.
+	`#rb-adcheck,#rb-adcheck *{display:block!important;visibility:visible!important;opacity:1!important;}` +
+	`#google_ads_iframe_test{display:block!important;visibility:visible!important;opacity:1!important;` +
+	`width:300px!important;height:250px!important;}`
 
 var (
 	cosmeticMu      sync.RWMutex
