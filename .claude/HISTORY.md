@@ -781,3 +781,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 ## 2026-10-12 — Image RPi400 : dépendances résolues, audité, kiosque par défaut (closes #2495)
 - Cause constatée sur une uSD isp-rpi alpha.12 : 32 paquets secubox sans leurs dépendances (systemd-timesyncd, python3-cryptography, lxc…), premier pas arrêté à l'étape Horloge, Tor/SMTP en échec, pas de kiosque. build-rpi-usb.sh n'exécutait `apt --fix-broken` que sous --kiosk, et le workflow ne passait --kiosk que sur déclenchement manuel.
 - build-rpi-usb.sh : apt --fix-broken systématique puis image/verify-deps.py (fatal) ; build-image.yml : kiosk=auto, inclus par défaut pour rpi400/rpi4 ; secubox-premier-pas 0.5.4 : étape NTP souple. 17 tests.
+
+## 2026-10-12 — Image lite RPi400 (closes #2497)
+- matrice-images.py : rpi400 publie lite, isp, full ; option --profil pour forcer un profil. build-image.yml : choix du profil (auto/lite/isp/full) au déclenchement manuel. 4 tests de plus.

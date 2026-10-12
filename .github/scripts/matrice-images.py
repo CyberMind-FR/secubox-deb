@@ -80,6 +80,9 @@ PROFILS_PUBLIES = {
     # « socle de comparaison » donnerait une image qui cale au demarrage.
     "espressobin-v7": ["lite"],
     "espressobin-ultra": ["lite"],
+    # RPi 400 (BCM2711, 4 Go, carte uSD) : lite (le plus léger : protection, sans hébergement), isp et full. Le lite n'existait pas pour cette carte
+    # (#2497) : une uSD « lite RPi400 » n'avait donc aucune image publiée. full-rpi pèse 1,7 Go, sous la limite de 2 Gio d'un fichier de release.
+    "rpi400": ["lite", "isp", "full"],
 }
 
 _RE_PROFIL = re.compile(r"^\s*SECUBOX_PROFILE\s*=\s*(\S+)", re.M)
@@ -119,11 +122,12 @@ def profils_pour(racine: Path, carte: str) -> list[str]:
     return profils
 
 
-def matrice(racine: Path, cartes: list[str]) -> list[dict[str, str]]:
+def matrice(racine: Path, cartes: list[str], profil: str | None = None) -> list[dict[str, str]]:
+    """`profil` (lite|isp|full) force UN profil pour les cartes demandées (déclenchement manuel, #2497) : on construit l'image voulue, pas toute la matrice."""
     return [
         {"board": c, "profile": p}
         for c in cartes
-        for p in profils_pour(racine, c)
+        for p in (profils_pour(racine, c) if not profil else [profil])
     ]
 
 
@@ -132,6 +136,8 @@ def main() -> int:
     ap.add_argument("--racine", default=".", help="racine du dépôt")
     ap.add_argument("--cartes", required=True,
                     help="cartes séparées par des virgules, ou 'defaut'")
+    ap.add_argument("--profil", default="auto", choices=["auto", "lite", "isp", "full"],
+                    help="force UN profil pour les cartes demandées (auto = ceux que la matrice publie)")
     ap.add_argument("--defaut", default="mochabin,vm-x64,rpi400,espressobin-v7",
                     help="cartes bâties quand --cartes vaut 'defaut'")
     a = ap.parse_args()
@@ -148,7 +154,7 @@ def main() -> int:
         print("carte(s) inconnue(s) : %s" % ", ".join(inconnues), file=sys.stderr)
         return 2
 
-    m = matrice(racine, cartes)
+    m = matrice(racine, cartes, None if a.profil == "auto" else a.profil)
     if not m:
         print("matrice vide", file=sys.stderr)
         return 2

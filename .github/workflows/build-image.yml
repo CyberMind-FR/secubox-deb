@@ -59,6 +59,12 @@ on:
         type: choice
         options: [bookworm, trixie]
         default: trixie
+      profile:
+        description: 'Profil à construire (auto = ceux que la matrice publie pour la carte) — ex. lite pour une image RPi400 légère (#2497)'
+        required: false
+        type: choice
+        options: [auto, lite, isp, full]
+        default: auto
       kiosk:
         description: 'rpi400/rpi4 only: GUI kiosk (chromium fullscreen dashboard). auto = inclus pour rpi400/rpi4 (#2495)'
         required: false
@@ -102,7 +108,7 @@ jobs:
           set -euo pipefail
           cartes='${{ inputs.board || github.event.inputs.board || 'defaut' }}'
           [ "$cartes" = "all" ] && cartes=defaut
-          m=$(python3 .github/scripts/matrice-images.py --cartes "$cartes")
+          m=$(python3 .github/scripts/matrice-images.py --cartes "$cartes" --profil '${{ github.event.inputs.profile || 'auto' }}')
           echo "$m" | python3 -m json.tool
           echo "include=$(echo "$m" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin)["include"]))')" >> "$GITHUB_OUTPUT"
 
