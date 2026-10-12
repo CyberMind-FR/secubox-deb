@@ -55,3 +55,14 @@ def test_mesure_absente_en_tiret():
 
 def test_menu_lateral_hors_embed():
     assert "/shared/sidebar.js" in HTML and "EMB" in HTML
+
+
+def test_conteneurs_lxc_isoles_de_la_liste_des_appareils_2410():
+    """#2410 : les conteneurs LXC ont leur panneau ; ils ne sont ni dans la liste, ni dans les tuiles et répartitions."""
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1] / "www" / "nac" / "index.html").read_text(encoding="utf-8")
+    assert 'id="lxc"' in src and "Conteneurs LXC" in src
+    assert "LISTE=TOUS.filter(function(r){return !r.lxc;})" in src   # appareils = hors conteneurs
+    assert "LXC=TOUS.filter(function(r){return r.lxc;})" in src
+    assert "var r=TOUS[Number(b.getAttribute('data-ok'))]" in src     # l'action retrouve l'appareil par son indice d'origine
+    assert "ct-exemple" in src and "exemple" in src                    # démonstration : noms fictifs

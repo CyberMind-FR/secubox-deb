@@ -1,3 +1,9 @@
+secubox-nac (3.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * feat: page NAC, les conteneurs LXC (pont br-lxc) sont isoles dans leur propre panneau et ne figurent plus dans la liste des appareils, les tuiles, les repartitions ni les nouveaux appareils ; l action de quarantaine reste reservee aux appareils (ref #2410)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:51:35 +0200
+
 secubox-nac (3.5.1-1~bookworm1) bookworm; urgency=medium
 
   * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)

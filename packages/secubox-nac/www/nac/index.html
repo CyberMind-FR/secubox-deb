@@ -134,6 +134,7 @@
       </div>
       <div class="rang" id="rang"></div><button type="button" class="plus" id="plus" hidden></button></div>
     <div class="cote">
+      <div class="pan"><h3>Conteneurs LXC <i id="lxcNote">pont br-lxc · isolés des appareils</i></h3><div id="lxc"></div></div>
       <div class="pan"><h3>Répartition par système <i>déduit côté NAC</i></h3><div class="repart"><div id="donutO"></div><div class="leg" id="legO"></div></div><div class="note">Famille lue dans l’OS déduit (« Android 14 » compte avec Android). L’OS vient d’une preuve (DHCP, User-Agent, DNS) ; sans preuve, « non identifié ».</div></div>
       <div class="pan"><h3>Répartition par état <i>appareils</i></h3><div id="parEtat"></div></div>
       <div class="pan"><h3>Zones <i>VLAN / zone NAC</i></h3><div id="parZone"></div><div class="note">L’API fournit la zone NAC, pas de numéro de VLAN.</div></div>
@@ -142,7 +143,7 @@
       <div class="pan"><h3>Historique récent <i>événements NAC</i></h3><div id="histo"></div></div>
     </div>
   </div>
-  <div class="note">Les actions sont réversibles · chaque décision de sécurité est écrite dans le journal d’audit · les conteneurs LXC sont des appareils du pont br-lxc.</div>
+  <div class="note">Les actions sont réversibles · chaque décision de sécurité est écrite dans le journal d’audit · les conteneurs LXC (pont br-lxc) sont isolés dans leur propre panneau, hors de la liste des appareils.</div>
 </div></div>
 </main>
 <script>
@@ -197,7 +198,7 @@
     return '#29b6f6';
   }
 
-  var DONNEES=null,LISTE=[],ETAT={n:30,conf:null,occupe:false};
+  var DONNEES=null,TOUS=[],LISTE=[],LXC=[],ETAT={n:30,conf:null,occupe:false};
   function etatDe(c){
     var z=String(c.zone||'').toLowerCase(),a=String(c.allow_state||'').toLowerCase();
     if(z==='quarantine'||c.status==='quarantine') return 'quarantaine';
@@ -269,7 +270,7 @@
   function rend(d){
     DONNEES=d.data;var ok=!!d.data;
     el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||ok);
-    LISTE=ok?normalise(d.data):[];var L=LISTE,n=L.length,st=(ok&&d.data.status)||null;
+    TOUS=ok?normalise(d.data):[];LISTE=TOUS.filter(function(r){return !r.lxc;});LXC=TOUS.filter(function(r){return r.lxc;});var L=LISTE,n=L.length,st=(ok&&d.data.status)||null;
     var a=el('actif');
     if(!ok){a.textContent='SESSION REQUISE';a.className='actif neutre';}
     else if(st&&st.nftables_ok===false){a.textContent='PARE-FEU NAC NON APPLIQUÉ';a.className='actif hors';}
@@ -278,13 +279,19 @@
     var N=function(v){return ok?fmt(v):'—';},cnt=function(f){return L.filter(f).length;};
     var nos=cnt(function(r){return !!r.os;});
     el('tuiles').innerHTML=
-      tuile(IC.nb,N(n),'Appareils','connus du NAC','Appareils enregistrés par le NAC (base locale alimentée par le collecteur : DHCP, ARP, mDNS, scans). Les conteneurs LXC y figurent aussi.')
+      tuile(IC.nb,N(n),'Appareils',ok&&LXC.length?'hors '+fmt(LXC.length)+' conteneurs LXC':'connus du NAC','Appareils enregistrés par le NAC (base locale alimentée par le collecteur : DHCP, ARP, mDNS, scans). Les conteneurs LXC du pont br-lxc sont comptés à part, dans leur propre panneau.')
      +tuile(IC.on,N(cnt(function(r){return r.on;})),'Connectés','maintenant','Appareils présents dans le dernier cycle du collecteur (vus sur le réseau à l’instant).')
      +tuile(IC.inc,N(cnt(function(r){return r.etat==='inconnu';})),'Inconnus','sans décision','Appareils ni autorisés explicitement, ni en quarantaine, ni bloqués : le NAC n’a encore pris aucune décision à leur sujet.')
      +tuile(IC.qua,N(cnt(function(r){return r.etat==='quarantaine';})),'En quarantaine','isolés','Appareils placés dans la zone de quarantaine : accès réseau restreint en attendant une décision.')
      +tuile(IC.ok,N(cnt(function(r){return r.etat==='autorise';})),'Autorisés','décision explicite','Appareils explicitement autorisés (état « allow »). Un appareil du LAN sans décision est compté parmi les inconnus.')
      +tuile(IC.os,N(nos),'OS identifiés',ok&&n?Math.round(100*nos/n)+' % · '+fmt(n-nos)+' sans OS':'','Appareils dont l’OS a été déduit d’une preuve (classe DHCP, User-Agent, DNS, nom, mDNS). Le fabricant seul ne donne jamais d’OS.');
     majFiltreOs(L);
+    // conteneurs LXC : isolés, lecture seule (pas d’action de quarantaine sur l’infrastructure)
+    var enL=LXC.filter(function(r){return r.on;}).length,LX=LXC.slice().sort(function(x,y){return (y.on-x.on)||(x.nom||x.ip).toLowerCase().localeCompare((y.nom||y.ip).toLowerCase());});
+    el('lxcNote').textContent=ok?(LXC.length?fmt(enL)+' en ligne sur '+fmt(LXC.length)+' · pont br-lxc':'pont br-lxc'):'pont br-lxc · isolés des appareils';
+    el('lxc').innerHTML=!ok?'<div class="vide">Session requise.</div>':!LXC.length?'<div class="vide">Aucun conteneur vu sur le pont br-lxc.</div>'
+      :LX.slice(0,12).map(function(r){return '<div class="evt"><span title="'+esc(r.nom||'Conteneur sans nom')+'">'+esc(r.nom||'Conteneur sans nom')+'</span><span><code>'+esc(r.ip||'—')+'</code> <b style="color:'+(r.on?'#2ecc71':'#6f84a8')+'">'+(r.on?'en ligne':'hors ligne')+'</b></span></div>';}).join('')
+        +(LX.length>12?'<div class="note">+ '+fmt(LX.length-12)+' autres conteneurs</div>':'');
     // OS
     var fam={};L.forEach(function(r){var f=r.os?famille(r.os):'';fam[f]=(fam[f]||0)+1;});
     var fl=Object.keys(fam).filter(function(k){return k;}).sort(function(x,y){return fam[y]-fam[x];}),parts=fl.slice(0,6).map(function(k,i){return [k,fam[k],couleurOs(k),k];});
@@ -326,7 +333,10 @@
       c('02:00:5e:10:00:0a','198.51.100.20','pc-invite','HP','Windows','user-agent','laptop','guest','unknown',false,60*24*2,60*20),
       c('02:00:5e:10:00:0b','192.0.2.60','cam-entree','Hikvision','','','camera','iot','deny',false,60*24*70,60*50),
       c('02:00:5e:10:00:0c','192.0.2.1','routeur-atelier','GL.iNet','Linux','empreinte-openwrt','router','lan','allow',true,60*24*200,1),
-      c('02:00:5e:10:00:0d','192.0.2.24','mac-dev','Apple','macOS','user-agent','computer','lan','allow',false,60*24*10,60*9)
+      c('02:00:5e:10:00:0d','192.0.2.24','mac-dev','Apple','macOS','user-agent','computer','lan','allow',false,60*24*10,60*9),
+      c('00:16:3e:00:00:01','198.51.100.101','ct-exemple-web','Xensource','','','unknown','lxc','unknown',true,60*24*90,1,{conteneur:true}),
+      c('00:16:3e:00:00:02','198.51.100.102','ct-exemple-db','Xensource','','','unknown','lxc','unknown',true,60*24*90,2,{conteneur:true}),
+      c('00:16:3e:00:00:03','198.51.100.103','ct-exemple-cache','Xensource','','','unknown','lxc','unknown',false,60*24*40,60*7,{conteneur:true})
     ];
     cl[10].zone='blocked';
     var ev=function(e,mac,x){return {timestamp:new Date((n-x*60)*1000).toISOString(),event:e,details:{mac:mac}};};
@@ -381,7 +391,7 @@
     var b=e.target.closest&&e.target.closest('button');if(!b)return;
     if(b.hasAttribute('data-act')){ETAT.conf={i:Number(b.getAttribute('data-i')),v:b.getAttribute('data-act')};liste();hauteur();return;}
     if(b.hasAttribute('data-ko')){ETAT.conf=null;liste();hauteur();return;}
-    if(b.hasAttribute('data-ok')){var r=LISTE[Number(b.getAttribute('data-ok'))],v=ETAT.conf&&ETAT.conf.v;ETAT.conf=null;liste();if(r&&v) agir(v,r);}
+    if(b.hasAttribute('data-ok')){var r=TOUS[Number(b.getAttribute('data-ok'))],v=ETAT.conf&&ETAT.conf.v;ETAT.conf=null;liste();if(r&&v) agir(v,r);}
   });
 
   heure();
