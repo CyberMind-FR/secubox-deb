@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# Script shell : rien a compiler.
+
+override_dh_auto_install:
+	install -D -m 755 sbin/secubox-kiosk-setup debian/secubox-kiosk/usr/sbin/secubox-kiosk-setup
+
+override_dh_auto_test:
+	# Les tests tournent hors build (pytest).

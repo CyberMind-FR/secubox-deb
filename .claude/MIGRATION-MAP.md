@@ -99,6 +99,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-jellyfin** | ✅ | ✅ | ✅ | **LXC-native 2.0.x** — auto-wire biblios (photoprism/nextcloud/torrent/lyrion/peertube), self-mint API key, mode léger | ✅ |
 | **secubox-lyrion** | ✅ | ✅ | ✅ | players, library, backup, LMS JSON-RPC | ✅ |
 | **secubox-console** | — | ✅ | ✅ | Textual TUI dashboard (no www) v1.1.0 | ✅ |
+| **secubox-kiosk** | — | ✅ | ✅ | secubox-kiosk-setup (installe/active le kiosque Chromium), arch all v1.0.0 | ✅ |
 | **secubox-soc-agent** | — | ✅ | ✅ | Edge node metrics agent v1.0.0 | ✅ |
 | **secubox-soc-gateway** | — | ✅ | ✅ | SOC aggregation gateway v1.0.0 | ✅ |
 | **secubox-soc-web** | ✅ | — | ✅ | React SOC dashboard v1.0.0 | ✅ |

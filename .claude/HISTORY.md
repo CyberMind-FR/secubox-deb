@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — secubox-kiosk 1.0.0 : l'outil d'installation du kiosque devient un paquet (ref #2504)
+
+`secubox-kiosk-setup` vivait dans `image/sbin/` et seul `build-image.sh` le copiait ; sur une box déjà flashée (RPi400 alpha12 sans kiosque) l'outil manquait et `apt-get install secubox-kiosk` répondait « paquet introuvable ». Nouveau paquet `secubox-kiosk` (arch all) : `/usr/sbin/secubox-kiosk-setup`, une seule copie (`build-image.sh` et `build-live-usb.sh` la prennent dans le paquet). Le lanceur appelé par l'unité générée reste celui de `secubox-premier-pas` (dépendance, pas de second exemplaire). Tests `packages/secubox-kiosk/tests/test_paquet_2504.py`.
+
 ## 2026-10-12 — build-image : repli sur le dernier agrégat quand le commit n'en a pas (ref #2501)
 
 Un commit sans paquet lance quand même `build-packages.yml`, dont le job `collect` est sauté : le run existe, l'agrégat `secubox-debs-all` non. L'étape « commit exact » (`if_no_artifact_found: warn`) finissait en success avec 0 .deb, le repli ne partait pas et l'image échouait (« Aucun paquet SecuBox à installer », runs 38260593345 et 38262902039). Le repli se décide maintenant sur le nombre de .deb, et la provenance ne dit plus « agrégat du commit » avec 0 fichier. Le repli remonte aussi (`search_artifacts: true`) jusqu'à un run qui possède l'agrégat : le « dernier run réussi » était lui-même vide (run 38266017460). Test `tests/test_workflow_repli_paquets_2501.py`.

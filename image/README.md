@@ -474,7 +474,7 @@ linux /live/vmlinuz boot=live secubox.netmode=bridge secubox.kiosk=1
 
 GUI kiosk mode configuration tool.
 
-**Location:** `/usr/sbin/secubox-kiosk-setup`
+**Location:** `/usr/sbin/secubox-kiosk-setup` (livré par le paquet `secubox-kiosk`, sources dans `packages/secubox-kiosk/sbin/`)
 
 **Usage:**
 ```bash
