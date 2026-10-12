@@ -1,3 +1,9 @@
+secubox-kiosk (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'utilisateur secubox-kiosk est cree (et un compte existant repare) avec /bin/bash et non /usr/sbin/nologin (#2506) : le lanceur ouvre la session par `su -l`, qui repondait « This account is currently not available » apres le demarrage de Xorg (constate sur RPi400). Meme shell que build-live-usb.sh.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 18:00:00 +0200
+
 secubox-kiosk (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Premier paquet (#2504). secubox-kiosk-setup vivait dans image/sbin/ et seul build-image.sh le copiait dans l'image : une box deja flashee (RPi400 alpha12, sans kiosque) n'avait pas l'outil, et `apt-get install secubox-kiosk` repondait « paquet introuvable ». Le paquet livre /usr/sbin/secubox-kiosk-setup (une seule copie, build-image.sh et build-live-usb.sh la prennent ici). Le lanceur /usr/sbin/secubox-kiosk-launcher que l'unite generee appelle est livre par secubox-premier-pas : dependance, pas de second exemplaire.

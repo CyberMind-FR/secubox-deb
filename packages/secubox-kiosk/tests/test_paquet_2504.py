@@ -47,10 +47,25 @@ def test_rules_installe_l_outil_dans_usr_sbin():
 
 def test_changelog_en_tete():
     t = (PAQUET / "debian" / "changelog").read_text()
-    assert re.match(r"secubox-kiosk \(1\.0\.0-1~bookworm1\) bookworm; urgency=medium", t)
+    assert re.match(r"secubox-kiosk \(\d+\.\d+\.\d+-1~bookworm1\) bookworm; urgency=medium", t)
 
 
 def test_les_constructeurs_d_image_pointent_sur_la_nouvelle_source():
     for nom in ("build-image.sh", "build-live-usb.sh"):
         t = (RACINE / "image" / nom).read_text()
         assert "packages/secubox-kiosk/sbin" in t, nom
+
+
+def test_utilisateur_kiosque_a_un_vrai_shell_2506():
+    """Le lanceur ouvre la session par `su -l secubox-kiosk -c` : un compte en nologin répond « This account is currently not available »
+    (constaté sur la RPi400) après avoir démarré Xorg."""
+    s = (PAQUET / "sbin" / "secubox-kiosk-setup").read_text()
+    assert "-s /usr/sbin/nologin" not in s
+    assert s.count("-s /bin/bash") >= 2
+    assert re.search(r"usermod -s /bin/bash \"?\$KIOSK_USER", s), "un compte existant en nologin doit etre repare"
+
+
+def test_le_lanceur_ne_depend_pas_du_shell_du_compte_2506():
+    t = (RACINE / "packages" / "secubox-premier-pas" / "kiosque" / "secubox-kiosk-launcher").read_text()
+    assert 'su -s /bin/bash -l "$KIOSK_USER" -c' in t
+    assert 'su -l "$KIOSK_USER" -c' not in t

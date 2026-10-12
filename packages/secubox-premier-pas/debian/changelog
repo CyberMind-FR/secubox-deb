@@ -1,3 +1,9 @@
+secubox-premier-pas (0.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * Le lanceur du kiosque ouvre la session par `su -s /bin/bash -l` (#2506) : il ne depend plus du shell du compte secubox-kiosk (nologin => « This account is currently not available », Xorg demarre mais la session non).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 18:00:00 +0200
+
 secubox-premier-pas (0.5.4-1~bookworm1) bookworm; urgency=medium
 
   * Un défaut d'horloge n'arrête plus la première installation (#2495) : sans systemd-timesyncd
