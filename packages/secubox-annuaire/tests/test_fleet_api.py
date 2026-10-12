@@ -245,7 +245,8 @@ def test_fleet_never_500_on_unexpected_failure(client, monkeypatch):
 
     r = tc.get("/fleet")
     assert r.status_code == 200
-    assert r.json() == {"nodes": []}
+    # #2487 : jamais un 500, mais une lecture en échec ne se fait pas passer pour une flotte vide
+    assert r.json() == {"nodes": [], "erreur": True}
 
 
 # ---------------------------------------------------------------------------

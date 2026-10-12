@@ -901,7 +901,9 @@ async def get_fleet():
         ]
         return {"nodes": nodes}
     except Exception:
-        return {"nodes": []}
+        # Ne lève jamais (500 évité), mais ne se fait PAS passer pour une flotte vide : `erreur: true` (#2487). Une lecture en échec
+        # affichée « aucun nœud » faisait croire que le maillage était vide.
+        return {"nodes": [], "erreur": True}
 
 
 # ---------------------------------------------------------------------------

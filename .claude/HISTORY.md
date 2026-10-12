@@ -765,3 +765,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Vue d'ensemble Aurora (closes #2485)
 - secubox-hub 1.10.1 : /apercu/ au profil Aurora (page autonome, tuiles, cartes par espace) ; captures dashboard et apercu ajoutées à la galerie.
+
+## 2026-10-12 — Flotte Aurora (closes #2487)
+- secubox-annuaire 0.11.1 : /fleet/ au profil Aurora (XSS-stricte conservée) ; GET /fleet signale une lecture en échec (`erreur: true`) au lieu de rendre une flotte vide. 8 tests ; 15 échecs préexistants de la suite inchangés.

@@ -1,309 +1,258 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-<html lang="fr" class="hybrid-dark">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Flotte (instantanés signés des nœuds du maillage), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/annuaire/fleet. Panneau XSS-strict : les valeurs de l'API sont posées par createElement/textContent/dataset, jamais en HTML ;
+  aucune action n'est portée par un attribut d'événement en ligne (une délégation unique lit dataset). Flotte illisible = dite, jamais « aucun nœud ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives.
+-->
+<html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuBox — Flotte</title>
-<link rel="stylesheet" href="/shared/hybrid-dark.css">
-<style>
-  :root{
-    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
-    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
-    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44; --yellow:#ffcc00;
-  }
-  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
-  .header{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
-  .header h1{font-size:1.3rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
-  .header .sub{font-size:.72rem;color:var(--p31-dim);margin-top:.2rem}
-  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.35rem;vertical-align:middle}
-  .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)} .dot.off{background:var(--red)}
-  .dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
-  .dot.warn{background:var(--yellow);box-shadow:0 0 6px var(--yellow)}
-  .dot.down{background:var(--red);box-shadow:0 0 6px var(--red)}
-  .dot.stale{background:var(--p31-dim);box-shadow:none}
-  .btns{display:flex;flex-wrap:wrap;gap:.4rem}
-  .btn{font-family:inherit;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;
-    color:var(--text);background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
-    padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
-  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
-  .btn.small{padding:.2rem .45rem;font-size:.62rem}
-  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
-  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
-  .note{font-size:.76rem;color:var(--p31-dim);line-height:1.5;margin-top:.5rem}
-  table.matrix{width:100%;border-collapse:collapse;font-size:.78rem}
-  table.matrix th,table.matrix td{padding:.5rem .6rem;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
-  table.matrix th{color:var(--p31-dim);text-transform:uppercase;font-size:.66rem;letter-spacing:.06em}
-  .empty-cell{color:var(--p31-dim);font-style:italic;font-size:.74rem}
-  tr.node-row.is-stale{opacity:.45}
-  .bar-wrap{display:inline-block;width:5rem;height:.5rem;background:var(--bg-row);border:1px solid var(--border);border-radius:3px;overflow:hidden;vertical-align:middle;margin-right:.4rem}
-  .bar-fill{display:block;height:100%;background:var(--cyan)}
-  .bar-fill.warn{background:var(--yellow)}
-  .bar-fill.crit{background:var(--red)}
-  .cell-inner{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}
-  .counter-badge{display:inline-block;padding:.1rem .35rem;border-radius:4px;background:var(--bg-row);
-    border:1px solid var(--border);font-size:.66rem;color:var(--text);margin-right:.25rem}
-  .counter-badge.nonzero{color:var(--yellow);border-color:var(--yellow)}
-  .module-badge{display:inline-block;padding:.1rem .35rem;border-radius:4px;background:var(--bg-row);
-    border:1px solid var(--red);color:var(--red);font-size:.66rem;margin:.1rem .2rem 0 0}
-  .empty{color:var(--p31-dim);font-size:.8rem;font-style:italic}
-  .hostname-col{color:var(--cyan);white-space:nowrap}
-  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;border-radius:6px;
-    font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
-  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
-  @media(max-width:768px){.main{margin-left:0}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Flotte</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
+    
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
+            .tw{overflow-x:auto} table.matrix{width:100%;border-collapse:collapse;font-size:.78rem} table.matrix th{color:var(--faible);font-weight:600;text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;padding:4px 8px;white-space:nowrap}
+        table.matrix td{padding:6px 8px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap} tr.node-row{cursor:pointer} tr.node-row:hover{background:rgba(41,182,246,.06)} tr.node-row.sel{background:rgba(41,182,246,.12)} tr.is-stale{opacity:.55}
+        .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;background:var(--faible)} .dot.ok{background:var(--vert)} .dot.warn{background:var(--orange)} .dot.down{background:var(--rouge)} .dot.stale{background:var(--faible)}
+        .cell-inner{display:inline-flex;align-items:center;gap:6px} .bar-wrap{display:inline-block;width:56px;height:8px;border-radius:4px;background:rgba(159,179,214,.14);overflow:hidden} .bar-fill{display:block;height:100%;background:var(--vert)} .bar-fill.warn{background:var(--orange)} .bar-fill.crit{background:var(--rouge)}
+        .counter-badge,.module-badge{display:inline-block;border:1px solid var(--trait);border-radius:999px;padding:0 8px;margin-right:4px;font-size:.68rem;color:var(--doux)} .counter-badge.nonzero{border-color:var(--orange);color:var(--orange)} .module-badge{border-color:var(--rouge);color:#ffd9de}
+        .hostname-col{font-weight:700} .empty{color:var(--faible)} .detail .kv{margin-bottom:0}
+    </style>
 </head>
-<body class="hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.4" fill="rgba(41,182,246,.14)"/><circle cx="5" cy="18" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M12 7.5v4M12 11.5l-6 4.5M12 11.5l6 4.5"/></svg>
+                <div><b>Flotte</b><small id="sub">Nœuds du maillage</small></div>
+            </div>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="note">Un instantané signé par nœud (le dernier gagne), publié toutes les 60 s par <code>secubox-metrics-publish.timer</code>, agrégé et vérifié ici. Une ligne grisée « hors ligne » est un instantané périmé : aucune preuve fraîche de vie.</div>
 
-<main class="main">
-  <header class="header">
-    <div>
-      <h1>🛰 Flotte</h1>
-      <div class="sub" id="sub"><span class="dot" id="dot"></span>chargement…</div>
-    </div>
-    <div class="btns">
-      <button class="btn" id="btn-refresh">↻ Rafraîchir</button>
-    </div>
-  </header>
+        <div class="tuiles">
+            <div class="tuile"><div class="l">Nœuds</div><div class="v" id="tN">—</div><div class="s">dans le maillage</div></div>
+            <div class="tuile"><div class="l">En ligne</div><div class="v" id="tOn">—</div><div class="s">instantané frais</div></div>
+            <div class="tuile"><div class="l">Périmés</div><div class="v" id="tOff">—</div><div class="s">hors ligne</div></div>
+            <div class="tuile"><div class="l">Modules à l’arrêt</div><div class="v" id="tMod">—</div><div class="s">sur tous les nœuds</div></div>
+            <div class="tuile"><div class="l">Alertes SOC</div><div class="v" id="tSoc">—</div><div class="s">cumul des compteurs</div></div>
+        </div>
 
-  <div class="card">
-    <h3>Nœuds mesh</h3>
-    <div class="note">Un instantané signé par nœud (dernier gagne) — publié toutes les 60s par
-      <code>secubox-metrics-publish.timer</code>, agrégé et vérifié ici. Une ligne grisée /
-      « hors-ligne » signifie un instantané périmé (aucune preuve fraîche de vie).</div>
-    <div style="overflow-x:auto;margin-top:.6rem">
-      <table class="matrix">
-        <thead>
-          <tr>
-            <th>Nœud</th><th>CPU</th><th>Mém.</th><th>Disque</th><th>Load1</th>
-            <th>Uptime</th><th>Compteurs</th><th>Modules down</th><th>Vu</th>
-          </tr>
-        </thead>
-        <tbody id="fleet-body"></tbody>
-      </table>
-    </div>
-  </div>
-</main>
+        <div class="pan"><h3>Nœuds du maillage <i>cliquer une ligne pour le détail</i></h3>
+            <div class="tw"><table class="matrix"><thead><tr><th>Nœud</th><th>CPU</th><th>Mém.</th><th>Disque</th><th>Charge</th><th>En marche</th><th>Compteurs</th><th>Modules à l’arrêt</th><th>Vu</th></tr></thead><tbody id="fleet-body"></tbody></table></div>
+        </div>
+        <div class="pan detail" id="detail" hidden><h3>Détail <i id="detTitre"></i></h3><div class="kv" id="detKv"></div></div>
+    </div></div></main>
 
-<div class="toast" id="toast"></div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/annuaire';
+        const REFRESH_MS = 10000;
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        let noeuds = [], choisi = null;
 
-<script>
-const API = '/api/v1/annuaire';
-const REFRESH_MS = 10000;
-const $ = (id) => document.getElementById(id);
+        function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+        function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
 
-function token(){ return localStorage.getItem('sbx_token') || ''; }
-function authHeaders(extra){
-  return Object.assign({'Authorization': 'Bearer ' + token()}, extra || {});
-}
-function toast(msg, isErr){
-  const t = $('toast'); t.textContent = msg;
-  t.className = 'toast show' + (isErr ? ' error' : '');
-  setTimeout(() => { t.className = 'toast'; }, 2600);
-}
-async function J(path, opts){
-  const o = Object.assign({credentials: 'same-origin'}, opts || {});
-  o.headers = authHeaders(o.headers);
-  const r = await fetch(API + path, o);
-  if (!r.ok) {
-    let detail = 'HTTP ' + r.status;
-    try { const b = await r.json(); if (b && b.detail) detail = b.detail; } catch (e) { /* ignore */ }
-    throw new Error(detail);
-  }
-  return r.json();
-}
+        async function J(path) {
+            if (DEMO) return demo();
+            const h = {}, t = token(); if (t) h.Authorization = 'Bearer ' + t;
+            const r = await fetch(API + path, { headers: h, credentials: 'same-origin', cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status === 401 ? 'session requise' : 'HTTP ' + r.status);
+            return r.json();
+        }
 
-// Toutes les valeurs issues de l'API sont posées via textContent/dataset
-// uniquement — JAMAIS en assignant du HTML brut à un noeud (garde XSS plus
-// stricte que le panneau /centers). Aucune donnée d'API n'apparaît dans un
-// attribut d'événement inline ; les actions passent par un unique
-// addEventListener délégué qui lit `dataset`.
+        function ago(ts) {
+            if (!ts) return '—';
+            const then = Date.parse(ts); if (Number.isNaN(then)) return '—';
+            const s = Math.max(0, Math.floor((Date.now() - then) / 1000));
+            if (s < 90) return 'il y a ' + s + ' s'; if (s < 5400) return 'il y a ' + Math.round(s / 60) + ' min'; return 'il y a ' + Math.round(s / 3600) + ' h';
+        }
+        function marche(sec) { sec = Number(sec) || 0; const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60); return d > 0 ? d + ' j ' + h + ' h' : h > 0 ? h + ' h ' + m + ' min' : m + ' min'; }
 
-function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+        function pctCell(pct) {
+            const wrap = el('span', 'cell-inner');
+            if (pct == null || !isFinite(+pct)) { wrap.append(el('span', 'empty', '—')); return wrap; }
+            const v = Math.max(0, Math.min(100, Number(pct)));
+            const bw = el('span', 'bar-wrap'), fill = el('span', 'bar-fill ' + (v >= 90 ? 'crit' : v >= 70 ? 'warn' : '')); fill.style.width = v + '%'; bw.append(fill);
+            wrap.append(bw, el('span', null, v.toFixed(0) + ' %')); return wrap;
+        }
+        function compteurs(c) {
+            const w = el('span'); const o = c || {};
+            [['bans', 'bannissements'], ['assist_sessions', 'assistances'], ['soc_alerts', 'alertes SOC']].forEach(([k, lib]) => { const v = Number(o[k]) || 0; w.append(el('span', 'counter-badge' + (v > 0 ? ' nonzero' : ''), lib + ' : ' + v)); });
+            return w;
+        }
+        function modulesDown(l) {
+            const w = el('span'); const list = l || [];
+            if (!list.length) { w.append(el('span', 'empty', 'aucun')); return w; }
+            list.forEach(n => w.append(el('span', 'module-badge', String(n)))); return w;
+        }
 
-function agoStr(ts){
-  if (!ts) return '—';
-  const then = Date.parse(ts);
-  if (Number.isNaN(then)) return '—';
-  const s = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (s < 90) return 'il y a ' + s + 's';
-  if (s < 5400) return 'il y a ' + Math.round(s / 60) + 'm';
-  return 'il y a ' + Math.round(s / 3600) + 'h';
-}
+        function ligneNoeud(n) {
+            const tr = el('tr', 'node-row' + (n.stale ? ' is-stale' : '') + (choisi && choisi === n.node_did ? ' sel' : '')); tr.dataset.nodeDid = n.node_did || '';
+            const h = el('td', 'hostname-col'), inner = el('span', 'cell-inner');
+            const dot = el('span', 'dot ' + (n.stale ? 'stale' : (n.health || 'ok'))); dot.title = n.stale ? 'instantané périmé' : 'santé : ' + (n.health || 'ok');
+            inner.append(dot, el('span', null, n.hostname || '(inconnu)')); h.append(inner); tr.append(h);
+            [n.cpu_pct, n.mem_pct, n.disk_pct].forEach(v => { const td = el('td'); td.append(pctCell(v)); tr.append(td); });
+            tr.append(el('td', null, n.load1 == null ? '—' : (Number(n.load1) || 0).toFixed(2)), el('td', null, n.uptime_s == null ? '—' : marche(n.uptime_s)));
+            const c = el('td'); c.append(compteurs(n.counters)); tr.append(c); const m = el('td'); m.append(modulesDown(n.modules_down)); tr.append(m);
+            tr.append(el('td', null, n.stale ? 'hors ligne' : ago(n.ts)));
+            return tr;
+        }
 
-function fmtUptime(sec){
-  sec = Number(sec) || 0;
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (d > 0) return d + 'j ' + h + 'h';
-  if (h > 0) return h + 'h ' + m + 'm';
-  return m + 'm';
-}
+        function rendreNoeuds(liste, erreur) {
+            noeuds = liste || [];
+            const body = $('fleet-body'); clear(body);
+            if (erreur) { const tr = el('tr'), td = el('td', 'empty'); td.colSpan = 9; td.textContent = 'La flotte est illisible (' + erreur + ') : ce n’est pas « aucun nœud ».'; tr.append(td); body.append(tr); }
+            else if (!noeuds.length) { const tr = el('tr'), td = el('td', 'empty'); td.colSpan = 9; td.textContent = 'Aucun nœud n’a publié d’instantané.'; tr.append(td); body.append(tr); }
+            else noeuds.slice().sort((a, b) => (a.hostname || '').localeCompare(b.hostname || '')).forEach(n => body.append(ligneNoeud(n)));
 
-function pctBarClass(pct){
-  if (pct >= 90) return 'crit';
-  if (pct >= 70) return 'warn';
-  return '';
-}
+            const ok = !erreur;
+            $('tN').textContent = ok ? fmt(noeuds.length) : '—';
+            $('tOn').textContent = ok ? fmt(noeuds.filter(n => !n.stale).length) : '—'; $('tOff').textContent = ok ? fmt(noeuds.filter(n => n.stale).length) : '—';
+            $('tMod').textContent = ok ? fmt(noeuds.reduce((a, n) => a + ((n.modules_down || []).length), 0)) : '—';
+            $('tSoc').textContent = ok ? fmt(noeuds.reduce((a, n) => a + (Number((n.counters || {}).soc_alerts) || 0), 0)) : '—';
+            const pa = $('pastille');
+            if (!ok) { pa.textContent = 'FLOTTE ILLISIBLE'; pa.className = 'actif hors'; }
+            else if (!noeuds.length) { pa.textContent = 'AUCUN NŒUD'; pa.className = 'actif neutre'; }
+            else { const off = noeuds.filter(n => n.stale).length; pa.textContent = off ? (noeuds.length - off) + ' / ' + noeuds.length + ' EN LIGNE' : 'TOUS EN LIGNE'; pa.className = 'actif' + (off ? ' hors' : ''); }
+            $('sub').textContent = ok ? noeuds.length + ' nœud' + (noeuds.length > 1 ? 's' : '') + ' dans le maillage' : 'Nœuds du maillage';
+            rendreDetail(); hauteur();
+        }
 
-function healthDot(healthState, isStale){
-  const dot = document.createElement('span');
-  dot.className = 'dot ' + (isStale ? 'stale' : (healthState || 'ok'));
-  return dot;
-}
+        function rendreDetail() {
+            const n = noeuds.find(x => x.node_did === choisi), p = $('detail');
+            if (!n) { p.hidden = true; return; }
+            p.hidden = false; $('detTitre').textContent = n.hostname || '(inconnu)';
+            const kv = $('detKv'); clear(kv);
+            const l = (k, v) => { kv.append(el('div', 'k', k), el('div', null, v == null || v === '' ? '—' : String(v))); };
+            l('Identifiant (DID)', n.node_did); l('Instantané', n.ts ? n.ts + ' (' + ago(n.ts) + ')' : null); l('Santé', n.stale ? 'périmé' : n.health); l('Charge (1 min)', n.load1);
+            l('Bannissements', (n.counters || {}).bans); l('Sessions d’assistance', (n.counters || {}).assist_sessions); l('Alertes SOC', (n.counters || {}).soc_alerts);
+            l('Modules à l’arrêt', (n.modules_down || []).join(', ') || 'aucun');
+        }
 
-function pctCell(pct){
-  const wrap = document.createElement('span');
-  wrap.className = 'cell-inner';
-  const barWrap = document.createElement('span');
-  barWrap.className = 'bar-wrap';
-  const fill = document.createElement('span');
-  const v = Math.max(0, Math.min(100, Number(pct) || 0));
-  fill.className = 'bar-fill ' + pctBarClass(v);
-  fill.style.width = v + '%';
-  barWrap.appendChild(fill);
-  const label = document.createElement('span');
-  label.textContent = v.toFixed(0) + '%';
-  wrap.appendChild(barWrap);
-  wrap.appendChild(label);
-  return wrap;
-}
+        // Délégation unique : aucune interaction ne dépend d'un attribut d'événement en ligne ; l'identifiant est lu dans dataset, jamais interprété.
+        $('fleet-body').addEventListener('click', e => {
+            const row = e.target.closest('[data-node-did]'); if (!row) return;
+            choisi = row.dataset.nodeDid === choisi ? null : row.dataset.nodeDid;
+            rendreNoeuds(noeuds, null);
+        });
 
-function countersCell(counters){
-  const wrap = document.createElement('span');
-  const c = counters || {};
-  ['bans', 'assist_sessions', 'soc_alerts'].forEach((key) => {
-    const v = c[key] || 0;
-    const badge = document.createElement('span');
-    badge.className = 'counter-badge' + (v > 0 ? ' nonzero' : '');
-    badge.textContent = key + ':' + v;
-    wrap.appendChild(badge);
-  });
-  return wrap;
-}
+        async function loadFleet() {
+            try {
+                const d = await J('/fleet');
+                rendreNoeuds(d.nodes || [], d.erreur ? 'lecture en échec côté nœud' : null);
+            } catch (e) {
+                rendreNoeuds([], e.message);
+            }
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'fleet' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('btn-refresh').addEventListener('click', loadFleet);
 
-function modulesDownCell(modulesDown){
-  const wrap = document.createElement('span');
-  const list = modulesDown || [];
-  if (list.length === 0) {
-    const ok = document.createElement('span');
-    ok.className = 'empty';
-    ok.textContent = 'aucun';
-    wrap.appendChild(ok);
-    return wrap;
-  }
-  list.forEach((name) => {
-    const badge = document.createElement('span');
-    badge.className = 'module-badge';
-    badge.textContent = name;
-    wrap.appendChild(badge);
-  });
-  return wrap;
-}
-
-function buildRow(node){
-  const tr = document.createElement('tr');
-  tr.className = 'node-row' + (node.stale ? ' is-stale' : '');
-  tr.dataset.nodeDid = node.node_did || '';
-
-  const hostTd = document.createElement('td');
-  hostTd.className = 'hostname-col';
-  const inner = document.createElement('span');
-  inner.className = 'cell-inner';
-  inner.appendChild(healthDot(node.health, node.stale));
-  const hostSpan = document.createElement('span');
-  hostSpan.textContent = node.hostname || '(inconnu)';
-  inner.appendChild(hostSpan);
-  hostTd.appendChild(inner);
-  tr.appendChild(hostTd);
-
-  const cpuTd = document.createElement('td'); cpuTd.appendChild(pctCell(node.cpu_pct)); tr.appendChild(cpuTd);
-  const memTd = document.createElement('td'); memTd.appendChild(pctCell(node.mem_pct)); tr.appendChild(memTd);
-  const diskTd = document.createElement('td'); diskTd.appendChild(pctCell(node.disk_pct)); tr.appendChild(diskTd);
-
-  const loadTd = document.createElement('td');
-  loadTd.textContent = (Number(node.load1) || 0).toFixed(2);
-  tr.appendChild(loadTd);
-
-  const upTd = document.createElement('td');
-  upTd.textContent = fmtUptime(node.uptime_s);
-  tr.appendChild(upTd);
-
-  const countersTd = document.createElement('td');
-  countersTd.appendChild(countersCell(node.counters));
-  tr.appendChild(countersTd);
-
-  const modulesTd = document.createElement('td');
-  modulesTd.appendChild(modulesDownCell(node.modules_down));
-  tr.appendChild(modulesTd);
-
-  const seenTd = document.createElement('td');
-  seenTd.textContent = node.stale ? 'hors-ligne' : agoStr(node.ts);
-  tr.appendChild(seenTd);
-
-  return tr;
-}
-
-function renderNodes(nodes){
-  const body = $('fleet-body');
-  clear(body);
-  if (!nodes || nodes.length === 0) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 9;
-    td.className = 'empty-cell';
-    td.textContent = 'aucun nœud publié';
-    tr.appendChild(td);
-    body.appendChild(tr);
-    return;
-  }
-  nodes
-    .slice()
-    .sort((a, b) => (a.hostname || '').localeCompare(b.hostname || ''))
-    .forEach((node) => body.appendChild(buildRow(node)));
-}
-
-// Délégation d'événements : aucune interaction ne dépend d'un attribut
-// on*="..." inline ; data-node-did porte l'identifiant (jamais interprété
-// comme code, lu via dataset).
-$('fleet-body').addEventListener('click', (e) => {
-  const row = e.target.closest('[data-node-did]');
-  if (!row) return;
-  // Réservé pour une future vue détaillée par nœud (data-node-did disponible).
-});
-
-async function loadFleet(){
-  try {
-    const d = await J('/fleet');
-    renderNodes(d.nodes || []);
-    $('dot').className = 'dot on';
-    const sub = $('sub');
-    clear(sub);
-    const dot = document.createElement('span');
-    dot.className = 'dot on';
-    sub.appendChild(dot);
-    sub.appendChild(document.createTextNode((d.nodes || []).length + ' nœud(s)'));
-  } catch (e) {
-    $('dot').className = 'dot off';
-    const sub = $('sub');
-    clear(sub);
-    const dot = document.createElement('span');
-    dot.className = 'dot off';
-    sub.appendChild(dot);
-    sub.appendChild(document.createTextNode('flotte indisponible (' + e.message + ')'));
-    renderNodes([]);
-    toast('Flotte indisponible : ' + e.message, true);
-  }
-}
-
-$('btn-refresh').addEventListener('click', loadFleet);
-
-loadFleet();
-setInterval(loadFleet, REFRESH_MS);
-</script>
+        function demo() {
+            const t = new Date(Date.now() - 20000).toISOString(), vieux = new Date(Date.now() - 3600 * 1000 * 5).toISOString();
+            return { nodes: [
+                { node_did: 'did:plc:' + 'a'.repeat(32), hostname: 'noeud-exemple-1', cpu_pct: 21, mem_pct: 63, disk_pct: 48, load1: 0.74, uptime_s: 1052000, counters: { bans: 12, assist_sessions: 0, soc_alerts: 3 }, modules_down: [], health: 'ok', stale: false, ts: t },
+                { node_did: 'did:plc:' + 'b'.repeat(32), hostname: 'noeud-exemple-2', cpu_pct: 88, mem_pct: 91, disk_pct: 72, load1: 3.2, uptime_s: 86400 * 3, counters: { bans: 0, assist_sessions: 1, soc_alerts: 0 }, modules_down: ['module-exemple'], health: 'warn', stale: false, ts: t },
+                { node_did: 'did:plc:' + 'c'.repeat(32), hostname: '<img src=x onerror=alert(1)>', cpu_pct: null, mem_pct: 40, disk_pct: 95, load1: null, uptime_s: null, counters: {}, modules_down: ['<b>x</b>'], health: 'down', stale: true, ts: vieux }] };
+        }
+        if (DEMO) $('demo').hidden = false;
+        loadFleet();
+        setInterval(loadFleet, REFRESH_MS);
+    </script>
 </body>
 </html>
