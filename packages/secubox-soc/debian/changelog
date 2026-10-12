@@ -1,3 +1,9 @@
+secubox-soc (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: Guardian, appareils principaux en barres empilees par type d usage, identites de meme adresse de tunnel regroupees (deduit), renvoi vers les Clients reels du NAC (ref #2423)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 07:42:37 +0200
+
 secubox-soc (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * fix: Guardian lit les routes /pub/ du DPI en premier : la route legacy ne renvoie pas connected et affichait un faux ⛔ Analyse du trafic (DPI) alors que sbxdpi etait connecte (ref #2408)

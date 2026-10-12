@@ -39,6 +39,7 @@ from .collector import Collector
 from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_vendor, risk_score
 from .osdetect import est_conteneur_lxc
 from . import zones_info
+from .clients_reels import cle_appareil
 from .dnsevidence import domaines_par_adresse
 from .quarantaine_auto import QuarantaineAuto
 from .presence.geo import enrich_origin
@@ -924,6 +925,7 @@ def clients(
             "online": is_online,
             "status": status,  # For frontend badge
             "conteneur": conteneur,  # #2236 : conteneur LXC (br-lxc, 10.100.0.0/16, OUI 00:16:3e), pas un appareil
+            "cle": cle_appareil(mac),  # #2423 : clé de jonction avec le Toolbox (condensat, jamais la MAC)
         })
 
     response = {

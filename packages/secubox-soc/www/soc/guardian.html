@@ -145,6 +145,27 @@
   }
   var GRAV={critical:['Critique','#ff4d5e'],high:['Haute','#ff4d5e'],medium:['Moyenne','#ff9f1c'],low:['Faible','#ffd23f'],info:['Info','#6f84a8'],audit:['Audit','#6f84a8']};
   var ACT={robot:'Robot',banned:'Banni',blocked:'Bloqué',block:'Bloqué',warning:'Alerte',log:'Capturé',captured:'Capturé',limited:'Limité',observe:'Observe'};
+  /* #2423 : appareils principaux, octets par type d'usage ; les identités qui ont porté la même adresse de tunnel (suffixe « · .NN » du nom DPI) sont regroupées — DÉDUIT, annoncé comme tel. Le rattachement à l'appareil du NAC est dans /nac/ (Clients réels). */
+  var COULEUR_USAGE={cloud:'#a78bfa',streaming:'#ff9f1c',social:'#29b6f6',web:'#2ecc71',messaging:'#ffd23f',ai:'#ff4d5e'};
+  function appareilsEmpiles(box,C){
+    var G={},ordre=[];
+    C.forEach(function(c){
+      var m=/·\s*(\.\d+)\s*$/.exec(String(c.name||'')),suf=m?m[1]:'',n=suf?C.filter(function(x){return new RegExp('·\\s*\\'+suf+'\\s*$').test(String(x.name||''));}).length:0;
+      var k=suf&&n>1?'s:'+suf:'h:'+(c.device||c.name);
+      if(!G[k]){G[k]={nom:suf&&n>1?'Appareil · '+suf:String(c.name||c.device||'Appareil'),ids:0,bytes:0,usages:{},deduit:!!(suf&&n>1)};ordre.push(k);}
+      var g=G[k];g.ids++;g.bytes+=num(c.bytes);(c.usages||[]).forEach(function(u){g.usages[u.name]=(g.usages[u.name]||0)+num(u.bytes);});
+    });
+    var L=ordre.map(function(k){return G[k];}).sort(function(a,b){return b.bytes-a.bytes;}).slice(0,8);
+    if(!L.length){box.innerHTML='<div class="vide">Aucun appareil mesuré.</div>';return;}
+    var max=L[0].bytes||1;
+    box.innerHTML=L.map(function(g){
+      var segs=Object.keys(g.usages).sort(function(a,b){return g.usages[b]-g.usages[a];});
+      var tot=segs.reduce(function(t,u){return t+g.usages[u];},0);
+      var barre=tot>0?segs.map(function(u){return '<i style="flex:'+g.usages[u]+';background:'+(COULEUR_USAGE[u]||'#6f84a8')+'" title="'+esc(u+' : '+oct(g.usages[u]))+'"></i>';}).join(''):'<i style="flex:1;background:#3b82f6"></i>';
+      return '<div class="ligne" style="grid-template-columns:minmax(70px,1fr) minmax(0,2.2fr) auto"><span class="n" title="'+esc(g.nom+(g.deduit?' — '+g.ids+' identités sur la même adresse de tunnel (déduit)':''))+'">'+esc(g.nom)+(g.deduit?' <small style="color:var(--faible)">×'+g.ids+'</small>':'')+'</span>'
+        +'<div style="height:10px;border-radius:5px;background:rgba(159,179,214,.12);overflow:hidden"><div style="display:flex;height:100%;width:'+Math.max(2,100*g.bytes/max).toFixed(1)+'%">'+barre+'</div></div><span>'+esc(oct(g.bytes))+'</span></div>';
+    }).join('')+'<div class="note">Couleur = type d’usage. « ×N » : identités regroupées sur la même adresse de tunnel (déduit). Rattachement à l’appareil du NAC : <a href="/nac/" target="_top" style="color:var(--cyan)">Clients réels</a>.</div>';
+  }
   function barres(el_,rows,fmtv,col){
     var m=rows.length?rows[0][1]:1;
     el_.innerHTML=rows.length?rows.map(function(r,i){return '<div class="ligne"><span class="n" title="'+esc(r[0])+'">'+esc(r[0])+'</span><span>'+fmtv(r[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*r[1]/m)+'%;background:'+(col||PAL[i%8])+'"></i></div></div>';}).join(''):'<div class="vide">Aucune donnée.</div>';
@@ -190,7 +211,7 @@
     if(U&&U.length){var tt=U.reduce(function(t,u){return t+num(u.bytes);},0)||1;barres(el('apps'),U.slice(0,8).map(function(u){return [u.name,100*num(u.bytes)/tt];}),function(v){return Math.round(v)+' %';});}
     else el('apps').innerHTML='<div class="vide">'+(d.usage?'Aucun usage classé.':'Session requise.')+'</div>';
     var C=d.clients;
-    if(C) barres(el('appareils'),C.slice().sort(function(a,b){return num(b.bytes)-num(a.bytes);}).slice(0,8).map(function(c){return [c.name||c.device,num(c.bytes)];}),oct,'#3b82f6'); else el('appareils').innerHTML='<div class="vide">Session requise.</div>';
+    if(C) appareilsEmpiles(el('appareils'),C); else el('appareils').innerHTML='<div class="vide">Session requise.</div>';
     var L=s&&s.leurres_touches,ll=L?Object.keys(L).map(function(k){return [k,num(L[k])];}).sort(function(a,b){return b[1]-a[1];}):null;
     el('leurresN').textContent=ll?fmt(ll.length):'—';
     el('leurres').innerHTML=ll&&ll.length?ll.slice(0,4).map(function(l){return '<div class="ligne" style="grid-template-columns:1fr auto"><span class="n">'+esc(l[0])+'</span><span>'+fmt(l[1])+'</span></div>';}).join('')+'<div class="note">'+fmt(ll.length)+' services leurres touchés aujourd’hui</div>':'<div class="vide">'+(s?'Aucun leurre touché.':'Session requise.')+'</div>';
@@ -208,7 +229,7 @@
       by_category:{robots:15502,'host_anomaly:unrouted':152,'host_anomaly:ip_literal':108,scanners:81,'auth_smtp:sasl_failed':33,lfi:25,honeypot:17},leurres_touches:{telnet:7221,vnc:4475,redis:1527,mysql:1749}},
     history:{jours:{'2026-10-04':{total:7000,severites:{high:60,medium:150,critical:20}},'2026-10-05':{total:11000,severites:{high:90,medium:210,critical:30}},'2026-10-06':{total:9000,severites:{high:70,medium:160,critical:25}},'2026-10-07':{total:15000,severites:{high:120,medium:260,critical:40}},'2026-10-08':{total:13000,severites:{high:100,medium:240,critical:35}},'2026-10-09':{total:19000,severites:{high:150,medium:300,critical:50}},'2026-10-10':{total:17000,severites:{high:140,medium:280,critical:45}}}},
     alerts:[{timestamp:'2026-10-10T07:13:51',client_ip:'57.141.0.59',country:'US',category:'robots',host:'gtl.gk2',path:'/user/login',severity:'high',action:'observe'},{timestamp:'2026-10-10T07:13:42',client_ip:'185.220.101.3',country:'DE',category:'scanner',host:'gtl.gk2',path:'/scan-ports',severity:'high',action:'observe'}],
-    usage:{usages:[{name:'streaming',bytes:32},{name:'web',bytes:18},{name:'social',bytes:12},{name:'dns',bytes:10}]},clients:[{name:'iPhone · 204',bytes:10.7e9},{name:'Android · 189',bytes:613e6},{name:'TV Salon',bytes:387e6}],
+    usage:{usages:[{name:'streaming',bytes:32},{name:'web',bytes:18},{name:'social',bytes:12},{name:'dns',bytes:10}]},clients:[{name:'iPhone · .204',bytes:10.7e9,usages:[{name:'streaming',bytes:6e9},{name:'cloud',bytes:3e9},{name:'social',bytes:1.7e9}]},{name:'Android · .204',bytes:2.1e9,usages:[{name:'cloud',bytes:1.4e9},{name:'web',bytes:.7e9}]},{name:'Android · .189',bytes:613e6,usages:[{name:'web',bytes:400e6},{name:'messaging',bytes:213e6}]},{name:'TV Salon',bytes:387e6,usages:[{name:'streaming',bytes:387e6}]}],
     dpiStats:{connected:true,total_flows:1551979,protocols:new Array(11).fill(0)},dpiPays:new Array(49).fill(0),gardien:{appareils:{connectes:14,total:38}},detections:{detections:[{nom:'Anti-robots',actif:true},{nom:'Leurres de service',actif:true}]}};
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxSocVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY)+12},location.origin);}catch(e){}}}

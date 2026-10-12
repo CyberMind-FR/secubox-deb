@@ -109,3 +109,35 @@ def test_tuiles_de_synthese_sont_des_boutons_de_filtre_2421():
         assert pg.evaluate("document.querySelectorAll('#rang .app-c').length") == total
         nav.close()
     assert erreurs == [], erreurs
+
+
+def test_clients_reels_jonction_par_preuves_2423():
+    """#2423 : les identités se regroupent par preuve (clé NAC, puis même adresse de tunnel annoncée comme déduite) ; sans preuve, rien n'est deviné."""
+    import pathlib
+    import pytest
+    sync_api = pytest.importorskip("playwright.sync_api")
+    page = pathlib.Path(__file__).resolve().parents[1] / "www" / "nac" / "index.html"
+    erreurs = []
+    with sync_api.sync_playwright() as p:
+        try:
+            nav = p.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"chromium indisponible : {e}")
+        pg = nav.new_page()
+        pg.on("pageerror", lambda e: erreurs.append(str(e)))
+        pg.goto("file://" + str(page) + "?demo=1")
+        pg.wait_for_timeout(400)
+        r = pg.evaluate("""() => {
+          const U = n => ({name:n, bytes:100});
+          const d = (id, nom, b) => ({device:id, name:nom, bytes:b, up_bytes:b/2, down_bytes:b/2, flows:1, usages:[U('cloud')], top_dst:[], countries:[]});
+          const tb = [{mac_hash:'h1', appareil_cle:'K1'}, {mac_hash:'h2', appareil_cle:''}, {mac_hash:'h3', appareil_cle:''}, {mac_hash:'h4', appareil_cle:''}, {mac_hash:'h5', appareil_cle:''}];
+          const dpi = [d('h1','iPhone · .75',300), d('h2','Android · .75',200), d('h3','Linux · .9',50), d('h4','Linux · .9',40), d('h5','Seul · .5',10)];
+          const A = window.sbxReels.agreger([{cle:'K1', nom:'tel', fab:'Apple', os:'iOS', type:'phone', lxc:false}, {cle:'K2', nom:'conteneur', lxc:true}], tb, dpi);
+          return A.clients.map(c => [c.preuve, c.ids.length, c.bytes, c.nom]);
+        }""")
+        nav.close()
+    assert erreurs == [], erreurs
+    assert ["nac", 2, 500, "tel"] in r            # h1 relié au NAC par sa clé ; h2 partage son adresse .75 : même appareil
+    assert ["adresse", 2, 90, "Appareil · .9"] in r   # deux identités sur la même adresse, sans appareil NAC : déduit
+    assert ["aucune", 1, 10, "Seul · .5"] in r         # aucune preuve : identité seule, rien de deviné
+    assert len(r) == 3
