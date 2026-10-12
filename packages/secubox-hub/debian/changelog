@@ -1,3 +1,9 @@
+secubox-hub (1.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * Pastilles de la barre laterale (#2512) : DNS Guard, HAProxy, Hardening restaient grises alors qu'ils repondent. Le lot de sante (/public/health-batch) jugeait par unite systemd et par socket ; un module monte EN PROCESSUS par l'agregateur n'a ni l'un ni l'autre. Le lot est maintenant complete par la liste « mounted » du /health de l'agregateur (appel hors boucle, ensemble vide si injoignable : aucun module declare en service a tort), et R-Level, page du Toolbox, suit le Toolbox. Une unite en echec reste une alarme. 10 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 19:30:00 +0200
+
 secubox-hub (1.10.1-1~bookworm1) bookworm; urgency=low
 
   * Vue d'ensemble (/apercu/) au profil Aurora (#2485) : page autonome (la feuille et le script

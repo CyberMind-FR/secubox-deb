@@ -14,6 +14,8 @@ from secubox_core.kiosk import (
     get_interface_classification,
 )
 from secubox_core.health import systemd_batch, unites_au_repos
+import http.client
+import socket
 import subprocess
 import json
 import asyncio
@@ -607,6 +609,50 @@ def _unites_au_repos_cache() -> tuple:
     return _au_repos["repos"], _au_repos["absents"]
 
 
+# Pages portées par un autre module : sans unité ni socket propres, elles suivent le module qui les sert (R-Level est une page du Toolbox).
+PAGES_PORTEES = {"rlevel": "toolbox"}
+
+
+class _ConnexionUnix(http.client.HTTPConnection):
+    def __init__(self, chemin, timeout=2.0):
+        super().__init__("localhost", timeout=timeout)
+        self._chemin = chemin
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self._chemin)
+
+
+def modules_montes(socket_agregateur: str = "/run/secubox/aggregator.sock") -> frozenset:
+    """Modules montés EN PROCESSUS par l'agrégateur (son /health) : ni unité ni socket propres, et pourtant ils répondent (#2512).
+
+    Agrégateur injoignable ou réponse illisible : ensemble vide, donc aucun module déclaré en service à tort. À appeler hors de la
+    boucle (le rafraîchissement passe par to_thread) : le hub est lui-même monté dans l'agrégateur."""
+    try:
+        c = _ConnexionUnix(socket_agregateur)
+        try:
+            c.request("GET", "/health")
+            rep = c.getresponse()
+            data = json.loads(rep.read().decode("utf-8", "replace")) if rep.status == 200 else {}
+        finally:
+            c.close()
+        return frozenset(str(m) for m in (data.get("mounted") or []) if isinstance(m, str))
+    except Exception:  # noqa: BLE001
+        return frozenset()
+
+
+def superposer_montes(modules: dict, montes: frozenset) -> None:
+    """Corrige le lot de santé pour les modules sans unité propre. Une unité en échec (`error`) reste une alarme, jamais masquée."""
+    for mid in montes:
+        cur = modules.get(mid)
+        if cur is None or (cur.get("status") == "warn" and str(cur.get("msg", "")).startswith("inactive")):
+            modules[mid] = {"status": "ok", "msg": "Monté dans l'agrégateur"}
+    for page, porteur in PAGES_PORTEES.items():
+        if page not in modules and porteur in modules:
+            modules[page] = dict(modules[porteur])
+
+
 def _refresh_health_batch():
     """Build the sidebar health snapshot in ONE systemctl list-units call.
 
@@ -637,6 +683,8 @@ def _refresh_health_batch():
     # alors que la protection tourne (secubox-waf-ng active/running).
     if "waf-ng" in modules:
         modules["waf"] = dict(modules["waf-ng"])
+
+    superposer_montes(modules, modules_montes())
 
     _cache["health_batch"] = {"modules": modules, "count": len(modules)}
     _cache["health_batch_ts"] = time.time()
