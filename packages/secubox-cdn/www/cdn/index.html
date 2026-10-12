@@ -4,405 +4,201 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  SecuBox — Caches de la box (module CDN), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/cdn/caches (taille, fichiers, âge de chaque dossier de /var/cache/secubox). Illisible = « — », jamais un zéro inventé.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - CDN Cache</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Caches</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn-group { display: flex; gap: 0.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.hit .value { color: var(--green); }
-        .stat-card.miss .value { color: var(--yellow); }
-        .stat-card.size .value { color: var(--cyan); }
-        .stat-card.peers .value { color: var(--purple); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .progress { background: var(--bg-dark); border-radius: 4px; height: 8px; overflow: hidden; width: 100px; display: inline-block; }
-        .progress-bar { height: 100%; background: var(--green); }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
-        .badge.online { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.offline { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
     
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>💾 CDN Cache</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn danger" onclick="clearCache()">Clear Cache</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3" fill="rgba(41,182,246,.14)"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+                <div><b>Caches de la box</b><small id="subline">Ce qui est mis de côté sur le disque</small></div>
             </div>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="info">Lecture seule : la taille, le nombre de fichiers et la dernière activité de chaque cache de /var/cache/secubox. Un cache dont le dossier est fermé au service s’affiche en « — ».</div>
 
-        <div class="grid">
-            <div class="stat-card hit">
-                <div class="value" id="hitRate">-</div>
-                <div class="label">Hit Rate %</div>
-            </div>
-            <div class="stat-card size">
-                <div class="value" id="cacheSize">-</div>
-                <div class="label">Cache Size</div>
-            </div>
-            <div class="stat-card miss">
-                <div class="value" id="objects">-</div>
-                <div class="label">Cached Objects</div>
-            </div>
-            <div class="stat-card peers">
-                <div class="value" id="peers">-</div>
-                <div class="label">Mesh Peers</div>
-            </div>
+        <div class="tuiles">
+            <div class="tuile"><div class="l">Caches</div><div class="v" id="sNb">—</div><div class="s">dossiers et fichiers</div></div>
+            <div class="tuile"><div class="l">Taille lisible</div><div class="v" id="sTot">—</div><div class="s">hors caches fermés</div></div>
+            <div class="tuile"><div class="l">Le plus gros</div><div class="v" id="sGros" style="font-size:1.1rem">—</div><div class="s" id="sGrosS"></div></div>
+            <div class="tuile"><div class="l">Fermés au service</div><div class="v" id="sFerm">—</div><div class="s">taille inconnue</div></div>
+            <div class="tuile"><div class="l">Politiques CDN</div><div class="v" id="sPol">—</div><div class="s" id="sPolS">enregistrées</div></div>
         </div>
 
-        <div class="card">
-            <h2>Cache Statistics</h2>
-            <table>
-                <thead><tr><th>Metric</th><th>Value</th><th>Graph</th></tr></thead>
-                <tbody id="statsTable"><tr><td colspan="3">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <div class="pan"><h3>Caches <i>du plus gros au plus petit</i></h3><div id="liste"><div class="vide">Chargement…</div></div></div>
+        <div class="pan" id="polPan" hidden><h3>Politiques CDN enregistrées</h3><div class="peer-note" id="polNote"></div></div>
+    </div></div></main>
 
-        <div class="card">
-            <h2>P2P Mesh Peers</h2>
-            <table>
-                <thead><tr><th>Peer</th><th>IP</th><th>Objects</th><th>Status</th><th>Latency</th></tr></thead>
-                <tbody id="peersTable"><tr><td colspan="5">Loading...</td></tr></tbody>
-            </table>
-        </div>
-
-        <div class="card">
-            <h2>Top Cached Domains</h2>
-            <table>
-                <thead><tr><th>Domain</th><th>Requests</th><th>Bandwidth Saved</th></tr></thead>
-                <tbody id="domainsTable"><tr><td colspan="3">Loading...</td></tr></tbody>
-            </table>
-        </div>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
         const API = '/api/v1/cdn';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+        function octets(b) { if (b == null) return '—'; b = Number(b) || 0; const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return (i ? (b < 10 ? b.toFixed(1) : b.toFixed(0)) : b).toString().replace('.', ',') + ' ' + u[i]; }
+        function age(t) { if (t == null) return '—'; const s = Math.max(0, Date.now() / 1000 - t); if (s < 90) return 'à l’instant'; if (s < 3600) return Math.floor(s / 60) + ' min'; if (s < 86400) return Math.floor(s / 3600) + ' h'; return Math.floor(s / 86400) + ' j'; }
+        function vide(el, msg) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'vide'; d.textContent = msg; el.append(d); }
 
-        async function api(path, opts = {}) {
+        async function lire() {
+            if (DEMO) return demo();
             try {
-                const res = await fetch(API + path, { credentials: 'include', ...opts });
-                return res.json();
-            } catch { return {}; }
+                const h = {}, t = token(); if (t) h.Authorization = 'Bearer ' + t;
+                const r = await fetch(API + '/caches', { headers: h });
+                if (r.status === 401) return { _session: true };
+                return r.ok ? await r.json() : null;
+            } catch (e) { return null; }
         }
 
-        async function refresh() {
-            const status = await api('/status');
-            document.getElementById('hitRate').textContent = (status.hit_rate || 0).toFixed(1);
-            document.getElementById('cacheSize').textContent = status.cache_size || '0 MB';
-            document.getElementById('objects').textContent = status.objects || 0;
-            document.getElementById('peers').textContent = status.mesh_peers || 0;
-
-            // Stats table
-            const statsBody = document.getElementById('statsTable');
-            const stats = [
-                { name: 'Cache Hits', value: status.hits || 0, percent: status.hit_rate || 0 },
-                { name: 'Cache Misses', value: status.misses || 0, percent: 100 - (status.hit_rate || 0) },
-                { name: 'Bandwidth Saved', value: status.bandwidth_saved || '0 MB', percent: 0 },
-            ];
-            statsBody.innerHTML = stats.map(s => `
-                <tr>
-                    <td>${s.name}</td>
-                    <td>${s.value}</td>
-                    <td>${s.percent > 0 ? `<div class="progress"><div class="progress-bar" style="width:${s.percent}%"></div></div>` : '-'}</td>
-                </tr>
-            `).join('');
-
-            // Mesh peers
-            const mesh = await api('/mesh/peers');
-            const peersBody = document.getElementById('peersTable');
-            if (mesh.peers && mesh.peers.length > 0) {
-                peersBody.innerHTML = mesh.peers.map(p => `
-                    <tr>
-                        <td>${p.name || p.id}</td>
-                        <td style="font-family:monospace">${p.ip}</td>
-                        <td>${p.objects || 0}</td>
-                        <td><span class="badge ${p.online ? 'online' : 'offline'}">${p.online ? 'Online' : 'Offline'}</span></td>
-                        <td>${p.latency || '-'}</td>
-                    </tr>
-                `).join('');
-            } else {
-                peersBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No mesh peers connected</td></tr>';
+        function rendre(d) {
+            const pa = $('pastille');
+            if (!d || d._session || d.disponible === false) {
+                pa.textContent = d && d._session ? 'SESSION REQUISE' : 'ILLISIBLE'; pa.className = 'actif hors';
+                vide($('liste'), d && d._session ? 'Session requise : connectez-vous.' : 'Les caches sont illisibles (route ou dossier indisponible).');
+                ['sNb', 'sTot', 'sGros', 'sFerm', 'sPol'].forEach(i => $(i).textContent = '—'); $('polPan').hidden = true; hauteur(); return;
             }
-
-            // Top domains
-            const domains = await api('/domains');
-            const domainsBody = document.getElementById('domainsTable');
-            if (domains.domains && domains.domains.length > 0) {
-                domainsBody.innerHTML = domains.domains.slice(0, 10).map(d => `
-                    <tr>
-                        <td>${d.domain}</td>
-                        <td>${d.requests}</td>
-                        <td>${d.saved || '-'}</td>
-                    </tr>
-                `).join('');
-            } else {
-                domainsBody.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No cached domains</td></tr>';
+            const C = d.caches || [];
+            pa.textContent = 'LECTURE · ' + C.length + ' CACHES'; pa.className = 'actif';
+            $('sNb').textContent = fmt(C.length); $('sTot').textContent = octets(d.octets_total); $('sFerm').textContent = fmt(d.illisibles);
+            const gros = C.find(c => c.octets != null);
+            $('sGros').textContent = gros ? gros.nom : '—'; $('sGrosS').textContent = gros ? octets(gros.octets) : '';
+            const z = $('liste'); z.replaceChildren();
+            const max = Math.max(1, ...C.map(c => c.octets || 0));
+            if (!C.length) vide(z, 'Aucun cache.');
+            for (const c of C) {
+                const l = document.createElement('div'); l.className = 'hl'; l.style.gridTemplateColumns = 'minmax(90px,1fr) minmax(0,2fr) 5.5rem 4.5rem 4rem';
+                const n = document.createElement('span'); n.className = 'hn'; n.textContent = c.nom + (c.type === 'fichier' ? ' (fichier)' : ''); n.title = c.nom;
+                const b = document.createElement('div'); b.className = 'hb'; const i = document.createElement('div'); i.className = 'hbi';
+                i.style.width = c.octets == null ? '0%' : Math.max(2, 100 * c.octets / max) + '%'; const seg = document.createElement('i'); seg.style.flex = '1'; seg.style.background = c.partiel ? '#ff9f1c' : '#29b6f6'; i.append(seg); b.append(i);
+                const t = document.createElement('b'); t.textContent = octets(c.octets) + (c.partiel && c.octets != null ? ' +' : ''); t.title = c.lisible ? (c.partiel ? 'mesure partielle (une partie est illisible ou le parcours a été borné)' : '') : 'dossier fermé au service';
+                const f = document.createElement('b'); f.textContent = c.fichiers == null ? '—' : fmt(c.fichiers) + ' f.';
+                const a = document.createElement('b'); a.textContent = age(c.recent);
+                l.append(n, b, t, f, a); z.append(l);
             }
+            const p = d.politiques || {};
+            $('sPol').textContent = fmt(p.nombre); $('sPolS').textContent = p.appliquees === false ? 'enregistrées, non appliquées' : 'enregistrées';
+            $('polPan').hidden = !(p.nombre || p.regles);
+            $('polNote').textContent = (p.nombre || 0) + ' politique(s) et ' + (p.regles || 0) + ' règle(s) · ' + (p.note || '');
+            $('subline').textContent = 'Total lisible : ' + octets(d.octets_total);
+            hauteur();
         }
-
-        async function clearCache() {
-            if (!confirm('Clear all cache? This cannot be undone.')) return;
-            await api('/clear', { method: 'POST' });
-            refresh();
+        async function charger() {
+            rendre(await lire());
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'cdn' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('btn-refresh').addEventListener('click', charger);
 
-        refresh();
-        setInterval(refresh, 30000);
+        function demo() {
+            const t = Date.now() / 1000;
+            return { disponible: true, octets_total: 4.4e7, illisibles: 2, caches: [
+                { nom: 'metablogizer', type: 'dossier', octets: 3.9e7, fichiers: 1200, recent: t - 3600, lisible: true, partiel: false },
+                { nom: 'metrics', type: 'dossier', octets: 1.6e7, fichiers: 40, recent: t - 30, lisible: true, partiel: false },
+                { nom: '<img src=x onerror=alert(1)>', type: 'dossier', octets: 2.2e6, fichiers: 12, recent: t - 86400 * 2, lisible: true, partiel: true },
+                { nom: 'menu.json', type: 'fichier', octets: 94000, fichiers: 1, recent: t - 600, lisible: true, partiel: false },
+                { nom: 'fonts', type: 'dossier', octets: null, fichiers: null, recent: null, lisible: false, partiel: false },
+                { nom: 'toolbox', type: 'dossier', octets: null, fichiers: null, recent: null, lisible: false, partiel: false }],
+                politiques: { nombre: 2, regles: 1, actif: false, appliquees: false, note: 'Enregistrées dans /etc/secubox/cdn.json mais lues par aucun moteur de cache : elles ne changent rien au trafic.' } };
+        }
+        if (DEMO) $('demo').hidden = false;
+        charger();
+        setInterval(charger, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
