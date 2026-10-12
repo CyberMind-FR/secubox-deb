@@ -40,11 +40,31 @@ def maj_lignes_de_base(detector, heures: int = 24, periode_s: int = 3600, minimu
     return n
 
 
+_COMPTEURS = ("_rx_bytes", "_tx_bytes")
+
+
+def migrer_compteurs(detector) -> int:
+    """Retire les historiques de COMPTEURS cumulatifs (octets d'interface, requêtes DNS totales) et leurs lignes de base (#2461) : seuls leurs débits ont un sens.
+    Idempotent ; rend le nombre de métriques retirées."""
+    n = 0
+    for f in list(detector.metrics_dir.glob("*.jsonl")):
+        if f.stem.endswith(_COMPTEURS) or f.stem == "dns_queries_total":
+            f.unlink(missing_ok=True)
+            detector.baselines.pop(f.stem, None)
+            n += 1
+    for nom in [k for k in detector.baselines if k.endswith(_COMPTEURS) or k == "dns_queries_total"]:
+        detector.baselines.pop(nom, None)
+    if n:
+        detector._save_baselines()
+    return n
+
+
 def collecter(detector=None) -> Dict[str, Any]:
     """Un passage : rend {alertes: n}. `detector` injectable (tests)."""
     if detector is None:
         from .main import detector as defaut      # importé ici : `python -m api.collecte` ne charge pas l'application tant qu'on n'en a pas besoin
         detector = defaut
+    migrer_compteurs(detector)
     maj_lignes_de_base(detector)                   # AVANT la détection : la première pointe suivante peut alerter
     alertes = detector.run_detection()             # mesure (collect_metrics) PUIS détection ; l'historique est stocké par la mesure
     return {"alertes": len(alertes)}

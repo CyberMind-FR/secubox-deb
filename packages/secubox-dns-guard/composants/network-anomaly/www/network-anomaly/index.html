@@ -148,7 +148,7 @@
   function appareil(a){
     if(a.source_ip) return a.source_ip;
     var m=a.details&&a.details.metric;
-    if(m){var r=/^(.+?)_(rx|tx)_bytes$/.exec(m);return r?r[1]:m;}
+    if(m){var r=/^(.+?)_(rx|tx)_bps$/.exec(m);return r?r[1]:m;}
     return null;
   }
   function score(a){var z=a.details&&a.details.z_score;return ok(z)?Number(z):null;}
@@ -163,7 +163,8 @@
   function valeur(metric,v){
     if(!ok(v))return '—';
     v=Number(v);
-    if(/bytes/.test(metric||'')){var u=['o','Kio','Mio','Gio','Tio'],i=0;while(v>=1024&&i<4){v/=1024;i++;}return dec(v,i?1:0)+' '+u[i];}
+    if(/_bps$/.test(metric||'')){var u=['o/s','Kio/s','Mio/s','Gio/s'],i=0;while(v>=1024&&i<3){v/=1024;i++;}return dec(v,i?1:0)+' '+u[i];}
+    if(/_s$/.test(metric||''))return dec(v,2)+' /s';
     return Math.abs(v)>=100?fmt(v):dec(v,2);
   }
 
@@ -278,14 +279,14 @@
   function demo(){
     var b=function(metric,mean,sd,mn,mx,n,age){return {metric:metric,mean:mean,std_dev:sd,min_val:mn,max_val:mx,sample_count:n,last_updated:iso(age)};};
     return {
-      bases:[b('tcp_connections',212,31,150,290,1000,14),b('listening_ports',38,1.2,36,41,1000,14),b('dns_queries_total',184200,2210,180100,188900,960,14),b('eth0_rx_bytes',48.2e9,3.1e9,41e9,55e9,1000,14),b('eth0_tx_bytes',12.6e9,1.4e9,9.8e9,15.1e9,1000,14),b('br-lan_rx_bytes',9.1e9,.8e9,7.4e9,10.6e9,1000,14)],
+      bases:[b('tcp_connections',212,31,150,290,1000,14),b('listening_ports',38,1.2,36,41,1000,14),b('dns_queries_s',3.1,.4,2.2,4.1,960,14),b('eth0_rx_bps',6.2e6,.9e6,4.1e6,8.4e6,1000,14),b('eth0_tx_bps',1.6e6,.3e6,.9e6,2.4e6,1000,14),b('br-lan_rx_bps',1.1e6,.2e6,.6e6,1.7e6,1000,14)],
       alerts:[
-        {id:'anomaly-1',type:'bandwidth_spike',severity:'critical',source_ip:null,description:'eth0_tx_bytes anomaly detected: 23.40 Gio (baseline: 12.60 Gio, z-score: 7.71)',details:{metric:'eth0_tx_bytes',value:23.4e9,baseline_mean:12.6e9,baseline_std:1.4e9,z_score:7.7,threshold:3},timestamp:iso(18),acknowledged:false},
+        {id:'anomaly-1',type:'bandwidth_spike',severity:'critical',source_ip:null,description:'eth0_tx_bps anomaly detected: 4.1 Mio/s (baseline: 1.6 Mio/s, z-score: 8.3)',details:{metric:'eth0_tx_bps',value:4.1e6,baseline_mean:1.6e6,baseline_std:.3e6,z_score:8.3,threshold:3},timestamp:iso(18),acknowledged:false},
         {id:'anomaly-2',type:'port_scan',severity:'high',source_ip:'198.51.100.23',description:'Port scan detected: 198.51.100.23 probed 64 ports',details:{source_ip:'198.51.100.23',port_count:64,ports_sample:[21,22,23,25,80,110,143,443]},timestamp:iso(47),acknowledged:false},
         {id:'anomaly-3',type:'connection_flood',severity:'high',source_ip:null,description:'tcp_connections anomaly detected: 410 (baseline: 212, z-score: 6.4)',details:{metric:'tcp_connections',value:410,baseline_mean:212,baseline_std:31,z_score:6.4,threshold:2.5},timestamp:iso(95),acknowledged:false},
-        {id:'anomaly-4',type:'dns_anomaly',severity:'medium',source_ip:null,description:'dns_queries_total anomaly detected',details:{metric:'dns_queries_total',value:191500,baseline_mean:184200,baseline_std:2210,z_score:3.3,threshold:2.5},timestamp:iso(160),acknowledged:true,acknowledged_by:'admin',acknowledged_at:iso(120)},
+        {id:'anomaly-4',type:'dns_anomaly',severity:'medium',source_ip:null,description:'dns_queries_s anomaly detected',details:{metric:'dns_queries_s',value:4.5,baseline_mean:3.1,baseline_std:.4,z_score:3.5,threshold:2.5},timestamp:iso(160),acknowledged:true,acknowledged_by:'admin',acknowledged_at:iso(120)},
         {id:'anomaly-5',type:'port_scan',severity:'medium',source_ip:'203.0.113.77',description:'Port scan detected: 203.0.113.77 probed 27 ports',details:{source_ip:'203.0.113.77',port_count:27,ports_sample:[22,80,443,3389,8080]},timestamp:iso(330),acknowledged:false},
-        {id:'anomaly-6',type:'bandwidth_spike',severity:'medium',source_ip:null,description:'br-lan_rx_bytes anomaly',details:{metric:'br-lan_rx_bytes',value:12.1e9,baseline_mean:9.1e9,baseline_std:.8e9,z_score:3.75,threshold:3},timestamp:iso(610),acknowledged:true,acknowledged_by:'admin',acknowledged_at:iso(580)},
+        {id:'anomaly-6',type:'bandwidth_spike',severity:'medium',source_ip:null,description:'br-lan_rx_bps anomaly',details:{metric:'br-lan_rx_bps',value:1.6e6,baseline_mean:1.1e6,baseline_std:.2e6,z_score:3.75,threshold:3},timestamp:iso(610),acknowledged:true,acknowledged_by:'admin',acknowledged_at:iso(580)},
         {id:'anomaly-7',type:'protocol_anomaly',severity:'medium',source_ip:null,description:'listening_ports anomaly: 44',details:{metric:'listening_ports',value:44,baseline_mean:38,baseline_std:1.2,z_score:5,threshold:3},timestamp:iso(905),acknowledged:false},
         {id:'anomaly-8',type:'connection_flood',severity:'medium',source_ip:null,description:'tcp_connections anomaly',details:{metric:'tcp_connections',value:305,baseline_mean:212,baseline_std:31,z_score:3,threshold:2.5},timestamp:iso(1210),acknowledged:true,acknowledged_by:'admin'}
       ],
