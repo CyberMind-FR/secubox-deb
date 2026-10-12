@@ -1,3 +1,9 @@
+secubox-webfilter (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: domaines TOUJOURS bloques par profil et par appareil (cle bloque) : refuses meme quand la categorie qui les liste est en observe pour l appareil ; la liste de l appareil s ajoute a celle du profil, un blocage l emporte sur une autorisation du meme nom, une autorisation sur un parent ne debloque pas un sous-domaine force ; forme canonique, 200 au plus ; la cle n est ecrite que si elle sert (configuration inchangee sinon, retour arriere sur) ; API, ctl, estimation et panneau (puces, confirmation integree) (ref #2433)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:33:36 +0200
+
 secubox-webfilter (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: interface au profil Aurora (tuiles par categorie, repartition, bloque et observe, appareils les plus filtres), toutes les actions gardees ; les confirm() de blocage, ignores par le navigateur du Hall, deviennent des confirmations integrees a la page ; hauteur annoncee a l hote, ?embed=1 et ?demo=1 (ref #2430)

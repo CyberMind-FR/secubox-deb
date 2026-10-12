@@ -122,6 +122,7 @@ class ProfilIn(BaseModel):
     nom: str = Field(max_length=32)
     categories: dict[str, str] = Field(default_factory=dict, max_length=16)
     autorise: list[str] = Field(default_factory=list, max_length=200)
+    bloque: list[str] = Field(default_factory=list, max_length=200)      # domaines TOUJOURS bloqués, même catégorie en observe (#2433)
 
 
 class AppareilIn(BaseModel):
@@ -129,6 +130,7 @@ class AppareilIn(BaseModel):
     nom: str = Field(default="", max_length=64)
     profil: str = Field(max_length=32)
     exceptions: dict[str, str] = Field(default_factory=dict, max_length=16)
+    bloque: list[str] = Field(default_factory=list, max_length=200)      # domaines TOUJOURS bloqués pour cet appareil (#2433)
 
 
 def _ids() -> set:
@@ -182,7 +184,7 @@ def ecrire_profil(corps: ProfilIn):
     ids = _ids()
     with _VERROU_CONFIG:
         cfg = copy.deepcopy(_config(ids))
-        cfg["profils"][corps.nom] = {"categories": corps.categories, "autorise": corps.autorise}
+        cfg["profils"][corps.nom] = {"categories": corps.categories, "autorise": corps.autorise, "bloque": corps.bloque}
         valide = _enregistrer(cfg, ids)
     return {"version": valide["version"], "profils": valide["profils"]}
 
@@ -220,7 +222,7 @@ def lister_appareils():
     for mac in sorted(cfg["appareils"]):
         a = cfg["appareils"][mac]
         adr = (connus.get(mac) or {}).get("adresses") or adr_carte.get(mac, [])
-        assignes.append({"mac": mac, "nom": a["nom"], "profil": a["profil"], "exceptions": a["exceptions"], "adresses": adr, "exclu": exclus.get(mac)})
+        assignes.append({"mac": mac, "nom": a["nom"], "profil": a["profil"], "exceptions": a["exceptions"], "bloque": a.get("bloque", []), "adresses": adr, "exclu": exclus.get(mac)})
     autres = [{"mac": mac, "adresses": (v or {}).get("adresses", []), "vu": (v or {}).get("vu"), "exclu": exclus.get(mac)}
               for mac, v in sorted(connus.items()) if mac not in cfg["appareils"] and _MAC.match(mac)]
     return {"assignes": assignes, "connus": autres}
@@ -231,7 +233,7 @@ def ecrire_appareil(mac: str, corps: AppareilIn):
     mac, ids = _mac(mac), _ids()
     with _VERROU_CONFIG:
         cfg = copy.deepcopy(_config(ids))
-        cfg["appareils"][mac] = {"nom": corps.nom, "profil": corps.profil, "exceptions": corps.exceptions}
+        cfg["appareils"][mac] = {"nom": corps.nom, "profil": corps.profil, "exceptions": corps.exceptions, "bloque": corps.bloque}
         valide = _enregistrer(cfg, ids)
     return {"version": valide["version"], "appareil": valide["appareils"][mac]}
 
@@ -263,7 +265,7 @@ def _estimation(cfg: dict, cats: dict) -> dict:
     vues = set()
     for mac in [""] + sorted(cfg["appareils"]):
         e = profils.effective(cfg, mac)
-        vues.add((tuple(profils.bloquees(e)), tuple(sorted(e["autorise"]))))
+        vues.add((tuple(profils.bloquees(e)), tuple(sorted(e["autorise"])) + tuple(sorted(e.get("bloque", [])))))
     zones_n = sum(sum(_taille_categorie(cats[c]) for c in b if c in cats) + len(a) for b, a in vues)
     return {"zones": zones_n, "memoire_mo": round(zones_n * 0.35 / 1024), "rechargement_s": round(6.9 + 2.5 * zones_n / 312000, 1)}
 

@@ -14,6 +14,14 @@ n'est écrit dans Unbound : ni rechargement, ni coupure du DNS.
    jour, appareil, catégorie et domaine dans `/var/lib/secubox/webfilter/webfilter.db` (30 jours, `0640`). Les requêtes de la box sont exclues.
 3. `secubox-webfilter-api` (socket `/run/secubox/webfilter.sock`) et le panneau `/webfilter/` affichent le résultat. Le panneau suit le profil Aurora (`.claude/AURORA-REFERENCE.md`) : confirmations intégrées à la page (jamais `confirm()`, que le navigateur du Hall ignore), `?embed=1`, `?demo=1`. Le NAC (carte de l'appareil) et Guardian (panneau Filtrage web) le lisent en lecture seule.
 
+## Domaines toujours bloqués (`bloque`)
+
+Un profil et un appareil peuvent porter une liste `bloque` : ces domaines sont refusés (NXDOMAIN, sous-domaines compris) **quel que soit le mode des catégories**,
+même quand la catégorie qui les liste est en `observe` pour cet appareil (exception voulue). La liste de l'appareil s'ajoute à celle de son profil ; un blocage
+l'emporte sur une autorisation du même nom ; une autorisation sur un domaine parent ne débloque pas un sous-domaine forcé. Forme canonique exigée
+(minuscules, sans schéma ni chemin), 200 domaines au plus. La clé n'est écrite dans `config.json` que si elle sert : une configuration sans domaine forcé reste
+identique à celle d'avant. API : `bloque` sur `POST /profils` et `POST /appareils/<mac>`, relu par `GET /profils` et `GET /appareils`.
+
 Les listes sont **téléchargées à l'exécution, jamais livrées** : seule leur utilisation compte pour la licence, rappelée dans le panneau.
 
 ## Configuration : `/etc/secubox/webfilter.toml`
