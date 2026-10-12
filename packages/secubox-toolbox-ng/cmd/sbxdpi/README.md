@@ -63,3 +63,13 @@ unité `sbxdpi.service` (DARK à l'install). Voir aussi `secubox-dpi-engine`.
 
 `DPI_ACTOR_SOCK` (dans `dpi.env`) arme un capteur qui dépose une enveloppe `dpi` vers actord pour une **adresse publique** dont les flux cumulent, en 10 minutes, au moins `DPI_ACTOR_SEUIL` (6) points de risques nDPI hostiles. Poids par défaut : `Malicious Fingerprint` 3, `Possible Exploit Attempt` 5, `Malware Host Contacted` 5, `HTTP Susp User-Agent` 2, `Probing Attempt` 1, `TLS Susp Extn` 1 ; surcharge `DPI_ACTOR_RISQUES="Nom=poids, …"`. Les risques banals ne comptent jamais, un même flux ne compte qu'une fois par risque, les adresses non publiques ne sont jamais jugées, et `DPI_RISK_MUTE` vaut aussi pour le capteur. La gravité de l'enveloppe est 35 + 4 par point (plafond 100) ; elle porte le JA4, le nombre de ports visés et le protocole.
 
+
+## Empreintes TLS des clients (#2405)
+
+La libndpi livrée (4.2) n'émet ni `ja3` ni `ja4` dans ses événements. sbxdpi les calcule donc lui-même : nDPId transmet les premiers paquets de chaque flux (événements `packet-flow`, champ `pkt` en base64) et `tlsfp.go` y lit le ClientHello TLS.
+
+- **JA3** (md5) et **JA4** (spécification FoxIO : `t13d1516h2_…_…`), GREASE retiré.
+- Un ClientHello moderne (clés post-quantiques) dépasse un segment TCP : les segments d'un même flux sont recollés (4 au plus, mémoire bornée à 4096 flux).
+- **Une empreinte par flux**, comptée une seule fois même si le ClientHello est retransmis.
+- Rien d'autre n'est retenu : ni adresse, ni nom d'hôte. Les compteurs sortent dans `/stats` sous `fingerprints` (JA4) et `fingerprints_ja3` (JA3), lus par la page `/ndpid/` onglet Empreintes.
+- IPv4 et IPv6 sans en-tête d'extension ; le QUIC (UDP) n'est pas lu.

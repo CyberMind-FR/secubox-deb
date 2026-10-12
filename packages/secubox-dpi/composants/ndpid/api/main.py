@@ -809,7 +809,7 @@ async def get_fingerprints(fp_type: str = None, limit: int = 100):
     """Get JA3/JA4 fingerprints."""
     fps = flow_db.get_fingerprints(fp_type, limit)
     if not fps and sbx_bridge.available():
-        fps = sbx_bridge.fingerprints(fp_type or "ja4", limit)
+        fps = sbx_bridge.fingerprints(fp_type or "", limit)
     return {"fingerprints": fps}
 
 

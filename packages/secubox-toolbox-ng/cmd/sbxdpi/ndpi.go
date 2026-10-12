@@ -44,17 +44,23 @@ const (
 // objects.
 type dpiEvent struct {
 	FlowEventName string `json:"flow_event_name"`
-	FlowID        uint64 `json:"flow_id"`
-	L4Proto       string `json:"l4_proto"`
-	SrcIP         string `json:"src_ip"`
-	DstIP         string `json:"dst_ip"`
-	SrcPort       int    `json:"src_port"`
-	DstPort       int    `json:"dst_port"`
-	SrcPackets    uint64 `json:"flow_src_packets"`
-	DstPackets    uint64 `json:"flow_dst_packets"`
-	SrcBytes      uint64 `json:"flow_src_tot_l4_payload_len"`
-	DstBytes      uint64 `json:"flow_dst_tot_l4_payload_len"`
-	NDPI          struct {
+	// Événements packet-flow : trame brute en base64 (premiers paquets d'un
+	// flux). Sert à lire le ClientHello TLS (tlsfp.go).
+	PacketEventName string `json:"packet_event_name"`
+	Pkt             string `json:"pkt"`
+	PktL3Offset     int    `json:"pkt_l3_offset"`
+	PktType         int    `json:"pkt_type"`
+	FlowID          uint64 `json:"flow_id"`
+	L4Proto         string `json:"l4_proto"`
+	SrcIP           string `json:"src_ip"`
+	DstIP           string `json:"dst_ip"`
+	SrcPort         int    `json:"src_port"`
+	DstPort         int    `json:"dst_port"`
+	SrcPackets      uint64 `json:"flow_src_packets"`
+	DstPackets      uint64 `json:"flow_dst_packets"`
+	SrcBytes        uint64 `json:"flow_src_tot_l4_payload_len"`
+	DstBytes        uint64 `json:"flow_dst_tot_l4_payload_len"`
+	NDPI            struct {
 		Proto    string `json:"proto"`    // "TLS.Google" (master.app)
 		ProtoID  string `json:"proto_id"` // "91.126"
 		Category string `json:"category"` // "Web", "Cloud", ...
@@ -199,6 +205,10 @@ func readFrames(conn net.Conn, agg *aggregator, filt *filter, sess *sessionTrack
 // end (accurate final volume); risks are surfaced whenever present and not
 // muted.
 func ingest(agg *aggregator, filt *filter, sess *sessionTracker, ev *dpiEvent) {
+	if ev.PacketEventName == "packet-flow" {
+		agg.recordTLS(ev)
+		return
+	}
 	switch ev.FlowEventName {
 	case "detected", "detection-update", "guessed":
 		d := filt.classify(ev)
