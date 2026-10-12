@@ -756,3 +756,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Surf, vidéo d'un article BFM (closes #2479)
 - secubox-surf 1.0.33 : le conteneur Bitmovin sans `<video>` est ranimé à partir de son `data-video-url` (HLS via hls.js, relayé par l'origine surf) ; jamais un autre média. 7 tests.
+
+## 2026-10-12 — Dashboard Aurora (closes #2481)
+- secubox-hub 1.10.0 : racine de l'administration au profil Aurora (lecture seule, données réelles, session requise dite) ; actions factices ou sans confirmation retirées. 6 tests navigateur.
