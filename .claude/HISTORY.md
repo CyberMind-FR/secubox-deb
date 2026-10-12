@@ -747,3 +747,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Billets au profil Aurora (closes #2473)
 - secubox-billets 0.12.0 : portail /billets/ Aurora sur stats.json réel (liens http(s) seulement) ; tableau de bord, modération, édition, connexion habillés Aurora par la feuille billets-admin.css ; polices distantes retirées. 5 tests navigateur ; échecs préexistants inchangés.
+
+## 2026-10-12 — SÉCURITÉ p2p : routes de maillage « locales » sans authentification (closes #2476)
+- secubox-p2p 1.12.1 : invite-local et cleanup-local exigent le JWT (la provenance annoncée ne prouve rien) ; is_local_request supprimée. Constaté sur gk2 : un jeton (1 s, sans auto-approbation, sans effet) fabriqué sans authentification. Vérifier les pairs approuvés des autres box.
