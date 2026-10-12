@@ -77,3 +77,35 @@ def test_nac_administrable_zones_autoriser_bloquer_et_comportements_2417():
     assert "jget('/zone_behaviors')" in src and 'id="comport"' in src
     assert "Non disponible dans cette version" in src
     assert "confirm(" not in src and "alert(" not in src       # la confirmation est intégrée à la page
+
+
+def test_tuiles_de_synthese_sont_des_boutons_de_filtre_2421():
+    """#2421 : cliquer une tuile filtre la liste ; re-cliquer retire le filtre ; « Appareils » remet tout à zéro. Test dans un vrai navigateur."""
+    import pathlib
+    import pytest
+    sync_api = pytest.importorskip("playwright.sync_api")
+    page = pathlib.Path(__file__).resolve().parents[1] / "www" / "nac" / "index.html"
+    erreurs = []
+    with sync_api.sync_playwright() as p:
+        try:
+            nav = p.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"chromium indisponible : {e}")
+        pg = nav.new_page()
+        pg.on("pageerror", lambda e: erreurs.append(str(e)))
+        pg.goto("file://" + str(page) + "?demo=1")
+        pg.wait_for_timeout(500)
+        total = pg.evaluate("document.querySelectorAll('#rang .app-c').length")
+        assert pg.evaluate("document.querySelectorAll('#tuiles button.tuile[data-f]').length") == 6
+        pg.click('#tuiles [data-f="fe:quarantaine"]')
+        quarantaine = pg.evaluate("document.querySelectorAll('#rang .app-c').length")
+        assert 0 < quarantaine < total
+        assert pg.evaluate("document.querySelector('#tuiles [data-f=\"fe:quarantaine\"]').getAttribute('aria-pressed')") == "true"
+        assert pg.evaluate("document.querySelector('#fe').value") == "quarantaine"      # cohérent avec la liste déroulante
+        pg.click('#tuiles [data-f="fe:quarantaine"]')                                      # re-clic : filtre retiré
+        assert pg.evaluate("document.querySelectorAll('#rang .app-c').length") == total
+        pg.click('#tuiles [data-f="fc:on"]')
+        pg.click('#tuiles [data-f="reset"]')
+        assert pg.evaluate("document.querySelectorAll('#rang .app-c').length") == total
+        nav.close()
+    assert erreurs == [], erreurs
