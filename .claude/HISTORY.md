@@ -741,3 +741,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Captures Aurora de toutes les pages (closes #2469)
 - scripts/snapshots-aurora.py : 9 pages ajoutées (NAC, filtre web, ad-guard, DNS Guard, anomalies, WireGuard, Interceptor, modes réseau, caches), bande vide de gauche retirée ; les 37 pages régénérées en démonstration ; galerie docs/aurora/README.md à jour.
+
+## 2026-10-12 — Mirror fusionné avec CDN (closes #2471)
+- secubox-cdn 1.5.0 : GET /miroirs (dépôt APT hébergé : suites, paquets, pool), page « Caches et miroirs », /mirror/ redirige vers /cdn/, une seule entrée de menu.

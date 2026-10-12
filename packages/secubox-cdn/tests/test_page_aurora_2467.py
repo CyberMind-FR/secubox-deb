@@ -76,3 +76,20 @@ def test_session_requise_est_dite():
         return pg.inner_text("#pastille"), pg.inner_text("#liste")
     (pastille, liste), erreurs, _ = _nav(sc, api=api)
     assert pastille == "SESSION REQUISE" and "Session requise" in liste and erreurs == []
+
+
+def test_depot_apt_dans_la_page_fusionnee_2471():
+    def sc(pg):
+        return (pg.inner_text("#sApt"), pg.locator("#apt table tr").count(), pg.inner_text("#apt table tr:nth-child(2)"), pg.inner_text("#aptPool"), pg.inner_text("#aptDist"),
+                pg.evaluate("document.getElementById('apt').textContent.includes('<img src=x onerror=alert(1)>')"), pg.locator("#apt img").count())
+    (apt, lignes, trixie, pool, dist, texte, imgs), erreurs, natifs = _nav(sc)
+    assert apt == "1 240" or apt.replace(" ", " ").replace("\xa0", " ") == "1 240"
+    assert lignes == 3 and "arm64 : 620" in trixie and "amd64 : 620" in trixie and "Pool" in pool and "aucun configuré" in dist
+    assert texte and imgs == 0 and erreurs == [] and natifs == []                         # suite hostile : texte brut ; paquets null : « — »
+
+
+def test_ancienne_adresse_mirror_redirige_vers_cdn_2471():
+    src = (pathlib.Path(__file__).resolve().parents[1] / "composants" / "mirror" / "www" / "mirror" / "index.html").read_text(encoding="utf-8")
+    assert 'http-equiv="refresh" content="0; url=/cdn/"' in src and 'href="/cdn/"' in src
+    menus = list((pathlib.Path(__file__).resolve().parents[1] / "composants" / "mirror").glob("menu.d/*.json"))
+    assert menus == []                                                                    # une seule entrée de menu : « Caches et miroirs »

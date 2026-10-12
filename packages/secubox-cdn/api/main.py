@@ -598,4 +598,29 @@ async def caches_reels(user=Depends(require_jwt)):
                                 "note": "Enregistrées dans /etc/secubox/cdn.json mais lues par aucun moteur de cache : elles ne changent rien au trafic."}}
 
 
+_depot_cache: dict = {"t": 0.0, "v": None}
+_depot_verrou = None
+
+
+@router.get("/miroirs")
+async def miroirs(user=Depends(require_jwt)):
+    """Dépôt APT hébergé par la box (suites, architectures, paquets, pool), en lecture seule, hors boucle et en cache 30 s (#2471). Les miroirs DISTANTS de l'ancien module Mirror
+    ne sont pas synchronisés par un moteur : on rend seulement ce que /etc/secubox/mirror.json en dit, ou null."""
+    global _depot_verrou
+    from . import depot as _d
+    if _depot_verrou is None:
+        _depot_verrou = asyncio.Lock()
+    async with _depot_verrou:
+        if _depot_cache["v"] is None or time.monotonic() - _depot_cache["t"] > 30:
+            _depot_cache["v"] = await asyncio.to_thread(_d.lire)
+            _depot_cache["t"] = time.monotonic()
+        v = _depot_cache["v"]
+    distants = None
+    try:
+        distants = [str(x.get("name") or x) if isinstance(x, dict) else str(x) for x in json.loads(Path("/etc/secubox/mirror.json").read_text()).get("mirrors", [])]
+    except (OSError, ValueError, AttributeError):
+        pass
+    return {**v, "distants": distants}
+
+
 app.include_router(router)
