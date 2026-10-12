@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — build-image : repli sur le dernier agrégat quand le commit n'en a pas (ref #2501)
+
+Un commit sans paquet lance quand même `build-packages.yml`, dont le job `collect` est sauté : le run existe, l'agrégat `secubox-debs-all` non. L'étape « commit exact » (`if_no_artifact_found: warn`) finissait en success avec 0 .deb, le repli ne partait pas et l'image échouait (« Aucun paquet SecuBox à installer », runs 38260593345 et 38262902039). Le repli se décide maintenant sur le nombre de .deb, et la provenance ne dit plus « agrégat du commit » avec 0 fichier. Test `tests/test_workflow_repli_paquets_2501.py`.
+
 ## 2026-10-12 — image RPi400 : resolv.conf propre à l'image (ref #2499)
 
 Constaté sur une uSD alpha12 : `/etc/resolv.conf` inutilisable, `apt` ne résolvait rien (corrigé à la main). Cause : `build-image.sh` écrit son fichier depuis #1294, pas `build-rpi-usb.sh` ; l'image gardait celui de la machine de construction (talon 127.0.0.53 sans systemd-resolved). Correctif : même écriture (unbound local + 9.9.9.9 / 1.1.1.1 en filet) avant le démontage du chroot, test `tests/test_image_resolv_conf_2499.py`. Pas de paquet, donc pas de montée de version ; effectif à la prochaine image.
