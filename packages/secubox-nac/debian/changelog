@@ -1,3 +1,15 @@
+secubox-nac (3.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Noms et services par Bonjour/mDNS (#2440) : une passe avahi-browse mise en cache (120 s)
+    renseigne le nom des appareils sans bail (un bail l'emporte toujours), le nom annoncé
+    (« TV du salon ») et des pastilles de services (Impression, AirPlay, Chromecast, Partage…).
+    Les types de service nourrissent aussi la détection du type fin. Bonjour absent ou en
+    échec : la découverte continue sans.
+  * Colonnes services et bonjour_name (migration additive) ; /clients renvoie `services`.
+  * La recherche de la page trouve aussi par service.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:16:53 +0200
+
 secubox-nac (3.8.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: la carte d un appareil montre son filtre web : profil de filtrage de contenus, requetes bloquees et classees sur 7 jours, ou « gere par ad-guard » (lecture seule, lien vers le reglage) (ref #2430)

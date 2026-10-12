@@ -97,8 +97,13 @@ class Collector:
     def _detecter(self, mac: str, dev: dict, enriched: dict, vendor, dns: dict) -> None:
         """#2236 : OS et type fin par preuves passives (osdetect) ; chaque conclusion porte sa source."""
         ev = DeviceEvidence(hostname=dev.get("hostname") or None, vendor=vendor, mac=mac, dns_domains=dns.get(dev.get("ip") or "", []),
-                            is_openwrt=bool(enriched.get("is_openwrt")), is_secubox=bool(enriched.get("is_secubox")))
+                            is_openwrt=bool(enriched.get("is_openwrt")), is_secubox=bool(enriched.get("is_secubox")),
+                            mdns=list(dev.get("bonjour_types") or []))
         d = detecter(ev)
+        try:   # #2440 : services et nom annoncés par Bonjour (la preuve disparue remplace)
+            self.store.set_services(mac, dev.get("services") or [], dev.get("bonjour_name"))
+        except Exception:  # noqa: BLE001
+            logger.warning("collector: set_services failed for %s", mac, exc_info=True)
         try:
             self.store.set_detection(mac, os=d["os"], os_source=d["os_source"], device_subtype=d["device_subtype"], mac_random=mac_aleatoire(mac))
         except Exception:  # noqa: BLE001

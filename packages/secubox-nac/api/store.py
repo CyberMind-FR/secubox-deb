@@ -147,7 +147,7 @@ class DeviceStore:
         is a no-op.
         """
         have = {r["name"] for r in self._conn.execute("PRAGMA table_info(devices)")}
-        for col, decl in (("interface", "TEXT"), ("os", "TEXT"), ("os_source", "TEXT"), ("device_subtype", "TEXT"), ("mac_random", "INTEGER DEFAULT 0")):
+        for col, decl in (("interface", "TEXT"), ("os", "TEXT"), ("os_source", "TEXT"), ("device_subtype", "TEXT"), ("mac_random", "INTEGER DEFAULT 0"), ("services", "TEXT"), ("bonjour_name", "TEXT")):
             if col not in have:
                 self._conn.execute(f"ALTER TABLE devices ADD COLUMN {col} {decl}")
 
@@ -223,6 +223,14 @@ class DeviceStore:
         with self._lock:
             self._conn.execute("UPDATE devices SET os=?, os_source=?, device_subtype=?, mac_random=? WHERE mac=?",
                                (os, os_source if os else None, device_subtype, 1 if mac_random else 0, mac))
+            self._conn.commit()
+
+    def set_services(self, mac: str, services: list, nom: str | None) -> None:
+        """#2440 : services Bonjour (JSON) et nom annoncé. Une valeur absente REMPLACE : un service disparu ne doit pas survivre."""
+        import json
+        with self._lock:
+            self._conn.execute("UPDATE devices SET services=?, bonjour_name=? WHERE mac=?",
+                               (json.dumps(list(services), ensure_ascii=False) if services else None, nom or None, mac))
             self._conn.commit()
 
     def get(self, mac: str) -> dict | None:

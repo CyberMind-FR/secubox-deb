@@ -925,6 +925,7 @@ def clients(
             "online": is_online,
             "status": status,  # For frontend badge
             "conteneur": conteneur,  # #2236 : conteneur LXC (br-lxc, 10.100.0.0/16, OUI 00:16:3e), pas un appareil
+            "services": _services_json(d.get("services")),  # #2440 : services Bonjour (liste de libellés)
             "cle": cle_appareil(mac),  # #2423 : clé de jonction avec le Toolbox (condensat, jamais la MAC)
         })
 
@@ -1864,6 +1865,15 @@ def _parse_mdns(output: str) -> List[Dict[str, Any]]:
                 "port": int(parts[8]) if parts[8].isdigit() else 80,
             })
     return services
+
+
+def _services_json(v) -> list:
+    """Colonne `services` (JSON texte) -> liste de libellés ; toute valeur illisible donne []."""
+    try:
+        r = json.loads(v) if isinstance(v, str) and v else (v or [])
+        return [str(x) for x in r] if isinstance(r, list) else []
+    except ValueError:
+        return []
 
 
 @router.get("/mdns")
