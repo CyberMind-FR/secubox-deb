@@ -19,8 +19,9 @@ def test_hauteur_et_demo():
 
 
 def test_aucune_dependance_externe():
-    assert not re.search(r"<script[^>]+src=", SRC)
-    assert "fonts.googleapis" not in SRC and "<link" not in SRC
+    assert not re.search(r"<script[^>]+src=", SRC)                      # le menu est chargé par le script de la page, depuis /shared/ (local)
+    assert "fonts.googleapis" not in SRC
+    assert re.findall(r"<link[^>]+>", SRC) == ['<link rel="stylesheet" href="/shared/sidebar-light.css">']   # seule feuille : celle du menu de la box
 
 
 def test_pas_de_lorem_ni_secret():
@@ -52,3 +53,11 @@ def test_ecriture_identique_et_inerte_en_demo():
 
 def test_mesure_absente_en_tiret_et_actualisation():
     assert "'—'" in SRC and "setInterval" in SRC and "30000" in SRC and "document.hidden" in SRC
+
+
+def test_menu_de_gauche_present_hors_cadre_et_demo_2463():
+    """Sans la barre laterale et /shared/sidebar.js, la page n'avait plus de menu à gauche."""
+    assert '<nav class="sidebar" id="sidebar"></nav>' in SRC and '<main class="principal">' in SRC and "</main>" in SRC
+    assert SRC.index('<main class="principal">') < SRC.index('<div class="cadre">') < SRC.index("</main>")        # le cadre est DANS le contenu décalé
+    assert "body:not(.emb) .principal{margin-left:220px" in SRC and "body.emb #sidebar,body.demoOn #sidebar{display:none}" in SRC
+    assert re.search(r"if\(!q\.get\('embed'\)&&!DEMO_ON\)\{.*?/shared/sidebar\.js", SRC)       # ni en cadre ni en démonstration

@@ -14,6 +14,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anomalies réseau — SecuBox</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
   :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
     --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
@@ -22,6 +23,11 @@
   body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
        color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
   body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .principal{min-width:0}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  body.emb #sidebar,body.demoOn #sidebar{display:none}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
   .cadre{container-type:inline-size;container-name:a;padding:10px}
   .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
   .app>*{min-width:0}
@@ -88,6 +94,8 @@
   }
   @container a (max-width:480px){.repart{grid-template-columns:1fr;justify-items:center}.repart .leg{width:100%}.ligne{grid-template-columns:76px auto 1fr}}
 </style>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="principal">
 <div class="cadre"><div class="app">
   <div class="tete">
     <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12h4l2.5-7 4 14 2.5-7h6" fill="none"/><circle cx="12" cy="12" r="10" stroke="rgba(41,182,246,.35)" fill="rgba(41,182,246,.08)"/></svg><span><b>Anomalies réseau</b><small>Écart par rapport à la normale</small></span></span>
@@ -117,6 +125,7 @@
   <div class="pan"><h3>La normale : lignes de base <i id="blNote"></i></h3><div class="scroll"><table><thead><tr><th>Métrique</th><th class="r">Moyenne</th><th class="r">Écart-type</th><th class="r">Min</th><th class="r">Max</th><th class="r">Échantillons</th><th>Mise à jour</th></tr></thead><tbody id="bases"></tbody></table></div></div>
   <div class="note">Lecture seule, sauf l’acquittement d’une anomalie (confirmation demandée). Aucun blocage n’est déclenché depuis cette page.</div>
 </div></div>
+</main>
 <script>
 (function(){
   "use strict";
@@ -129,6 +138,9 @@
   function dec(n,d){return num(n).toFixed(d==null?2:d).replace('.',',');}
   var q=new URLSearchParams(location.search), DEMO_ON=!!q.get('demo');
   if(q.get('embed')) document.body.classList.add('emb');
+  if(DEMO_ON) document.body.classList.add('demoOn');
+  // Menu de gauche de l'administration : chargé hors cadre et hors démonstration (comme les autres pages Aurora)
+  if(!q.get('embed')&&!DEMO_ON){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
   var PAL=['#29b6f6','#ff9f1c','#ff4d5e','#a78bfa','#ffd23f','#2ecc71','#3b82f6'];
   var TYPES={bandwidth_spike:['Pic de bande passante','#29b6f6'],connection_flood:['Inondation de connexions','#ff9f1c'],port_scan:['Balayage de ports','#ff4d5e'],dns_anomaly:['Anomalie DNS','#a78bfa'],protocol_anomaly:['Anomalie de protocole','#ffd23f']};
   var GRAV={critical:['Critique','#ff4d5e',4],high:['Haute','#ff9f1c',3],medium:['Moyenne','#ffd23f',2],low:['Basse','#3b82f6',1],info:['Info','#6f84a8',0]};
