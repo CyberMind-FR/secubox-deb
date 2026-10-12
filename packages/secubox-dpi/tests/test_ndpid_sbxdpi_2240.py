@@ -82,3 +82,14 @@ def test_main_prefere_sbxdpi_puis_retombe_sur_ndpireader():
     src = (Path(__file__).resolve().parents[1] / "composants" / "ndpid" / "api" / "main.py").read_text()
     ast.parse(src)
     assert "sbxdpi_bridge" in src and "sbx_bridge.available()" in src and "dpi_bridge.available()" in src
+
+
+def test_empreintes_ja3_calculees_par_sbxdpi_et_liste_mixte():
+    # #2405 : sbxdpi lit le ClientHello lui-même (la libndpi 4.2 n'émet ni ja3 ni ja4).
+    st = {**STATS, "fingerprints_ja3": [{"name": "11138d9933242c3a03b6aad35a296476", "flows": 90, "bytes": 0}]}
+    j3 = pont(stats=st).fingerprints("ja3", 10)
+    assert j3 == [{"fingerprint": "11138d9933242c3a03b6aad35a296476", "fp_type": "ja3", "known_app": "", "hit_count": 90, "last_seen": j3[0]["last_seen"]}]
+    tous = pont(stats=st).fingerprints("", 10)                    # la page Empreintes demande sans type
+    assert [(f["fp_type"], f["hit_count"]) for f in tous] == [("ja3", 90), ("ja4", 42)]   # tri par fréquence
+    assert len(pont(stats=st).fingerprints("", 1)) == 1
+    assert pont(stats=st).status()["database"]["total_fingerprints"] == 2

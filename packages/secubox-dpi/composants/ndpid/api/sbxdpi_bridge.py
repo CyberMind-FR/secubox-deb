@@ -83,7 +83,7 @@ class SbxdpiBridge:
         s = self._stats()
         notables = sum(int(r.get("count") or 0) for r in self._risques_notables())
         return {"daemon": {"running": bool(s.get("connected")), "socket_available": True, "source": SOURCE},
-                "database": {"total_flows": int(s.get("total_flows") or 0), "total_fingerprints": len(s.get("fingerprints") or []),
+                "database": {"total_flows": int(s.get("total_flows") or 0), "total_fingerprints": len(s.get("fingerprints") or []) + len(s.get("fingerprints_ja3") or []),
                              "total_risk_events": notables, "risks_24h": notables, "flows_24h": int(s.get("total_flows") or 0), "source": SOURCE}}
 
     def top_protocols(self, limit: int = 20) -> List[dict]:
@@ -99,11 +99,16 @@ class SbxdpiBridge:
                  "description": f"{int(r.get('count') or 0)} flux (cumul depuis le démarrage de sbxdpi)"} for r in notables[:limit]]
 
     def fingerprints(self, kind: str, limit: int = 100) -> List[dict]:
-        if kind != "ja4":
-            return []
-        quand = datetime.fromtimestamp(int(self._stats().get("updated_at") or time.time()), timezone.utc).isoformat()
-        return [{"fingerprint": f.get("name", ""), "fp_type": "ja4", "known_app": "", "hit_count": f.get("flows", 0), "last_seen": quand}
-                for f in (self._stats().get("fingerprints") or [])[:limit]]
+        """Empreintes TLS des clients, calculées par sbxdpi depuis le ClientHello.
+        `kind` : "ja4", "ja3", ou vide pour les deux (page Empreintes)."""
+        st = self._stats()
+        quand = datetime.fromtimestamp(int(st.get("updated_at") or time.time()), timezone.utc).isoformat()
+        sources = {"ja4": st.get("fingerprints") or [], "ja3": st.get("fingerprints_ja3") or []}
+        types = [kind] if kind in sources else ["ja4", "ja3"]
+        out = [{"fingerprint": f.get("name", ""), "fp_type": t, "known_app": "", "hit_count": f.get("flows", 0), "last_seen": quand}
+               for t in types for f in sources[t]]
+        out.sort(key=lambda f: -int(f["hit_count"] or 0))
+        return out[:limit]
 
     def flows(self, limit: int = 100) -> List[dict]:
         ss = self._get("sessions")

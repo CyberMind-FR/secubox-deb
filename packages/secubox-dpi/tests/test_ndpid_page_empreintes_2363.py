@@ -52,5 +52,5 @@ def test_l_etat_vide_distingue_moteur_actif_et_moteur_arrete():
     if src is None:
         import pathlib
         src = (pathlib.Path(__file__).resolve().parents[1] / "composants/ndpid/www/ndpid/empreintes.html").read_text(encoding="utf-8")
-    assert "D.run===true" in src and "n\\u2019a relevé aucune empreinte" in src
+    assert "D.run===true" in src and "sbxdpi calcule JA3 et JA4" in src   # #2405 : sbxdpi lit le ClientHello lui-même
     assert "doit être actif pour relever" not in src

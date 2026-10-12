@@ -49,6 +49,8 @@ type aggregator struct {
 	hosts      map[string]*counter // SNI/DNS hostname (pivot des règles usage/CDN)
 	ports      map[string]*counter // port destinataire (service)
 	fps        map[string]*counter // empreinte JA4 (fingerprint device/learner)
+	fpsJA3     map[string]*counter // empreinte JA3 (md5), calculée depuis le ClientHello
+	recolle    *recolleur          // recolle les ClientHello sur plusieurs segments TCP
 	risks      map[string]*riskCounter
 	firstParty map[string]bool // apps seen as first-party (our own vhosts)
 
@@ -79,6 +81,8 @@ func newAggregator() *aggregator {
 		hosts:      map[string]*counter{},
 		ports:      map[string]*counter{},
 		fps:        map[string]*counter{},
+		fpsJA3:     map[string]*counter{},
+		recolle:    newRecolleur(),
 		risks:      map[string]*riskCounter{},
 		firstParty: map[string]bool{},
 	}
@@ -142,6 +146,26 @@ func (a *aggregator) recordFlow(ev *dpiEvent, firstParty bool) {
 			a.firstParty[ev.app()] = true
 		}
 	}
+	a.mu.Unlock()
+}
+
+// recordTLS lit le ClientHello d'un paquet packet-flow et compte l'empreinte JA4
+// et JA3, une fois par flux. Aucune adresse ni nom d'hôte n'est retenu.
+func (a *aggregator) recordTLS(ev *dpiEvent) {
+	if ev.Pkt == "" {
+		return
+	}
+	charge := chargeTCP(ev.Pkt, ev.PktL3Offset, ev.PktType)
+	if charge == nil {
+		return
+	}
+	e, ok := a.recolle.Observe(ev.FlowID, charge)
+	if !ok {
+		return
+	}
+	a.mu.Lock()
+	bump(a.fps, e.JA4, 1, 0)
+	bump(a.fpsJA3, e.JA3, 1, 0)
 	a.mu.Unlock()
 }
 
@@ -232,22 +256,23 @@ type riskKV struct {
 
 // snapshot is the full on-disk / API-root document.
 type snapshot struct {
-	UpdatedAt    int64      `json:"updated_at"`
-	Connected    bool       `json:"connected"`
-	TotalFlows   uint64     `json:"total_flows"`
-	TotalBytes   uint64     `json:"total_bytes"`
-	OutBytes     uint64     `json:"out_bytes"` // direction (#DPI-sémantique, additif)
-	InBytes      uint64     `json:"in_bytes"`
-	Filtered     uint64     `json:"filtered"`
-	FirstPartyN  int        `json:"first_party_apps"`
-	Protocols    []kv       `json:"protocols"`
-	Apps         []kv       `json:"apps"`
-	Categories   []kv       `json:"categories"`
-	Talkers      []talkerKV `json:"talkers"`
-	Hosts        []kv       `json:"hosts"`        // SNI/DNS destinations (#DPI-sémantique, additif)
-	Ports        []kv       `json:"ports"`        // ports destinataires (services)
-	Fingerprints []kv       `json:"fingerprints"` // empreintes JA4
-	Risks        []riskKV   `json:"risks"`
+	UpdatedAt       int64      `json:"updated_at"`
+	Connected       bool       `json:"connected"`
+	TotalFlows      uint64     `json:"total_flows"`
+	TotalBytes      uint64     `json:"total_bytes"`
+	OutBytes        uint64     `json:"out_bytes"` // direction (#DPI-sémantique, additif)
+	InBytes         uint64     `json:"in_bytes"`
+	Filtered        uint64     `json:"filtered"`
+	FirstPartyN     int        `json:"first_party_apps"`
+	Protocols       []kv       `json:"protocols"`
+	Apps            []kv       `json:"apps"`
+	Categories      []kv       `json:"categories"`
+	Talkers         []talkerKV `json:"talkers"`
+	Hosts           []kv       `json:"hosts"`            // SNI/DNS destinations (#DPI-sémantique, additif)
+	Ports           []kv       `json:"ports"`            // ports destinataires (services)
+	Fingerprints    []kv       `json:"fingerprints"`     // empreintes JA4
+	FingerprintsJA3 []kv       `json:"fingerprints_ja3"` // empreintes JA3 (calculées depuis le ClientHello)
+	Risks           []riskKV   `json:"risks"`
 }
 
 // rank sorts a counter map into a bytes-desc (flows-desc tiebreak) slice, with
@@ -301,22 +326,23 @@ func (a *aggregator) snapshot() snapshot {
 	}
 	sort.Slice(risks, func(i, j int) bool { return risks[i].Count > risks[j].Count })
 	return snapshot{
-		UpdatedAt:    time.Now().Unix(),
-		Connected:    a.connected.Load(),
-		TotalFlows:   tf,
-		TotalBytes:   tb,
-		OutBytes:     a.outBytes,
-		InBytes:      a.inBytes,
-		Filtered:     a.filtered,
-		FirstPartyN:  len(a.firstParty),
-		Protocols:    rank(a.protocols, tb, tf),
-		Apps:         rank(a.apps, tb, tf),
-		Categories:   rank(a.categories, tb, tf),
-		Talkers:      a.rankTalkers(tb, tf),
-		Hosts:        rank(a.hosts, tb, tf),
-		Ports:        rank(a.ports, tb, tf),
-		Fingerprints: rank(a.fps, tb, tf),
-		Risks:        risks,
+		UpdatedAt:       time.Now().Unix(),
+		Connected:       a.connected.Load(),
+		TotalFlows:      tf,
+		TotalBytes:      tb,
+		OutBytes:        a.outBytes,
+		InBytes:         a.inBytes,
+		Filtered:        a.filtered,
+		FirstPartyN:     len(a.firstParty),
+		Protocols:       rank(a.protocols, tb, tf),
+		Apps:            rank(a.apps, tb, tf),
+		Categories:      rank(a.categories, tb, tf),
+		Talkers:         a.rankTalkers(tb, tf),
+		Hosts:           rank(a.hosts, tb, tf),
+		Ports:           rank(a.ports, tb, tf),
+		Fingerprints:    rank(a.fps, tb, tf),
+		FingerprintsJA3: rank(a.fpsJA3, tb, tf),
+		Risks:           risks,
 	}
 }
 
@@ -389,6 +415,7 @@ func (a *aggregator) loadSnapshot(path string) {
 	restore(a.hosts, snap.Hosts)
 	restore(a.ports, snap.Ports)
 	restore(a.fps, snap.Fingerprints)
+	restore(a.fpsJA3, snap.FingerprintsJA3)
 	for _, t := range snap.Talkers {
 		if len(a.talkers) >= mapCap {
 			break

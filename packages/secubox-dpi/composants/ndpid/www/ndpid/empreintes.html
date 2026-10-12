@@ -175,7 +175,7 @@
         +'<div class="m"><span class="fam"><i style="background:'+F[1]+'"></i>'+esc(F[0])+(f.app?' · '+esc(f.app):'')+'</span><span class="conf '+c[1]+'" title="'+esc(c[2])+'">'+esc(c[0])+'</span>'
         +(f.ti?'<span style="color:var(--rouge)">'+esc(f.ti)+'</span>':'')
         +'<span title="'+esc(complet(f.p))+'">1re vue : '+esc(rel(f.p))+'</span><span title="'+esc(complet(f.d))+'">dernière : '+esc(rel(f.d))+'</span></div></div>';}).join('')
-      :'<div class="vide">'+(D.fps.length?'Aucune empreinte ne correspond au filtre.':(D.run===true?'Le moteur nDPId est actif mais n\u2019a relevé aucune empreinte : il ne remonte pas JA3/JA4 dans ses événements (option TLS de sa configuration à activer, ou poignées de main TLS non vues sur l\u2019interface capturée).':'Aucune empreinte enregistrée : le moteur nDPId n\u2019est pas actif ou sa source ne relève pas JA3/JA4.'))+'</div>';
+      :'<div class="vide">'+(D.fps.length?'Aucune empreinte ne correspond au filtre.':(D.run===true?'Aucune poignée de main TLS relevée pour l\u2019instant : sbxdpi calcule JA3 et JA4 depuis le ClientHello des flux vus par nDPId, les empreintes apparaissent avec le premier trafic TLS capturé.':'Aucune empreinte enregistrée : le moteur nDPId n\u2019est pas actif, sbxdpi n\u2019a donc aucune poignée de main TLS à lire.')))+'</div>';
     el('rang').querySelectorAll('button.cp').forEach(function(b){b.addEventListener('click',function(){
       var f=L[+b.getAttribute('data-i')];if(!f) return;
       var ok=function(){b.textContent='Copié';setTimeout(function(){b.textContent='Copier';},1200);};
