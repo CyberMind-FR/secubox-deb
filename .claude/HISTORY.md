@@ -759,3 +759,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Dashboard Aurora (closes #2481)
 - secubox-hub 1.10.0 : racine de l'administration au profil Aurora (lecture seule, données réelles, session requise dite) ; actions factices ou sans confirmation retirées. 6 tests navigateur.
+
+## 2026-10-12 — Captures de données réelles, identifiants masqués (ref #2483)
+- scripts/snapshots-live.py : captures d'une box réelle avec jeton en variable d'environnement, masque des identifiants dans le navigateur avant la capture (IP, MAC, clés, courriels, domaines), flou des noms d'appareils ; 4 tests du masque. Les captures elles-mêmes attendent un jeton de session fourni par l'exploitant.

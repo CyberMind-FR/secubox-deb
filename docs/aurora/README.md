@@ -10,6 +10,10 @@ empreintes). Les règles qui produisent ces pages sont dans [`.claude/AURORA-REF
 
 Régénérer : `python3 scripts/snapshots-aurora.py [préfixe…]` (playwright + Pillow).
 
+**Captures de données réelles, identifiants masqués** (wiki) : `SBX_TOKEN=<jeton de session> SBX_BASE=https://admin.<domaine> python3 scripts/snapshots-live.py [dossier] [préfixe…]`.
+Le jeton vient de l'environnement, jamais du dépôt (copié depuis `localStorage.sbx_token` d'une session ouverte). Le navigateur masque avant la capture les adresses IP et MAC, les clés
+et empreintes, les courriels et les noms de domaine, et floute les noms d'appareils des pages qui en montrent. Un masque est un filet : **relire chaque capture avant de la publier**.
+
 ## Anatomie d'une page (voir `waf-vue`)
 
 | Zone | Rôle |
