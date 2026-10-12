@@ -738,3 +738,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — CDN, supervision des caches réels (closes #2467)
 - secubox-cdn 1.4.0 : GET /caches (taille, fichiers, activité de chaque cache de /var/cache/secubox, illisible = null) ; page Aurora ; politiques CDN signalées non appliquées. 10 tests.
+
+## 2026-10-12 — Captures Aurora de toutes les pages (closes #2469)
+- scripts/snapshots-aurora.py : 9 pages ajoutées (NAC, filtre web, ad-guard, DNS Guard, anomalies, WireGuard, Interceptor, modes réseau, caches), bande vide de gauche retirée ; les 37 pages régénérées en démonstration ; galerie docs/aurora/README.md à jour.
