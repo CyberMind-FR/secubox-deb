@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — image RPi400 : resolv.conf propre à l'image (ref #2499)
+
+Constaté sur une uSD alpha12 : `/etc/resolv.conf` inutilisable, `apt` ne résolvait rien (corrigé à la main). Cause : `build-image.sh` écrit son fichier depuis #1294, pas `build-rpi-usb.sh` ; l'image gardait celui de la machine de construction (talon 127.0.0.53 sans systemd-resolved). Correctif : même écriture (unbound local + 9.9.9.9 / 1.1.1.1 en filet) avant le démontage du chroot, test `tests/test_image_resolv_conf_2499.py`. Pas de paquet, donc pas de montée de version ; effectif à la prochaine image.
+
 ## 2026-10-12 — ad-guard 1.12.0 : page Aurora, dialogues intégrés, données échappées (ref #2436)
 
 La page `/ad-guard/` quitte l'ancien style (CRT clair, anglais mêlé) pour le profil Aurora, en gardant le balisage, les identifiants et toutes les actions (25 tests d'interface existants passent après adaptation). `confirm()`, `prompt()` et `alert()`, ignorés par le navigateur du Hall, deviennent des dialogues intégrés. Les noms de domaine, motifs et noms d'appareil venus de l'API étaient insérés tels quels dans du HTML : ils sont désormais échappés (test avec une charge `<img onerror>`). Familles de blocage en pastilles de filtre.

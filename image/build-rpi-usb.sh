@@ -1372,6 +1372,22 @@ ok "Pi bootloader configured"
 # (which was Step 5.4's enable secubox-kiosk.service, already done by here).
 log "Removing chroot safety net (systemctl wrapper, policy-rc.d, /boot/firmware bind)"
 
+# (5) Ship the image's OWN resolv.conf (#2499, same fix as build-image.sh #1294).
+# debootstrap copies the BUILD MACHINE's /etc/resolv.conf into the chroot and
+# nobody cleaned it up: on the board it was a stub (127.0.0.53) with no
+# systemd-resolved behind it, so apt resolved nothing. rm -f first : the file
+# may be a symlink, and writing through it would target the wrong path.
+rm -f "${ROOTFS}/etc/resolv.conf"
+cat > "${ROOTFS}/etc/resolv.conf" <<'RESOLV'
+# SecuBox — unbound ecoute en local (cf. secubox-toolbox, drop-ins
+# /etc/unbound/unbound.conf.d/). Les deux suivants ne servent qu'au
+# demarrage, avant qu'unbound ne reponde, ou s'il est arrete.
+nameserver 127.0.0.1
+nameserver 9.9.9.9
+nameserver 1.1.1.1
+RESOLV
+log "resolv.conf de l'image ecrit (127.0.0.1 + filet public)"
+
 # (4) umount /proc + /sys (chroot no longer needs them)
 umount -lf "${ROOTFS}/proc" 2>/dev/null || true
 umount -lf "${ROOTFS}/sys"  2>/dev/null || true
