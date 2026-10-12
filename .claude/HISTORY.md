@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — release : fichiers de plus de 1,9 Gio découpés automatiquement (ref #2427)
+
+La publication de v3.0.0-alpha.12 échouait (`size must be less than 2147483648`) : les images full-vm, isp-vm, isp-mochabin et lite-mochabin dépassent 2 Gio et `release.yml` ne découpait pas (alpha.12 a été complétée à la main). `scripts/release-decouper-assets.sh` découpe en `.partNN` (1900 Mo, même convention que `build-all-live-usb.yml`), écrit `<fichier>.assembled.sha256` (somme du fichier réassemblé) et supprime l'original ; `release.yml` l'appelle avant les sommes, hache et publie les parties, et les notes expliquent le réassemblage. Tests : découpage, réassemblage identique, idempotence, ordre des étapes du workflow, backticks des notes. **Reste ouvert** : le live USB MOCHAbin dépasse 240 min sous QEMU (étape « Build embedded eMMC image » : reconstruit une image déjà produite par `build-images`) — piste : exécuteur arm64 natif ou réutilisation de l'artefact.
+
 ## 2026-10-12 — profil projet référence Aurora : règles, galerie et script (ref #2354)
 
 Les règles déduites du style Aurora sont écrites dans `.claude/AURORA-REFERENCE.md` (jetons, squelette, container queries, vérité des données, protocole de hauteur d'iframe, actions et confirmations intégrées, intégration en onglets, pièges, tests). `docs/aurora/` rassemble 28 pages en capture bureau et mobile, en démonstration (aucune capture authentifiée publiée) ; `scripts/snapshots-aurora.py` les régénère. Le README racine et `AGENTS.md` y pointent.

@@ -200,6 +200,13 @@ jobs:
 
           ## Checksums
 
+          Les images de plus de 1900 Mo sont découpées en \`.part00\`, \`.part01\`… (limite de 2 Gio par fichier de GitHub) :
+
+          \`\`\`bash
+          cat secubox-xxx.img.gz.part* > secubox-xxx.img.gz
+          sha256sum -c secubox-xxx.img.gz.assembled.sha256
+          \`\`\`
+
           All files are signed with GPG key \`packages@secubox.in\`.
 
           \`\`\`bash
@@ -215,6 +222,13 @@ jobs:
 
           EOF
 
+      - name: Split files over the GitHub 2 GiB asset limit
+        run: |
+          # GitHub refuse tout fichier de 2 Gio ou plus (« size must be less than 2147483648 », alpha.12 #2427).
+          # Les images plus grosses sont découpées en .partNN (1900 Mo) ; la somme du fichier réassemblé est
+          # publiée à côté (<fichier>.assembled.sha256). Réassembler : cat <fichier>.part* > <fichier>
+          bash scripts/release-decouper-assets.sh release/images release/live-usb
+
       - name: Generate combined checksums
         run: |
           cd release/
@@ -228,7 +242,8 @@ jobs:
           # images/). Deux contenus différents sous un même nom (vu sur
           # secubox-full-rpi-arm64 en alpha.7) sont signalés : la somme suit
           # alors le fichier publié, pas le premier trouvé.
-          for f in images/*.img.gz images/*.img.xz live-usb/*.img.gz live-usb/*.img.xz \
+          for f in images/*.img.gz images/*.img.xz images/*.part* images/*.assembled.sha256 \
+                   live-usb/*.img.gz live-usb/*.img.xz live-usb/*.part* live-usb/*.assembled.sha256 \
                    live-usb/*.sha256 create-qemu-arm64-vm.sh create-vbox-vm.sh; do
             [ -f "$f" ] || continue
             ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" )
@@ -263,7 +278,7 @@ jobs:
             echo "Release exists, cleaning up for retry..."
             # Get existing asset names
             existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
-            for asset in release/images/*.img.gz release/images/*.img.xz release/live-usb/*.img.gz release/live-usb/*.img.xz release/live-usb/*.sha256; do
+            for asset in release/images/*.img.gz release/images/*.img.xz release/images/*.part* release/images/*.assembled.sha256 release/live-usb/*.img.gz release/live-usb/*.img.xz release/live-usb/*.part* release/live-usb/*.assembled.sha256 release/live-usb/*.sha256; do
               [ -f "$asset" ] || continue
               name=$(basename "$asset")
               if echo "$existing" | grep -qF "$name"; then
@@ -284,6 +299,11 @@ jobs:
           files: |
             release/images/*.img.gz
             release/images/*.img.xz
+            # Parties des images de plus de 1900 Mo (limite GitHub de 2 Gio, #2427) et somme du fichier réassemblé.
+            release/images/*.part*
+            release/images/*.assembled.sha256
+            release/live-usb/*.part*
+            release/live-usb/*.assembled.sha256
             # Compressées SEULEMENT (#1507) : `*.img*` attrapait l'image brute
             # (8 Go) et GitHub refuse tout fichier de plus de 2 Go.
             release/live-usb/*.img.gz
