@@ -1,3 +1,9 @@
+secubox-netmodes (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Livre /usr/sbin/secubox-net-detect (#2508) : l'assistant premier-pas l'appelle (`apply router`) et s'arretait sur l'image RPi400 avec « code 127 : No such file or directory ». L'outil vivait dans image/sbin/ et seul build-live-usb.sh le copiait ; une seule copie desormais, dans ce paquet (build-live-usb.sh la prend ici).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 19:00:00 +0200
+
 secubox-netmodes (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /netmodes/ refaite au profil Aurora (#2457), en français, sur des données réelles :
