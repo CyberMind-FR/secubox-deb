@@ -199,10 +199,13 @@
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,data:j};},function(){return {ok:r.ok,status:r.status,data:null};});})
       .catch(function(){return {ok:false,status:0,data:null};});
   }
-  function lire(path){return api(path).then(function(r){return r.ok?r.data:null;});}
+  // 401/403 : la session manque, ce n'est PAS une panne du module (#2514) — la pastille ne dit « hors ligne » que d'une vraie panne.
+  var SANS_SESSION=false;
+  function lire(path){return api(path).then(function(r){if(r.status===401||r.status===403)SANS_SESSION=true;return r.ok?r.data:null;});}
 
   function charge(){
     if(DEMO){var d=demoData();for(var k in d)D[k]=d[k];rend();return Promise.resolve();}
+    SANS_SESSION=false;
     return Promise.all([lire('/status'),lire('/alerts?hours=24'),lire('/top-blocked?limit=10'),lire('/stats'),lire('/sinkhole/status'),lire('/sinkhole/sources'),lire('/sinkhole/whitelist'),lire('/sinkhole/ip-allowlist')]).then(function(r){
       D.status=r[0];D.alerts=r[1]&&r[1].alerts||null;D.top=r[2];D.stats=r[3];D.sink=r[4];D.sources=r[5];D.wl=r[6];D.ips=r[7];rend();
     });
@@ -223,7 +226,10 @@
   function rend(){
     var s=D.status,al=D.alerts,st=D.stats,sk=D.sink;
     el('demo').hidden=!DEMO;el('session').hidden=!!(DEMO||s&&al);
-    var pg=el('pGarde');pg.textContent=s?'GARDE ACTIVE':'HORS LIGNE';pg.className='pastille '+(s?'':'hors');
+    var pg=el('pGarde');
+    if(s){pg.textContent='GARDE ACTIVE';pg.className='pastille ';}
+    else if(SANS_SESSION){pg.textContent='SESSION REQUISE';pg.className='pastille inc';}
+    else{pg.textContent='HORS LIGNE';pg.className='pastille hors';}
     var pr=el('pRes');
     if(sk&&typeof sk.enabled==='boolean'){pr.textContent=sk.enabled?'RÉSOLVEUR · PUITS ACTIF':'RÉSOLVEUR · PUITS INACTIF';pr.className='pastille '+(sk.enabled?'':'att');}
     else{pr.textContent='RÉSOLVEUR · —';pr.className='pastille inc';}

@@ -1,3 +1,9 @@
+secubox-dns-guard (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2514) : la pastille d'etat de /dns-guard/ disait « HORS LIGNE » quand c'etait la session qui manquait (401/403), alors que le bandeau annoncait « session requise ». Elle ne dit plus « hors ligne » que d'une vraie panne (erreur reseau ou serveur) ; sans session : « SESSION REQUISE », en neutre. 3 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 20:00:00 +0200
+
 secubox-dns-guard (1.4.4-1~bookworm1) bookworm; urgency=medium
 
   * Correction (#2463) : la page /network-anomaly/ n'avait plus le menu de gauche (ni la barre
