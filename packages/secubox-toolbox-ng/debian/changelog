@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.12.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix: sbxmitm laisse visible l'appat des detecteurs d'anti-adblock (#rb-adcheck > #google_ads_iframe_test, theme Foxiz : zataz.com) ; la feuille cosmetique du R3 le masquait et la page dressait son mur « bloqueur de publicites detecte » (ref #2516)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 21:00:00 +0200
+
 secubox-toolbox-ng (0.12.4-1~bookworm1) bookworm; urgency=medium
 
   * feat: sbxdpi retient pour chaque empreinte TLS la premiere et la derniere vue et ses SNI les plus frequents (noms demandes, bornes, jamais d adresse client), exposes dans fingerprint_meta (ref #2408)

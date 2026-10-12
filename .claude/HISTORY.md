@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — surf 1.0.34 et toolbox-ng 0.12.5 : l'appât du détecteur de pub n'est plus masqué (ref #2516)
+
+zataz.com affichait « Bloqueur de publicités détecté ! » par surf comme en direct (R3). Cause reproduite avec Chromium sur la vraie page : le thème Foxiz crée un appât `#rb-adcheck > #google_ads_iframe_test` et dresse son mur s'il est masqué ; nos feuilles cosmétiques (`[id^="google_ads"]`…) le masquaient. Le chargement du script `adsbygoogle.js` passait déjà (réponse 204). Une règle de protection par id, après la règle de masquage, laisse l'appât visible, dans les deux moteurs. Tests : `packages/secubox-surf/tests/test_appat_detecteur_2516.py` et `cosmetic_appat_2516_test.go`.
+
 ## 2026-10-12 — dns-guard 1.4.5 : la pastille ne dit plus « hors ligne » sans session (ref #2514)
 
 Sur la capture de l'admin gk2, `/dns-guard/` affichait « HORS LIGNE » alors que le module répond : la pastille se déduisait de la seule absence de `/status`, un 401/403 passait donc pour une panne. Distinction faite : « SESSION REQUISE » (neutre) sans session, « HORS LIGNE » seulement pour une vraie panne. Test `packages/secubox-dns-guard/tests/test_pastille_session_2514.py`.
