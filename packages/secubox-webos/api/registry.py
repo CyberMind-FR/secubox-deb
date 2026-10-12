@@ -28,8 +28,28 @@ def load_exposure_cache(path: str = "/var/cache/secubox/webos/exposure-health.js
         return {}
 
 
+# Pages d'un module qui n'a pas d'unité ni de socket propres : l'état est celui du module qui les porte (#2455).
+PAGES_PORTEES = {"rlevel": "toolbox"}
+
+
+def modules_montes(socket_agregateur: str = "/run/secubox/aggregator.sock") -> frozenset:
+    """Modules montés EN PROCESSUS par l'agrégateur (son /health). Sans unité ni socket propres, ils répondent pourtant : c'est la preuve
+    qu'ils sont en service (#2455). Agrégateur injoignable ou réponse illisible : ensemble vide, donc aucun module déclaré en service à tort."""
+    try:
+        c = _ConnexionUnix(socket_agregateur, timeout=2.0)
+        try:
+            c.request("GET", "/health")
+            rep = c.getresponse()
+            data = json.loads(rep.read().decode("utf-8", "replace")) if rep.status == 200 else {}
+        finally:
+            c.close()
+        return frozenset(str(m) for m in (data.get("mounted") or []) if isinstance(m, str))
+    except Exception:
+        return frozenset()
+
+
 def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None,
-                       sockets: frozenset = frozenset()) -> List[Service]:
+                       sockets: frozenset = frozenset(), montes: frozenset = frozenset()) -> List[Service]:
     exposure = exposure or {}
     out: List[Service] = []
     for cat in menu.get("categories", []):
@@ -42,7 +62,13 @@ def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None
             # le vrai signal de joignabilité : présente ⇒ online, SAUF si l'unité a
             # réellement échoué (`failed` = alarme, jamais masquée par une socket
             # périmée).
-            if item["id"] in sockets and _raw != "error":
+            # Même vérité pour un module monté dans l'agrégateur (ni unité ni socket propres) et pour une page portée par un autre module
+            # (R-Level est une page du Toolbox) : on suit le module qui répond. Une unité réellement en échec reste une alarme.
+            porteur = PAGES_PORTEES.get(item["id"])
+            if porteur and _raw is None:
+                _raw = (health.get(porteur) or {}).get("status")
+                state = HEALTH_MAP.get(_raw, "unknown")
+            if (item["id"] in sockets or item["id"] in montes) and _raw != "error":
                 state = "online"
             domain, same_origin = resolve(item)
             rec = exposure.get(domain) if domain else None
