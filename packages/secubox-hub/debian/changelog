@@ -1,3 +1,19 @@
+secubox-hub (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Dashboard (racine de l'administration) au profil Aurora (#2481), en français, lecture
+    seule sur les routes du hub : modules, santé, alertes, interfaces, ressources, réseau,
+    santé des modules et des sites, pied (version, carte, démarrage, authentification).
+    Mesure absente = « — » ; session requise dite avec un lien de connexion ; ?demo=1 et
+    ?embed=1.
+  * Retirés (ils faisaient du bruit ou de l'à-peu-près) : le redémarrage des services sans
+    confirmation, le changement de mode réseau par confirm() (il vit sur /netmodes/, avec sa
+    confirmation intégrée), l'export factice (« Export started »). Les appels n'étaient pas
+    émis sans jeton local (session par cookie = page vide) : ils partent maintenant avec le
+    jeton s'il existe, le cookie sinon.
+  * Échec préexistant inchangé : test_chaque_entree_de_menu_a_son_espace. 6 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 11:12:29 +0200
+
 secubox-hub (1.9.55-1~bookworm1) bookworm; urgency=low
 
   * Les stats reseau ne sont plus marquees « perimees » en permanence (ref #2388) : le seuil de peremption (120 s) etait inferieur a la cadence du collecteur (120 s + 30 s de delai aleatoire, drop-in de cadence de secubox-core), si bien que « Reseau en direct » du SOC et l'onglet Reseau du Toolbox affichaient « COLLECTEUR ARRETE ? » collecteur en marche. Seuil porte a 360 s (deux cadences + marge) ; test lie au drop-in de cadence.

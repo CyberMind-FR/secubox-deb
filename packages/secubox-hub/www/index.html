@@ -4,1094 +4,291 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  SecuBox — Dashboard (page d'accueil de l'administration), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/hub/{menu,dashboard,system_health,module-health/summary,health-monitor/summary,alerts,network_summary,network_mode,memory,disk,
+  uptime,boot_mode,auth_mode}. Mesure absente = « — », jamais un zéro inventé. Les actions (mode réseau, services) vivent sur leurs pages, avec leur confirmation.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox Control Center</title>
-    <!-- Force browser to use system fonts including emoji -->
+    <title>SecuBox — Dashboard</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        /* Ensure emoji rendering with system fonts */
-        @font-face {
-            font-family: 'SystemEmoji';
-            src: local('Noto Color Emoji'), local('Apple Color Emoji'),
-                 local('Segoe UI Emoji'), local('Symbola'), local('EmojiOne Color');
-            unicode-range: U+1F000-1F9FF, U+2600-26FF, U+2700-27BF, U+FE00-FE0F;
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
+    
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
+            .barres{display:grid;gap:10px} .barre-l{display:grid;grid-template-columns:5.5rem minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.78rem}
+        .barre-l b{font-variant-numeric:tabular-nums;white-space:nowrap} .jauge{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden;display:flex} .jauge i{display:block;height:100%}
+        .legs{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.74rem;color:var(--doux);margin-top:6px} .legs i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+        .alerte{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.78rem}
+        .alerte:first-child{border-top:0} .alerte span.n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        a.btn{text-decoration:none;display:inline-block} .pied{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--faible);font-size:.72rem;justify-content:space-between}
+        .pied b{color:var(--doux);font-weight:600}
     </style>
-    <link rel="stylesheet" href="/shared/design-tokens.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
-    <style>
-        /**
-         * SecuBox Control Center — 6-Module Design System v2.0
-         * Overrides and dashboard-specific styles
-         */
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: var(--font-body);
-            background: var(--bg);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(10,88,64,0.02) 0%, transparent 70%);
-            color: var(--text);
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Main content */
-        /* La barre de menu globale injectée par /shared/sidebar.js est en
-           position fixe, en haut, sur 48px de haut — mesuré au navigateur, et
-           constant de 900 à 1920px de large. Sans réserve, elle recouvre le
-           haut du tableau de bord. Les panneaux de module réservent 56 à 60px ;
-           on s'aligne dessus, avec la même marge de sécurité. */
-        .main { flex: 1; margin-left: 220px; padding-top: 56px; }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border);
-            background: var(--surface);
-        }
-
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-
-        .header-title h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--root-main);
-            letter-spacing: 0.03em;
-        }
-
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: var(--radius-sm);
-            font-size: var(--size-xs);
-            font-weight: 600;
-            font-family: var(--font-mono);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-
-        .badge.version {
-            background: var(--bg);
-            border-color: var(--border);
-            color: var(--muted);
-        }
-
-        .badge.active {
-            background: rgba(10,88,64,0.15);
-            border-color: var(--root-main);
-            color: var(--root-main);
-        }
-
-        .header-actions { display: flex; gap: 0.75rem; }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius-md);
-            border: 1px solid var(--border);
-            background: var(--surface);
-            color: var(--text);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: var(--size-sm);
-            font-family: var(--font-body);
-            transition: all var(--transition-fast);
-        }
-
-        .btn:hover {
-            border-color: var(--root-main);
-            color: var(--root-main);
-        }
-
-        .btn.danger {
-            background: rgba(128,48,24,0.1);
-            border-color: var(--boot-main);
-            color: var(--boot-main);
-        }
-
-        .btn.danger:hover {
-            background: rgba(128,48,24,0.2);
-        }
-
-        .btn.primary {
-            background: rgba(10,88,64,0.1);
-            border-color: var(--root-main);
-            color: var(--root-main);
-        }
-
-        .btn.primary:hover {
-            background: rgba(10,88,64,0.2);
-        }
-
-        .content { padding: 1.5rem; }
-
-        .subtitle {
-            color: var(--muted);
-            font-size: var(--size-sm);
-            margin-bottom: 1.5rem;
-        }
-
-        /* Stats row - 6-module color coding */
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 1.25rem;
-            text-align: center;
-            transition: all var(--transition-fast);
-        }
-
-        .stat-card:hover {
-            border-color: var(--border2);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-
-        .stat-card .value {
-            font-size: 2rem;
-            font-weight: 700;
-            font-family: var(--font-mono);
-            margin-bottom: 0.25rem;
-        }
-
-        .stat-card .label {
-            font-size: var(--size-xs);
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-family: var(--font-mono);
-        }
-
-        /* 6-Module stat colors */
-        .stat-card.mesh .value { color: var(--mesh-main); }
-        .stat-card.root .value { color: var(--root-main); }
-        .stat-card.wall .value { color: var(--wall-main); }
-        .stat-card.boot .value { color: var(--boot-main); }
-        .stat-card.mind .value { color: var(--mind-main); }
-        .stat-card.auth .value { color: var(--auth-main); }
-        /* Legacy compat */
-        .stat-card.cyan .value { color: var(--mesh-main); }
-        .stat-card.green .value { color: var(--root-main); }
-        .stat-card.yellow .value { color: var(--wall-main); }
-        .stat-card.red .value { color: var(--boot-main); }
-
-        /* Grid layout */
-        .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 1.25rem;
-            margin-bottom: 1.5rem;
-            transition: all var(--transition-fast);
-        }
-
-        .card:hover {
-            border-color: var(--border2);
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .card-header h2 {
-            font-size: var(--size-sm);
-            font-weight: 700;
-            color: var(--wall-main);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-family: var(--font-mono);
-        }
-
-        .card-header a {
-            color: var(--root-main);
-            font-size: var(--size-sm);
-            text-decoration: none;
-            transition: color var(--transition-fast);
-        }
-
-        .card-header a:hover { color: var(--root-light); }
-
-        /* Module table */
-        .module-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-family: var(--font-mono);
-        }
-
-        .module-table th {
-            text-align: left;
-            padding: 0.75rem;
-            color: var(--wall-main);
-            font-size: var(--size-xs);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .module-table td {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border);
-            font-size: var(--size-sm);
-            color: var(--text);
-        }
-
-        .module-table tr:hover {
-            background: rgba(10,88,64,0.03);
-        }
-
-        .module-icon {
-            width: 24px;
-            height: 24px;
-            border-radius: var(--radius-sm);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 0.5rem;
-            font-size: 0.8rem;
-        }
-
-        .status-badge {
-            padding: 0.2rem 0.5rem;
-            border-radius: var(--radius-sm);
-            font-size: var(--size-xs);
-            font-family: var(--font-mono);
-        }
-
-        .status-badge.active {
-            background: rgba(10,88,64,0.15);
-            color: var(--root-main);
-        }
-
-        .status-badge.inactive {
-            background: rgba(128,48,24,0.15);
-            color: var(--boot-main);
-        }
-
-        /* Network addresses */
-        .network-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-
-        .network-item {
-            text-align: center;
-            padding: 1rem;
-            background: var(--bg);
-            border-radius: var(--radius-md);
-        }
-
-        .network-item .label {
-            font-size: var(--size-xs);
-            color: var(--muted);
-            margin-bottom: 0.25rem;
-            font-family: var(--font-mono);
-            letter-spacing: 0.1em;
-        }
-
-        .network-item .value {
-            color: var(--mesh-main);
-            font-family: var(--font-mono);
-        }
-
-        /* Quick actions */
-        .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-
-        .action-btn {
-            padding: 0.75rem;
-            background: rgba(16,74,136,0.1);
-            border: 1px solid var(--mesh-main);
-            border-radius: var(--radius-md);
-            color: var(--mesh-main);
-            cursor: pointer;
-            text-align: left;
-            font-size: var(--size-sm);
-            font-family: var(--font-body);
-            transition: all var(--transition-fast);
-        }
-
-        .action-btn:hover {
-            background: rgba(16,74,136,0.2);
-        }
-
-        .action-btn.green {
-            background: rgba(10,88,64,0.1);
-            border-color: var(--root-main);
-            color: var(--root-main);
-        }
-
-        .action-btn.green:hover {
-            background: rgba(10,88,64,0.2);
-        }
-
-        /* Alert timeline */
-        .alert-item {
-            padding: 0.75rem;
-            border-left: 3px solid var(--wall-main);
-            background: rgba(154,96,16,0.1);
-            margin-bottom: 0.5rem;
-            border-radius: 0 var(--radius-md) var(--radius-md) 0;
-        }
-
-        .alert-item .time {
-            font-size: var(--size-xs);
-            color: var(--muted);
-            font-family: var(--font-mono);
-        }
-
-        .alert-item .message {
-            font-size: var(--size-sm);
-        }
-
-        /* System health */
-        .health-item { margin-bottom: 1rem; }
-
-        .health-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.25rem;
-            font-size: var(--size-sm);
-        }
-
-        .health-bar {
-            height: 8px;
-            background: var(--bg);
-            border-radius: var(--radius-sm);
-            overflow: hidden;
-        }
-
-        .health-bar .fill {
-            height: 100%;
-            border-radius: var(--radius-sm);
-            transition: width 0.3s;
-        }
-
-        .health-bar .fill.red { background: var(--boot-main); }
-        .health-bar .fill.yellow { background: var(--wall-main); }
-        .health-bar .fill.green { background: var(--root-main); }
-        .health-bar .fill.cyan { background: var(--mesh-main); }
-
-        .health-percent {
-            font-size: var(--size-xs);
-            color: var(--muted);
-            text-align: right;
-            margin-top: 0.25rem;
-            font-family: var(--font-mono);
-        }
-
-        /* Form elements */
-        input, select, textarea {
-            font-family: var(--font-mono);
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 0.5rem;
-            border-radius: var(--radius-sm);
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--root-main);
-            box-shadow: 0 0 0 2px rgba(10,88,64,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
-        @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; } }
-
-        /* Footer — Kiosk mode version display */
-        .footer {
-            position: fixed;
-            bottom: 0;
-            left: 220px;
-            right: 0;
-            padding: 0.5rem 1.5rem;
-            background: var(--surface);
-            border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: var(--size-xs);
-            font-family: var(--font-mono);
-            color: var(--muted);
-            z-index: 100;
-        }
-        .footer-left, .footer-right { display: flex; gap: 1.5rem; align-items: center; }
-        .footer-item { display: flex; align-items: center; gap: 0.5rem; }
-        .footer-item .label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-        .footer-item .value { color: var(--text); }
-        .footer-item .value.kiosk { color: var(--mesh-main); }
-        .footer-item .value.console { color: var(--wall-main); }
-        .footer-item .value.zkp { color: var(--root-main); }
-        .footer-item .value.standard { color: var(--muted); }
-        @media (max-width: 768px) { .footer { left: 0; } }
-    </style>
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
 </head>
-<body class="hybrid-skin hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>SecuBox Control Center</h1>
-                <span class="badge version" id="version">v1.5.10</span>
-                <span class="badge version" id="build-info" title="Build timestamp">Build: --</span>
-                <span class="badge active" id="status-badge">-/- Active</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z" fill="rgba(41,182,246,.14)"/></svg>
+                <div><b>Dashboard</b><small id="subline">Centre de contrôle de la box</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="location.href='/system/'">Settings</button>
-                <button class="btn danger" onclick="logout()">Logout</button>
-            </div>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button><button class="btn" id="btn-quitter">⏻ Déconnexion</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="session" hidden>Session requise : aucune mesure ne peut être lue. <a href="/login.html" target="_top" style="color:#04202a">Se connecter</a></div>
 
-        <div class="content">
-            <p class="subtitle">Security | Network | System automation</p>
-
-            <div class="stats-row">
-                <div class="stat-card mesh">
-                    <div class="value" id="total-modules">-</div>
-                    <div class="label">Modules</div>
-                </div>
-                <div class="stat-card mesh">
-                    <div class="value" id="installed-modules">-</div>
-                    <div class="label">Installed</div>
-                </div>
-                <div class="stat-card root">
-                    <div class="value" id="active-modules">-</div>
-                    <div class="label">Active</div>
-                </div>
-                <div class="stat-card wall">
-                    <div class="value" id="health-score">-%</div>
-                    <div class="label">Health</div>
-                </div>
-                <div class="stat-card boot">
-                    <div class="value" id="alerts-count">0</div>
-                    <div class="label">Alerts</div>
-                </div>
-            </div>
-
-            <!-- Health Monitor Widgets (Upper) -->
-            <div class="health-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                <div class="card" style="margin-bottom: 0;">
-                    <div class="card-header">
-                        <h2>Module Health</h2>
-                        <span id="module-health-pct" style="font-family: var(--font-mono); color: var(--root-main);">-%</span>
-                    </div>
-                    <div class="health-bar" style="height: 8px; background: var(--border); border-radius: 4px; margin-bottom: 0.75rem;">
-                        <div id="module-health-bar" class="fill" style="width: 0%; height: 100%; background: var(--root-main); border-radius: 4px; transition: width 0.3s;"></div>
-                    </div>
-                    <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
-                        <span id="module-health-ok" style="color: var(--root-main);">🟢 0</span>
-                        <span id="module-health-warn" style="color: var(--wall-main);">🟡 0</span>
-                        <span id="module-health-down" style="color: var(--boot-main);">🔴 0</span>
-                    </div>
-                </div>
-                <div class="card" style="margin-bottom: 0;">
-                    <div class="card-header">
-                        <h2>VHost Health</h2>
-                        <span id="vhost-health-pct" style="font-family: var(--font-mono); color: var(--mesh-main);">-%</span>
-                    </div>
-                    <div class="health-bar" style="height: 8px; background: var(--border); border-radius: 4px; margin-bottom: 0.75rem;">
-                        <div id="vhost-health-bar" class="fill" style="width: 0%; height: 100%; background: var(--mesh-main); border-radius: 4px; transition: width 0.3s;"></div>
-                    </div>
-                    <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
-                        <span id="vhost-health-ok" style="color: var(--root-main);">🟢 0</span>
-                        <span id="vhost-health-slow" style="color: var(--wall-main);">🟡 0</span>
-                        <span id="vhost-health-down" style="color: var(--boot-main);">🔴 0</span>
-                        <span id="vhost-health-placeholder" style="color: var(--muted);">⬜ 0</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid-2">
-                <div>
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Modules Overview</h2>
-                            <a href="/system/">View All</a>
-                        </div>
-                        <table class="module-table">
-                            <thead>
-                                <tr><th>Module</th><th>Category</th><th>Status</th><th>Version</th></tr>
-                            </thead>
-                            <tbody id="modules-table">
-                                <tr><td colspan="4">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>System Health</h2>
-                        </div>
-                        <!-- Concentric Gauge (eyeremote style) -->
-                        <div style="margin-top: 0.5rem;">
-                            <div id="concentric-gauge" style="display: flex; justify-content: center;">
-                                <div style="color: var(--muted); font-size: 0.8rem;">Loading...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <!-- Network Mode Selection Card -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Network Mode</h2>
-                            <a href="/netmodes/">Configure</a>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-                            <span style="font-size: 2rem;" id="mode-icon">🔀</span>
-                            <div>
-                                <div style="font-weight: bold; color: var(--root-main);" id="current-mode-name">Router</div>
-                                <div style="font-size: 0.8rem; color: var(--muted);" id="current-mode-desc">Loading...</div>
-                            </div>
-                        </div>
-                        <div style="margin-bottom: 0.75rem;">
-                            <label style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem; display: block;">Change Mode:</label>
-                            <select id="mode-select" style="width: 100%; padding: 0.5rem; border-radius: 4px;">
-                                <option value="router">Router (NAT + DHCP)</option>
-                                <option value="sniffer-inline">Inline Sniffer</option>
-                                <option value="sniffer-passive">Passive Sniffer</option>
-                                <option value="access-point">Access Point</option>
-                                <option value="relay">VPN Relay</option>
-                            </select>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn" onclick="previewMode()" style="flex: 1;">Preview</button>
-                            <button class="btn primary" onclick="applyMode()" style="flex: 1;">Apply</button>
-                        </div>
-                        <div id="mode-interfaces" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--muted);"></div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header"><h2>Network Addresses</h2></div>
-                        <div class="network-grid">
-                            <div class="network-item">
-                                <div class="label">LAN</div>
-                                <div class="value" id="lan-ip">-</div>
-                            </div>
-                            <div class="network-item">
-                                <div class="label">BR-WAN</div>
-                                <div class="value" id="wan-ip">-</div>
-                            </div>
-                            <div class="network-item">
-                                <div class="label">PUBLIC IPV4</div>
-                                <div class="value" id="pub-ipv4">N/A</div>
-                            </div>
-                            <div class="network-item">
-                                <div class="label">PUBLIC IPV6</div>
-                                <div class="value" id="pub-ipv6">N/A</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header"><h2>Quick Actions</h2></div>
-                        <div class="quick-actions">
-                            <button class="action-btn" onclick="restartServices()">Restart Services</button>
-                            <button class="action-btn green" onclick="checkUpdates()">Update Packages</button>
-                            <button class="action-btn" onclick="viewLogs()">View Logs</button>
-                            <button class="action-btn green" onclick="exportConfig()">Export Config</button>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header"><h2>Alert Timeline</h2></div>
-                        <div id="alerts-list">
-                            <div class="alert-item">
-                                <div class="time">-</div>
-                                <div class="message">No alerts</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+        <div class="tuiles">
+            <div class="tuile"><div class="l">Modules actifs</div><div class="v" id="tMod">—</div><div class="s" id="tModS">actifs / installés</div></div>
+            <div class="tuile"><div class="l">Santé globale</div><div class="v" id="tSante">—</div><div class="s">modules et ressources</div></div>
+            <div class="tuile"><div class="l">Alertes</div><div class="v" id="tAl">—</div><div class="s">services à l’arrêt</div></div>
+            <div class="tuile"><div class="l">Interfaces</div><div class="v" id="tIf">—</div><div class="s">montées / total</div></div>
+            <div class="tuile"><div class="l">En marche depuis</div><div class="v" id="tUp" style="font-size:1.15rem">—</div><div class="s" id="tUpS"></div></div>
         </div>
-    </main>
 
-    <footer class="footer" id="footer">
-        <div class="footer-left">
-            <div class="footer-item">
-                <span class="label">SecuBox</span>
-                <span class="value" id="footer-version">v1.7.0</span>
-            </div>
-            <div class="footer-item">
-                <span class="label">Mode</span>
-                <span class="value" id="footer-boot-mode">--</span>
-            </div>
-            <div class="footer-item">
-                <span class="label">Auth</span>
-                <span class="value" id="footer-auth-mode">--</span>
-            </div>
+        <div class="grille g2">
+            <div class="pan"><h3>Ressources <i>instantané de la box</i></h3><div class="barres" id="res"><div class="vide">—</div></div></div>
+            <div class="pan"><h3>Réseau</h3><div class="kv" id="reseau"></div><div class="peer-note" id="modeNote"></div><a class="btn sm" href="/netmodes/" id="lienMode" hidden>Modes réseau →</a></div>
         </div>
-        <div class="footer-right">
-            <div class="footer-item">
-                <span class="label">Uptime</span>
-                <span class="value" id="footer-uptime">--</span>
-            </div>
-            <div class="footer-item">
-                <span class="value" style="color: var(--muted);">CyberMind</span>
-            </div>
-        </div>
-    </footer>
 
+        <div class="grille g2">
+            <div class="pan"><h3>Santé des modules</h3><div id="sMod"><div class="vide">—</div></div></div>
+            <div class="pan"><h3>Santé des sites</h3><div id="sSites"><div class="vide">—</div></div></div>
+        </div>
+
+        <div class="pan"><h3>Alertes <i id="alNote"></i></h3><div id="alertes"><div class="vide">—</div></div></div>
+
+        <div class="pied"><span>Version <b id="pVer">—</b></span><span>Carte <b id="pCarte">—</b></span><span>Construction <b id="pBuild">—</b></span><span>Démarrage <b id="pBoot">—</b></span><span>Authentification <b id="pAuth">—</b></span></div>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
         const API = '/api/v1/hub';
-        // Ring gauge for health metrics (eyeremote style)
-        function createRingGauge(percent, color, size) {
-            size = size || 50;
-            const r = size/2 - 4;
-            const circ = 2 * Math.PI * r;
-            const pct = Math.min(100, Math.max(0, percent));
-            const dash = circ * pct / 100;
-            const gap = circ - dash;
-            const col = color || (pct > 80 ? "#ef4444" : pct > 60 ? "#eab308" : "#22c55e");
-            return "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\"><circle cx=\"" + size/2 + "\" cy=\"" + size/2 + "\" r=\"" + r + "\" fill=\"none\" stroke=\"var(--divider)\" stroke-width=\"4\"/><circle cx=\"" + size/2 + "\" cy=\"" + size/2 + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + col + "\" stroke-width=\"4\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + circ/4 + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.3s;\"/><text x=\"50%\" y=\"50%\" dominant-baseline=\"middle\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"" + (size/4) + "\" font-weight=\"bold\">" + Math.round(pct) + "%</text></svg>";
-        }
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        const num = v => (v == null || v === '' || !isFinite(+v) ? null : +v);
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+        const pct = v => (num(v) == null ? '—' : Math.round(+v) + ' %');
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function vide(el, msg) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'vide'; d.textContent = msg; el.append(d); }
+        let sessionRequise = false;
 
-        // Concentric rings gauge for System Health (eyeremote style)
-        function createConcentricGauge(cpu, mem, disk) {
-            const size = 140;
-            const center = size / 2;
-            const rings = [
-                { pct: disk, color: "#22c55e", icon: "💾", label: "Disk", r: 20 },
-                { pct: mem, color: "#eab308", icon: "🧠", label: "RAM", r: 35 },
-                { pct: cpu, color: "#ef4444", icon: "🔥", label: "CPU", r: 50 }
-            ];
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            // Draw rings from outer to inner
-            for (let i = rings.length - 1; i >= 0; i--) {
-                const ring = rings[i];
-                const circ = 2 * Math.PI * ring.r;
-                const dash = circ * ring.pct / 100;
-                const gap = circ - dash;
-                const strokeW = 8;
-                
-                // Background circle
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + ring.r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.1)\" stroke-width=\"" + strokeW + "\"/>";
-                
-                // Progress arc
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + ring.r + "\" fill=\"none\" stroke=\"" + ring.color + "\" stroke-width=\"" + strokeW + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;\"><title>" + ring.icon + " " + ring.label + ": " + Math.round(ring.pct) + "%</title></circle>";
-                
-                // Icon at 12 oclock position (top of ring)
-                const iconY = center - ring.r - 3;
-                svg += "<text x=\"" + center + "\" y=\"" + iconY + "\" text-anchor=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + ring.icon + "</text>";
-            }
-            
-            // Center text
-            const avgPct = Math.round((cpu + mem + disk) / 3);
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + avgPct + "%</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"7\">LOAD</text>";
-            
-            svg += "</svg>";
-            
-            // Legend
-            const legend = rings.map(function(r) {
-                return "<span style=\"display:inline-flex;align-items:center;gap:3px;\"><span style=\"width:8px;height:8px;background:" + r.color + ";border-radius:2px;\"></span>" + r.icon + " " + Math.round(r.pct) + "%</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"font-size:0.65rem;margin-top:6px;display:flex;gap:8px;\">" + legend + "</div></div>";
-        }
-
-        // ── Authentication ────────────────────────────────────────────
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
-        }
-
-        // #964/auth — NE PLUS forcer une reconnexion côté JS : la session tient
-        // au cookie (utilisateurs maîtres gk2/admin). Le redirect pré-emptif
-        // cassait les sessions valides en rebouclant sur login.html?redirect=%2F.
-        // Les appels API portent le jeton et gèrent eux-mêmes un vrai 401.
-        function checkAuth() { return true; }
-
-        if (!checkAuth()) {
-            document.body.innerHTML = '<div style="padding:2rem;color:var(--root-main);">Redirecting to login...</div>';
-        }
-
-        let menuData = null;
-
-        async function api(endpoint, method = 'GET', data = null) {
-            const token = getToken();
-            if (!token) { checkAuth(); return {}; }
-            const opts = {
-                method,
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
-            };
-            if (data) opts.body = JSON.stringify(data);
+        // Tous les appels passent ici : jeton s'il existe, sinon cookie de session ; 401 = session requise (dite), autre échec = null (tiret).
+        async function lire(chemin) {
+            if (DEMO) return demo(chemin);
             try {
-                const res = await fetch(API + endpoint, opts);
-                if (res.status === 401) {
-                    localStorage.removeItem('sbx_token');
-                    localStorage.removeItem('secubox_token');
-                    checkAuth();
-                    return {};
-                }
-                return res.json();
-            } catch (e) { return {}; }
+                const h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+                const r = await fetch(API + chemin, { headers: h, credentials: 'same-origin', cache: 'no-store' });
+                if (r.status === 401) { sessionRequise = true; return null; }
+                return r.ok ? await r.json() : null;
+            } catch (e) { return null; }
         }
 
-        function formatBytes(b) {
-            if (!b) return '0 B';
-            const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(b) / Math.log(k));
-            return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
+        function barre(nom, v, detail) {
+            const l = document.createElement('div'); l.className = 'barre-l';
+            const n = document.createElement('span'); n.textContent = nom;
+            const j = document.createElement('div'); j.className = 'jauge'; const i = document.createElement('i');
+            const p = num(v); i.style.width = p == null ? '0%' : Math.min(100, Math.max(0, p)) + '%'; i.style.background = p == null ? '#6f84a8' : (p > 85 ? '#ff4d5e' : p > 65 ? '#ff9f1c' : '#2ecc71'); j.append(i);
+            const b = document.createElement('b'); b.textContent = (p == null ? '—' : Math.round(p) + ' %') + (detail ? ' · ' + detail : '');
+            l.append(n, j, b); return l;
         }
-
-        async function loadMenu() {
-            try {
-                const data = await api('/menu');
-                if (!data || !data.categories) return;
-                menuData = data;
-                document.getElementById('status-badge').textContent = `${data.total_active}/${data.total_installed} Active`;
-            } catch (e) { console.error('Failed to load menu:', e); }
+        function empile(el, segments, total) {
+            el.replaceChildren();
+            const j = document.createElement('div'); j.className = 'jauge';
+            const somme = Math.max(1, total != null ? total : segments.reduce((a, s) => a + (s[1] || 0), 0));
+            for (const [nom, n, c] of segments) { if (!n) continue; const i = document.createElement('i'); i.style.width = (100 * n / somme) + '%'; i.style.background = c; i.title = nom + ' : ' + n; j.append(i); }
+            const legs = document.createElement('div'); legs.className = 'legs';
+            for (const [nom, n, c] of segments) { const s = document.createElement('span'); const p = document.createElement('i'); p.style.background = c; s.append(p, document.createTextNode(nom + ' : ' + fmt(n))); legs.append(s); }
+            el.append(j, legs);
         }
+        function ligne(parent, k, v) { const a = document.createElement('div'), b = document.createElement('div'); a.className = 'k'; a.textContent = k; b.textContent = v == null || v === '' ? '—' : String(v); parent.append(a, b); }
 
-        async function loadDashboard() {
-            const data = await api('/dashboard');
-            if (!data || data.detail) return;
+        function rendre(d) {
+            const { menu, dash, sante, mods, sites, alertes, reseau, mode, mem, disque, up, boot, auth } = d;
+            const aucune = ![menu, dash, sante, mods, sites, alertes, reseau].some(x => x != null);
+            $('session').hidden = !(sessionRequise && aucune);
+            const pa = $('pastille');
+            const s = sante && num(sante.overall);
+            pa.textContent = aucune ? (sessionRequise ? 'SESSION REQUISE' : 'HORS LIGNE') : (s == null ? 'MESURES PARTIELLES' : s >= 85 ? 'SANTÉ ' + Math.round(s) + ' % · TOUT VA BIEN' : s >= 60 ? 'SANTÉ ' + Math.round(s) + ' % · DÉGRADÉE' : 'SANTÉ ' + Math.round(s) + ' % · CRITIQUE');
+            pa.className = 'actif' + (aucune || (s != null && s < 85) ? ' hors' : '');
 
-            const modules = data.modules || {};
-            const total = Object.keys(modules).length;
-            const active = Object.values(modules).filter(m => m.active).length;
+            $('tMod').textContent = menu && num(menu.total_active) != null ? fmt(menu.total_active) + ' / ' + fmt(menu.total_installed) : '—';
+            $('tSante').textContent = s == null ? '—' : Math.round(s) + ' %';
+            const al = Array.isArray(alertes) ? alertes : null;
+            $('tAl').textContent = al ? fmt(al.length) : '—';
+            const up2 = reseau && num(reseau.interfaces_up) != null ? fmt(reseau.interfaces_up) + ' / ' + fmt(reseau.interfaces) : '—';
+            $('tIf').textContent = up2;
+            $('tUp').textContent = up && up.uptime ? String(up.uptime) : '—';
 
-            if (data.build_info) {
-                const bi = data.build_info;
-                const buildEl = document.getElementById('build-info');
-                if (bi.build_timestamp) {
-                    const d = new Date(bi.build_timestamp);
-                    buildEl.textContent = 'Build: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    buildEl.title = `Built: ${bi.build_timestamp}\nCommit: ${bi.git_commit || 'N/A'}\nBoard: ${bi.board || 'generic'}`;
-                }
-                if (bi.version) document.getElementById('version').textContent = 'v' + bi.version;
+            // ressources
+            const R = $('res'); R.replaceChildren();
+            if (!dash && !mem && !disque) vide(R, 'Ressources illisibles.');
+            else {
+                const load = dash && Array.isArray(dash.load_avg) ? dash.load_avg : null;
+                R.append(barre('Processeur', dash && dash.cpu_percent, load && num(load[0]) != null ? 'charge ' + (+load[0]).toFixed(2) : ''));
+                R.append(barre('Mémoire', dash && dash.memory_percent, mem && num(mem.total_mb) ? (Math.round(num(mem.used_mb) / 102.4) / 10) + ' / ' + (Math.round(num(mem.total_mb) / 102.4) / 10) + ' Go' : ''));
+                R.append(barre('Disque', dash && dash.disk_percent, disque && num(disque.total_gb) ? disque.used_gb + ' / ' + disque.total_gb + ' Go' : ''));
             }
 
-            document.getElementById('total-modules').textContent = total;
-            document.getElementById('installed-modules').textContent = menuData?.total_installed || total;
-            document.getElementById('active-modules').textContent = menuData?.total_active || active;
+            // réseau
+            const N = $('reseau'); N.replaceChildren();
+            ligne(N, 'Sortie Internet', reseau ? reseau.wan_status : null); ligne(N, 'Adresse LAN', reseau ? reseau.lan_ip : null); ligne(N, 'Adresse WAN', reseau ? reseau.wan_ip : null);
+            ligne(N, 'Mode réseau', mode && (mode.mode_name || mode.current_mode) ? (mode.mode_name || mode.current_mode) : null);
+            $('modeNote').textContent = mode && mode.pending_mode ? 'Changement en attente : ' + mode.pending_mode : '';
+            $('lienMode').hidden = !mode;
 
-            const cpu = data.cpu_percent || 0;
-            const mem = data.memory_percent || 0;
-            const disk = data.disk_percent || 0;
-            const load = data.load_avg || [0, 0, 0];
+            // santé des modules / sites
+            if (mods && num(mods.total) != null) empile($('sMod'), [['en service', mods.healthy, '#2ecc71'], ['dégradés', mods.degraded, '#ff9f1c'], ['à l’arrêt', mods.down, '#ff4d5e']], mods.total); else vide($('sMod'), 'Santé des modules illisible.');
+            if (sites && num(sites.total) != null) empile($('sSites'), [['répondent', sites.ok, '#2ecc71'], ['lents', sites.slow, '#ff9f1c'], ['en panne', sites.down, '#ff4d5e'], ['sans contenu', sites.placeholder, '#6f84a8']], sites.total); else vide($('sSites'), 'Santé des sites illisible.');
 
-            const cpuInfoEl = document.getElementById('cpu-info'); if (cpuInfoEl) cpuInfoEl.textContent = 'Load: ' + load[0]?.toFixed(2);
-            const cpuBarEl = document.getElementById('cpu-bar'); if (cpuBarEl) cpuBarEl.style.width = cpu + '%';
-            const cpuPctEl = document.getElementById('cpu-percent'); if (cpuPctEl) cpuPctEl.textContent = cpu.toFixed(0) + '%';
-            const memBarEl = document.getElementById('mem-bar'); if (memBarEl) memBarEl.style.width = mem + '%';
-            const memPctEl = document.getElementById('mem-percent'); if (memPctEl) memPctEl.textContent = mem.toFixed(0) + '%';
-            const diskBarEl = document.getElementById('disk-bar'); if (diskBarEl) diskBarEl.style.width = disk + '%';
-            const diskPctEl = document.getElementById('disk-percent'); if (diskPctEl) diskPctEl.textContent = disk.toFixed(0) + '%';
-            // Update concentric gauge (eyeremote style)
-            const concentricEl = document.getElementById('concentric-gauge');
-            if (concentricEl) {
-                concentricEl.innerHTML = createConcentricGauge(cpu, mem, disk);
+            // alertes
+            const A = $('alertes'); A.replaceChildren();
+            $('alNote').textContent = al ? fmt(al.length) + ' au total' : '';
+            if (!al) vide(A, sessionRequise ? 'Session requise.' : 'Alertes illisibles.');
+            else if (!al.length) vide(A, 'Aucune alerte : tous les services attendus répondent.');
+            else for (const a of al.slice(0, 10)) {
+                const l = document.createElement('div'); l.className = 'alerte';
+                const p = document.createElement('span'); p.className = 'pill ' + (a.severity === 'critical' ? 'down' : 'neutre'); p.textContent = a.severity === 'critical' ? 'critique' : 'attention';
+                const n = document.createElement('span'); n.className = 'n'; n.textContent = String(a.type || 'alerte').replace(/_/g, ' ') + ' — ' + (a.module || '—'); n.title = n.textContent;
+                l.append(p, n); A.append(l);
             }
 
-            const tbody = document.getElementById('modules-table');
-            if (menuData && menuData.categories) {
-                const allItems = menuData.categories.flatMap(c => c.items);
-                tbody.innerHTML = allItems.slice(0, 4).map(item => {
-                    // Look up version from modules data if available
-                    const modData = modules[item.id] || {};
-                    const version = modData.version || '-';
-                    return `
-                    <tr onclick="location.href='${item.path}'" style="cursor:pointer">
-                        <td><span class="module-icon">${item.icon}</span>${item.name}</td>
-                        <td>${item.category}</td>
-                        <td><span class="status-badge ${item.active ? 'active' : 'inactive'}">${item.active ? 'Active' : 'Inactive'}</span></td>
-                        <td>${version}</td>
-                    </tr>`;
-                }).join('');
-            } else {
-                tbody.innerHTML = Object.entries(modules).map(([name, m]) => `
-                    <tr>
-                        <td><span class="module-icon">📦</span>${name.charAt(0).toUpperCase() + name.slice(1)}</td>
-                        <td>-</td>
-                        <td><span class="status-badge ${m.active ? 'active' : 'inactive'}">${m.active ? 'Active' : 'Inactive'}</span></td>
-                        <td>${m.version || '-'}</td>
-                    </tr>
-                `).join('');
-            }
+            // pied
+            const bi = (dash && dash.build_info) || {};
+            $('pVer').textContent = bi.version ? 'v' + bi.version : '—'; $('pCarte').textContent = (dash && dash.board) || bi.board || '—';
+            $('pBuild').textContent = bi.build_timestamp ? new Date(bi.build_timestamp).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+            $('pBoot').textContent = boot && boot.mode ? boot.mode : '—'; $('pAuth').textContent = auth && auth.mode ? auth.mode : '—';
+            $('subline').textContent = (dash && dash.board) ? 'Centre de contrôle · ' + dash.board : 'Centre de contrôle de la box';
+            hauteur();
         }
 
-        async function loadHealth() {
-            const data = await api('/system_health');
-            if (data && data.overall !== undefined) {
-                document.getElementById('health-score').textContent = data.overall + '%';
-            }
+        async function charger() {
+            sessionRequise = false;
+            const noms = ['menu', 'dash', 'sante', 'mods', 'sites', 'alertes', 'reseau', 'mode', 'mem', 'disque', 'up', 'boot', 'auth'];
+            const chemins = ['/menu', '/dashboard', '/system_health', '/module-health/summary', '/health-monitor/summary', '/alerts', '/network_summary', '/network_mode', '/memory', '/disk', '/uptime', '/boot_mode', '/auth_mode'];
+            const vals = await Promise.all(chemins.map(lire));
+            const d = {}; noms.forEach((n, i) => { d[n] = vals[i]; });
+            rendre(d);
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
 
-        async function loadModuleHealth() {
-            try {
-                const data = await api('/module-health/summary');
-                if (data && data.health_percent !== undefined) {
-                    const pct = Math.round(data.health_percent);
-                    document.getElementById('module-health-pct').textContent = pct + '%';
-                    document.getElementById('module-health-bar').style.width = pct + '%';
-                    document.getElementById('module-health-ok').textContent = '🟢 ' + (data.healthy || 0);
-                    document.getElementById('module-health-warn').textContent = '🟡 ' + (data.degraded || 0);
-                    document.getElementById('module-health-down').textContent = '🔴 ' + (data.down || 0);
-                }
-            } catch (e) {
-                // Fallback: compute from menu data
-                if (menuData && menuData.categories) {
-                    const allItems = menuData.categories.flatMap(c => c.items);
-                    const active = allItems.filter(i => i.active).length;
-                    const total = allItems.length;
-                    const pct = total > 0 ? Math.round((active / total) * 100) : 0;
-                    document.getElementById('module-health-pct').textContent = pct + '%';
-                    document.getElementById('module-health-bar').style.width = pct + '%';
-                    document.getElementById('module-health-ok').textContent = '🟢 ' + active;
-                    document.getElementById('module-health-down').textContent = '🔴 ' + (total - active);
-                }
-            }
+        async function quitter() {
+            // Termine la session CÔTÉ SERVEUR (#1803) puis efface le jeton du navigateur.
+            const t = jeton();
+            try { await fetch('/api/v1/auth/auth/logout', { method: 'POST', credentials: 'include', headers: t ? { Authorization: 'Bearer ' + t } : {} }); } catch (e) { /* hors ligne : on efface quand même */ }
+            try { localStorage.removeItem('secubox_token'); localStorage.removeItem('sbx_token'); } catch (e) { /* stockage refusé */ }
+            if (!DEMO) location.href = '/login.html';
         }
 
-        async function loadVHostHealth() {
-            try {
-                const data = await api('/health-monitor/summary');
-                if (data && data.health_percent !== undefined) {
-                    const pct = Math.round(data.health_percent);
-                    document.getElementById('vhost-health-pct').textContent = pct + '%';
-                    document.getElementById('vhost-health-bar').style.width = pct + '%';
-                    document.getElementById('vhost-health-ok').textContent = '🟢 ' + (data.ok || 0);
-                    document.getElementById('vhost-health-slow').textContent = '🟡 ' + (data.slow || 0);
-                    document.getElementById('vhost-health-down').textContent = '🔴 ' + (data.down || 0);
-                    document.getElementById('vhost-health-placeholder').textContent = '⬜ ' + (data.placeholder || 0);
-                }
-            } catch (e) {
-                document.getElementById('vhost-health-pct').textContent = 'N/A';
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'dashboard' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('btn-refresh').addEventListener('click', charger); $('btn-quitter').addEventListener('click', quitter);
+
+        // ── Démonstration : données fictives (noms de documentation) ────────────────────────────────────────────────────────────────────
+        function demo(c) {
+            const r = d => Promise.resolve(d);
+            switch (c) {
+                case '/menu': return r({ total_active: 108, total_installed: 112, categories: [] });
+                case '/dashboard': return r({ board: 'carte-exemple', cpu_percent: 31, memory_percent: 62, disk_percent: 48, load_avg: [0.84, 0.71, 0.66], build_info: { version: '3.0.0', build_timestamp: '2026-10-11T08:30:00Z' } });
+                case '/system_health': return r({ overall: 91 });
+                case '/module-health/summary': return r({ health_percent: 96, healthy: 105, degraded: 2, down: 1, total: 108 });
+                case '/health-monitor/summary': return r({ health_percent: 88, ok: 30, slow: 3, down: 1, placeholder: 4, total: 38 });
+                case '/alerts': return r([{ type: 'service_down', module: 'exemple', severity: 'warning' }, { type: 'service_down', module: '<img src=x onerror=alert(1)>', severity: 'critical' }]);
+                case '/network_summary': return r({ wan_status: 'connecté', lan_ip: '192.0.2.10', wan_ip: '198.51.100.7', interfaces: 6, interfaces_up: 5 });
+                case '/network_mode': return r({ current_mode: 'router', mode_name: 'Routeur', pending_mode: null });
+                case '/memory': return r({ total_mb: 8192, used_mb: 5100 });
+                case '/disk': return r({ total_gb: 232, used_gb: 111 });
+                case '/uptime': return r({ uptime: '12d 4h 31m' });
+                case '/boot_mode': return r({ mode: 'console' });
+                case '/auth_mode': return r({ mode: 'Standard' });
+                default: return r(null);
             }
         }
-
-        async function loadAlerts() {
-            const data = await api('/alerts');
-            const alerts = data || [];
-            document.getElementById('alerts-count').textContent = Array.isArray(alerts) ? alerts.length : 0;
-
-            const list = document.getElementById('alerts-list');
-            if (Array.isArray(alerts) && alerts.length > 0) {
-                list.innerHTML = alerts.slice(0, 3).map(a => `
-                    <div class="alert-item">
-                        <div class="time">${new Date().toLocaleTimeString()}</div>
-                        <div class="message">${a.type?.replace(/_/g, ' ') || 'Alert'}: ${a.module || ''}</div>
-                    </div>
-                `).join('');
-            }
-        }
-
-        async function loadNetwork() {
-            const data = await api('/network_summary');
-            const netInfoEl = document.getElementById('net-info'); if (netInfoEl) netInfoEl.textContent = data?.wan_status || 'Unknown';
-            document.getElementById('lan-ip').textContent = data?.lan_ip || '-';
-            document.getElementById('wan-ip').textContent = data?.wan_ip || '-';
-            if (data?.interfaces_up) {
-                const pct = Math.round((data.interfaces_up / Math.max(data.interfaces, 1)) * 100);
-                const netBarEl = document.getElementById('net-bar'); if (netBarEl) netBarEl.style.width = pct + '%';
-                const netPctEl = document.getElementById('net-percent'); if (netPctEl) netPctEl.textContent = pct + '%';
-            }
-        }
-
-        async function loadMemory() {
-            const data = await api('/memory');
-            if (data && data.total_mb) {
-                const used = data.used_mb || 0;
-                const total = data.total_mb || 1;
-                const memInfoEl = document.getElementById('mem-info'); if (memInfoEl) memInfoEl.textContent =
-                    Math.round(used / 1024 * 10) / 10 + ' / ' + Math.round(total / 1024 * 10) / 10 + ' GB';
-            }
-        }
-
-        async function loadDisk() {
-            const data = await api('/disk');
-            if (data && data.total_gb) {
-                const used = data.used_gb || 0;
-                const total = data.total_gb || 1;
-                const diskInfoEl = document.getElementById('disk-info'); if (diskInfoEl) diskInfoEl.textContent = used + ' / ' + total + ' GB';
-            }
-        }
-
-        function restartServices() { api('/execute_action', 'POST', { action: 'restart_services' }).then(() => alert('Services restarted')); }
-        function checkUpdates() { location.href = '/system/'; }
-        function viewLogs() { location.href = '/system/'; }
-        function exportConfig() { alert('Export started'); }
-
-        async function logout() {
-            // Termine la session CÔTÉ SERVEUR (#1803) : l'ancien appel visait le
-            // portail, qui gère un autre cookie — la session restait valable.
-            const t = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
-            try {
-                await fetch('/api/v1/auth/auth/logout', { method: 'POST', credentials: 'include',
-                    headers: t ? { 'Authorization': 'Bearer ' + t } : {} });
-            } catch (e) { /* hors ligne : on efface quand même côté navigateur */ }
-            localStorage.removeItem('secubox_token');
-            localStorage.removeItem('sbx_token');
-            window.location.href = '/login.html';
-        }
-
-        async function loadNetworkMode() {
-            const data = await api('/network_mode');
-            if (!data || data.detail) return;
-
-            document.getElementById('mode-icon').textContent = data.mode_icon || '🔀';
-            document.getElementById('current-mode-name').textContent = data.mode_name || data.current_mode || 'Router';
-            document.getElementById('current-mode-desc').textContent = data.mode_desc || '';
-
-            const select = document.getElementById('mode-select');
-            if (select && data.current_mode) select.value = data.current_mode;
-
-            if (data.available_modes && data.available_modes.length > 0) {
-                select.innerHTML = data.available_modes.map(m =>
-                    `<option value="${m.id}" ${m.id === data.current_mode ? 'selected' : ''}>${m.icon || '📦'} ${m.name}</option>`
-                ).join('');
-            }
-
-            const ifacesDiv = document.getElementById('mode-interfaces');
-            if (data.interfaces && ifacesDiv) {
-                const wan = (data.interfaces.wan || []).join(', ') || 'N/A';
-                const lan = (data.interfaces.lan || []).join(', ') || 'N/A';
-                ifacesDiv.innerHTML = `<span style="color: var(--wall-main);">WAN:</span> ${wan} | <span style="color: var(--root-main);">LAN:</span> ${lan}`;
-            }
-
-            if (data.pending_mode) {
-                document.getElementById('current-mode-desc').innerHTML =
-                    `<span style="color: var(--wall-main);">Pending: ${data.pending_mode}</span>`;
-            }
-        }
-
-        async function previewMode() {
-            const mode = document.getElementById('mode-select').value;
-            const data = await api('/network_mode/preview?mode=' + mode);
-            if (data && data.yaml_preview) {
-                alert('Preview for ' + mode + ':\n\n' + data.yaml_preview.substring(0, 500) + '...\n\nGo to Network Modes page for full config.');
-            }
-        }
-
-        async function applyMode() {
-            const mode = document.getElementById('mode-select').value;
-            if (!confirm(`Change network mode to "${mode}"?\n\nThis will reconfigure network interfaces and may disconnect you temporarily.`)) return;
-
-            const token = getToken();
-            if (!token) { checkAuth(); return; }
-
-            try {
-                const res = await fetch(API + '/network_mode', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ mode: mode, dry_run: false })
-                });
-                const data = await res.json();
-
-                if (data.success) {
-                    alert('Network mode changed to: ' + mode + '\n\nPage will reload in 5 seconds...');
-                    setTimeout(() => location.reload(), 5000);
-                } else {
-                    alert('Failed to change mode: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) { alert('Error: ' + e.message); }
-
-            loadNetworkMode();
-        }
-
-        async function loadFooter() {
-            // Load version and build info
-            const data = await api('/dashboard');
-            if (data && data.build_info) {
-                const bi = data.build_info;
-                document.getElementById('footer-version').textContent = 'v' + (bi.version || '1.7.0');
-            }
-
-            // Load boot mode (kiosk vs console)
-            const bootModeEl = document.getElementById('footer-boot-mode');
-            try {
-                const modeRes = await api('/boot_mode');
-                if (modeRes && modeRes.mode) {
-                    const mode = modeRes.mode;
-                    bootModeEl.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
-                    bootModeEl.className = 'value ' + mode;
-                } else {
-                    bootModeEl.textContent = 'Console';
-                    bootModeEl.className = 'value console';
-                }
-            } catch (e) {
-                bootModeEl.textContent = 'Console';
-                bootModeEl.className = 'value console';
-            }
-
-            // Load auth mode (ZKP vs standard)
-            const authModeEl = document.getElementById('footer-auth-mode');
-            try {
-                const authRes = await api('/auth_mode');
-                if (authRes && authRes.mode) {
-                    const mode = authRes.mode.toLowerCase();
-                    authModeEl.textContent = authRes.mode;
-                    authModeEl.className = 'value ' + (mode === 'zkp' ? 'zkp' : 'standard');
-                } else {
-                    authModeEl.textContent = 'Standard';
-                    authModeEl.className = 'value standard';
-                }
-            } catch (e) {
-                authModeEl.textContent = 'Standard';
-                authModeEl.className = 'value standard';
-            }
-
-            // Load uptime
-            try {
-                const uptimeRes = await api('/uptime');
-                if (uptimeRes && uptimeRes.uptime) {
-                    document.getElementById('footer-uptime').textContent = uptimeRes.uptime;
-                }
-            } catch (e) { /* ignore */ }
-        }
-
-        async function refresh() {
-            await loadMenu();
-            loadDashboard();
-            loadHealth();
-            loadModuleHealth();
-            loadVHostHealth();
-            loadAlerts();
-            loadNetwork();
-            loadMemory();
-            loadDisk();
-            loadNetworkMode();
-            loadFooter();
-        }
-
-        if (checkAuth()) {
-            refresh();
-            setInterval(refresh, 30000);
-        }
+        if (DEMO) $('demo').hidden = false;
+        charger();
+        setInterval(charger, 30000);
     </script>
-    <script src="/shared/sidebar.js"></script>
-    <script src="/shared/health-banner.js"></script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
