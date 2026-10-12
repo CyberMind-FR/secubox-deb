@@ -14,9 +14,8 @@ Depends: ${misc:Depends},
  python3-uvicorn | python3-pip,
  secubox-core (>= 1.4.0)
 Recommends: secubox-waf-ng,
- openssl
-Description: SecuBox Traffic Interceptor
- HTTP/HTTPS traffic interception and analysis module.
- Provides SSL/TLS inspection, request/response modification,
- traffic recording, protocol analysis, content filtering,
- and WAF integration.
+ secubox-toolbox-ng
+Description: SecuBox Interceptor — supervision de l'inspection du trafic
+ Vue en lecture seule de la chaîne d'inspection réelle (sbxmitm, sbxwaf) :
+ état des moteurs et de leurs ports, activité d'inspection tirée du journal,
+ niveaux d'inspection par pair et exclusions.

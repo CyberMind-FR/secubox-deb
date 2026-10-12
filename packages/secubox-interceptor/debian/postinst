@@ -3,37 +3,13 @@ set -e
 
 case "$1" in
     configure)
-        # Create config directory
-        mkdir -p /etc/secubox
-        mkdir -p /etc/secubox/interceptor
-
-        # Create run directory
-        mkdir -p /run/secubox
-
-        # Create data directories
-        mkdir -p /var/lib/secubox/interceptor
-        mkdir -p /var/lib/secubox/interceptor/flows
-        mkdir -p /var/lib/secubox/interceptor/recordings
-        mkdir -p /var/lib/secubox/interceptor/replays
-        mkdir -p /tmp/secubox
-
-        # Create log directory
-        mkdir -p /var/log/secubox
-
-        # Generate CA certificate if not exists
-        if [ ! -f /etc/secubox/interceptor/ca.crt ]; then
-            openssl req -x509 -newkey rsa:4096 -nodes \
-                -keyout /etc/secubox/interceptor/ca.key \
-                -out /etc/secubox/interceptor/ca.crt \
-                -days 3650 \
-                -subj "/CN=SecuBox Interceptor CA/O=SecuBox/C=FR" 2>/dev/null || true
-            chmod 600 /etc/secubox/interceptor/ca.key
+        # #2447 : l'API est servie par l'agrégateur ; l'ancien démon (maquette, lancé en root) n'existe plus.
+        # Une mise à jour depuis une version antérieure le retire proprement ; ses données et sa CA ne sont pas touchées.
+        if [ -n "$2" ]; then
+            systemctl disable --now secubox-interceptor.service >/dev/null 2>&1 || true
+            rm -f /usr/lib/systemd/system/secubox-interceptor.service /etc/systemd/system/multi-user.target.wants/secubox-interceptor.service
+            systemctl daemon-reload >/dev/null 2>&1 || true
         fi
-
-        # Enable and start service
-        systemctl daemon-reload
-        systemctl enable secubox-interceptor.service
-        systemctl start secubox-interceptor.service || true
         ;;
 esac
 
