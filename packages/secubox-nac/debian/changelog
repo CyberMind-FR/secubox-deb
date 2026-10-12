@@ -1,3 +1,9 @@
+secubox-nac (3.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: NAC administrable : affectation d un appareil a une zone (LAN, IoT, Invites, Quarantaine), autoriser et bloquer, avec confirmation integree ; nouvelle route /zone_behaviors et panneau Comportement des zones issu des regles nft reelles (isolement du LAN, DNS et DHCP de la box, quarantaine, bloque), analyse couverte, VPN et Tor par client dans le Toolbox, et options indisponibles (puits DNS, parking, repli) annoncees comme telles (ref #2417)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 07:28:13 +0200
+
 secubox-nac (3.5.2-1~bookworm1) bookworm; urgency=medium
 
   * feat: page NAC, les conteneurs LXC (pont br-lxc) sont isoles dans leur propre panneau et ne figurent plus dans la liste des appareils, les tuiles, les repartitions ni les nouveaux appareils ; l action de quarantaine reste reservee aux appareils (ref #2410)

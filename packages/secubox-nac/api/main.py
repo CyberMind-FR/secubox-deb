@@ -38,6 +38,7 @@ from secubox_core.logger import get_logger
 from .collector import Collector
 from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_vendor, risk_score
 from .osdetect import est_conteneur_lxc
+from . import zones_info
 from .dnsevidence import domaines_par_adresse
 from .quarantaine_auto import QuarantaineAuto
 from .presence.geo import enrich_origin
@@ -1265,6 +1266,12 @@ def alerts(user=Depends(require_jwt)):
 
 
 # Policy
+@router.get("/zone_behaviors")
+def zone_behaviors(user=Depends(require_jwt)):
+    """Comportement réel de chaque zone (isolement, DNS/DHCP de la box, Internet), ce qui ne l'est pas, et ce que l'analyse couvre (#2417)."""
+    return zones_info.comportements()
+
+
 @router.get("/policy")
 async def get_policy(user=Depends(require_jwt)):
     """Get NAC policy."""
