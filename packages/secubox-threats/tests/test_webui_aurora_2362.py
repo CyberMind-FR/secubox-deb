@@ -33,8 +33,11 @@ def test_routes_citees():
         assert r in HTML, r
 
 
-def test_lecture_seule_sans_post():
-    assert "method:'POST'" not in HTML and 'method: "POST"' not in HTML
+def test_une_seule_ecriture_le_bannissement_2465():
+    """Page de lecture, plus une action : bannir une adresse publique 30 jours. Aucune autre écriture."""
+    assert HTML.count("method:'POST'") == 1 and 'method: "POST"' not in HTML
+    assert "'/api/v1/waf/ban'" in HTML and "duration:'30d'" in HTML
+    assert "confirm(" not in re.sub(r"//[^\n]*", "", HTML)                    # confirmation intégrée, jamais celle du navigateur
 
 
 def test_ni_lorem_ni_secret():

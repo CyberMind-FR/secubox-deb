@@ -11,7 +11,7 @@
     · TABLEAU DE BORD complet (largeur ≥ 900 px).
   DONNÉES RÉELLES UNIQUEMENT (API /api/v1/threats : /status, /timeline, /scores, /alerts, /alerts/sources, /iocs,
   /incidents, /feeds, /reports, lues en session). Une mesure absente s'affiche « — », jamais 0.
-  Page en LECTURE SEULE (l'ancienne page n'avait aucune action). `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+  Lecture, plus UNE action : bannir une adresse publique 30 jours (POST /api/v1/waf/ban, validé par wafctl), avec confirmation intégrée. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
 -->
 <html lang="fr">
 <head>
@@ -40,6 +40,9 @@
   .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
   .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
   .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+  #dialogue button,.ban{font:inherit;font-size:.72rem;color:var(--texte);background:rgba(255,77,94,.16);border:1px solid var(--rouge);border-radius:8px;padding:2px 9px;cursor:pointer} #dialogue button.non{background:rgba(59,130,246,.18);border-color:var(--trait2)}
+  .ban:focus-visible,#dialogue button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .ban:disabled{opacity:.5;cursor:default} #retour{font-size:.78rem;color:var(--doux);min-height:1.1em}
   .droite button{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
   .droite button:disabled{opacity:.5;cursor:wait}
   .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
@@ -92,16 +95,18 @@
     <div class="droite"><span id="heure"></span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
   </div>
   <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
-  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle ; les bannissements sont inertes</div>
+  <div id="dialogue" role="alertdialog" aria-label="Confirmation" hidden></div>
+  <div id="retour" role="status"></div>
   <div><h1>Menaces</h1><div class="sous">Alertes agrégées, indicateurs de compromission, incidents et flux de renseignement, au même endroit.</div></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="grille g1">
     <div class="pan"><h3>Chronologie des 24 dernières heures <i id="chroNote"></i></h3><div id="chrono"></div><div class="legende" id="legChrono"></div></div>
     <div class="pan"><h3>Score de risque <i>sur 100</i></h3><div id="score"></div></div>
   </div>
-  <div class="pan"><h3>Alertes récentes <i id="alNote"></i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th>Source</th><th>Gravité</th><th>Message</th><th>Valeur</th></tr></thead><tbody id="alertes"></tbody></table></div></div>
+  <div class="pan"><h3>Alertes récentes <i id="alNote"></i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th>Source</th><th>Gravité</th><th>Message</th><th>Valeur</th><th></th></tr></thead><tbody id="alertes"></tbody></table></div></div>
   <div class="grille g2">
-    <div class="pan"><h3>Indicateurs de compromission <i id="iocNote"></i></h3><div class="scroll"><table><thead><tr><th>Type</th><th>Valeur</th><th>Source</th><th>Confiance</th><th>Vu</th></tr></thead><tbody id="iocs"></tbody></table></div></div>
+    <div class="pan"><h3>Indicateurs de compromission <i id="iocNote"></i></h3><div class="scroll"><table><thead><tr><th>Type</th><th>Valeur</th><th>Source</th><th>Confiance</th><th>Vu</th><th></th></tr></thead><tbody id="iocs"></tbody></table></div></div>
     <div class="pan"><h3>Incidents <i id="incNote"></i></h3><div class="scroll"><table><thead><tr><th>Titre</th><th>Gravité</th><th>Statut</th><th>Ouvert</th></tr></thead><tbody id="incidents"></tbody></table></div></div>
   </div>
   <div class="grille g3">
@@ -109,7 +114,7 @@
     <div class="pan"><h3>Flux de renseignement <i id="feedNote"></i></h3><div class="scroll"><table><thead><tr><th>Nom</th><th>Type</th><th>État</th><th>Dernière mise à jour</th></tr></thead><tbody id="feeds"></tbody></table></div></div>
     <div class="pan"><h3>Rapports <i id="repNote"></i></h3><div class="scroll"><table><thead><tr><th>Type</th><th>Période</th><th>Généré</th><th>Alertes</th></tr></thead><tbody id="reports"></tbody></table></div></div>
   </div>
-  <div class="note">Lecture seule · aucune action n’est lancée depuis cette page · chaque décision de sécurité est écrite dans le journal d’audit.</div>
+  <div class="note">Une seule action : bannir une adresse publique 30 jours, après confirmation · les adresses privées et locales ne sont jamais bannissables · chaque décision de sécurité est écrite dans le journal d’audit.</div>
 </div></div>
 </main>
 <script>
@@ -168,6 +173,51 @@
       +'<div class="ligne" style="color:var(--faible);font-size:.68rem"><span style="text-align:left">Contribution au score</span><span>Points</span><span></span></div>'
       +ks.map(function(k,i){return '<div class="ligne"><span class="n">'+esc(k[0])+'</span><span>'+esc(k[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*k[1]/m)+'%;background:'+PAL[i%7]+'"></i></div></div>';}).join('');
   }
+  // ── Bannir 30 jours (seule action de la page) ───────────────────────────────────────────────────────────────────────────────────────────────
+  // Une adresse n'est proposée que si elle est publique ; le serveur (wafctl) revalide et refuse tout de même une adresse privée ou locale.
+  function ipPublique(v){
+    v=String(v==null?'':v).trim();
+    var m=/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(v);
+    if(m){var a=m.slice(1).map(Number);if(a.some(function(x){return x>255;}))return false;
+      if(a[0]===10||a[0]===127||a[0]===0||a[0]>=224)return false;
+      if(a[0]===169&&a[1]===254)return false; if(a[0]===172&&a[1]>=16&&a[1]<=31)return false; if(a[0]===192&&a[1]===168)return false;
+      if(a[0]===100&&a[1]>=64&&a[1]<=127)return false; return true;}
+    if(/^[0-9a-f:]+$/i.test(v)&&v.indexOf(':')>=0&&v.length<=39){var l=v.toLowerCase();return !(l==='::1'||l==='::'||/^f[cd]/.test(l)||/^fe[89ab]/.test(l));}
+    return false;
+  }
+  function btnBan(valeur,source){
+    if(!ipPublique(valeur))return '';
+    return '<button type="button" class="ban" data-ban="'+esc(valeur)+'" data-src="'+esc(source||'')+'" title="Bannir '+esc(valeur)+' pendant 30 jours">Bannir 30 j</button>';
+  }
+  function confirmer(message){
+    return new Promise(function(resolve){
+      var z=el('dialogue');z.textContent='';
+      var m=document.createElement('span');m.textContent=message;m.style.whiteSpace='pre-line';
+      var oui=document.createElement('button'),non=document.createElement('button');
+      oui.type=non.type='button';oui.textContent='Confirmer le bannissement';non.textContent='Annuler';non.className='non';
+      function fin(v){z.hidden=true;z.textContent='';hauteur();resolve(v);}
+      oui.addEventListener('click',function(){fin(true);});non.addEventListener('click',function(){fin(false);});
+      z.appendChild(m);z.appendChild(oui);z.appendChild(non);z.hidden=false;hauteur();non.focus();
+    });
+  }
+  function retour(t){el('retour').textContent=t;hauteur();}
+  function bannir(ip,src,btn){
+    confirmer('Bannir '+ip+' pendant 30 jours ?\n\nLe trafic de cette adresse est refusé par le pare-feu de la box. La décision est écrite dans le journal d’audit.').then(function(ok){
+      if(!ok)return;
+      if(q.get('demo')){retour('Démonstration : aucun bannissement réel.');return;}
+      btn.disabled=true;retour('Bannissement de '+ip+'…');
+      var h={'Content-Type':'application/json','Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+      fetch('/api/v1/waf/ban',{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify({ip:ip,duration:'30d',reason:'Menaces : '+(src||'alerte')+' (30 jours)'})})
+        .then(function(r){return r.json().catch(function(){return {};}).then(function(j){return {ok:r.ok,status:r.status,j:j};});})
+        .then(function(r){
+          if(r.status===401){retour('Session requise pour bannir.');btn.disabled=false;return;}
+          if(r.ok&&r.j&&r.j.success!==false){retour('✅ '+ip+' est banni 30 jours.');btn.textContent='Banni';}
+          else{retour('❌ Bannissement refusé : '+String(r.j&&(r.j.detail||r.j.message)||('erreur '+r.status)).slice(0,200));btn.disabled=false;}
+        }).catch(function(e){retour('❌ Bannissement impossible : '+e.message);btn.disabled=false;});
+    });
+  }
+  document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-ban]');if(b)bannir(b.getAttribute('data-ban'),b.getAttribute('data-src'),b);});
+
   function lignes(id,cols,rows,msg,fn){el(id).innerHTML=rows&&rows.length?rows.map(fn).join(''):'<tr><td colspan="'+cols+'" class="vide">'+msg+'</td></tr>';}
 
   function rend(d){
@@ -193,9 +243,9 @@
     el('legChrono').innerHTML=ch&&ch.total?'<span><i style="background:#ff4d5e"></i>Haute et critique</span><span><i style="background:#ff9f1c"></i>Moyenne</span><span><i style="background:#ffd23f"></i>Faible et info</span>':'';
     rendScores(sc);
     el('alNote').textContent=d.alerts?fmt(d.alerts.total)+' au total':'session requise';
-    lignes('alertes',5,al&&al.slice(0,12),al?'Aucune alerte récente.':'Ouvre une session pour voir les alertes.',function(x){return '<tr><td>'+esc(heureC(x.timestamp))+'</td><td>'+esc(x.source)+'</td><td>'+pastille(GRAV,x.severity)+'</td><td title="'+esc(x.message)+'">'+esc(x.message)+'</td><td>'+esc(x.value)+'</td></tr>';});
+    lignes('alertes',6,al&&al.slice(0,12),al?'Aucune alerte récente.':'Ouvre une session pour voir les alertes.',function(x){return '<tr><td>'+esc(heureC(x.timestamp))+'</td><td>'+esc(x.source)+'</td><td>'+pastille(GRAV,x.severity)+'</td><td title="'+esc(x.message)+'">'+esc(x.message)+'</td><td>'+esc(x.value)+'</td><td>'+btnBan(x.value,x.source)+'</td></tr>';});
     el('iocNote').textContent=d.iocs?fmt(d.iocs.total)+' au total':'session requise';
-    lignes('iocs',5,ic&&ic.slice(0,10),ic?'Aucun indicateur.':'Session requise.',function(x){return '<tr><td>'+esc(TIOC[x.type]||x.type)+'</td><td title="'+esc(x.value)+'">'+esc(x.value)+'</td><td>'+esc(x.source)+'</td><td>'+(has(x.confidence)?esc(x.confidence)+' %':'—')+'</td><td>'+esc(x.added_at?heureC(x.added_at):'—')+(num(x.hits)?' · '+fmt(x.hits)+' hits':'')+'</td></tr>';});
+    lignes('iocs',6,ic&&ic.slice(0,10),ic?'Aucun indicateur.':'Session requise.',function(x){return '<tr><td>'+esc(TIOC[x.type]||x.type)+'</td><td title="'+esc(x.value)+'">'+esc(x.value)+'</td><td>'+esc(x.source)+'</td><td>'+(has(x.confidence)?esc(x.confidence)+' %':'—')+'</td><td>'+esc(x.added_at?heureC(x.added_at):'—')+(num(x.hits)?' · '+fmt(x.hits)+' hits':'')+'</td><td>'+(x.type==='ip'?btnBan(x.value,x.source):'')+'</td></tr>';});
     el('incNote').textContent=d.incidents?fmt(d.incidents.total)+' au total':'session requise';
     lignes('incidents',4,inc&&inc.slice(0,10),inc?'Aucun incident.':'Session requise.',function(x){return '<tr><td title="'+esc(x.title)+'">'+esc(x.title)+'</td><td>'+pastille(GRAV,x.severity)+'</td><td>'+pastille(STAT,x.status)+'</td><td>'+esc(x.created_at?heureC(x.created_at):'—')+'</td></tr>';});
     // Sources d'alertes : répartition des alertes lues par source, état actif depuis /alerts/sources.

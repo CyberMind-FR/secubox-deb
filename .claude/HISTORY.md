@@ -732,3 +732,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — network-anomaly, menu de gauche (closes #2463)
 - secubox-dns-guard 1.4.4 : la page /network-anomaly/ charge la barre laterale et /shared/sidebar.js (hors cadre et démonstration).
+
+## 2026-10-12 — Threats, bannir 30 jours (closes #2465)
+- secubox-threats 1.5.0 : bouton Bannir 30 j par adresse publique (alertes et IOC IP), confirmation intégrée, POST /api/v1/waf/ban (30d) validé par wafctl ; erreurs réelles rendues. 6 tests navigateur.
