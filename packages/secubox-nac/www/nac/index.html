@@ -47,6 +47,9 @@
   h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
   .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
   .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  button.tuile{font:inherit;color:inherit;text-align:left;width:100%;cursor:pointer}
+  button.tuile:hover{border-color:var(--cyan)} button.tuile:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .tuile.clic.on{border-color:var(--cyan);background:linear-gradient(160deg,rgba(24,66,128,.85),rgba(8,24,52,.85));box-shadow:0 0 0 1px rgba(41,182,246,.35),0 0 16px rgba(41,182,246,.2)}
   .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
   .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
   .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
@@ -186,7 +189,10 @@
     ok:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(46,204,113,.14)"/><path d="M8 12.3l2.7 2.7 5.3-5.6"/></svg>',
     os:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2" fill="rgba(167,139,250,.14)"/><path d="M7 9l2.5 2L7 13M12 13h4"/></svg>'
   };
-  function tuile(ic,v,l,s,def){return '<div class="tuile" title="'+esc(def)+'"><div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>';}
+  function tuile(ic,v,l,s,def,f){
+    var corps='<div class="haut">'+ic+'<div><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div></div></div>'+(s?'<div class="s">'+esc(s)+'</div>':'');
+    return f?'<button type="button" class="tuile clic" data-f="'+f+'" aria-pressed="false" title="'+esc(def)+' — cliquer pour filtrer la liste">'+corps+'</button>':'<div class="tuile" title="'+esc(def)+'">'+corps+'</div>';
+  }
 
   function ts(v){ // epoch en secondes (ou ms) ou ISO ; null si absent
     if(v==null||v==='') return null;
@@ -240,7 +246,7 @@
   function filtrer(L){
     var t=el('fq').value.trim().toLowerCase(),e=el('fe').value,o=el('fo').value,c=el('fc').value,s=el('ft').value;
     var R=L.filter(function(r){
-      if(e&&r.etat!==e) return false; if(o&&(o==='_aucun'?!!r.os:famille(r.os)!==o)) return false;
+      if(e&&r.etat!==e) return false; if(o&&(o==='_aucun'?!!r.os:o==='_oui'?!r.os:famille(r.os)!==o)) return false;
       if(c&&(c==='on')!==r.on) return false;
       if(t){var h=[r.nom,r.ip,r.fab,r.os,r.sub,r.type,macCourt(r.mac)].join(' ').toLowerCase();if(h.indexOf(t)<0) return false;}
       return true;});
@@ -269,6 +275,7 @@
       +'</div>';
   }
   function liste(){
+    try{majTuiles();}catch(e){}
     if(!DONNEES){el('rang').innerHTML='<div class="vide">Session requise pour voir les appareils.</div>';el('nbAff').textContent='';el('plus').hidden=true;return;}
     var R=filtrer(LISTE);
     el('nbAff').textContent=LISTE.length?(R.length===LISTE.length?fmt(LISTE.length)+' appareils':fmt(R.length)+' sur '+fmt(LISTE.length)):'';
@@ -278,8 +285,18 @@
   function majFiltreOs(L){
     var s=el('fo'),cur=s.value,fam={},aucun=0;
     L.forEach(function(r){if(r.os) fam[famille(r.os)]=1;else aucun++;});
-    var h='<option value="">Tous OS</option>'+Object.keys(fam).sort().map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('')+(aucun?'<option value="_aucun">Non identifié</option>':'');
+    var h='<option value="">Tous OS</option>'+(Object.keys(fam).length?'<option value="_oui">OS identifié</option>':'')+Object.keys(fam).sort().map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('')+(aucun?'<option value="_aucun">Non identifié</option>':'');
     if(s.getAttribute('data-h')!==h){s.innerHTML=h;s.setAttribute('data-h',h);s.value=cur;}
+  }
+  /* tuiles-filtres : la tuile active reflète les listes déroulantes (#2421) */
+  function majTuiles(){
+    var v={fe:el('fe').value,fo:el('fo').value,fc:el('fc').value};
+    document.querySelectorAll('#tuiles .tuile.clic').forEach(function(t){
+      var f=t.getAttribute('data-f'),on;
+      if(f==='reset') on=!v.fe&&!v.fo&&!v.fc;
+      else{var k=f.split(':');on=v[k[0]]===k[1];}
+      t.classList.toggle('on',on);t.setAttribute('aria-pressed',on?'true':'false');
+    });
   }
   var OUI={'oui':['#2ecc71','Oui'],'non':['#ff4d5e','Non'],'partiel':['#ff9f1c','Partiel']};
   function pil(v){var o=OUI[v]||['#9fb3d6',v||'—'];return '<span class="pil" style="color:'+o[0]+';border-color:'+o[0]+';background:'+o[0]+'1f">'+esc(o[1])+'</span>';}
@@ -310,12 +327,12 @@
     var N=function(v){return ok?fmt(v):'—';},cnt=function(f){return L.filter(f).length;};
     var nos=cnt(function(r){return !!r.os;});
     el('tuiles').innerHTML=
-      tuile(IC.nb,N(n),'Appareils',ok&&LXC.length?'hors '+fmt(LXC.length)+' conteneurs LXC':'connus du NAC','Appareils enregistrés par le NAC (base locale alimentée par le collecteur : DHCP, ARP, mDNS, scans). Les conteneurs LXC du pont br-lxc sont comptés à part, dans leur propre panneau.')
-     +tuile(IC.on,N(cnt(function(r){return r.on;})),'Connectés','maintenant','Appareils présents dans le dernier cycle du collecteur (vus sur le réseau à l’instant).')
-     +tuile(IC.inc,N(cnt(function(r){return r.etat==='inconnu';})),'Inconnus','sans décision','Appareils ni autorisés explicitement, ni en quarantaine, ni bloqués : le NAC n’a encore pris aucune décision à leur sujet.')
-     +tuile(IC.qua,N(cnt(function(r){return r.etat==='quarantaine';})),'En quarantaine','isolés','Appareils placés dans la zone de quarantaine : accès réseau restreint en attendant une décision.')
-     +tuile(IC.ok,N(cnt(function(r){return r.etat==='autorise';})),'Autorisés','décision explicite','Appareils explicitement autorisés (état « allow »). Un appareil du LAN sans décision est compté parmi les inconnus.')
-     +tuile(IC.os,N(nos),'OS identifiés',ok&&n?Math.round(100*nos/n)+' % · '+fmt(n-nos)+' sans OS':'','Appareils dont l’OS a été déduit d’une preuve (classe DHCP, User-Agent, DNS, nom, mDNS). Le fabricant seul ne donne jamais d’OS.');
+      tuile(IC.nb,N(n),'Appareils',ok&&LXC.length?'hors '+fmt(LXC.length)+' conteneurs LXC':'connus du NAC','Appareils enregistrés par le NAC (base locale alimentée par le collecteur : DHCP, ARP, mDNS, scans). Les conteneurs LXC du pont br-lxc sont comptés à part, dans leur propre panneau.','reset')
+     +tuile(IC.on,N(cnt(function(r){return r.on;})),'Connectés','maintenant','Appareils présents dans le dernier cycle du collecteur (vus sur le réseau à l’instant).','fc:on')
+     +tuile(IC.inc,N(cnt(function(r){return r.etat==='inconnu';})),'Inconnus','sans décision','Appareils ni autorisés explicitement, ni en quarantaine, ni bloqués : le NAC n’a encore pris aucune décision à leur sujet.','fe:inconnu')
+     +tuile(IC.qua,N(cnt(function(r){return r.etat==='quarantaine';})),'En quarantaine','isolés','Appareils placés dans la zone de quarantaine : accès réseau restreint en attendant une décision.','fe:quarantaine')
+     +tuile(IC.ok,N(cnt(function(r){return r.etat==='autorise';})),'Autorisés','décision explicite','Appareils explicitement autorisés (état « allow »). Un appareil du LAN sans décision est compté parmi les inconnus.','fe:autorise')
+     +tuile(IC.os,N(nos),'OS identifiés',ok&&n?Math.round(100*nos/n)+' % · '+fmt(n-nos)+' sans OS':'','Appareils dont l’OS a été déduit d’une preuve (classe DHCP, User-Agent, DNS, nom, mDNS). Le fabricant seul ne donne jamais d’OS.','fo:_oui');
     majFiltreOs(L);
     rendComport(d.zi,LISTE);
     // conteneurs LXC : isolés, lecture seule (pas d’action de quarantaine sur l’infrastructure)
@@ -428,6 +445,15 @@
 
   // ---- événements
   ['fq','fe','fo','fc','ft'].forEach(function(i){el(i).addEventListener(i==='fq'?'input':'change',function(){ETAT.n=30;liste();hauteur();});});
+  el('tuiles').addEventListener('click',function(e){
+    var t=e.target.closest&&e.target.closest('.tuile.clic');if(!t) return;
+    var f=t.getAttribute('data-f');
+    if(f==='reset'){['fe','fo','fc'].forEach(function(i){el(i).value='';});}
+    else{var k=f.split(':'),sel=el(k[0]);
+      if(k[0]==='fo'&&!sel.querySelector('option[value="'+k[1]+'"]')){return;}   // aucun OS identifié : rien à filtrer
+      sel.value=sel.value===k[1]?'':k[1];}
+    ETAT.n=30;liste();hauteur();
+  });
   el('plus').addEventListener('click',function(){ETAT.n+=30;liste();hauteur();});
   el('rafraichir').addEventListener('click',function(){msg('');charge();if(DEMOMODE){rend(DEMO);}});
   el('legO').addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-os]');if(!t)return;var v=t.getAttribute('data-os');el('fo').value=el('fo').value===v?'':v;ETAT.n=30;liste();hauteur();});
