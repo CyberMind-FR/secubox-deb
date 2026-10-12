@@ -1,3 +1,12 @@
+secubox-webos (1.9.9-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2451) : les routes des ressources du Hall (#2449) n'étaient livrées que dans
+    secubox.d/, que le vhost de l'adresse IP et d'admin (webui.conf) n'inclut pas : sur gk2,
+    après un vrai redémarrage de nginx, /domaine.js rendait toujours du HTML. Le fragment
+    est aussi livré dans secubox-routes.d/. Test de correspondance entre les deux fichiers.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:05:37 +0200
+
 secubox-webos (1.9.8-1~bookworm1) bookworm; urgency=medium
 
   * Correction (#2449) : le Hall servi sous /hall/ à l'adresse IP (live amd64, première
