@@ -1,3 +1,15 @@
+secubox-dns-guard (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * network-anomaly (#2461) : la détection de débit travaillait sur des COMPTEURS cumulatifs
+    (octets d'interface, requêtes DNS totales) : comparés à une ligne de base ils la dépassent
+    en permanence, donc alertes continues dès que les lignes de base existent (#2459). Ils
+    deviennent des débits (octets/s, requêtes/s) avant stockage et détection ; une remise à
+    zéro du compteur ou un trou de mesure ne donne pas de débit. Les historiques de compteurs
+    et leurs lignes de base sont retirés au premier passage. La page affiche les débits
+    (Kio/s…). 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:21:30 +0200
+
 secubox-dns-guard (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * network-anomaly (#2459) : les lignes de base se construisent seules. La collecte mesurait

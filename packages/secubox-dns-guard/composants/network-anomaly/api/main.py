@@ -317,10 +317,35 @@ class AnomalyDetector:
         except Exception:
             return 0
 
+    def _en_debit(self, nom: str, valeur: float, t: float) -> Optional[float]:
+        """Compteur cumulatif -> débit par seconde depuis la mesure précédente (#2461).
+
+        Les octets d'interface et les requêtes DNS ne font que croître : comparés tels quels à une ligne de base (moyenne, écart-type) ils la dépassent en
+        permanence et la détection alerte à chaque passage. Seul leur débit a un sens. Pas de référence, compteur reparti de zéro (redémarrage,
+        interface recréée) ou plus de 10 minutes sans mesure : None, jamais un débit inventé. L'état est un fichier : un passage planifié est un processus."""
+        fichier = self.data_dir / "compteurs.json"
+        try:
+            etat = json.loads(fichier.read_text())
+        except (OSError, ValueError):
+            etat = {}
+        prec = etat.get(nom)
+        etat[nom] = {"v": valeur, "t": t}
+        try:
+            fichier.write_text(json.dumps(etat))
+        except OSError:
+            pass
+        if not prec:
+            return None
+        dt = t - prec["t"]
+        if dt <= 0 or dt > 600 or valeur < prec["v"]:
+            return None
+        return (valeur - prec["v"]) / dt
+
     def collect_metrics(self) -> Dict[str, float]:
         """Collect current network metrics."""
         metrics = {}
         now = datetime.utcnow().isoformat() + "Z"
+        t = time.time()
 
         # TCP connections (with fallbacks)
         metrics["tcp_connections"] = self._get_tcp_connections()
@@ -335,8 +360,10 @@ class AnomalyDetector:
                             parts = line.split()
                             if len(parts) >= 10:
                                 iface = parts[0].rstrip(":")
-                                metrics[f"{iface}_rx_bytes"] = int(parts[1])
-                                metrics[f"{iface}_tx_bytes"] = int(parts[9])
+                                for sens, col in (("rx", 1), ("tx", 9)):
+                                    debit = self._en_debit(f"{iface}_{sens}", int(parts[col]), t)
+                                    if debit is not None:
+                                        metrics[f"{iface}_{sens}_bps"] = debit      # octets par seconde
                             break
         except Exception:
             pass
@@ -351,7 +378,9 @@ class AnomalyDetector:
                     timeout=5
                 )
                 if result.returncode == 0:
-                    metrics["dns_queries_total"] = int(result.stdout.strip())
+                    debit = self._en_debit("dns_queries", int(result.stdout.strip()), t)
+                    if debit is not None:
+                        metrics["dns_queries_s"] = debit                    # requêtes par seconde
                     break
             except Exception:
                 pass
@@ -510,7 +539,7 @@ class AnomalyDetector:
         for metric, value in metrics.items():
             if "connections" in metric or "queries" in metric:
                 alert = self.check_anomaly(metric, value, AnomalyType.CONNECTION_FLOOD)
-            elif "bytes" in metric:
+            elif metric.endswith("_bps"):
                 alert = self.check_anomaly(metric, value, AnomalyType.BANDWIDTH_SPIKE)
             else:
                 alert = self.check_anomaly(metric, value, AnomalyType.PROTOCOL_ANOMALY)

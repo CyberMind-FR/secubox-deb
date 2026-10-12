@@ -726,3 +726,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — network-anomaly, lignes de base automatiques (closes #2459)
 - secubox-dns-guard 1.4.2 : le passage planifié construit puis rafraîchit les lignes de base (30 échantillons, 1 h) avant la détection ; sans elles la détection ne pouvait jamais alerter. L'API relit le fichier.
+
+## 2026-10-12 — network-anomaly, détection sur des débits (closes #2461)
+- secubox-dns-guard 1.4.3 : octets d'interface et requêtes DNS convertis en débits avant stockage et détection (les compteurs cumulatifs alertaient en permanence) ; historiques de compteurs retirés au premier passage ; page en Kio/s.
