@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — dns-guard 1.4.5 : la pastille ne dit plus « hors ligne » sans session (ref #2514)
+
+Sur la capture de l'admin gk2, `/dns-guard/` affichait « HORS LIGNE » alors que le module répond : la pastille se déduisait de la seule absence de `/status`, un 401/403 passait donc pour une panne. Distinction faite : « SESSION REQUISE » (neutre) sans session, « HORS LIGNE » seulement pour une vraie panne. Test `packages/secubox-dns-guard/tests/test_pastille_session_2514.py`.
+
 ## 2026-10-12 — hub 1.10.2 : pastilles des modules montés dans l'agrégateur (ref #2512)
 
 Sur la capture de l'admin gk2, DNS Guard, HAProxy, Hardening et R-Level avaient une pastille grise alors qu'ils répondent. Le lot de santé du hub jugeait par unité systemd et par socket ; les modules montés en processus par l'agrégateur n'ont ni l'un ni l'autre (même vérité que le Hall, #2455). Le lot est complété par la liste `mounted` du `/health` de l'agrégateur, R-Level suit le Toolbox ; une unité en échec reste une alarme. Test `packages/secubox-hub/tests/test_pastilles_montes_2512.py`.
