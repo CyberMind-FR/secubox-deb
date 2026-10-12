@@ -125,3 +125,18 @@ def test_appareils_principaux_empiles_par_usage_et_regroupes_2423():
     assert erreurs == [], erreurs
     assert any(n.startswith("Appareil · .204") and "×2" in n for n in noms)   # deux identités sur .204 regroupées
     assert segments >= 4                                                          # barres empilées : plusieurs types d'usage
+
+
+def test_panneau_filtrage_web_2430():
+    """#2430 : Guardian lit /api/v1/webfilter/etat : barres bloqué/observé par catégorie, mode dit ; sans session « Session requise »."""
+    import pathlib
+    page = pathlib.Path(__file__).resolve().parents[1] / "www" / "soc" / "guardian.html"
+    (note, lignes, texte), erreurs = _navigateur(page, lambda pg: (
+        pg.evaluate("document.getElementById('wfNote').textContent"),
+        pg.evaluate("document.querySelectorAll('#wf .ligne').length"),
+        pg.evaluate("document.getElementById('wf').textContent")))
+    assert erreurs == [], erreurs
+    assert "blocage actif" in note and lignes == 4
+    assert "980 / 1 240" in texte.replace(" ", " ").replace(" ", " ") and "aurait bloqué" in texte
+    src = page.read_text(encoding="utf-8")
+    assert "/api/v1/webfilter/etat" in src and "Session requise" in src

@@ -70,6 +70,13 @@ def _page(navigateur, rep=None, token="jeton-admin"):
     return ctx, p, erreurs, requetes
 
 
+def _repond(p, accepte, messages=None):
+    """Remplace la confirmation INTÉGRÉE à la page (#2430) par une réponse imposée, et note les messages posés.
+    Les anciens tests interceptaient `confirm()`, que le navigateur du Hall ignore : la page n'en utilise plus."""
+    p.expose_function("__noter", lambda m: messages.append(m) if messages is not None else None)
+    p.evaluate("(ok) => { window.confirmer = m => { window.__noter(m); return Promise.resolve(ok); }; }", accepte)
+
+
 def _chiffres(texte):
     return re.sub(r"\s| ", "", texte)
 
@@ -178,7 +185,7 @@ def test_onglet_profils_affiche_les_modes_et_les_autorisations(navigateur):
 def test_passer_en_block_demande_confirmation_et_envoie_le_bon_profil(navigateur):
     ctx, p, _, _ = _page(navigateur)
     messages = []
-    p.on("dialog", lambda d: (messages.append(d.message), d.accept()))
+    _repond(p, True, messages)
     onglet(p, "profils")
     p.wait_for_selector("[data-profil='enfants']")
     p.select_option("select[data-profil='enfants'][data-cat='jeux']", "block")
@@ -191,7 +198,7 @@ def test_passer_en_block_demande_confirmation_et_envoie_le_bon_profil(navigateur
 
 def test_refuser_la_confirmation_n_envoie_rien(navigateur):
     ctx, p, _, requetes = _page(navigateur)
-    p.on("dialog", lambda d: d.dismiss())
+    _repond(p, False)
     onglet(p, "profils")
     p.wait_for_selector("[data-profil='enfants']")
     p.select_option("select[data-profil='enfants'][data-cat='jeux']", "block")
@@ -203,7 +210,7 @@ def test_refuser_la_confirmation_n_envoie_rien(navigateur):
 
 def test_creer_un_profil_depuis_un_modele(navigateur):
     ctx, p, _, _ = _page(navigateur)
-    p.on("dialog", lambda d: d.accept())
+    _repond(p, True)
     onglet(p, "profils")
     p.wait_for_selector("#nouveau-nom")
     p.fill("#nouveau-nom", "ados")
@@ -227,7 +234,7 @@ def test_onglet_appareils_assigne_et_signale_ad_guard(navigateur):
 
 def test_enregistrer_un_appareil_envoie_profil_et_exceptions(navigateur):
     ctx, p, _, _ = _page(navigateur)
-    p.on("dialog", lambda d: d.accept())
+    _repond(p, True)
     onglet(p, "appareils")
     p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
     p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='jeux']", "")                  # retire l'exception
@@ -240,7 +247,7 @@ def test_enregistrer_un_appareil_envoie_profil_et_exceptions(navigateur):
 
 def test_assigner_un_appareil_connu(navigateur):
     ctx, p, _, _ = _page(navigateur)
-    p.on("dialog", lambda d: d.accept())
+    _repond(p, True)
     onglet(p, "appareils")
     p.wait_for_selector("[data-connu='aa:bb:cc:dd:ee:09']")
     p.fill("[data-connu='aa:bb:cc:dd:ee:09'] input", "Console")
@@ -254,7 +261,7 @@ def test_assigner_un_appareil_connu(navigateur):
 def test_onglet_appliquer_montre_l_attente_l_estimation_et_demande(navigateur):
     ctx, p, _, requetes = _page(navigateur)
     messages = []
-    p.on("dialog", lambda d: (messages.append(d.message), d.accept()))
+    _repond(p, True, messages)
     onglet(p, "appliquer")
     p.wait_for_function("document.getElementById('appli-estimation').textContent.includes('106')")          # les données de l'API sont arrivées
     assert "en attente" in p.text_content("#appli-etat").lower() and "106" in p.text_content("#appli-estimation") and "9,4" in p.text_content("#appli-estimation").replace(".", ",")
@@ -266,7 +273,7 @@ def test_onglet_appliquer_montre_l_attente_l_estimation_et_demande(navigateur):
 
 def test_application_deja_en_cours_reste_affichee(navigateur):
     ctx, p, _, _ = _page(navigateur, rep={("POST", "/appliquer"): (409, {"detail": "une application est déjà demandée ou en cours"})})
-    p.on("dialog", lambda d: d.accept())
+    _repond(p, True)
     onglet(p, "appliquer")
     p.wait_for_selector("#btn-appliquer")
     p.click("#btn-appliquer")
@@ -322,7 +329,7 @@ def test_motif_d_exclusion_reel_et_retirer_toujours_possible(navigateur):
     apps = json.loads(json.dumps(APPAREILS))
     apps["assignes"].append({"mac": "aa:bb:cc:dd:ee:03", "nom": "Tel", "profil": "enfants", "exceptions": {}, "adresses": [], "exclu": "adresse inconnue"})
     ctx, p, _, requetes = _page(navigateur, rep={("GET", "/appareils"): (200, apps), ("DELETE", "/appareils/aa:bb:cc:dd:ee:03"): (200, {"version": 11})})
-    p.on("dialog", lambda d: d.accept())
+    _repond(p, True)
     onglet(p, "appareils")
     p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:03']")
     ligne = p.text_content("[data-mac='aa:bb:cc:dd:ee:03']")
@@ -340,7 +347,7 @@ def test_motif_d_exclusion_reel_et_retirer_toujours_possible(navigateur):
 def test_exception_en_block_demande_confirmation(navigateur):
     ctx, p, _, requetes = _page(navigateur)
     messages = []
-    p.on("dialog", lambda d: (messages.append(d.message), d.dismiss()))
+    _repond(p, False, messages)
     onglet(p, "appareils")
     p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
     p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='adulte']", "block")        # le profil « enfants » bloque déjà adulte : pas nouveau
@@ -355,7 +362,7 @@ def test_exception_en_block_demande_confirmation(navigateur):
     apps["assignes"][0].update({"profil": "defaut", "exceptions": {}})                          # aucun blocage actuellement
     ctx, p, _, requetes = _page(navigateur, rep={("GET", "/appareils"): (200, apps)})
     messages.clear()
-    p.on("dialog", lambda d: (messages.append(d.message), d.dismiss()))
+    _repond(p, False, messages)
     onglet(p, "appareils")
     p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
     p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='adulte']", "block")          # NOUVEAU blocage
@@ -369,7 +376,7 @@ def test_exception_en_block_demande_confirmation(navigateur):
 def test_assigner_a_un_profil_qui_bloque_demande_confirmation(navigateur):
     ctx, p, _, requetes = _page(navigateur)
     messages = []
-    p.on("dialog", lambda d: (messages.append(d.message), d.dismiss()))
+    _repond(p, False, messages)
     onglet(p, "appareils")
     p.wait_for_selector("[data-connu='aa:bb:cc:dd:ee:09']")
     p.select_option("[data-connu='aa:bb:cc:dd:ee:09'] select", "enfants")
@@ -377,4 +384,76 @@ def test_assigner_a_un_profil_qui_bloque_demande_confirmation(navigateur):
     p.wait_for_timeout(300)
     assert messages and "BLOCAGE" in messages[0] and "adulte" in messages[0].lower()
     assert not [r for r in requetes if r[0] == "POST" and r[1].startswith("/appareils/")]
+    ctx.close()
+
+
+# ── #2430 : profil Aurora ────────────────────────────────────────────────────────────────────────────────────────────────
+
+def test_la_page_n_utilise_plus_confirm_ni_alert():
+    src = PAGE.read_text(encoding="utf-8")
+    code = re.sub(r"//[^\n]*", "", re.sub(r"<!--.*?-->", "", src, flags=re.S))      # hors commentaires
+    assert "confirm(" not in code.replace("await confirmer(", "") and "alert(" not in code and "prompt(" not in code
+
+
+def test_confirmation_integree_confirmer_envoie_annuler_n_envoie_rien(navigateur):
+    ctx, p, erreurs, requetes = _page(navigateur)
+    p.wait_for_selector("[data-cat='adulte']")
+    p.click("#onglets [data-onglet='profils']")
+    p.wait_for_selector("select[data-profil='defaut'][data-cat='adulte']")
+    p.select_option("select[data-profil='defaut'][data-cat='adulte']", "block")
+    p.click("[data-action='enregistrer-profil'][data-profil='defaut']")
+    p.wait_for_selector("#confirmation:not([hidden])")
+    assert "BLOCAGE" in p.inner_text("#confirmation") and "adulte" in p.inner_text("#confirmation")
+    p.click("#confirmation .btn:not(.dg)")                                  # Annuler
+    p.wait_for_selector("#confirmation[hidden]", state="attached")
+    assert not any(m == "POST" and c == "/profils" for m, c, _ in requetes)
+    p.click("[data-action='enregistrer-profil'][data-profil='defaut']")
+    p.wait_for_selector("#confirmation:not([hidden])")
+    p.click("#confirmation .btn.dg")                                        # Confirmer
+    p.wait_for_selector("#toast.show")
+    assert any(m == "POST" and c == "/profils" for m, c, _ in requetes) and p.corps[("POST", "/profils")]["categories"]["adulte"] == "block"
+    assert not erreurs
+    ctx.close()
+
+
+def test_graphes_par_categorie_et_appareils_les_plus_filtres(navigateur):
+    etat = json.loads(json.dumps(ETAT))
+    etat["categories"][0]["bloque_7j"] = 3
+    ctx, p, erreurs, _ = _page(navigateur, rep={("GET", "/etat"): (200, etat)})
+    p.wait_for_selector("#graph-anneau svg")
+    assert p.locator("#graph-barres .hl").count() == 2
+    assert "3 / 4" in p.inner_text("#graph-barres")                          # bloqué / classé
+    p.wait_for_selector("#top-appareils .hl")
+    assert "192.168.1.95" in p.inner_text("#top-appareils")
+    assert not erreurs
+    ctx.close()
+
+
+def test_la_hauteur_est_annoncee_a_l_hote_et_le_cadre_n_a_pas_de_min_height(navigateur):
+    src = PAGE.read_text(encoding="utf-8")
+    assert "sbxVue" in src and "min-height:100vh" not in src and "scrollHeight" not in src
+    ctx, p, _, _ = _page(navigateur)
+    p.wait_for_selector("[data-cat='adulte']")
+    assert p.evaluate("document.querySelector('.cadre') !== null")
+    ctx.close()
+
+
+def test_demonstration_donnees_fictives_et_actions_inertes(navigateur):
+    ctx = navigateur.new_context()
+    p = ctx.new_page()
+    erreurs, requetes = [], []
+    p.on("pageerror", lambda e: erreurs.append(str(e)))
+    p.on("request", lambda r: requetes.append(r.url) if "/api/v1/webfilter" in r.url else None)
+    p.route("**/*", lambda r: r.fulfill(status=200, content_type="text/html", body=PAGE.read_text(encoding="utf-8")) if r.request.url.startswith("http://sbx.test/?") else r.fulfill(status=200, content_type="application/javascript", body=""))
+    p.goto("http://sbx.test/?demo=1")
+    p.wait_for_selector("#cartes .tuile")
+    assert not p.is_hidden("#demo") and "DÉMONSTRATION" in p.inner_text("#demo")
+    p.click("#onglets [data-onglet='appareils']")
+    p.wait_for_selector("[data-action='retirer-appareil']")
+    p.click("[data-action='retirer-appareil']")
+    p.wait_for_selector("#confirmation:not([hidden])")
+    p.click("#confirmation .btn.dg")
+    p.wait_for_selector("#errtoast.show")
+    assert "inerte" in p.inner_text("#errtoast")
+    assert requetes == [] and not erreurs                                    # aucun appel réseau : tout est fictif
     ctx.close()

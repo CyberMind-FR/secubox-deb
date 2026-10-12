@@ -1,3 +1,9 @@
+secubox-nac (3.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: la carte d un appareil montre son filtre web : profil de filtrage de contenus, requetes bloquees et classees sur 7 jours, ou « gere par ad-guard » (lecture seule, lien vers le reglage) (ref #2430)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:23:58 +0200
+
 secubox-nac (3.7.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: panneau Clients reels : l appareil du NAC, ses identites Toolbox et son activite DPI reunis sur des preuves (cle d appareil = condensat de la MAC, sinon meme adresse de tunnel annoncee comme deduite, sinon identite seule), camembert global des usages, histogramme des clients actifs par type d usage et fiche par client ; la liste /clients porte la cle de jonction (ref #2423)

@@ -141,3 +141,29 @@ def test_clients_reels_jonction_par_preuves_2423():
     assert ["adresse", 2, 90, "Appareil · .9"] in r   # deux identités sur la même adresse, sans appareil NAC : déduit
     assert ["aucune", 1, 10, "Seul · .5"] in r         # aucune preuve : identité seule, rien de deviné
     assert len(r) == 3
+
+
+def test_filtre_web_par_appareil_dans_la_carte_2430():
+    """#2430 : la carte d'un appareil montre son profil de filtrage de contenus et ses requêtes classées (7 j) ; ad-guard est dit ; sans données, rien."""
+    import pathlib
+    import pytest
+    sync_api = pytest.importorskip("playwright.sync_api")
+    page = pathlib.Path(__file__).resolve().parents[1] / "www" / "nac" / "index.html"
+    erreurs = []
+    with sync_api.sync_playwright() as p:
+        try:
+            nav = p.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"chromium indisponible : {e}")
+        pg = nav.new_page()
+        pg.on("pageerror", lambda e: erreurs.append(str(e)))
+        pg.goto("file://" + str(page) + "?demo=1")
+        pg.wait_for_timeout(500)
+        lignes = pg.evaluate("[...document.querySelectorAll('#rang .app-c')].map(c => [c.querySelector('b').textContent, (c.textContent.match(/Filtre web[^A-Z]*/) || [''])[0]])")
+        pg.evaluate("window.sbxWf = null")
+        nav.close()
+    assert erreurs == [], erreurs
+    par_nom = {n: t for n, t in lignes}
+    assert "profil enfants" in par_nom["iphone-bob"] and "75 bloquées / 80 classées" in par_nom["iphone-bob"]
+    assert "géré par ad-guard" in par_nom["cam-entree"]
+    assert par_nom["nas-atelier"] == ""                                   # aucun profil ni requête : rien d'affiché, jamais « 0 »

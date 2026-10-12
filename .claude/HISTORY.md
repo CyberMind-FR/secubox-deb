@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — webfilter 0.3.0 Aurora, NAC 3.8.0 et SOC 1.6.0 : filtre web intégré (ref #2430)
+
+La page `/webfilter/` passe au profil Aurora (tuiles, répartition, bloqué et observé, appareils les plus filtrés) en gardant toutes ses actions. Ses `confirm()` de blocage, ignorés par le navigateur du Hall (réponse « non » sans rien dire), deviennent des confirmations intégrées. `secubox-lite` dépendait déjà de `secubox-webfilter` (rien à ajouter). Le NAC montre sur la carte de chaque appareil son profil de filtrage et ses requêtes bloquées et classées sur 7 jours ; Guardian a un panneau Filtrage web. Tests navigateur : 27 (webfilter, dont les 22 existants adaptés à la confirmation intégrée), NAC et Guardian.
+
 ## 2026-10-12 — release : fichiers de plus de 1,9 Gio découpés automatiquement (ref #2427)
 
 La publication de v3.0.0-alpha.12 échouait (`size must be less than 2147483648`) : les images full-vm, isp-vm, isp-mochabin et lite-mochabin dépassent 2 Gio et `release.yml` ne découpait pas (alpha.12 a été complétée à la main). `scripts/release-decouper-assets.sh` découpe en `.partNN` (1900 Mo, même convention que `build-all-live-usb.yml`), écrit `<fichier>.assembled.sha256` (somme du fichier réassemblé) et supprime l'original ; `release.yml` l'appelle avant les sommes, hache et publie les parties, et les notes expliquent le réassemblage. Tests : découpage, réassemblage identique, idempotence, ordre des étapes du workflow, backticks des notes. **Reste ouvert** : le live USB MOCHAbin dépasse 240 min sous QEMU (étape « Build embedded eMMC image » : reconstruit une image déjà produite par `build-images`) — piste : exécuteur arm64 natif ou réutilisation de l'artefact.

@@ -1,82 +1,101 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<!-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     Source-Disclosed License — All rights reserved except as expressly granted.
+     See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Filtrage de contenus, profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/webfilter/etat, /stats, /categories/<id>/domaines, /profils, /appareils, /appliquer ;
+  actions inchangées : POST /sync, POST|DELETE /profils, POST|DELETE /appareils/<mac>, POST /appliquer. Mesure absente = « — ».
+  Confirmations intégrées à la page (jamais confirm() : le navigateur du Hall l'ignore). ?demo=1 : données fictives, actions inertes.
+-->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox — Filtrage de contenus</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8); --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2); --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
-            --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
-        }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); margin: 0; }
-        .main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; }
-        .header .sub { color: var(--p31-dim); font-size: .8rem; margin-top: .25rem; }
-        .btn { font-family: inherit; text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; padding: .5rem .9rem; border-radius: 6px;
-               border: 1px solid var(--border); background: var(--bg-row); color: var(--text); cursor: pointer; }
-        .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 212, 255, .4); }
-        .btn.primary { background: rgba(0, 212, 255, .15); color: var(--cyan); }
-        .btn:disabled { opacity: .5; cursor: default; }
-        .bandeau { border: 1px solid var(--orange); border-left: 4px solid var(--orange); background: rgba(255, 153, 68, .08); border-radius: 8px;
-                   padding: .75rem 1rem; margin-bottom: 1rem; font-size: .85rem; line-height: 1.5; }
-        .bandeau strong { color: var(--orange); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: .9rem; backdrop-filter: blur(10px); }
-        .stat-card .value { font-size: 1.8rem; color: var(--cyan); text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
-        .stat-card .label { font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; color: var(--p31-dim); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h3 { color: var(--cyan); margin: 0 0 .75rem; font-size: 1rem; }
-        .rangee { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: baseline; background: var(--bg-row); border-left: 3px solid var(--green);
-                  border-radius: 6px; padding: .5rem .75rem; margin-bottom: .4rem; font-size: .8rem; }
-        .rangee .nom { color: var(--cyan); }
-        .rangee .meta { color: var(--p31-dim); font-variant-numeric: tabular-nums; }
-        table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-        th { text-align: left; color: var(--p31-dim); text-transform: uppercase; letter-spacing: .05em; font-size: .65rem; padding: .35rem .5rem; }
-        td { padding: .4rem .5rem; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
-        select { font-family: inherit; background: var(--bg-row); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; }
-        ul.top { list-style: none; padding: 0; margin: .75rem 0 0; }
-        ul.top li { display: flex; justify-content: space-between; gap: 1rem; background: var(--bg-row); border-left: 3px solid var(--orange); border-radius: 6px;
-                    padding: .4rem .75rem; margin-bottom: .3rem; font-size: .8rem; }
-        .note { color: var(--p31-dim); font-size: .8rem; }
-        .toast, .errtoast { position: fixed; right: 1rem; bottom: 1rem; max-width: 26rem; padding: .7rem 1rem; border-radius: 8px; display: none; z-index: 50; font-size: .85rem; }
-        .toast { background: var(--cyan); color: #04202a; }
-        .errtoast { background: var(--red); color: #fff; bottom: 4.5rem; }
-        .toast.show, .errtoast.show { display: block; }
-        .errtoast .fermer { margin-left: .75rem; background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; }
-        .tabs { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { font-family: inherit; text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; background: none; border: 0; border-bottom: 2px solid transparent;
-               color: var(--p31-dim); padding: .6rem .9rem; cursor: pointer; }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .onglet[hidden] { display: none; }
-        .bloque { color: var(--orange); }
-        .ligne-champ { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin: .35rem 0; font-size: .8rem; }
-        .ligne-champ label { min-width: 7rem; color: var(--p31-dim); }
-        input[type=text] { font-family: inherit; background: var(--bg-row); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; }
-        .puce { display: inline-flex; gap: .35rem; align-items: center; background: var(--bg-row); border: 1px solid var(--border); border-radius: 12px; padding: .1rem .55rem; margin: .15rem; font-size: .75rem; }
-        .puce button { background: none; border: 0; color: var(--red); cursor: pointer; font-size: .8rem; }
-        .attente { border: 1px solid var(--cyan); border-left: 4px solid var(--cyan); background: rgba(0, 212, 255, .06); border-radius: 8px; padding: .75rem 1rem; margin-bottom: .75rem; }
-        .exclu { color: var(--yellow); }
-        @media (max-width: 768px) { .main { margin-left: 0; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.obs{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.dg{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de}
+        .btn:disabled{opacity:.5;cursor:default}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .bandeau{border:1px solid var(--orange);border-left:4px solid var(--orange);background:rgba(255,159,28,.08);border-radius:10px;padding:8px 12px;font-size:.78rem;line-height:1.45;color:var(--doux)}
+        .bandeau strong{color:var(--orange)}
+        #confirmation{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #confirmation[hidden]{display:none} #confirmation span{flex:1 1 260px}
+        .tabs{display:flex;gap:6px;flex-wrap:wrap}
+        .tab{font:inherit;font-size:.74rem;background:rgba(10,22,46,.6);border:1px solid var(--trait);border-radius:999px;color:var(--doux);padding:4px 14px;cursor:pointer}
+        .tab:hover{border-color:var(--cyan)} .tab.active{background:rgba(41,182,246,.28);border-color:var(--cyan);color:#fff}
+        .onglet{display:grid;gap:10px} .onglet[hidden]{display:none}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:30px;height:30px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:1fr 1fr}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 180px;min-width:0}
+        .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg em{font-style:normal;color:var(--faible)} .leg b{font-weight:600} .leg span{overflow:hidden;text-overflow:ellipsis}
+        svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0}
+        .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600}
+        .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .rangee{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;border:1px solid var(--trait);border-left:3px solid var(--vert);border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:.78rem;background:rgba(8,18,38,.5)}
+        .rangee .nom{color:var(--cyan);font-weight:600} .rangee .meta{color:var(--faible);font-variant-numeric:tabular-nums} .rangee select,.rangee input{max-width:100%}
+        .exclu{color:var(--jaune);font-size:.74rem} .bloque{color:var(--orange)} .note{color:var(--faible);font-size:.74rem} .vide{color:var(--faible);font-size:.78rem;padding:4px 0}
+        .scroll{overflow-x:auto} table{width:100%;border-collapse:collapse;font-size:.78rem}
+        th{text-align:left;color:var(--faible);text-transform:uppercase;letter-spacing:.05em;font-size:.66rem;padding:4px 6px;white-space:nowrap}
+        td{padding:5px 6px;border-top:1px solid rgba(86,150,255,.12);font-variant-numeric:tabular-nums} tbody tr:hover{background:rgba(41,182,246,.07)}
+        select,input[type=text]{font:inherit;font-size:.76rem;background:rgba(8,18,38,.7);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;min-width:0}
+        ul.top{list-style:none;padding:0;margin:8px 0 0} ul.top li{display:flex;justify-content:space-between;gap:1rem;border:1px solid var(--trait);border-left:3px solid var(--orange);border-radius:8px;padding:5px 10px;margin-bottom:4px;font-size:.78rem;background:rgba(8,18,38,.5)}
+        ul.top .meta{color:var(--faible)} .ligne-champ{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:4px 0;font-size:.78rem} .ligne-champ label{min-width:7rem;color:var(--doux)}
+        .puce{display:inline-flex;gap:6px;align-items:center;background:rgba(8,18,38,.7);border:1px solid var(--trait2);border-radius:999px;padding:1px 10px;margin:2px;font-size:.72rem}
+        .puce button{background:none;border:0;color:var(--rouge);cursor:pointer;font-size:.8rem}
+        .attente{border:1px solid var(--cyan);border-left:4px solid var(--cyan);background:rgba(41,182,246,.07);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .toast,.errtoast{position:fixed;right:12px;bottom:12px;max-width:26rem;padding:9px 14px;border-radius:10px;display:none;z-index:50;font-size:.82rem}
+        .toast{background:var(--cyan);color:#04202a} .errtoast{background:var(--rouge);color:#fff;bottom:62px} .toast.show,.errtoast.show{display:block}
+        .errtoast .fermer{margin-left:10px;background:none;border:0;color:inherit;cursor:pointer;font-size:1rem}
     </style>
 </head>
 <body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div><h1>🛡️ Filtrage de contenus</h1><div class="sub" id="subline">Observation par catégorie — phase 1</div></div>
-            <div class="btn-group">
-                <button class="btn" id="btn-refresh">↻ Actualiser</button>
-                <button class="btn primary" id="btn-sync">⬇️ Synchroniser les listes</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(41,182,246,.14)"/><path d="M9 12l2 2 4-4"/></svg>
+                <div><b>Filtrage de contenus</b><small id="subline">Observation par catégorie, profils par appareil</small></div>
             </div>
+            <span class="actif obs" id="mode-pastille">MODE OBSERVE</span>
+            <div class="droite"><span id="heure"></span>
+                <button class="btn" id="btn-refresh">⟳ Actualiser</button>
+                <button class="btn primary" id="btn-sync">⬇ Synchroniser les listes</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div id="confirmation" role="alertdialog" aria-label="Confirmation" hidden></div>
 
         <div class="bandeau" id="bandeau-observe">
             <strong>👁️ Mode observe : rien n'est bloqué.</strong>
@@ -92,33 +111,35 @@
         </div>
 
         <section class="onglet" id="onglet-observation">
-        <div class="grid" id="cartes"></div>
-
-        <div class="card">
-            <h3>📜 Listes publiques</h3>
-            <div class="note">Listes téléchargées à l'exécution, jamais livrées avec le paquet ; chaque licence est rappelée ci-dessous.</div>
-            <div id="listes"></div>
-        </div>
-
-        <div class="card">
-            <h3>📊 Aurait été bloqué, par appareil (7 jours)</h3>
-            <div class="note" id="note-admin" style="display:none">🔒 Connexion administrateur requise pour le détail par appareil et par domaine.</div>
-            <table id="table-appareils" style="display:none">
-                <thead><tr id="entete-appareils"><th>Appareil</th></tr></thead>
-                <tbody id="par-appareil"></tbody>
-            </table>
-        </div>
-
-        <div class="card">
-            <h3>🔎 Domaines les plus vus</h3>
-            <label class="note" for="cat-select">Catégorie </label><select id="cat-select"></select>
-            <ul class="top" id="top-domaines"></ul>
-        </div>
+            <div class="tuiles" id="cartes"></div>
+            <div class="grille g2">
+                <div class="pan"><h3>Répartition <i>requêtes classées, 7 jours</i></h3><div id="graph-anneau"></div></div>
+                <div class="pan"><h3>Bloqué et observé <i>par catégorie</i></h3><div id="graph-barres"></div></div>
+            </div>
+            <div class="grille g2">
+                <div class="pan"><h3>Appareils les plus filtrés <i>bloqué / classé, 7 jours</i></h3><div id="top-appareils"><div class="vide">—</div></div></div>
+                <div class="pan"><h3>Domaines les plus vus</h3>
+                    <label class="note" for="cat-select">Catégorie </label><select id="cat-select"></select>
+                    <ul class="top" id="top-domaines"></ul></div>
+            </div>
+            <div class="pan">
+                <h3>Aurait été bloqué, par appareil <i>7 jours</i></h3>
+                <div class="note" id="note-admin" style="display:none">🔒 Connexion administrateur requise pour le détail par appareil et par domaine.</div>
+                <div class="scroll"><table id="table-appareils" style="display:none">
+                    <thead><tr id="entete-appareils"><th>Appareil</th></tr></thead>
+                    <tbody id="par-appareil"></tbody>
+                </table></div>
+            </div>
+            <div class="pan">
+                <h3>Listes publiques</h3>
+                <div class="note">Listes téléchargées à l'exécution, jamais livrées avec le paquet ; chaque licence est rappelée ci-dessous.</div>
+                <div id="listes"></div>
+            </div>
         </section>
 
         <section class="onglet" id="onglet-profils" hidden>
             <div class="note" id="note-admin-profils" style="display:none">🔒 Connexion administrateur requise pour gérer les profils.</div>
-            <div id="profils-liste"></div>
+            <div id="profils-liste" class="grille g2"></div>
             <div class="card" id="nouveau-profil">
                 <h3>➕ Nouveau profil</h3>
                 <div class="ligne-champ">
@@ -148,11 +169,13 @@
                     <span class="note">Sinon, les changements sont appliqués automatiquement à 4 h. Les changements de listes ne sont jamais appliqués avant.</span></div>
             </div>
         </section>
-    </main>
+    </div></div></main>
     <div class="toast" id="toast"></div>
     <div class="errtoast" id="errtoast"><span class="texte"></span><button class="fermer" aria-label="Fermer">✕</button></div>
     <script>
         const API_BASE = '/api/v1/webfilter';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const TIRET = '—';
 
         function el(tag, cls, texte) {                       // jamais d'innerHTML : tout ce qui vient de l'API est du TEXTE
@@ -178,6 +201,7 @@
 
         const $ = id => document.getElementById(id);
         async function api(endpoint, methode = 'GET', corps = null) {
+            if (DEMO) return demoApi(endpoint, methode);
             const h = {};
             const jeton = localStorage.getItem('sbx_token');
             if (jeton) h['Authorization'] = 'Bearer ' + jeton;
@@ -196,6 +220,7 @@
         function rendreBandeau(mode) {
             const b = $('bandeau-observe');
             b.replaceChildren();
+            const pa = $('mode-pastille'); pa.textContent = mode === 'block' ? 'BLOCAGE ACTIF' : 'MODE OBSERVE'; pa.className = 'actif' + (mode === 'block' ? '' : ' obs');
             if (mode === 'block') {
                 b.append(el('strong', '', '🛡️ Blocage actif sur certains profils.'),
                          ' Les appareils assignés à un profil qui bloque une catégorie ne joignent plus ces sites ; les autres restent en observation (« aurait bloqué »). ' +
@@ -213,8 +238,10 @@
             const choisie = sel.value;
             sel.replaceChildren();
             for (const c of etat.categories || []) {
-                const carte = el('div', 'stat-card'); carte.dataset.cat = c.id;
-                carte.append(el('div', 'value', fmt(c.requetes_7j)), el('div', 'label', c.libelle), el('div', 'label bloque', 'bloqué : ' + fmt(c.bloque_7j)));
+                const carte = el('div', 'tuile'); carte.dataset.cat = c.id;
+                const haut = el('div', 'haut'); haut.append(icone(c.id));
+                const txt = el('div'); txt.append(el('div', 'l label', c.libelle), el('div', 'v value', fmt(c.requetes_7j))); haut.append(txt);
+                carte.append(haut, el('div', 's bloque', 'bloqué : ' + fmt(c.bloque_7j) + ' · mode ' + (c.mode || TIRET)));
                 cartes.append(carte);
                 const o = el('option', '', c.libelle); o.value = c.id; sel.append(o);
                 for (const s of c.sources || []) {
@@ -246,6 +273,8 @@
                 }
                 corps.append(tr);
             }
+            rendreTopAppareils(stats, ids);
+            hauteur();
         }
 
         function masquerAdmin() {
@@ -253,6 +282,8 @@
             document.getElementById('table-appareils').style.display = 'none';
             document.getElementById('par-appareil').replaceChildren();
             document.getElementById('top-domaines').replaceChildren();
+            $('top-appareils').replaceChildren(el('div', 'vide', 'Session requise.'));
+            hauteur();
         }
 
         async function chargerDomaines() {
@@ -266,6 +297,7 @@
                 const li = el('li'); li.append(el('span', '', d.domaine), el('span', 'meta', fmt(d.n))); ul.append(li);
             }
             if (!(r.data.domaines || []).length) ul.append(el('li', '', 'Aucune requête classée sur 7 jours'));
+            hauteur();
         }
 
         async function refresh() {
@@ -273,6 +305,7 @@
             if (!e.ok) { errorToast('État indisponible : ' + (e.data.detail || e.status)); return; }
             rendreBandeau(e.data.mode_global);
             const ids = rendreEtat(e.data);
+            rendreGraphes(e.data);
             const s = await api('/stats?jours=7');
             if (s.status === 401 || s.status === 403) { masquerAdmin(); return; }
             if (!s.ok) { errorToast('Statistiques indisponibles : ' + (s.data.detail || s.status)); return; }
@@ -305,6 +338,7 @@
             else if (nom === 'profils') chargerProfils();
             else if (nom === 'appareils') chargerAppareils();
             else if (nom === 'appliquer') chargerAppliquer();
+            hauteur();
         }
 
         function modesEffectifs(prof, nom, exceptions) { return Object.assign({}, ((prof || {})[nom] || {}).categories || {}, exceptions || {}); }
@@ -354,7 +388,7 @@
                 const categories = {};
                 carte.querySelectorAll('select[data-cat]').forEach(s => { categories[s.dataset.cat] = s.value; });
                 const nouveaux = Object.keys(categories).filter(c => categories[c] === 'block' && initial[c] !== 'block');
-                if (nouveaux.length && !confirm('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour le profil « ' + nom + ' » ? Les appareils de ce profil ne pourront plus joindre ces sites après l\'application.')) return;
+                if (nouveaux.length && !await confirmer('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour le profil « ' + nom + ' » ? Les appareils de ce profil ne pourront plus joindre ces sites après l\'application.')) return;
                 const rr = await api('/profils', 'POST', { nom, categories, autorise });
                 if (rr.ok) { enregistrerOk('Profil « ' + nom + ' » enregistré'); chargerProfils(); } else echec(rr, 'Profil refusé');
             });
@@ -362,7 +396,7 @@
             if (nom !== 'defaut') {
                 const sup = el('button', 'btn', 'Supprimer'); sup.dataset.action = 'supprimer-profil'; sup.dataset.profil = nom;
                 sup.addEventListener('click', async () => {
-                    if (!confirm('Supprimer le profil « ' + nom + ' » ?')) return;
+                    if (!await confirmer('Supprimer le profil « ' + nom + ' » ?')) return;
                     const rr = await api('/profils/' + encodeURIComponent(nom), 'DELETE');
                     if (rr.ok) { enregistrerOk('Profil supprimé'); chargerProfils(); } else echec(rr, 'Suppression refusée');
                 });
@@ -377,7 +411,7 @@
             if (!nom) { errorToast('Donnez un nom au profil.'); return; }
             const base = m && modeles[m] ? modeles[m] : { categories: {}, autorise: [] };
             const bloque = Object.keys(base.categories).filter(c => base.categories[c] === 'block');
-            if (bloque.length && !confirm('Ce profil bloquera ' + bloque.join(', ') + ' (BLOCAGE) une fois appliqué. Continuer ?')) return;
+            if (bloque.length && !await confirmer('Ce profil bloquera ' + bloque.join(', ') + ' (BLOCAGE) une fois appliqué. Continuer ?')) return;
             const r = await api('/profils', 'POST', { nom, categories: base.categories, autorise: base.autorise });
             if (r.ok) { $('nouveau-nom').value = ''; enregistrerOk('Profil « ' + nom + ' » créé'); chargerProfils(); } else echec(r, 'Création refusée');
         }
@@ -404,7 +438,7 @@
                                                               : '⚠️ ' + a.exclu + ' : non filtré tant que son adresse n\'est pas connue'));
             const ret = el('button', 'btn', 'Retirer'); ret.dataset.action = 'retirer-appareil'; ret.dataset.mac = a.mac;
             ret.addEventListener('click', async () => {
-                if (!confirm('Retirer cet appareil ? Il reprendra le profil « defaut ».')) return;
+                if (!await confirmer('Retirer cet appareil ? Il reprendra le profil « defaut ».')) return;
                 const r = await api('/appareils/' + encodeURIComponent(a.mac), 'DELETE');
                 if (r.ok) { enregistrerOk('Appareil retiré'); chargerAppareils(); } else echec(r, 'Retrait refusé');
             });
@@ -423,7 +457,7 @@
                 const exceptions = {};
                 ligne.querySelectorAll('select[data-exc]').forEach(s => { if (s.value) exceptions[s.dataset.exc] = s.value; });
                 const nouveaux = nouveauxBlocages(modesEffectifs(prof, a.profil, a.exceptions), modesEffectifs(prof, sp.value, exceptions));
-                if (nouveaux.length && !confirm('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour « ' + (nom.value.trim() || a.mac) + ' » ? Cet appareil ne pourra plus joindre ces sites après l\'application.')) return;
+                if (nouveaux.length && !await confirmer('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour « ' + (nom.value.trim() || a.mac) + ' » ? Cet appareil ne pourra plus joindre ces sites après l\'application.')) return;
                 const r = await api('/appareils/' + encodeURIComponent(a.mac), 'POST', { nom: nom.value.trim(), profil: sp.value, exceptions });
                 if (r.ok) { enregistrerOk('Appareil enregistré'); chargerAppareils(); } else echec(r, 'Appareil refusé');
             });
@@ -440,7 +474,7 @@
             const b = el('button', 'btn primary', 'Assigner'); b.dataset.action = 'assigner'; b.dataset.mac = c.mac;
             b.addEventListener('click', async () => {
                 const nouveaux = nouveauxBlocages({}, modesEffectifs(prof, sp.value, {}));
-                if (nouveaux.length && !confirm('Assigner cet appareil au profil « ' + sp.value + ' » le mettra en BLOCAGE pour ' + nouveaux.join(', ') + ' après l\'application. Continuer ?')) return;
+                if (nouveaux.length && !await confirmer('Assigner cet appareil au profil « ' + sp.value + ' » le mettra en BLOCAGE pour ' + nouveaux.join(', ') + ' après l\'application. Continuer ?')) return;
                 const r = await api('/appareils/' + encodeURIComponent(c.mac), 'POST', { nom: nom.value.trim(), profil: sp.value, exceptions: {} });
                 if (r.ok) { enregistrerOk('Appareil assigné'); chargerAppareils(); } else echec(r, 'Assignation refusée');
             });
@@ -467,7 +501,7 @@
         }
 
         async function appliquer() {
-            if (!confirm('Appliquer maintenant ? Le DNS sera coupé environ ' + String(rechargementEstime).replace('.', ',') + ' s pendant le rechargement d\'Unbound.')) return;
+            if (!await confirmer('Appliquer maintenant ? Le DNS sera coupé environ ' + String(rechargementEstime).replace('.', ',') + ' s pendant le rechargement d\'Unbound.')) return;
             const b = $('btn-appliquer'); b.disabled = true;
             try {
                 const r = await api('/appliquer', 'POST');
@@ -491,6 +525,123 @@
         document.getElementById('cat-select').addEventListener('change', chargerDomaines);
         refresh();
         setInterval(refresh, 60000);
+
+        // ══ Aurora : confirmation intégrée, icônes, graphes, démonstration, hauteur ═══════════════════════════════
+        // `confirm()` est ignoré par le navigateur du Hall (il répond « non » sans rien dire) : un passage en blocage ne pouvait
+        // donc pas être confirmé. La confirmation est dans la page.
+        function confirmer(message) {
+            return new Promise(resolve => {
+                const zone = $('confirmation');
+                zone.replaceChildren();
+                const oui = el('button', 'btn dg', 'Confirmer'), non = el('button', 'btn', 'Annuler');
+                const fin = v => { zone.hidden = true; zone.replaceChildren(); hauteur(); resolve(v); };
+                oui.addEventListener('click', () => fin(true)); non.addEventListener('click', () => fin(false));
+                zone.append(el('span', '', message), oui, non);
+                zone.hidden = false; hauteur();
+                zone.scrollIntoView({ block: 'nearest' });
+                non.focus();
+            });
+        }
+
+        const COUL = { adulte: '#ff4d5e', jeux: '#ff9f1c', phishing: '#a78bfa', malware: '#ffd23f' };
+        const couleur = (id, i = 0) => COUL[id] || ['#29b6f6', '#2ecc71', '#3b82f6', '#6f84a8'][i % 4];
+        function svg(tag, attrs, enfants) {
+            const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+            for (const c of enfants || []) e.append(c);
+            return e;
+        }
+        function icone(id) {
+            const c = couleur(id);
+            return svg('svg', { class: 'ic', viewBox: '0 0 24 24', fill: 'none', stroke: c, 'stroke-width': '1.7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+                [svg('path', { d: 'M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z', fill: c + '24' }), svg('path', { d: 'M9 12l2 2 4-4' })]);
+        }
+        function anneau(parts, tot) {
+            const R = 46, C = 2 * Math.PI * R; let acc = 0;
+            const s = svg('svg', { viewBox: '0 0 120 120', width: '120', height: '120', role: 'img', 'aria-label': 'Répartition des requêtes classées par catégorie' },
+                [svg('circle', { cx: 60, cy: 60, r: R, fill: 'none', stroke: 'rgba(159,179,214,.16)', 'stroke-width': 16 })]);
+            for (const p of parts) {
+                const l = C * p.n / tot;
+                const c = svg('circle', { cx: 60, cy: 60, r: R, fill: 'none', stroke: p.c, 'stroke-width': 16, 'stroke-dasharray': l.toFixed(2) + ' ' + (C - l).toFixed(2), 'stroke-dashoffset': (-acc).toFixed(2), transform: 'rotate(-90 60 60)' });
+                const t = svg('title'); t.textContent = p.nom + ' : ' + fmt(p.n); c.append(t); s.append(c); acc += l;
+            }
+            const t1 = svg('text', { x: 60, y: 62, 'text-anchor': 'middle', class: 'dn' }); t1.textContent = fmt(tot);
+            const t2 = svg('text', { x: 60, y: 76, 'text-anchor': 'middle', class: 'dp' }); t2.textContent = 'requêtes';
+            s.append(t1, t2); return s;
+        }
+        function rendreGraphes(etat) {
+            const cats = etat.categories || [];
+            const parts = cats.map((c, i) => ({ id: c.id, nom: c.libelle, n: Number(c.requetes_7j) || 0, b: Number(c.bloque_7j) || 0, c: couleur(c.id, i) }));
+            const tot = parts.reduce((t, p) => t + p.n, 0);
+            const zD = $('graph-anneau'), zB = $('graph-barres'); zD.replaceChildren(); zB.replaceChildren();
+            if (!tot) { zD.append(el('div', 'vide', 'Aucune requête classée sur 7 jours.')); zB.append(el('div', 'vide', '—')); return; }
+            const rep = el('div', 'repart'); rep.append(anneau(parts.filter(p => p.n), tot));
+            const leg = el('div', 'leg');
+            for (const p of parts) {
+                const l = el('div'); const i = el('i'); i.style.background = p.c;
+                l.append(i, el('span', '', p.nom), el('b', '', fmt(p.n)), el('em', '', (tot ? Math.round(100 * p.n / tot) : 0) + ' %')); leg.append(l);
+            }
+            rep.append(leg); zD.append(rep);
+            const max = Math.max(...parts.map(p => p.n), 1);
+            for (const p of parts) {
+                const l = el('div', 'hl'); l.append(el('span', 'hn', p.nom));
+                const barre = el('div', 'hb'), cadre = el('div', 'hbi'); cadre.style.width = Math.max(2, 100 * p.n / max).toFixed(1) + '%';
+                const bl = el('i'); bl.style.flex = String(p.b); bl.style.background = '#ff4d5e'; bl.title = 'bloqué : ' + fmt(p.b);
+                const ob = el('i'); ob.style.flex = String(Math.max(p.n - p.b, 0)); ob.style.background = '#29b6f6'; ob.title = 'observé : ' + fmt(Math.max(p.n - p.b, 0));
+                cadre.append(bl, ob); barre.append(cadre); l.append(barre, el('b', '', fmt(p.b) + ' / ' + fmt(p.n))); zB.append(l);
+            }
+            zB.append(el('div', 'note', 'Rouge : requêtes bloquées. Bleu : requêtes classées seulement observées (« aurait bloqué »).'));
+        }
+        function rendreTopAppareils(stats, ids) {
+            const z = $('top-appareils'); z.replaceChildren();
+            const lignes = Object.entries(stats.par_client || {}).map(([client, cats]) => {
+                const n = ids.reduce((t, id) => t + (Number((cats || {})[id]) || 0), 0);
+                const b = ids.reduce((t, id) => t + (Number((((stats.par_client_decision || {})[client] || {})[id] || {}).bloque) || 0), 0);
+                return { client, n, b };
+            }).filter(x => x.n).sort((a, b) => b.n - a.n).slice(0, 8);
+            if (!lignes.length) { z.append(el('div', 'vide', 'Aucun appareil n\'a de requête classée sur 7 jours.')); return; }
+            const max = lignes[0].n;
+            for (const x of lignes) {
+                const l = el('div', 'hl'); l.append(el('span', 'hn', x.client)); l.firstChild.title = x.client;
+                const barre = el('div', 'hb'), cadre = el('div', 'hbi'); cadre.style.width = Math.max(2, 100 * x.n / max).toFixed(1) + '%';
+                const bl = el('i'); bl.style.flex = String(x.b); bl.style.background = '#ff4d5e';
+                const ob = el('i'); ob.style.flex = String(Math.max(x.n - x.b, 0)); ob.style.background = '#29b6f6';
+                cadre.append(bl, ob); barre.append(cadre); l.append(barre, el('b', '', fmt(x.b) + ' / ' + fmt(x.n))); z.append(l);
+            }
+        }
+
+        // Hauteur annoncée à l'hôte (SOC, Hall) : on mesure le .cadre, jamais le document.
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'webfilter' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+        // ── Démonstration : lectures fictives (adresses de documentation), écritures inertes ─────────────────────────
+        function demoApi(endpoint, methode) {
+            const rep = (data, ok = true, status = 200) => Promise.resolve({ ok, status, data });
+            if (methode !== 'GET') return rep({ detail: 'démonstration : action inerte' }, false, 0);
+            const e = endpoint.split('?')[0];
+            if (e === '/etat') return rep({ mode_global: 'block', dernier_evenement: '2026-10-12T07:40:00Z', categories: [
+                { id: 'adulte', libelle: 'Contenu adulte', mode: 'block', requetes_7j: 1240, bloque_7j: 980, sources: [{ nom: 'liste-exemple-nsfw', licence: 'GPL-3.0', n: 412000, ts: 1791720000 }] },
+                { id: 'jeux', libelle: 'Jeux d\'argent', mode: 'block', requetes_7j: 860, bloque_7j: 860, sources: [{ nom: 'liste-exemple-jeux', licence: 'GPL-3.0', n: 38000, ts: 1791720000 }] },
+                { id: 'phishing', libelle: 'Hameçonnage', mode: 'observe', requetes_7j: 140, bloque_7j: 0, sources: [{ nom: 'liste-exemple-phishing', licence: 'CC0', n: 91000, ts: 1791720000 }] },
+                { id: 'malware', libelle: 'Logiciels malveillants', mode: 'observe', requetes_7j: 56, bloque_7j: 0, sources: [{ nom: 'liste-exemple-malware', licence: 'CC0', n: 120000, ts: 1791720000 }] }] });
+            if (e === '/stats') return rep({ jours: 7,
+                par_client: { '192.0.2.21': { adulte: 900, jeux: 120, phishing: 10, malware: 4 }, '192.0.2.30': { adulte: 240, jeux: 700, phishing: 100, malware: 40 }, '198.51.100.12': { adulte: 100, jeux: 40, phishing: 30, malware: 12 } },
+                par_client_decision: { '192.0.2.21': { adulte: { bloque: 800 }, jeux: { bloque: 120 } }, '192.0.2.30': { adulte: { bloque: 180 }, jeux: { bloque: 700 } }, '198.51.100.12': {} } });
+            if (e.startsWith('/categories/')) return rep({ domaines: [{ domaine: 'exemple-un.test', n: 410 }, { domaine: 'exemple-deux.test', n: 260 }, { domaine: 'exemple-trois.test', n: 90 }] });
+            if (e === '/profils') return rep({ modeles: { enfants: { categories: { adulte: 'block', jeux: 'block', phishing: 'block', malware: 'block' }, autorise: [] } },
+                profils: { defaut: { categories: { adulte: 'observe', jeux: 'observe', phishing: 'observe', malware: 'observe' }, autorise: [] },
+                           enfants: { categories: { adulte: 'block', jeux: 'block', phishing: 'block', malware: 'block' }, autorise: ['ecole-exemple.test'] } } });
+            if (e === '/appareils') return rep({ assignes: [{ mac: '02:00:5e:10:00:01', nom: 'tablette-enfants', profil: 'enfants', exceptions: {}, adresses: ['192.0.2.21'], exclu: null }],
+                connus: [{ mac: '02:00:5e:10:00:09', adresses: ['192.0.2.30'], vu: 1791780000, exclu: null }, { mac: '02:00:5e:10:00:0a', adresses: ['198.51.100.12'], vu: 1791781000, exclu: 'geree par ad-guard' }] });
+            if (e === '/appliquer') return rep({ en_attente: true, version: 7, appliquee: 6, estimation: { zones: 660000, memoire_mo: 58, rechargement_s: 4.5 }, dernier: { statut: 'ok', message: '', duree_s: 4.2 } });
+            return rep({}, false, 404);
+        }
+        if (DEMO) $('demo').hidden = false;
     </script>
 </body>
 </html>
