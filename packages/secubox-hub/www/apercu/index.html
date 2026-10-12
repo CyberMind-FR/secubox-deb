@@ -4,33 +4,218 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Vue d'ensemble (#2212), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/hub/apercu (caches du hub uniquement : jamais d'apt ni de systemctl sur le chemin de la requête).
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
-<!-- SecuBox · Vue d'ensemble (#2212) : lit /api/v1/hub/apercu (caches seulement). -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox · Vue d'ensemble</title>
-    <link rel="stylesheet" href="/shared/design-tokens.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="apercu.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <title>SecuBox — Vue d'ensemble</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
+    
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
+            .espaces{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        a.carte,.carte{display:flex;flex-direction:column;gap:3px;border:1px solid var(--trait);border-left:3px solid var(--vert);border-radius:10px;padding:9px 11px;background:rgba(8,18,38,.5);color:var(--texte);text-decoration:none;min-width:0}
+        a.carte:hover{border-color:var(--cyan)} a.carte:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .carte.degrade{border-left-color:var(--orange)} .carte.critique{border-left-color:var(--rouge)} .carte.inconnu{border-left-color:var(--faible)}
+        .carte b{overflow-wrap:anywhere;font-size:.9rem} .carte small{color:var(--doux);font-size:.74rem;overflow-wrap:anywhere} .carte .n{font-size:1.4rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
+        .ressources{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))} .ressources .carte{border-left-color:var(--cyan)}
+        ul.alertes{list-style:none;margin:0;padding:0;display:grid;gap:6px} ul.alertes li{border:1px solid var(--trait);border-radius:8px;padding:6px 10px;font-size:.8rem;overflow-wrap:anywhere;background:rgba(8,18,38,.5)}
+        .count{color:var(--faible);font-weight:400} #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem} #erreur[hidden]{display:none}
+    </style>
 </head>
-<body class="module-root hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main">
-        <header class="page">
-            <h1>🧭 Vue d'ensemble</h1>
-            <div class="actions"><span id="maj" class="maj">—</span><button class="btn" id="rafraichir" type="button">↻ Actualiser</button></div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="rgba(41,182,246,.14)"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
+                <div><b>Vue d’ensemble</b><small id="subline">Un coup d’œil par espace</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite"><span id="etat-titre">Chargement…</span></span>
+            <div class="droite"><span id="etat-sous"></span><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
-        <div id="erreur" class="banner err" hidden></div>
-        <section id="etat" class="etat inconnu" aria-live="polite"><span class="pastille"></span><div><p id="etat-titre">Chargement…</p><small id="etat-sous"></small></div></section>
-        <section><h2>Espaces</h2><div id="espaces" class="grille"></div></section>
-        <section><h2>Accès rapides</h2><div class="grille"><a class="carte" href="/appareil/"><b>📱 Appareils</b><small>Liste et fiche de chaque appareil du réseau</small></a></div></section>
-        <section><h2>Ressources</h2><div id="ressources" class="grille res"></div></section>
-        <section><h2>Alertes récentes <span id="nb-alertes" class="count"></span></h2><ul id="alertes" class="alertes"></ul></section>
-    </main>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <div class="tuiles">
+            <div class="tuile"><div class="l">Espaces</div><div class="v" id="tEsp">—</div><div class="s">regroupent les modules</div></div>
+            <div class="tuile"><div class="l">Services actifs</div><div class="v" id="tAct">—</div><div class="s" id="tActS">actifs / total</div></div>
+            <div class="tuile"><div class="l">À l’arrêt</div><div class="v" id="tArr">—</div><div class="s">services attendus</div></div>
+            <div class="tuile"><div class="l">Alertes</div><div class="v" id="tAl">—</div><div class="s">récentes</div></div>
+            <div class="tuile"><div class="l">En marche depuis</div><div class="v" id="tUp" style="font-size:1.1rem">—</div><div class="s"></div></div>
+        </div>
+
+        <div class="pan"><h3>Espaces <i>cliquer pour ouvrir l’espace</i></h3><div id="espaces" class="espaces"><div class="vide">Chargement…</div></div></div>
+        <div class="grille g2">
+            <div class="pan"><h3>Ressources</h3><div id="ressources" class="ressources"><div class="vide">—</div></div></div>
+            <div class="pan"><h3>Alertes récentes <span id="nb-alertes" class="count"></span></h3><ul id="alertes" class="alertes"><li class="vide">—</li></ul></div>
+        </div>
+        <div class="pan"><h3>Accès rapides</h3><div class="espaces"><a class="carte inconnu" href="/appareil/" style="border-left-color:var(--cyan)"><b>📱 Appareils</b><small>Liste et fiche de chaque appareil du réseau</small></a></div></div>
+    </div></div></main>
+
     <script src="/shared/sidebar.js"></script>
-    <script src="apercu.js" defer></script>
+    <script>
+        const API = '/api/v1/hub/apercu';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const ETATS = { ok: 'Tout fonctionne', degrade: 'Quelque chose demande votre attention', critique: 'Ressources critiques', inconnu: 'État inconnu' };
+        const $ = id => document.getElementById(id);
+        function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+        const pct = v => (v == null ? '—' : Number(v).toFixed(0) + ' %');
+        function duree(s) { if (s == null) return null; const j = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (j ? j + ' j ' : '') + h + ' h ' + m + ' min'; }
+
+        function rendre(d) {
+            const etat = ETATS[d.etat] ? d.etat : 'inconnu';
+            const pa = $('etat'); pa.className = 'actif' + (etat === 'ok' ? '' : etat === 'inconnu' ? ' neutre' : ' hors');
+            $('etat-titre').textContent = ETATS[etat];
+            const up = duree(d.uptime);
+            $('etat-sous').textContent = up ? 'En service depuis ' + up : '';
+            $('tUp').textContent = up || '—';
+
+            const esp = d.espaces || [], g = $('espaces'); g.replaceChildren();
+            esp.forEach(e => {
+                const c = el('a', 'carte ' + (e.etat || 'inconnu')); c.href = '/espace/#' + encodeURIComponent(e.id);
+                c.append(el('b', null, ((e.icone || '') + ' ' + (e.nom || e.id || '')).trim()), el('span', 'n', fmt(e.actifs) + ' / ' + fmt(e.total)),
+                         el('small', null, (e.arretes || []).length ? 'À l’arrêt : ' + e.arretes.join(', ') : 'Tous les services actifs'));
+                g.append(c);
+            });
+            if (!esp.length) g.append(el('p', 'vide', 'Menu en cours de préparation, réessayez dans un instant.'));
+            const actifs = esp.reduce((a, e) => a + (Number(e.actifs) || 0), 0), total = esp.reduce((a, e) => a + (Number(e.total) || 0), 0), arr = esp.reduce((a, e) => a + (e.arretes || []).length, 0);
+            $('tEsp').textContent = esp.length ? fmt(esp.length) : '—'; $('tAct').textContent = esp.length ? fmt(actifs) + ' / ' + fmt(total) : '—'; $('tArr').textContent = esp.length ? fmt(arr) : '—';
+
+            const r = d.ressources || {}, rs = $('ressources'); rs.replaceChildren();
+            [['Processeur', pct(r.cpu)], ['Mémoire', pct(r.memoire)], ['Disque', pct(r.disque)], ['Charge', r.charge ? r.charge.map(x => Number(x).toFixed(2)).join(' · ') : '—']].forEach(p => {
+                const c = el('div', 'carte'); c.append(el('small', null, p[0]), el('span', 'n', p[1])); rs.append(c);
+            });
+
+            const a = d.alertes || { total: 0, recentes: [] }, ul = $('alertes'); ul.replaceChildren();
+            $('nb-alertes').textContent = a.total ? '(' + a.total + ')' : '';
+            $('tAl').textContent = fmt(a.total || 0);
+            (a.recentes || []).forEach(n => ul.append(el('li', null, n.title || n.message || n.id || 'Alerte')));
+            if (!(a.recentes || []).length) ul.append(el('li', 'vide', 'Aucune alerte.'));
+            $('maj').textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+            $('subline').textContent = esp.length ? esp.length + ' espaces' : 'Un coup d’œil par espace';
+            hauteur();
+        }
+
+        async function charger() {
+            try {
+                let d;
+                if (DEMO) d = demo();
+                else {
+                    let token = null; try { token = localStorage.getItem('sbx_token'); } catch (e) { /* stockage indisponible */ }
+                    const r = await fetch(API, { headers: token ? { Authorization: 'Bearer ' + token } : {}, credentials: 'same-origin' });
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    d = await r.json();
+                }
+                $('erreur').hidden = true;
+                rendre(d);
+            } catch (e) {
+                $('erreur').hidden = false;
+                $('erreur').textContent = 'Impossible de lire l’état de la box (' + e.message + ').';
+                $('etat-titre').textContent = ETATS.inconnu; $('etat').className = 'actif neutre';
+                hauteur();
+            }
+        }
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'apercu' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('rafraichir').addEventListener('click', charger);
+
+        function demo() {
+            return { etat: 'degrade', uptime: 1052000, espaces: [
+                { id: 'protection', nom: 'Protection', icone: '🛡️', total: 14, actifs: 13, arretes: ['dns-exemple'], etat: 'degrade' },
+                { id: 'surveillance', nom: 'Surveillance', icone: '👁️', total: 9, actifs: 9, arretes: [], etat: 'ok' },
+                { id: 'services', nom: 'Services', icone: '📦', total: 20, actifs: 20, arretes: [], etat: 'ok' },
+                { id: 'identite', nom: 'Identité et accès', icone: '👤', total: 7, actifs: 7, arretes: [], etat: 'ok' },
+                { id: 'systeme', nom: 'Système', icone: '⚙️', total: 11, actifs: 10, arretes: ['<img src=x onerror=alert(1)>'], etat: 'degrade' }],
+                ressources: { cpu: 31.2, memoire: 62.0, disque: null, charge: [0.84, 0.71, 0.66] },
+                alertes: { total: 2, recentes: [{ title: 'Service exemple à l’arrêt' }, { title: '<img src=x onerror=window.__xss=1>' }] } };
+        }
+        if (DEMO) $('demo').hidden = false;
+        charger();
+        setInterval(charger, 30000);
+    </script>
 </body>
 </html>

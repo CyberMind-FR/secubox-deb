@@ -322,3 +322,19 @@ et empreintes, les courriels et les noms de domaine, et floute les noms d'appare
 | Bureau | Mobile |
 |---|---|
 | ![Caches de la box — bureau](cdn-bureau.webp) | ![Caches de la box — mobile](cdn-mobile.webp) |
+
+### Dashboard
+
+`packages/secubox-hub/www/index.html` — Page d'accueil de l'administration : modules, santé, alertes, interfaces, ressources, réseau, santé des modules et des sites.
+
+| Bureau | Mobile |
+|---|---|
+| ![Dashboard — bureau](dashboard-bureau.webp) | ![Dashboard — mobile](dashboard-mobile.webp) |
+
+### Vue d'ensemble
+
+`packages/secubox-hub/www/apercu/index.html` — Un coup d'œil par espace : services actifs et à l'arrêt, ressources, alertes récentes.
+
+| Bureau | Mobile |
+|---|---|
+| ![Vue d'ensemble — bureau](apercu-bureau.webp) | ![Vue d'ensemble — mobile](apercu-mobile.webp) |
