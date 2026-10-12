@@ -1,3 +1,14 @@
+secubox-threats (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Bannir 30 jours depuis /threats/ (#2465) : un bouton par adresse PUBLIQUE des alertes et des
+    indicateurs IP, avec confirmation intégrée à la page (jamais confirm()). Il appelle le
+    POST /api/v1/waf/ban existant (durée 30d), validé par wafctl, qui refuse toujours les adresses
+    privées et locales ; le refus du serveur ou la session manquante sont dits tels quels et le
+    bouton reste utilisable. Aucune adresse privée n'est proposée. Seule écriture de la page.
+    6 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:29:47 +0200
+
 secubox-threats (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)
