@@ -1,3 +1,14 @@
+secubox-wireguard (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /wireguard/ au profil Aurora (#2438) : tuiles, tunnels dépliables, trafic par
+    tunnel, mode ?demo=1 et ?embed=1, libellés en français.
+  * Les deux confirm() natifs sont remplacés par une confirmation intégrée à la page
+    (le navigateur du Hall les ignorait) ; l'avertissement de coupure d'accès pour les
+    tunnels admin/mesh est conservé.
+  * Actions et routes inchangées (/status, /peers, /peer, /interface/<nom>/up|down).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:48:27 +0200
+
 secubox-wireguard (1.1.6-1~bookworm1) bookworm; urgency=high
 
   * wgctl valide ses arguments (#1785) : interfaces [A-Za-z0-9_-]{1,15},
