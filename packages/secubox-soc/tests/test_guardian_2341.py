@@ -85,3 +85,43 @@ def test_la_hauteur_envoyee_ne_depend_pas_de_la_hauteur_de_l_iframe():
     src = (pathlib.Path(__file__).resolve().parents[1] / "www/soc/guardian.html").read_text()
     assert "sbxSocVue:document.documentElement.scrollHeight" not in src
     assert "querySelector('.cadre').getBoundingClientRect()" in src
+
+
+def _navigateur(page, interroger):
+    """Exécute `interroger(page)` dans un thread propre : Playwright (API synchrone) refuse de tourner
+    sous une boucle asyncio, et un test asynchrone voisin peut en laisser une active (#2423)."""
+    import concurrent.futures
+    import pytest
+    sync_api = pytest.importorskip("playwright.sync_api")
+
+    def tache():
+        with sync_api.sync_playwright() as p:
+            try:
+                nav = p.chromium.launch()
+            except Exception as e:
+                return ("skip", f"chromium indisponible : {e}")
+            pg = nav.new_page()
+            erreurs = []
+            pg.on("pageerror", lambda e: erreurs.append(str(e)))
+            pg.goto("file://" + str(page) + "?demo=1")
+            pg.wait_for_timeout(500)
+            r = interroger(pg)
+            nav.close()
+            return ("ok", r, erreurs)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        res = ex.submit(tache).result(timeout=60)
+    if res[0] == "skip":
+        pytest.skip(res[1])
+    return res[1], res[2]
+
+
+def test_appareils_principaux_empiles_par_usage_et_regroupes_2423():
+    """#2423 : barres empilées par type d'usage ; les identités de même adresse de tunnel sont regroupées (déduit) ; aucune erreur JavaScript."""
+    import pathlib
+    page = pathlib.Path(__file__).resolve().parents[1] / "www" / "soc" / "guardian.html"
+    (noms, segments), erreurs = _navigateur(page, lambda pg: (
+        pg.evaluate("[...document.querySelectorAll('#appareils .ligne .n')].map(e => e.textContent.trim())"),
+        pg.evaluate("document.querySelectorAll('#appareils .ligne i').length")))
+    assert erreurs == [], erreurs
+    assert any(n.startswith("Appareil · .204") and "×2" in n for n in noms)   # deux identités sur .204 regroupées
+    assert segments >= 4                                                          # barres empilées : plusieurs types d'usage

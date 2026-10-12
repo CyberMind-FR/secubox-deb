@@ -83,6 +83,21 @@
   .btn[disabled]{opacity:.5;cursor:default}
   .btn.zb.on{background:rgba(41,182,246,.28);border-color:var(--cyan);color:#fff}
   .act .sep{color:var(--doux);font-size:.72rem;margin-right:2px}
+  .rg{display:grid;gap:12px;grid-template-columns:1fr} @container a (min-width:900px){.rg{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}}
+  .rg h4,.zs h4{margin:0 0 6px;font-size:.78rem;color:var(--texte)} .rg h4 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.66rem;margin-left:6px}
+  .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600}
+  .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+  .rc{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));margin-top:12px}
+  .rcl{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);min-width:0}
+  .rt{display:flex;justify-content:space-between;gap:8px;align-items:center} .rt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rb{display:flex;gap:10px;align-items:center;margin:6px 0} .rb svg{flex:none}
+  .rs{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:.72rem;color:var(--doux);font-variant-numeric:tabular-nums}
+  .rm{font-size:.7rem;color:var(--faible);margin-top:4px;overflow-wrap:anywhere}
+  .rd{margin-top:6px;font-size:.7rem} .rd div{display:flex;justify-content:space-between;gap:8px;padding:1px 0} .rd span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--doux)} .rd b{color:var(--texte);font-weight:600;white-space:nowrap}
+  #reelDonut .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} #reelDonut .leg{flex:1 1 180px;min-width:0}
+  #reelDonut .leg div,.rcl .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto auto;gap:6px;align-items:center;font-size:.72rem;padding:1px 0;white-space:nowrap}
+  #reelDonut .leg i,.rcl .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} #reelDonut .leg em,.rcl .leg em{font-style:normal;color:var(--faible)} #reelDonut .leg b{font-weight:600}
+  #reelDonut .leg span,.rcl .leg span{overflow:hidden;text-overflow:ellipsis}
   .zg{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
   .zc{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);min-width:0}
   .zt{display:flex;justify-content:space-between;gap:8px;align-items:baseline} .zt span{color:var(--doux);font-size:.7rem}
@@ -156,6 +171,9 @@
       <div class="pan"><h3>Historique récent <i>événements NAC</i></h3><div id="histo"></div></div>
     </div>
   </div>
+  <div class="pan" style="margin-top:10px"><h3>Clients réels <i id="reelsNote">appareil, identités et activité réunis</i></h3>
+    <div class="rg"><div><h4>Usages <i>octets, tous clients</i></h4><div id="reelDonut"></div></div><div><h4>Clients les plus actifs <i>octets par type d’usage</i></h4><div id="reelHisto"></div></div></div>
+    <div class="rc" id="reelCartes"></div><div class="note" id="reelFoot"></div></div>
   <div class="pan" style="margin-top:10px"><h3>Comportement des zones <i>règles nftables réellement appliquées</i></h3><div id="comport"></div></div>
   <div class="note">Les actions sont réversibles · chaque décision de sécurité est écrite dans le journal d’audit · les conteneurs LXC (pont br-lxc) sont isolés dans leur propre panneau, hors de la liste des appareils.</div>
 </div></div>
@@ -226,7 +244,7 @@
   function normalise(d){
     return ((d&&d.clients&&d.clients.clients)||[]).map(function(c,i){
       var nom=c.custom_hostname||c.hostname||'';
-      return {i:i,mac:String(c.mac||''),ip:String(c.ip||''),nom:nom,fab:c.oui_vendor||'',os:c.os||'',src:c.os_source||'',sub:c.device_subtype||'',
+      return {i:i,cle:String(c.cle||''),mac:String(c.mac||''),ip:String(c.ip||''),nom:nom,fab:c.oui_vendor||'',os:c.os||'',src:c.os_source||'',sub:c.device_subtype||'',
         type:String(c.device_type||'unknown'),zone:String(c.zone||''),on:!!c.online,a:ts(c.first_seen),b:ts(c.last_seen),
         etat:etatDe(c),alea:!!c.mac_random,lxc:!!c.conteneur};
     });
@@ -298,6 +316,78 @@
       t.classList.toggle('on',on);t.setAttribute('aria-pressed',on?'true':'false');
     });
   }
+  /* ===== Clients réels (#2423) : NAC + Toolbox + DPI, joints sur des PREUVES ======================================
+     1. « nac »     : la clé d'appareil de l'identité Toolbox égale celle d'un appareil du NAC (condensat de la MAC) ;
+     2. « adresse » : plusieurs identités ont porté la MÊME adresse de tunnel (le suffixe .NN du nom DPI) : un emplacement WireGuard
+                      réattribué, donc très probablement le même appareil — DÉDUIT, annoncé comme tel ;
+     3. « aucune »  : identité seule. Rien n'est deviné au-delà. */
+  var USAGE={cloud:['Cloud','#a78bfa'],streaming:['Streaming','#ff9f1c'],social:['Réseaux sociaux','#29b6f6'],web:['Web','#2ecc71'],messaging:['Messagerie','#ffd23f'],ai:['IA','#ff4d5e'],other:['Autre','#6f84a8']};
+  function usageMeta(k,i){return USAGE[k]||[k||'Autre',['#6f84a8','#3b82f6','#2ecc71','#ffd23f'][i%4]];}
+  function oct(n){n=num(n);var u=['o','Ko','Mo','Go','To'],i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return (i?n.toFixed(n<10?1:0):String(Math.round(n))).replace('.',',')+' '+u[i];}
+  function suffixe(nom){var m=/·\s*(\.\d+)\s*$/.exec(String(nom||''));return m?m[1]:'';}
+  function agreger(nac,tb,dpi){
+    var parCle={};(nac||[]).forEach(function(d){if(d.cle&&!d.lxc) parCle[d.cle]=d;});
+    var parH={};(tb||[]).forEach(function(r){parH[r.mac_hash]=r;});
+    var ids=(dpi||[]).map(function(c){var r=parH[c.device]||null;return {h:c.device,c:c,tb:r,cle:r&&r.appareil_cle&&parCle[r.appareil_cle]?r.appareil_cle:'',suf:suffixe(c.name)};});
+    var sufCle={};ids.forEach(function(x){if(x.cle&&x.suf) sufCle[x.suf]=x.cle;});
+    var G={},ordre=[];
+    ids.forEach(function(x){
+      var cle=x.cle||(x.suf&&sufCle[x.suf])||'',k,preuve;
+      if(cle){k='n:'+cle;preuve='nac';}
+      else if(x.suf&&ids.filter(function(y){return y.suf===x.suf;}).length>1){k='s:'+x.suf;preuve='adresse';}
+      else{k='h:'+x.h;preuve='aucune';}
+      if(!G[k]){G[k]={k:k,preuve:preuve,cle:cle,suf:x.suf,ids:[],bytes:0,up:0,down:0,flows:0,usages:{},dest:{},pays:{},vu:0};ordre.push(k);}
+      var g=G[k];g.ids.push(x);
+      g.bytes+=num(x.c.bytes);g.up+=num(x.c.up_bytes);g.down+=num(x.c.down_bytes);g.flows+=num(x.c.flows);g.vu=Math.max(g.vu,num(x.c.last_seen));
+      (x.c.usages||[]).forEach(function(u){g.usages[u.name]=(g.usages[u.name]||0)+num(u.bytes);});
+      (x.c.top_dst||[]).forEach(function(d){var kk=d.host;if(!g.dest[kk]) g.dest[kk]={host:d.host,service:d.service,bytes:0};g.dest[kk].bytes+=num(d.bytes);});
+      (x.c.countries||[]).forEach(function(p){if(!g.pays[p.cc]) g.pays[p.cc]={cc:p.cc,flag:p.flag,bytes:0};g.pays[p.cc].bytes+=num(p.bytes);});
+    });
+    var clients=ordre.map(function(k){var g=G[k],d=g.cle?parCle[g.cle]:null;
+      var noms=g.ids.map(function(x){return String(x.c.name||'').replace(/\s*·\s*\.\d+\s*$/,'')||'Identité';});
+      g.nom=d?(d.nom||[d.fab,d.os].filter(Boolean).join(' ')||'Appareil du réseau'):(g.preuve==='adresse'?'Appareil · '+g.suf:(noms[0]+(g.suf?' · '+g.suf:'')));
+      g.materiel=d?[d.fab,d.os,d.type&&d.type!=='unknown'?d.type:''].filter(Boolean).join(' · '):'';
+      g.noms=noms.filter(function(n,i){return noms.indexOf(n)===i;});
+      g.usageL=Object.keys(g.usages).map(function(u,i){var m=usageMeta(u,i);return {k:u,nom:m[0],c:m[1],b:g.usages[u]};}).sort(function(a,b){return b.b-a.b;});
+      g.destL=Object.keys(g.dest).map(function(h){return g.dest[h];}).sort(function(a,b){return b.bytes-a.bytes;}).slice(0,4);
+      g.paysL=Object.keys(g.pays).map(function(c){return g.pays[c];}).sort(function(a,b){return b.bytes-a.bytes;}).slice(0,5);
+      return g;}).sort(function(a,b){return b.bytes-a.bytes;});
+    var glob={};clients.forEach(function(g){g.usageL.forEach(function(u){glob[u.k]=(glob[u.k]||0)+u.b;});});
+    var rattaches=clients.filter(function(g){return g.preuve!=='aucune';}).length;
+    return {clients:clients,glob:glob,rattaches:rattaches,identites:ids.length};
+  }
+  function anneau(parts,tot,taille){
+    var R=46,C=2*Math.PI*R,acc=0,s='<svg viewBox="0 0 120 120" width="'+taille+'" height="'+taille+'" role="img" aria-label="Répartition des usages"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="16"/>';
+    parts.forEach(function(p){var l=C*p.b/tot;s+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+p.c+'" stroke-width="16" stroke-dasharray="'+l.toFixed(2)+' '+(C-l).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+esc(p.nom)+' : '+esc(oct(p.b))+'</title></circle>';acc+=l;});
+    return s+'</svg>';
+  }
+  function barreEmpilee(g,max){
+    var w=max>0?100*g.bytes/max:0;
+    return '<div class="hb" title="'+esc(oct(g.bytes))+'"><div class="hbi" style="width:'+Math.max(2,w).toFixed(1)+'%">'+g.usageL.map(function(u){return '<i style="flex:'+u.b+';background:'+u.c+'" title="'+esc(u.nom+' : '+oct(u.b))+'"></i>';}).join('')+'</div></div>';
+  }
+  var PREUVE={nac:['Appareil du NAC','#2ecc71','Rattaché à un appareil connu du NAC par sa clé (condensat de la MAC).'],adresse:['Même adresse de tunnel','#ff9f1c','DÉDUIT : plusieurs identités ont porté la même adresse de tunnel, donc probablement le même appareil. Ce n’est pas une preuve par la MAC.'],aucune:['Identité seule','#6f84a8','Aucune preuve ne la relie à un appareil du NAC.']};
+  function rendReels(r,L){
+    var note=el('reelsNote'),hist=el('reelHisto'),don=el('reelDonut'),car=el('reelCartes'),pied=el('reelFoot');
+    if(!r||!r.dpi||!r.tb){note.textContent=DONNEES?'indisponible':'session requise';don.innerHTML=hist.innerHTML=car.innerHTML='<div class="vide">'+(DONNEES?'Données DPI ou Toolbox indisponibles.':'Session requise.')+'</div>';pied.textContent='';return;}
+    var A=agreger(L,r.tb,r.dpi);
+    note.textContent=fmt(A.clients.length)+' client'+(A.clients.length>1?'s':'')+' réel'+(A.clients.length>1?'s':'')+' · '+fmt(A.identites)+' identité'+(A.identites>1?'s':'')+' mesurée'+(A.identites>1?'s':'');
+    if(!A.clients.length){don.innerHTML=hist.innerHTML=car.innerHTML='<div class="vide">Aucune activité mesurée par le DPI.</div>';pied.textContent='';return;}
+    var gl=Object.keys(A.glob).map(function(u,i){var m=usageMeta(u,i);return {nom:m[0],c:m[1],b:A.glob[u]};}).sort(function(a,b){return b.b-a.b;}),gt=gl.reduce(function(t,x){return t+x.b;},0);
+    don.innerHTML='<div class="repart">'+(gt>0?anneau(gl,gt,120):'')+'<div class="leg">'+gl.map(function(u){return '<div><i style="background:'+u.c+'"></i><span>'+esc(u.nom)+'</span><b>'+esc(oct(u.b))+'</b><em>'+Math.round(100*u.b/gt)+' %</em></div>';}).join('')+'</div></div>';
+    var top=A.clients.slice(0,8),max=top[0].bytes;
+    hist.innerHTML=top.map(function(g){return '<div class="hl"><span class="hn" title="'+esc(g.nom)+'">'+esc(g.nom)+'</span>'+barreEmpilee(g,max)+'<b>'+esc(oct(g.bytes))+'</b></div>';}).join('');
+    car.innerHTML=A.clients.map(function(g){var P=PREUVE[g.preuve],tot=g.usageL.reduce(function(t,u){return t+u.b;},0);
+      return '<div class="rcl"><div class="rt"><b title="'+esc(g.nom)+'">'+esc(g.nom)+'</b><span class="pil" title="'+esc(P[2])+'" style="color:'+P[1]+';border-color:'+P[1]+';background:'+P[1]+'1f">'+esc(P[0])+'</span></div>'
+        +(g.materiel?'<div class="rm">🖥 '+esc(g.materiel)+'</div>':'')
+        +'<div class="rb">'+(tot>0?anneau(g.usageL,tot,72):'')+'<div class="leg">'+g.usageL.slice(0,4).map(function(u){return '<div><i style="background:'+u.c+'"></i><span>'+esc(u.nom)+'</span><em>'+Math.round(100*u.b/(tot||1))+' %</em></div>';}).join('')+'</div></div>'
+        +'<div class="rs"><span>↑ '+esc(oct(g.up))+'</span><span>↓ '+esc(oct(g.down))+'</span><span>'+fmt(g.flows)+' flux</span><span>'+g.ids.length+' identité'+(g.ids.length>1?'s':'')+'</span></div>'
+        +(g.noms.length>1||g.ids.length>1?'<div class="rm">Identités : '+esc(g.noms.join(', '))+'</div>':'')
+        +(g.destL.length?'<div class="rd">'+g.destL.map(function(d){return '<div><span title="'+esc(d.host+(d.service?' · '+d.service:''))+'">'+esc(d.host)+'</span><b>'+esc(oct(d.bytes))+'</b></div>';}).join('')+'</div>':'')
+        +(g.paysL.length?'<div class="rm">'+g.paysL.map(function(p){return esc((p.flag||'')+' '+p.cc);}).join(' · ')+'</div>':'')+'</div>';}).join('');
+    pied.textContent='Jonction : appareil du NAC par clé (condensat de la MAC), sinon même adresse de tunnel (déduit), sinon identité seule. '+fmt(A.rattaches)+' client'+(A.rattaches>1?'s':'')+' sur '+fmt(A.clients.length)+' relié'+(A.rattaches>1?'s':'')+' à plus d’une identité ou à un appareil. L’activité vient du DPI (octets mesurés), pas du DNS.';
+    hauteur();
+  }
+  window.sbxReels={agreger:agreger};
   var OUI={'oui':['#2ecc71','Oui'],'non':['#ff4d5e','Non'],'partiel':['#ff9f1c','Partiel']};
   function pil(v){var o=OUI[v]||['#9fb3d6',v||'—'];return '<span class="pil" style="color:'+o[0]+';border-color:'+o[0]+';background:'+o[0]+'1f">'+esc(o[1])+'</span>';}
   function rendComport(zi,L){
@@ -335,6 +425,7 @@
      +tuile(IC.os,N(nos),'OS identifiés',ok&&n?Math.round(100*nos/n)+' % · '+fmt(n-nos)+' sans OS':'','Appareils dont l’OS a été déduit d’une preuve (classe DHCP, User-Agent, DNS, nom, mDNS). Le fabricant seul ne donne jamais d’OS.','fo:_oui');
     majFiltreOs(L);
     rendComport(d.zi,LISTE);
+    rendReels(d.reels,LISTE);
     // conteneurs LXC : isolés, lecture seule (pas d’action de quarantaine sur l’infrastructure)
     var enL=LXC.filter(function(r){return r.on;}).length,LX=LXC.slice().sort(function(x,y){return (y.on-x.on)||(x.nom||x.ip).toLowerCase().localeCompare((y.nom||y.ip).toLowerCase());});
     el('lxcNote').textContent=ok?(LXC.length?fmt(enL)+' en ligne sur '+fmt(LXC.length)+' · pont br-lxc':'pont br-lxc'):'pont br-lxc · isolés des appareils';
@@ -373,7 +464,7 @@
       c('02:00:5e:10:00:01','192.0.2.21','poste-compta','Dell','Windows','dhcp-vendor-class','computer','lan','allow',true,60*24*40,1),
       c('02:00:5e:10:00:02','192.0.2.22','portable-alice','Lenovo','Windows','user-agent','laptop','lan','allow',true,60*24*30,3),
       c('02:00:5e:10:00:03','192.0.2.30','tel-alice','','Android 14','dhcp-vendor-class','phone','lan','allow',true,60*24*20,2,{mac_random:1}),
-      c('02:00:5e:10:00:04','192.0.2.31','iphone-bob','Apple','iOS','user-agent','phone','lan','allow',true,60*24*15,8),
+      c('02:00:5e:10:00:04','192.0.2.31','iphone-bob','Apple','iOS','user-agent','phone','lan','allow',true,60*24*15,8,{cle:'demo-iphone'}),
       c('02:00:5e:10:00:05','192.0.2.40','salon-tv','Samsung','','','smart_tv','iot','unknown',true,60*24*60,5),
       c('02:00:5e:10:00:06','192.0.2.41','imprimante-bureau','Brother','','','printer','iot','allow',false,60*24*90,60*30),
       c('02:00:5e:10:00:07','192.0.2.50','nas-atelier','Synology','Linux','dns-domaines','nas','lan','allow',true,60*24*120,1),
@@ -389,7 +480,16 @@
     ];
     cl[10].zone='blocked';
     var ev=function(e,mac,x){return {timestamp:new Date((n-x*60)*1000).toISOString(),event:e,details:{mac:mac}};};
-    return {demo:true,zi:{"zones":{"lan":{"nom":"LAN principal","ensemble":"lan_allowed","internet":"oui","lan":"oui","box_dns_dhcp":"oui","isolement":"aucun","regles":["Appartenance à l'ensemble lan_allowed : aucune règle de restriction."]},"lxc":{"nom":"Conteneurs LXC","ensemble":"lxc_zone","internet":"oui","lan":"oui","box_dns_dhcp":"oui","isolement":"aucun (classement du pont br-lxc)","regles":["Zone de classement des conteneurs du pont br-lxc : aucune règle de restriction propre."]},"iot":{"nom":"IoT isolé","ensemble":"iot_zone","internet":"oui","lan":"non","box_dns_dhcp":"oui","isolement":"LAN privé refusé","regles":["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).","Vers Internet : autorisé."]},"guest":{"nom":"Invités","ensemble":"guest_zone","internet":"oui","lan":"non","box_dns_dhcp":"oui","isolement":"LAN privé refusé","regles":["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).","Vers Internet : autorisé."]},"quarantine":{"nom":"Quarantaine","ensemble":"quarantine_zone","internet":"non","lan":"non","box_dns_dhcp":"partiel","isolement":"total","regles":["Vers la box : DNS (53) et DHCP (67, 68) seulement, le reste est refusé.","Vers tout autre réseau (transit) : refusé."]},"blocked":{"nom":"Bloqué","ensemble":"blocked","internet":"non","lan":"non","box_dns_dhcp":"non","isolement":"total","regles":["Entrée vers la box, sortie et entrée en transit : refusées."]}},"analyse":[{"nom":"Analyse du trafic (DPI)","etat":"actif","portee":"tout le trafic vu par nDPId sur l'interface capturée, quelle que soit la zone"},{"nom":"Filtrage et suivi DNS (ad-guard)","etat":"actif","portee":"appareils qui interrogent le résolveur de la box"},{"nom":"Quarantaine automatique (Actor Intelligence)","etat":"selon le mode","portee":"isole un appareil sur preuves concordantes de deux capteurs au moins ; mode lisible sur la page"}],"hors_zone":[{"nom":"VPN (tunnel WireGuard) et Tor","ou":"Toolbox : niveau R0 à R3 choisi par client, pas par zone"}],"indisponible":[{"nom":"Puits DNS (DNS hole) pour la quarantaine","detail":"la quarantaine laisse passer DNS et DHCP vers la box mais ne détourne rien"},{"nom":"Parking / page de redirection de quarantaine","detail":"aucune redirection : un appareil en quarantaine n'est simplement pas routé"},{"nom":"Zone de repli (fallback) automatique","detail":"la zone par défaut d'un appareil neuf est la quarantaine (politique), pas un repli"},{"nom":"Tor ou VPN imposé par zone","detail":"se règle par client dans le Toolbox"}]},data:{status:{nftables_ok:true,dnsmasq_ok:true},clients:{clients:cl},quarantine:{clients:[]},policy:{default_zone:'quarantine',auto_approve:false,quarantine_timeout:0},
+    return {demo:true,reels:{tb:[
+      {mac_hash:'aaaa000000000001',tunnel:'actif',ip:'10.99.1.75',appareil_cle:'demo-iphone'},
+      {mac_hash:'aaaa000000000002',tunnel:'inactif',ip:'10.99.1.75',appareil_cle:''},
+      {mac_hash:'aaaa000000000003',tunnel:'inactif',ip:'10.99.1.75',appareil_cle:''},
+      {mac_hash:'bbbb000000000001',tunnel:'actif',ip:'10.99.1.89',appareil_cle:''}],
+    dpi:[
+      {device:'aaaa000000000001',name:'iPhone · .75',bytes:51096248,up_bytes:41000000,down_bytes:10096248,flows:8100,first_seen:1791700000,last_seen:1791783000,usages:[{name:'streaming',bytes:30000000},{name:'cloud',bytes:14000000},{name:'social',bytes:5000000},{name:'web',bytes:2096248}],top_dst:[{host:'video.exemple.test',bytes:22000000,service:'CDN exemple'},{host:'cloud.exemple.test',bytes:9000000,service:'Cloud exemple'}],countries:[{cc:'FR',flag:'🇫🇷',name:'France',bytes:30000000},{cc:'IE',flag:'🇮🇪',name:'Irlande',bytes:12000000}]},
+      {device:'aaaa000000000002',name:'Android · .75',bytes:12400000,up_bytes:9000000,down_bytes:3400000,flows:2100,first_seen:1791600000,last_seen:1791690000,usages:[{name:'cloud',bytes:8000000},{name:'web',bytes:4400000}],top_dst:[{host:'cloud.exemple.test',bytes:7000000,service:'Cloud exemple'}],countries:[{cc:'IE',flag:'🇮🇪',name:'Irlande',bytes:8000000}]},
+      {device:'aaaa000000000003',name:'Navigateur · .75',bytes:3200000,up_bytes:1200000,down_bytes:2000000,flows:900,first_seen:1791500000,last_seen:1791550000,usages:[{name:'web',bytes:2400000},{name:'ai',bytes:800000}],top_dst:[{host:'api.exemple.test',bytes:2000000,service:'API exemple'}],countries:[{cc:'US',flag:'🇺🇸',name:'États-Unis',bytes:2000000}]},
+      {device:'bbbb000000000001',name:'Linux · .89',bytes:25840428,up_bytes:20000000,down_bytes:5840428,flows:3250,first_seen:1791650000,last_seen:1791783300,usages:[{name:'cloud',bytes:21000000},{name:'messaging',bytes:3000000},{name:'web',bytes:1840428}],top_dst:[{host:'depot.exemple.test',bytes:18000000,service:'Dépôt exemple'}],countries:[{cc:'FR',flag:'🇫🇷',name:'France',bytes:19000000}]}]},zi:{"zones":{"lan":{"nom":"LAN principal","ensemble":"lan_allowed","internet":"oui","lan":"oui","box_dns_dhcp":"oui","isolement":"aucun","regles":["Appartenance à l'ensemble lan_allowed : aucune règle de restriction."]},"lxc":{"nom":"Conteneurs LXC","ensemble":"lxc_zone","internet":"oui","lan":"oui","box_dns_dhcp":"oui","isolement":"aucun (classement du pont br-lxc)","regles":["Zone de classement des conteneurs du pont br-lxc : aucune règle de restriction propre."]},"iot":{"nom":"IoT isolé","ensemble":"iot_zone","internet":"oui","lan":"non","box_dns_dhcp":"oui","isolement":"LAN privé refusé","regles":["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).","Vers Internet : autorisé."]},"guest":{"nom":"Invités","ensemble":"guest_zone","internet":"oui","lan":"non","box_dns_dhcp":"oui","isolement":"LAN privé refusé","regles":["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).","Vers Internet : autorisé."]},"quarantine":{"nom":"Quarantaine","ensemble":"quarantine_zone","internet":"non","lan":"non","box_dns_dhcp":"partiel","isolement":"total","regles":["Vers la box : DNS (53) et DHCP (67, 68) seulement, le reste est refusé.","Vers tout autre réseau (transit) : refusé."]},"blocked":{"nom":"Bloqué","ensemble":"blocked","internet":"non","lan":"non","box_dns_dhcp":"non","isolement":"total","regles":["Entrée vers la box, sortie et entrée en transit : refusées."]}},"analyse":[{"nom":"Analyse du trafic (DPI)","etat":"actif","portee":"tout le trafic vu par nDPId sur l'interface capturée, quelle que soit la zone"},{"nom":"Filtrage et suivi DNS (ad-guard)","etat":"actif","portee":"appareils qui interrogent le résolveur de la box"},{"nom":"Quarantaine automatique (Actor Intelligence)","etat":"selon le mode","portee":"isole un appareil sur preuves concordantes de deux capteurs au moins ; mode lisible sur la page"}],"hors_zone":[{"nom":"VPN (tunnel WireGuard) et Tor","ou":"Toolbox : niveau R0 à R3 choisi par client, pas par zone"}],"indisponible":[{"nom":"Puits DNS (DNS hole) pour la quarantaine","detail":"la quarantaine laisse passer DNS et DHCP vers la box mais ne détourne rien"},{"nom":"Parking / page de redirection de quarantaine","detail":"aucune redirection : un appareil en quarantaine n'est simplement pas routé"},{"nom":"Zone de repli (fallback) automatique","detail":"la zone par défaut d'un appareil neuf est la quarantaine (politique), pas un repli"},{"nom":"Tor ou VPN imposé par zone","detail":"se règle par client dans le Toolbox"}]},data:{status:{nftables_ok:true,dnsmasq_ok:true},clients:{clients:cl},quarantine:{clients:[]},policy:{default_zone:'quarantine',auto_approve:false,quarantine_timeout:0},
       history:{events:[ev('client_banned','02:00:5e:10:00:0b',3000),ev('client_joined','02:00:5e:10:00:0a',2800),ev('client_joined','02:00:5e:10:00:08',40),ev('client_moved','02:00:5e:10:00:09',90),ev('client_joined','02:00:5e:10:00:09',95)]}}};
   })();
 
@@ -407,12 +507,14 @@
     if(t) h['Authorization']='Bearer '+t;
     return fetch(API+path,Object.assign({credentials:'include',cache:'no-store'},opts,{headers:h}));
   }
+  function jabs(url){var t=jeton(),h={'Accept':'application/json'};if(t) h['Authorization']='Bearer '+t;
+    return fetch(url,{headers:h,credentials:'include',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function jget(path){return api(path).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     if(DEMOMODE){return;}
-    Promise.all([jget('/status'),jget('/clients'),jget('/quarantine'),jget('/policy'),jget('/history?limit=30'),jget('/zone_behaviors')]).then(function(r){
+    Promise.all([jget('/status'),jget('/clients'),jget('/quarantine'),jget('/policy'),jget('/history?limit=30'),jget('/zone_behaviors'),jabs('/api/v1/toolbox/admin/clients/rich'),jabs('/api/v1/dpi/pub/clients')]).then(function(r){
       var ok=r[1]&&Array.isArray(r[1].clients);
-      rend({data:ok?{status:r[0],clients:r[1],quarantine:r[2],policy:r[3],history:r[4]}:null,zi:r[5]});
+      rend({data:ok?{status:r[0],clients:r[1],quarantine:r[2],policy:r[3],history:r[4]}:null,zi:r[5],reels:{tb:r[6]&&Array.isArray(r[6].clients)?r[6].clients:null,dpi:Array.isArray(r[7])?r[7]:null}});
       heure();hauteur();
     });
   }

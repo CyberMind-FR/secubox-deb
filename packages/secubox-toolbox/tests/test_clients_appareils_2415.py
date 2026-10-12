@@ -59,3 +59,9 @@ def test_page_ecarte_les_identites_sans_tunnel_et_regroupe_par_appareil():
     src = (pathlib.Path(__file__).resolve().parents[1] / "www" / "toolbox" / "clients.html").read_text(encoding="utf-8")
     assert "function base()" in src and "c.tunnel==='aucun'" in src
     assert "appareil_cle" in src and "Identités sans tunnel" in src
+
+
+def test_cle_d_appareil_figee_identique_a_celle_du_nac(tmp_path, monkeypatch):
+    # Même valeur figée dans packages/secubox-nac/tests/test_clients_reels_2423.py : la jonction NAC ↔ Toolbox repose dessus.
+    _nac(tmp_path, monkeypatch, [("aa:bb:cc:dd:ee:01", "192.168.1.89", "iphone-exemple", "Apple", "iOS", "phone")])
+    assert appareils.rattacher(["192.168.1.89"])["cle"] == "077a24919e64"

@@ -1,3 +1,9 @@
+secubox-nac (3.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: panneau Clients reels : l appareil du NAC, ses identites Toolbox et son activite DPI reunis sur des preuves (cle d appareil = condensat de la MAC, sinon meme adresse de tunnel annoncee comme deduite, sinon identite seule), camembert global des usages, histogramme des clients actifs par type d usage et fiche par client ; la liste /clients porte la cle de jonction (ref #2423)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 07:42:37 +0200
+
 secubox-nac (3.6.1-1~bookworm1) bookworm; urgency=medium
 
   * feat: les tuiles de synthese de la page deviennent des boutons de filtre (Connectes, Inconnus, En quarantaine, Autorises, OS identifies ; Appareils remet tout a zero), la tuile active suit les listes deroulantes (ref #2421)
