@@ -88,6 +88,9 @@
         .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
         .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
         .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
         svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
     </style>
 </head>
@@ -127,6 +130,25 @@
         <div class="grille g2">
             <div class="pan"><h3>Niveau d’inspection par pair <i>off · passive · active · reel</i></h3><div id="niveaux"><div class="vide">—</div></div><div class="peer-note" id="niveauxNote"></div></div>
             <div class="pan"><h3>Répartition par moteur</h3><div id="parMoteur"><div class="vide">—</div></div></div>
+        </div>
+
+        <div class="pan"><h3>Classes nDPI <i id="dpiNote">protocoles et applications reconnus par le moteur DPI</i></h3>
+            <div class="tuiles" style="margin-bottom:8px">
+                <div class="tuile"><div class="l">Volume total</div><div class="v" id="dTot">—</div></div>
+                <div class="tuile"><div class="l">Sortant</div><div class="v" id="dOut">—</div></div>
+                <div class="tuile"><div class="l">Entrant</div><div class="v" id="dIn">—</div></div>
+                <div class="tuile"><div class="l">Flux</div><div class="v" id="dFlux">—</div></div>
+            </div>
+            <div class="g3">
+                <div><div class="ml" style="margin-bottom:4px">Protocoles</div><div id="dProto"><div class="vide">—</div></div></div>
+                <div><div class="ml" style="margin-bottom:4px">Applications</div><div id="dApps"><div class="vide">—</div></div></div>
+                <div><div class="ml" style="margin-bottom:4px">Catégories</div><div id="dCats"><div class="vide">—</div></div></div>
+            </div>
+        </div>
+
+        <div class="grille" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
+            <div class="pan"><h3>Sorties <i>pays des destinations, par volume</i></h3><div class="carte"><svg class="monde" id="mondeOut" viewBox="0 0 120 60" role="img" aria-label="Carte des pays de destination du trafic"></svg></div><div class="pays" id="paysOut"></div><div class="peer-note" id="noteOut"></div></div>
+            <div class="pan"><h3>Entrées <i>pays des visiteurs (7 jours)</i></h3><div class="carte"><svg class="monde" id="mondeIn" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des visiteurs"></svg></div><div class="pays" id="paysIn"></div><div class="peer-note" id="noteIn"></div></div>
         </div>
 
         <div class="pan"><h3>Exclusions <i>ce que l’inspection ne déchiffre pas</i></h3>
@@ -193,7 +215,8 @@
             z.innerHTML = svg;   // uniquement des nombres calculés ici : aucune donnée de l'API n'entre dans ce balisage
         }
 
-        function barres(el, items, couleur, videMsg) {
+        function barres(el, items, couleur, videMsg, f) {
+            f = f || fmt;
             el.replaceChildren();
             if (!items.length) { vide(el, videMsg); return; }
             const max = Math.max(1, ...items.map(x => x[1]));
@@ -201,8 +224,8 @@
                 const l = document.createElement('div'); l.className = 'hl';
                 const h = document.createElement('span'); h.className = 'hn'; h.textContent = nom; h.title = nom;
                 const b = document.createElement('div'); b.className = 'hb'; const i = document.createElement('div'); i.className = 'hbi'; i.style.width = Math.max(3, 100 * n / max) + '%';
-                const f = document.createElement('i'); f.style.flex = '1'; f.style.background = couleur; i.append(f); b.append(i);
-                const t = document.createElement('b'); t.textContent = fmt(n); l.append(h, b, t); el.append(l);
+                const seg = document.createElement('i'); seg.style.flex = '1'; seg.style.background = couleur; i.append(seg); b.append(i);
+                const t = document.createElement('b'); t.textContent = f(n); l.append(h, b, t); el.append(l);
             }
         }
 
@@ -241,9 +264,51 @@
             liste($('bypass'), $('nByp'), s ? null : e.bypass); liste($('splice'), $('nSpl'), s ? null : e.splice);
         }
 
+
+        // ── nDPI et cartes ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
+  var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
+        const num = v => (isFinite(+v) ? +v : 0);
+        function octets(b) { if (b == null) return '—'; b = Number(b) || 0; const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return (i ? b.toFixed(b < 10 ? 1 : 0) : b) .toString().replace('.', ',') + ' ' + u[i]; }
+        function drapeau(c) { return /^[A-Z]{2}$/.test(c) ? String.fromCodePoint(127397 + c.charCodeAt(0), 127397 + c.charCodeAt(1)) : ''; }
+        // Grille de 60 × 120 points de 3° ; un cercle au centre du pays, rayon en racine du volume. Rien d'inventé : sans pays, carte vide.
+        function carte(idSvg, idListe, idNote, pays, rgb, gid, vide, note, fmtN) {
+            const svg = document.getElementById(idSvg), L = document.getElementById(idListe);
+            let s = '<defs><radialGradient id="' + gid + '"><stop offset="0" stop-color="' + rgb + '" stop-opacity=".95"/><stop offset="1" stop-color="' + rgb + '" stop-opacity="0"/></radialGradient></defs><rect width="120" height="60" fill="rgba(6,13,27,.5)"/>';
+            TERRE.split('|').forEach((l, j) => { let cur = l.charAt(0) === '1', x = 0; l.slice(1).split(',').forEach(n => { n = +n; if (cur) for (let i = 0; i < n; i++) s += '<circle cx="' + (x + i + .5) + '" cy="' + (j + .5) + '" r=".42" fill="#33507f"/>'; x += n; cur = !cur; }); });
+            const P = (pays || []).filter(p => CENTRE[String(p.code).toUpperCase()]).sort((a, b) => num(b.n) - num(a.n));
+            const max = Math.max(1, ...P.map(p => num(p.n)));
+            P.forEach(p => { const c = CENTRE[String(p.code).toUpperCase()]; s += '<circle cx="' + ((c[1] + 180) / 3).toFixed(1) + '" cy="' + ((90 - c[0]) / 3).toFixed(1) + '" r="' + (1.4 + 3.4 * Math.sqrt(num(p.n) / max)).toFixed(1) + '" fill="url(#' + gid + ')"><title>' + String(p.code).toUpperCase().replace(/[^A-Z]/g, '') + ' : ' + fmtN(p.n) + '</title></circle>'; });
+            svg.innerHTML = s;      // uniquement des nombres et des codes pays [A-Z] filtrés ici : aucune chaîne de l'API n'entre dans ce balisage
+            L.replaceChildren();
+            if (!P.length) { const d = document.createElement('div'); d.className = 'vide'; d.textContent = '— ' + vide; L.append(d); }
+            P.slice(0, 8).forEach(p => { const d = document.createElement('div'), a = document.createElement('span'), b = document.createElement('b'); const cc = String(p.code).toUpperCase(); a.textContent = drapeau(cc) + ' ' + cc; b.textContent = fmtN(p.n); d.append(a, b); L.append(d); });
+            document.getElementById(idNote).textContent = P.length ? 'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.' : note;
+        }
+
+        function rendreDpi(s) {
+            const ok = s && !s._session && s.connected !== false;
+            const ou = (v, f) => (ok && v != null ? f(v) : '—');
+            $('dTot').textContent = ou(s && s.total_bytes, octets); $('dOut').textContent = ou(s && s.out_bytes, octets); $('dIn').textContent = ou(s && s.in_bytes, octets); $('dFlux').textContent = ou(s && s.total_flows, fmt);
+            const liste = (id, L) => barres($(id), ok ? (L || []).slice(0, 10).map(x => [x.name, num(x.bytes != null ? x.bytes : x.flows)]) : [], '#a78bfa', ok ? 'Aucune donnée.' : (s && s._session ? 'Session requise.' : 'Moteur DPI illisible.'), octets);
+            liste('dProto', s && s.protocols); liste('dApps', s && s.apps); liste('dCats', s && s.categories);
+        }
+        function rendreCartes(c, v) {
+            const sorties = Array.isArray(c) ? c.map(x => ({ code: x.cc, n: num(x.bytes) })) : null;
+            carte('mondeOut', 'paysOut', 'noteOut', sorties, '#ffd23f', 'lueurOut', 'aucune destination géolocalisée', c && c._session ? 'Session requise.' : 'Géolocalisation des destinations indisponible (moteur DPI ou base absente).', octets);
+            let agg = null;
+            if (v && !v._session && Array.isArray(v.vhosts)) { const m = {}; v.vhosts.forEach(h => (h.pays || []).forEach(p => { m[p.code] = (m[p.code] || 0) + num(p.n); })); agg = Object.keys(m).map(k => ({ code: k, n: m[k] })); }
+            carte('mondeIn', 'paysIn', 'noteIn', agg, '#29b6f6', 'lueurIn', 'aucune visite géolocalisée', v && v._session ? 'Session requise.' : 'Aucune visite géolocalisée sur la période (route indisponible ou trafic privé).', x => fmt(x) + ' visites');
+        }
+        async function lireAilleurs(url) {
+            if (DEMO) return demoAilleurs(url);
+            try { const r = await fetch(url, { headers: entetes() }); if (r.status === 401) return { _session: true }; return r.ok ? await r.json() : null; } catch (e) { return null; }
+        }
+
         async function rafraichir() {
-            const [m, a, n, e] = await Promise.all([lire('/moteurs'), lire('/activite?minutes=' + minutes), lire('/niveaux'), lire('/exclusions')]);
-            rendreMoteurs(m); rendreActivite(a); rendreNiveaux(n); rendreExclusions(e);
+            const [m, a, n, e, s, c, v] = await Promise.all([lire('/moteurs'), lire('/activite?minutes=' + minutes), lire('/niveaux'), lire('/exclusions'),
+                lireAilleurs('/api/v1/dpi/pub/stats'), lireAilleurs('/api/v1/dpi/pub/countries'), lireAilleurs('/api/v1/metrics/vhost-stats?periode=semaine')]);
+            rendreMoteurs(m); rendreActivite(a); rendreNiveaux(n); rendreExclusions(e); rendreDpi(s); rendreCartes(c, v);
             $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             hauteur();
         }
@@ -270,6 +335,13 @@
             if (e === '/activite') { const m = +(new URLSearchParams(chemin.split('?')[1]).get('minutes')) || 60; const serie = Array.from({ length: m }, (_, i) => Math.round(8 + 6 * Math.sin(i / 5) + (i % 7))); return rep({ disponible: true, minutes: m, total: serie.reduce((a, b) => a + b, 0), hotes_distincts: 41, empreintes_distinctes: 17, serie, top_hotes: [['cdn.exemple.test', 212], ['api.exemple.test', 160], ['mail.exemple.test', 96], ['<img src=x onerror=alert(1)>', 31]].map(([hote, n]) => ({ hote, n })), par_moteur: { 1: 180, 2: 200, 3: 150 } }); }
             if (e === '/niveaux') return rep({ defaut: { mode: 'reel', floor: 'passive' }, pairs: 6, repartition_pairs: { reel: 3, passive: 2, 'défaut': 1 }, niveaux_clients: null, evenements_7j: 2249 });
             if (e === '/exclusions') return rep({ bypass: ['(.+\\.)?banque\\.exemple\\.test', '(.+\\.)?messagerie\\.exemple\\.test'], splice: ['api.exemple.test', 'assistant.exemple.test'], filtres_desactives: [] });
+            return rep(null);
+        }
+        function demoAilleurs(u) {
+            const rep = d => Promise.resolve(d);
+            if (u.includes('/dpi/pub/stats')) return rep({ connected: true, total_bytes: 6.9e11, out_bytes: 5.4e10, in_bytes: 2.6e11, total_flows: 3.2e7, protocols: [['TLS', 5.9e11], ['SOCKS', 4.1e10], ['RTP', 2.9e10], ['HTTP', 4.4e9], ['DNS', 1.8e9]].map(([name, bytes]) => ({ name, bytes })), apps: [['TLS.YouTube', 1.1e10], ['TLS.Apple', 8e9], ['TLS.Tor', 4e9], ['<img src=x onerror=alert(1)>', 1e9]].map(([name, bytes]) => ({ name, bytes })), categories: [['Web', 5.8e11], ['VPN', 4.4e10], ['Media', 4.1e10]].map(([name, bytes]) => ({ name, bytes })) });
+            if (u.includes('/dpi/pub/countries')) return rep([['US', 4e11], ['IE', 9e10], ['DE', 6e10], ['FR', 5e10], ['NL', 3e10], ['SG', 1e10]].map(([cc, bytes]) => ({ cc, bytes })));
+            if (u.includes('vhost-stats')) return rep({ vhosts: [{ vhost: 'www.exemple.test', pays: [{ code: 'FR', n: 9400 }, { code: 'DE', n: 1200 }, { code: 'US', n: 980 }, { code: 'BR', n: 310 }] }] });
             return rep(null);
         }
         if (DEMO) $('demo').hidden = false;

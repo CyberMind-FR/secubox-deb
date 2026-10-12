@@ -714,3 +714,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Hall à l'adresse IP, routes aussi dans secubox-routes.d (closes #2451)
 - secubox-webos 1.9.9 : fragment hall-racine.conf livré dans secubox-routes.d (vhost webui) en plus des mêmes lignes dans webos.conf (secubox.d). Cause trouvée en vérifiant sur gk2 après un redémarrage réel de nginx.
+
+## 2026-10-12 — Interceptor, classes nDPI et cartes du monde (closes #2453)
+- secubox-interceptor 2.1.0 : panneau nDPI (protocoles, applications, catégories, volumes) et cartes des sorties (DPI) et des entrées (visiteurs).

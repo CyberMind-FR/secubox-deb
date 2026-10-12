@@ -84,3 +84,31 @@ def test_source_illisible_donne_des_tirets_pas_des_zeros():
     if r is None:
         pytest.skip("chromium indisponible")
     assert r == ["—"] * 5
+
+
+def test_classes_ndpi_et_cartes_du_monde_2453():
+    def scenario(pg):
+        pg.wait_for_selector("#dProto .hl")
+        return (pg.inner_text("#dTot"), pg.locator("#dProto .hl").count(), pg.inner_text("#dProto .hl b"),
+                pg.locator("#mondeOut circle").count() > 300, pg.locator("#paysOut div").count(), pg.locator("#paysIn div").count(),
+                pg.evaluate("document.getElementById('dApps').textContent.includes('<img src=x onerror=alert(1)>')"), pg.locator("#dApps img").count())
+    (tot, nproto, vol, terre, nout, nin, texte, imgs), erreurs, natifs = _navigateur(scenario)
+    assert tot.endswith("Go") and nproto == 5 and vol.endswith("Go") and terre and nout == 6 and nin == 4 and texte and imgs == 0 and erreurs == [] and natifs == []
+
+
+def test_sans_source_les_cartes_sont_vides_et_les_volumes_en_tiret_2453():
+    def tache():
+        with sync_api.sync_playwright() as p:
+            try:
+                nav = p.chromium.launch()
+            except Exception:
+                return None
+            pg = nav.new_page(); pg.route("**/api/**", lambda r: r.fulfill(status=500, body="{}"))
+            pg.goto("file://" + str(PAGE)); pg.wait_for_timeout(600)
+            r = [pg.inner_text(i) for i in ("#dTot", "#dOut", "#dIn", "#dFlux")] + [pg.inner_text("#noteOut")[:30], str(pg.locator("#paysOut .vide").count())]
+            nav.close(); return r
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        r = ex.submit(tache).result(timeout=60)
+    if r is None:
+        pytest.skip("chromium indisponible")
+    assert r[:4] == ["—"] * 4 and r[4].startswith("Géolocalisation") and r[5] == "1"
