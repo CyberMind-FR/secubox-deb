@@ -78,6 +78,16 @@
   .btn.dg{background:rgba(255,77,94,.14);border-color:var(--rouge);color:var(--rouge)}
   .btn.ok{background:rgba(46,204,113,.14);border-color:var(--vert);color:var(--vert)}
   .btn[disabled]{opacity:.5;cursor:default}
+  .btn.zb.on{background:rgba(41,182,246,.28);border-color:var(--cyan);color:#fff}
+  .act .sep{color:var(--doux);font-size:.72rem;margin-right:2px}
+  .zg{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+  .zc{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);min-width:0}
+  .zt{display:flex;justify-content:space-between;gap:8px;align-items:baseline} .zt span{color:var(--doux);font-size:.7rem}
+  .zp{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0;font-size:.72rem;color:var(--doux)}
+  .zi{font-size:.74rem;color:var(--doux)} .zi b{color:var(--texte)}
+  .zc ul{margin:6px 0 0;padding-left:16px;font-size:.7rem;color:var(--faible)}
+  .zs{margin-top:10px;font-size:.74rem} .zs h4{margin:0 0 4px;font-size:.78rem;color:var(--texte)} .zs div{display:flex;flex-wrap:wrap;gap:2px 8px;padding:2px 0} .zs small{color:var(--faible);flex-basis:100%}
+  .zs.nd b{color:var(--faible);font-weight:600} .zs.nd{opacity:.85}
   .conf{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.08);border-radius:8px;padding:6px 9px;font-size:.76rem}
   .conf span{flex:1 1 180px;min-width:0}
   .msg{border-radius:8px;padding:5px 9px;font-size:.76rem;margin-bottom:8px;border:1px solid var(--vert);background:rgba(46,204,113,.1);color:var(--vert)}
@@ -143,6 +153,7 @@
       <div class="pan"><h3>Historique récent <i>événements NAC</i></h3><div id="histo"></div></div>
     </div>
   </div>
+  <div class="pan" style="margin-top:10px"><h3>Comportement des zones <i>règles nftables réellement appliquées</i></h3><div id="comport"></div></div>
   <div class="note">Les actions sont réversibles · chaque décision de sécurité est écrite dans le journal d’audit · les conteneurs LXC (pont br-lxc) sont isolés dans leur propre panneau, hors de la liste des appareils.</div>
 </div></div>
 </main>
@@ -244,14 +255,17 @@
     var et=ETATS[r.etat],z=ZONES[r.zone]||[r.zone||'—','#9fb3d6'],oc=r.os?couleurOs(famille(r.os)):'#6f84a8';
     var nom=r.nom||(r.lxc?'Conteneur LXC':'Appareil sans nom');
     var cn=ETAT.conf&&ETAT.conf.i===r.i;
-    var act=r.etat==='quarantaine'?{lib:'🔓 Libérer',cls:'ok',v:'unq'}:{lib:'🔒 Mettre en quarantaine',cls:'dg',v:'qua'};
+    var act=r.etat==='quarantaine'?{lib:'🔓 Libérer',cls:'ok',v:'unq'}:{lib:'🔒 Quarantaine',cls:'dg',v:'qua'};
     return '<div class="app-c'+(r.etat==='quarantaine'?' q':'')+'"><div class="id"><span class="ty" title="Type : '+esc(r.type)+'">'+(TYPE_ICON[r.type]||'🔌')+'</span><div><b title="'+esc(nom)+'">'+esc(nom)+'</b><span class="fab">'+esc(r.fab||'Fabricant inconnu')+(r.alea?' · MAC aléatoire':'')+'</span></div></div>'
       +'<div class="meta"><span>IP <code>'+esc(r.ip||'—')+'</code></span><span title="Adresse MAC tronquée">MAC <code>'+esc(macCourt(r.mac))+'</code></span><span>Zone : '+esc(z[0])+'</span><span title="'+esc(plein(r.b))+'">Vu : '+esc(rel(r.b))+'</span></div>'
       +'<div class="tags"><span class="pil" style="color:'+et[1]+';border-color:'+et[1]+';background:'+et[1]+'1f">'+esc(et[0])+'</span>'
       +'<span class="pil" style="color:'+(r.on?'#2ecc71':'#9fb3d6')+';border-color:'+(r.on?'#2ecc71':'#6f84a8')+';background:'+(r.on?'rgba(46,204,113,.12)':'rgba(159,179,214,.1)')+'">'+(r.on?'Connecté':'Hors ligne')+'</span>'
       +'<span class="pil" style="color:'+oc+';border-color:'+oc+';background:'+oc+'1f" title="'+esc(r.os?('OS déduit'+(r.src?' — preuve : '+r.src:'')):'Aucune preuve d’OS : non identifié')+'">'+esc(r.os||'OS non identifié')+(r.sub?' · '+esc(r.sub):'')+'</span></div>'
-      +(cn?'<div class="conf" role="alertdialog" aria-label="Confirmation"><span>'+(ETAT.conf.v==='qua'?'Mettre en quarantaine « '+esc(nom)+' » ? Il perd l’accès au LAN.':'Libérer « '+esc(nom)+' » de la quarantaine ? Il retourne sur le LAN.')+'</span><button type="button" class="btn '+act.cls+'" data-ok="'+r.i+'">Confirmer</button><button type="button" class="btn" data-ko="1">Annuler</button></div>'
-        :'<div class="act"><button type="button" class="btn '+act.cls+'" data-act="'+act.v+'" data-i="'+r.i+'" title="'+(DEMOMODE?'Inerte en démonstration':'')+'">'+act.lib+'</button></div>')
+      +(cn?'<div class="conf" role="alertdialog" aria-label="Confirmation"><span>'+esc(texteConf(ETAT.conf.v,nom))+'</span><button type="button" class="btn '+(/^(qua|deny)$/.test(ETAT.conf.v)?'dg':'ok')+'" data-ok="'+r.i+'">Confirmer</button><button type="button" class="btn" data-ko="1">Annuler</button></div>'
+        :'<div class="act"><span class="sep">Affecter à :</span>'+['lan','iot','guest'].map(function(z){var cur=r.zone===z;return '<button type="button" class="btn zb'+(cur?' on':'')+'" data-act="zone:'+z+'" data-i="'+r.i+'"'+(cur?' disabled aria-pressed="true"':'')+' title="'+(cur?'Zone actuelle':'Affecter à la zone '+esc(ZONES[z][0]))+'">'+esc(ZONES[z][0])+'</button>';}).join('')
+        +'<button type="button" class="btn '+act.cls+'" data-act="'+act.v+'" data-i="'+r.i+'" title="'+(DEMOMODE?'Inerte en démonstration':'')+'">'+act.lib+'</button>'
+        +(r.etat==='autorise'?'':'<button type="button" class="btn ok" data-act="allow" data-i="'+r.i+'" title="Décision explicite : autorisé">✅ Autoriser</button>')
+        +(r.etat==='bloque'?'':'<button type="button" class="btn dg" data-act="deny" data-i="'+r.i+'" title="Coupe tout accès à l’appareil">⛔ Bloquer</button>')+'</div>')
       +'</div>';
   }
   function liste(){
@@ -266,6 +280,23 @@
     L.forEach(function(r){if(r.os) fam[famille(r.os)]=1;else aucun++;});
     var h='<option value="">Tous OS</option>'+Object.keys(fam).sort().map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('')+(aucun?'<option value="_aucun">Non identifié</option>':'');
     if(s.getAttribute('data-h')!==h){s.innerHTML=h;s.setAttribute('data-h',h);s.value=cur;}
+  }
+  var OUI={'oui':['#2ecc71','Oui'],'non':['#ff4d5e','Non'],'partiel':['#ff9f1c','Partiel']};
+  function pil(v){var o=OUI[v]||['#9fb3d6',v||'—'];return '<span class="pil" style="color:'+o[0]+';border-color:'+o[0]+';background:'+o[0]+'1f">'+esc(o[1])+'</span>';}
+  function rendComport(zi,L){
+    var b=el('comport');
+    if(!zi||!zi.zones){b.innerHTML='<div class="vide">'+(DONNEES?'Comportement des zones indisponible.':'Session requise.')+'</div>';return;}
+    var nz={};(L||[]).forEach(function(r){var k=r.etat==='bloque'?'blocked':r.zone;nz[k]=(nz[k]||0)+1;});
+    var ordre=['lan','iot','guest','quarantine','blocked','lxc'];
+    var h='<div class="zg">'+ordre.filter(function(k){return zi.zones[k];}).map(function(k){var z=zi.zones[k];
+      return '<div class="zc"><div class="zt"><b>'+esc(z.nom)+'</b><span>'+fmt(nz[k]||0)+' appareil'+((nz[k]||0)>1?'s':'')+'</span></div>'
+        +'<div class="zp"><span>Internet '+pil(z.internet)+'</span><span>LAN privé '+pil(z.lan)+'</span><span>DNS/DHCP de la box '+pil(z.box_dns_dhcp)+'</span></div>'
+        +'<div class="zi">Isolement : <b>'+esc(z.isolement)+'</b></div>'
+        +'<ul>'+(z.regles||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div>';
+    h+='<div class="zs"><h4>Analyse, quelle que soit la zone</h4>'+(zi.analyse||[]).map(function(a){return '<div><b>'+esc(a.nom)+'</b> <span class="pil" style="color:#29b6f6;border-color:#29b6f6;background:#29b6f61f">'+esc(a.etat)+'</span><small>'+esc(a.portee)+'</small></div>';}).join('')+'</div>';
+    h+='<div class="zs"><h4>VPN et Tor</h4>'+(zi.hors_zone||[]).map(function(a){return '<div><b>'+esc(a.nom)+'</b><small>'+esc(a.ou)+'</small></div>';}).join('')+'</div>';
+    h+='<div class="zs nd"><h4>Non disponible dans cette version</h4>'+(zi.indisponible||[]).map(function(a){return '<div><b>'+esc(a.nom)+'</b><small>'+esc(a.detail)+'</small></div>';}).join('')+'</div>';
+    b.innerHTML=h;
   }
   function rend(d){
     DONNEES=d.data;var ok=!!d.data;
@@ -286,6 +317,7 @@
      +tuile(IC.ok,N(cnt(function(r){return r.etat==='autorise';})),'Autorisés','décision explicite','Appareils explicitement autorisés (état « allow »). Un appareil du LAN sans décision est compté parmi les inconnus.')
      +tuile(IC.os,N(nos),'OS identifiés',ok&&n?Math.round(100*nos/n)+' % · '+fmt(n-nos)+' sans OS':'','Appareils dont l’OS a été déduit d’une preuve (classe DHCP, User-Agent, DNS, nom, mDNS). Le fabricant seul ne donne jamais d’OS.');
     majFiltreOs(L);
+    rendComport(d.zi,LISTE);
     // conteneurs LXC : isolés, lecture seule (pas d’action de quarantaine sur l’infrastructure)
     var enL=LXC.filter(function(r){return r.on;}).length,LX=LXC.slice().sort(function(x,y){return (y.on-x.on)||(x.nom||x.ip).toLowerCase().localeCompare((y.nom||y.ip).toLowerCase());});
     el('lxcNote').textContent=ok?(LXC.length?fmt(enL)+' en ligne sur '+fmt(LXC.length)+' · pont br-lxc':'pont br-lxc'):'pont br-lxc · isolés des appareils';
@@ -340,7 +372,7 @@
     ];
     cl[10].zone='blocked';
     var ev=function(e,mac,x){return {timestamp:new Date((n-x*60)*1000).toISOString(),event:e,details:{mac:mac}};};
-    return {demo:true,data:{status:{nftables_ok:true,dnsmasq_ok:true},clients:{clients:cl},quarantine:{clients:[]},policy:{default_zone:'quarantine',auto_approve:false,quarantine_timeout:0},
+    return {demo:true,zi:{"zones":{"lan":{"nom":"LAN principal","ensemble":"lan_allowed","internet":"oui","lan":"oui","box_dns_dhcp":"oui","isolement":"aucun","regles":["Appartenance à l'ensemble lan_allowed : aucune règle de restriction."]},"lxc":{"nom":"Conteneurs LXC","ensemble":"lxc_zone","internet":"oui","lan":"oui","box_dns_dhcp":"oui","isolement":"aucun (classement du pont br-lxc)","regles":["Zone de classement des conteneurs du pont br-lxc : aucune règle de restriction propre."]},"iot":{"nom":"IoT isolé","ensemble":"iot_zone","internet":"oui","lan":"non","box_dns_dhcp":"oui","isolement":"LAN privé refusé","regles":["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).","Vers Internet : autorisé."]},"guest":{"nom":"Invités","ensemble":"guest_zone","internet":"oui","lan":"non","box_dns_dhcp":"oui","isolement":"LAN privé refusé","regles":["Vers 10.0.0.0/8, 172.16.0.0/12 et 192.168.0.0/16 : refusé (isolé du LAN).","Vers Internet : autorisé."]},"quarantine":{"nom":"Quarantaine","ensemble":"quarantine_zone","internet":"non","lan":"non","box_dns_dhcp":"partiel","isolement":"total","regles":["Vers la box : DNS (53) et DHCP (67, 68) seulement, le reste est refusé.","Vers tout autre réseau (transit) : refusé."]},"blocked":{"nom":"Bloqué","ensemble":"blocked","internet":"non","lan":"non","box_dns_dhcp":"non","isolement":"total","regles":["Entrée vers la box, sortie et entrée en transit : refusées."]}},"analyse":[{"nom":"Analyse du trafic (DPI)","etat":"actif","portee":"tout le trafic vu par nDPId sur l'interface capturée, quelle que soit la zone"},{"nom":"Filtrage et suivi DNS (ad-guard)","etat":"actif","portee":"appareils qui interrogent le résolveur de la box"},{"nom":"Quarantaine automatique (Actor Intelligence)","etat":"selon le mode","portee":"isole un appareil sur preuves concordantes de deux capteurs au moins ; mode lisible sur la page"}],"hors_zone":[{"nom":"VPN (tunnel WireGuard) et Tor","ou":"Toolbox : niveau R0 à R3 choisi par client, pas par zone"}],"indisponible":[{"nom":"Puits DNS (DNS hole) pour la quarantaine","detail":"la quarantaine laisse passer DNS et DHCP vers la box mais ne détourne rien"},{"nom":"Parking / page de redirection de quarantaine","detail":"aucune redirection : un appareil en quarantaine n'est simplement pas routé"},{"nom":"Zone de repli (fallback) automatique","detail":"la zone par défaut d'un appareil neuf est la quarantaine (politique), pas un repli"},{"nom":"Tor ou VPN imposé par zone","detail":"se règle par client dans le Toolbox"}]},data:{status:{nftables_ok:true,dnsmasq_ok:true},clients:{clients:cl},quarantine:{clients:[]},policy:{default_zone:'quarantine',auto_approve:false,quarantine_timeout:0},
       history:{events:[ev('client_banned','02:00:5e:10:00:0b',3000),ev('client_joined','02:00:5e:10:00:0a',2800),ev('client_joined','02:00:5e:10:00:08',40),ev('client_moved','02:00:5e:10:00:09',90),ev('client_joined','02:00:5e:10:00:09',95)]}}};
   })();
 
@@ -361,23 +393,35 @@
   function jget(path){return api(path).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     if(DEMOMODE){return;}
-    Promise.all([jget('/status'),jget('/clients'),jget('/quarantine'),jget('/policy'),jget('/history?limit=30')]).then(function(r){
+    Promise.all([jget('/status'),jget('/clients'),jget('/quarantine'),jget('/policy'),jget('/history?limit=30'),jget('/zone_behaviors')]).then(function(r){
       var ok=r[1]&&Array.isArray(r[1].clients);
-      rend({data:ok?{status:r[0],clients:r[1],quarantine:r[2],policy:r[3],history:r[4]}:null});
+      rend({data:ok?{status:r[0],clients:r[1],quarantine:r[2],policy:r[3],history:r[4]}:null,zi:r[5]});
       heure();hauteur();
     });
   }
+  function texteConf(v,nom){
+    var n='« '+nom+' »';
+    if(v==='qua') return 'Mettre '+n+' en quarantaine ? Il perd l’accès au LAN et à Internet (DNS et DHCP restent permis).';
+    if(v==='unq') return 'Libérer '+n+' de la quarantaine ? Il retourne sur le LAN.';
+    if(v==='allow') return 'Autoriser '+n+' ? Décision explicite, enregistrée dans le journal d’audit.';
+    if(v==='deny') return 'Bloquer '+n+' ? Tout accès est coupé, dans les deux sens.';
+    if(/^zone:/.test(v)){var z=ZONES[v.slice(5)]||[v.slice(5)];return 'Affecter '+n+' à la zone « '+z[0]+' » ?'+(/^(iot|guest)$/.test(v.slice(5))?' Il n’atteindra plus le LAN privé.':'');}
+    return 'Confirmer cette action sur '+n+' ?';
+  }
   function agir(v,r){
     if(DEMOMODE){msg('Démonstration : action inerte.',false);return;}
-    var corps=JSON.stringify({mac:r.mac}),h={'Content-Type':'application/json'};
-    var p=v==='qua'
+    var corps=JSON.stringify({mac:r.mac}),h={'Content-Type':'application/json'},zone=/^zone:/.test(v)?v.slice(5):'';
+    var p=zone?api('/add_to_zone',{method:'POST',headers:h,body:JSON.stringify({mac:r.mac,zone:zone})})
+      :v==='allow'?api('/allow/'+encodeURIComponent(r.mac),{method:'POST'})
+      :v==='deny'?api('/deny/'+encodeURIComponent(r.mac),{method:'POST'})
+      :v==='qua'
       ?api('/quarantine',{method:'POST',headers:h,body:corps}).then(function(x){
           // la route d'origine de l'ancienne page n'existe pas sur toutes les versions de l'API : repli sur la route documentée
           return (x.status===404||x.status===405)?api('/quarantine_client?mac='+encodeURIComponent(r.mac),{method:'POST'}):x;})
       :api('/unquarantine',{method:'POST',headers:h,body:corps});
     p.then(function(x){
-      if(x.ok){msg(v==='qua'?'Appareil mis en quarantaine.':'Appareil libéré de la quarantaine.',false);}
-      else{msg('Action refusée (HTTP '+x.status+')'+(x.status===401?' : session requise.':'.'),true);}
+      if(x.ok){msg(zone?'Appareil affecté à la zone « '+((ZONES[zone]||[zone])[0])+' ».':v==='allow'?'Appareil autorisé.':v==='deny'?'Appareil bloqué.':v==='qua'?'Appareil mis en quarantaine.':'Appareil libéré de la quarantaine.',false);}
+      else{msg('Action refusée (HTTP '+x.status+')'+(x.status===401?' : session requise.':x.status===403?' : droits administrateur requis.':'.'),true);}
       charge();
     }).catch(function(){msg('Action impossible : le service ne répond pas.',true);});
   }

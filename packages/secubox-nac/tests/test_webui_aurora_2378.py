@@ -66,3 +66,14 @@ def test_conteneurs_lxc_isoles_de_la_liste_des_appareils_2410():
     assert "LXC=TOUS.filter(function(r){return r.lxc;})" in src
     assert "var r=TOUS[Number(b.getAttribute('data-ok'))]" in src     # l'action retrouve l'appareil par son indice d'origine
     assert "ct-exemple" in src and "exemple" in src                    # démonstration : noms fictifs
+
+
+def test_nac_administrable_zones_autoriser_bloquer_et_comportements_2417():
+    """#2417 : affecter une zone, autoriser, bloquer (avec confirmation intégrée) et voir le comportement réel des zones."""
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1] / "www" / "nac" / "index.html").read_text(encoding="utf-8")
+    assert "api('/add_to_zone'" in src and "api('/allow/'" in src and "api('/deny/'" in src
+    assert 'data-act="zone:' in src and 'data-act="allow"' in src and 'data-act="deny"' in src
+    assert "jget('/zone_behaviors')" in src and 'id="comport"' in src
+    assert "Non disponible dans cette version" in src
+    assert "confirm(" not in src and "alert(" not in src       # la confirmation est intégrée à la page
