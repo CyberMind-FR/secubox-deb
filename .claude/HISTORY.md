@@ -729,3 +729,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — network-anomaly, détection sur des débits (closes #2461)
 - secubox-dns-guard 1.4.3 : octets d'interface et requêtes DNS convertis en débits avant stockage et détection (les compteurs cumulatifs alertaient en permanence) ; historiques de compteurs retirés au premier passage ; page en Kio/s.
+
+## 2026-10-12 — network-anomaly, menu de gauche (closes #2463)
+- secubox-dns-guard 1.4.4 : la page /network-anomaly/ charge la barre laterale et /shared/sidebar.js (hors cadre et démonstration).

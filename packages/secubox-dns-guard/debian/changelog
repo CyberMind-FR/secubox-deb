@@ -1,3 +1,11 @@
+secubox-dns-guard (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2463) : la page /network-anomaly/ n'avait plus le menu de gauche (ni la barre
+    laterale ni /shared/sidebar.js). Elle les charge comme les autres pages Aurora, hors cadre
+    et hors démonstration. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:25:36 +0200
+
 secubox-dns-guard (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * network-anomaly (#2461) : la détection de débit travaillait sur des COMPTEURS cumulatifs
