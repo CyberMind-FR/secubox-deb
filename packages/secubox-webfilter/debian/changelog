@@ -1,3 +1,11 @@
+secubox-webfilter (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2441) : le profil AppArmor du contrôleur root n'avait pas le droit d'effacer
+    appliquer.demande. Le service d'application échouait, l'unité .path atteignait sa limite de
+    démarrage et « Appliquer maintenant » répondait 409 (« déjà demandée ou en cours »).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:18:24 +0200
+
 secubox-webfilter (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: domaines TOUJOURS bloques par profil et par appareil (cle bloque) : refuses meme quand la categorie qui les liste est en observe pour l appareil ; la liste de l appareil s ajoute a celle du profil, un blocage l emporte sur une autorisation du meme nom, une autorisation sur un parent ne debloque pas un sous-domaine force ; forme canonique, 200 au plus ; la cle n est ecrite que si elle sert (configuration inchangee sinon, retour arriere sur) ; API, ctl, estimation et panneau (puces, confirmation integree) (ref #2433)
