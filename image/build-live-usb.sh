@@ -2015,12 +2015,18 @@ mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
 # Copy scripts (including kiosk-launcher for robust startup, TUI, mode switcher, disk/eMMC flashers)
-for script in secubox-net-detect secubox-net-reset secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk secubox-flash-emmc; do
+for script in secubox-net-detect secubox-net-reset secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk secubox-flash-emmc; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
   fi
 done
+
+# secubox-kiosk-setup vit dans le paquet secubox-kiosk (#2504) : une seule copie.
+if [[ -f "${SCRIPT_DIR}/../packages/secubox-kiosk/sbin/secubox-kiosk-setup" ]]; then
+  cp "${SCRIPT_DIR}/../packages/secubox-kiosk/sbin/secubox-kiosk-setup" "${ROOTFS}/usr/sbin/"
+  chmod +x "${ROOTFS}/usr/sbin/secubox-kiosk-setup"
+fi
 
 # secubox-kiosk-tui: discoverable alias for the kiosk-mode fallback TUI
 # (matches the `kiosk` mode in secubox-mode) — see issue #228.

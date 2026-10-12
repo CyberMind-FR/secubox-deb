@@ -1168,8 +1168,9 @@ if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
     cp "${SCRIPT_DIR}/sbin/secubox-kiosk-launcher" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/secubox-kiosk-launcher"
   fi
-  if [[ -f "${SCRIPT_DIR}/sbin/secubox-kiosk-setup" ]]; then
-    cp "${SCRIPT_DIR}/sbin/secubox-kiosk-setup" "${ROOTFS}/usr/sbin/"
+  # secubox-kiosk-setup vit dans le paquet secubox-kiosk (#2504) : une seule copie.
+  if [[ -f "${SCRIPT_DIR}/../packages/secubox-kiosk/sbin/secubox-kiosk-setup" ]]; then
+    cp "${SCRIPT_DIR}/../packages/secubox-kiosk/sbin/secubox-kiosk-setup" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/secubox-kiosk-setup"
   fi
   if [[ -f "${SCRIPT_DIR}/sbin/secubox-cmdline-handler" ]]; then

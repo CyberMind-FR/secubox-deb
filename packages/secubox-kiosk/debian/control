@@ -1,0 +1,28 @@
+Source: secubox-kiosk
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-kiosk
+Architecture: all
+Depends: ${misc:Depends},
+         bash,
+         systemd,
+         secubox-premier-pas
+Recommends: secubox-console
+Description: SecuBox GUI kiosk — installation and setup tool
+ Provides secubox-kiosk-setup, which installs a minimal GUI (X11 or
+ Wayland) with Chromium fullscreen on the SecuBox WebUI, creates the
+ dedicated secubox-kiosk user and the systemd unit, and switches a box
+ between kiosk, console TUI and plain console.
+ .
+ The unit it generates starts /usr/sbin/secubox-kiosk-launcher, shipped by
+ secubox-premier-pas.
+ .
+ Usage: secubox-kiosk-setup install --x11 && secubox-kiosk-setup enable --x11
+ .
+ Port Debian de SecuBox-DEB (CyberMind.fr).
