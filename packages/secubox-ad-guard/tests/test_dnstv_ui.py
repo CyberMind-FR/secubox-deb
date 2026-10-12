@@ -20,6 +20,12 @@ def navigateur():
         yield b
         b.close()
 
+def _repond(p, accepte):
+    """Impose la réponse de la confirmation INTÉGRÉE à la page (#2436). Les anciens tests interceptaient `confirm()`, que le navigateur du Hall ignore."""
+    p.evaluate("(ok) => { window.confirmer = () => Promise.resolve(ok); }", accepte)
+
+
+
 
 def _page(navigateur, appels, etat):
     ctx = navigateur.new_context()
@@ -229,7 +235,7 @@ def test_actions_du_panneau_appellent_les_bonnes_routes(navigateur):
     p.click("button[data-tab=adblocktv]")
     p.wait_for_selector("#auto-essai tr")
     p.evaluate("document.querySelector('#auto-carte details').open = true")
-    p.once("dialog", lambda d: d.accept())
+    _repond(p, True)
     p.click("#auto-candidats button:has-text('Essayer')")
     p.click("#auto-essai button:has-text('Confirmer')")
     p.click("#auto-essai button:has-text('Retirer')")
@@ -246,11 +252,11 @@ def test_ca_ne_marche_plus_demande_confirmation_puis_appelle_la_route(navigateur
     ctx, p, _ = _page(navigateur, appels, _etat_auto())
     p.click("button[data-tab=adblocktv]")
     p.wait_for_selector("button.ca-ne-marche-plus")
-    p.once("dialog", lambda d: d.dismiss())                                             # refus : rien n'est envoyé
+    _repond(p, False)                                             # refus : rien n'est envoyé
     p.click("button.ca-ne-marche-plus")
     p.wait_for_timeout(200)
     assert not [c for (m, c, _) in appels if m == "POST" and c.endswith("/ca-ne-marche-plus")]
-    p.once("dialog", lambda d: d.accept())
+    _repond(p, True)
     p.click("button.ca-ne-marche-plus")
     p.wait_for_timeout(300)
     assert [c for (m, c, _) in appels if m == "POST" and c == "/adblock-tv/auto/appareils/tv-banc/ca-ne-marche-plus"]
@@ -391,11 +397,11 @@ def test_panneau_detection_actions_avec_confirmation(navigateur):
     ctx, p, _ = _page_detection(navigateur, appels)
     p.wait_for_selector("#det-appareils tr")
     posts = lambda: [(c, b) for (m, c, b) in appels if m == "POST"]          # noqa: E731
-    p.once("dialog", lambda d: d.dismiss())                                  # activer l'ajout automatique : refus → rien n'est envoyé
+    _repond(p, False)                                  # activer l'ajout automatique : refus → rien n'est envoyé
     p.check("#det-ajout")
     p.wait_for_timeout(300)
     assert not [x for x in posts() if x[0].endswith("/detection/reglage")]
-    p.once("dialog", lambda d: d.accept())
+    _repond(p, True)
     p.check("#det-ajout")
     p.wait_for_timeout(300)
     assert ("/adblock-tv/auto/detection/reglage", {"ajout_auto": True}) in posts()
@@ -405,11 +411,11 @@ def test_panneau_detection_actions_avec_confirmation(navigateur):
     p.locator("#det-appareils tr", has_text="TV banc").locator("input[type=checkbox]").uncheck()
     p.wait_for_timeout(300)
     assert ("/adblock-tv/auto/appareils/TV%20banc/puits", {"actif": False}) in posts()
-    p.once("dialog", lambda d: d.dismiss())
+    _repond(p, False)
     p.locator("#det-appareils tr", has_text="TV fb5b").locator("button.det-ignorer").click()
     p.wait_for_timeout(300)
     assert not [x for x in posts() if x[0].endswith("/ignorer")]
-    p.once("dialog", lambda d: d.accept())
+    _repond(p, True)
     p.locator("#det-appareils tr", has_text="TV fb5b").locator("button.det-ignorer").click()
     p.wait_for_timeout(300)
     assert ("/adblock-tv/auto/appareils/TV%20fb5b/ignorer", None) in posts()
@@ -438,17 +444,17 @@ def test_autorisations_refus_recents_et_actions_avec_confirmation(navigateur):
     t = p.inner_text("#det-appareils .det-detail")
     assert "licensing.bitmovin.com" in t and "8" in t and "imasdk.googleapis.com" in t and "deja.example.com" in t
     posts = lambda: [(c, b) for (m, c, b) in appels if m == "POST"]          # noqa: E731
-    p.once("dialog", lambda d: d.dismiss())
+    _repond(p, False)
     p.locator(".det-detail tr", has_text="licensing.bitmovin.com").locator("button.det-autoriser").click()
     p.wait_for_timeout(300)
     assert not [x for x in posts() if x[0].endswith("/autoriser")]            # refus de la confirmation : rien n'est envoyé
-    p.once("dialog", lambda d: d.accept())
+    _repond(p, True)
     p.locator(".det-detail tr", has_text="licensing.bitmovin.com").locator("button.det-autoriser").click()
     p.wait_for_timeout(300)
     assert ("/adblock-tv/auto/appareils/TV%20banc/autoriser", {"domaine": "licensing.bitmovin.com", "actif": True}) in posts()
     p.locator("#det-appareils tr", has_text="TV banc").first.locator("button.det-autorisations").click()
     p.wait_for_selector("#det-appareils .det-detail")
-    p.once("dialog", lambda d: d.accept())
+    _repond(p, True)
     p.locator(".det-detail tr", has_text="deja.example.com").locator("button.det-retirer-autorisation").click()
     p.wait_for_timeout(300)
     assert ("/adblock-tv/auto/appareils/TV%20banc/autoriser", {"domaine": "deja.example.com", "actif": False}) in posts()

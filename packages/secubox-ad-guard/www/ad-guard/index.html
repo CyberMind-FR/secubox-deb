@@ -4,141 +4,111 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  SecuBox — Ad Guard, profil projet référence Aurora (.claude/AURORA-REFERENCE.md). Le balisage, les identifiants et les actions de l'ancienne page
+  sont conservés. Confirmations et saisies INTÉGRÉES à la page (jamais confirm(), prompt() ni alert() : le navigateur du Hall les ignore) ;
+  tout texte venu de l'API est échappé avant insertion. ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - Ad Guard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: #1b3d1c;
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --danger: #ff4466;
-            --warning: var(--p31-decay);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            color: var(--text);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
-        .badge.version { background: var(--bg-dark); border: 1px solid var(--border); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
-        .stat-value.danger { color: var(--danger); }
-        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .tabs { display: flex; gap: 0.25rem; background: var(--bg-dark); padding: 0.25rem; border-radius: 8px; margin-bottom: 1.5rem; }
-        .tab { padding: 0.6rem 1.25rem; cursor: pointer; border: none; background: none; color: var(--text-dim); border-radius: 6px; font-size: 0.85rem; font-family: inherit; transition: all 0.2s; }
-        .tab:hover { color: var(--text); }
-        .tab.active { background: var(--primary); color: #000; font-weight: 600; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; background: var(--bg-dark); }
-        tr:hover { background: rgba(0,221,68,0.05); }
-        .badge-cat { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
-        .badge-advertising { background: #ff444433; color: #cc3333; }
-        .badge-tracking { background: #ffaa0033; color: #996600; }
-        .badge-analytics { background: #6666ff33; color: #4444aa; }
-        .badge-telemetry { background: #ff66ff33; color: #aa44aa; }
-        .badge-social { background: #00aaff33; color: #0077aa; }
-        .badge-malware { background: #ff000033; color: #cc0000; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
-        .btn-primary:hover { background: var(--p31-hot); }
-        .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
-        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-        .input-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .input-row input, .input-row select { flex: 1; padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-dark); color: var(--text); font-family: inherit; }
-        .input-row input:focus, .input-row select:focus { outline: none; border-color: var(--primary); }
-        .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .device-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; border-left: 4px solid var(--primary); }
-        .device-card.high-block { border-left-color: var(--danger); }
-        .device-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
-        .device-icon { font-size: 1.5rem; }
-        .device-info h3 { margin: 0; font-size: 1rem; }
-        .device-info .mac { font-size: 0.75rem; color: var(--text-dim); font-family: monospace; }
-        .device-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.75rem; }
-        .device-stat { text-align: center; padding: 0.5rem; background: var(--bg-card); border-radius: 4px; }
-        .device-stat .value { font-size: 1.1rem; font-weight: bold; }
-        .device-stat .label { font-size: 0.7rem; color: var(--text-dim); }
-        .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 0.5rem; }
-        .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
-        .progress-fill.high { background: var(--danger); }
-        .check-result { padding: 1rem; border-radius: 8px; margin-top: 1rem; }
-        .check-result.blocked { background: #ff444422; border: 1px solid var(--danger); }
-        .check-result.safe { background: #00dd4422; border: 1px solid var(--primary); }
-        .loading { text-align: center; padding: 2rem; color: var(--text-dim); }
-        @media (max-width: 768px) {
-            .main { margin-left: 0; padding: 1rem; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        /* Page simplifiée (#2174) : l'essentiel d'abord, le reste sous « Avancé » */
-        .simple { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; max-width: 46rem; }
-        .sp-etat { display: flex; gap: .8rem; align-items: center; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
-        .sp-pastille { width: 12px; height: 12px; border-radius: 50%; background: var(--primary); flex: none; }
-        .sp-pastille.ko { background: var(--danger); }
-        .sp-app { display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; align-items: center; padding: .9rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
-        .sp-app .sous, .sp-sig small { color: var(--text-dim); font-size: .8rem; }
-        .sp-app .ligne { grid-column: 1 / -1; font-size: .82rem; }
-        .sp-sig { display: grid; grid-template-columns: 1fr auto; gap: .2rem .8rem; align-items: center; padding: .6rem 0; border-top: 1px solid var(--border); }
-        .sp-sig code { overflow-wrap: anywhere; min-width: 0; }
-        .sp-sig .act { grid-row: 1 / 3; grid-column: 2; display: flex; gap: .4rem; flex-wrap: wrap; }
-        .sp-sw { position: relative; width: 52px; height: 30px; flex: none; }
-        .sp-sw input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
-        .sp-sw span { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: background .15s; }
-        .sp-sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--bg-dark); transition: transform .15s; }
-        .sp-sw input:checked + span { background: var(--primary); }
-        .sp-sw input:checked + span::after { transform: translateX(22px); }
-        .sp-sw input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
-        #sp-toast { position: sticky; bottom: 1rem; padding: .6rem 1rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--primary); }
-        #sp-toast.ko { border-color: var(--danger); color: var(--danger); }
-        #avance > summary { cursor: pointer; font-weight: 600; padding: .8rem 0; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+          /* alias : le balisage et le JS d'origine utilisent encore ces noms */
+          --bg-dark:rgba(8,18,38,.7);--bg-card:rgba(10,22,46,.6);--border:var(--trait);--text:var(--texte);--text-dim:var(--doux);--text-muted:var(--faible);
+          --primary:var(--cyan);--danger:var(--rouge);--warning:var(--orange);--p31-hot:var(--cyan)}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem} .version{border:1px solid var(--trait);border-radius:6px;padding:1px 8px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px} #dialogue input{flex:1 1 200px}
+        .simple{display:flex;flex-direction:column;gap:10px;max-width:none}
+        .sp-etat{display:flex;gap:.8rem;align-items:center;padding:10px 12px;background:var(--bg-card);border:1px solid var(--trait);border-radius:12px}
+        .sp-pastille{width:12px;height:12px;border-radius:50%;background:var(--vert);flex:none;box-shadow:0 0 10px rgba(46,204,113,.5)} .sp-pastille.ko{background:var(--rouge);box-shadow:0 0 10px rgba(255,77,94,.5)}
+        .sp-app{display:grid;grid-template-columns:1fr auto;gap:.2rem 1rem;align-items:center;padding:9px 12px;background:var(--bg-card);border:1px solid var(--trait);border-radius:12px}
+        .sp-app .sous,.sp-sig small{color:var(--doux);font-size:.76rem} .sp-app .ligne{grid-column:1/-1;font-size:.78rem}
+        .sp-sig{display:grid;grid-template-columns:1fr auto;gap:.2rem .8rem;align-items:center;padding:6px 0;border-top:1px solid rgba(86,150,255,.12)}
+        .sp-sig code{overflow-wrap:anywhere;min-width:0} .sp-sig .act{grid-row:1/3;grid-column:2;display:flex;gap:.4rem;flex-wrap:wrap}
+        .sp-sw{position:relative;width:52px;height:30px;flex:none} .sp-sw input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer}
+        .sp-sw span{position:absolute;inset:0;background:rgba(159,179,214,.22);border-radius:999px;transition:background .15s}
+        .sp-sw span::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#eaf1ff;transition:transform .15s}
+        .sp-sw input:checked+span{background:var(--cyan)} .sp-sw input:checked+span::after{transform:translateX(22px)} .sp-sw input:focus-visible+span{outline:2px solid var(--cyan);outline-offset:2px}
+        #sp-toast{position:fixed;right:12px;bottom:12px;max-width:26rem;padding:9px 14px;border-radius:10px;background:var(--cyan);color:#04202a;z-index:50;font-size:.82rem} #sp-toast[hidden]{display:none} #sp-toast.ko{background:var(--rouge);color:#fff}
+        #avance>summary{cursor:pointer;font-weight:600;padding:8px 0;color:var(--doux)}
+        h2{font-size:.88rem;margin:0} h3{font-size:.84rem} a{color:var(--cyan)}
+        .stats-grid{display:grid;gap:8px;grid-template-columns:repeat(2,1fr);margin-bottom:10px}
+        @container a (min-width:560px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+        .stat-card{display:flex;flex-direction:column;gap:2px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));text-align:left;min-width:0}
+        .stat-icon{font-size:1.1rem} .stat-value{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--texte)} .stat-value.danger{color:var(--rouge)}
+        .stat-label{color:var(--doux);font-size:.74rem}
+        .card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:var(--bg-card);min-width:0;margin-bottom:10px}
+        .card-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(86,150,255,.12)}
+        .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+        .tab{font:inherit;font-size:.74rem;background:rgba(10,22,46,.6);border:1px solid var(--trait);border-radius:999px;color:var(--doux);padding:4px 14px;cursor:pointer}
+        .tab:hover{border-color:var(--cyan)} .tab.active{background:rgba(41,182,246,.28);border-color:var(--cyan);color:#fff;font-weight:600}
+        .tab-content{display:none} .tab-content.active{display:block}
+        .defile{overflow-x:auto} table{width:100%;border-collapse:collapse}
+        th,td{text-align:left;padding:5px 6px;border-bottom:1px solid rgba(86,150,255,.12);font-size:.78rem}
+        th{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;background:transparent;white-space:nowrap} tbody tr:hover{background:rgba(41,182,246,.07)}
+        td code{overflow-wrap:anywhere}
+        .badge-cat{display:inline-block;padding:1px 9px;border-radius:999px;font-size:.7rem;font-weight:600;border:1px solid currentColor}
+        .badge-advertising{color:#ff6b78;background:rgba(255,77,94,.12)} .badge-tracking{color:#ffb347;background:rgba(255,159,28,.12)} .badge-analytics{color:#8aa8ff;background:rgba(59,130,246,.14)}
+        .badge-telemetry{color:#c79bff;background:rgba(167,139,250,.14)} .badge-social{color:#4fc3f7;background:rgba(41,182,246,.12)} .badge-malware{color:#ff4d5e;background:rgba(255,77,94,.2)} .badge-autre{color:var(--doux);background:rgba(159,179,214,.1)}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn-primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn-danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn-sm{padding:3px 9px;font-size:.72rem}
+        input[type=text],select{font:inherit;font-size:.76rem;background:rgba(8,18,38,.7);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0}
+        input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .input-row{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap} .input-row input,.input-row select{flex:1 1 160px}
+        .puces{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px} .puce{font:inherit;font-size:.72rem;background:rgba(10,22,46,.6);border:1px solid var(--trait);border-radius:999px;color:var(--doux);padding:2px 11px;cursor:pointer}
+        .puce:hover{border-color:var(--cyan)} .puce.on{background:rgba(41,182,246,.28);border-color:var(--cyan);color:#fff}
+        .device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+        .device-card{background:rgba(8,18,38,.5);border:1px solid var(--trait);border-radius:10px;padding:10px;border-left:3px solid var(--cyan);min-width:0} .device-card.high-block{border-left-color:var(--rouge)}
+        .device-header{display:flex;align-items:center;gap:.7rem;margin-bottom:.6rem} .device-icon{font-size:1.4rem} .device-info{min-width:0} .device-info h3{margin:0;overflow-wrap:anywhere}
+        .device-info .mac{font-size:.7rem;color:var(--faible);font-family:monospace}
+        .device-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:.6rem} .device-stat{text-align:center;padding:5px;background:rgba(10,22,46,.6);border-radius:8px}
+        .device-stat .value{font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums} .device-stat .label{font-size:.68rem;color:var(--faible)}
+        .progress-bar{height:6px;background:rgba(159,179,214,.16);border-radius:3px;overflow:hidden;margin-top:.5rem} .progress-fill{height:100%;background:var(--cyan)} .progress-fill.high{background:var(--rouge)}
+        .note-bas{text-align:center;font-size:.72rem;color:var(--faible);margin-top:.4rem}
+        .check-result{padding:10px 12px;border-radius:10px;margin-top:8px;font-size:.8rem;line-height:1.5} .check-result.blocked{background:rgba(255,77,94,.12);border:1px solid var(--rouge)} .check-result.safe{background:rgba(46,204,113,.1);border:1px solid var(--vert)}
+        .differe{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:9px 12px;background:rgba(8,18,38,.5);border:1px solid var(--trait);border-radius:10px;margin-bottom:6px}
+        .loading,.vide{text-align:center;padding:14px;color:var(--faible);font-size:.78rem} td.vide{text-align:center}
+        details summary{cursor:pointer;color:var(--doux)} details[open] summary{margin-bottom:6px}
+        label{font-size:.78rem;color:var(--doux)} small{color:var(--faible)}
+        @media (max-width:560px){th,td{padding:4px}}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-
-    <div class="main">
-        <div class="header">
-            <h1>🛡️ Ad Guard</h1>
-            <span class="badge version">v1.2.0</span>
-        </div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z" fill="rgba(41,182,246,.14)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>
+                <div><b>Ad Guard</b><small>Filtrage DNS des publicités et des traqueurs</small></div>
+            </div>
+            <span class="actif" id="pastille-global">ACTIF</span>
+            <div class="droite"><span id="heure"></span><span class="version">v1.2.0</span></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div id="dialogue" role="alertdialog" aria-label="Confirmation" hidden></div>
 
         <div class="simple" id="simple">
             <div class="sp-etat" role="status"><span class="sp-pastille" id="sp-pastille"></span>
@@ -157,7 +127,7 @@
             <div class="stat-card">
                 <div class="stat-icon">📋</div>
                 <div class="stat-value" id="blocklist-count">-</div>
-                <div class="stat-label">Blocked Domains</div>
+                <div class="stat-label">Domaines bloqués</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">📱</div>
@@ -172,16 +142,16 @@
             <div class="stat-card">
                 <div class="stat-icon">⏳</div>
                 <div class="stat-value" id="pending-count">-</div>
-                <div class="stat-label">Pending Approvals</div>
+                <div class="stat-label">Blocages différés</div>
             </div>
         </div>
         <p id="stats-note" style="color:var(--text-muted);font-size:.78rem;margin:.4rem 0 1rem;"></p>
 
         <div class="tabs">
-            <button class="tab active" data-tab="overview">Overview</button>
-            <button class="tab" data-tab="devices">Devices</button>
-            <button class="tab" data-tab="blocklist">Blocklist</button>
-            <button class="tab" data-tab="delayed">Delayed</button>
+            <button class="tab active" data-tab="overview">Vue d’ensemble</button>
+            <button class="tab" data-tab="devices">Appareils</button>
+            <button class="tab" data-tab="blocklist">Liste de blocage</button>
+            <button class="tab" data-tab="delayed">Différés</button>
             <button class="tab" data-tab="adblocktv">DNS AdBlock TV</button>
         </div>
 
@@ -189,32 +159,33 @@
         <div id="overview" class="tab-content active">
             <div class="card">
                 <div class="card-header">
-                    <h2>📊 Top Blocked Domains</h2>
-                    <button class="btn btn-sm" onclick="fetchTopDomains()">Refresh</button>
+                    <h2>📊 Domaines les plus bloqués</h2>
+                    <button class="btn btn-sm" onclick="fetchTopDomains()">Actualiser</button>
                 </div>
-                <table>
+                <div class="puces" id="filtre-familles" aria-label="Filtrer par famille de blocage"></div>
+                <div class="defile"><table>
                     <thead>
                         <tr>
-                            <th>Domain</th>
-                            <th>Category</th>
-                            <th>Hits</th>
-                            <th>Last Hit</th>
+                            <th>Domaine</th>
+                            <th>Famille</th>
+                            <th>Requêtes</th>
+                            <th>Dernière</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="top-domains-table">
-                        <tr><td colspan="5" class="loading">Loading...</td></tr>
+                        <tr><td colspan="5" class="loading">Chargement…</td></tr>
                     </tbody>
-                </table>
+                </table></div>
             </div>
 
             <div class="card">
                 <div class="card-header">
-                    <h2>🔍 Check Domain</h2>
+                    <h2>🔍 Vérifier un domaine</h2>
                 </div>
                 <div class="input-row">
-                    <input type="text" id="check-domain-input" placeholder="Enter domain (e.g., doubleclick.net)">
-                    <button class="btn btn-primary" onclick="checkDomain()">Check</button>
+                    <input type="text" id="check-domain-input" placeholder="Domaine à vérifier (ex. doubleclick.net)">
+                    <button class="btn btn-primary" onclick="checkDomain()">Vérifier</button>
                 </div>
                 <div id="check-result"></div>
             </div>
@@ -224,11 +195,11 @@
         <div id="devices" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <h2>📱 Device Statistics</h2>
-                    <button class="btn btn-sm" onclick="fetchDevices()">Refresh</button>
+                    <h2>📱 Statistiques par appareil</h2>
+                    <button class="btn btn-sm" onclick="fetchDevices()">Actualiser</button>
                 </div>
                 <div class="device-grid" id="device-grid">
-                    <div class="loading">Loading...</div>
+                    <div class="loading">Chargement…</div>
                 </div>
             </div>
         </div>
@@ -237,27 +208,27 @@
         <div id="blocklist" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <h2>➕ Add to Blocklist</h2>
+                    <h2>➕ Ajouter à la liste de blocage</h2>
                 </div>
                 <div class="input-row">
-                    <input type="text" id="block-domain-input" placeholder="Domain to block">
+                    <input type="text" id="block-domain-input" placeholder="Domaine à bloquer">
                     <select id="block-category">
-                        <option value="advertising">Advertising</option>
-                        <option value="tracking">Tracking</option>
-                        <option value="analytics">Analytics</option>
-                        <option value="telemetry">Telemetry</option>
-                        <option value="social">Social</option>
-                        <option value="malware">Malware</option>
+                        <option value="advertising">Publicité</option>
+                        <option value="tracking">Pistage</option>
+                        <option value="analytics">Mesure d’audience</option>
+                        <option value="telemetry">Télémétrie</option>
+                        <option value="social">Réseaux sociaux</option>
+                        <option value="malware">Logiciels malveillants</option>
                     </select>
-                    <button class="btn btn-danger" onclick="blockDomain()">Block Now</button>
-                    <button class="btn" onclick="delayBlock()">Delay Block</button>
+                    <button class="btn btn-danger" onclick="blockDomain()">Bloquer maintenant</button>
+                    <button class="btn" onclick="delayBlock()">Différer de 24 h</button>
                 </div>
             </div>
 
             <div class="card">
                 <div class="card-header">
-                    <h2>📋 Blocklist Sources</h2>
-                    <button class="btn btn-primary" onclick="updateBlocklists()">Update All</button>
+                    <h2>📋 Sources de listes</h2>
+                    <button class="btn btn-primary" onclick="updateBlocklists()">Tout mettre à jour</button>
                 </div>
                 <div class="stats-grid" id="sources-grid">
                     <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">-</div><div class="stat-label">StevenBlack</div></div>
@@ -272,11 +243,11 @@
         <div id="delayed" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <h2>⏳ Pending Delayed Blocks</h2>
-                    <button class="btn btn-primary" onclick="processDelayed()">Process Due</button>
+                    <h2>⏳ Blocages différés en attente</h2>
+                    <button class="btn btn-primary" onclick="processDelayed()">Traiter les échéances</button>
                 </div>
                 <div id="delayed-list">
-                    <div class="loading">Loading...</div>
+                    <div class="loading">Chargement…</div>
                 </div>
             </div>
         </div>
@@ -291,7 +262,7 @@
             <div class="card-header" style="margin-top:1rem;"><h2 style="font-size:1rem;">🎚️ Seuils (filters.json)</h2></div>
             <div id="learn-thresholds"></div>
             <div class="card-header" style="margin-top:1rem;"><h2 style="font-size:1rem;">📃 Trackers appris</h2></div>
-            <div id="learn-trackers"><div class="loading">Loading…</div></div>
+            <div id="learn-trackers"><div class="loading">Chargement…</div></div>
         </div>
 
         <!-- DNS AdBlock TV (POC #1943) : mesurer ce que le filtrage DNS bloque pour des appareils choisis -->
@@ -404,11 +375,15 @@
             </div>
         </div>
         </details>
-    </div>
+    
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
         const API_BASE = '/api/v1/ad-guard';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));      // tout ce qui vient de l'API est échappé avant insertion
         const deviceIcons = { 'unknown': '❓', 'computer': '💻', 'phone': '📱', 'tablet': '📱', 'smart_tv': '📺', 'iot': '📡', 'game_console': '🎮', 'streaming': '📺' };
 
         // Tab switching
@@ -422,6 +397,7 @@
         });
 
         async function api(endpoint, method = 'GET', data = null) {
+            if (DEMO) return demoApi(endpoint, method);
             const token = localStorage.getItem('sbx_token');
             const opts = { method, headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) } };
             if (data) opts.body = JSON.stringify(data);
@@ -448,74 +424,91 @@
             document.getElementById('stats-note').textContent = notes.join(' · ');
         }
 
-        async function fetchTopDomains() {
-            const data = await api('/blocklist/top?limit=5');
-            const tbody = document.getElementById('top-domains-table');
-            if (!data?.domains?.length) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);">No blocked domains yet</td></tr>';
-                return;
-            }
-            tbody.innerHTML = data.domains.map(d => `
+        let topDomaines = [], familleChoisie = '';
+        const FAMILLES = { advertising: 'Publicité', tracking: 'Pistage', analytics: 'Mesure d’audience', telemetry: 'Télémétrie', social: 'Réseaux sociaux', malware: 'Logiciels malveillants' };
+        const famille = c => FAMILLES[c] || c || '—';
+        const classeFamille = c => (c in FAMILLES) ? c : 'autre';                                    // la classe CSS ne vient jamais d'une valeur libre
+        function rendreTop() {
+            const tbody = document.getElementById('top-domains-table'), puces = document.getElementById('filtre-familles');
+            const comptes = {}; topDomaines.forEach(d => { comptes[d.category] = (comptes[d.category] || 0) + 1; });
+            puces.replaceChildren();
+            const puce = (cle, texte) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'puce' + (familleChoisie === cle ? ' on' : ''); b.textContent = texte;
+                b.addEventListener('click', () => { familleChoisie = cle; rendreTop(); }); puces.append(b); };
+            puce('', 'Toutes (' + topDomaines.length + ')');
+            Object.keys(comptes).sort().forEach(c => puce(c, famille(c) + ' (' + comptes[c] + ')'));
+            const liste = topDomaines.filter(d => !familleChoisie || d.category === familleChoisie);
+            if (!liste.length) { tbody.innerHTML = '<tr><td colspan="5" class="vide">' + (topDomaines.length ? 'Aucun domaine dans cette famille.' : 'Aucun domaine bloqué pour l’instant.') + '</td></tr>'; hauteur(); return; }
+            tbody.innerHTML = liste.map(d => `
                 <tr>
-                    <td><code>${d.domain}</code></td>
-                    <td><span class="badge-cat badge-${d.category}">${d.category}</span></td>
-                    <td>${d.hits.toLocaleString()}</td>
-                    <td>${d.last_hit ? new Date(d.last_hit).toLocaleString() : '-'}</td>
-                    <td><button class="btn btn-sm" onclick="unblockDomain('${d.domain}')">Unblock</button></td>
-                </tr>
-            `).join('');
+                    <td><code>${esc(d.domain)}</code></td>
+                    <td><span class="badge-cat badge-${classeFamille(d.category)}">${esc(famille(d.category))}</span></td>
+                    <td>${Number(d.hits || 0).toLocaleString('fr-FR')}</td>
+                    <td>${d.last_hit ? esc(new Date(d.last_hit).toLocaleString('fr-FR')) : '—'}</td>
+                    <td><button class="btn btn-sm" data-debloquer="${esc(d.domain)}">Débloquer</button></td>
+                </tr>`).join('');
+            tbody.querySelectorAll('[data-debloquer]').forEach(b => b.addEventListener('click', () => unblockDomain(b.dataset.debloquer)));
+            hauteur();
+        }
+        async function fetchTopDomains() {
+            const data = await api('/blocklist/top?limit=30');
+            topDomaines = (data && Array.isArray(data.domains)) ? data.domains : [];
+            if (!topDomaines.length && !data) document.getElementById('top-domains-table').innerHTML = '<tr><td colspan="5" class="vide">Données indisponibles (session requise ?).</td></tr>';
+            else rendreTop();
         }
 
         async function fetchDevices() {
             const data = await api('/devices');
             const container = document.getElementById('device-grid');
             if (!data?.devices?.length) {
-                container.innerHTML = '<p style="text-align:center;color:var(--text-dim);grid-column:1/-1;">No devices tracked yet</p>';
+                container.innerHTML = '<p class="vide" style="grid-column:1/-1;">Aucun appareil suivi pour l’instant.</p>'; hauteur();
                 return;
             }
+            const n = v => Number(v || 0).toLocaleString('fr-FR');
             container.innerHTML = data.devices.map(d => `
                 <div class="device-card ${d.block_rate > 30 ? 'high-block' : ''}">
                     <div class="device-header">
                         <span class="device-icon">${deviceIcons[d.device_type] || '❓'}</span>
                         <div class="device-info">
-                            <h3>${d.hostname || d.ip_address || 'Unknown'}</h3>
-                            <div class="mac">${d.mac_address}</div>
+                            <h3>${esc(d.hostname || d.ip_address || 'Inconnu')}</h3>
+                            <div class="mac">${esc(d.mac_address)}</div>
                         </div>
                     </div>
                     <div class="device-stats">
-                        <div class="device-stat"><div class="value">${d.total_requests.toLocaleString()}</div><div class="label">Total</div></div>
-                        <div class="device-stat"><div class="value" style="color:var(--danger);">${d.blocked_requests.toLocaleString()}</div><div class="label">Blocked</div></div>
-                        <div class="device-stat"><div class="value">${d.ad_requests.toLocaleString()}</div><div class="label">Ads</div></div>
-                        <div class="device-stat"><div class="value">${d.tracker_requests.toLocaleString()}</div><div class="label">Trackers</div></div>
+                        <div class="device-stat"><div class="value">${n(d.total_requests)}</div><div class="label">Total</div></div>
+                        <div class="device-stat"><div class="value" style="color:var(--danger);">${n(d.blocked_requests)}</div><div class="label">Bloquées</div></div>
+                        <div class="device-stat"><div class="value">${n(d.ad_requests)}</div><div class="label">Publicités</div></div>
+                        <div class="device-stat"><div class="value">${n(d.tracker_requests)}</div><div class="label">Traqueurs</div></div>
                     </div>
-                    <div class="progress-bar"><div class="progress-fill ${d.block_rate > 30 ? 'high' : ''}" style="width:${d.block_rate}%"></div></div>
-                    <div style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:0.5rem;">${d.block_rate}% block rate</div>
-                </div>
-            `).join('');
+                    <div class="progress-bar"><div class="progress-fill ${d.block_rate > 30 ? 'high' : ''}" style="width:${Math.max(0, Math.min(100, Number(d.block_rate) || 0))}%"></div></div>
+                    <div class="note-bas">${esc(d.block_rate)} % de requêtes bloquées</div>
+                </div>`).join('');
+            hauteur();
         }
 
         async function fetchDelayed() {
             const data = await api('/delayed');
             const container = document.getElementById('delayed-list');
             if (!data?.delayed?.length) {
-                container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">No pending delayed blocks</p>';
+                container.innerHTML = '<p class="vide">Aucun blocage différé en attente.</p>'; hauteur();
                 return;
             }
             container.innerHTML = data.delayed.map(d => `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:1rem;background:var(--bg-dark);border-radius:8px;margin-bottom:0.75rem;">
+                <div class="differe">
                     <div>
-                        <strong>${d.domain}</strong>
-                        <div style="font-size:0.8rem;color:var(--text-dim);">
-                            <span class="badge-cat badge-${d.category}">${d.category}</span> ${d.reason}<br>
-                            Scheduled: ${new Date(d.scheduled_at).toLocaleString()}
+                        <strong>${esc(d.domain)}</strong>
+                        <div class="note-bas" style="text-align:left;margin:0;">
+                            <span class="badge-cat badge-${classeFamille(d.category)}">${esc(famille(d.category))}</span> ${esc(d.reason)}<br>
+                            Prévu : ${esc(new Date(d.scheduled_at).toLocaleString('fr-FR'))}
                         </div>
                     </div>
                     <div style="display:flex;gap:0.5rem;">
-                        ${d.approved ? '<span style="color:var(--primary);">Approved</span>' : `<button class="btn btn-sm btn-primary" onclick="approveDelayed('${d.domain}')">Approve</button>`}
-                        <button class="btn btn-sm btn-danger" onclick="cancelDelayed('${d.domain}')">Cancel</button>
+                        ${d.approved ? '<span style="color:var(--vert);">Approuvé</span>' : `<button class="btn btn-sm btn-primary" data-approuver="${esc(d.domain)}">Approuver</button>`}
+                        <button class="btn btn-sm btn-danger" data-annuler="${esc(d.domain)}">Annuler</button>
                     </div>
-                </div>
-            `).join('');
+                </div>`).join('');
+            container.querySelectorAll('[data-approuver]').forEach(b => b.addEventListener('click', () => approveDelayed(b.dataset.approuver)));
+            container.querySelectorAll('[data-annuler]').forEach(b => b.addEventListener('click', () => cancelDelayed(b.dataset.annuler)));
+            hauteur();
         }
 
         async function checkDomain() {
@@ -525,10 +518,11 @@
             const container = document.getElementById('check-result');
             if (!data) { container.innerHTML = ''; return; }
             if (data.blocked) {
-                container.innerHTML = `<div class="check-result blocked"><strong>🚫 BLOCKED</strong><br>Domain: ${data.domain}<br>Category: <span class="badge-cat badge-${data.category}">${data.category}</span><br>Matched: ${data.matched_rule}</div>`;
+                container.innerHTML = `<div class="check-result blocked"><strong>🚫 BLOQUÉ</strong><br>Domaine : ${esc(data.domain)}<br>Famille : <span class="badge-cat badge-${classeFamille(data.category)}">${esc(famille(data.category))}</span></div>`;
             } else {
-                container.innerHTML = `<div class="check-result safe"><strong>✅ NOT BLOCKED</strong><br>Domain: ${data.domain}<br>This domain is not in the blocklist</div>`;
+                container.innerHTML = `<div class="check-result safe"><strong>✅ NON BLOQUÉ</strong><br>Domaine : ${esc(data.domain)}<br>Ce domaine n’est pas dans la liste de blocage.</div>`;
             }
+            hauteur();
         }
 
         async function blockDomain() {
@@ -543,7 +537,7 @@
         async function delayBlock() {
             const domain = document.getElementById('block-domain-input').value.trim();
             if (!domain) return;
-            const reason = prompt('Reason for blocking:');
+            const reason = await saisir('Motif du blocage différé (' + domain + ') :');
             if (!reason) return;
             await api(`/delayed?domain=${encodeURIComponent(domain)}&reason=${encodeURIComponent(reason)}&delay_hours=24`, 'POST');
             document.getElementById('block-domain-input').value = '';
@@ -551,7 +545,7 @@
         }
 
         async function unblockDomain(domain) {
-            if (!confirm(`Unblock ${domain}?`)) return;
+            if (!await confirmer(`Débloquer ${domain} ?`)) return;
             await api(`/blocklist/${encodeURIComponent(domain)}`, 'DELETE');
             fetchStats(); fetchTopDomains();
         }
@@ -562,27 +556,24 @@
         }
 
         async function cancelDelayed(domain) {
-            if (!confirm(`Cancel delayed block for ${domain}?`)) return;
+            if (!await confirmer(`Annuler le blocage différé de ${domain} ?`)) return;
             fetchDelayed();
         }
 
         async function processDelayed() {
             const data = await api('/delayed/process', 'POST');
-            if (data) alert(`Processed ${data.processed} delayed blocks`);
+            if (data) spDit(`${data.processed} blocage(s) différé(s) traité(s).`);
             fetchDelayed(); fetchStats();
         }
 
         async function updateBlocklists() {
             const btn = event.target;
-            btn.disabled = true; btn.textContent = 'Updating...';
+            btn.disabled = true; btn.textContent = 'Mise à jour…';
             const data = await api('/blocklist/update', 'POST');
-            btn.disabled = false; btn.textContent = 'Update All';
+            btn.disabled = false; btn.textContent = 'Tout mettre à jour';
             if (data) {
-                let msg = 'Blocklists updated:\n';
-                for (const [source, count] of Object.entries(data.updated || {})) {
-                    msg += `${source}: ${count >= 0 ? count + ' domains' : 'failed'}\n`;
-                }
-                alert(msg);
+                const lignes = Object.entries(data.updated || {}).map(([source, count]) => `${source} : ${count >= 0 ? count + ' domaines' : 'échec'}`);
+                spDit('Listes mises à jour — ' + (lignes.join(' · ') || 'rien à signaler') + '.');
             }
             fetchStats();
         }
@@ -727,20 +718,20 @@
             return r;
         }
         async function detAjout(v) {
-            if (v && !confirm('L\u2019ajout automatique ajoute au périmètre, sans clic, les appareils détectés comme TV ou streamers, avec le profil de base. Continuer ?')) { detRender(); return; }
+            if (v && !await confirmer('L\u2019ajout automatique ajoute au périmètre, sans clic, les appareils détectés comme TV ou streamers, avec le profil de base. Continuer ?')) { detRender(); return; }
             await detReglage({ ajout_auto: v });
         }
         async function detMode(m) { await detReglage({ mode_defaut: m }); }
         async function detPuits(nom, actif) { await api('/adblock-tv/auto/appareils/' + detNom(nom) + '/puits', 'POST', { actif: actif }); detRender(); tvRender(); }
         async function detIgnorer(nom) {
-            if (!confirm('Retirer cet appareil du périmètre (retour au puits de production), retirer ses règles et ne plus jamais l\u2019ajouter automatiquement ?')) return;
+            if (!await confirmer('Retirer cet appareil du périmètre (retour au puits de production), retirer ses règles et ne plus jamais l\u2019ajouter automatiquement ?')) return;
             await api('/adblock-tv/auto/appareils/' + detNom(nom) + '/ignorer', 'POST'); detRender(); autoRender(); tvRender();
         }
 
         // ── autorisations par appareil (#1965) : ce qui a été refusé, et les exceptions au puits complet ──────────────────
         async function detAutoriser(nom, domaine, actif) {
             const verbe = actif ? 'Autoriser' : 'Retirer l\u2019autorisation de';
-            if (!confirm(verbe + ' « ' + domaine + ' » pour « ' + nom + ' » ? Le DNS est rechargé (quelques secondes) ; cela n\u2019affecte que cet appareil.')) return;
+            if (!await confirmer(verbe + ' « ' + domaine + ' » pour « ' + nom + ' » ? Le DNS est rechargé (quelques secondes) ; cela n\u2019affecte que cet appareil.')) return;
             await api('/adblock-tv/auto/appareils/' + detNom(nom) + '/autoriser', 'POST', { domaine: domaine, actif: actif });
             detRender();
         }
@@ -821,7 +812,7 @@
         }
         async function autoAction(rid, action) { await api('/adblock-tv/auto/regles/' + encodeURIComponent(rid) + '/' + action, 'POST'); autoRender(); }
         async function autoCaNeMarchePlus(app) {
-            if (!confirm('Retirer TOUTES les règles à l\u2019essai de cet appareil ? Les règles confirmées restent.')) return;
+            if (!await confirmer('Retirer TOUTES les règles à l\u2019essai de cet appareil ? Les règles confirmées restent.')) return;
             await api('/adblock-tv/auto/appareils/' + encodeURIComponent(app) + '/ca-ne-marche-plus', 'POST'); autoRender();
         }
         async function autoEssai(v) { await api('/adblock-tv/auto/reglage/auto-essai', 'POST', { actif: v }); autoRender(); }
@@ -898,7 +889,7 @@
         }
         async function tvActif(v) { await api('/adblock-tv/etat', 'POST', { actif: v }); tvRender(); }
         async function tvMode(m) { await api('/adblock-tv/mode', 'POST', { mode: m }); tvRender(); }
-        async function tvModeClient(ip, m) { if (m === 'auto' && !confirm('Le mode auto applique, à l\u2019essai et avec votre accord, des règles apprises sur cet appareil. Continuer ?')) { tvRender(); return; } await api('/adblock-tv/mode', 'POST', { mode: m, ip: ip }); tvRender(); }
+        async function tvModeClient(ip, m) { if (m === 'auto' && !await confirmer('Le mode auto applique, à l\u2019essai et avec votre accord, des règles apprises sur cet appareil. Continuer ?')) { tvRender(); return; } await api('/adblock-tv/mode', 'POST', { mode: m, ip: ip }); tvRender(); }
         async function tvRetirer(ip) { await api('/adblock-tv/clients/' + encodeURIComponent(ip), 'DELETE'); tvRender(); }
         async function tvAddClient() {
             const ip = document.getElementById('tv-new-ip').value.trim(), nom = document.getElementById('tv-new-nom').value.trim();
@@ -969,7 +960,66 @@
 
         fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender(); dnsBoxRender(); detRender();
         setInterval(fetchStats, 30000);
+
+        // ══ Aurora : dialogues intégrés, hauteur, démonstration ═══════════════════════════════════════════════════════
+        // confirm(), prompt() et alert() sont ignorés par le navigateur du Hall (confirm répond « non » sans rien dire) : tout est dans la page.
+        function dialogue(construire) {
+            return new Promise(resolve => {
+                const z = document.getElementById('dialogue'); z.replaceChildren();
+                const fin = v => { z.hidden = true; z.replaceChildren(); hauteur(); resolve(v); };
+                construire(z, fin); z.hidden = false; hauteur(); z.scrollIntoView({ block: 'nearest' });
+            });
+        }
+        function confirmer(message) {
+            return dialogue((z, fin) => {
+                const m = document.createElement('span'); m.textContent = message;
+                const oui = document.createElement('button'), non = document.createElement('button');
+                oui.type = non.type = 'button'; oui.className = 'btn btn-danger'; non.className = 'btn'; oui.textContent = 'Confirmer'; non.textContent = 'Annuler';
+                oui.addEventListener('click', () => fin(true)); non.addEventListener('click', () => fin(false));
+                z.append(m, oui, non); non.focus();
+            });
+        }
+        function saisir(message) {
+            return dialogue((z, fin) => {
+                const m = document.createElement('span'); m.textContent = message;
+                const champ = document.createElement('input'); champ.type = 'text'; champ.maxLength = 200; champ.setAttribute('aria-label', message);
+                const oui = document.createElement('button'), non = document.createElement('button');
+                oui.type = non.type = 'button'; oui.className = 'btn btn-primary'; non.className = 'btn'; oui.textContent = 'Valider'; non.textContent = 'Annuler';
+                const ok = () => fin(champ.value.trim() || null);
+                oui.addEventListener('click', ok); non.addEventListener('click', () => fin(null));
+                champ.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } });
+                z.append(m, champ, oui, non); champ.focus();
+            });
+        }
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'ad-guard' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setTimeout(hauteur, 0)));
+        document.getElementById('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+        // ── Démonstration : lectures fictives (noms de documentation), écritures inertes ─────────────────────────────
+        function demoApi(endpoint, methode) {
+            if (methode !== 'GET') return Promise.resolve({ detail: 'démonstration : action inerte' });
+            const e = endpoint.split('?')[0];
+            if (e === '/stats') return Promise.resolve({ blocklist_domains: 412800, monitored_devices: 7, detections_24h: 3150, pending_delayed_blocks: 1, dns_lisible: true, dns_fenetre: 'du jour (UTC)', dns_requetes_jour: 18400, dns_taux_blocage: 17.1 });
+            if (e === '/blocklist/top') return Promise.resolve({ domains: [
+                { domain: 'pub.exemple.test', category: 'advertising', hits: 940, last_hit: 1791780000000 }, { domain: 'suivi.exemple.test', category: 'tracking', hits: 610, last_hit: 1791779000000 },
+                { domain: 'stats.exemple.test', category: 'analytics', hits: 380, last_hit: 1791778000000 }, { domain: 'telemetrie.exemple.test', category: 'telemetry', hits: 270, last_hit: 1791777000000 },
+                { domain: 'widget.exemple.test', category: 'social', hits: 120, last_hit: 1791776000000 }, { domain: '<img src=x onerror=alert(1)>.test', category: 'malware', hits: 9, last_hit: null }] });
+            if (e === '/devices') return Promise.resolve({ devices: [
+                { hostname: 'tv-salon', mac_address: '02:00:5e:10:00:21', device_type: 'smart_tv', total_requests: 5200, blocked_requests: 1800, ad_requests: 1500, tracker_requests: 300, block_rate: 34.6 },
+                { hostname: 'telephone-exemple', mac_address: '02:00:5e:10:00:22', device_type: 'phone', total_requests: 3100, blocked_requests: 380, ad_requests: 250, tracker_requests: 130, block_rate: 12.3 }] });
+            if (e === '/delayed') return Promise.resolve({ delayed: [{ domain: 'differe.exemple.test', category: 'advertising', reason: 'vu après la TV', scheduled_at: 1791800000000, approved: false }] });
+            if (e === '/adblock-tv/simple') return Promise.resolve({ actif: true, protegees: 2, bloques_24h: 3150, appareils: [
+                { nom: 'tv-salon', adresses: 2, protege: true, blocages_jour: 1800 }, { nom: 'tablette-exemple', adresses: 1, protege: true, blocages_jour: 240 }, { nom: 'console-exemple', adresses: 1, protege: false, blocages_jour: 0 }] });
+            if (e === '/adblock-tv/simple/suspects') return Promise.resolve({ suspects: [{ domaine: 'regie-suspecte.exemple.test', appareil: 'tv-salon', requetes: 14, motif: 'ressemble à une régie publicitaire' }] });
+            if (e.startsWith('/check/')) return Promise.resolve({ blocked: true, domain: decodeURIComponent(e.slice(7)), category: 'advertising' });
+            return Promise.resolve(null);
+        }
+        if (DEMO) document.getElementById('demo').hidden = false;
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

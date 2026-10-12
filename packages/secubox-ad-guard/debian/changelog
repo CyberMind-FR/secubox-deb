@@ -1,3 +1,9 @@
+secubox-ad-guard (1.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: page /ad-guard/ au profil Aurora (tuiles, onglets en pastilles, familles de blocage en pastilles de filtre), libelles en francais, toutes les actions et le balisage gardes ; confirm(), prompt() et alert(), ignores par le navigateur du Hall, remplaces par des dialogues integres ; les noms de domaine, motifs et noms d appareil venus de l API sont echappes avant insertion dans le HTML ; demonstration, ?embed=1 et hauteur annoncee a l hote (ref #2436)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:43:47 +0200
+
 secubox-ad-guard (1.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Guardian (#2287) : le tableau de bord du réseau domestique. GET /adblock-tv/gardien (require_lecture, cache 60 s) rend appareils connectés (NAC, lecture seule, conteneurs LXC exclus), requêtes DNS du jour et d'hier, domaines bloqués, menaces 24 h (compteurs publics d'actord ; indisponible = null, jamais 0), courbe 7 jours, types de domaines bloqués, catégories, appareils principaux. Page www/guardian/index.html (une seule page : tableau de bord complet ou cardlet ?embed=1 ; ?demo=1 annoncé par bandeau) : données réelles uniquement, états honnêtes sans session ou sans réponse, tout échappé, aucune ressource externe. 17 tests dont navigateur réel.
