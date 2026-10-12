@@ -60,6 +60,8 @@ PAGES = [  # (nom, chemin, titre)
     ('interceptor', 'secubox-interceptor/www/interceptor/index.html', 'Interceptor'),
     ('netmodes', 'secubox-netmodes/www/netmodes/index.html', 'Modes réseau'),
     ('cdn', 'secubox-cdn/www/cdn/index.html', 'Caches de la box'),
+    ('dashboard', 'secubox-hub/www/index.html', 'Dashboard'),
+    ('apercu', 'secubox-hub/www/apercu/index.html', "Vue d'ensemble"),
 ]
 HAUTEUR_MAX = 3200
 

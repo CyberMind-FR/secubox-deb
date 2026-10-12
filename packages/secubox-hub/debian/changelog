@@ -1,3 +1,13 @@
+secubox-hub (1.10.1-1~bookworm1) bookworm; urgency=low
+
+  * Vue d'ensemble (/apercu/) au profil Aurora (#2485) : page autonome (la feuille et le script
+    séparés disparaissent), tuiles calculées sur les données lues (espaces, services actifs,
+    à l'arrêt, alertes, durée de marche), cartes par espace, ressources, alertes ; mesure
+    absente = « — » ; ?demo=1 et ?embed=1. Mêmes données (/api/v1/hub/apercu), mêmes
+    identifiants testés ; erreur de lecture toujours dite. 4 tests de plus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 12:51:11 +0200
+
 secubox-hub (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Dashboard (racine de l'administration) au profil Aurora (#2481), en français, lecture

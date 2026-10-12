@@ -762,3 +762,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Captures de données réelles, identifiants masqués (ref #2483)
 - scripts/snapshots-live.py : captures d'une box réelle avec jeton en variable d'environnement, masque des identifiants dans le navigateur avant la capture (IP, MAC, clés, courriels, domaines), flou des noms d'appareils ; 4 tests du masque. Les captures elles-mêmes attendent un jeton de session fourni par l'exploitant.
+
+## 2026-10-12 — Vue d'ensemble Aurora (closes #2485)
+- secubox-hub 1.10.1 : /apercu/ au profil Aurora (page autonome, tuiles, cartes par espace) ; captures dashboard et apercu ajoutées à la galerie.
