@@ -1,3 +1,13 @@
+secubox-webos (1.9.8-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2449) : le Hall servi sous /hall/ à l'adresse IP (live amd64, première
+    installation) appelait /fonts/, /domaine.js, /lexie.js, /hall-logo.svg et /medaillons/ en
+    chemins absolus, que le vhost par défaut servait par son repli index.html (text/html) :
+    polices rejetées, SBX_DOMAINE non défini. Ces ressources sont maintenant servies depuis
+    le dossier du Hall. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:00:15 +0200
+
 secubox-webos (1.9.7-1~bookworm1) bookworm; urgency=medium
 
   * SBX OS : les widgets du Hall dans le manifeste (ref #2351) : chaque module porte sa carte (chemin valide par gabarit) et sa hauteur ; une carte qui demande une session est cachee a l'invite. Activite, Mes comptes, Ephemeride, Flux YouTube, Freebox TV, Voix, IPv6 Guardian et Surf & Viewer sont places dans les Espaces. 2 tests.

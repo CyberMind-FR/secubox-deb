@@ -708,3 +708,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Interceptor, fin de la maquette (closes #2447)
 - secubox-interceptor 2.0.0 : l'API supervise en lecture seule la chaîne d'inspection réelle (moteurs sbxmitm/sbxwaf, activité tirée du journal, niveaux par pair, exclusions) ; instantané root pour le dossier fermé du Toolbox ; page Aurora ; ancien démon root et CA inutilisée retirés. 14 tests.
+
+## 2026-10-12 — Hall à l'adresse IP, ressources racine (closes #2449)
+- secubox-webos 1.9.8 : /fonts/, /domaine.js, /lexie.js, /hall-logo.svg, /medaillons/ servis depuis le dossier du Hall sur le vhost par défaut (live amd64 : polices rejetées, SBX_DOMAINE non défini). Atteint le live avec la prochaine image ; non vérifié sur 192.168.1.9 (pas d'accès SSH).
