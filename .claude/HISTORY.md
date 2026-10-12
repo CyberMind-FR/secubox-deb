@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — ad-guard 1.12.0 : page Aurora, dialogues intégrés, données échappées (ref #2436)
+
+La page `/ad-guard/` quitte l'ancien style (CRT clair, anglais mêlé) pour le profil Aurora, en gardant le balisage, les identifiants et toutes les actions (25 tests d'interface existants passent après adaptation). `confirm()`, `prompt()` et `alert()`, ignorés par le navigateur du Hall, deviennent des dialogues intégrés. Les noms de domaine, motifs et noms d'appareil venus de l'API étaient insérés tels quels dans du HTML : ils sont désormais échappés (test avec une charge `<img onerror>`). Familles de blocage en pastilles de filtre.
+
 ## 2026-10-12 — webfilter 0.4.0 : domaines toujours bloqués, et toolbox 2.13.0 : profondeur d'inspection dans l'onglet Clients (ref #2433, #2432)
 
 Un appareil dont la catégorie adulte est en `observe` (exception voulue) ne bloquait pas un domaine précis de la liste : `bloque` (par profil et par appareil) refuse ces domaines quel que soit le mode des catégories, l'emporte sur une autorisation, et n'est écrit dans `config.json` que s'il sert. Toolbox : la profondeur d'inspection par pair (R-level `off/passive/active/reel`, choisi, plancher, forcé, effectif) se règle dans l'onglet Clients, à côté de chaque client du tunnel, avec confirmation intégrée quand l'inspection devient plus profonde ; `/rlevel/peers` porte `mac_hash`.
