@@ -1,13 +1,14 @@
-secubox-metrics (1.20.1-1~bookworm1) bookworm; urgency=medium
-
-  * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)
-
- -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:09:47 +0200
 secubox-metrics (1.21.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: page vhosts, visiteurs uniques mis en avant (premiere tuile accentuee), type de client (humains/robots) et systeme d exploitation en vue d ensemble et par site (ref #2401)
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:14:03 +0200
+
+secubox-metrics (1.20.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:09:47 +0200
 
 secubox-metrics (1.20.0-1~bookworm1) bookworm; urgency=medium
 
