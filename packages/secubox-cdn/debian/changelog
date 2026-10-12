@@ -1,3 +1,15 @@
+secubox-cdn (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Mirror fusionné avec CDN (#2471) : l'ancien module Mirror gérait des miroirs distants que
+    rien ne synchronise (aucun miroir, cache vide sur gk2). Le vrai miroir est le dépôt APT
+    hébergé par la box : nouvelle route GET /miroirs (suites, architectures, composants, nombre
+    de paquets, taille du pool ; en-tête Release et nombre de paquets seulement, hors boucle,
+    cache 30 s). La page /cdn/ devient « Caches et miroirs » avec un panneau Miroir APT local ;
+    /mirror/ redirige vers /cdn/ ; une seule entrée de menu. Source absente : null, jamais un
+    zéro inventé. 6 tests de plus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:40:32 +0200
+
 secubox-cdn (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Fin de la maquette (#2467) : le module gérait /var/cache/secubox-cdn, qui n'existe pas, et des

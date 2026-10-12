@@ -5,15 +5,15 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — Caches de la box (module CDN), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
-  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/cdn/caches (taille, fichiers, âge de chaque dossier de /var/cache/secubox). Illisible = « — », jamais un zéro inventé.
+  SecuBox — Caches et miroirs (modules CDN et Mirror fusionnés), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/cdn/caches (taille, fichiers, âge de chaque dossier de /var/cache/secubox) et /api/v1/cdn/miroirs (dépôt APT hébergé par la box). Illisible = « — », jamais un zéro inventé.
   ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Caches</title>
+    <title>SecuBox — Caches et miroirs</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
@@ -71,6 +71,7 @@
         .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
         .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
         pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .tw{overflow-x:auto} table.t{width:100%;border-collapse:collapse;font-size:.78rem} table.t th{color:var(--faible);font-weight:600;text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px} table.t td{padding:5px 8px;border-top:1px solid rgba(86,150,255,.12);overflow-wrap:anywhere}
         .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
         .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
         .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
@@ -99,7 +100,7 @@
         <header class="tete">
             <div class="marque">
                 <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3" fill="rgba(41,182,246,.14)"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
-                <div><b>Caches de la box</b><small id="subline">Ce qui est mis de côté sur le disque</small></div>
+                <div><b>Caches et miroirs</b><small id="subline">Ce qui est mis de côté sur le disque, et le dépôt APT de la box</small></div>
             </div>
             <span class="actif neutre" id="pastille">LECTURE…</span>
             <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button></div>
@@ -112,10 +113,12 @@
             <div class="tuile"><div class="l">Taille lisible</div><div class="v" id="sTot">—</div><div class="s">hors caches fermés</div></div>
             <div class="tuile"><div class="l">Le plus gros</div><div class="v" id="sGros" style="font-size:1.1rem">—</div><div class="s" id="sGrosS"></div></div>
             <div class="tuile"><div class="l">Fermés au service</div><div class="v" id="sFerm">—</div><div class="s">taille inconnue</div></div>
+            <div class="tuile"><div class="l">Dépôt APT</div><div class="v" id="sApt">—</div><div class="s" id="sAptS">paquets publiés</div></div>
             <div class="tuile"><div class="l">Politiques CDN</div><div class="v" id="sPol">—</div><div class="s" id="sPolS">enregistrées</div></div>
         </div>
 
         <div class="pan"><h3>Caches <i>du plus gros au plus petit</i></h3><div id="liste"><div class="vide">Chargement…</div></div></div>
+        <div class="pan"><h3>Miroir APT local <i id="aptNote">dépôt hébergé par cette box</i></h3><div class="tw" id="apt"><div class="vide">—</div></div><div class="peer-note" id="aptPool"></div><div class="peer-note" id="aptDist"></div></div>
         <div class="pan" id="polPan" hidden><h3>Politiques CDN enregistrées</h3><div class="peer-note" id="polNote"></div></div>
     </div></div></main>
 
@@ -131,11 +134,11 @@
         function age(t) { if (t == null) return '—'; const s = Math.max(0, Date.now() / 1000 - t); if (s < 90) return 'à l’instant'; if (s < 3600) return Math.floor(s / 60) + ' min'; if (s < 86400) return Math.floor(s / 3600) + ' h'; return Math.floor(s / 86400) + ' j'; }
         function vide(el, msg) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'vide'; d.textContent = msg; el.append(d); }
 
-        async function lire() {
-            if (DEMO) return demo();
+        async function lire(chemin) {
+            if (DEMO) return chemin === '/miroirs' ? demoApt() : demo();
             try {
                 const h = {}, t = token(); if (t) h.Authorization = 'Bearer ' + t;
-                const r = await fetch(API + '/caches', { headers: h });
+                const r = await fetch(API + chemin, { headers: h });
                 if (r.status === 401) return { _session: true };
                 return r.ok ? await r.json() : null;
             } catch (e) { return null; }
@@ -173,8 +176,34 @@
             $('subline').textContent = 'Total lisible : ' + octets(d.octets_total);
             hauteur();
         }
+        function rendreApt(d) {
+            const z = $('apt'); z.replaceChildren();
+            const ok = d && !d._session && d.disponible !== false;
+            $('sApt').textContent = ok ? fmt(d.paquets_total) : '—';
+            $('aptPool').textContent = ''; $('aptDist').textContent = '';
+            if (!ok) { vide(z, d && d._session ? 'Session requise : connectez-vous.' : 'Le dépôt APT est illisible ou absent sur cette box.'); hauteur(); return; }
+            $('aptNote').textContent = d.racine;
+            if (!(d.suites || []).length) vide(z, 'Aucune suite publiée.');
+            else {
+                const t = document.createElement('table'); t.className = 't';
+                const th = document.createElement('tr'); ['Suite', 'Version', 'Architectures · paquets', 'Composants', 'Publiée'].forEach(x => { const c = document.createElement('th'); c.textContent = x; th.append(c); }); t.append(th);
+                for (const s of d.suites) {
+                    const r = document.createElement('tr'); const c = [document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td')];
+                    c[0].textContent = s.nom; c[1].textContent = s.version || '—';
+                    c[2].textContent = (s.architectures || []).map(a => a + ' : ' + (s.paquets && s.paquets[a] != null ? fmt(s.paquets[a]) : '—')).join(' · ') || '—';
+                    c[3].textContent = (s.composants || []).join(', ') || '—'; c[4].textContent = s.date || '—';
+                    c.forEach(x => r.append(x)); t.append(r);
+                }
+                z.append(t);
+            }
+            $('aptPool').textContent = d.pool ? 'Pool : ' + octets(d.pool.octets) + ' · ' + fmt(d.pool.fichiers) + ' fichiers' + (d.pool.partiel ? ' (mesure partielle)' : '') : 'Pool : illisible.';
+            $('aptDist').textContent = d.distants == null ? 'Miroirs distants : aucun configuré (aucun moteur de synchronisation n’est branché).' : 'Miroirs distants enregistrés : ' + (d.distants.join(', ') || 'aucun') + ' — non synchronisés par un moteur.';
+            const p = $('sAptS'); p.textContent = 'paquets publiés · ' + (d.suites || []).length + ' suite(s)';
+            hauteur();
+        }
         async function charger() {
-            rendre(await lire());
+            lire('/miroirs').then(rendreApt);
+            rendre(await lire('/caches'));
             $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
         function hauteur() {
@@ -185,6 +214,11 @@
         if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
         $('btn-refresh').addEventListener('click', charger);
 
+        function demoApt() {
+            return { disponible: true, racine: '/data/apt', paquets_total: 1240, distants: null, pool: { octets: 7.6e8, fichiers: 412, partiel: false }, suites: [
+                { nom: 'trixie', codename: 'trixie', version: '13', date: 'Mon, 12 Oct 2026 08:34:59 UTC', architectures: ['arm64', 'amd64'], composants: ['main', 'contrib'], paquets: { arm64: 620, amd64: 620 } },
+                { nom: '<img src=x onerror=alert(1)>', codename: 'x', version: null, date: null, architectures: ['amd64'], composants: ['main'], paquets: { amd64: null } }] };
+        }
         function demo() {
             const t = Date.now() / 1000;
             return { disponible: true, octets_total: 4.4e7, illisibles: 2, caches: [

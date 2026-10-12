@@ -1,10 +1,10 @@
 {
   "id": "cdn",
-  "name": "CDN Cache",
+  "name": "Caches et miroirs",
   "category": "mesh",
   "icon": "💾",
   "path": "/cdn/",
   "order": 240,
-  "description": "Content delivery cache",
+  "description": "Caches de la box et dépôt APT hébergé (ex-module Mirror)",
   "theme": "reseau"
 }
