@@ -697,3 +697,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — WireGuard, interface Aurora (closes #2438)
 - secubox-wireguard 1.2.0 : page /wireguard/ au profil Aurora (tuiles, tunnels dépliables, trafic par tunnel, démo/embed) ; les deux `confirm()` natifs remplacés par une confirmation intégrée (avertissement de coupure d'accès admin/mesh conservé). 6 tests navigateur. Déployé gk2, dépôt apt à jour.
+
+## 2026-10-12 — NAC, noms et services par Bonjour (closes #2440)
+- secubox-nac 3.9.0 : passe avahi-browse en cache (120 s), nom des appareils sans bail, nom annoncé, pastilles de services, types de service injectés dans la détection du type fin ; colonnes services/bonjour_name. 10 tests.

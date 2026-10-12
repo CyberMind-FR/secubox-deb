@@ -243,10 +243,10 @@
   }
   function normalise(d){
     return ((d&&d.clients&&d.clients.clients)||[]).map(function(c,i){
-      var nom=c.custom_hostname||c.hostname||'';
+      var nom=c.custom_hostname||c.bonjour_name||c.hostname||'';
       return {i:i,cle:String(c.cle||''),mac:String(c.mac||''),ip:String(c.ip||''),nom:nom,fab:c.oui_vendor||'',os:c.os||'',src:c.os_source||'',sub:c.device_subtype||'',
         type:String(c.device_type||'unknown'),zone:String(c.zone||''),on:!!c.online,a:ts(c.first_seen),b:ts(c.last_seen),
-        etat:etatDe(c),alea:!!c.mac_random,lxc:!!c.conteneur};
+        etat:etatDe(c),alea:!!c.mac_random,lxc:!!c.conteneur,svc:Array.isArray(c.services)?c.services.map(String):[]};
     });
   }
 
@@ -266,7 +266,7 @@
     var R=L.filter(function(r){
       if(e&&r.etat!==e) return false; if(o&&(o==='_aucun'?!!r.os:o==='_oui'?!r.os:famille(r.os)!==o)) return false;
       if(c&&(c==='on')!==r.on) return false;
-      if(t){var h=[r.nom,r.ip,r.fab,r.os,r.sub,r.type,macCourt(r.mac)].join(' ').toLowerCase();if(h.indexOf(t)<0) return false;}
+      if(t){var h=[r.nom,r.ip,r.fab,r.os,r.sub,r.type,r.svc.join(' '),macCourt(r.mac)].join(' ').toLowerCase();if(h.indexOf(t)<0) return false;}
       return true;});
     R.sort(function(x,y){
       if(s==='nom') return (x.nom||'~').toLowerCase()<(y.nom||'~').toLowerCase()?-1:1;
@@ -285,7 +285,7 @@
       +ligneWf(r)
       +'<div class="tags"><span class="pil" style="color:'+et[1]+';border-color:'+et[1]+';background:'+et[1]+'1f">'+esc(et[0])+'</span>'
       +'<span class="pil" style="color:'+(r.on?'#2ecc71':'#9fb3d6')+';border-color:'+(r.on?'#2ecc71':'#6f84a8')+';background:'+(r.on?'rgba(46,204,113,.12)':'rgba(159,179,214,.1)')+'">'+(r.on?'Connecté':'Hors ligne')+'</span>'
-      +'<span class="pil" style="color:'+oc+';border-color:'+oc+';background:'+oc+'1f" title="'+esc(r.os?('OS déduit'+(r.src?' — preuve : '+r.src:'')):'Aucune preuve d’OS : non identifié')+'">'+esc(r.os||'OS non identifié')+(r.sub?' · '+esc(r.sub):'')+'</span></div>'
+      +'<span class="pil" style="color:'+oc+';border-color:'+oc+';background:'+oc+'1f" title="'+esc(r.os?('OS déduit'+(r.src?' — preuve : '+r.src:'')):'Aucune preuve d’OS : non identifié')+'">'+esc(r.os||'OS non identifié')+(r.sub?' · '+esc(r.sub):'')+'</span>'+r.svc.map(function(x){return '<span class="pil svc" style="color:#9fb3d6;border-color:rgba(159,179,214,.4)" title="Service annoncé par Bonjour">'+esc(x)+'</span>';}).join('')+'</div>'
       +(cn?'<div class="conf" role="alertdialog" aria-label="Confirmation"><span>'+esc(texteConf(ETAT.conf.v,nom))+'</span><button type="button" class="btn '+(/^(qua|deny)$/.test(ETAT.conf.v)?'dg':'ok')+'" data-ok="'+r.i+'">Confirmer</button><button type="button" class="btn" data-ko="1">Annuler</button></div>'
         :'<div class="act"><span class="sep">Affecter à :</span>'+['lan','iot','guest'].map(function(z){var cur=r.zone===z;return '<button type="button" class="btn zb'+(cur?' on':'')+'" data-act="zone:'+z+'" data-i="'+r.i+'"'+(cur?' disabled aria-pressed="true"':'')+' title="'+(cur?'Zone actuelle':'Affecter à la zone '+esc(ZONES[z][0]))+'">'+esc(ZONES[z][0])+'</button>';}).join('')
         +'<button type="button" class="btn '+act.cls+'" data-act="'+act.v+'" data-i="'+r.i+'" title="'+(DEMOMODE?'Inerte en démonstration':'')+'">'+act.lib+'</button>'
@@ -493,8 +493,8 @@
       c('02:00:5e:10:00:02','192.0.2.22','portable-alice','Lenovo','Windows','user-agent','laptop','lan','allow',true,60*24*30,3),
       c('02:00:5e:10:00:03','192.0.2.30','tel-alice','','Android 14','dhcp-vendor-class','phone','lan','allow',true,60*24*20,2,{mac_random:1}),
       c('02:00:5e:10:00:04','192.0.2.31','iphone-bob','Apple','iOS','user-agent','phone','lan','allow',true,60*24*15,8,{cle:'demo-iphone'}),
-      c('02:00:5e:10:00:05','192.0.2.40','salon-tv','Samsung','','','smart_tv','iot','unknown',true,60*24*60,5),
-      c('02:00:5e:10:00:06','192.0.2.41','imprimante-bureau','Brother','','','printer','iot','allow',false,60*24*90,60*30),
+      c('02:00:5e:10:00:05','192.0.2.40','salon-tv','Samsung','','','smart_tv','iot','unknown',true,60*24*60,5,{services:['AirPlay','Chromecast'],bonjour_name:'TV du salon'}),
+      c('02:00:5e:10:00:06','192.0.2.41','imprimante-bureau','Brother','','','printer','iot','allow',false,60*24*90,60*30,{services:['Impression','Numériseur','Web']}),
       c('02:00:5e:10:00:07','192.0.2.50','nas-atelier','Synology','Linux','dns-domaines','nas','lan','allow',true,60*24*120,1),
       c('02:00:5e:10:00:08','198.51.100.12','','Espressif','','','iot','iot','unknown',true,40,4),
       c('02:00:5e:10:00:09','198.51.100.14','','','Android 13','dhcp-vendor-class','phone','quarantine','unknown',true,95,6,{mac_random:1}),

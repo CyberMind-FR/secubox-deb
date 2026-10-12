@@ -382,4 +382,21 @@ def discover(*, dnsmasq_leases=DEFAULT_DNSMASQ_LEASES, isc_leases=DEFAULT_ISC_LE
         if name:
             device["hostname"] = name
 
+    # #2440 : Bonjour/mDNS donne le nom et les services que ARP ne donne pas. Nom : seulement s'il manque (un bail l'emporte) ;
+    # services : toujours joints, ils ne remplacent rien.
+    try:
+        from . import bonjour
+        bj = bonjour.snapshot()
+    except Exception:  # noqa: BLE001 - Bonjour est un bonus
+        bj = {}
+    for device in result:
+        e = bj.get(device.get("ip") or "")
+        if not e:
+            continue
+        if not device.get("hostname") and e["host"]:
+            device["hostname"] = e["host"]
+        device["services"] = list(e["services"])
+        device["bonjour_types"] = list(e["types"])
+        device["bonjour_name"] = e["name"]
+
     return result
