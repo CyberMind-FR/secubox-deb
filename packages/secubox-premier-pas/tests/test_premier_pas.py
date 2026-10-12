@@ -237,3 +237,26 @@ def test_le_reseau_existant_exige_une_route_par_defaut():
         M._reseau_existant_conserve("")
     with pytest.raises(RuntimeError, match="aucune route par défaut"):
         M._reseau_existant_conserve("10.0.2.0/24 dev enp0s3 scope link\n")
+
+
+# ── #2495 : un défaut d'horloge est dit mais n'arrête pas la première installation ─────────────────────────────────────────────────────
+def test_ntp_absent_est_un_avertissement_et_l_assistant_continue(complet, isole):
+    vues = []
+
+    def exe(argv):
+        vues.append(argv)
+        return (1, "Failed to set ntp: NTP not supported") if argv[:2] == ["timedatectl", "set-ntp"] else (0, "")
+    r = M.appliquer(complet, exe, CONNUS, isole / "fait")
+    assert r.ok and (isole / "fait").exists()                                   # avant : « Arrêt à l'étape Horloge », box inutilisable
+    assert len(r.avertissements) == 1 and "horloge" in r.avertissements[0] and "NTP not supported" in r.avertissements[0]
+    assert any(a[0] == "secubox-profilectl" for a in vues)                      # les étapes suivantes ont bien été jouées
+
+
+def test_un_echec_non_souple_arrete_toujours(complet, isole):
+    r = M.appliquer(complet, lambda a: (1, "boom") if a[0] == "hostnamectl" else (0, ""), CONNUS, isole / "fait")
+    assert not r.ok and r.echec == "nom" and not (isole / "fait").exists() and r.avertissements == []
+
+
+def test_seule_l_etape_ntp_est_souple(complet):
+    souples = [a.quoi for a in M.plan(complet) if a.souple]
+    assert souples == ["synchronisation NTP"]                                    # tout le reste reste bloquant : on ne masque pas un vrai défaut

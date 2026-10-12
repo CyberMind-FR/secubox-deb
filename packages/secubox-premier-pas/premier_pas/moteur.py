@@ -64,6 +64,7 @@ class Action:
     fn: Optional[Callable[[], None]] = None
     essais: int = 1                   # tentatives (réseau qui revient, #1544)
     pause: float = 5.0
+    souple: bool = False              # un échec est DIT mais n'arrête pas l'assistant (#2495) : ce qui ne doit pas bloquer une première installation
 
 
 Executeur = Callable[[List[str]], Tuple[int, str]]
@@ -231,7 +232,9 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
         # encore « secubox-live.local » (#1556). Absent d'Avahi : rien à faire.
         Action("nom", "Bonjour : annoncer le nouveau nom", fn=_avahi_nouveau_nom),
         Action("horloge", f"fuseau {box['fuseau']}", ["timedatectl", "set-timezone", str(box["fuseau"])]),
-        Action("horloge", "synchronisation NTP", ["timedatectl", "set-ntp", "true"]),
+        # Souple (#2495) : sans systemd-timesyncd (« NTP not supported ») l'assistant s'arrêtait ICI et la box restait inutilisable. Le défaut est dit à l'écran et au journal,
+        # l'installation continue ; l'horloge se règle ensuite (Tor et TLS en dépendent) dès qu'un client NTP est présent.
+        Action("horloge", "synchronisation NTP", ["timedatectl", "set-ntp", "true"], souple=True),
     ]
     mdp = admin.get("mot_de_passe")
     if mdp and mdp != "demander":
@@ -345,6 +348,7 @@ class Resultat:
     echec: Optional[str] = None
     detail: str = ""
     reprendre: Optional[str] = None
+    avertissements: List[str] = field(default_factory=list)
 
 
 def appliquer(profil: Dict[str, Any], executeur: Executeur = execute_reel,
@@ -359,6 +363,7 @@ def appliquer(profil: Dict[str, Any], executeur: Executeur = execute_reel,
                                "à compléter : " + ", ".join(ex.manquantes))
     actions = plan(profil)
     faites: List[str] = []
+    avertissements: List[str] = []
     for i, a in enumerate(actions, 1):
         ecrit_etat(phase="application", etape=a.etape, action=a.quoi, n=i, total=len(actions))
         journal(f"[{a.etape}] {a.quoi}")
@@ -371,7 +376,13 @@ def appliquer(profil: Dict[str, Any], executeur: Executeur = execute_reel,
                     journal(f"[{a.etape}] essai {essai}/{a.essais} : {cause(sortie, 120)} — nouvel essai")
                     time.sleep(a.pause)
                 if code != 0:
-                    raise RuntimeError(f"{' '.join(a.argv)} → code {code} : {cause(sortie)}")
+                    msg = f"{' '.join(a.argv)} → code {code} : {cause(sortie)}"
+                    if a.souple:
+                        journal(f"AVERTISSEMENT [{a.etape}] {msg} — l'assistant continue")
+                        avertissements.append(f"{a.etape} : {a.quoi} — {cause(sortie, 160)}")
+                        ecrit_etat(phase="application", etape=a.etape, action=a.quoi, n=i, total=len(actions), avertissements=avertissements)
+                        continue
+                    raise RuntimeError(msg)
             elif a.fn:
                 a.fn()
         except Exception as e:  # noqa: BLE001 — on s'arrête, on dit où
@@ -381,6 +392,6 @@ def appliquer(profil: Dict[str, Any], executeur: Executeur = execute_reel,
         faites.append(a.quoi)
     marqueur.parent.mkdir(parents=True, exist_ok=True)
     marqueur.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"))
-    ecrit_etat(phase="fait", total=len(actions))
-    journal("premier pas terminé")
-    return Resultat(ok=True, faites=faites)
+    ecrit_etat(phase="fait", total=len(actions), avertissements=avertissements)
+    journal("premier pas terminé" + (f" ({len(avertissements)} avertissement(s))" if avertissements else ""))
+    return Resultat(ok=True, faites=faites, avertissements=avertissements)

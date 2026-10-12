@@ -1,3 +1,13 @@
+secubox-premier-pas (0.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Un défaut d'horloge n'arrête plus la première installation (#2495) : sans systemd-timesyncd
+    (« Failed to set ntp: NTP not supported ») l'assistant s'arrêtait à l'étape Horloge et la box
+    restait inutilisable (constaté sur un RPi400 alpha.12). L'étape « synchronisation NTP »
+    est maintenant SOUPLE : l'échec est dit (journal, état, Resultat.avertissements) et
+    l'assistant continue ; tout le reste reste bloquant. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 15:56:52 +0200
+
 secubox-premier-pas (0.5.3-1~bookworm1) bookworm; urgency=medium
 
   * L'assistant manuel s'efface devant l'Auto-Load (#2317) : secubox-premier-pas.service (qui cree le jeton du kiosque) et la face console restent fermes tant que /boot/secubox/autoload/reponses.toml existe — ils ecrasaient le nom et le reseau signes (erreur secubox-net-detect, nom change) —, SAUF si l'agent a abandonne (abandon.json) : ils reprennent alors la main. Une box SANS fichier Auto-Load garde l'assistant, le code de preparation et les propositions du maitre comme avant. 3 tests, dont la logique OU evaluee par systemd-analyze.

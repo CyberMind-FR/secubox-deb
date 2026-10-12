@@ -817,8 +817,22 @@ if [[ $DEB_COUNT -gt 0 ]]; then
   chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' 2>&1 | \
     grep -v "^dpkg: warning" || true
 
-  # Configure packages (skip apt-get -f as pip provides Python deps)
+  # Configure packages
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+
+  # RÉSOUDRE LES DÉPENDANCES (#2495). Le commentaire d'origine (« pip fournit les dépendances Python ») ne vaut pas pour le reste : `dpkg -i --force-depends` laisse
+  # SANS systemd-timesyncd, python3-cryptography, lxc, unbound, hostapd… Constaté sur une uSD alpha.12 : le premier pas s'arrêtait à l'étape Horloge (« NTP not supported »)
+  # et Tor, SMTP et le kiosque échouaient. Avant, seul --kiosk déclenchait `apt --fix-broken` : une image sans kiosque n'avait AUCUNE dépendance résolue (build-image.sh, lui,
+  # le fait toujours). Meilleur effort ici (un postinst peut échouer sous qemu) ; c'est l'audit ci-dessous qui tranche.
+  log "Résolution des dépendances des paquets SecuBox (apt --fix-broken install)..."
+  _DPKG_CONF_DEPS='-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold'
+  chroot "${ROOTFS}" /bin/bash -c \
+      "DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y -q --no-install-recommends ${_DPKG_CONF_DEPS}" 2>&1 | tail -8 \
+      || warn "apt --fix-broken install a signalé des erreurs (l'audit des dépendances tranchera)"
+  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+  # Fatal : une image « secubox-<profil> » sans ses dépendances démarre, a l'air saine, et manque de tout (#2495). Pas de `| head` : SIGPIPE sous pipefail.
+  python3 "${SCRIPT_DIR}/verify-deps.py" "${ROOTFS}" \
+      || err "dépendances des paquets SecuBox manquantes dans l'image — non produite (voir la liste ci-dessus)"
 
   # Count installed
   # Meme piege que le comptage plus haut : `grep` rend 1 quand il ne trouve

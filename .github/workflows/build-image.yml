@@ -60,10 +60,11 @@ on:
         options: [bookworm, trixie]
         default: trixie
       kiosk:
-        description: 'rpi400/rpi4 only: include GUI kiosk (chromium fullscreen dashboard)'
+        description: 'rpi400/rpi4 only: GUI kiosk (chromium fullscreen dashboard). auto = inclus pour rpi400/rpi4 (#2495)'
         required: false
-        type: boolean
-        default: false
+        type: choice
+        options: [auto, "true", "false"]
+        default: auto
   # Pas de `push: tags` : release.yml appelle déjà ce workflow ; son propre déclencheur sur l'étiquette le
   # lançait EN DOUBLE et monopolisait les runners (#1991). Reste appelable (workflow_call) et manuel.
 
@@ -269,8 +270,14 @@ jobs:
 
           # rpi400/rpi4 GUI kiosk (chromium fullscreen dashboard). Ignored by
           # non-rpi boards (build-image.sh only forwards it to build-rpi-usb.sh).
+          # Le kiosque est la face de la carte : par DÉFAUT pour rpi400 et rpi4 (#2495). Seul le déclenchement manuel peut le refuser (kiosk = false) ; une construction
+          # lancée par un push (kiosk vide) l'avait toujours omis : les images publiées n'avaient pas de kiosque.
           KIOSK_OPT=""
-          if [ "${{ inputs.kiosk || github.event.inputs.kiosk }}" = "true" ]; then
+          KIOSK_WANTED="${{ inputs.kiosk || github.event.inputs.kiosk }}"
+          case "${{ matrix.board }}" in
+            rpi400|rpi4) { [ -z "$KIOSK_WANTED" ] || [ "$KIOSK_WANTED" = "auto" ]; } && KIOSK_WANTED=true ;;
+          esac
+          if [ "$KIOSK_WANTED" = "true" ]; then
             KIOSK_OPT="--kiosk"
           fi
 
