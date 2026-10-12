@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — métapaquets : secubox-kiosk classé dans l'arbre (ref #2510)
+
+La release alpha.13 a vu échouer `secubox-appstore` et `secubox-meta` : « paquets ni dans l'arbre ni hors-arbre : secubox-kiosk ». Le générateur exige que chaque paquet du dépôt figure dans `arbre.yaml` ; le paquet `secubox-kiosk` (#2504) n'y était pas. Classé en « suggère » du nœud Noyau, à côté de `secubox-console` (jamais installé sans le demander) ; `debian/control` de `secubox-meta` régénéré. Deux tests de `secubox-meta` échouent encore, sans rapport (`test_refus`, `test_sbxos_pose_tout_le_hall` : carte `guardian` → `secubox-ad-guard`).
+
 ## 2026-10-12 — secubox-netmodes 1.3.1 : secubox-net-detect livré par le paquet (ref #2508)
 
 Sur la RPi400, l'assistant s'arrêtait à « Réseau et domaine » : `secubox-net-detect apply router → code 127`. L'outil vivait dans `image/sbin/` et seul `build-live-usb.sh` le copiait. `secubox-netmodes` (déjà dans `secubox-lite`) le livre désormais, une seule copie. Tests `packages/secubox-netmodes/tests/test_net_detect_livre_2508.py`.

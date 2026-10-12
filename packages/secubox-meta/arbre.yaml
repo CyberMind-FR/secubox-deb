@@ -249,6 +249,7 @@ recommande:
 suggere:
   - secubox-led-heartbeat
   - secubox-console
+  - secubox-kiosk               # kiosque graphique : jamais installé sans le demander (#2504)
 
 meta: secubox-service-identite
 niveau: service
