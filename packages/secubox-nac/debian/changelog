@@ -1,3 +1,13 @@
+secubox-nac (3.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2444) : avahi-browse est appelé avec -k ; sans cela il traduit les types de
+    service (« AirTunes Remote Audio ») et aucun service n'était reconnu.
+  * Conteneurs LXC nommés (#2445) : nos modules, dont on connaît le nom même sans DNS ni bail.
+    Nouveau service root étroit secubox-nac-lxc-names (minuterie 5 min) qui écrit
+    conteneurs.json (adresse -> nom) ; le NAC l'utilise pour les appareils sans nom.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:25:39 +0200
+
 secubox-nac (3.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Noms et services par Bonjour/mDNS (#2440) : une passe avahi-browse mise en cache (120 s)

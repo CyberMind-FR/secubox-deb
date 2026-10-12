@@ -64,7 +64,7 @@ def parse_browse(texte: str) -> dict:
 def _lancer() -> str:
     if not shutil.which("avahi-browse"):
         return ""
-    return subprocess.run(["avahi-browse", "-a", "-r", "-t", "-p"], capture_output=True, text=True, timeout=_DELAI).stdout or ""
+    return subprocess.run(["avahi-browse", "-a", "-r", "-t", "-p", "-k"], capture_output=True, text=True, timeout=_DELAI).stdout or ""
 
 
 def snapshot() -> dict:

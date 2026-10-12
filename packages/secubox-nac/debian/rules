@@ -40,6 +40,10 @@ override_dh_auto_install:
 	install -m 0755 sbin/secubox-nac-apply debian/secubox-nac/usr/sbin/secubox-nac-apply
 	install -m 0644 debian/secubox-nac-apply.service debian/secubox-nac/lib/systemd/system/
 	install -m 0644 debian/secubox-nac-apply.path    debian/secubox-nac/lib/systemd/system/
+	# #2445 : inventaire root des conteneurs LXC (nom par adresse) lu par le NAC
+	install -m 0755 sbin/secubox-nac-lxc-names debian/secubox-nac/usr/sbin/secubox-nac-lxc-names
+	install -m 0644 debian/secubox-nac-lxc-names.service debian/secubox-nac/lib/systemd/system/
+	install -m 0644 debian/secubox-nac-lxc-names.timer   debian/secubox-nac/lib/systemd/system/
 	install -d debian/secubox-nac/etc/nftables.d
 	install -m 0644 nft/secubox-nac.nft debian/secubox-nac/etc/nftables.d/secubox-nac.nft
 	install -d debian/secubox-nac/usr/share/secubox/nac
