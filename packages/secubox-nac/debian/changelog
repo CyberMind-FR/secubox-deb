@@ -1,3 +1,9 @@
+secubox-nac (3.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:09:48 +0200
+
 secubox-nac (3.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Webui refait au profil projet reference Aurora (ref #2378) : tuiles (appareils, connectes, inconnus, en quarantaine, autorises, part d'OS identifies), cartes d'appareils avec recherche, filtres (etat, OS, connexion) et tri, repartition par OS et par etat/zone, nouveaux appareils 24 h, politique en lecture seule, historique. Quarantaine et levee de quarantaine gardent leur appel (confirmation integree) ; la mise en quarantaine, qui appelait un POST /quarantine inexistant cote API (404/405), retombe sur /quarantine_client si le serveur refuse. Pas de VLAN dans l'API : la page montre la zone NAC. ?embed=1, ?demo=1 annonce, hauteur annoncee (sbxVue). 8 tests.

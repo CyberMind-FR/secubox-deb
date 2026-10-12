@@ -1,3 +1,9 @@
+secubox-portal (2.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:09:48 +0200
+
 secubox-portal (2.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Webui /portal/ refait au profil projet reference Aurora (ref #2382) : tuiles (sante, services en ligne, sessions, connexions 24 h, bans, certificats), services, acces rapides, identite et sessions, protection, certificats, cookies RGPD, sites les plus visites, reseaux d'origine, derniers evenements. Lecture seule comme avant ; login.html n'est PAS touche. ?embed=1, ?demo=1 annonce, hauteur annoncee (sbxVue). 8 tests.
