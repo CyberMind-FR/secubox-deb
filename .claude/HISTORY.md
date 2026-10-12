@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — en-têtes CMSD-1.0 manquants (ref #2518)
+
+Le contrôle « License Headers » échouait sur master : trois `tests/__init__.py` (interceptor, cdn, repo) et `docs/dossiers/automesh.md` n'avaient pas l'en-tête. Posé par `scripts/license-headers.py --fix` ; `--check` passe sur tout le dépôt.
+
 ## 2026-10-12 — surf 1.0.34 et toolbox-ng 0.12.5 : l'appât du détecteur de pub n'est plus masqué (ref #2516)
 
 zataz.com affichait « Bloqueur de publicités détecté ! » par surf comme en direct (R3). Cause reproduite avec Chromium sur la vraie page : le thème Foxiz crée un appât `#rb-adcheck > #google_ads_iframe_test` et dresse son mur s'il est masqué ; nos feuilles cosmétiques (`[id^="google_ads"]`…) le masquaient. Le chargement du script `adsbygoogle.js` passait déjà (réponse 204). Une règle de protection par id, après la règle de masquage, laisse l'appât visible, dans les deux moteurs. Tests : `packages/secubox-surf/tests/test_appat_detecteur_2516.py` et `cosmetic_appat_2516_test.go`.
