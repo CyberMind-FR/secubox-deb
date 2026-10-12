@@ -113,7 +113,7 @@
             <div class="tuile"><div class="l">Taille lisible</div><div class="v" id="sTot">—</div><div class="s">hors caches fermés</div></div>
             <div class="tuile"><div class="l">Le plus gros</div><div class="v" id="sGros" style="font-size:1.1rem">—</div><div class="s" id="sGrosS"></div></div>
             <div class="tuile"><div class="l">Fermés au service</div><div class="v" id="sFerm">—</div><div class="s">taille inconnue</div></div>
-            <div class="tuile"><div class="l">Dépôt APT</div><div class="v" id="sApt">—</div><div class="s" id="sAptS">paquets publiés</div></div>
+            <div class="tuile"><div class="l">Dépôt APT</div><div class="v" id="sApt">—</div><div class="s" id="sAptS">entrées de paquets</div></div>
             <div class="tuile"><div class="l">Politiques CDN</div><div class="v" id="sPol">—</div><div class="s" id="sPolS">enregistrées</div></div>
         </div>
 
@@ -198,7 +198,7 @@
             }
             $('aptPool').textContent = d.pool ? 'Pool : ' + octets(d.pool.octets) + ' · ' + fmt(d.pool.fichiers) + ' fichiers' + (d.pool.partiel ? ' (mesure partielle)' : '') : 'Pool : illisible.';
             $('aptDist').textContent = d.distants == null ? 'Miroirs distants : aucun configuré (aucun moteur de synchronisation n’est branché).' : 'Miroirs distants enregistrés : ' + (d.distants.join(', ') || 'aucun') + ' — non synchronisés par un moteur.';
-            const p = $('sAptS'); p.textContent = 'paquets publiés · ' + (d.suites || []).length + ' suite(s)';
+            const p = $('sAptS'); p.textContent = 'entrées (suites × architectures) · ' + (d.suites || []).length + ' suite(s)';
             hauteur();
         }
         async function charger() {

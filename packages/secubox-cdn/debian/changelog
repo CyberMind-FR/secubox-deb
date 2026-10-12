@@ -1,3 +1,11 @@
+secubox-cdn (1.5.1-1~bookworm1) bookworm; urgency=low
+
+  * Le total du dépôt APT est dit pour ce qu'il est : des entrées de paquets sur toutes les
+    suites et architectures (un même paquet compte une fois par suite et architecture), pas un
+    nombre de paquets distincts (#2471).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:42:28 +0200
+
 secubox-cdn (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Mirror fusionné avec CDN (#2471) : l'ancien module Mirror gérait des miroirs distants que
