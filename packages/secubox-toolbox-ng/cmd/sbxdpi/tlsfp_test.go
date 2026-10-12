@@ -100,3 +100,42 @@ func TestEvenementPaquetAlimenteLesCompteurs(t *testing.T) {
 		t.Errorf("JA3 agrégé = %+v", s.FingerprintsJA3)
 	}
 }
+
+func TestSNIEtMetaParEmpreinte(t *testing.T) {
+	e, _, _ := lireClientHello(hello(t))
+	if e.SNI != "exemple.test" {
+		t.Errorf("SNI = %q", e.SNI)
+	}
+	agg := newAggregator()
+	ev := &dpiEvent{PacketEventName: "packet-flow", FlowID: 1, PktL3Offset: 14, PktType: 0x0800,
+		Pkt: base64.StdEncoding.EncodeToString(trame(hello(t)))}
+	ingest(agg, nil, nil, ev)
+	ev.FlowID = 2
+	ingest(agg, nil, nil, ev)
+	m, ok := agg.snapshot().FingerprintMeta[attenduJA4]
+	if !ok || m.First == 0 || m.Last < m.First {
+		t.Fatalf("meta JA4 = %+v (ok=%v)", m, ok)
+	}
+	if len(m.SNI) != 1 || m.SNI[0].Name != "exemple.test" || m.SNI[0].Flows != 2 {
+		t.Errorf("SNI agrégés = %+v", m.SNI)
+	}
+	if _, ok := agg.snapshot().FingerprintMeta[attenduJA3]; !ok {
+		t.Error("meta JA3 absente")
+	}
+}
+
+func TestSNIDouteuxEcarte(t *testing.T) {
+	for _, d := range [][]byte{
+		{0, 5, 0, 0, 2, 'a', '<'},  // caractère interdit
+		{0, 3, 0, 0, 0},            // nom vide
+		{0, 5, 1, 0, 2, 'a', 'b'},  // type de nom inconnu
+		{0, 9, 0, 0, 90, 'a', 'b'}, // longueur annoncée trop grande
+	} {
+		if s := lireSNI(d); s != "" {
+			t.Errorf("SNI douteux accepté : %q", s)
+		}
+	}
+	if s := lireSNI([]byte{0, 5, 0, 0, 2, 'A', 'b'}); s != "ab" {
+		t.Errorf("SNI normalisé = %q", s)
+	}
+}

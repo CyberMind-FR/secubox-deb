@@ -1,3 +1,9 @@
+secubox-soc (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: Guardian lit les routes /pub/ du DPI en premier : la route legacy ne renvoie pas connected et affichait un faux ⛔ Analyse du trafic (DPI) alors que sbxdpi etait connecte (ref #2408)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:49:09 +0200
+
 secubox-soc (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Les stats reseau live en premiere ligne du SOC (ref #2364) : nouvel onglet « Reseau en direct » juste apres Guardian — debit entrant et sortant de chaque interface sur 24 h (courbes a echelle commune, groupees Interfaces / Tunnels / Conteneurs, interfaces au repos repliees) et paquets ecartes par le pare-feu par categorie, lus sur /api/v1/hub/netstats (summary et series). Ces mesures vivaient au fond de l'onglet Reseau du Toolbox. Profil Aurora, ?embed=1, ?demo=1 annonce, « — » sans mesure, bandeau si collecteur arrete. 4 tests.

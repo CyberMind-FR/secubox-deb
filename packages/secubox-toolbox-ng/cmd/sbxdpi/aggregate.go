@@ -50,6 +50,7 @@ type aggregator struct {
 	ports      map[string]*counter // port destinataire (service)
 	fps        map[string]*counter // empreinte JA4 (fingerprint device/learner)
 	fpsJA3     map[string]*counter // empreinte JA3 (md5), calculée depuis le ClientHello
+	fpMeta     map[string]*fpMeta  // première/dernière vue et SNI les plus fréquents, par empreinte (JA4 ou JA3)
 	recolle    *recolleur          // recolle les ClientHello sur plusieurs segments TCP
 	risks      map[string]*riskCounter
 	firstParty map[string]bool // apps seen as first-party (our own vhosts)
@@ -82,6 +83,7 @@ func newAggregator() *aggregator {
 		ports:      map[string]*counter{},
 		fps:        map[string]*counter{},
 		fpsJA3:     map[string]*counter{},
+		fpMeta:     map[string]*fpMeta{},
 		recolle:    newRecolleur(),
 		risks:      map[string]*riskCounter{},
 		firstParty: map[string]bool{},
@@ -149,6 +151,64 @@ func (a *aggregator) recordFlow(ev *dpiEvent, firstParty bool) {
 	a.mu.Unlock()
 }
 
+// fpMeta : ce qu'on sait d'une empreinte en plus de son compteur. Les SNI sont
+// des NOMS DEMANDÉS (destinations), jamais des adresses de clients.
+type fpMeta struct {
+	First, Last int64
+	SNI         map[string]uint64
+}
+
+const (
+	fpSNIMax = 5 // SNI gardés par empreinte
+)
+
+// noterEmpreinte met à jour première/dernière vue et SNI ; l'appelant tient a.mu.
+func (a *aggregator) noterEmpreinte(h, sni string, now int64) {
+	m := a.fpMeta[h]
+	if m == nil {
+		if len(a.fpMeta) >= mapCap {
+			return
+		}
+		m = &fpMeta{First: now, SNI: map[string]uint64{}}
+		a.fpMeta[h] = m
+	}
+	m.Last = now
+	if sni == "" {
+		return
+	}
+	if _, ok := m.SNI[sni]; ok || len(m.SNI) < fpSNIMax*4 {
+		m.SNI[sni]++
+	}
+}
+
+// fpMetaOut : forme sérialisée (snapshot et persistance).
+type fpMetaOut struct {
+	First int64 `json:"first"`
+	Last  int64 `json:"last"`
+	SNI   []kv  `json:"sni,omitempty"`
+}
+
+func (a *aggregator) metaSortie() map[string]fpMetaOut {
+	out := make(map[string]fpMetaOut, len(a.fpMeta))
+	for h, m := range a.fpMeta {
+		noms := make([]kv, 0, len(m.SNI))
+		for n, c := range m.SNI {
+			noms = append(noms, kv{Name: n, Flows: c})
+		}
+		sort.Slice(noms, func(i, j int) bool {
+			if noms[i].Flows != noms[j].Flows {
+				return noms[i].Flows > noms[j].Flows
+			}
+			return noms[i].Name < noms[j].Name
+		})
+		if len(noms) > fpSNIMax {
+			noms = noms[:fpSNIMax]
+		}
+		out[h] = fpMetaOut{First: m.First, Last: m.Last, SNI: noms}
+	}
+	return out
+}
+
 // recordTLS lit le ClientHello d'un paquet packet-flow et compte l'empreinte JA4
 // et JA3, une fois par flux. Aucune adresse ni nom d'hôte n'est retenu.
 func (a *aggregator) recordTLS(ev *dpiEvent) {
@@ -166,6 +226,9 @@ func (a *aggregator) recordTLS(ev *dpiEvent) {
 	a.mu.Lock()
 	bump(a.fps, e.JA4, 1, 0)
 	bump(a.fpsJA3, e.JA3, 1, 0)
+	now := time.Now().Unix()
+	a.noterEmpreinte(e.JA4, e.SNI, now)
+	a.noterEmpreinte(e.JA3, e.SNI, now)
 	a.mu.Unlock()
 }
 
@@ -256,23 +319,24 @@ type riskKV struct {
 
 // snapshot is the full on-disk / API-root document.
 type snapshot struct {
-	UpdatedAt       int64      `json:"updated_at"`
-	Connected       bool       `json:"connected"`
-	TotalFlows      uint64     `json:"total_flows"`
-	TotalBytes      uint64     `json:"total_bytes"`
-	OutBytes        uint64     `json:"out_bytes"` // direction (#DPI-sémantique, additif)
-	InBytes         uint64     `json:"in_bytes"`
-	Filtered        uint64     `json:"filtered"`
-	FirstPartyN     int        `json:"first_party_apps"`
-	Protocols       []kv       `json:"protocols"`
-	Apps            []kv       `json:"apps"`
-	Categories      []kv       `json:"categories"`
-	Talkers         []talkerKV `json:"talkers"`
-	Hosts           []kv       `json:"hosts"`            // SNI/DNS destinations (#DPI-sémantique, additif)
-	Ports           []kv       `json:"ports"`            // ports destinataires (services)
-	Fingerprints    []kv       `json:"fingerprints"`     // empreintes JA4
-	FingerprintsJA3 []kv       `json:"fingerprints_ja3"` // empreintes JA3 (calculées depuis le ClientHello)
-	Risks           []riskKV   `json:"risks"`
+	UpdatedAt       int64                `json:"updated_at"`
+	Connected       bool                 `json:"connected"`
+	TotalFlows      uint64               `json:"total_flows"`
+	TotalBytes      uint64               `json:"total_bytes"`
+	OutBytes        uint64               `json:"out_bytes"` // direction (#DPI-sémantique, additif)
+	InBytes         uint64               `json:"in_bytes"`
+	Filtered        uint64               `json:"filtered"`
+	FirstPartyN     int                  `json:"first_party_apps"`
+	Protocols       []kv                 `json:"protocols"`
+	Apps            []kv                 `json:"apps"`
+	Categories      []kv                 `json:"categories"`
+	Talkers         []talkerKV           `json:"talkers"`
+	Hosts           []kv                 `json:"hosts"`            // SNI/DNS destinations (#DPI-sémantique, additif)
+	Ports           []kv                 `json:"ports"`            // ports destinataires (services)
+	Fingerprints    []kv                 `json:"fingerprints"`     // empreintes JA4
+	FingerprintsJA3 []kv                 `json:"fingerprints_ja3"` // empreintes JA3 (calculées depuis le ClientHello)
+	FingerprintMeta map[string]fpMetaOut `json:"fingerprint_meta"` // première/dernière vue et SNI par empreinte
+	Risks           []riskKV             `json:"risks"`
 }
 
 // rank sorts a counter map into a bytes-desc (flows-desc tiebreak) slice, with
@@ -342,6 +406,7 @@ func (a *aggregator) snapshot() snapshot {
 		Ports:           rank(a.ports, tb, tf),
 		Fingerprints:    rank(a.fps, tb, tf),
 		FingerprintsJA3: rank(a.fpsJA3, tb, tf),
+		FingerprintMeta: a.metaSortie(),
 		Risks:           risks,
 	}
 }
@@ -416,6 +481,16 @@ func (a *aggregator) loadSnapshot(path string) {
 	restore(a.ports, snap.Ports)
 	restore(a.fps, snap.Fingerprints)
 	restore(a.fpsJA3, snap.FingerprintsJA3)
+	for h, m := range snap.FingerprintMeta {
+		if len(a.fpMeta) >= mapCap {
+			break
+		}
+		fm := &fpMeta{First: m.First, Last: m.Last, SNI: map[string]uint64{}}
+		for _, n := range m.SNI {
+			fm.SNI[n.Name] = n.Flows
+		}
+		a.fpMeta[h] = fm
+	}
 	for _, t := range snap.Talkers {
 		if len(a.talkers) >= mapCap {
 			break

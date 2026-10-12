@@ -219,7 +219,9 @@
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     var w='/api/v1/waf/',dp='/api/v1/dpi/';
-    Promise.all([jget(w+'stats'),jget(w+'status'),jget(w+'alerts?limit=8'),jget(w+'history'),jget(w+'detections'),jget(w+'enforcement/mode'),jget(dp+'stats'),jget(dp+'usage'),jget(dp+'clients'),jget(dp+'countries'),jget('/api/v1/ad-guard/adblock-tv/gardien')]).then(function(r){
+    // Lectures agrégées d'abord (/pub/, la porte qui existe sur l'hôte admin) ; les routes « legacy » ne renvoient pas `connected` et affichaient un faux ⛔.
+    var dpi=function(n){return jget(dp+'pub/'+n).then(function(x){return x!==null?x:jget(dp+n);});};
+    Promise.all([jget(w+'stats'),jget(w+'status'),jget(w+'alerts?limit=8'),jget(w+'history'),jget(w+'detections'),jget(w+'enforcement/mode'),dpi('stats'),dpi('usage'),dpi('clients'),dpi('countries'),jget('/api/v1/ad-guard/adblock-tv/gardien')]).then(function(r){
       rend({stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,history:r[3],detections:r[4],enforcement:r[5],dpiStats:r[6],usage:r[7],clients:Array.isArray(r[8])?r[8]:null,dpiPays:Array.isArray(r[9])?r[9]:null,gardien:r[10]});
     });
   }

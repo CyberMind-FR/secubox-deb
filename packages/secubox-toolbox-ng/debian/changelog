@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.12.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat: sbxdpi retient pour chaque empreinte TLS la premiere et la derniere vue et ses SNI les plus frequents (noms demandes, bornes, jamais d adresse client), exposes dans fingerprint_meta (ref #2408)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:49:09 +0200
+
 secubox-toolbox-ng (0.12.3-1~bookworm1) bookworm; urgency=medium
 
   * feat: sbxdpi calcule JA3 et JA4 des clients TLS depuis le ClientHello des paquets nDPId (la libndpi 4.2 n emet ni l un ni l autre), recollage sur plusieurs segments, une empreinte par flux, compteurs fingerprints et fingerprints_ja3 (ref #2405)

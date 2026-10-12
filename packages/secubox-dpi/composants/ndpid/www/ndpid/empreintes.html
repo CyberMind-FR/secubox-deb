@@ -74,6 +74,7 @@
   @container a (max-width:499px){.repart{grid-template-columns:96px 1fr}svg.donut{width:96px;height:96px}}
   @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
   @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.7fr 1fr} .col{display:grid;gap:10px;align-content:start}}
+  .fp .m .pf{color:var(--doux);font-size:.68rem;overflow-wrap:anywhere}
 </style>
 <div class="cadre" id="cadre"><div class="app">
   <div class="tete">
@@ -116,7 +117,7 @@
   function famille(f){
     if(f.ti) return 'mal';
     var a=String(f.app||'').toLowerCase();
-    if(!a||a==='-') return 'inc';
+    if(!a||a==='-') return FAM[f.fd]&&f.fd!=='inc'?f.fd:'inc';
     if(/chrom|firefox|safari|edge|opera|brave|webkit|browser|navigat/.test(a)) return 'nav';
     if(/curl|wget|nmap|masscan|zgrab|metasploit|burp|sqlmap|nikto|scanner|tor|openvpn|ssh/.test(a)) return 'out';
     if(/python|requests|urllib|java|okhttp|go-http|golang|node|openssl|libcurl|ruby|perl|php|rust|\.net|library|lib/.test(a)) return 'lib';
@@ -124,7 +125,8 @@
   }
   function norm(f){
     return {h:String(f.fingerprint||''),t:String(f.fingerprint_type||f.fp_type||'').toLowerCase(),app:String(f.known_app||''),ti:String(f.threat_intel||''),
-      n:num(f.hit_count),p:f.first_seen?Date.parse(f.first_seen):NaN,d:f.last_seen?Date.parse(f.last_seen):NaN};
+      n:num(f.hit_count),p:f.first_seen?Date.parse(f.first_seen):NaN,d:f.last_seen?Date.parse(f.last_seen):NaN,
+      snis:(Array.isArray(f.snis)?f.snis:[]).filter(function(x){return x&&x.name;}),profil:String(f.profil||''),fd:String(f.famille_deduite||'')};
   }
   function rel(ms){
     if(!isFinite(ms)) return '—';
@@ -138,6 +140,7 @@
   function court(h){return h.length>20?h.slice(0,10)+'…'+h.slice(-6):h;}
   function conf(r){
     if(r.ti) return ['menace','x','Étiquetée avec du renseignement de menace.'];
+    if(!r.app&&r.fd) return ['déduite','b','Famille déduite de la forme de la poignée de main (version, SNI, suites, extensions, ALPN), pas d’une application connue.'];
     if(!r.app) return ['inconnue','b','Jamais rattachée à une application.'];
     if(r.n>=20) return ['élevée','h','Application connue, vue sur de nombreux flux.'];
     if(r.n>=3) return ['moyenne','m','Application connue, peu de flux : à confirmer.'];
@@ -174,6 +177,8 @@
         +'<div class="n">'+fmt(f.n)+'<small>flux</small></div>'
         +'<div class="m"><span class="fam"><i style="background:'+F[1]+'"></i>'+esc(F[0])+(f.app?' · '+esc(f.app):'')+'</span><span class="conf '+c[1]+'" title="'+esc(c[2])+'">'+esc(c[0])+'</span>'
         +(f.ti?'<span style="color:var(--rouge)">'+esc(f.ti)+'</span>':'')
+        +(f.profil?'<span class="pf" title="Forme de la poignée de main décodée depuis le JA4">'+esc(f.profil)+'</span>':'')
+        +(f.snis.length?'<span class="pf" title="Noms demandés (SNI) avec cette empreinte">→ '+f.snis.slice(0,3).map(function(x){return esc(x.name);}).join(', ')+'</span>':'')
         +'<span title="'+esc(complet(f.p))+'">1re vue : '+esc(rel(f.p))+'</span><span title="'+esc(complet(f.d))+'">dernière : '+esc(rel(f.d))+'</span></div></div>';}).join('')
       :'<div class="vide">'+(D.fps.length?'Aucune empreinte ne correspond au filtre.':(D.run===true?'Aucune poignée de main TLS relevée pour l\u2019instant : sbxdpi calcule JA3 et JA4 depuis le ClientHello des flux vus par nDPId, les empreintes apparaissent avec le premier trafic TLS capturé.':'Aucune empreinte enregistrée : le moteur nDPId n\u2019est pas actif, sbxdpi n\u2019a donc aucune poignée de main TLS à lire.')))+'</div>';
     el('rang').querySelectorAll('button.cp').forEach(function(b){b.addEventListener('click',function(){
@@ -195,6 +200,7 @@
     var inc=fps.filter(function(f){return f.fam==='inc'||f.n<=2;}).length;
     var clients=fps.filter(function(f){return f.t==='ja3'||f.t==='ja4';}).length;
     var snis={},nsni=0;(d.flows||[]).forEach(function(x){var s=x&&(x.server_name||(x.tls&&x.tls.server_name));if(s){s=String(s).toLowerCase();snis[s]=(snis[s]||0)+1;nsni++;}});
+    if(!nsni){fps.filter(function(f){return f.t==='ja4';}).forEach(function(f){f.snis.forEach(function(x){snis[x.name]=(snis[x.name]||0)+num(x.n);nsni+=num(x.n);});});}
     var sl=Object.keys(snis).map(function(k){return [k,snis[k]];}).sort(function(x,y){return y[1]-x[1];});
     var rec=fps.filter(function(f){return isFinite(f.p);}).sort(function(x,y){return y.p-x.p;})[0];
     el('tuiles').innerHTML=
@@ -217,7 +223,7 @@
     var m=Date.now(),h=3600e3,j=86400e3,iso=function(x){return new Date(m-x).toISOString();};
     return {demo:true,status:{daemon:{running:true}},
       fp:[{fingerprint:'771,4865-4866-4867-49195-49199,0-23-65281-10-11-35-16-5-13,29-23-24,0',fingerprint_type:'ja3',hit_count:48210,known_app:'Chrome 128',first_seen:iso(40*j),last_seen:iso(20e3)},
-        {fingerprint:'t13d1516h2_8daaf6152771_b186095e22b6',fingerprint_type:'ja4',hit_count:41877,known_app:'Chrome 128',first_seen:iso(40*j),last_seen:iso(35e3)},
+        {fingerprint:'t13d1516h2_8daaf6152771_b186095e22b6',fingerprint_type:'ja4',hit_count:41877,known_app:'Chrome 128',profil:'TLS 1.3 · avec SNI · 15 suites · 16 extensions · ALPN h2',famille_deduite:'nav',snis:[{name:'www.exemple.test',n:900},{name:'cdn.exemple.test',n:420}],first_seen:iso(40*j),last_seen:iso(35e3)},
         {fingerprint:'t13d1715h2_5b57614c22b0_3d5424432f57',fingerprint_type:'ja4',hit_count:12044,known_app:'Firefox 131',first_seen:iso(33*j),last_seen:iso(2*60e3)},
         {fingerprint:'t13d1516h2_8daaf6152771_02713d6af862',fingerprint_type:'ja4',hit_count:9120,known_app:'Safari / iOS 18',first_seen:iso(21*j),last_seen:iso(9*60e3)},
         {fingerprint:'771,4866-4867-4865-49196-49200,0-11-10-35-22,29-23-24,0',fingerprint_type:'ja3',hit_count:2210,known_app:'Python requests',first_seen:iso(12*j),last_seen:iso(1*h)},
