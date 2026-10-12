@@ -25,6 +25,10 @@ from pathlib import Path
 # Import shared auth
 import sys
 from secubox_core.auth import require_lecture
+try:
+    from . import publie
+except ImportError:  # pragma: no cover - exécuté hors paquet (python -m uvicorn api.main)
+    import publie  # type: ignore
 from secubox_core.crypto.empreinte import ident
 # En QUEUE, jamais en tête : devant /usr/local, le websockets 10.4 de Debian
 # masquait celui qu'attend uvicorn ≥ 0.54 → service en boucle (#1796).
@@ -313,21 +317,27 @@ def get_recent_packages(limit: int = 10) -> List[Dict[str, Any]]:
     return packages[:limit]
 
 
+async def _comptes_distributions(dists: List[str]) -> Dict[str, Optional[int]]:
+    """Paquets distincts par suite, lus dans ce que le dépôt PUBLIE (#2493). Hors de la boucle d'événements (lecture disque et, en repli, repoctl). Une suite non publiée ou
+    illisible : None, jamais 0 ; repoctl ne sert que de repli quand l'arborescence publiée est illisible."""
+    pub = await asyncio.to_thread(publie.lire, Path(REPO_OUT))
+    if pub["disponible"]:
+        comptes = {s["nom"]: s["uniques"] for s in pub["suites"]}
+        return {d: comptes.get(d) for d in dists}
+    out: Dict[str, Optional[int]] = {}
+    for d in dists:
+        r = await asyncio.to_thread(run_repoctl, "list", d, "--json", parse_json=True)
+        out[d] = len(r) if isinstance(r, list) else None
+    return out
+
+
 async def _update_stats():
     """Background task to update repository statistics."""
     while True:
         try:
             dists = list_distributions()
-            size_info = get_repo_size()
-
-            # Build distributions dict with counts
-            dist_counts = {}
-            for dist in dists:
-                result = run_repoctl("list", dist, "--json", parse_json=True)
-                if isinstance(result, list):
-                    dist_counts[dist] = len(result)
-                else:
-                    dist_counts[dist] = 0
+            size_info = await asyncio.to_thread(get_repo_size)
+            dist_counts = await _comptes_distributions(dists)
 
             stats = {
                 "distributions": dist_counts,
@@ -451,7 +461,7 @@ async def get_stats():
         return cached
 
     dists = list_distributions()
-    size_info = get_repo_size()
+    size_info = await asyncio.to_thread(get_repo_size)
 
     stats = {
         "total_packages": size_info["file_count"],
@@ -460,15 +470,28 @@ async def get_stats():
         "timestamp": datetime.now().isoformat()
     }
 
-    for dist in dists:
-        result = run_repoctl("list", dist, "--json", parse_json=True)
-        if isinstance(result, list):
-            stats["distributions"][dist] = len(result)
-        else:
-            stats["distributions"][dist] = 0
+    # #2493 : le nombre de paquets d'une suite vient de ce que le dépôt PUBLIE (fichiers Packages servis), pas du socle reprepro de repoctl (« trixie : 0 » pour une suite pleine).
+    stats["distributions"] = await _comptes_distributions(dists)
 
     stats_cache.set("repo_stats", stats)
     return stats
+
+
+_publie_cache: dict = {"t": 0.0, "v": None}
+_publie_verrou = None
+
+
+@app.get("/publie", dependencies=[Depends(require_lecture)])
+async def get_publie():
+    """Ce que le dépôt publie réellement (suites, architectures, paquets, pool, dernière publication), lecture seule, hors boucle, cache 30 s (#2493)."""
+    global _publie_verrou
+    if _publie_verrou is None:
+        _publie_verrou = asyncio.Lock()
+    async with _publie_verrou:
+        if _publie_cache["v"] is None or time.monotonic() - _publie_cache["t"] > 30:
+            _publie_cache["v"] = await asyncio.to_thread(publie.lire, Path(REPO_OUT))
+            _publie_cache["t"] = time.monotonic()
+        return _publie_cache["v"]
 
 
 @app.get("/recent", dependencies=[Depends(require_lecture)])

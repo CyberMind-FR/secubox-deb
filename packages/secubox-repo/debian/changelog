@@ -1,3 +1,19 @@
+secubox-repo (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Comptes du dépôt APT faux (#2493) : « 0 paquet » et « trixie : 0 » pour un dépôt qui en publie
+    des centaines. repoctl interroge le socle reprepro de REPO_BASE, qui n'est pas celui du dépôt
+    publié (sur gk2 : un autre dossier). Nouvelle route GET /publie : ce que le dépôt PUBLIE,
+    lu dans l'arborescence servie (suites, architectures, paquets distincts, pool, dernière
+    publication), hors boucle, cache 30 s ; /stats et la tâche de fond en tirent leurs comptes ;
+    une suite non publiée ou illisible vaut null, jamais 0. La lecture disque et repoctl ne
+    bloquent plus la boucle d'événements.
+  * Page /repo/ au profil Aurora : tuiles, suites, paquets récents, journal ; « — » sans
+    mesure. Les boutons Initialiser le dépôt et Générer la clé GPG, qui appelaient alert() sans
+    confirmation, passent par une confirmation intégrée à la page, avec l'avertissement
+    (configuration ou clé de signature remplacée sur un dépôt en service). 11 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 13:29:37 +0200
+
 secubox-repo (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-release (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

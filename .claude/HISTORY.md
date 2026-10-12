@@ -774,3 +774,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — toolbox, dossier partagé de journaux (closes #2490)
 - secubox-toolbox 2.13.1 : /var/log/secubox en secubox-toolbox:secubox 0775 (la rotation générale de secubox-core, sous su secubox, peut de nouveau y créer ses .1.gz) ; logrotate.service ne doit plus échouer chaque nuit.
+
+## 2026-10-12 — Dépôt APT, comptes réels et page Aurora (closes #2493)
+- secubox-repo 1.3.0 : GET /publie (suites, paquets distincts, pool lus dans l'arborescence publiée) ; /stats et la tâche de fond n'utilisent plus le socle reprepro de repoctl (« trixie : 0 ») ; page Aurora ; Init et GPG confirmés dans la page. 11 tests.

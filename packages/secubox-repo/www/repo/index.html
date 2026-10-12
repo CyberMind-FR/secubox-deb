@@ -1,496 +1,261 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Dépôt APT, profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES : GET /api/v1/repo/publie (ce que le dépôt PUBLIE : suites, paquets, pool), /recent, /history, /status. Illisible = « — », jamais un zéro inventé.
+  Maintenance (POST /init, /gpg/setup) : confirmation INTÉGRÉE à la page (jamais alert()/confirm()), jeton d'administrateur requis.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>APT Repository - SecuBox</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Dépôt APT</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --tube-mist: #81c784; --tube-dark: #1b3d1c;
-            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
-            --p31-decay: #dd8800; --p31-decay-dim: #aa6600;
-            --bloom-text: 0 0 2px #00dd44, 0 0 4px rgba(0,221,68,0.4);
-            --bloom-soft: 0 0 3px rgba(0,221,68,0.3);
-            --bloom-amber: 0 0 2px #dd8800, 0 0 5px rgba(221,136,0,0.3);
-        }
-        body { background: var(--tube-light); color: var(--tube-dark); font-family: 'JetBrains Mono', monospace; display: flex; min-height: 100vh; }
-        .repo-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .stat-card {
-            background: var(--surface0);
-            border-radius: 8px;
-            padding: 1.5rem;
-            text-align: center;
-        }
-        .stat-card h3 {
-            color: var(--subtext0);
-            font-size: 0.875rem;
-            margin-bottom: 0.5rem;
-        }
-        .stat-card .value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--blue);
-        }
-        .package-list {
-            background: var(--surface0);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .package-list table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .package-list th,
-        .package-list td {
-            padding: 0.75rem 1rem;
-            text-align: left;
-            border-bottom: 1px solid var(--surface1);
-        }
-        .package-list th {
-            background: var(--surface1);
-            color: var(--subtext0);
-            font-weight: 500;
-        }
-        .package-list tr:hover {
-            background: var(--surface1);
-        }
-        .dist-tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .dist-tab {
-            padding: 0.5rem 1rem;
-            background: var(--surface1);
-            border: none;
-            border-radius: 4px;
-            color: var(--text);
-            cursor: pointer;
-        }
-        .dist-tab.active {
-            background: var(--blue);
-            color: var(--base);
-        }
-        .install-box {
-            background: var(--mantle);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .install-box h3 {
-            margin-bottom: 1rem;
-        }
-        .install-box pre {
-            background: var(--crust);
-            padding: 1rem;
-            border-radius: 4px;
-            overflow-x: auto;
-        }
-        .install-box code {
-            color: var(--green);
-        }
-        .action-btn {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        .action-btn.primary {
-            background: var(--blue);
-            color: var(--base);
-        }
-        .action-btn.danger {
-            background: var(--red);
-            color: var(--base);
-        }
-        .gpg-status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .gpg-status .dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-        .gpg-status .dot.ok { background: var(--green); }
-        .gpg-status .dot.error { background: var(--red); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
     
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
+            .tw{overflow-x:auto} table.t{width:100%;border-collapse:collapse;font-size:.78rem} table.t th{color:var(--faible);font-weight:600;text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;white-space:nowrap}
+        table.t td{padding:5px 8px;border-top:1px solid rgba(86,150,255,.12);overflow-wrap:anywhere} .rec{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 12px;font-size:.76rem;padding:3px 0;border-top:1px solid rgba(86,150,255,.1)} .rec:first-child{border-top:0}
+        .rec span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .rec b{color:var(--doux);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+        .maint{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
-    <div class="app-container">
-        <nav class="sidebar" id="sidebar"></nav>
-
-        <main class="main-content">
-            <header class="content-header">
-                <h1>APT Repository</h1>
-                <p class="subtitle">apt.secubox.in package management</p>
-            </header>
-
-            <div class="install-box">
-                <h3>Quick Install</h3>
-                <pre><code>curl -fsSL https://apt.secubox.in/install.sh | sudo bash
-sudo apt install secubox-full</code></pre>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4-9 4z" fill="rgba(41,182,246,.14)"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/></svg>
+                <div><b>Dépôt APT</b><small id="subline">Ce que la box publie</small></div>
             </div>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle ; les actions sont inertes</div>
+        <div id="dialogue" role="alertdialog" aria-label="Confirmation" hidden></div>
+        <div class="peer-note" id="retour" role="status"></div>
 
-            <div class="repo-stats" id="stats">
-                <div class="stat-card">
-                    <h3>Total Packages</h3>
-                    <div class="value" id="pkg-count">--</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Distributions</h3>
-                    <div class="value" id="dist-count">--</div>
-                </div>
-                <div class="stat-card">
-                    <h3>GPG Status</h3>
-                    <div class="gpg-status" id="gpg-status">
-                        <span class="dot"></span>
-                        <span>Checking...</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <h3>Repository</h3>
-                    <div class="value" id="repo-status">--</div>
-                </div>
-            </div>
+        <div class="tuiles">
+            <div class="tuile"><div class="l">Suites publiées</div><div class="v" id="tSuites">—</div><div class="s">avec leur fichier Release</div></div>
+            <div class="tuile"><div class="l">Paquets distincts</div><div class="v" id="tPaq">—</div><div class="s">toutes suites confondues</div></div>
+            <div class="tuile"><div class="l">Fichiers .deb</div><div class="v" id="tDeb">—</div><div class="s" id="tDebS">dans le pool</div></div>
+            <div class="tuile"><div class="l">Taille du pool</div><div class="v" id="tPool">—</div><div class="s">octets publiés</div></div>
+            <div class="tuile"><div class="l">Dernière publication</div><div class="v" id="tPub" style="font-size:1rem">—</div><div class="s" id="tPubS"></div></div>
+        </div>
 
-            <div class="section">
-                <h2>Packages</h2>
-                <div class="dist-tabs" id="dist-tabs"></div>
-                <div class="package-list">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Package</th>
-                                <th>Version</th>
-                                <th>Architecture</th>
-                            </tr>
-                        </thead>
-                        <tbody id="package-table"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="section" style="margin-top: 2rem;">
-                <h2>Actions</h2>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <button class="action-btn primary" onclick="initRepo()">Initialize Repository</button>
-                    <button class="action-btn primary" onclick="setupGPG()">Setup GPG Key</button>
-                    <button class="action-btn" onclick="refreshPackages()">Refresh Package List</button>
-                </div>
-            </div>
-        </main>
-    </div>
+        <div class="pan"><h3>Suites <i id="racine"></i></h3><div class="tw" id="suites"><div class="vide">Chargement…</div></div></div>
+        <div class="grille g2">
+            <div class="pan"><h3>Paquets ajoutés récemment</h3><div id="recents"><div class="vide">—</div></div></div>
+            <div class="pan"><h3>Journal du dépôt <i id="histNote"></i></h3><div id="histo"><div class="vide">—</div></div></div>
+        </div>
+        <div class="pan"><h3>Maintenance <i>réservée à l’administrateur · chaque action demande confirmation</i></h3>
+            <div class="maint"><button class="btn danger sm" id="btnInit">⚙ Initialiser le dépôt</button><button class="btn danger sm" id="btnGpg">🔑 Générer la clé de signature GPG</button></div>
+            <div class="peer-note">Ces actions n’ont de sens que sur un dépôt neuf : sur un dépôt en service, elles peuvent remplacer sa configuration ou sa clé de signature.</div>
+        </div>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
-        const API_BASE = '/api/v1/repo';
-        let currentDist = 'bookworm';
+        const API = '/api/v1/repo';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+        function octets(b) { if (b == null) return '—'; b = Number(b) || 0; const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return (i ? (b < 10 ? b.toFixed(1) : b.toFixed(0)) : b).toString().replace('.', ',') + ' ' + u[i]; }
+        function age(t) { if (t == null) return '—'; const s = Math.max(0, Date.now() / 1000 - t); if (s < 90) return 'à l’instant'; if (s < 3600) return Math.floor(s / 60) + ' min'; if (s < 86400) return Math.floor(s / 3600) + ' h'; return Math.floor(s / 86400) + ' j'; }
+        function vide(e, msg) { e.replaceChildren(); e.append(el('div', 'vide', msg)); }
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        let sessionRequise = false;
 
-        async function fetchAPI(endpoint, options = {}) {
-            const token = localStorage.getItem('jwt_token');
-            const headers = {
-                'Content-Type': 'application/json',
-                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                ...options.headers
-            };
-            const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-            return response.json();
+        async function appeler(chemin, methode) {
+            if (DEMO) return demo(chemin, methode);
+            try {
+                const h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+                const r = await fetch(API + chemin, { method: methode || 'GET', headers: h, credentials: 'same-origin', cache: 'no-store' });
+                if (r.status === 401) { sessionRequise = true; return { _session: true }; }
+                let j = null; try { j = await r.json(); } catch (e) { /* pas de JSON */ }
+                if (!r.ok) return { _erreur: (j && (j.detail || j.error)) || ('erreur ' + r.status) };
+                return j;
+            } catch (e) { return { _erreur: e.message }; }
         }
 
-        async function loadStatus() {
-            try {
-                const status = await fetchAPI('/status');
-                document.getElementById('pkg-count').textContent = status.package_count || 0;
-                document.getElementById('dist-count').textContent =
-                    status.distributions ? status.distributions.split(',').length : 0;
-                document.getElementById('repo-status').textContent =
-                    status.repo_exists ? 'Active' : 'Not initialized';
-
-                const gpgEl = document.getElementById('gpg-status');
-                if (status.gpg_configured) {
-                    gpgEl.innerHTML = '<span class="dot ok"></span><span>Configured</span>';
-                } else {
-                    gpgEl.innerHTML = '<span class="dot error"></span><span>Not configured</span>';
+        function rendrePublie(d) {
+            const ok = d && !d._session && !d._erreur && d.disponible !== false;
+            const pa = $('pastille');
+            if (!ok) {
+                pa.textContent = d && d._session ? 'SESSION REQUISE' : 'DÉPÔT ILLISIBLE'; pa.className = 'actif hors';
+                ['tSuites', 'tPaq', 'tDeb', 'tPool', 'tPub'].forEach(i => $(i).textContent = '—');
+                vide($('suites'), d && d._session ? 'Session requise : connectez-vous.' : 'L’arborescence publiée est illisible ou absente sur cette box.'); hauteur(); return;
+            }
+            const S = d.suites || [];
+            pa.textContent = S.length + ' SUITE' + (S.length > 1 ? 'S' : '') + ' PUBLIÉE' + (S.length > 1 ? 'S' : ''); pa.className = 'actif';
+            $('tSuites').textContent = fmt(S.length); $('tPaq').textContent = fmt(d.paquets_uniques);
+            $('tDeb').textContent = d.pool ? fmt(d.pool.paquets_deb) : '—'; $('tDebS').textContent = d.pool && d.pool.partiel ? 'mesure partielle' : 'dans le pool';
+            $('tPool').textContent = d.pool ? octets(d.pool.octets) : '—';
+            $('tPub').textContent = d.derniere_publication ? String(d.derniere_publication).replace(/^\w+, /, '').replace(/ UTC$/, '') : '—'; $('tPubS').textContent = d.derniere_publication ? 'UTC' : '';
+            $('racine').textContent = d.racine || '';
+            const z = $('suites'); z.replaceChildren();
+            if (!S.length) { vide(z, 'Aucune suite publiée.'); }
+            else {
+                const t = el('table', 't'), th = el('tr');
+                ['Suite', 'Version', 'Architectures · entrées', 'Paquets distincts', 'Composants', 'Publiée'].forEach(x => th.append(el('th', null, x))); t.append(th);
+                for (const s of S) {
+                    const r = el('tr');
+                    r.append(el('td', null, s.nom), el('td', null, s.version || '—'), el('td', null, (s.architectures || []).map(a => a + ' : ' + (s.paquets && s.paquets[a] != null ? fmt(s.paquets[a]) : '—')).join(' · ') || '—'),
+                             el('td', null, fmt(s.uniques)), el('td', null, (s.composants || []).join(', ') || '—'), el('td', null, s.date || '—'));
+                    t.append(r);
                 }
-            } catch (e) {
-                console.error('Failed to load status:', e);
+                z.append(t);
             }
+            $('subline').textContent = ((S.find(s => s.nom === 'trixie') || S[0] || {}).nom || 'dépôt') + ' · ' + fmt(d.paquets_uniques) + ' paquets distincts';
+            hauteur();
+        }
+        function rendreRecents(d) {
+            const z = $('recents'); z.replaceChildren();
+            const L = d && Array.isArray(d.packages) ? d.packages : null;
+            if (!L) { vide(z, d && d._session ? 'Session requise.' : 'Liste illisible.'); return; }
+            if (!L.length) { vide(z, 'Aucun paquet.'); return; }
+            for (const p of L.slice(0, 10)) { const r = el('div', 'rec'); const n = el('span', null, p.name); n.title = p.name; r.append(n, el('b', null, p.size_human || octets(p.size)), el('b', null, p.modified ? age(Date.parse(p.modified) / 1000) : '—')); z.append(r); }
+        }
+        function rendreHisto(d) {
+            const z = $('histo'); z.replaceChildren();
+            const L = d && Array.isArray(d.events) ? d.events : null;
+            $('histNote').textContent = L ? fmt(d.total) + ' au total' : '';
+            if (!L) { vide(z, d && d._session ? 'Session requise.' : 'Journal illisible.'); return; }
+            if (!L.length) { vide(z, 'Aucun événement enregistré.'); return; }
+            for (const e of L.slice(-10).reverse()) { const r = el('div', 'rec'); r.append(el('span', null, String(e.event || '').replace(/_/g, ' ') + (e.details && e.details.user ? ' · ' + e.details.user : '')), el('b', null, e.timestamp ? age(Date.parse(e.timestamp) / 1000) : '—'), el('b', null, '')); z.append(r); }
         }
 
-        async function loadDistributions() {
-            try {
-                const data = await fetchAPI('/distributions');
-                const tabs = document.getElementById('dist-tabs');
-                tabs.innerHTML = data.distributions.map(dist =>
-                    `<button class="dist-tab ${dist === currentDist ? 'active' : ''}"
-                             onclick="selectDist('${dist}')">${dist}</button>`
-                ).join('');
-            } catch (e) {
-                console.error('Failed to load distributions:', e);
-            }
-        }
-
-        async function loadPackages(dist) {
-            try {
-                const data = await fetchAPI(`/packages/${dist}`);
-                const tbody = document.getElementById('package-table');
-                if (data.packages && data.packages.length > 0) {
-                    tbody.innerHTML = data.packages.map(pkg => `
-                        <tr>
-                            <td>${pkg.package}</td>
-                            <td>${pkg.version}</td>
-                            <td>${pkg.arch}</td>
-                        </tr>
-                    `).join('');
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--subtext0);">No packages found</td></tr>';
-                }
-            } catch (e) {
-                console.error('Failed to load packages:', e);
-                document.getElementById('package-table').innerHTML =
-                    '<tr><td colspan="3" style="text-align: center; color: var(--red);">Failed to load packages</td></tr>';
-            }
-        }
-
-        function selectDist(dist) {
-            currentDist = dist;
-            document.querySelectorAll('.dist-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.textContent === dist);
+        function confirmer(message) {
+            return new Promise(resolve => {
+                const z = $('dialogue'); z.replaceChildren(); z.className = 'grave';
+                const m = el('span', null, message); m.style.whiteSpace = 'pre-line';
+                const oui = el('button', 'btn danger', 'Confirmer'), non = el('button', 'btn', 'Annuler'); oui.type = non.type = 'button';
+                const fin = v => { z.hidden = true; z.replaceChildren(); hauteur(); resolve(v); };
+                oui.addEventListener('click', () => fin(true)); non.addEventListener('click', () => fin(false));
+                z.append(m, oui, non); z.hidden = false; hauteur(); non.focus();
             });
-            loadPackages(dist);
         }
-
-        async function initRepo() {
-            try {
-                await fetchAPI('/init', { method: 'POST' });
-                alert('Repository initialized');
-                loadStatus();
-            } catch (e) {
-                alert('Failed to initialize: ' + e.message);
-            }
+        async function maintenance(chemin, libelle, avertissement) {
+            if (!await confirmer(libelle + ' ?\n\n' + avertissement)) return;
+            $('retour').textContent = libelle + '…';
+            const r = await appeler(chemin, 'POST');
+            if (r && r._session) $('retour').textContent = 'Session d’administrateur requise.';
+            else if (r && r._erreur) $('retour').textContent = '❌ ' + r._erreur;
+            else if (r && r.success === false) $('retour').textContent = '❌ ' + (r.error || r.message || 'échec');
+            else { $('retour').textContent = '✅ ' + libelle + ' : terminé.'; charger(); }
+            hauteur();
         }
+        $('btnInit').addEventListener('click', () => maintenance('/init', 'Initialiser le dépôt', 'La configuration du dépôt est (ré)écrite. Sur un dépôt en service, cela peut remplacer ses réglages de distributions.'));
+        $('btnGpg').addEventListener('click', () => maintenance('/gpg/setup', 'Générer la clé de signature GPG', 'Une nouvelle clé de signature est créée. Sur un dépôt en service, les clients qui font confiance à l’ancienne clé ne vérifieront plus ses paquets.'));
 
-        async function setupGPG() {
-            try {
-                await fetchAPI('/gpg/setup', { method: 'POST' });
-                alert('GPG key generated');
-                loadStatus();
-            } catch (e) {
-                alert('Failed to setup GPG: ' + e.message);
-            }
+        async function charger() {
+            sessionRequise = false;
+            const [p, r, h] = await Promise.all([appeler('/publie'), appeler('/recent'), appeler('/history?limit=20')]);
+            rendrePublie(p); rendreRecents(r); rendreHisto(h);
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
-
-        function refreshPackages() {
-            loadPackages(currentDist);
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'repo' }, location.origin); } catch (e) { /* hors cadre */ }
         }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('btn-refresh').addEventListener('click', charger);
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadStatus();
-            loadDistributions();
-            loadPackages(currentDist);
-        });
+        function demo(c, methode) {
+            const r = d => Promise.resolve(d), e = c.split('?')[0];
+            if (methode === 'POST') return r({ _erreur: 'démonstration : action inerte' });
+            if (e === '/publie') return r({ disponible: true, racine: '/srv/depot-exemple', paquets_uniques: 188, derniere_publication: 'Mon, 12 Oct 2026 08:34:59 UTC', pool: { octets: 7.8e8, paquets_deb: 465, partiel: false }, suites: [
+                { nom: 'trixie', version: '13', date: 'Mon, 12 Oct 2026 08:34:59 UTC', architectures: ['arm64', 'amd64'], composants: ['main', 'contrib'], paquets: { arm64: 173, amd64: 173 }, uniques: 173 },
+                { nom: 'bookworm', version: '12', date: 'Sat, 03 Oct 2026 09:00:00 UTC', architectures: ['arm64', 'amd64'], composants: ['main'], paquets: { arm64: 218, amd64: null }, uniques: 218 },
+                { nom: '<img src=x onerror=alert(1)>', version: null, date: null, architectures: ['amd64'], composants: ['main'], paquets: { amd64: null }, uniques: null }] });
+            if (e === '/recent') { const t = new Date(Date.now() - 3600e3).toISOString(); return r({ packages: [{ name: 'secubox-exemple_1.2.0-1~trixie1_all.deb', size: 480000, size_human: '469 Ko', modified: t }, { name: '<b>x</b>_1_all.deb', size: 1200, size_human: '1 Ko', modified: t }] }); }
+            if (e === '/history') return r({ total: 3, events: [{ event: 'repo_init', timestamp: new Date(Date.now() - 86400e3).toISOString(), details: { user: 'admin' } }, { event: 'package_added', timestamp: new Date(Date.now() - 3600e3).toISOString(), details: {} }] });
+            return r(null);
+        }
+        if (DEMO) $('demo').hidden = false;
+        charger();
+        setInterval(charger, 60000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
