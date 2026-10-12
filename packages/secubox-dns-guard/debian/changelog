@@ -1,3 +1,13 @@
+secubox-dns-guard (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * network-anomaly (#2459) : les lignes de base se construisent seules. La collecte mesurait
+    chaque minute mais seul un POST manuel construisait les lignes de base ; sans elles la
+    détection ne pouvait jamais alerter (22 000 échantillons sur gk2, aucune ligne). Le passage
+    planifié les construit avant la détection (30 échantillons au moins) et les rafraîchit
+    toutes les heures ; l'API relit le fichier écrit par ce processus. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:19:06 +0200
+
 secubox-dns-guard (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)

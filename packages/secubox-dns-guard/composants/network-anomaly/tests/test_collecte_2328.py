@@ -44,3 +44,66 @@ def test_l_unite_et_le_minuteur_existent_et_sont_durcis():
     assert "OnUnitActiveSec=1min" in t and "WantedBy=timers.target" in t
     regles = (Path(__file__).resolve().parents[3] / "debian" / "rules").read_text(encoding="utf-8")
     assert "secubox-network-anomaly-collecte.timer" in regles and "secubox-network-anomaly-collecte.service" in regles
+
+
+# ── #2459 : les lignes de base se construisent seules ─────────────────────────────────────────────────────────────────────────────────────────
+import json  # noqa: E402
+from datetime import datetime, timedelta  # noqa: E402
+
+
+def _historique(d, metrique, valeurs, depuis_min=0):
+    f = d.metrics_dir / f"{metrique}.jsonl"
+    n = len(valeurs)
+    with open(f, "w") as h:
+        for i, v in enumerate(valeurs):
+            ts = (datetime.utcnow() - timedelta(minutes=depuis_min + n - i)).isoformat() + "Z"
+            h.write(json.dumps({"value": v, "timestamp": ts}) + "\n")
+
+
+def test_sans_ligne_de_base_une_collecte_en_construit_une(tmp_path):
+    d = AnomalyDetector(tmp_path)
+    _historique(d, "eth0_rx_bytes", [100.0 + (i % 5) for i in range(40)])
+    assert d.baselines == {}
+    assert C.maj_lignes_de_base(d) == 1
+    assert d.baselines["eth0_rx_bytes"].sample_count == 40
+    assert (tmp_path / "baselines.json").exists()                              # écrite pour l'API, qui est un autre processus
+
+
+def test_historique_trop_court_ne_construit_rien(tmp_path):
+    d = AnomalyDetector(tmp_path)
+    _historique(d, "m", [1.0] * 10)
+    assert C.maj_lignes_de_base(d) == 0 and d.baselines == {}                   # 30 échantillons au moins : pas de statistique sur trois points
+
+
+def test_ligne_de_base_recente_n_est_pas_recalculee(tmp_path):
+    d = AnomalyDetector(tmp_path)
+    _historique(d, "m", [float(i % 7) for i in range(40)])
+    assert C.maj_lignes_de_base(d) == 1
+    assert C.maj_lignes_de_base(d) == 0                                         # fraîche : on ne la recalcule pas à chaque minute
+    d.baselines["m"].last_updated = (datetime.utcnow() - timedelta(hours=2)).isoformat() + "Z"
+    assert C.maj_lignes_de_base(d) == 1                                         # périmée : rafraîchie
+
+
+def test_une_pointe_apres_construction_donne_une_alerte(tmp_path):
+    from api.main import AnomalyType
+    d = AnomalyDetector(tmp_path)
+    _historique(d, "eth0_rx_bytes", [100.0 + (i % 5) for i in range(40)])
+    C.maj_lignes_de_base(d)
+    assert d.check_anomaly("eth0_rx_bytes", 100000.0, AnomalyType.BANDWIDTH_SPIKE) is not None      # avant : aucune ligne de base, aucune alerte possible
+
+
+def test_collecter_construit_les_lignes_de_base_avant_la_detection(tmp_path):
+    ordre = []
+
+    class Faux:
+        baselines = {}
+        metrics_dir = tmp_path
+        def run_detection(self):
+            ordre.append("detection"); return []
+    orig = C.maj_lignes_de_base
+    C.maj_lignes_de_base = lambda det, **k: ordre.append("lignes") or 0
+    try:
+        C.collecter(Faux())
+    finally:
+        C.maj_lignes_de_base = orig
+    assert ordre == ["lignes", "detection"]
