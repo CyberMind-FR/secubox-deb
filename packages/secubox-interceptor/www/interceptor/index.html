@@ -4,806 +4,277 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  SecuBox — Interceptor, profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES UNIQUEMENT, EN LECTURE SEULE : GET /api/v1/interceptor/moteurs, /activite?minutes=, /niveaux, /exclusions.
+  Source absente = « — », jamais un zéro inventé. L'inspection elle-même est faite par sbxmitm et sbxwaf : cette page les supervise.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Interceptor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Interceptor</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Interceptor accent - Amber */
-            --accent: #f59e0b;
-            --accent-dim: #d97706;
-            --accent-light: rgba(245, 158, 11, 0.15);
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--accent);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--accent);
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--accent), 0 0 10px rgba(245,158,11,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(245,158,11,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--accent); text-shadow: var(--bloom-amber); }
-
-        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; border: 1px solid; letter-spacing: 0.1em; text-transform: uppercase; }
-        .badge-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
-        .badge-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
-        .badge-yellow { background: rgba(210,153,34,0.15); border-color: var(--yellow); color: var(--yellow); }
-        .badge-amber { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
-        .badge-primary { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
-
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); border-color: var(--p31-dim); }
-        .btn-primary { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
-        .btn-primary:hover { background: rgba(245,158,11,0.25); box-shadow: 0 0 12px rgba(245,158,11,0.2); }
-        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
-        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
-        .card:hover { border-color: var(--p31-dim); }
-        .card-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--accent); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; }
-
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 768px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
-
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 2rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
-        .stat-value.amber { color: var(--accent); }
-        .stat-value.green { color: var(--green); }
-        .stat-value.red { color: var(--red); }
-        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; letter-spacing: 0.15em; }
-
-        /* Tabs */
-        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; background: var(--tube-pale); }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; transition: all 0.2s; }
-        .tab:hover { color: var(--accent); }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); text-shadow: var(--bloom-amber); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Table */
-        table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
-        th { font-size: 0.75rem; color: var(--accent); text-shadow: var(--bloom-amber); text-transform: uppercase; letter-spacing: 0.15em; }
-        td { font-size: 0.875rem; color: var(--p31-mid); }
-        tr:hover { background: rgba(245,158,11,0.03); }
-
-        /* Flow list */
-        .flow-item { padding: 0.75rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: background 0.2s; }
-        .flow-item:hover { background: rgba(245,158,11,0.05); }
-        .flow-method { min-width: 60px; font-weight: bold; }
-        .flow-method.GET { color: var(--green); }
-        .flow-method.POST { color: var(--accent); }
-        .flow-method.PUT { color: #3b82f6; }
-        .flow-method.DELETE { color: var(--red); }
-        .flow-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--p31-mid); }
-        .flow-status { min-width: 50px; text-align: right; }
-        .flow-status.s2xx { color: var(--green); }
-        .flow-status.s3xx { color: var(--accent); }
-        .flow-status.s4xx { color: var(--red); }
-        .flow-status.s5xx { color: #a855f7; }
-        .flow-time { font-size: 0.75rem; color: var(--text-dim); min-width: 80px; text-align: right; }
-
-        /* Rule builder */
-        .rule-form { display: grid; gap: 1rem; }
-        .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
-        .form-group label { font-size: 0.75rem; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
-        input, select, textarea { font-family: 'Courier Prime', monospace; background: var(--tube-light); border: 1px solid var(--tube-soft); color: var(--p31-mid); padding: 0.5rem; border-radius: 4px; }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 8px rgba(245,158,11,0.1); }
-
-        /* Toggle */
-        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 24px; transition: 0.3s; }
-        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--text-dim); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
-        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: white; }
-
-        /* Modal */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--tube-pale); border: 1px solid var(--accent); border-radius: 8px; padding: 1.5rem; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 30px rgba(245,158,11,0.1); }
-        .modal-title { font-size: 1rem; color: var(--accent); text-shadow: var(--bloom-amber); margin-bottom: 1rem; letter-spacing: 0.1em; }
-        .modal-close { position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem; cursor: pointer; color: var(--text-dim); }
-
-        /* Toast */
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--tube-pale); border: 1px solid var(--p31-dim); z-index: 1000; animation: slideIn 0.3s; font-family: 'Courier Prime', monospace; }
-        .toast-success { border-color: var(--green); }
-        .toast-error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-        .empty { text-align: center; padding: 2rem; color: var(--p31-dim); }
-
-        /* Recording indicator */
-        .recording { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--red); }
-        .recording-dot { width: 10px; height: 10px; background: var(--red); border-radius: 50%; animation: pulse 1s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        /* Code viewer */
-        .code-viewer { background: #1a1a2e; color: var(--p31-peak); padding: 1rem; border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; overflow-x: auto; max-height: 300px; overflow-y: auto; }
-        .code-viewer .header { color: var(--accent); }
-        .code-viewer .value { color: #a5d6a7; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
+    
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>Traffic Interceptor <span class="badge" id="status-badge">Loading...</span></h1>
-            <div class="actions">
-                <span class="recording" id="recording-indicator" style="display: none;">
-                    <span class="recording-dot"></span> Recording
-                </span>
-                <button class="btn btn-primary" id="toggle-btn" onclick="toggleService()">Start</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6" fill="rgba(41,182,246,.14)"/><path d="M20 20l-4.2-4.2M8.5 11h5M11 8.5v5"/></svg>
+                <div><b>Interceptor</b><small id="subline">Supervision de l’inspection du trafic</small></div>
             </div>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="info">Lecture seule : l’inspection est assurée par sbxmitm (déchiffrement du tunnel wg-toolbox) et sbxwaf (WAF). Cette page montre leur état et leur activité réels.</div>
 
-        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">HTTP/HTTPS traffic interception and analysis</p>
-
-        <!-- Stats -->
-        <div class="grid-4">
-            <div class="stat-card">
-                <div class="stat-value amber" id="stat-flows">0</div>
-                <div class="stat-label">Total Flows</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value red" id="stat-blocked">0</div>
-                <div class="stat-label">Blocked</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value green" id="stat-sessions">0</div>
-                <div class="stat-label">Active Sessions</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value amber" id="stat-bytes">0</div>
-                <div class="stat-label">Bytes Inspected</div>
-            </div>
+        <div class="tuiles">
+            <div class="tuile"><div class="haut"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="rgba(46,204,113,.14)"/><path d="M8 12l3 3 5-6"/></svg><div><div class="l">Moteurs actifs</div><div class="v" id="sMot">—</div></div></div><div class="s" id="sMotS">sbxmitm + sbxwaf</div></div>
+            <div class="tuile"><div class="haut"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><div><div class="l">Connexions vues</div><div class="v" id="sHello">—</div></div></div><div class="s" id="sHelloS">client-hello TLS</div></div>
+            <div class="tuile"><div class="haut"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="rgba(59,130,246,.14)"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><div><div class="l">Hôtes distincts</div><div class="v" id="sHotes">—</div></div></div><div class="s">noms (SNI) vus</div></div>
+            <div class="tuile"><div class="haut"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 4v16M17 4v16M7 9h10M7 15h10"/></svg><div><div class="l">Empreintes JA4</div><div class="v" id="sJa4">—</div></div></div><div class="s">clients TLS distincts</div></div>
+            <div class="tuile"><div class="haut"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ffd23f" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="3" fill="rgba(255,210,63,.14)"/><circle cx="17" cy="10" r="2.4"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5"/></svg><div><div class="l">Pairs inspectés</div><div class="v" id="sPairs">—</div></div></div><div class="s" id="sPairsS">pairs WireGuard</div></div>
         </div>
 
-        <!-- Tabs -->
-        <div class="tabs">
-            <div class="tab active" data-tab="sessions">Sessions</div>
-            <div class="tab" data-tab="flows">Flows</div>
-            <div class="tab" data-tab="rules">Rules</div>
-            <div class="tab" data-tab="recordings">Recordings</div>
-            <div class="tab" data-tab="statistics">Statistics</div>
-            <div class="tab" data-tab="settings">Settings</div>
+        <div class="pan"><h3>Moteurs d’inspection <i>état systemd et port d’écoute réels</i></h3><div class="moteurs" id="moteurs"><div class="vide">Chargement…</div></div></div>
+
+        <div class="grille g2">
+            <div class="pan">
+                <h3>Activité d’inspection <i id="fenetre">dernière heure</i></h3>
+                <div class="win" id="win" style="margin-bottom:8px"></div>
+                <div id="serie"><div class="vide">—</div></div>
+            </div>
+            <div class="pan"><h3>Hôtes les plus vus</h3><div id="hotes"><div class="vide">—</div></div></div>
         </div>
 
-        <!-- Sessions Tab -->
-        <div class="tab-content active" id="tab-sessions">
-            <div class="card">
-                <div class="card-title">
-                    <span>Active Sessions</span>
-                    <span class="badge badge-amber" id="sessions-count">0</span>
-                </div>
-                <div id="sessions-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
+        <div class="grille g2">
+            <div class="pan"><h3>Niveau d’inspection par pair <i>off · passive · active · reel</i></h3><div id="niveaux"><div class="vide">—</div></div><div class="peer-note" id="niveauxNote"></div></div>
+            <div class="pan"><h3>Répartition par moteur</h3><div id="parMoteur"><div class="vide">—</div></div></div>
         </div>
 
-        <!-- Flows Tab -->
-        <div class="tab-content" id="tab-flows">
-            <div class="card">
-                <div class="card-title">
-                    <span>Intercepted Flows</span>
-                    <div class="actions">
-                        <input type="text" id="flow-filter" placeholder="Filter by host..." style="width: 200px;">
-                        <button class="btn btn-sm" onclick="loadFlows()">Filter</button>
-                    </div>
-                </div>
-                <div id="flows-list">
-                    <div class="empty">Loading...</div>
-                </div>
+        <div class="pan"><h3>Exclusions <i>ce que l’inspection ne déchiffre pas</i></h3>
+            <div class="grille g2" style="gap:12px">
+                <div><div class="ml" style="margin-bottom:4px">Bypass (laissés passer) <b id="nByp"></b></div><div class="liste" id="bypass"></div></div>
+                <div><div class="ml" style="margin-bottom:4px">Splice (relayés sans déchiffrer) <b id="nSpl"></b></div><div class="liste" id="splice"></div></div>
             </div>
         </div>
+    </div></div></main>
 
-        <!-- Rules Tab -->
-        <div class="tab-content" id="tab-rules">
-            <div class="card">
-                <div class="card-title">
-                    <span>Interception Rules</span>
-                    <button class="btn btn-primary btn-sm" onclick="showRuleModal()">Add Rule</button>
-                </div>
-                <div id="rules-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recordings Tab -->
-        <div class="tab-content" id="tab-recordings">
-            <div class="card">
-                <div class="card-title">
-                    <span>Traffic Recordings</span>
-                    <div class="actions">
-                        <button class="btn btn-primary btn-sm" id="record-btn" onclick="toggleRecording()">Start Recording</button>
-                    </div>
-                </div>
-                <div id="recordings-list">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Statistics Tab -->
-        <div class="tab-content" id="tab-statistics">
-            <div class="grid-2">
-                <div class="card">
-                    <div class="card-title">By HTTP Method</div>
-                    <div id="stats-methods">
-                        <div class="empty">Loading...</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-title">By Status Code</div>
-                    <div id="stats-status">
-                        <div class="empty">Loading...</div>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-title">Top Hosts</div>
-                <div id="stats-hosts">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div class="tab-content" id="tab-settings">
-            <div class="grid-2">
-                <div class="card">
-                    <div class="card-title">General Settings</div>
-                    <table>
-                        <tr>
-                            <td>SSL/TLS Inspection</td>
-                            <td style="text-align: right;">
-                                <label class="toggle">
-                                    <input type="checkbox" id="ssl-inspection" onchange="updateConfig('ssl_inspection', this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>WAF Integration</td>
-                            <td style="text-align: right;">
-                                <label class="toggle">
-                                    <input type="checkbox" id="waf-integration" onchange="updateConfig('waf_integration', this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Listen Port</td>
-                            <td style="text-align: right;">
-                                <input type="number" id="listen-port" style="width: 100px; text-align: right;" onchange="updateConfig('listen_port', parseInt(this.value))">
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-                <div class="card">
-                    <div class="card-title">Content Filters</div>
-                    <table>
-                        <tr>
-                            <td>Block Malware</td>
-                            <td style="text-align: right;">
-                                <label class="toggle">
-                                    <input type="checkbox" id="block-malware" onchange="updateConfig('block_malware', this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Block Scripts</td>
-                            <td style="text-align: right;">
-                                <label class="toggle">
-                                    <input type="checkbox" id="block-scripts" onchange="updateConfig('block_scripts', this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Block Trackers</td>
-                            <td style="text-align: right;">
-                                <label class="toggle">
-                                    <input type="checkbox" id="block-trackers" onchange="updateConfig('block_trackers', this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Flow Detail Modal -->
-    <div class="modal" id="flow-modal">
-        <div class="modal-content" style="position: relative;">
-            <span class="modal-close" onclick="closeModal('flow-modal')">&times;</span>
-            <div class="modal-title">Flow Details</div>
-            <div id="flow-detail">
-                <div class="empty">Loading...</div>
-            </div>
-            <div class="actions" style="margin-top: 1rem;">
-                <button class="btn btn-primary" onclick="replayFlow()">Replay</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Rule Modal -->
-    <div class="modal" id="rule-modal">
-        <div class="modal-content" style="position: relative;">
-            <span class="modal-close" onclick="closeModal('rule-modal')">&times;</span>
-            <div class="modal-title">Create Rule</div>
-            <div class="rule-form">
-                <div class="form-group">
-                    <label>Rule Name</label>
-                    <input type="text" id="rule-name" placeholder="My Rule">
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea id="rule-description" rows="2" placeholder="Optional description"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Match Type</label>
-                    <select id="rule-match-type">
-                        <option value="all">All Traffic</option>
-                        <option value="request">Request Only</option>
-                        <option value="response">Response Only</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Condition (JSON)</label>
-                    <textarea id="rule-conditions" rows="3" placeholder='[{"field": "host", "operator": "contains", "value": "example.com"}]'></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Action (JSON)</label>
-                    <textarea id="rule-actions" rows="3" placeholder='[{"type": "block"}]'></textarea>
-                </div>
-            </div>
-            <div class="actions" style="margin-top: 1rem;">
-                <button class="btn btn-primary" onclick="createRule()">Create Rule</button>
-                <button class="btn" onclick="closeModal('rule-modal')">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
         const API = '/api/v1/interceptor';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        let minutes = 60;
+        const FEN = {15: 'dernières 15 min', 60: 'dernière heure', 240: 'dernières 4 h'};
 
-        let statusData = {};
-        let configData = {};
-        let selectedFlowId = null;
+        function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = {}, t = token(); if (t) h['Authorization'] = 'Bearer ' + t; return h; }
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+        function vide(el, msg) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'vide'; d.textContent = msg; el.append(d); }
 
-        async function api(path, opts = {}) {
+        // Tous les appels passent ici ; en démonstration, données fictives. 401 = session requise, autre erreur = source illisible.
+        async function lire(chemin) {
+            if (DEMO) return demo(chemin);
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch (e) { console.error(e); return null; }
+                const r = await fetch(API + chemin, { headers: entetes() });
+                if (r.status === 401) return { _session: true };
+                if (!r.ok) return null;
+                return await r.json();
+            } catch (e) { return null; }
         }
 
-        function showToast(msg, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
-            setTimeout(() => toast.innerHTML = '', 3000);
-        }
-
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-        }
-
-        // Tab handling
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-            });
-        });
-
-        // Modal handling
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-        }
-
-        function showRuleModal() {
-            document.getElementById('rule-modal').classList.add('active');
-        }
-
-        async function loadStatus() {
-            statusData = await api('/status') || {};
-
-            const badge = document.getElementById('status-badge');
-            const toggleBtn = document.getElementById('toggle-btn');
-            const recordIndicator = document.getElementById('recording-indicator');
-
-            if (statusData.running) {
-                badge.textContent = 'Running';
-                badge.className = 'badge badge-green';
-                toggleBtn.textContent = 'Stop';
-                toggleBtn.className = 'btn btn-red';
-            } else {
-                badge.textContent = 'Stopped';
-                badge.className = 'badge badge-red';
-                toggleBtn.textContent = 'Start';
-                toggleBtn.className = 'btn btn-primary';
+        function rendreMoteurs(d) {
+            const z = $('moteurs');
+            if (d && d._session) { vide(z, 'Session requise : connectez-vous pour voir l’état des moteurs.'); return; }
+            if (!d || !d.moteurs) { vide(z, 'État des moteurs illisible.'); return; }
+            z.replaceChildren();
+            for (const m of d.moteurs) {
+                const c = document.createElement('div'); c.className = 'mot ' + (m.actif ? 'ok' : 'ko');
+                const b = document.createElement('b'); b.textContent = (m.actif ? '● ' : '○ ') + m.nom;
+                const s1 = document.createElement('small'); s1.textContent = m.unite + ' — ' + (m.etat || 'inconnu');
+                const s2 = document.createElement('small'); s2.textContent = 'écoute ' + m.ecoute + (m.port_ouvert === true ? ' · port ouvert' : m.port_ouvert === false ? ' · PORT FERMÉ' : '');
+                c.append(b, s1, s2); z.append(c);
             }
-
-            recordIndicator.style.display = statusData.recording_enabled ? 'inline-flex' : 'none';
-
-            // Update stats
-            document.getElementById('stat-flows').textContent = statusData.total_flows || 0;
-            document.getElementById('stat-blocked').textContent = statusData.blocked_flows || 0;
-            document.getElementById('stat-sessions').textContent = statusData.active_sessions || 0;
-            document.getElementById('stat-bytes').textContent = formatBytes(statusData.bytes_inspected || 0);
+            $('sMot').textContent = d.actifs + ' / ' + d.total;
+            const pa = $('pastille');
+            pa.textContent = d.actifs === d.total ? 'INSPECTION ACTIVE' : (d.actifs ? 'INSPECTION PARTIELLE' : 'INSPECTION ARRÊTÉE');
+            pa.className = 'actif' + (d.actifs === d.total ? '' : ' hors');
         }
 
-        async function loadConfig() {
-            configData = await api('/config') || {};
+        // Courbe en barres : une barre par minute, échelle commune ; axe gradué sur des valeurs atteintes (0 et le maximum).
+        function rendreSerie(a) {
+            const z = $('serie');
+            if (!a || a._session || a.disponible === false) { vide(z, a && a._session ? 'Session requise.' : 'Journal d’inspection illisible.'); return; }
+            const s = a.serie || [], max = Math.max(1, ...s), W = 600, H = 120, bw = W / s.length;
+            let svg = '<svg class="serie" viewBox="0 0 ' + (W + 34) + ' ' + (H + 22) + '" role="img" aria-label="Connexions inspectées par minute">';
+            svg += '<line x1="30" y1="' + H + '" x2="' + (W + 32) + '" y2="' + H + '" stroke="rgba(159,179,214,.3)"/>';
+            s.forEach((v, i) => { const h = v ? Math.max(2, H * v / max) : 0; if (h) svg += '<rect x="' + (32 + i * bw + 0.5).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + Math.max(1, bw - 1).toFixed(1) + '" height="' + h.toFixed(1) + '" fill="#29b6f6"><title>' + v + ' connexion(s)</title></rect>'; });
+            svg += '<text class="ax" x="28" y="' + H + '" text-anchor="end">0</text><text class="ax" x="28" y="10" text-anchor="end">' + max + '</text>';
+            svg += '<text class="ax" x="32" y="' + (H + 14) + '">−' + a.minutes + ' min</text><text class="ax" x="' + (W + 32) + '" y="' + (H + 14) + '" text-anchor="end">maintenant</text></svg>';
+            z.innerHTML = svg;   // uniquement des nombres calculés ici : aucune donnée de l'API n'entre dans ce balisage
+        }
 
-            document.getElementById('ssl-inspection').checked = configData.ssl_inspection || false;
-            document.getElementById('waf-integration').checked = configData.waf_integration || false;
-            document.getElementById('listen-port').value = configData.listen_port || 8889;
-
-            const filters = configData.content_filters || {};
-            document.getElementById('block-malware').checked = filters.block_malware || false;
-            document.getElementById('block-scripts').checked = filters.block_scripts || false;
-            document.getElementById('block-trackers').checked = filters.block_trackers || false;
-
-            // Update record button
-            const recordBtn = document.getElementById('record-btn');
-            if (configData.recording_enabled) {
-                recordBtn.textContent = 'Stop Recording';
-                recordBtn.className = 'btn btn-red btn-sm';
-            } else {
-                recordBtn.textContent = 'Start Recording';
-                recordBtn.className = 'btn btn-primary btn-sm';
+        function barres(el, items, couleur, videMsg) {
+            el.replaceChildren();
+            if (!items.length) { vide(el, videMsg); return; }
+            const max = Math.max(1, ...items.map(x => x[1]));
+            for (const [nom, n] of items) {
+                const l = document.createElement('div'); l.className = 'hl';
+                const h = document.createElement('span'); h.className = 'hn'; h.textContent = nom; h.title = nom;
+                const b = document.createElement('div'); b.className = 'hb'; const i = document.createElement('div'); i.className = 'hbi'; i.style.width = Math.max(3, 100 * n / max) + '%';
+                const f = document.createElement('i'); f.style.flex = '1'; f.style.background = couleur; i.append(f); b.append(i);
+                const t = document.createElement('b'); t.textContent = fmt(n); l.append(h, b, t); el.append(l);
             }
         }
 
-        async function loadSessions() {
-            const data = await api('/sessions') || {};
-            const sessions = data.sessions || [];
-
-            document.getElementById('sessions-count').textContent = sessions.length;
-
-            if (sessions.length === 0) {
-                document.getElementById('sessions-table').innerHTML = '<div class="empty">No active sessions</div>';
-                return;
-            }
-
-            const rows = sessions.map(s => `
-                <tr>
-                    <td style="font-family: monospace;">${s.id}</td>
-                    <td>${s.client_ip || '-'}</td>
-                    <td>${s.host || '-'}</td>
-                    <td>${s.flows || 0}</td>
-                    <td>${s.duration || '-'}</td>
-                    <td><button class="btn btn-sm btn-red" onclick="closeSession('${s.id}')">Close</button></td>
-                </tr>
-            `).join('');
-
-            document.getElementById('sessions-table').innerHTML = `
-                <table>
-                    <thead><tr><th>ID</th><th>Client</th><th>Host</th><th>Flows</th><th>Duration</th><th>Action</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
+        function rendreActivite(a) {
+            const ok = a && !a._session && a.disponible !== false;
+            $('sHello').textContent = ok ? fmt(a.total) : '—'; $('sHotes').textContent = ok ? fmt(a.hotes_distincts) : '—'; $('sJa4').textContent = ok ? fmt(a.empreintes_distinctes) : '—';
+            $('sHelloS').textContent = ok ? 'client-hello TLS · ' + (FEN[a.minutes] || a.minutes + ' min') : 'client-hello TLS';
+            $('fenetre').textContent = FEN[minutes] || (minutes + ' min');
+            rendreSerie(a);
+            barres($('hotes'), ok ? (a.top_hotes || []).map(x => [x.hote, x.n]) : [], '#3b82f6', ok ? 'Aucune connexion vue sur la période.' : '—');
+            barres($('parMoteur'), ok ? Object.entries(a.par_moteur || {}).map(([k, n]) => ['sbxmitm ' + k, n]) : [], '#a78bfa', ok ? 'Aucune connexion vue.' : '—');
         }
 
-        async function loadFlows() {
-            const filter = document.getElementById('flow-filter').value;
-            const params = filter ? `?filter_host=${encodeURIComponent(filter)}` : '';
-            const data = await api('/flows' + params) || {};
-            const flows = data.flows || [];
-
-            if (flows.length === 0) {
-                document.getElementById('flows-list').innerHTML = '<div class="empty">No flows captured</div>';
-                return;
-            }
-
-            const items = flows.map(f => {
-                const statusClass = f.status_code ? `s${Math.floor(f.status_code/100)}xx` : '';
-                return `
-                    <div class="flow-item" onclick="showFlowDetail('${f.id}')">
-                        <span class="flow-method ${f.method || 'GET'}">${f.method || 'GET'}</span>
-                        <span class="flow-url">${f.host || ''}${f.path || '/'}</span>
-                        <span class="flow-status ${statusClass}">${f.status_code || '-'}</span>
-                        <span class="flow-time">${f.timestamp ? new Date(f.timestamp).toLocaleTimeString() : '-'}</span>
-                    </div>
-                `;
-            }).join('');
-
-            document.getElementById('flows-list').innerHTML = items;
+        function rendreNiveaux(n) {
+            const z = $('niveaux'), note = $('niveauxNote');
+            if (!n || n._session) { vide(z, n && n._session ? 'Session requise.' : 'Niveaux illisibles.'); $('sPairs').textContent = '—'; return; }
+            $('sPairs').textContent = n.pairs == null ? '—' : fmt(n.pairs);
+            const couleurs = { reel: '#ff4d5e', active: '#ff9f1c', passive: '#29b6f6', off: '#6f84a8', 'défaut': '#9fb3d6' };
+            barres(z, n.repartition_pairs ? Object.entries(n.repartition_pairs).sort((a, b) => b[1] - a[1]) : [], '#29b6f6', n.pairs == null ? 'Niveaux par pair illisibles.' : 'Aucun pair enregistré.');
+            if (n.repartition_pairs) z.querySelectorAll('.hl').forEach(l => { const k = l.querySelector('.hn').textContent; l.querySelector('i').style.background = couleurs[k] || '#29b6f6'; });
+            const parts = [];
+            if (n.defaut) parts.push('Par défaut : ' + (n.defaut.mode || '—') + (n.defaut.floor ? ' (plancher : ' + n.defaut.floor + ')' : ''));
+            if (n.evenements_7j != null) parts.push(fmt(n.evenements_7j) + ' événements en 7 jours');
+            note.textContent = parts.join(' · ');
         }
 
-        async function showFlowDetail(flowId) {
-            selectedFlowId = flowId;
-            const data = await api(`/flow/${flowId}`) || {};
-            const flow = data.flow || {};
-
-            const detail = `
-                <div style="margin-bottom: 1rem;">
-                    <strong>Request</strong>
-                    <div class="code-viewer">
-                        <span class="header">${flow.method || 'GET'}</span> ${flow.path || '/'}<br>
-                        <span class="header">Host:</span> <span class="value">${flow.host || '-'}</span><br>
-                        ${(flow.request_headers || []).map(h => `<span class="header">${h.name}:</span> <span class="value">${h.value}</span><br>`).join('')}
-                    </div>
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <strong>Response</strong>
-                    <div class="code-viewer">
-                        <span class="header">Status:</span> <span class="value">${flow.status_code || '-'}</span><br>
-                        ${(flow.response_headers || []).map(h => `<span class="header">${h.name}:</span> <span class="value">${h.value}</span><br>`).join('')}
-                    </div>
-                </div>
-                ${flow.request_body ? `<div style="margin-bottom: 1rem;"><strong>Request Body</strong><div class="code-viewer">${flow.request_body}</div></div>` : ''}
-                ${flow.response_body ? `<div><strong>Response Body</strong><div class="code-viewer">${flow.response_body.substring(0, 2000)}${flow.response_body.length > 2000 ? '...' : ''}</div></div>` : ''}
-            `;
-
-            document.getElementById('flow-detail').innerHTML = detail;
-            document.getElementById('flow-modal').classList.add('active');
+        function liste(el, nEl, L) {
+            el.replaceChildren();
+            if (L == null) { nEl.textContent = ''; vide(el, 'Liste illisible.'); return; }
+            nEl.textContent = '(' + L.length + ')';
+            if (!L.length) { vide(el, 'Aucune.'); return; }
+            for (const x of L) { const c = document.createElement('code'); c.textContent = x; el.append(c); }
+        }
+        function rendreExclusions(e) {
+            const s = !e || e._session;
+            liste($('bypass'), $('nByp'), s ? null : e.bypass); liste($('splice'), $('nSpl'), s ? null : e.splice);
         }
 
-        async function replayFlow() {
-            if (!selectedFlowId) return;
-            const res = await api(`/flow/${selectedFlowId}/replay`, { method: 'POST' });
-            if (res && res.success) {
-                showToast('Flow queued for replay');
-                closeModal('flow-modal');
-            } else {
-                showToast(res?.error || 'Failed to replay', 'error');
-            }
+        async function rafraichir() {
+            const [m, a, n, e] = await Promise.all([lire('/moteurs'), lire('/activite?minutes=' + minutes), lire('/niveaux'), lire('/exclusions')]);
+            rendreMoteurs(m); rendreActivite(a); rendreNiveaux(n); rendreExclusions(e);
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            hauteur();
         }
 
-        async function loadRules() {
-            const data = await api('/rules') || {};
-            const rules = data.rules || [];
-
-            if (rules.length === 0) {
-                document.getElementById('rules-table').innerHTML = '<div class="empty">No rules defined</div>';
-                return;
-            }
-
-            const rows = rules.map(r => `
-                <tr>
-                    <td>${r.name}</td>
-                    <td>${r.description || '-'}</td>
-                    <td>${r.match_type}</td>
-                    <td><span class="badge ${r.enabled ? 'badge-green' : 'badge-red'}">${r.enabled ? 'Enabled' : 'Disabled'}</span></td>
-                    <td><button class="btn btn-sm btn-red" onclick="deleteRule('${r.id}')">Delete</button></td>
-                </tr>
-            `).join('');
-
-            document.getElementById('rules-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>Description</th><th>Match</th><th>Status</th><th>Action</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
+        const W = $('win');
+        for (const [v, l] of [[15, '15 min'], [60, '1 h'], [240, '4 h']]) {
+            const b = document.createElement('button'); b.className = 'btn sm' + (v === minutes ? ' on' : ''); b.textContent = l; b.dataset.m = v;
+            b.addEventListener('click', () => { minutes = v; W.querySelectorAll('.btn').forEach(x => x.classList.toggle('on', x === b)); rafraichir(); });
+            W.append(b);
         }
 
-        async function createRule() {
-            const name = document.getElementById('rule-name').value;
-            const description = document.getElementById('rule-description').value;
-            const matchType = document.getElementById('rule-match-type').value;
-            let conditions = [];
-            let actions = [];
-
-            try {
-                const condStr = document.getElementById('rule-conditions').value;
-                const actStr = document.getElementById('rule-actions').value;
-                if (condStr) conditions = JSON.parse(condStr);
-                if (actStr) actions = JSON.parse(actStr);
-            } catch (e) {
-                showToast('Invalid JSON format', 'error');
-                return;
-            }
-
-            if (!name) {
-                showToast('Rule name required', 'error');
-                return;
-            }
-
-            const res = await api('/rule', {
-                method: 'POST',
-                body: JSON.stringify({
-                    name,
-                    description,
-                    match_type: matchType,
-                    conditions,
-                    actions,
-                    enabled: true
-                })
-            });
-
-            if (res && res.success) {
-                showToast('Rule created');
-                closeModal('rule-modal');
-                loadRules();
-            } else {
-                showToast(res?.error || 'Failed to create rule', 'error');
-            }
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'interceptor' }, location.origin); } catch (e) { /* hors cadre */ }
         }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('btn-refresh').addEventListener('click', rafraichir);
 
-        async function deleteRule(ruleId) {
-            if (!confirm('Delete this rule?')) return;
-            const res = await api(`/rule/${ruleId}`, { method: 'DELETE' });
-            if (res && res.success) {
-                showToast('Rule deleted');
-                loadRules();
-            } else {
-                showToast(res?.error || 'Failed to delete', 'error');
-            }
+        // ── Démonstration : données fictives (noms de documentation) ────────────────────────────────────────────────────────────────────
+        function demo(chemin) {
+            const rep = d => Promise.resolve(d), e = chemin.split('?')[0];
+            if (e === '/moteurs') return rep({ actifs: 4, total: 5, moteurs: [1, 2, 3, 4].map(i => ({ nom: 'sbxmitm ' + i, unite: 'secubox-toolbox-ng-worker@' + i, etat: i === 4 ? 'inactive' : 'active', actif: i !== 4, ecoute: '10.99.1.1:809' + i, port_ouvert: i !== 4 })).concat([{ nom: 'sbxwaf', unite: 'secubox-waf-ng', etat: 'active', actif: true, ecoute: '127.0.0.1:8085', port_ouvert: true }]) });
+            if (e === '/activite') { const m = +(new URLSearchParams(chemin.split('?')[1]).get('minutes')) || 60; const serie = Array.from({ length: m }, (_, i) => Math.round(8 + 6 * Math.sin(i / 5) + (i % 7))); return rep({ disponible: true, minutes: m, total: serie.reduce((a, b) => a + b, 0), hotes_distincts: 41, empreintes_distinctes: 17, serie, top_hotes: [['cdn.exemple.test', 212], ['api.exemple.test', 160], ['mail.exemple.test', 96], ['<img src=x onerror=alert(1)>', 31]].map(([hote, n]) => ({ hote, n })), par_moteur: { 1: 180, 2: 200, 3: 150 } }); }
+            if (e === '/niveaux') return rep({ defaut: { mode: 'reel', floor: 'passive' }, pairs: 6, repartition_pairs: { reel: 3, passive: 2, 'défaut': 1 }, niveaux_clients: null, evenements_7j: 2249 });
+            if (e === '/exclusions') return rep({ bypass: ['(.+\\.)?banque\\.exemple\\.test', '(.+\\.)?messagerie\\.exemple\\.test'], splice: ['api.exemple.test', 'assistant.exemple.test'], filtres_desactives: [] });
+            return rep(null);
         }
-
-        async function loadRecordings() {
-            const data = await api('/recordings') || {};
-            const recordings = data.recordings || [];
-
-            if (recordings.length === 0) {
-                document.getElementById('recordings-list').innerHTML = '<div class="empty">No recordings</div>';
-                return;
-            }
-
-            const rows = recordings.map(r => `
-                <tr>
-                    <td>${r.id}</td>
-                    <td>${r.started ? new Date(r.started).toLocaleString() : '-'}</td>
-                    <td>${r.duration || '-'}</td>
-                    <td>${r.flows || 0} flows</td>
-                    <td>${formatBytes(r.size || 0)}</td>
-                </tr>
-            `).join('');
-
-            document.getElementById('recordings-list').innerHTML = `
-                <table>
-                    <thead><tr><th>ID</th><th>Started</th><th>Duration</th><th>Flows</th><th>Size</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        async function loadStats() {
-            const data = await api('/stats') || {};
-
-            // Methods
-            const methods = data.by_method || {};
-            const methodRows = Object.entries(methods).map(([m, c]) => `<tr><td class="flow-method ${m}">${m}</td><td>${c}</td></tr>`).join('');
-            document.getElementById('stats-methods').innerHTML = methodRows ? `<table><tbody>${methodRows}</tbody></table>` : '<div class="empty">No data</div>';
-
-            // Status codes
-            const status = data.by_status || {};
-            const statusRows = Object.entries(status).map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('');
-            document.getElementById('stats-status').innerHTML = statusRows ? `<table><tbody>${statusRows}</tbody></table>` : '<div class="empty">No data</div>';
-
-            // Top hosts
-            const hosts = data.top_hosts || {};
-            const hostRows = Object.entries(hosts).map(([h, c]) => `<tr><td>${h}</td><td>${c}</td></tr>`).join('');
-            document.getElementById('stats-hosts').innerHTML = hostRows ? `<table><thead><tr><th>Host</th><th>Requests</th></tr></thead><tbody>${hostRows}</tbody></table>` : '<div class="empty">No data</div>';
-        }
-
-        async function toggleService() {
-            const action = statusData.running ? '/stop' : '/start';
-            await api(action, { method: 'POST' });
-            showToast(statusData.running ? 'Stopping...' : 'Starting...');
-            setTimeout(refresh, 2000);
-        }
-
-        async function toggleRecording() {
-            const action = configData.recording_enabled ? '/record/stop' : '/record/start';
-            const res = await api(action, { method: 'POST' });
-            if (res && res.success) {
-                showToast(configData.recording_enabled ? 'Recording stopped' : 'Recording started');
-                refresh();
-            } else {
-                showToast(res?.error || 'Failed', 'error');
-            }
-        }
-
-        async function closeSession(sessionId) {
-            const res = await api(`/session/${sessionId}/close`, { method: 'POST' });
-            if (res && res.success) {
-                showToast('Session closed');
-                loadSessions();
-            } else {
-                showToast(res?.error || 'Failed', 'error');
-            }
-        }
-
-        async function updateConfig(key, value) {
-            const res = await api('/config', {
-                method: 'POST',
-                body: JSON.stringify({ [key]: value })
-            });
-            if (res && res.success) {
-                showToast('Configuration updated');
-            } else {
-                showToast(res?.error || 'Failed to update', 'error');
-            }
-        }
-
-        async function refresh() {
-            await Promise.all([
-                loadStatus(),
-                loadConfig(),
-                loadSessions(),
-                loadFlows(),
-                loadRules(),
-                loadRecordings(),
-                loadStats()
-            ]);
-        }
-
-        refresh();
-        setInterval(refresh, 30000);
+        if (DEMO) $('demo').hidden = false;
+        rafraichir();
+        setInterval(rafraichir, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

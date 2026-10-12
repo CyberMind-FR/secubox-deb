@@ -1,3 +1,17 @@
+secubox-interceptor (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Fin de la maquette (#2447) : l'API ne sert plus de flux, règles ni enregistrements jamais
+    alimentés. Elle supervise en lecture seule la chaîne d'inspection réelle : /moteurs (état
+    systemd et port des ng-worker sbxmitm et de sbxwaf), /activite (client-hello TLS vus, SNI
+    et JA4, tirés du journal de sbxmitm, lecture hors boucle avec cache), /niveaux (niveau
+    d'inspection par pair WireGuard) et /exclusions (bypass et splice).
+  * Page /interceptor/ refaite au profil Aurora, sur ces seules données ; source illisible =
+    « — ». Mode ?demo=1 et ?embed=1.
+  * L'ancien démon (lancé en root, inactif) et la création de la CA inutilisée sont retirés ;
+    une mise à jour le désactive. API incompatible avec la 1.x : routes de maquette supprimées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 09:50:34 +0200
+
 secubox-interceptor (1.1.2-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-waf-ng au lieu de secubox-waf (transitoire, #2050).
