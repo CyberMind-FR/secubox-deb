@@ -717,3 +717,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Interceptor, classes nDPI et cartes du monde (closes #2453)
 - secubox-interceptor 2.1.0 : panneau nDPI (protocoles, applications, catégories, volumes) et cartes des sorties (DPI) et des entrées (visiteurs).
+
+## 2026-10-12 — Hall, états de la vue d'ensemble (closes #2455)
+- secubox-webos 1.9.10 : modules montés par l'agrégateur comptés en service (HAProxy, DNS Guard, Hardening, Exposure, IP Blocklist, Interceptor) ; R-Level suit le Toolbox.

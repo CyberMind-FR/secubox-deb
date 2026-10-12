@@ -1,3 +1,15 @@
+secubox-webos (1.9.10-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2455) : la vue d'ensemble du Hall affichait « à l'arrêt » des modules qui
+    répondent : ceux montés en processus par l'agrégateur n'ont ni unité ni socket propres
+    (HAProxy, DNS Guard, Hardening, Exposure, IP Blocklist, Interceptor). L'état tient compte
+    de la liste des modules montés (/health de l'agrégateur), lue hors de la boucle
+    d'événements ; R-Level, page du Toolbox, suit l'état du Toolbox. Une unité réellement en
+    échec reste une alarme ; agrégateur injoignable : rien n'est déclaré en service à tort.
+    4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:11:57 +0200
+
 secubox-webos (1.9.9-1~bookworm1) bookworm; urgency=medium
 
   * Correction (#2451) : les routes des ressources du Hall (#2449) n'étaient livrées que dans

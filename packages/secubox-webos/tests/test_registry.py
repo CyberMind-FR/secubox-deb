@@ -153,3 +153,45 @@ def test_le_reveil_du_hub_interroge_son_statut_public(monkeypatch):
     monkeypatch.setattr(main_mod.registry, "_ConnexionUnix", Faux)
     assert main_mod.registry.reveille_hub("/run/secubox/aggregator.sock") is True
     assert ("GET", "/api/v1/hub/status") in appels
+
+
+def _menu(*ids):
+    return {"categories": [{"items": [{"id": i, "name": i, "category": "wall", "icon": "", "path": f"/{i}/", "installed": True, "active": True} for i in ids]}]}
+
+
+def test_module_monte_par_l_agregateur_est_en_service_sans_unite_ni_socket_2455():
+    from api.registry import normalize_services as ns
+    h = {"hardening": {"status": "warn", "msg": "inactive/dead"}}
+    s = {x.id: x for x in ns(_menu("hardening", "haproxy", "autre"), h, None, montes=frozenset({"hardening", "haproxy"}))}
+    assert s["hardening"].health.state == "online" and s["haproxy"].health.state == "online"    # unité inactive ou absente, mais monté et répond
+    assert s["autre"].health.state == "unknown"                                               # non monté, rien : pas de faux « en service »
+
+
+def test_une_unite_en_echec_reste_une_alarme_meme_montee_2455():
+    from api.registry import normalize_services as ns
+    s = {x.id: x for x in ns(_menu("dns-guard"), {"dns-guard": {"status": "error", "msg": "Failed"}}, None, montes=frozenset({"dns-guard"}))}
+    assert s["dns-guard"].health.state == "offline"
+
+
+def test_page_portee_suit_le_module_porteur_2455():
+    from api.registry import normalize_services as ns
+    ok = {x.id: x for x in ns(_menu("rlevel"), {"toolbox": {"status": "ok"}}, None)}
+    ko = {x.id: x for x in ns(_menu("rlevel"), {"toolbox": {"status": "error"}}, None)}
+    sans = {x.id: x for x in ns(_menu("rlevel"), {}, None)}
+    assert ok["rlevel"].health.state == "online" and ko["rlevel"].health.state == "offline" and sans["rlevel"].health.state == "unknown"
+
+
+def test_modules_montes_lit_le_health_de_l_agregateur_et_se_replie_a_vide_2455(monkeypatch):
+    import json
+    from api import registry
+
+    class Faux:
+        def __init__(self, *a, **k): pass
+        def request(self, *a): pass
+        def getresponse(self):
+            return type("R", (), {"status": 200, "read": lambda s: json.dumps({"mounted": ["haproxy", "hardening", 3]}).encode()})()
+        def close(self): pass
+    monkeypatch.setattr(registry, "_ConnexionUnix", Faux)
+    assert registry.modules_montes() == frozenset({"haproxy", "hardening"})
+    monkeypatch.setattr(registry, "_ConnexionUnix", lambda *a, **k: (_ for _ in ()).throw(OSError("injoignable")))
+    assert registry.modules_montes() == frozenset()

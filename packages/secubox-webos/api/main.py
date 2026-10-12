@@ -20,6 +20,7 @@ from api import registry, flags, cardlets, actions, aide, hotes
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
+_montes: frozenset = frozenset()          # modules montés par l'agrégateur (#2455), rafraîchi hors de la boucle d'événements
 _flags: dict = flags.load_flags()
 _CACHE_FILE = Path("/var/cache/secubox/webos/services.json")
 
@@ -43,7 +44,7 @@ def _recompute() -> bool:
         return False
     health = systemd_batch()
     expo = registry.load_exposure_cache()
-    svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets())
+    svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets(), montes=_montes)
     _cache["services"] = [s.model_dump() for s in svcs]
     _cache["computed_at"] = time.time()
     try:
@@ -55,8 +56,10 @@ def _recompute() -> bool:
 
 
 async def _refresh_loop() -> None:
+    global _montes
     while True:
         try:
+            _montes = await asyncio.to_thread(registry.modules_montes)
             if not _recompute():
                 # Menu absent : on réveille le hub (hors boucle d'événements).
                 await asyncio.to_thread(registry.reveille_hub)
