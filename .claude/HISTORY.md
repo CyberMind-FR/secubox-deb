@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — hub 1.10.2 : pastilles des modules montés dans l'agrégateur (ref #2512)
+
+Sur la capture de l'admin gk2, DNS Guard, HAProxy, Hardening et R-Level avaient une pastille grise alors qu'ils répondent. Le lot de santé du hub jugeait par unité systemd et par socket ; les modules montés en processus par l'agrégateur n'ont ni l'un ni l'autre (même vérité que le Hall, #2455). Le lot est complété par la liste `mounted` du `/health` de l'agrégateur, R-Level suit le Toolbox ; une unité en échec reste une alarme. Test `packages/secubox-hub/tests/test_pastilles_montes_2512.py`.
+
 ## 2026-10-12 — métapaquets : secubox-kiosk classé dans l'arbre (ref #2510)
 
 La release alpha.13 a vu échouer `secubox-appstore` et `secubox-meta` : « paquets ni dans l'arbre ni hors-arbre : secubox-kiosk ». Le générateur exige que chaque paquet du dépôt figure dans `arbre.yaml` ; le paquet `secubox-kiosk` (#2504) n'y était pas. Classé en « suggère » du nœud Noyau, à côté de `secubox-console` (jamais installé sans le demander) ; `debian/control` de `secubox-meta` régénéré. Deux tests de `secubox-meta` échouent encore, sans rapport (`test_refus`, `test_sbxos_pose_tout_le_hall` : carte `guardian` → `secubox-ad-guard`).
