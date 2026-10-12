@@ -29,6 +29,10 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-p2p/usr/share/secubox/menu.d
 	install -m 644 $(CURDIR)/menu.d/590-p2p.json $(CURDIR)/debian/secubox-p2p/usr/share/secubox/menu.d/
 
+	# #2475 : jonction automatique au maillage (code déposé par la préparation de la box ; appel sortant vers le parent)
+	install -d $(CURDIR)/debian/secubox-p2p/usr/sbin $(CURDIR)/debian/secubox-p2p/lib/systemd/system
+	install -m 755 $(CURDIR)/sbin/secubox-automesh $(CURDIR)/debian/secubox-p2p/usr/sbin/secubox-automesh
+	install -m 644 $(CURDIR)/systemd/secubox-automesh.service $(CURDIR)/systemd/secubox-automesh.timer $(CURDIR)/debian/secubox-p2p/lib/systemd/system/
 	# Install systemd service
 	install -d $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system
 	install -m 644 $(CURDIR)/debian/secubox-p2p.service $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system/

@@ -39,7 +39,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht, federation, masterlink
+from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh
 from secubox_core.auth import require_lecture
 from secubox_core.crypto.empreinte import ident
 
@@ -1841,8 +1841,10 @@ async def ml_generate_invite(
     # CLI one-liner for OpenWRT/Linux
     cli_cmd = f"wget -qO- 'http://{lan_ip}:{API_PORT}/api/v1/p2p/master-link/join-script?token={token}' | sh"
 
+    code = _code_invitation(lan_ip, token)
     return {
         "token": token,
+        "code": code,
         "expires": result["expires"],
         "auto_approve": auto_approve,
         "master": {
@@ -1872,6 +1874,9 @@ Option 1 - Web Browser:
 
 Option 2 - Command Line (OpenWRT/Linux):
   {cli_cmd}
+
+Code (une seule saisie sur la box qui rejoint) :
+  {code or token}
 
 Token: {token}
 Expires: {result['expires']}
@@ -1916,6 +1921,7 @@ async def ml_generate_invite_local(
 
     return {
         "token": token,
+        "code": _code_invitation(lan_ip, token),
         "hash": result["token_hash"],
         "expires": result["expires"],
         "expires_ts": result.get("ttl", 3600) + int(datetime.utcnow().timestamp()),
@@ -2521,21 +2527,38 @@ async def ml_set_config(
     return {"status": "ok", "config": config}
 
 
-@app.post("/master-link/join-with-token")
-async def ml_join_upstream(
-    master_addr: str,
-    token: str,
-    user: dict = Depends(require_jwt)
-):
-    """Join a mesh as peer using a token (peer-side operation)."""
+def _code_invitation(adresse, token: str):
+    """Code d'invitation (adresse du parent + jeton) ; None si l'adresse n'est pas exploitable (pas d'IP locale connue)."""
+    try:
+        return automesh.encoder(str(adresse or ""), token)
+    except ValueError:
+        return None
+
+
+def _url_jonction(master_addr: str) -> str:
+    """URL de /master-link/join du parent. Une adresse du réseau local (IP privée) reste en HTTP sur le port du module, comme avant ; toute autre adresse passe par HTTPS
+    (nginx du parent), certificat VÉRIFIÉ : le jeton ne voyage jamais en clair sur Internet."""
+    hote = f"[{master_addr}]" if ":" in master_addr else master_addr          # un littéral IPv6 s'écrit entre crochets dans une URL
+    try:
+        if ipaddress.ip_address(master_addr).is_private:
+            return f"http://{hote}:{API_PORT}/api/v1/p2p/master-link/join"
+    except ValueError:
+        pass
+    return f"https://{hote}/api/v1/p2p/master-link/join"
+
+
+async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
+    """Côté box qui REJOINT : envoie la demande de jonction au parent (appel SORTANT) et, si le parent approuve, enregistre son rôle de pair."""
+    if not automesh.adresse_valide(master_addr):
+        raise HTTPException(status_code=400, detail="Adresse du parent invalide")
     my_fp = get_node_id()
     my_hostname = get_hostname()
     my_addr = get_lan_ip()
-
-    # Send join request to master
+    url = _url_jonction(master_addr)
     try:
         proc = await asyncio.create_subprocess_exec(
-            "curl", "-s", "--connect-timeout", "10", "-k",
+            "curl", "-s", "--connect-timeout", "10",
+            *(["-k"] if url.startswith("http://") else []),
             "-X", "POST",
             "-H", "Content-Type: application/json",
             "-d", json.dumps({
@@ -2544,7 +2567,7 @@ async def ml_join_upstream(
                 "hostname": my_hostname,
                 "address": my_addr
             }),
-            f"http://{master_addr}:{API_PORT}/api/v1/p2p/master-link/join",
+            url,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -2569,6 +2592,30 @@ async def ml_join_upstream(
         raise HTTPException(status_code=502, detail="Invalid response from master")
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Master timeout")
+
+
+@app.post("/master-link/join-with-token")
+async def ml_join_upstream(
+    master_addr: str,
+    token: str,
+    user: dict = Depends(require_jwt)
+):
+    """Join a mesh as peer using a token (peer-side operation)."""
+    return await _rejoindre_maitre(master_addr, token)
+
+
+class CodeRequest(BaseModel):
+    code: str
+
+
+@app.post("/master-link/join-with-code")
+async def ml_join_with_code(req: CodeRequest, user: dict = Depends(require_jwt)):
+    """Rejoindre le maillage avec UN code (adresse du parent + jeton) au lieu de deux saisies (#2475). La box appelle le parent ; c'est le parent qui décide."""
+    try:
+        adresse, jeton = automesh.decoder(req.code)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return await _rejoindre_maitre(adresse, jeton)
 
 
 # ============== Health ==============

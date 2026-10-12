@@ -44,6 +44,9 @@ if [ $# -eq 1 ]; then
 elif [ $# -eq 2 ]; then
     MASTER_IP="$1"
     TOKEN="$2"
+    # `-` : le jeton vient de l'environnement (SBX_MESH_TOKEN), pas de la ligne de commande — la jonction automatique (#2475) ne l'expose pas dans `ps`.
+    [ "$TOKEN" = "-" ] && TOKEN="${SBX_MESH_TOKEN:-}"
+    [ -z "$TOKEN" ] && usage
 else
     usage
 fi
