@@ -744,3 +744,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Mirror fusionné avec CDN (closes #2471)
 - secubox-cdn 1.5.0 : GET /miroirs (dépôt APT hébergé : suites, paquets, pool), page « Caches et miroirs », /mirror/ redirige vers /cdn/, une seule entrée de menu.
+
+## 2026-10-12 — Billets au profil Aurora (closes #2473)
+- secubox-billets 0.12.0 : portail /billets/ Aurora sur stats.json réel (liens http(s) seulement) ; tableau de bord, modération, édition, connexion habillés Aurora par la feuille billets-admin.css ; polices distantes retirées. 5 tests navigateur ; échecs préexistants inchangés.
