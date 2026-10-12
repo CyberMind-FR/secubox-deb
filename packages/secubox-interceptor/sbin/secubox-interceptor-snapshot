@@ -1,0 +1,42 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Instantané des fichiers d'état du Toolbox pour l'API de l'Interceptor (#2447).
+
+Le dossier du Toolbox est fermé au compte de l'agrégateur (0750). Ce service root, bac à sable, lit les niveaux par pair et les listes d'exclusion
+(noms d'hôtes, aucune clé de pair ni secret) et écrit `/var/lib/secubox/interceptor/toolbox.json` en écriture atomique."""
+import json
+import os
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/interceptor/api")
+import lecture  # noqa: E402
+
+SORTIE = os.environ.get("SBX_INTERCEPTOR_SNAPSHOT", "/var/lib/secubox/interceptor/toolbox.json")
+
+
+def main() -> int:
+    data = {"niveaux": lecture.niveaux(), "exclusions": lecture.exclusions()}
+    os.makedirs(os.path.dirname(SORTIE), exist_ok=True)
+    tmp = SORTIE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, sort_keys=True)
+    os.chmod(tmp, 0o644)
+    try:
+        import pwd
+        u = pwd.getpwnam("secubox")
+        os.chown(tmp, u.pw_uid, u.pw_gid)
+    except (KeyError, PermissionError):
+        pass
+    os.replace(tmp, SORTIE)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except OSError as e:
+        print(f"secubox-interceptor-snapshot : {e}", file=sys.stderr)
+        sys.exit(1)

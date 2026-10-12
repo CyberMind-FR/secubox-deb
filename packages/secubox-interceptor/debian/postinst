@@ -10,6 +10,13 @@ case "$1" in
             rm -f /usr/lib/systemd/system/secubox-interceptor.service /etc/systemd/system/multi-user.target.wants/secubox-interceptor.service
             systemctl daemon-reload >/dev/null 2>&1 || true
         fi
+
+        # Instantané des niveaux par pair et des exclusions du Toolbox (dossier fermé au compte de l'agrégateur)
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox/interceptor
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        systemctl enable secubox-interceptor-snapshot.timer >/dev/null 2>&1 || true
+        systemctl start secubox-interceptor-snapshot.timer >/dev/null 2>&1 || true
+        systemctl start secubox-interceptor-snapshot.service >/dev/null 2>&1 || true
         ;;
 esac
 

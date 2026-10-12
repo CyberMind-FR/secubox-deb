@@ -26,6 +26,11 @@ from typing import Any, Callable, Optional
 from fastapi import Depends, FastAPI
 
 try:
+    from . import lecture
+except ImportError:  # pragma: no cover - exécuté hors paquet
+    import lecture  # type: ignore
+
+try:
     from secubox_core.auth import require_lecture
 except ImportError:  # pragma: no cover - hors paquet
     async def require_lecture():
@@ -33,7 +38,7 @@ except ImportError:  # pragma: no cover - hors paquet
 
 app = FastAPI(title="SecuBox Interceptor API", version="2.0.0")
 
-TOOLBOX_DIR = Path("/var/lib/secubox/toolbox")
+TOOLBOX_DIR = lecture.TOOLBOX_DIR
 WORKERS = [f"secubox-toolbox-ng-worker@{i}" for i in range(1, 5)]
 # (libellé, unité systemd, adresses d'écoute attendues) ; l'adresse d'écoute est lue dans `ss`, jamais supposée
 MOTEURS = [(f"sbxmitm {i}", u, p) for i, (u, p) in enumerate(zip(WORKERS, ("10.99.1.1:8091", "10.99.1.1:8092", "10.99.1.1:8093", "10.99.1.1:8094")), 1)] + [
@@ -114,41 +119,24 @@ def activite(minutes: int = 60) -> dict:
     return r
 
 
-def _json(chemin: Path) -> Optional[dict]:
-    try:
-        d = json.loads(chemin.read_text(encoding="utf-8"))
-        return d if isinstance(d, dict) else None
-    except (OSError, ValueError):
-        return None
+SNAPSHOT = Path("/var/lib/secubox/interceptor/toolbox.json")
 
 
-def niveaux(dossier: Path = TOOLBOX_DIR) -> dict:
-    """Niveaux d'inspection par pair WireGuard (off/passive/active/reel) et répartition cumulée du Toolbox ; une source absente donne null."""
-    rl = _json(dossier / "peer-rlevel.json")
-    cum = _json(dossier / "cumulative-cache.json")
-    out: dict[str, Any] = {"defaut": None, "pairs": None, "repartition_pairs": None, "niveaux_clients": None, "evenements_7j": None}
-    if rl is not None:
-        pairs = rl.get("peers") or {}
-        out["defaut"] = rl.get("defaults")
-        out["pairs"] = len(pairs)
-        out["repartition_pairs"] = dict(Counter(str((p or {}).get("chosen") or "défaut") for p in pairs.values()))
-    if cum is not None:
-        out["niveaux_clients"] = cum.get("level_distribution_7d")
-        out["evenements_7j"] = (cum.get("events") or {}).get("total_7d")
-    return out
+def niveaux(dossier: Optional[Path] = None) -> dict:
+    return lecture.niveaux(dossier)
 
 
-def _lignes(chemin: Path) -> Optional[list]:
-    try:
-        return [l.strip() for l in chemin.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip() and not l.lstrip().startswith("#")]
-    except OSError:
-        return None
+def exclusions(dossier: Optional[Path] = None) -> dict:
+    return lecture.exclusions(dossier)
 
 
-def exclusions(dossier: Path = TOOLBOX_DIR) -> dict:
-    """Hôtes que l'inspection ne déchiffre pas (bypass : laissés passer ; splice : relayés sans déchiffrer) et motifs de filtre désactivés."""
-    return {"bypass": _lignes(dossier / "mitm-bypass.conf"), "splice": _lignes(dossier / "splice-learned.txt"),
-            "filtres_desactives": _lignes(dossier / "mitm-filter-disabled.txt")}
+def _instantane(cle: str, direct: Callable[[], dict]) -> dict:
+    """Le dossier du Toolbox est fermé au compte de l'agrégateur : on lit l'instantané écrit par le service root (secubox-interceptor-snapshot) ;
+    à défaut, lecture directe (qui rend null si le dossier est fermé)."""
+    d = lecture._json(SNAPSHOT)
+    if d is not None and isinstance(d.get(cle), dict):
+        return d[cle]
+    return direct()
 
 
 # ── cache à un seul vol : la boucle n'attend jamais une lecture lourde ──────────────────────────────────────────────────────────────────────
@@ -190,19 +178,19 @@ async def get_activite(minutes: int = 60):
 
 @app.get("/niveaux", dependencies=[Depends(require_lecture)])
 async def get_niveaux():
-    return await _mis_en_cache("niveaux", niveaux)
+    return await _mis_en_cache("niveaux", lambda: _instantane("niveaux", niveaux))
 
 
 @app.get("/exclusions", dependencies=[Depends(require_lecture)])
 async def get_exclusions():
-    return await _mis_en_cache("exclusions", exclusions)
+    return await _mis_en_cache("exclusions", lambda: _instantane("exclusions", exclusions))
 
 
 @app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     m = await _mis_en_cache("moteurs", moteurs)
     a = await _mis_en_cache("activite60", lambda: activite(60))
-    n = await _mis_en_cache("niveaux", niveaux)
+    n = await _mis_en_cache("niveaux", lambda: _instantane("niveaux", niveaux))
     return {"moteurs_actifs": sum(1 for x in m if x["actif"]), "moteurs_total": len(m),
             "hello_60min": a.get("total") if a.get("disponible") else None, "pairs": n.get("pairs")}
 

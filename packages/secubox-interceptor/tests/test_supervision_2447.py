@@ -67,3 +67,27 @@ def test_moteurs_etat_et_port(monkeypatch):
 def test_aucune_ecriture_ni_action_dans_l_api():
     posts = [r for r in m.app.routes if getattr(r, "methods", None) and (r.methods & {"POST", "PUT", "DELETE", "PATCH"})]
     assert posts == []
+
+
+def test_l_api_prefere_l_instantane_quand_le_dossier_du_toolbox_est_ferme(tmp_path, monkeypatch):
+    snap = tmp_path / "toolbox.json"
+    snap.write_text(json.dumps({"niveaux": {"pairs": 4}, "exclusions": {"bypass": ["a.test"], "splice": [], "filtres_desactives": []}}))
+    monkeypatch.setattr(m, "SNAPSHOT", snap)
+    monkeypatch.setattr(m, "TOOLBOX_DIR", tmp_path / "ferme")                  # dossier illisible : l'agrégateur n'y entre pas
+    assert m._instantane("niveaux", m.niveaux)["pairs"] == 4 and m._instantane("exclusions", m.exclusions)["bypass"] == ["a.test"]
+    monkeypatch.setattr(m, "SNAPSHOT", tmp_path / "absent.json")
+    assert m._instantane("niveaux", lambda: m.niveaux(tmp_path / "ferme"))["pairs"] is None
+
+
+def test_instantane_root_ecrit_sans_cle_de_pair(tmp_path, monkeypatch):
+    import importlib.machinery, importlib.util
+    (tmp_path / "t").mkdir()
+    (tmp_path / "t" / "peer-rlevel.json").write_text(json.dumps({"peers": {"CLE-PUBLIQUE-SECRETE=": {"chosen": "reel"}}}))
+    src = pathlib.Path(__file__).resolve().parents[1] / "sbin" / "secubox-interceptor-snapshot"
+    monkeypatch.syspath_prepend(str(pathlib.Path(__file__).resolve().parents[1] / "api"))
+    loader = importlib.machinery.SourceFileLoader("snap", str(src)); spec = importlib.util.spec_from_loader("snap", loader); mod = importlib.util.module_from_spec(spec); loader.exec_module(mod)
+    monkeypatch.setattr(mod.lecture, "TOOLBOX_DIR", tmp_path / "t")
+    mod.SORTIE = str(tmp_path / "out.json")
+    assert mod.main() == 0
+    brut = (tmp_path / "out.json").read_text()
+    assert "CLE-PUBLIQUE-SECRETE" not in brut and json.loads(brut)["niveaux"]["repartition_pairs"] == {"reel": 1}

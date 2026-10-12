@@ -8,6 +8,9 @@ override_dh_auto_install:
 	install -m 644 api/*.py $(CURDIR)/debian/secubox-interceptor/usr/lib/secubox/interceptor/api/
 	install -d $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/www/interceptor
 	install -m 644 www/interceptor/*.html $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/www/interceptor/
+	install -d $(CURDIR)/debian/secubox-interceptor/usr/sbin $(CURDIR)/debian/secubox-interceptor/lib/systemd/system
+	install -m 755 sbin/secubox-interceptor-snapshot $(CURDIR)/debian/secubox-interceptor/usr/sbin/secubox-interceptor-snapshot
+	install -m 644 debian/secubox-interceptor-snapshot.service debian/secubox-interceptor-snapshot.timer $(CURDIR)/debian/secubox-interceptor/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/menu.d
 	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/menu.d/
 

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox Interceptor — instantané des niveaux et exclusions du Toolbox (#2447)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-interceptor-snapshot
+UMask=0022
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
+ReadOnlyPaths=/var/lib/secubox/toolbox /usr/lib/secubox/interceptor
+ReadWritePaths=/var/lib/secubox/interceptor
