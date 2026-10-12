@@ -1,3 +1,13 @@
+secubox-interceptor (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Classes nDPI (#2453) : protocoles, applications et catégories reconnus par le moteur DPI,
+    volumes total, sortant et entrant, depuis /api/v1/dpi/pub/stats.
+  * Cartes du monde (#2453) : sorties (pays des destinations, DPI) et entrées (pays des
+    visiteurs sur 7 jours, metrics), même carte à points que la vue Metrics. Source absente :
+    carte vide et « — », rien d'inventé. 2 tests navigateur (valeurs de l'API en texte brut).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:08:57 +0200
+
 secubox-interceptor (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Fin de la maquette (#2447) : l'API ne sert plus de flux, règles ni enregistrements jamais
