@@ -234,6 +234,38 @@ def _publique(ip: str) -> bool:
         return False
 
 
+_PROPRES = None
+
+
+def _adresses_propres() -> set:
+    """Adresses de la box elle-meme (nginx `set_real_ip_from`, engendrees par
+    secubox-realip) : ce sont les appels internes des modules, pas des visiteurs."""
+    global _PROPRES
+    if _PROPRES is None:
+        propres = {"127.0.0.1", "::1"}
+        try:
+            for ligne in Path("/etc/nginx/conf.d/secubox-real-ip-local.conf").read_text().splitlines():
+                m = re.match(r"\s*set_real_ip_from\s+([0-9a-fA-F:.]+)\s*;", ligne)
+                if m:
+                    propres.add(m.group(1))
+        except OSError:
+            pass
+        _PROPRES = propres
+    return _PROPRES
+
+
+def _lan(ip: str) -> bool:
+    """Vrai pour un poste du reseau local : adresse privee, hors boucle locale,
+    hors adresses propres de la box. Compte a part des visiteurs publics (#2404)."""
+    try:
+        adr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    if not adr.is_private or adr.is_loopback or adr.is_link_local:
+        return False
+    return ip not in _adresses_propres()
+
+
 def _pays(ip: str) -> Optional[str]:
     """Code pays ISO-2 d'une IP PUBLIQUE, ou None (privee/inconnue/base absente)."""
     global _geo_reader, _geo_essaye
@@ -273,7 +305,7 @@ def _drapeau(cc: Optional[str]) -> str:
 def _vierge() -> dict:
     return {
         "visites": 0, "requetes": 0, "octets": 0,
-        "ips": set(), "ips_debordees": False,
+        "ips": set(), "ips_debordees": False, "ips_lan": set(),
         "navigateurs": Counter(), "plateformes": Counter(),
         "statuts": Counter(), "chemins": Counter(), "referents": Counter(),
         "sondes": 0, "erreurs": 0, "robots": 0,
@@ -315,6 +347,8 @@ def _compter(s: dict, m: re.Match) -> None:
             s["ips"].add(g["ip"])
         else:
             s["ips_debordees"] = True
+    elif _lan(g["ip"]) and len(s["ips_lan"]) < PLAFOND_IP:
+        s["ips_lan"].add(g["ip"])
 
     nav = _classe(ua, NAVIGATEURS)
     s["navigateurs"][nav] += 1
@@ -534,6 +568,7 @@ class VhostStatsAggregator:
                 # visiteurs distincts, pas une somme de journees.
                 t["ips"] |= s["ips"]
                 t["ips_debordees"] |= s["ips_debordees"]
+                t["ips_lan"] |= s["ips_lan"]
         return total
 
     def _fenetre(self, periode: str) -> list[str]:
@@ -548,6 +583,7 @@ class VhostStatsAggregator:
             "requetes": s["requetes"],
             "visiteurs": len(s["ips"]),
             "visiteurs_minores": s["ips_debordees"],
+            "visiteurs_lan": len(s["ips_lan"]),
             "octets": s["octets"],
             "robots": s["robots"],
             "humains": s["requetes"] - s["robots"],
@@ -586,6 +622,7 @@ class VhostStatsAggregator:
             # est une personne, pas deux.
             t["ips"] |= s["ips"]
             t["ips_debordees"] |= s["ips_debordees"]
+            t["ips_lan"] |= s["ips_lan"]
         for f, s in fam.items():
             s["membres"] = sorted(membres[f])
         return fam
@@ -646,6 +683,7 @@ class VhostStatsAggregator:
                 # vhosts compte deux fois. C'est voulu — dedoublonner a
                 # l'echelle de la boite demanderait de garder toutes les IP.
                 "visiteurs": sum(v["visiteurs"] for v in vhosts),
+                "visiteurs_lan": sum(v["visiteurs_lan"] for v in vhosts),
                 "sondes": sum(v["sondes"] for v in vhosts),
                 "erreurs": sum(v["erreurs"] for v in vhosts),
                 "top_referents": synth_refs["top"],
@@ -782,6 +820,7 @@ class VhostStatsAggregator:
                                              "sondes", "erreurs", "robots")},
                         "ips": sorted(s["ips"]),
                         "ips_debordees": s["ips_debordees"],
+                        "ips_lan": sorted(s["ips_lan"]),
                         # `pays` A ETE OUBLIE ICI pendant que _charger le
                         # relisait : la repartition geographique repartait donc
                         # de zero a CHAQUE redemarrage, et sur ce nœud 0 des
@@ -832,6 +871,7 @@ class VhostStatsAggregator:
                     seau[c] = s.get(c, 0)
                 seau["ips"] = set(s.get("ips", []))
                 seau["ips_debordees"] = s.get("ips_debordees", False)
+                seau["ips_lan"] = set(s.get("ips_lan", []))
                 for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
                     seau[c] = Counter(s.get(c, {}))
                 self._jours[j][v] = seau

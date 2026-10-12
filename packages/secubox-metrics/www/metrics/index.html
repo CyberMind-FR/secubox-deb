@@ -316,9 +316,9 @@
     }else{el('scoreNote').textContent='';el('modules').innerHTML='<div class="vide">Session requise.</div>';}
 
     // cartes du monde : attaques (rouge) puis visiteurs (cyan)
-    var tc=wf&&wf.top_countries&&typeof wf.top_countries==='object'?wf.top_countries:null,att=null;
+    var wg=d.wafg,tc=wg&&wg.top_countries&&typeof wg.top_countries==='object'?wg.top_countries:(wf&&wf.top_countries&&typeof wf.top_countries==='object'?wf.top_countries:null),att=null;
     if(tc)att=(Array.isArray(tc)?tc.map(function(p){return {code:p.country||p.code,n:p.count||p.n};}):Object.keys(tc).map(function(k){return {code:k,n:tc[k]};}));
-    carteMonde('mondeAtt','paysAtt','noteAtt',att,'#ff4d5e','lueurAtt','aucun pays d’attaque','La route /waf_stats ne fournit que des compteurs, aucun pays : la carte des attaques par pays est celle de la vue d’ensemble du WAF.');
+    carteMonde('mondeAtt','paysAtt','noteAtt',att,'#ff4d5e','lueurAtt','aucun pays d’attaque',wg?'Aucune attaque géolocalisée aujourd’hui (base GeoLite2 absente ou menaces locales).':'La route /api/v1/waf/stats ne répond pas : session requise.');
     var vp={};
     ((vs&&vs.vhosts)||[]).forEach(function(v){(v.pays||[]).forEach(function(p){vp[p.code]=(vp[p.code]||0)+num(p.n);});});
     var vl=Object.keys(vp).map(function(k){return {code:k,n:vp[k]};});
@@ -344,8 +344,8 @@
   const API = '/api/v1/metrics';
   var charge=function(){};
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
-  function api(p){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
-    return fetch(API+p,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
+  function api(p,base){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    return fetch((base||API)+p,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){
       if(r.status===401){if(!EMB&&!/\/login\.html$/.test(location.pathname))window.location='/login.html?redirect='+encodeURIComponent(location.pathname+location.search);return null;}
       return r.ok?r.json():null;}).catch(function(){return null;});}
   // encadrée par une page hôte : on lui dit la hauteur du cadre pour qu'elle n'ait pas de défilement interne
@@ -356,8 +356,8 @@
   var bouton=el('rafraichir');
   charge=function(){
     bouton.disabled=true;
-    Promise.all([api('/overview'),api('/health/summary'),api('/memory/history?heures=24'),api('/connections'),api('/waf_stats'),api('/waf/campaigns'),api('/cert-status'),api('/live-hosts'),api('/vhost-stats?periode=semaine')]).then(function(r){
-      maj();rend({overview:r[0],sante:r[1],memoire:r[2],conns:r[3],waf:r[4],campagnes:r[5],certs:r[6],hotes:r[7],visites:r[8]});
+    Promise.all([api('/overview'),api('/health/summary'),api('/memory/history?heures=24'),api('/connections'),api('/waf_stats'),api('/waf/campaigns'),api('/cert-status'),api('/live-hosts'),api('/vhost-stats?periode=semaine'),api('/stats','/api/v1/waf')]).then(function(r){
+      maj();rend({overview:r[0],sante:r[1],memoire:r[2],conns:r[3],waf:r[4],campagnes:r[5],certs:r[6],hotes:r[7],visites:r[8],wafg:r[9]});
     }).then(function(){bouton.disabled=false;},function(){bouton.disabled=false;});
   };
   bouton.addEventListener('click',charge);
