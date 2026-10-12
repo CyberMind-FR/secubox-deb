@@ -52,7 +52,7 @@ def test_panel_uses_shared_skin_and_sidebar():
     html = _html()
     assert '<nav class="sidebar" id="sidebar">' in html
     assert '/shared/sidebar.js' in html
-    assert 'hybrid-dark' in html
+    assert 'sidebar-light.css' in html                # profil Aurora (#2487) : l'ancienne peau hybrid-dark est remplacée
 
 
 def test_panel_uses_sbx_token():
