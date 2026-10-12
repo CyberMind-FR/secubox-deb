@@ -88,8 +88,31 @@ def test_empreintes_ja3_calculees_par_sbxdpi_et_liste_mixte():
     # #2405 : sbxdpi lit le ClientHello lui-même (la libndpi 4.2 n'émet ni ja3 ni ja4).
     st = {**STATS, "fingerprints_ja3": [{"name": "11138d9933242c3a03b6aad35a296476", "flows": 90, "bytes": 0}]}
     j3 = pont(stats=st).fingerprints("ja3", 10)
-    assert j3 == [{"fingerprint": "11138d9933242c3a03b6aad35a296476", "fp_type": "ja3", "known_app": "", "hit_count": 90, "last_seen": j3[0]["last_seen"]}]
+    assert len(j3) == 1 and j3[0]["fingerprint"] == "11138d9933242c3a03b6aad35a296476" and j3[0]["fp_type"] == "ja3" and j3[0]["hit_count"] == 90
+    assert "profil" not in j3[0]                                  # un JA3 est un hash : rien à décoder
     tous = pont(stats=st).fingerprints("", 10)                    # la page Empreintes demande sans type
     assert [(f["fp_type"], f["hit_count"]) for f in tous] == [("ja3", 90), ("ja4", 42)]   # tri par fréquence
     assert len(pont(stats=st).fingerprints("", 1)) == 1
     assert pont(stats=st).status()["database"]["total_fingerprints"] == 2
+
+
+def test_empreintes_dates_reelles_sni_et_profil_deduit():
+    # #2408 : première/dernière vue et SNI viennent de sbxdpi ; le profil est déduit de la forme du JA4.
+    ja4 = "t13d1516h2_8daaf6152771_b186095e22b6"
+    st = {**STATS, "fingerprint_meta": {ja4: {"first": 1_799_000_000, "last": 1_799_900_000,
+                                              "sni": [{"name": "www.exemple.test", "flows": 30}, {"name": "cdn.exemple.test", "flows": 4}]}}}
+    f = pont(stats=st).fingerprints("ja4", 10)[0]
+    assert f["first_seen"].startswith("2027-01-") or f["first_seen"].startswith("2026-")      # date de sbxdpi, pas l'heure du relevé
+    assert f["first_seen"] < f["last_seen"]
+    assert f["snis"] == [{"name": "www.exemple.test", "n": 30}, {"name": "cdn.exemple.test", "n": 4}]
+    assert f["profil"] == "TLS 1.3 · avec SNI · 15 suites · 16 extensions · ALPN h2" and f["famille_deduite"] == "nav"
+    # sans méta : dates de repli, pas de SNI, rien d'inventé
+    g = pont().fingerprints("ja4", 10)[0]
+    assert g["snis"] == [] and g["first_seen"] == g["last_seen"]
+
+
+def test_profil_ja4_forme_seulement():
+    prof = _mod.profil_ja4
+    assert prof("t13d131100_f57a46bbacb6_ab7e3b40a677")["famille_deduite"] == "lib"    # sans ALPN : outil ou bibliothèque
+    assert prof("t13i0306h2_5559582ccdc4_fb71836bce29")["famille_deduite"] == "aut"    # sans SNI : indéterminé
+    assert prof("pas un ja4") == {} and prof("") == {}

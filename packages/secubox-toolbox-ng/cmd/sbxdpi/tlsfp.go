@@ -72,6 +72,7 @@ func estGrease(v uint16) bool { return v&0x0f0f == 0x0a0a && byte(v>>8) == byte(
 type empreinteTLS struct {
 	JA3 string // md5 hexadécimal
 	JA4 string // t13d1516h2_xxxxxxxxxxxx_xxxxxxxxxxxx
+	SNI string // nom demandé (SNI), assaini ; vide si absent ou douteux
 }
 
 // lireClientHello calcule JA3 et JA4 d'une charge TCP qui COMMENCE par un
@@ -130,6 +131,7 @@ func lireClientHello(p []byte) (e empreinteTLS, ok bool, incomplet bool) {
 		sigalgs  []uint16
 		versions []uint16
 		alpn     string
+		sniNom   string
 		hasSNI   bool
 	)
 	if len(b) >= 2 {
@@ -154,6 +156,7 @@ func lireClientHello(p []byte) (e empreinteTLS, ok bool, incomplet bool) {
 			switch t {
 			case 0x0000:
 				hasSNI = true
+				sniNom = lireSNI(d)
 			case 0x000a: // supported_groups
 				if len(d) >= 2 {
 					for i := 2; i+1 < len(d) && i < 2+int(binary.BigEndian.Uint16(d[0:2])); i += 2 {
@@ -195,6 +198,7 @@ func lireClientHello(p []byte) (e empreinteTLS, ok bool, incomplet bool) {
 
 	// JA3 : version,suites,extensions,groupes,formats (GREASE retiré).
 	e.JA3 = ja3(legacy, suites, exts, curves, formats)
+	e.SNI = sniNom
 
 	// JA4.
 	ver := legacy
@@ -210,6 +214,25 @@ func lireClientHello(p []byte) (e empreinteTLS, ok bool, incomplet bool) {
 	e.JA4 = "t" + versionJA4(ver) + sni + deux(len(suites)) + deux(len(exts)) + alpnJA4(alpn) +
 		"_" + hash12(triHex(suites)) + "_" + hash12ExtJA4(exts, sigalgs)
 	return e, true, false
+}
+
+// lireSNI extrait le nom de l'extension server_name ; rend "" si le nom n'est
+// pas un nom d'hôte plausible (caractères hors a-z 0-9 . - _, trop long, vide).
+func lireSNI(d []byte) string {
+	if len(d) < 5 || d[2] != 0 {
+		return ""
+	}
+	n := int(binary.BigEndian.Uint16(d[3:5]))
+	if n == 0 || n > 100 || 5+n > len(d) {
+		return ""
+	}
+	nom := strings.ToLower(string(d[5 : 5+n]))
+	for _, c := range nom {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '.' || c == '-' || c == '_') {
+			return ""
+		}
+	}
+	return nom
 }
 
 func ja3(version uint16, suites, exts, curves, formats []uint16) string {

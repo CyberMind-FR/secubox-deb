@@ -1,3 +1,9 @@
+secubox-dpi (1.12.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat: onglet Empreintes de /ndpid/ complete : dates de premiere et derniere vue reelles, SNI par empreinte, profil deduit de la forme du JA4 (annonce comme deduit) ; page /dpi/ reordonnee (exfiltration, timeline, tops, terminaux, sessions, pays, services, medias, destinations, LAN, learning) ; octets inconnus ou negatifs affiches « — » au lieu de NaN undefined (ref #2408)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 05:49:09 +0200
+
 secubox-dpi (1.12.3-1~bookworm1) bookworm; urgency=medium
 
   * feat: la page Empreintes de /ndpid/ liste les JA3 et JA4 calcules par sbxdpi (liste mixte triee par frequence, total des empreintes), message de l etat vide corrige (ref #2405)

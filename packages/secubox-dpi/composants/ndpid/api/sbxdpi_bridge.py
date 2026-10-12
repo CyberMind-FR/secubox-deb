@@ -15,6 +15,7 @@ from __future__ import annotations
 import http.client
 import json
 import socket
+import re
 import time
 from datetime import datetime, timezone
 from typing import Callable, List, Optional
@@ -48,6 +49,30 @@ def lire_socket(chemin: str, socket_path: str = SOCKET):
         return data
     except (OSError, ValueError, http.client.HTTPException):
         return None
+
+
+_JA4 = re.compile(r"^t(\d\d|s3|s2|00)([di])(\d\d)(\d\d)([0-9a-z]{2})_[0-9a-f]{12}_[0-9a-f]{12}$")
+_VERSIONS = {"13": "TLS 1.3", "12": "TLS 1.2", "11": "TLS 1.1", "10": "TLS 1.0", "s3": "SSL 3", "s2": "SSL 2"}
+
+
+def profil_ja4(ja4: str) -> dict:
+    """Décode la FORME d'un JA4 (version, SNI, nombre de suites et d'extensions, ALPN)
+    et en tire une famille PROBABLE : « nav » (poignée de main de navigateur),
+    « lib » (bibliothèque ou outil minimal), « aut » (indéterminé). C'est une
+    déduction de forme, pas une identité d'application."""
+    m = _JA4.match(ja4 or "")
+    if not m:
+        return {}
+    ver, sni, suites, exts, alpn = m.group(1), m.group(2) == "d", int(m.group(3)), int(m.group(4)), m.group(5)
+    texte = " · ".join([_VERSIONS.get(ver, "TLS ?"), "avec SNI" if sni else "sans SNI", f"{suites} suites", f"{exts} extensions",
+                        "sans ALPN" if alpn == "00" else f"ALPN {alpn}"])
+    if ver == "13" and sni and alpn in ("h2", "h3") and suites >= 8 and exts >= 12:
+        fam = "nav"
+    elif sni and (alpn in ("00", "h1") or suites < 8 or exts < 8):
+        fam = "lib"
+    else:
+        fam = "aut"
+    return {"profil": texte, "famille_deduite": fam}
 
 
 class SbxdpiBridge:
@@ -100,13 +125,29 @@ class SbxdpiBridge:
 
     def fingerprints(self, kind: str, limit: int = 100) -> List[dict]:
         """Empreintes TLS des clients, calculées par sbxdpi depuis le ClientHello.
-        `kind` : "ja4", "ja3", ou vide pour les deux (page Empreintes)."""
+        `kind` : "ja4", "ja3", ou vide pour les deux (page Empreintes).
+        Première/dernière vue et SNI viennent de sbxdpi ; le profil est DÉDUIT de la
+        forme du JA4 (jamais une identité d'application)."""
         st = self._stats()
-        quand = datetime.fromtimestamp(int(st.get("updated_at") or time.time()), timezone.utc).isoformat()
+        defaut = datetime.fromtimestamp(int(st.get("updated_at") or time.time()), timezone.utc).isoformat()
+        meta = st.get("fingerprint_meta") or {}
         sources = {"ja4": st.get("fingerprints") or [], "ja3": st.get("fingerprints_ja3") or []}
         types = [kind] if kind in sources else ["ja4", "ja3"]
-        out = [{"fingerprint": f.get("name", ""), "fp_type": t, "known_app": "", "hit_count": f.get("flows", 0), "last_seen": quand}
-               for t in types for f in sources[t]]
+
+        def iso(ts):
+            return datetime.fromtimestamp(int(ts), timezone.utc).isoformat() if ts else defaut
+
+        out = []
+        for t in types:
+            for f in sources[t]:
+                nom = f.get("name", "")
+                m = meta.get(nom) or {}
+                ligne = {"fingerprint": nom, "fp_type": t, "known_app": "", "hit_count": f.get("flows", 0),
+                         "first_seen": iso(m.get("first")), "last_seen": iso(m.get("last")),
+                         "snis": [{"name": x.get("name", ""), "n": x.get("flows", 0)} for x in (m.get("sni") or [])]}
+                if t == "ja4":
+                    ligne.update(profil_ja4(nom))
+                out.append(ligne)
         out.sort(key=lambda f: -int(f["hit_count"] or 0))
         return out[:limit]
 

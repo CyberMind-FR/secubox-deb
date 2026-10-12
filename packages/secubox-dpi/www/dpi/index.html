@@ -180,6 +180,31 @@
             <p id="exfil-foot" style="color:var(--text-dim);font-size:0.7rem;margin-top:0.75rem;"></p>
         </div>
 
+        <div class="card">
+            <div class="card-header"><h2>📈 Timeline <span class="sub">— flux/jour (14 j)</span></h2></div>
+            <div id="dpi-timeline" style="display:flex;align-items:flex-end;gap:4px;height:90px;padding-top:8px;"><p class="empty">Loading…</p></div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card"><div class="card-header"><h2>📊 Top Applications</h2></div><div class="app-list" id="top-apps"><p class="empty">Loading…</p></div></div>
+            <div class="card"><div class="card-header"><h2>📡 Top Protocols</h2></div><div class="app-list" id="top-protocols"><p class="empty">Loading…</p></div></div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card"><div class="card-header"><h2>💻 Débit par terminal <span class="sub">— qui parle, combien, et vers quoi</span></h2></div><div class="app-list" id="bandwidth-devices"><p class="empty">Loading…</p></div></div>
+            <div class="card"><div class="card-header"><h2>🌐 Active Flows <span class="sub">— live window</span></h2></div><div class="app-list" id="active-flows"><p class="empty">Loading…</p></div></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>🧭 Sessions d'usage <span class="sub">— flux corrélés par terminal + usage (sbxdpi) · mesuré par le DPI</span></h2></div>
+            <div id="dpi-sessions"><p class="empty">Loading…</p></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>🌍 Pays des destinations <span class="sub">— géo des IP réelles (GeoLite2) · top 5</span></h2></div>
+            <div id="dpi-countries"><p class="empty">Loading…</p></div>
+        </div>
+
         <div class="grid-2">
             <div class="card">
                 <div class="card-header"><h2>🏷️ Types de services captés <span class="sub">— octets par catégorie (SNI)</span></h2></div>
@@ -197,23 +222,6 @@
                 <span class="badge" id="media-buffer-badge">—</span>
             </div>
             <div class="media-gallery" id="media-buffer-gallery"><p class="empty">Loading…</p></div>
-        </div>
-
-        <div class="card">
-            <div class="card-header"><h2>📈 Timeline <span class="sub">— flux/jour (14 j)</span></h2></div>
-            <div id="dpi-timeline" style="display:flex;align-items:flex-end;gap:4px;height:90px;padding-top:8px;"><p class="empty">Loading…</p></div>
-        </div>
-
-        <div class="grid-2">
-            <div class="card"><div class="card-header"><h2>📊 Top Applications</h2></div><div class="app-list" id="top-apps"><p class="empty">Loading…</p></div></div>
-            <div class="card"><div class="card-header"><h2>📡 Top Protocols</h2></div><div class="app-list" id="top-protocols"><p class="empty">Loading…</p></div></div>
-            <div class="card"><div class="card-header"><h2>💻 Débit par terminal <span class="sub">— qui parle, combien, et vers quoi</span></h2></div><div class="app-list" id="bandwidth-devices"><p class="empty">Loading…</p></div></div>
-            <div class="card"><div class="card-header"><h2>🌐 Active Flows <span class="sub">— live window</span></h2></div><div class="app-list" id="active-flows"><p class="empty">Loading…</p></div></div>
-        </div>
-
-        <div class="card">
-            <div class="card-header"><h2>🧭 Sessions d'usage <span class="sub">— flux corrélés par terminal + usage (sbxdpi) · mesuré par le DPI</span></h2></div>
-            <div id="dpi-sessions"><p class="empty">Loading…</p></div>
         </div>
 
         <!-- Données d'ad-guard (#1960) : étiquettes des destinations non classées et vue DNS des appareils du LAN. Tout texte venu de l'API passe par textContent. -->
@@ -237,10 +245,6 @@
             <div id="dpi-learning"><p class="empty">Loading…</p></div>
         </div>
 
-        <div class="card">
-            <div class="card-header"><h2>🌍 Pays des destinations <span class="sub">— géo des IP réelles (GeoLite2) · top 5</span></h2></div>
-            <div id="dpi-countries"><p class="empty">Loading…</p></div>
-        </div>
     </main>
 
     <script>
@@ -297,6 +301,7 @@
             try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
         }
         function formatBytes(bytes) {
+            if (bytes == null || !isFinite(Number(bytes)) || Number(bytes) < 0) return '—'; // inconnu (octets absents ou négatifs) : jamais « NaN undefined »
             if (!bytes) return '0 B';
             const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
