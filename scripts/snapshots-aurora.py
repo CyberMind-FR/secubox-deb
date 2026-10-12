@@ -51,6 +51,15 @@ PAGES = [  # (nom, chemin, titre)
     ('toolbox-config', 'secubox-toolbox/www/toolbox/config.html', 'Toolbox — Config'),
     ('actor', 'secubox-webos/www/actor-intelligence/index.html', 'Actor Intelligence — Renseignement'),
     ('guardian', 'secubox-ad-guard/www/guardian/index.html', 'Guardian (filtrage DNS)'),
+    ('nac', 'secubox-nac/www/nac/index.html', 'NAC — Appareils et zones'),
+    ('webfilter', 'secubox-webfilter/www/webfilter/index.html', 'Filtre web'),
+    ('ad-guard', 'secubox-ad-guard/www/ad-guard/index.html', 'Ad Guard'),
+    ('dns-guard', 'secubox-dns-guard/www/dns-guard/index.html', 'DNS Guard'),
+    ('network-anomaly', 'secubox-dns-guard/composants/network-anomaly/www/network-anomaly/index.html', 'Anomalies réseau'),
+    ('wireguard', 'secubox-wireguard/www/wireguard/index.html', 'WireGuard'),
+    ('interceptor', 'secubox-interceptor/www/interceptor/index.html', 'Interceptor'),
+    ('netmodes', 'secubox-netmodes/www/netmodes/index.html', 'Modes réseau'),
+    ('cdn', 'secubox-cdn/www/cdn/index.html', 'Caches de la box'),
 ]
 HAUTEUR_MAX = 3200
 
@@ -74,6 +83,8 @@ async def main(filtres):
 
                 await page.route("**/*", vide)
                 await page.goto(f"file://{RACINE}/{P}/{chemin}{requete}")
+                # le menu de gauche est masqué en démonstration : on retire aussi la colonne qu'il réserve, sinon la capture a une bande vide à gauche
+                await page.add_style_tag(content="body:not(.emb) .principal{margin-left:0!important;padding-top:0!important}")
                 await page.wait_for_timeout(700)
                 im = Image.open(io.BytesIO(await page.screenshot(full_page=True))).convert("RGB")
                 if im.height > HAUTEUR_MAX:

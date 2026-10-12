@@ -246,3 +246,75 @@ Régénérer : `python3 scripts/snapshots-aurora.py [préfixe…]` (playwright +
 | Bureau | Mobile |
 |---|---|
 | ![Guardian (filtrage DNS) — bureau](guardian-bureau.webp) | ![Guardian (filtrage DNS) — mobile](guardian-mobile.webp) |
+
+### NAC — Appareils et zones
+
+`packages/secubox-nac/www/nac/index.html` — Tuiles filtres (état, zone, connexion), appareils réels agrégés (NAC, DPI, DNS, Toolbox), comportement des zones, noms et services Bonjour.
+
+| Bureau | Mobile |
+|---|---|
+| ![NAC — Appareils et zones — bureau](nac-bureau.webp) | ![NAC — Appareils et zones — mobile](nac-mobile.webp) |
+
+### Filtre web
+
+`packages/secubox-webfilter/www/webfilter/index.html` — Observation par catégorie, profils, exceptions par appareil, domaines toujours bloqués, application différée.
+
+| Bureau | Mobile |
+|---|---|
+| ![Filtre web — bureau](webfilter-bureau.webp) | ![Filtre web — mobile](webfilter-mobile.webp) |
+
+### Ad Guard
+
+`packages/secubox-ad-guard/www/ad-guard/index.html` — Filtrage DNS : tuiles, requêtes, familles de domaines, blocage différé, confirmations intégrées.
+
+| Bureau | Mobile |
+|---|---|
+| ![Ad Guard — bureau](ad-guard-bureau.webp) | ![Ad Guard — mobile](ad-guard-mobile.webp) |
+
+### DNS Guard
+
+`packages/secubox-dns-guard/www/dns-guard/index.html` — Garde DNS : anomalies, résolveur, état et actions.
+
+| Bureau | Mobile |
+|---|---|
+| ![DNS Guard — bureau](dns-guard-bureau.webp) | ![DNS Guard — mobile](dns-guard-mobile.webp) |
+
+### Anomalies réseau
+
+`packages/secubox-dns-guard/composants/network-anomaly/www/network-anomaly/index.html` — Débits mesurés, lignes de base automatiques, classement des anomalies et détail.
+
+| Bureau | Mobile |
+|---|---|
+| ![Anomalies réseau — bureau](network-anomaly-bureau.webp) | ![Anomalies réseau — mobile](network-anomaly-mobile.webp) |
+
+### WireGuard
+
+`packages/secubox-wireguard/www/wireguard/index.html` — Tunnels dépliables, pairs, trafic par tunnel, ajout de pair, confirmation avant de descendre un tunnel d'administration.
+
+| Bureau | Mobile |
+|---|---|
+| ![WireGuard — bureau](wireguard-bureau.webp) | ![WireGuard — mobile](wireguard-mobile.webp) |
+
+### Interceptor
+
+`packages/secubox-interceptor/www/interceptor/index.html` — Supervision de l'inspection : moteurs sbxmitm et sbxwaf, activité, classes nDPI, cartes des entrées et sorties, exclusions.
+
+| Bureau | Mobile |
+|---|---|
+| ![Interceptor — bureau](interceptor-bureau.webp) | ![Interceptor — mobile](interceptor-mobile.webp) |
+
+### Modes réseau
+
+`packages/secubox-netmodes/www/netmodes/index.html` — Mode jamais inventé (« inconnu »), interfaces, sortie Internet lue dans la route par défaut, détection matérielle, application confirmée.
+
+| Bureau | Mobile |
+|---|---|
+| ![Modes réseau — bureau](netmodes-bureau.webp) | ![Modes réseau — mobile](netmodes-mobile.webp) |
+
+### Caches de la box
+
+`packages/secubox-cdn/www/cdn/index.html` — Taille, fichiers et activité de chaque cache réel de /var/cache/secubox ; dossier fermé = tiret ; politiques non appliquées signalées.
+
+| Bureau | Mobile |
+|---|---|
+| ![Caches de la box — bureau](cdn-bureau.webp) | ![Caches de la box — mobile](cdn-mobile.webp) |
