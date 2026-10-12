@@ -4,158 +4,205 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Billets (portail d'administration du micro-blog), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES : le stats.json public du blog de CETTE box (https://billets.<domaine>/stats.json). Illisible = « — », jamais un zéro inventé.
+  Les liens d'administration ouvrent le blog (connexion propre au blog) : cette page ne porte aucune écriture.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
-
-<html lang="fr" class="hybrid-dark">
+<html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuBox — Billets</title>
-<link href="/cdn/fonts/css/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-dark.css">
-<style>
-  :root{
-    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
-    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
-    --cyan:#00d4ff; --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00;
-    --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
-  }
-  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
-  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
-  .header h1{font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
-  .header .sub{font-size:.72rem;color:var(--p31-dim);letter-spacing:.05em;margin-top:.25rem}
-  .btn-group{display:flex;flex-wrap:wrap;gap:.4rem}
-  .btn{font-family:inherit;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;
-    text-decoration:none;color:var(--text);background:var(--bg-row);border:1px solid var(--border);
-    border-radius:6px;padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
-  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
-  .btn.primary{border-color:var(--cyan);color:var(--cyan)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1rem}
-  .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
-    padding:.7rem;text-align:center;backdrop-filter:blur(10px)}
-  .stat-card .value{font-size:1.5rem;font-weight:bold;text-shadow:0 0 10px currentColor;font-variant-numeric:tabular-nums;color:var(--text)}
-  .stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;margin-top:.2rem;text-transform:uppercase}
-  .stat-card.cyan .value{color:var(--cyan)} .stat-card.yellow .value{color:var(--yellow)}
-  .stat-card.blue .value{color:var(--blue)} .stat-card.purple .value{color:var(--purple)}
-  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
-    padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
-  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.7rem}
-  .admin-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.5rem}
-  .admin-links .btn{text-align:center}
-  .reacts{display:flex;flex-wrap:wrap;gap:.5rem}
-  .chip{background:var(--bg-row);border:1px solid var(--border);border-radius:999px;
-    padding:.3rem .7rem;font-size:.95rem}
-  .chip b{color:var(--cyan);font-variant-numeric:tabular-nums;margin-left:.3rem;font-size:.85rem}
-  .item{display:flex;justify-content:space-between;gap:1rem;align-items:center;
-    background:var(--bg-row);border-left:3px solid var(--cyan);border-radius:4px;
-    padding:.55rem .7rem;margin-bottom:.4rem;text-decoration:none;color:var(--text);
-    transition:transform .12s,background .12s}
-  .item:hover{background:rgba(0,212,255,.08);transform:translateX(2px)}
-  .item .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.85rem}
-  .item .d{color:var(--p31-dim);font-size:.7rem;flex:none;font-variant-numeric:tabular-nums}
-  .muted{color:var(--p31-dim);font-size:.8rem}
-  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;
-    padding:.6rem 1rem;border-radius:6px;font-size:.8rem;opacity:0;pointer-events:none;
-    transition:opacity .2s;z-index:50}
-  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
-  @media(max-width:768px){.main{margin-left:0}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Billets</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #dialogue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #dialogue.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} #dialogue[hidden]{display:none} #dialogue span{flex:1 1 260px;line-height:1.4}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .haut{display:flex;gap:10px;align-items:center;min-width:0} .tuile svg.ic{flex:none;width:28px;height:28px}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.g2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+        .pan,.card{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3,.card h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .iface{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.5)} .iface.up{border-left-color:var(--vert)} .iface.down{border-left-color:var(--rouge)}
+        .iface-head{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;cursor:pointer}
+        .iface-emoji{font-size:1.3rem} .iface-id .name{font-weight:700;overflow-wrap:anywhere} .iface-id .role{color:var(--faible);font-size:.72rem}
+        .iface-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end} .m{text-align:right} .mv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.82rem} .ml{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .pill{border:1px solid;border-radius:999px;padding:1px 10px;font-size:.68rem;font-weight:700} .pill.up{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)} .pill.down{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chev{color:var(--faible);transition:transform .15s} .iface.open .chev{transform:rotate(90deg)}
+        .iface-body{display:none;padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12)} .iface.open .iface-body{display:block}
+        .iface-sub{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--doux);font-size:.76rem;margin-bottom:8px} .iface-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .peer-note{color:var(--faible);font-size:.76rem;padding:6px 0} .peer-list{display:flex;flex-direction:column;gap:4px}
+        .peer{display:grid;grid-template-columns:1.2em minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid rgba(86,150,255,.12);border-radius:8px;font-size:.76rem}
+        .peer.active{border-color:rgba(46,204,113,.45);background:rgba(46,204,113,.06)} .peer .ip{font-weight:600} .peer .key{color:var(--faible);font-size:.64rem;font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+        .peer .hs{color:var(--doux);white-space:nowrap} .peer .rx{color:var(--cyan)} .peer .tx{color:var(--jaune)} .peer .xfer{white-space:nowrap;font-variant-numeric:tabular-nums}
+        .hl{display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.4fr) auto;gap:8px;align-items:center;font-size:.74rem;padding:2px 0} .hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .hl b{font-variant-numeric:tabular-nums;color:var(--doux);font-weight:600;white-space:nowrap} .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
+        .repart{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .leg{flex:1 1 150px;min-width:0} .leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:.74rem;padding:1px 0;white-space:nowrap}
+        .leg i{width:9px;height:9px;border-radius:50%;display:inline-block} .leg b{font-weight:600} svg .dn{fill:#eaf1ff;font-size:18px;font-weight:700} svg .dp{fill:#9fb3d6;font-size:9px}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.78rem;margin-bottom:8px} .kv .k{color:var(--doux)}
+        pre{margin:0;background:rgba(3,8,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:#cfe8ff;max-height:16rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:6px 0}
+        .modal{position:fixed;inset:0;background:rgba(2,6,16,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:100} .modal.show{display:flex}
+        .modal-content{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+        .modal-content h3{margin:0 0 10px;font-size:1rem} .modal-content img{display:block;max-width:220px;width:100%;margin:8px auto;border-radius:8px;background:#fff;padding:6px}
+        .form-group{display:grid;gap:4px;margin-bottom:8px} .form-group label{color:var(--doux);font-size:.76rem}
+        input[type=text],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)} .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)} .toast.error{background:var(--rouge);color:#fff}
+        @media (max-width:560px){.iface-head{grid-template-columns:2em minmax(0,1fr) auto}.iface-meta .m{display:none}.peer{grid-template-columns:1.2em minmax(0,1fr) auto}.peer .xfer{display:none}}
+    
+        .moteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+        .mot{border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);display:grid;gap:2px}
+        .mot.ok{border-left-color:var(--vert)} .mot.ko{border-left-color:var(--rouge)} .mot b{font-size:.84rem} .mot small{color:var(--faible);font-size:.7rem}
+        .win{display:flex;gap:6px;flex-wrap:wrap} .win .btn.on{background:rgba(41,182,246,.22);border-color:var(--cyan)}
+        .liste{display:flex;flex-wrap:wrap;gap:5px;max-height:11rem;overflow:auto} .liste code{border:1px solid var(--trait);border-radius:6px;padding:1px 7px;background:rgba(8,18,38,.6)}
+        .carte svg.monde{width:100%;height:auto;display:block;border-radius:8px} .pays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 18px;font-size:.78rem;margin-top:8px}
+        .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)} .pays .vide{grid-column:1/-1}
+        .g3{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)} @container a (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        svg.serie{width:100%;height:auto;display:block} svg .ax{fill:#6f84a8;font-size:9px}
+            .liens{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))} a.btn{text-decoration:none;display:inline-block;text-align:center}
+        .reacts{display:flex;flex-wrap:wrap;gap:8px} .chip{border:1px solid var(--trait);border-radius:999px;padding:3px 12px;background:rgba(8,18,38,.5);font-size:.95rem} .chip b{color:var(--cyan);margin-left:6px;font-size:.82rem;font-variant-numeric:tabular-nums}
+        .item{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--trait);border-left:3px solid var(--cyan);border-radius:8px;padding:8px 10px;margin-bottom:6px;color:var(--texte);text-decoration:none;background:rgba(8,18,38,.5)}
+        .item:hover{border-color:var(--cyan)} .item .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.85rem} .item .d{color:var(--faible);font-size:.72rem;flex:none;font-variant-numeric:tabular-nums}
+        .btn.danger{margin-top:0}
+    </style>
 </head>
-<body class="hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="rgba(41,182,246,.14)"/><path d="M3 8l9 6 9-6"/></svg>
+                <div><b>Billets</b><small id="subline">Micro-blog inter-médias de la box</small></div>
+            </div>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh">⟳ Actualiser</button><a class="btn primary" id="a-open" target="_blank" rel="noopener">🚀 Voir le blog</a></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
 
-<main class="main">
-  <header class="header">
-    <div>
-      <h1>📮 Billets</h1>
-      <div class="sub" id="sub">micro-blog gateway inter-médias · chargement…</div>
-    </div>
-    <div class="btn-group">
-      <button class="btn" onclick="refresh()">↻ Refresh</button>
-      <a class="btn primary" id="a-open" target="_blank" rel="noopener">🚀 Voir le blog</a>
-    </div>
-  </header>
+        <div class="tuiles">
+            <div class="tuile"><div class="l">Publiés</div><div class="v" data-k="billets_published">—</div><div class="s">billets en ligne</div></div>
+            <div class="tuile"><div class="l">Brouillons</div><div class="v" data-k="billets_drafts">—</div><div class="s">non publiés</div></div>
+            <div class="tuile"><div class="l">Commentaires</div><div class="v" data-k="comments_approved">—</div><div class="s">approuvés</div></div>
+            <div class="tuile"><div class="l">Réactions</div><div class="v" data-k="reactions_total">—</div><div class="s">au total</div></div>
+        </div>
 
-  <div class="grid" id="cards">
-    <div class="stat-card cyan"><div class="value" data-k="billets_published">–</div><div class="label">📝 Publiés</div></div>
-    <div class="stat-card yellow"><div class="value" data-k="billets_drafts">–</div><div class="label">📄 Brouillons</div></div>
-    <div class="stat-card blue"><div class="value" data-k="comments_approved">–</div><div class="label">💬 Commentaires</div></div>
-    <div class="stat-card purple"><div class="value" data-k="reactions_total">–</div><div class="label">✨ Réactions</div></div>
-  </div>
+        <div class="pan"><h3>Administration <i>ouvre le blog : la connexion est celle du blog</i></h3>
+            <div class="liens">
+                <a class="btn primary" id="a-admin" target="_blank" rel="noopener">🔐 Connexion / Tableau de bord</a>
+                <a class="btn" id="a-new" target="_blank" rel="noopener">✍️ Nouveau billet</a>
+                <a class="btn" id="a-comments" target="_blank" rel="noopener">💬 Modération des commentaires</a>
+                <a class="btn" id="a-pw" target="_blank" rel="noopener">🔑 Changer le mot de passe</a>
+                <a class="btn" id="a-backup" target="_blank" rel="noopener">💾 Sauvegarde .sbxsite</a>
+                <a class="btn" id="a-feed" target="_blank" rel="noopener">📡 Flux Atom</a>
+                <a class="btn danger" id="a-override" target="_blank" rel="noopener">🔑 Réinitialiser le mot de passe (opérateur)</a>
+            </div>
+            <p class="peer-note">Mot de passe oublié ? « Réinitialiser (opérateur) » en génère un nouveau ; le secret est dans <code>/etc/secubox/secrets/billets</code> (root seulement).</p>
+        </div>
 
-  <div class="card">
-    <h3>🔐 Administration</h3>
-    <div class="admin-links">
-      <a class="btn primary" id="a-admin" target="_blank" rel="noopener">🔐 Connexion / Tableau de bord</a>
-      <a class="btn" id="a-new" target="_blank" rel="noopener">✍️ Nouveau billet</a>
-      <a class="btn" id="a-comments" target="_blank" rel="noopener">💬 Modération commentaires</a>
-      <a class="btn" id="a-pw" target="_blank" rel="noopener">🔑 Changer le mot de passe</a>
-      <a class="btn" id="a-backup">💾 Backup .sbxsite</a>
-      <a class="btn" id="a-feed" target="_blank" rel="noopener">📡 Flux Atom</a>
-      <a class="btn danger" id="a-override" target="_blank" rel="noopener">🔑 Reset mot de passe (opérateur)</a>
-    </div>
-    <p class="muted" style="margin-top:.6rem">🔑 Mot de passe oublié ? « Reset opérateur » génère un nouveau mot de passe (secret <code>/etc/secubox/secrets/billets</code>, root only).</p>
-  </div>
+        <div class="grille g2">
+            <div class="pan"><h3>Derniers billets</h3><div id="latest"><div class="vide">Chargement…</div></div></div>
+            <div class="pan"><h3>Réactions</h3><div class="reacts" id="reacts"><span class="vide">—</span></div></div>
+        </div>
+    </div></div></main>
 
-  <div class="card">
-    <h3>✨ Réactions</h3>
-    <div class="reacts" id="reacts"><span class="muted">…</span></div>
-  </div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        // Le blog de CETTE box (#1723) : le panneau vit sur admin.<domaine>, le blog sur billets.<domaine>.
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        const SITE = (function (h) { return 'https://billets.' + ((h.indexOf('.') > 0 && !/^[0-9.]+$/.test(h)) ? h.slice(h.indexOf('.') + 1) : 'gk2.secubox.in'); })(location.hostname);
+        const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+        const LIENS = { 'a-open': '/', 'a-admin': '/admin', 'a-new': '/admin/billets/new', 'a-comments': '/admin/comments', 'a-pw': '/admin', 'a-backup': '/admin/export.sbxsite', 'a-override': '/admin/override', 'a-feed': '/feed.xml' };
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+        function vide(el, msg) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'vide'; d.textContent = msg; el.append(d); }
+        // Une adresse n'est jamais posée sans être ré-analysée : seul un http(s) vers l'origine annoncée par le blog est accepté (aucun javascript:).
+        function lien(el, base, chemin) { try { const u = new URL(chemin, base + '/'); if (/^https?:$/.test(u.protocol)) el.href = u.href; } catch (e) { /* adresse illisible : lien inerte */ } }
+        function liens(site) { for (const id in LIENS) { const el = $(id); if (el) lien(el, site, LIENS[id]); } }
+        liens(SITE);
 
-  <div class="card">
-    <h3>🕒 Derniers billets</h3>
-    <div id="latest"><p class="muted">Chargement… ⏳</p></div>
-  </div>
-</main>
+        async function lire() {
+            if (DEMO) return demo();
+            try { const r = await fetch(SITE + '/stats.json', { mode: 'cors', cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; }
+        }
+        function rendre(s) {
+            const pa = $('pastille');
+            if (!s) {
+                pa.textContent = 'BLOG INJOIGNABLE'; pa.className = 'actif hors';
+                document.querySelectorAll('.tuile .v[data-k]').forEach(e => e.textContent = '—');
+                vide($('latest'), 'Le blog est injoignable pour l’instant (' + SITE.replace('https://', '') + ').');
+                $('reacts').replaceChildren(...EMOJIS.map(e => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = e; return c; }));
+                hauteur(); return;
+            }
+            const site = String(s.site_url || SITE + '/').replace(/\/$/, ''); liens(site);
+            document.querySelectorAll('.tuile .v[data-k]').forEach(e => { const v = s[e.getAttribute('data-k')]; e.textContent = typeof v === 'number' ? fmt(v) : '—'; });
+            pa.textContent = 'BLOG EN LIGNE · ' + fmt(s.billets_published) + ' PUBLIÉS'; pa.className = 'actif';
+            $('subline').textContent = site.replace(/^https?:\/\//, '');
+            const rb = s.reactions_by || {};
+            $('reacts').replaceChildren(...EMOJIS.map(e => { const c = document.createElement('span'); c.className = 'chip'; c.append(document.createTextNode(e)); const b = document.createElement('b'); b.textContent = fmt(rb[e] || 0); c.append(b); return c; }));
+            const lt = $('latest'); lt.replaceChildren();
+            if (Array.isArray(s.latest) && s.latest.length) {
+                for (const b of s.latest) {
+                    const a = document.createElement('a'); a.className = 'item'; a.target = '_blank'; a.rel = 'noopener'; lien(a, site, String(b.url || '/'));
+                    const t = document.createElement('span'); t.className = 't'; t.textContent = b.title || 'billet'; t.title = b.title || '';
+                    const d = document.createElement('span'); d.className = 'd'; d.textContent = b.date || '';
+                    a.append(t, d); lt.append(a);
+                }
+            } else vide(lt, 'Aucun billet publié — « Nouveau billet » pour commencer.');
+            hauteur();
+        }
+        async function charger() {
+            rendre(await lire());
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'billets' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        $('btn-refresh').addEventListener('click', charger);
 
-<div class="toast" id="toast"></div>
-
-<script>
-(function(){
-  // Le billets de CETTE box (#1723) : le panneau vit sur admin.<domaine>.
-  var FALLBACK = (function (h) {
-    return 'https://billets.' + ((h.indexOf('.') > 0 && !/^[0-9.]+$/.test(h)) ? h.slice(h.indexOf('.') + 1) : 'gk2.secubox.in');
-  })(location.hostname);
-  var EMOJI_ORDER = ["👍","❤️","😂","😮","😢","🔥"];
-  function esc(s){return String(s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
-  function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(err?' error':'');setTimeout(function(){t.className='toast';},2600);}
-  function links(site){
-    var m = {
-      'a-open': "/", 'a-admin': "/admin", 'a-new': "/admin/billets/new",
-      'a-comments': "/admin/comments", 'a-pw': "/admin", 'a-backup': "/admin/export.sbxsite",
-      'a-override': "/admin/override", 'a-feed': "/feed.xml"
-    };
-    for (var id in m){ var el = document.getElementById(id); if (el) el.href = site + m[id]; }
-  }
-  links(FALLBACK);
-  function refresh(){
-    fetch(FALLBACK + "/stats.json", {mode:"cors", cache:"no-store"}).then(function(r){return r.json();}).then(function(s){
-      var site = (s.site_url||FALLBACK+"/").replace(/\/$/,""); links(site);
-      document.querySelectorAll('.stat-card .value[data-k]').forEach(function(el){
-        var v = s[el.getAttribute('data-k')]; el.textContent = (typeof v==='number')? v : (v||0);
-      });
-      var rb = s.reactions_by||{};
-      document.getElementById('reacts').innerHTML = EMOJI_ORDER.map(function(e){
-        return '<span class="chip">'+e+'<b>'+(rb[e]||0)+'</b></span>'; }).join('');
-      document.getElementById('sub').textContent = 'micro-blog gateway inter-médias · '+(s.billets_published||0)+' publiés';
-      var lt = document.getElementById('latest');
-      if(s.latest && s.latest.length){
-        lt.innerHTML = s.latest.map(function(b){
-          return '<a class="item" href="'+esc(b.url)+'" target="_blank" rel="noopener">'+
-                 '<span class="t">'+esc(b.title||'billet')+'</span>'+
-                 '<span class="d">'+esc(b.date||'')+'</span></a>'; }).join('');
-      } else { lt.innerHTML = '<p class="muted">Aucun billet publié — clique ✍️ Nouveau.</p>'; }
-    }).catch(function(){
-      document.getElementById('latest').innerHTML = '<p class="muted">Blog injoignable pour l\'instant 😴 — <a class="btn" href="'+FALLBACK+'" target="_blank" rel="noopener">ouvrir</a>.</p>';
-      document.getElementById('reacts').innerHTML = EMOJI_ORDER.map(function(e){return '<span class="chip">'+e+'</span>';}).join('');
-      toast('Blog injoignable', true);
-    });
-  }
-  window.refresh = refresh;
-  refresh();
-  setInterval(refresh, 60000);
-})();
-</script>
+        function demo() {
+            return { site_url: 'https://billets.exemple.test/', billets_published: 42, billets_drafts: 3, comments_approved: 117, reactions_total: 560, reactions_by: { '👍': 210, '❤️': 150, '😂': 90, '🔥': 70, '😮': 25, '😢': 15 },
+                latest: [{ title: 'Ouverture de la saison', url: '/b/1', date: '2026-10-11' }, { title: '<img src=x onerror=alert(1)>', url: 'javascript:alert(1)', date: '2026-10-09' }, { title: 'Notes de version', url: '/b/3', date: '2026-10-05' }] };
+        }
+        if (DEMO) $('demo').hidden = false;
+        charger();
+        setInterval(charger, 60000);
+    </script>
 </body>
 </html>

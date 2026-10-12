@@ -1,3 +1,16 @@
+secubox-billets (0.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * Portail /billets/ au profil Aurora (#2473), en français, sur les statistiques réelles du
+    blog de la box (stats.json) : tuiles, derniers billets, réactions, liens d'administration.
+    Blog injoignable : « — » et le dit. Les liens ne sont posés qu'en http(s) (jamais
+    javascript:). ?demo=1 et ?embed=1. 5 tests navigateur.
+  * Tableau de bord, modération, édition, connexion et reset du blog habillés en Aurora
+    (feuille billets-admin.css : mêmes classes, mêmes gabarits, mêmes routes ; pile de polices
+    système, plus de police distante). Le fil public garde sa propre identité.
+  * Échecs préexistants de la suite (35 échecs, 17 erreurs) identiques avant et après.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:47:28 +0200
+
 secubox-billets (0.11.4-1~bookworm1) bookworm; urgency=medium
 
   * Video hebergee jouee en grand dans la scene du billet, et instant des commentaires juste (ref #2397). Un billet dont la piece jointe est une video (mp4, webm) montre sa vignette avec ▶ ; au clic, la video se joue dans la scene (plein cadre, fond noir). Sa position est REELLE (currentTime) et suit lecture/pause. Horodatage : « 359:44 » pour des lignes ecrites a quelques minutes d'intervalle venait de l'estimation « base + temps ecoule » depuis l'ouverture du lecteur, qui derive (onglet ouvert six heures, video en pause ou finie). YouTube donne maintenant sa position reelle (API postMessage : currentTime, lecture/pause) dans la page du billet et dans le theatre du fil ; sinon l'estimation est bornee a 3 h puis « inconnue » : la ligne part sans instant plutot qu'avec un faux instant, et rien n'est sauve en memoire locale en cas d'instant inconnu. 5 tests.
