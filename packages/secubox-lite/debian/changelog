@@ -1,3 +1,12 @@
+secubox-lite (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Automesh (#2475) : le profil lite embarque le maillage (secubox-p2p) et l'assistance sur
+    consentement (secubox-assist) pour le support à distance et la première installation. La
+    box APPELLE son parent avec un code d'invitation unique (adresse + jeton) déposé par la
+    préparation de la box ; sans code, rien ne se passe. Le parent garde la décision.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:56:40 +0200
+
 secubox-lite (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * La console TUI (partie headless de l'interface locale) est dans toute image (#2332) : elle quitte secubox-full. Le kiosque WebUI et la console sont dans tous les profils.

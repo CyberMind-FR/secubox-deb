@@ -1,3 +1,19 @@
+secubox-p2p (1.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * Automesh (#2475) : code d'invitation unique `sbxmesh1.…` (adresse du parent + jeton +
+    somme de contrôle) au lieu de deux saisies ; les invitations (/master-link/invite et
+    invite-local) le renvoient (`code`), POST /master-link/join-with-code le consomme (JWT).
+    Adresse et jeton revalidés strictement ; jonction par adresse non locale en HTTPS à
+    certificat vérifié, littéraux IPv6 entre crochets.
+  * Jonction automatique au démarrage : secubox-automesh.timer (45 s après le démarrage, puis
+    toutes les 2 min) lance sbx-mesh-join avec le code déposé dans
+    /var/lib/secubox/p2p/automesh.code — appel SORTANT de la box vers son parent. Sans code,
+    rien (ConditionPathExists). Le jeton passe par l'environnement, pas par la ligne de
+    commande ; code supprimé après approbation, après 24 h ou 5 refus ; jamais journalisé.
+  * sbx-mesh-join accepte `-` à la place du jeton (SBX_MESH_TOKEN). 26 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 10:56:40 +0200
+
 secubox-p2p (1.12.1-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (#2476) : /master-link/invite-local et /master-link/cleanup-local étaient accessibles

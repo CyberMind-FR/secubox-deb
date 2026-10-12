@@ -94,6 +94,10 @@ case "$1" in
         # Enable and start the service
         systemctl daemon-reload
         systemctl enable secubox-p2p.service
+        # #2475 : la minuterie ne fait rien tant qu'aucun code n'est déposé (ConditionPathExists)
+        install -d -m 0700 -o secubox -g secubox /var/lib/secubox/p2p 2>/dev/null || true
+        systemctl enable secubox-automesh.timer >/dev/null 2>&1 || true
+        systemctl start secubox-automesh.timer >/dev/null 2>&1 || true
         systemctl start secubox-p2p.service || true
 
         # ── MIRRORNET : L'ÉTAT DEVIENT UN TUNNEL (#1360) ───────────────────

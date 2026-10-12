@@ -1,0 +1,19 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Jonction automatique au maillage (#2475) : un passage, lancé au démarrage puis toutes les 2 minutes par secubox-automesh.timer.
+
+Si un code d'invitation a été déposé dans /var/lib/secubox/p2p/automesh.code (par la préparation de la box : Auto-Load, premier pas), la box APPELLE le parent avec ce code.
+Sans code : rien. Le parent garde la décision (jeton valide, approbation) ; le code n'est jamais journalisé."""
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/p2p")
+from api import automesh  # noqa: E402
+
+if __name__ == "__main__":
+    statut = automesh.executer(automesh.rejoindre_par_script)
+    if statut != "aucun":
+        print(f"secubox-automesh : {statut}")
+    sys.exit(0 if statut in ("aucun", "approuve", "en_attente") else 1)

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox — jonction automatique au maillage au démarrage puis toutes les 2 minutes (#2475)
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
