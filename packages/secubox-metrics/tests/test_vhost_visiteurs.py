@@ -32,3 +32,20 @@ def test_visiteurs_excluent_loopback_et_prive():
     assert "8.8.8.8" in s["ips"]
     assert "127.0.0.1" not in s["ips"]
     assert "192.168.1.200" not in s["ips"]
+
+
+def test_visiteurs_lan_a_part_des_publics(monkeypatch):
+    # #2404 : les postes du reseau local comptent a part ; la boucle locale et
+    # les adresses propres de la box (appels internes) ne sont pas des visiteurs.
+    monkeypatch.setattr(vs, "_PROPRES", {"127.0.0.1", "192.168.1.200"})
+    s = vs._vierge()
+    for ip in ["127.0.0.1", "192.168.1.200", "192.168.1.3", "192.168.1.3", "10.100.0.5", "8.8.8.8"]:
+        _feed(s, ip)
+    assert s["ips"] == {"8.8.8.8"}
+    assert s["ips_lan"] == {"192.168.1.3", "10.100.0.5"}
+    assert vs._lan("192.168.1.3") and not vs._lan("192.168.1.200") and not vs._lan("8.8.8.8")
+
+
+def test_page_vhosts_affiche_les_visiteurs_lan():
+    page = open(os.path.join(os.path.dirname(__file__), "..", "www", "metrics", "vhosts.html"), encoding="utf-8").read()
+    assert "visiteurs_lan" in page and "réseau local" in page
