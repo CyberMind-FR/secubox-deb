@@ -65,6 +65,7 @@
         .hb{height:12px;border-radius:6px;background:rgba(159,179,214,.12);overflow:hidden} .hbi{display:flex;height:100%;min-width:3px} .hbi i{display:block;min-width:1px}
         .rangee{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;border:1px solid var(--trait);border-left:3px solid var(--vert);border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:.78rem;background:rgba(8,18,38,.5)}
         .rangee .nom{color:var(--cyan);font-weight:600} .rangee .meta{color:var(--faible);font-variant-numeric:tabular-nums} .rangee select,.rangee input{max-width:100%}
+        .puce.bloquee{border-color:var(--rouge);color:#ffd9de} .bloques-appareil{flex:1 1 100%;margin-top:4px} .bloques .ligne-champ{margin:2px 0}
         .exclu{color:var(--jaune);font-size:.74rem} .bloque{color:var(--orange)} .note{color:var(--faible);font-size:.74rem} .vide{color:var(--faible);font-size:.78rem;padding:4px 0}
         .scroll{overflow-x:auto} table{width:100%;border-collapse:collapse;font-size:.78rem}
         th{text-align:left;color:var(--faible);text-transform:uppercase;letter-spacing:.05em;font-size:.66rem;padding:4px 6px;white-space:nowrap}
@@ -381,6 +382,8 @@
             dessiner();
             const ajout = el('button', 'btn', '+ Autoriser'); ajout.addEventListener('click', () => { const v = saisie.value.trim().toLowerCase(); if (v) { autorise.push(v); saisie.value = ''; dessiner(); } });
             const lAut = el('div', 'ligne-champ'); lAut.append(el('label', '', 'Autorisés'), zoneAut); carte.append(lAut);
+            const bloqueInit = (prof.bloque || []).slice(), bloque = bloqueInit.slice();
+            const lBlo = el('div', 'ligne-champ'); lBlo.append(el('label', '', 'Toujours bloqués'), zoneBloques(bloque, 'domaine à bloquer, même en observe')); carte.append(lBlo);
             const lSaisie = el('div', 'ligne-champ'); lSaisie.append(el('label', '', ''), saisie, ajout); carte.append(lSaisie);
             const actions = el('div', 'ligne-champ');
             const enr = el('button', 'btn primary', 'Enregistrer'); enr.dataset.action = 'enregistrer-profil'; enr.dataset.profil = nom;
@@ -389,7 +392,9 @@
                 carte.querySelectorAll('select[data-cat]').forEach(s => { categories[s.dataset.cat] = s.value; });
                 const nouveaux = Object.keys(categories).filter(c => categories[c] === 'block' && initial[c] !== 'block');
                 if (nouveaux.length && !await confirmer('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour le profil « ' + nom + ' » ? Les appareils de ce profil ne pourront plus joindre ces sites après l\'application.')) return;
-                const rr = await api('/profils', 'POST', { nom, categories, autorise });
+                const forces = ajoutes(bloqueInit, bloque);
+                if (forces.length && !await confirmer('Bloquer TOUJOURS ' + forces.join(', ') + ' pour le profil « ' + nom + ' » ? Ces domaines seront refusés même si leur catégorie est en observe.')) return;
+                const rr = await api('/profils', 'POST', avecBloque({ nom, categories, autorise }, bloque));
                 if (rr.ok) { enregistrerOk('Profil « ' + nom + ' » enregistré'); chargerProfils(); } else echec(rr, 'Profil refusé');
             });
             actions.append(enr);
@@ -409,10 +414,10 @@
         async function creerProfil() {
             const nom = $('nouveau-nom').value.trim(), m = $('nouveau-modele').value;
             if (!nom) { errorToast('Donnez un nom au profil.'); return; }
-            const base = m && modeles[m] ? modeles[m] : { categories: {}, autorise: [] };
+            const base = m && modeles[m] ? modeles[m] : { categories: {}, autorise: [], bloque: [] };
             const bloque = Object.keys(base.categories).filter(c => base.categories[c] === 'block');
             if (bloque.length && !await confirmer('Ce profil bloquera ' + bloque.join(', ') + ' (BLOCAGE) une fois appliqué. Continuer ?')) return;
-            const r = await api('/profils', 'POST', { nom, categories: base.categories, autorise: base.autorise });
+            const r = await api('/profils', 'POST', avecBloque({ nom, categories: base.categories, autorise: base.autorise }, base.bloque));
             if (r.ok) { $('nouveau-nom').value = ''; enregistrerOk('Profil « ' + nom + ' » créé'); chargerProfils(); } else echec(r, 'Création refusée');
         }
 
@@ -447,18 +452,22 @@
             const sp = el('select'); sp.dataset.mac = a.mac; sp.dataset.champ = 'profil';
             for (const n of noms) sp.append(option(n, n)); sp.value = a.profil;
             ligne.append(nom, sp);
+            const bloqueInit = (a.bloque || []).slice(), bloque = bloqueInit.slice();
             for (const c of cats) {
                 const s = el('select'); s.dataset.mac = a.mac; s.dataset.exc = c;
                 s.append(option('', c + ' : (profil)'), option('observe', c + ' : observe'), option('block', c + ' : block')); s.value = (a.exceptions || {})[c] || '';
                 ligne.append(s);
             }
+            const zB = el('div', 'bloques-appareil'); zB.append(el('span', 'meta', 'Toujours bloqués (même en observe) :'), zoneBloques(bloque, 'domaine à bloquer pour cet appareil')); ligne.append(zB);
             const enr = el('button', 'btn primary', 'Enregistrer'); enr.dataset.action = 'enregistrer-appareil'; enr.dataset.mac = a.mac;
             enr.addEventListener('click', async () => {
                 const exceptions = {};
                 ligne.querySelectorAll('select[data-exc]').forEach(s => { if (s.value) exceptions[s.dataset.exc] = s.value; });
                 const nouveaux = nouveauxBlocages(modesEffectifs(prof, a.profil, a.exceptions), modesEffectifs(prof, sp.value, exceptions));
                 if (nouveaux.length && !await confirmer('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour « ' + (nom.value.trim() || a.mac) + ' » ? Cet appareil ne pourra plus joindre ces sites après l\'application.')) return;
-                const r = await api('/appareils/' + encodeURIComponent(a.mac), 'POST', { nom: nom.value.trim(), profil: sp.value, exceptions });
+                const forces = ajoutes(bloqueInit, bloque);
+                if (forces.length && !await confirmer('Bloquer TOUJOURS ' + forces.join(', ') + ' pour « ' + (nom.value.trim() || a.mac) + ' » ? Ces domaines seront refusés même si leur catégorie est en observe.')) return;
+                const r = await api('/appareils/' + encodeURIComponent(a.mac), 'POST', avecBloque({ nom: nom.value.trim(), profil: sp.value, exceptions }, bloque));
                 if (r.ok) { enregistrerOk('Appareil enregistré'); chargerAppareils(); } else echec(r, 'Appareil refusé');
             });
             ligne.append(enr, ret);
@@ -525,6 +534,29 @@
         document.getElementById('cat-select').addEventListener('change', chargerDomaines);
         refresh();
         setInterval(refresh, 60000);
+
+        // Domaines TOUJOURS bloqués (#2433) : refusés même si leur catégorie est en observe ; l'emportent sur une autorisation.
+        function zoneBloques(liste, placeholder) {
+            const zone = el('div', 'bloques'), saisie = el('input'); saisie.type = 'text'; saisie.placeholder = placeholder; saisie.maxLength = 253;
+            const chips = el('div'), dessiner = () => {
+                chips.replaceChildren();
+                liste.forEach((d, i) => {
+                    const puce = el('span', 'puce bloquee', d), x = el('button', '', '✕'); x.title = 'Retirer'; x.type = 'button';
+                    x.addEventListener('click', () => { liste.splice(i, 1); dessiner(); });
+                    puce.append(x); chips.append(puce);
+                });
+                if (!liste.length) chips.append(el('span', 'note', 'aucun'));
+            };
+            const ajout = el('button', 'btn', '+ Bloquer'); ajout.type = 'button';
+            const ajouter = () => { const v = saisie.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''); if (v && !liste.includes(v)) { liste.push(v); saisie.value = ''; dessiner(); } };
+            ajout.addEventListener('click', ajouter);
+            saisie.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } });
+            dessiner(); zone.append(chips, el('div', 'ligne-champ'));
+            zone.lastChild.append(saisie, ajout);
+            return zone;
+        }
+        const ajoutes = (avant, apres) => apres.filter(d => !avant.includes(d));
+        const avecBloque = (corps, liste) => (liste && liste.length ? Object.assign(corps, { bloque: liste }) : corps);      // la clé n'est envoyée que si elle sert
 
         // ══ Aurora : confirmation intégrée, icônes, graphes, démonstration, hauteur ═══════════════════════════════
         // `confirm()` est ignoré par le navigateur du Hall (il répond « non » sans rien dire) : un passage en blocage ne pouvait
@@ -636,7 +668,7 @@
             if (e === '/profils') return rep({ modeles: { enfants: { categories: { adulte: 'block', jeux: 'block', phishing: 'block', malware: 'block' }, autorise: [] } },
                 profils: { defaut: { categories: { adulte: 'observe', jeux: 'observe', phishing: 'observe', malware: 'observe' }, autorise: [] },
                            enfants: { categories: { adulte: 'block', jeux: 'block', phishing: 'block', malware: 'block' }, autorise: ['ecole-exemple.test'] } } });
-            if (e === '/appareils') return rep({ assignes: [{ mac: '02:00:5e:10:00:01', nom: 'tablette-enfants', profil: 'enfants', exceptions: {}, adresses: ['192.0.2.21'], exclu: null }],
+            if (e === '/appareils') return rep({ assignes: [{ mac: '02:00:5e:10:00:01', nom: 'tablette-enfants', profil: 'enfants', exceptions: {}, bloque: ['live.exemple.test'], adresses: ['192.0.2.21'], exclu: null }],
                 connus: [{ mac: '02:00:5e:10:00:09', adresses: ['192.0.2.30'], vu: 1791780000, exclu: null }, { mac: '02:00:5e:10:00:0a', adresses: ['198.51.100.12'], vu: 1791781000, exclu: 'geree par ad-guard' }] });
             if (e === '/appliquer') return rep({ en_attente: true, version: 7, appliquee: 6, estimation: { zones: 660000, memoire_mo: 58, rechargement_s: 4.5 }, dernier: { statut: 'ok', message: '', duree_s: 4.2 } });
             return rep({}, false, 404);

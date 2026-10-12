@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — webfilter 0.4.0 : domaines toujours bloqués, et toolbox 2.13.0 : profondeur d'inspection dans l'onglet Clients (ref #2433, #2432)
+
+Un appareil dont la catégorie adulte est en `observe` (exception voulue) ne bloquait pas un domaine précis de la liste : `bloque` (par profil et par appareil) refuse ces domaines quel que soit le mode des catégories, l'emporte sur une autorisation, et n'est écrit dans `config.json` que s'il sert. Toolbox : la profondeur d'inspection par pair (R-level `off/passive/active/reel`, choisi, plancher, forcé, effectif) se règle dans l'onglet Clients, à côté de chaque client du tunnel, avec confirmation intégrée quand l'inspection devient plus profonde ; `/rlevel/peers` porte `mac_hash`.
+
 ## 2026-10-12 — webfilter 0.3.0 Aurora, NAC 3.8.0 et SOC 1.6.0 : filtre web intégré (ref #2430)
 
 La page `/webfilter/` passe au profil Aurora (tuiles, répartition, bloqué et observé, appareils les plus filtrés) en gardant toutes ses actions. Ses `confirm()` de blocage, ignorés par le navigateur du Hall (réponse « non » sans rien dire), deviennent des confirmations intégrées. `secubox-lite` dépendait déjà de `secubox-webfilter` (rien à ajouter). Le NAC montre sur la carte de chaque appareil son profil de filtrage et ses requêtes bloquées et classées sur 7 jours ; Guardian a un panneau Filtrage web. Tests navigateur : 27 (webfilter, dont les 22 existants adaptés à la confirmation intégrée), NAC et Guardian.

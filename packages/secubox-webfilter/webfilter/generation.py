@@ -71,8 +71,10 @@ def _zones_vue(eff: dict, charger) -> tuple:
     bloquees = []
     for cat in profils.bloquees(eff):
         bloquees += _noms(charger(cat), f"liste {cat}")
-    aut = sorted(set(_noms(eff["autorise"], "autorisation")))
-    return [z for z in zones.dedoublonner(bloquees) if z not in aut], aut
+    forces = sorted(set(_noms(eff.get("bloque", []), "blocage")))                 # domaines TOUJOURS refusés, même catégorie en observe (#2433)
+    aut = [a for a in sorted(set(_noms(eff["autorise"], "autorisation"))) if a not in forces]
+    base = [z for z in zones.dedoublonner(bloquees) if z not in aut]             # ordre d'origine : dédoublonner, PUIS retirer les autorisations
+    return zones.dedoublonner(base + forces), aut
 
 
 def generer(cfg, reseaux, voisins, adguard, charger, zones_max: int, adresses_box=frozenset()) -> Resultat:

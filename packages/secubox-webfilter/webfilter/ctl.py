@@ -79,12 +79,14 @@ def _changements(a: dict, n: dict) -> list:
         p, o = n["profils"][nom], a["profils"].get(nom)
         if o is None:
             sortie.append(f"profil {nom} cree")
-            o = {"categories": {c: "observe" for c in p["categories"]}, "autorise": []}
+            o = {"categories": {c: "observe" for c in p["categories"]}, "autorise": [], "bloque": []}
         for c in sorted(p["categories"]):
             if o["categories"].get(c, "observe") != p["categories"][c]:
                 sortie.append(f"profil {nom} {c} {o['categories'].get(c, 'observe')}->{p['categories'][c]}")
         if o["autorise"] != p["autorise"]:
             sortie.append(f"profil {nom} autorise +{len(set(p['autorise']) - set(o['autorise']))} -{len(set(o['autorise']) - set(p['autorise']))}")
+        if o.get("bloque", []) != p.get("bloque", []):
+            sortie.append(f"profil {nom} bloque +{len(set(p.get('bloque', [])) - set(o.get('bloque', [])))} -{len(set(o.get('bloque', [])) - set(p.get('bloque', [])))}")
     sortie += [f"profil {nom} supprime" for nom in sorted(set(a["profils"]) - set(n["profils"]))]
     for mac in sorted(n["appareils"]):
         d, o = n["appareils"][mac], a["appareils"].get(mac)
@@ -95,6 +97,8 @@ def _changements(a: dict, n: dict) -> list:
                 sortie.append(f"appareil {mac} profil {o['profil']}->{d['profil']}")
             if o["exceptions"] != d["exceptions"]:
                 sortie.append(f"appareil {mac} exceptions {json.dumps(d['exceptions'], sort_keys=True)}")
+            if o.get("bloque", []) != d.get("bloque", []):
+                sortie.append(f"appareil {mac} bloque {json.dumps(d.get('bloque', []))}")
     sortie += [f"appareil {mac} retire" for mac in sorted(set(a["appareils"]) - set(n["appareils"]))]
     return sortie
 

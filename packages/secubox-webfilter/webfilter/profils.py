@@ -34,6 +34,19 @@ def _modes(d, categories, quoi, complet: bool) -> dict:
     return dict(d)
 
 
+def _liste_domaines(valeur, quoi: str, genre: str) -> list:
+    """Liste de domaines autorisés ou TOUJOURS bloqués : forme canonique exigée (jamais de réécriture silencieuse), 200 au plus."""
+    if not isinstance(valeur, list) or len(valeur) > MAX_AUTORISES:
+        raise ErreurProfils(f"{quoi} : {MAX_AUTORISES} {genre}s au plus")
+    noms = []
+    for d in valeur:
+        n = domaines.valider(d)
+        if n is None or n != d:
+            raise ErreurProfils(f"{quoi} : domaine {genre} invalide")
+        noms.append(n)
+    return sorted(set(noms))
+
+
 def valider(brut, categories) -> dict:
     if not isinstance(brut, dict) or set(brut) - {"version", "profils", "appareils"}:
         raise ErreurProfils("configuration invalide : clés inattendues")
@@ -49,22 +62,17 @@ def valider(brut, categories) -> dict:
     for nom, p in pr.items():
         if not isinstance(nom, str) or not _PROFIL.match(nom):
             raise ErreurProfils(f"nom de profil invalide : {nom!r}")
-        if not isinstance(p, dict) or set(p) - {"categories", "autorise"}:
+        if not isinstance(p, dict) or set(p) - {"categories", "autorise", "bloque"}:
             raise ErreurProfils(f"profil {nom} : clés inattendues")
-        aut = p.get("autorise", [])
-        if not isinstance(aut, list) or len(aut) > MAX_AUTORISES:
-            raise ErreurProfils(f"profil {nom} : 200 autorisations au plus")
-        noms = []
-        for d in aut:
-            n = domaines.valider(d)
-            if n is None or n != d:                                   # forme canonique exigée : jamais de réécriture silencieuse
-                raise ErreurProfils(f"profil {nom} : domaine autorisé invalide")
-            noms.append(n)
-        sortie["profils"][nom] = {"categories": _modes(p.get("categories", {}), categories, f"profil {nom}", True), "autorise": sorted(set(noms))}
+        aut = _liste_domaines(p.get("autorise", []), f"profil {nom}", "autorisation")
+        blo = _liste_domaines(p.get("bloque", []), f"profil {nom}", "blocage")
+        sortie["profils"][nom] = {"categories": _modes(p.get("categories", {}), categories, f"profil {nom}", True), "autorise": aut}
+        if blo:                                   # clé écrite SEULEMENT si utilisée : une configuration sans domaine forcé reste identique à celle d'avant (retour arrière sûr)
+            sortie["profils"][nom]["bloque"] = blo
     for mac, a in ap.items():
         if not isinstance(mac, str) or not _MAC.match(mac):
             raise ErreurProfils(f"adresse MAC invalide : {mac!r}")
-        if not isinstance(a, dict) or set(a) - {"nom", "profil", "exceptions"}:
+        if not isinstance(a, dict) or set(a) - {"nom", "profil", "exceptions", "bloque"}:
             raise ErreurProfils(f"appareil {mac} : clés inattendues")
         nom = a.get("nom", "")
         if not isinstance(nom, str) or len(nom) > 64 or not nom.isprintable():
@@ -72,6 +80,9 @@ def valider(brut, categories) -> dict:
         if a.get("profil") not in sortie["profils"]:
             raise ErreurProfils(f"appareil {mac} : profil inexistant")
         sortie["appareils"][mac] = {"nom": nom, "profil": a["profil"], "exceptions": _modes(a.get("exceptions", {}), categories, f"appareil {mac}", False)}
+        blo = _liste_domaines(a.get("bloque", []), f"appareil {mac}", "blocage")
+        if blo:
+            sortie["appareils"][mac]["bloque"] = blo
     return sortie
 
 
@@ -80,9 +91,12 @@ def effective(cfg: dict, mac: str) -> dict:
     a = cfg["appareils"].get(mac)
     p = cfg["profils"][a["profil"] if a else "defaut"]
     modes = dict(p["categories"])
+    bloque = set(p.get("bloque", []))
     if a:
         modes.update(a["exceptions"])
-    return {"modes": modes, "autorise": list(p["autorise"])}
+        bloque |= set(a.get("bloque", []))
+    # `bloque` : domaines TOUJOURS refusés, quel que soit le mode des catégories (#2433) ; il l'emporte sur une autorisation du même nom.
+    return {"modes": modes, "autorise": [d for d in p["autorise"] if d not in bloque], "bloque": sorted(bloque)}
 
 
 def bloquees(eff: dict) -> list:
@@ -92,6 +106,7 @@ def bloquees(eff: dict) -> list:
 def cle_vue(eff: dict) -> str:
     """Nom de la vue d'Unbound d'une configuration effective : deux appareils de même configuration partagent la même vue."""
     b = bloquees(eff)
-    if not b and not eff["autorise"]:
+    if not b and not eff["autorise"] and not eff.get("bloque"):
         return "wf-libre"
-    return "wf-" + hashlib.blake2b(json.dumps([b, sorted(eff["autorise"])]).encode(), digest_size=4).hexdigest()
+    entree = [b, sorted(eff["autorise"])] + ([sorted(eff["bloque"])] if eff.get("bloque") else [])      # sans domaine forcé : même clé qu'avant (vues inchangées)
+    return "wf-" + hashlib.blake2b(json.dumps(entree).encode(), digest_size=4).hexdigest()

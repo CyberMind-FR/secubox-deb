@@ -457,3 +457,36 @@ def test_demonstration_donnees_fictives_et_actions_inertes(navigateur):
     assert "inerte" in p.inner_text("#errtoast")
     assert requetes == [] and not erreurs                                    # aucun appel réseau : tout est fictif
     ctx.close()
+
+
+def test_domaine_toujours_bloque_pour_un_appareil_confirmation_puis_envoi_2433(navigateur):
+    ctx, p, erreurs, requetes = _page(navigateur)
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
+    ligne = "[data-mac='aa:bb:cc:dd:ee:01']"
+    p.fill(f"{ligne} input[placeholder='domaine à bloquer pour cet appareil']", "https://Chaturbate.com/accueil")      # collé en URL : ramené au domaine
+    p.click(f"{ligne} .bloques-appareil button.btn")
+    assert "chaturbate.com" in p.inner_text(f"{ligne} .bloques-appareil")
+    p.click(f"{ligne} [data-action='enregistrer-appareil']")
+    p.wait_for_selector("#confirmation:not([hidden])")
+    assert "TOUJOURS" in p.inner_text("#confirmation") and "chaturbate.com" in p.inner_text("#confirmation")
+    p.click("#confirmation .btn:not(.dg)")                                                          # Annuler : rien n'est envoyé
+    assert not any(m == "POST" and c.startswith("/appareils/") for m, c, _ in requetes)
+    p.click(f"{ligne} [data-action='enregistrer-appareil']")
+    p.wait_for_selector("#confirmation:not([hidden])")
+    p.click("#confirmation .btn.dg")
+    p.wait_for_selector("#toast.show")
+    assert p.corps[("POST", "/appareils/aa:bb:cc:dd:ee:01")]["bloque"] == ["chaturbate.com"]
+    assert not erreurs
+    ctx.close()
+
+
+def test_profil_sans_domaine_force_n_envoie_pas_la_cle_bloque_2433(navigateur):
+    ctx, p, _, _ = _page(navigateur)
+    _repond(p, True)
+    onglet(p, "profils")
+    p.wait_for_selector("[data-profil='enfants']")
+    p.click("[data-action='enregistrer-profil'][data-profil='enfants']")
+    p.wait_for_selector("#toast.show")
+    assert "bloque" not in p.corps[("POST", "/profils")]
+    ctx.close()

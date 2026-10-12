@@ -364,3 +364,21 @@ def test_json_tres_imbrique_dans_config_donne_503_sans_plantage(banc2):
     admin()
     (banc2 / "config.json").write_text("[" * 200000)
     assert TestClient(main.app).get("/profils").status_code == 503
+
+
+def test_domaine_toujours_bloque_ecrit_lu_et_refuse_s_il_est_invalide_2433(banc2):
+    admin()
+    c = TestClient(main.app)
+    c.post("/profils", json={"nom": "enfants", "categories": {"adulte": "block"}, "autorise": []})
+    r = c.post(f"/appareils/{MAC1}", json={"nom": "reepost", "profil": "enfants", "exceptions": {"adulte": "observe"}, "bloque": ["chaturbate.com"]})
+    assert r.status_code == 200 and cfg_fichier(banc2)["appareils"][MAC1]["bloque"] == ["chaturbate.com"]
+    assert c.get("/appareils").json()["assignes"][0]["bloque"] == ["chaturbate.com"]
+    r = c.post("/profils", json={"nom": "stricts", "categories": {"adulte": "observe"}, "autorise": [], "bloque": ["live.exemple.test"]})
+    assert r.status_code == 200 and cfg_fichier(banc2)["profils"]["stricts"]["bloque"] == ["live.exemple.test"]
+    # forme canonique exigée : refusé, rien n'est écrit
+    avant = cfg_fichier(banc2)
+    assert c.post(f"/appareils/{MAC1}", json={"nom": "x", "profil": "enfants", "exceptions": {}, "bloque": ["HTTP://MAJUSCULES.test"]}).status_code in (400, 422)
+    assert cfg_fichier(banc2) == avant
+    # sans domaine forcé, la clé n'est jamais écrite (retour arrière sûr)
+    c.post(f"/appareils/{MAC1}", json={"nom": "reepost", "profil": "enfants", "exceptions": {}})
+    assert "bloque" not in cfg_fichier(banc2)["appareils"][MAC1]
