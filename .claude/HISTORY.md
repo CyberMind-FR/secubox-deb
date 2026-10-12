@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-12 — secubox-netmodes 1.3.1 : secubox-net-detect livré par le paquet (ref #2508)
+
+Sur la RPi400, l'assistant s'arrêtait à « Réseau et domaine » : `secubox-net-detect apply router → code 127`. L'outil vivait dans `image/sbin/` et seul `build-live-usb.sh` le copiait. `secubox-netmodes` (déjà dans `secubox-lite`) le livre désormais, une seule copie. Tests `packages/secubox-netmodes/tests/test_net_detect_livre_2508.py`.
+
 ## 2026-10-12 — secubox-kiosk 1.0.1 et premier-pas 0.5.5 : session du kiosque (ref #2506)
 
 Sur la RPi400, le lanceur démarrait Xorg puis affichait « This account is currently not available » : `secubox-kiosk-setup` créait `secubox-kiosk` en `nologin` et le lanceur ouvre la session par `su -l`. Le setup crée (et répare) le compte en `/bin/bash`, comme `build-live-usb.sh` ; le lanceur passe `su -s /bin/bash` et ne dépend plus du shell du compte. Tests `packages/secubox-kiosk/tests/test_paquet_2504.py`.

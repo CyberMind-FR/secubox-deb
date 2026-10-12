@@ -2015,12 +2015,18 @@ mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
 # Copy scripts (including kiosk-launcher for robust startup, TUI, mode switcher, disk/eMMC flashers)
-for script in secubox-net-detect secubox-net-reset secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk secubox-flash-emmc; do
+for script in secubox-net-reset secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk secubox-flash-emmc; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
   fi
 done
+
+# secubox-net-detect vit dans le paquet secubox-netmodes (#2508) : une seule copie.
+if [[ -f "${SCRIPT_DIR}/../packages/secubox-netmodes/sbin/secubox-net-detect" ]]; then
+  cp "${SCRIPT_DIR}/../packages/secubox-netmodes/sbin/secubox-net-detect" "${ROOTFS}/usr/sbin/"
+  chmod +x "${ROOTFS}/usr/sbin/secubox-net-detect"
+fi
 
 # secubox-kiosk-setup vit dans le paquet secubox-kiosk (#2504) : une seule copie.
 if [[ -f "${SCRIPT_DIR}/../packages/secubox-kiosk/sbin/secubox-kiosk-setup" ]]; then
