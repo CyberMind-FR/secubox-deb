@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 import time
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
@@ -112,6 +113,12 @@ def lire(racine: Path, max_fichiers: int = MAX_FICHIERS, budget_s: float = BUDGE
         tous |= {(nom, n) for n in uniques}
         suites.append({"nom": nom, "codename": rel.get("Codename"), "version": rel.get("Version"), "date": rel.get("Date"), "label": rel.get("Label"),
                        "architectures": archs, "composants": comps, "paquets": par_arch, "uniques": len(uniques) if lisibles else None})
-    dates = [s["date"] for s in suites if s["date"]]
+    dates = []
+    for s_ in suites:
+        try:
+            dates.append((parsedate_to_datetime(s_["date"]), s_["date"]))     # en DATE : « Mon, 24 Aug » est alphabétiquement après « Mon, 12 Oct »
+        except (TypeError, ValueError):
+            continue
+    derniere = max(dates)[1] if dates else None
     return {"disponible": True, "racine": str(racine), "suites": suites, "pool": _pool(racine / "pool", max_fichiers, budget_s),
-            "paquets_uniques": len({n for _, n in tous}) if visible else None, "derniere_publication": max(dates) if dates else None}
+            "paquets_uniques": len({n for _, n in tous}) if visible else None, "derniere_publication": derniere}

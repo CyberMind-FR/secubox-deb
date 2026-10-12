@@ -80,3 +80,11 @@ def test_route_publie_est_une_coroutine_en_lecture(monkeypatch, tmp_path):
     main._publie_cache.update(t=0.0, v=None)
     r = asyncio.run(main.get_publie())
     assert r["paquets_uniques"] == 3 and main.get_publie.__code__.co_flags & 0x80
+
+
+def test_derniere_publication_est_la_plus_recente_en_date_pas_en_ordre_alphabetique(tmp_path):
+    """« Mon, 24 Aug » est alphabétiquement après « Mon, 12 Oct » : un max() sur les chaînes donnait août pour un dépôt republié en octobre."""
+    for nom, date in (("ancienne", "Mon, 24 Aug 2026 20:51:13 UTC"), ("recente", "Mon, 12 Oct 2026 08:34:59 UTC")):
+        d = tmp_path / "dists" / nom; d.mkdir(parents=True)
+        (d / "Release").write_text(f"Suite: {nom}\nCodename: {nom}\nDate: {date}\nArchitectures: amd64\nComponents: main\n")
+    assert P.lire(tmp_path)["derniere_publication"] == "Mon, 12 Oct 2026 08:34:59 UTC"
