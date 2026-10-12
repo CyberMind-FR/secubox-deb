@@ -777,3 +777,7 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Dépôt APT, comptes réels et page Aurora (closes #2493)
 - secubox-repo 1.3.0 : GET /publie (suites, paquets distincts, pool lus dans l'arborescence publiée) ; /stats et la tâche de fond n'utilisent plus le socle reprepro de repoctl (« trixie : 0 ») ; page Aurora ; Init et GPG confirmés dans la page. 11 tests.
+
+## 2026-10-12 — Image RPi400 : dépendances résolues, audité, kiosque par défaut (closes #2495)
+- Cause constatée sur une uSD isp-rpi alpha.12 : 32 paquets secubox sans leurs dépendances (systemd-timesyncd, python3-cryptography, lxc…), premier pas arrêté à l'étape Horloge, Tor/SMTP en échec, pas de kiosque. build-rpi-usb.sh n'exécutait `apt --fix-broken` que sous --kiosk, et le workflow ne passait --kiosk que sur déclenchement manuel.
+- build-rpi-usb.sh : apt --fix-broken systématique puis image/verify-deps.py (fatal) ; build-image.yml : kiosk=auto, inclus par défaut pour rpi400/rpi4 ; secubox-premier-pas 0.5.4 : étape NTP souple. 17 tests.
