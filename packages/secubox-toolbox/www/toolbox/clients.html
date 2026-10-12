@@ -57,6 +57,7 @@
   .outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .outils input[type=search]{flex:1 1 180px;min-width:0;font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:5px 10px}
   .outils select{font:inherit;font-size:.78rem;color:var(--texte);background:rgba(6,13,27,.9);border:1px solid var(--trait2);border-radius:8px;padding:5px 8px}
+  .hw{font-size:.72rem;color:var(--doux);margin:2px 0 4px;overflow-wrap:anywhere} .hw b{color:var(--cyan);font-weight:600}
   .puces{display:flex;flex-wrap:wrap;gap:6px}
   .puce{border-radius:999px;padding:2px 10px;font-size:.72rem}
   .puce.on{background:rgba(41,182,246,.28);border-color:var(--cyan)}
@@ -137,7 +138,7 @@
   var ORDRE=['r0','r1','r2','r3'];
   var ETAT={actif:['Actif','#2ecc71'],idle:['Inactif','#ffd23f'],'expiré':['Expiré','#6f84a8'],quarantine:['Quarantaine','#ff4d5e']};
 
-  var etat={clients:null,metrics:null,erreur:null,fNiv:'',fEtat:'',confirm:null,confirmOubli:null,oubli:null,tous:false,detail:null};
+  var etat={fant:false,clients:null,metrics:null,erreur:null,fNiv:'',fEtat:'',confirm:null,confirmOubli:null,oubli:null,tous:false,detail:null};
 
   function rel(ts){
     if(!ts) return '—';
@@ -170,8 +171,12 @@
     return s+'<text x="60" y="58" text-anchor="middle" fill="#eaf1ff" font-size="22" font-weight="700">'+fmt(tot)+'</text><text x="60" y="73" text-anchor="middle" fill="#9fb3d6" font-size="9">clients</text></svg>';
   }
 
+  /* #2415 : une identité SANS tunnel (ni adresse, ni poignée de main) n'est pas un appareil : écartée du compte et de la liste, sauf demande. */
+  function aucunTunnel(c){return c.tunnel==='aucun';}
+  function base(){var L=etat.clients||[];return etat.fant?L:L.filter(function(c){return !aucunTunnel(c);});}
+
   function visibles(){
-    var L=(etat.clients||[]).slice(),r=(el('rech').value||'').trim().toLowerCase();
+    var L=base().slice(),r=(el('rech').value||'').trim().toLowerCase();
     if(etat.fNiv) L=L.filter(function(c){return niv(c)===etat.fNiv;});
     if(etat.fEtat) L=L.filter(function(c){return statut(c)===etat.fEtat;});
     if(r) L=L.filter(function(c){return [c.mac_hash,c.ip,c.device,c.asn_org,c.country_iso].join(' ').toLowerCase().indexOf(r)>=0;});
@@ -182,7 +187,10 @@
       if(t==='ancien') return num(a.first_seen)-num(b.first_seen);
       return num(b.last_seen)-num(a.last_seen);
     });
-    return L;
+    var vus={},R=[];
+    L.forEach(function(c){c._autres=[];});
+    L.forEach(function(c){var k=c.appareil_cle;if(!k){R.push(c);return;}if(vus[k]){vus[k]._autres.push(c);return;}vus[k]=c;R.push(c);});
+    return R;
   }
 
   function carte(c){
@@ -194,6 +202,7 @@
     return '<div class="carte'+(st==='quarantine'?' q':'')+'" data-h="'+esc(h)+'">'
       +'<div class="ch"><div class="emo">'+esc(c.device_emoji||'📱')+'</div><div class="nom"><b title="'+esc(c.device||'Appareil non identifié')+'">'+esc(c.device||'Appareil non identifié')+'</b><span title="'+esc(h)+'"><code>'+esc(h.slice(0,16))+'</code> · '+esc(c.ip||'—')+'</span></div>'
       +'<span class="pastille" title="'+esc(N[1]+' — '+N[3])+'" style="color:'+N[2]+';border-color:'+N[2]+';background:'+N[2]+'22">'+N[0]+'</span></div>'
+      +(c.appareil?'<div class="hw" title="Appareil réel vu par le NAC (rattaché sur l’adresse locale ; aucune adresse MAC n’est affichée)">🖥 '+esc(c.appareil)+(c.appareil_fabricant?' · '+esc(c.appareil_fabricant):'')+(c.appareil_os?' · '+esc(c.appareil_os):'')+((c._autres||[]).length?' · <b title="Identités du même matériel : '+esc(c._autres.map(function(x){return String(x.mac_hash||'').slice(0,8);}).join(', '))+'">'+((c._autres||[]).length+1)+' identités</b>':'')+'</div>':'')
       +'<div class="infos"><div><span class="etat"><i style="background:'+E[1]+'"></i>'+esc(E[0])+'</span></div>'
       +'<div title="'+esc(complet(c.last_seen))+'">Dernière activité : <b>'+esc(rel(c.last_seen))+'</b></div>'
       +'<div title="'+esc(c.asn_org||'')+'">'+esc((c.flag||'')+' '+(c.country_iso||''))+' <b>'+esc(c.asn_org||'—')+'</b></div>'
@@ -206,15 +215,15 @@
   }
 
   function rendListe(){
-    var L=visibles(),tot=(etat.clients||[]).length;
-    el('compte').textContent=etat.clients?L.length+' / '+tot:'';
+    var L=visibles(),tot=base().length;
+    el('compte').textContent=etat.clients?L.length+' / '+tot+(L.length<tot?' (identités regroupées par appareil)':''):'';
     el('cartes').innerHTML=etat.clients==null?'<div class="vide">'+esc(etat.erreur||'Chargement…')+'</div>'
       :!tot?'<div class="vide">Aucun client.</div>':!L.length?'<div class="vide">Aucun client ne correspond au filtre.</div>':L.map(carte).join('');
     hauteur();
   }
 
   function rend(){
-    var C=etat.clients,M=etat.metrics;
+    var C0=etat.clients,C=C0==null?null:base(),M=etat.metrics;
     el('demo').hidden=!DEMO;
     var s=el('session');
     if(!DEMO&&C==null){s.textContent=etat.erreur?'Aucune mesure : '+etat.erreur:'Chargement…';s.hidden=false;}else s.hidden=true;
@@ -235,6 +244,8 @@
     el('leg').innerHTML=ORDRE.map(function(l){var n=cnt[l]||0,t=(C||[]).length;return '<div title="'+esc(NIV[l][3])+'"><i style="background:'+NIV[l][2]+'"></i><span>'+NIV[l][0]+' · '+NIV[l][1]+'</span><b>'+(C?n+' ('+(t?Math.round(100*n/t):0)+'%)':'—')+'</b></div>';}).join('');
     var p='<button type="button" class="puce'+(etat.fNiv?'':' on')+'" data-fn="">Tous niveaux</button>'+ORDRE.map(function(l){return '<button type="button" class="puce'+(etat.fNiv===l?' on':'')+'" data-fn="'+l+'">'+NIV[l][0]+'</button>';}).join('')
       +'<span style="width:10px"></span><button type="button" class="puce'+(etat.fEtat?'':' on')+'" data-fe="">Tous états</button>'+['actif','idle','expiré','quarantine'].map(function(k){return '<button type="button" class="puce'+(etat.fEtat===k?' on':'')+'" data-fe="'+k+'">'+ETAT[k][0]+'</button>';}).join('');
+    var nf=(C0||[]).filter(aucunTunnel).length;
+    if(nf) p+='<span style="width:10px"></span><button type="button" class="puce'+(etat.fant?' on':'')+'" data-fant="1" title="Identités sans adresse ni poignée de main : anciennes clés ou niveaux modifiés, pas des appareils présents">Identités sans tunnel ('+nf+')</button>';
     el('puces').innerHTML=p;
     el('confTous').hidden=!etat.tous;
     el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -253,6 +264,10 @@
     dm('1d7c58a3f0e2b694','10.99.1.40','Téléviseur connecté','📺','r0',22,'expiré',86400*2,86400*60,'🇫🇷','FR','Free SAS'),
     dm('5a3e9b1c8d7f2046','10.99.1.44','Linux (Chromium)','💻','r3',41,'actif',200,7200,'🇨🇭','CH','Swisscom'),
     dm('9c0f4e6a2b8d3175','10.99.1.51','Android (Firefox)','📱','r1',15,'expiré',86400*5,86400*15,'🇫🇷','FR','SFR')],count:8};
+  Object.assign(DEMO_D.clients[0],{appareil:'iphone-exemple',appareil_fabricant:'Apple',appareil_os:'iOS',appareil_cle:'demo-iphone',tunnel:'actif'});
+  DEMO_D.clients.push(Object.assign(dm('0b6e1f7d3a95c248','10.99.1.13','iPhone (Safari)','📱','r3',9,'expiré',86400*2,86400*30,'🇫🇷','FR','Free SAS'),{appareil:'iphone-exemple',appareil_fabricant:'Apple',appareil_os:'iOS',appareil_cle:'demo-iphone',tunnel:'inactif'}));
+  DEMO_D.clients.push(Object.assign(dm('98129641d0e7a3b5','?','','📱','r3',0,'expiré',86400,86400*3,'','','—'),{tunnel:'aucun'}));
+  DEMO_D.count=DEMO_D.clients.length;
   var DEMO_M={events_24h_total:18432,clients_active:5};
 
   function jget(u){return fetch(API+u,{credentials:'same-origin'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
@@ -341,6 +356,7 @@
     if(t.dataset.oublioui){var ho=t.dataset.oublioui;etat.confirmOubli=null;rendListe();forgetClient(ho);return;}
     if(t.dataset.razno){etat.confirm=null;etat.confirmOubli=null;rendListe();return;}
     if(t.dataset.fn!==undefined){etat.fNiv=t.dataset.fn;rend();return;}
+    if(t.dataset.fant!==undefined){etat.fant=!etat.fant;rend();return;}
     if(t.dataset.fe!==undefined){etat.fEtat=t.dataset.fe;rend();return;}
   });
   el('razTous').addEventListener('click',function(){etat.tous=true;el('confTous').hidden=false;hauteur();});

@@ -5040,6 +5040,10 @@ async def admin_clients_rich() -> dict:
     rows = store.list_clients()
     rows = sorted(rows, key=lambda r: (r.get("last_seen") or 0), reverse=True)
     now = _t.time()
+    try:
+        _pairs = _wg.wg_pairs()
+    except Exception:
+        _pairs = {}
     enriched = []
     for idx, r in enumerate(rows):
         age_min = (now - (r.get("last_seen") or 0)) / 60.0
@@ -5086,7 +5090,22 @@ async def admin_clients_rich() -> dict:
             except Exception:
                 pass
 
+        # #2415 : tunnel + appareil réel. Une identité sans tunnel (ni adresse, ni
+        # poignée de main) n'est pas un appareil ; sinon on rattache sur preuve.
+        pair = _pairs.get(r.get("mac_hash") or "")
+        ip_row = r.get("ip") or ""
+        if pair:
+            tunnel = pair["tunnel"]
+        else:
+            tunnel = "aucun" if ip_row in ("", "?") else "lan"
+        from . import appareils as _app
+        appareil = _app.rattacher([(pair or {}).get("endpoint_ip"), ip_row])
         enriched.append({
+            "tunnel": tunnel,
+            "appareil": (appareil or {}).get("nom") or ("" if not appareil else "Appareil du réseau"),
+            "appareil_fabricant": (appareil or {}).get("fabricant", ""),
+            "appareil_os": (appareil or {}).get("os", ""),
+            "appareil_cle": (appareil or {}).get("cle", ""),
             "mac_hash": r.get("mac_hash"),
             "ip": r.get("ip"),
             "state": r.get("state"),

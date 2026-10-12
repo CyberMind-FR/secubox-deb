@@ -352,3 +352,39 @@ def wg_actifs(fenetre_s: int = 900) -> dict[str, tuple[str, int]]:
     except Exception as e:  # wg absent, délai dépassé, droit refusé
         log.debug("wg_actifs indisponible: %s", e)
     return out
+
+
+def wg_pairs(fenetre_s: int = 900) -> dict[str, dict]:
+    """{mac_hash: {"tunnel", "endpoint_ip", "handshake"}} pour chaque pair WG (#2415).
+
+    tunnel : « actif » (poignée de main < fenêtre), « inactif » (le pair a des
+    adresses autorisées mais n'a pas parlé récemment), « aucun » (aucune adresse
+    autorisée ni poignée de main : une identité sans tunnel, pas un appareil).
+    L'adresse du point d'accès sert uniquement à rattacher le pair à son appareil
+    du réseau local ; elle n'est jamais renvoyée telle quelle par l'API."""
+    out: dict[str, dict] = {}
+    try:
+        proc = subprocess.run(["wg", "show", WG_INTERFACE, "dump"],
+                              capture_output=True, text=True, timeout=3, check=False)
+        now = _now_ts()
+        for line in proc.stdout.splitlines()[1:]:
+            f = line.split("\t")
+            if len(f) < 5 or not f[0].strip():
+                continue
+            try:
+                hs = int(f[4])
+            except ValueError:
+                hs = 0
+            ips = (f[3] or "").strip()
+            avec_ip = bool(ips) and ips != "(none)"
+            if hs > 0 and now - hs <= fenetre_s:
+                tunnel = "actif"
+            elif avec_ip or hs > 0:
+                tunnel = "inactif"
+            else:
+                tunnel = "aucun"
+            out[_hashlib.sha256(f[0].strip().encode()).hexdigest()[:16]] = {
+                "tunnel": tunnel, "endpoint_ip": _strip_endpoint_port(f[2]), "handshake": hs}
+    except Exception as e:
+        log.debug("wg_pairs indisponible: %s", e)
+    return out
