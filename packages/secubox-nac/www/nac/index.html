@@ -282,6 +282,7 @@
     var act=r.etat==='quarantaine'?{lib:'🔓 Libérer',cls:'ok',v:'unq'}:{lib:'🔒 Quarantaine',cls:'dg',v:'qua'};
     return '<div class="app-c'+(r.etat==='quarantaine'?' q':'')+'"><div class="id"><span class="ty" title="Type : '+esc(r.type)+'">'+(TYPE_ICON[r.type]||'🔌')+'</span><div><b title="'+esc(nom)+'">'+esc(nom)+'</b><span class="fab">'+esc(r.fab||'Fabricant inconnu')+(r.alea?' · MAC aléatoire':'')+'</span></div></div>'
       +'<div class="meta"><span>IP <code>'+esc(r.ip||'—')+'</code></span><span title="Adresse MAC tronquée">MAC <code>'+esc(macCourt(r.mac))+'</code></span><span>Zone : '+esc(z[0])+'</span><span title="'+esc(plein(r.b))+'">Vu : '+esc(rel(r.b))+'</span></div>'
+      +ligneWf(r)
       +'<div class="tags"><span class="pil" style="color:'+et[1]+';border-color:'+et[1]+';background:'+et[1]+'1f">'+esc(et[0])+'</span>'
       +'<span class="pil" style="color:'+(r.on?'#2ecc71':'#9fb3d6')+';border-color:'+(r.on?'#2ecc71':'#6f84a8')+';background:'+(r.on?'rgba(46,204,113,.12)':'rgba(159,179,214,.1)')+'">'+(r.on?'Connecté':'Hors ligne')+'</span>'
       +'<span class="pil" style="color:'+oc+';border-color:'+oc+';background:'+oc+'1f" title="'+esc(r.os?('OS déduit'+(r.src?' — preuve : '+r.src:'')):'Aucune preuve d’OS : non identifié')+'">'+esc(r.os||'OS non identifié')+(r.sub?' · '+esc(r.sub):'')+'</span></div>'
@@ -321,6 +322,32 @@
      2. « adresse » : plusieurs identités ont porté la MÊME adresse de tunnel (le suffixe .NN du nom DPI) : un emplacement WireGuard
                       réattribué, donc très probablement le même appareil — DÉDUIT, annoncé comme tel ;
      3. « aucune »  : identité seule. Rien n'est deviné au-delà. */
+  /* Filtrage web par appareil (#2430) : profil d'après la MAC (webfilter /appareils), comptes d'après l'adresse (webfilter /stats, 7 jours).
+     Absent (session sans droits, module arrêté) : rien n'est affiché, jamais « 0 ». */
+  var WF={ok:false,profil:{},exclu:{},ip:{}};
+  function indexerWf(w){
+    WF={ok:false,profil:{},exclu:{},ip:{}};
+    if(!w||!w.app) return;
+    WF.ok=true;
+    (w.app.assignes||[]).forEach(function(a){WF.profil[String(a.mac).toLowerCase()]=a.profil;if(a.exclu) WF.exclu[String(a.mac).toLowerCase()]=a.exclu;});
+    (w.app.connus||[]).forEach(function(a){if(a.exclu) WF.exclu[String(a.mac).toLowerCase()]=a.exclu;});
+    if(w.stats&&w.stats.par_client){
+      Object.keys(w.stats.par_client).forEach(function(ip){
+        var cats=w.stats.par_client[ip]||{},n=0,b=0,dec=(w.stats.par_client_decision||{})[ip]||{};
+        Object.keys(cats).forEach(function(c){n+=Number(cats[c])||0;b+=Number(((dec[c]||{}).bloque))||0;});
+        WF.ip[ip]={n:n,b:b};
+      });
+    }
+  }
+  function ligneWf(r){
+    if(!WF.ok||r.lxc) return '';
+    var mac=String(r.mac||'').toLowerCase(),ex=WF.exclu[mac];
+    if(ex) return '<div class="rm" title="Cet appareil garde le filtrage propre d’ad-guard">🛡 Filtre web : géré par ad-guard</div>';
+    var pr=WF.profil[mac],st=WF.ip[r.ip];
+    if(!pr&&!st) return '';
+    return '<div class="rm" title="Profil de filtrage de contenus et requêtes classées sur 7 jours (lecture seule ici : le réglage est dans Filtrage de contenus)">🛡 Filtre web : profil <b>'+esc(pr||'défaut')+'</b>'
+      +(st?' · '+fmt(st.b)+' bloquée'+(st.b>1?'s':'')+' / '+fmt(st.n)+' classée'+(st.n>1?'s':'')+' (7 j)':'')+' · <a href="/webfilter/" target="_top" style="color:var(--cyan)">régler</a></div>';
+  }
   var USAGE={cloud:['Cloud','#a78bfa'],streaming:['Streaming','#ff9f1c'],social:['Réseaux sociaux','#29b6f6'],web:['Web','#2ecc71'],messaging:['Messagerie','#ffd23f'],ai:['IA','#ff4d5e'],other:['Autre','#6f84a8']};
   function usageMeta(k,i){return USAGE[k]||[k||'Autre',['#6f84a8','#3b82f6','#2ecc71','#ffd23f'][i%4]];}
   function oct(n){n=num(n);var u=['o','Ko','Mo','Go','To'],i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return (i?n.toFixed(n<10?1:0):String(Math.round(n))).replace('.',',')+' '+u[i];}
@@ -425,6 +452,7 @@
      +tuile(IC.os,N(nos),'OS identifiés',ok&&n?Math.round(100*nos/n)+' % · '+fmt(n-nos)+' sans OS':'','Appareils dont l’OS a été déduit d’une preuve (classe DHCP, User-Agent, DNS, nom, mDNS). Le fabricant seul ne donne jamais d’OS.','fo:_oui');
     majFiltreOs(L);
     rendComport(d.zi,LISTE);
+    indexerWf(d.wf);
     rendReels(d.reels,LISTE);
     // conteneurs LXC : isolés, lecture seule (pas d’action de quarantaine sur l’infrastructure)
     var enL=LXC.filter(function(r){return r.on;}).length,LX=LXC.slice().sort(function(x,y){return (y.on-x.on)||(x.nom||x.ip).toLowerCase().localeCompare((y.nom||y.ip).toLowerCase());});
@@ -480,7 +508,7 @@
     ];
     cl[10].zone='blocked';
     var ev=function(e,mac,x){return {timestamp:new Date((n-x*60)*1000).toISOString(),event:e,details:{mac:mac}};};
-    return {demo:true,reels:{tb:[
+    return {demo:true,wf:{app:{assignes:[{mac:'02:00:5e:10:00:04',nom:'iphone-bob',profil:'enfants',exceptions:{},adresses:['192.0.2.31'],exclu:null}],connus:[{mac:'02:00:5e:10:00:0b',adresses:['192.0.2.60'],exclu:'geree par ad-guard'}]},stats:{par_client:{'192.0.2.31':{adulte:60,jeux:20},'192.0.2.21':{adulte:5}},par_client_decision:{'192.0.2.31':{adulte:{bloque:55},jeux:{bloque:20}}}}},reels:{tb:[
       {mac_hash:'aaaa000000000001',tunnel:'actif',ip:'10.99.1.75',appareil_cle:'demo-iphone'},
       {mac_hash:'aaaa000000000002',tunnel:'inactif',ip:'10.99.1.75',appareil_cle:''},
       {mac_hash:'aaaa000000000003',tunnel:'inactif',ip:'10.99.1.75',appareil_cle:''},
@@ -512,9 +540,9 @@
   function jget(path){return api(path).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     if(DEMOMODE){return;}
-    Promise.all([jget('/status'),jget('/clients'),jget('/quarantine'),jget('/policy'),jget('/history?limit=30'),jget('/zone_behaviors'),jabs('/api/v1/toolbox/admin/clients/rich'),jabs('/api/v1/dpi/pub/clients')]).then(function(r){
+    Promise.all([jget('/status'),jget('/clients'),jget('/quarantine'),jget('/policy'),jget('/history?limit=30'),jget('/zone_behaviors'),jabs('/api/v1/toolbox/admin/clients/rich'),jabs('/api/v1/dpi/pub/clients'),jabs('/api/v1/webfilter/appareils'),jabs('/api/v1/webfilter/stats?jours=7')]).then(function(r){
       var ok=r[1]&&Array.isArray(r[1].clients);
-      rend({data:ok?{status:r[0],clients:r[1],quarantine:r[2],policy:r[3],history:r[4]}:null,zi:r[5],reels:{tb:r[6]&&Array.isArray(r[6].clients)?r[6].clients:null,dpi:Array.isArray(r[7])?r[7]:null}});
+      rend({data:ok?{status:r[0],clients:r[1],quarantine:r[2],policy:r[3],history:r[4]}:null,zi:r[5],reels:{tb:r[6]&&Array.isArray(r[6].clients)?r[6].clients:null,dpi:Array.isArray(r[7])?r[7]:null},wf:{app:r[8],stats:r[9]}});
       heure();hauteur();
     });
   }

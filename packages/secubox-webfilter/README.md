@@ -12,7 +12,7 @@ n'est écrit dans Unbound : ni rechargement, ni coupure du DNS.
    d'échec ou de liste tronquée) et construit un **index compact** par source (une empreinte de 64 bits par domaine).
 2. `secubox-webfilter-feed` suit `journalctl -u unbound`, classe chaque nom demandé (le nom ou l'un de ses parents est listé) et compte par
    jour, appareil, catégorie et domaine dans `/var/lib/secubox/webfilter/webfilter.db` (30 jours, `0640`). Les requêtes de la box sont exclues.
-3. `secubox-webfilter-api` (socket `/run/secubox/webfilter.sock`) et le panneau `/webfilter/` affichent le résultat.
+3. `secubox-webfilter-api` (socket `/run/secubox/webfilter.sock`) et le panneau `/webfilter/` affichent le résultat. Le panneau suit le profil Aurora (`.claude/AURORA-REFERENCE.md`) : confirmations intégrées à la page (jamais `confirm()`, que le navigateur du Hall ignore), `?embed=1`, `?demo=1`. Le NAC (carte de l'appareil) et Guardian (panneau Filtrage web) le lisent en lecture seule.
 
 Les listes sont **téléchargées à l'exécution, jamais livrées** : seule leur utilisation compte pour la licence, rappelée dans le panneau.
 

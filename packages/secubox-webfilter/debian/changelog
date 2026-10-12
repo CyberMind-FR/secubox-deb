@@ -1,3 +1,9 @@
+secubox-webfilter (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: interface au profil Aurora (tuiles par categorie, repartition, bloque et observe, appareils les plus filtres), toutes les actions gardees ; les confirm() de blocage, ignores par le navigateur du Hall, deviennent des confirmations integrees a la page ; hauteur annoncee a l hote, ?embed=1 et ?demo=1 (ref #2430)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:23:58 +0200
+
 secubox-webfilter (0.2.4-1~bookworm1) bookworm; urgency=medium
 
   * Les gestes sur Unbound (commande, ecriture atomique, checkconf, reload, audit) viennent de secubox_unbound (secubox-core >= 1.7.0) ; le controleur n'a toujours PAS la capacite de redemarrer Unbound (le test le verifie sur le comportement).

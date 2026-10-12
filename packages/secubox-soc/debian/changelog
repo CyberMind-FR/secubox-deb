@@ -1,3 +1,9 @@
+secubox-soc (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: Guardian, panneau Filtrage web (barres bloque et observe par categorie sur 7 jours, mode dit, lien vers le panneau) (ref #2430)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 08:23:58 +0200
+
 secubox-soc (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: Guardian, appareils principaux en barres empilees par type d usage, identites de meme adresse de tunnel regroupees (deduit), renvoi vers les Clients reels du NAC (ref #2423)
