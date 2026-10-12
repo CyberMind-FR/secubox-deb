@@ -313,6 +313,25 @@ def upsert_client(mac_hash: str, ip: str, level: str = "r1") -> None:
         )
 
 
+def ensure_client(mac_hash: str, ip: str, level: str = "r3", vu: int | None = None) -> bool:
+    """Crée la ligne du client si elle manque ; sinon ne met à jour QUE l'adresse
+    et la dernière activité — jamais le niveau R choisi (#2413). Rend True si la
+    ligne vient d'être créée."""
+    now = int(vu or time.time())
+    with _conn() as c:
+        try:
+            c.execute("ALTER TABLE clients ADD COLUMN level TEXT NOT NULL DEFAULT 'r1'")
+        except sqlite3.OperationalError:
+            pass
+        cur = c.execute("UPDATE clients SET ip=?, last_seen=MAX(last_seen, ?) WHERE mac_hash=?",
+                        (ip, now, mac_hash))
+        if cur.rowcount:
+            return False
+        c.execute("INSERT INTO clients(mac_hash, ip, level, first_seen, last_seen) VALUES (?,?,?,?,?)",
+                  (mac_hash, ip, level, now, now))
+        return True
+
+
 def set_client_level(mac_hash: str, level: str) -> None:
     """#724 — set a client's level by hash only (no ip needed), for the banner
     self-service switch on R3 wg peers (which have no captive MAC/ip). Updates the
