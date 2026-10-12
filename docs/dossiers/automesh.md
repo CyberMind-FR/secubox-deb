@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Automesh — jonction automatique au maillage (lite)
 
 Besoin : support à distance et première installation d'une box lite. La box APPELLE son parent (connexion sortante : elle traverse une Freebox sans port entrant).
