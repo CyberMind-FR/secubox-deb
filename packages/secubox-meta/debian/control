@@ -229,7 +229,8 @@ Depends: ${misc:Depends},
 Recommends: secubox-premier-pas,
          secubox-health
 Suggests: secubox-led-heartbeat,
-         secubox-console
+         secubox-console,
+         secubox-kiosk
 Description: SecuBox — service « Noyau »
  Bibliothèque centrale, passerelle d'API, hôte de groupe, santé.
  .
