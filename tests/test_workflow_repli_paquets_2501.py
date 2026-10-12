@@ -34,3 +34,9 @@ def test_la_provenance_ne_dit_pas_agregat_du_commit_avec_zero_deb():
     run = next(s for s in yaml.safe_load(WF.read_text())["jobs"]["build-image"]["steps"]
                if s.get("name") == "Provenance des paquets")["run"]
     assert "debs-count.outputs.n" in run
+
+
+def test_le_repli_remonte_jusqu_a_un_run_qui_a_l_agregat():
+    """Le « dernier run réussi » est lui-même vide quand le dernier commit n'a touché aucun paquet (collect sauté, conclusion success) :
+    sans search_artifacts, le repli retombe sur ce run vide (run 38266017460)."""
+    assert _steps()["debs-fallback"]["with"]["search_artifacts"] is True

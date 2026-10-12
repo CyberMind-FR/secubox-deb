@@ -217,6 +217,9 @@ jobs:
           name: secubox-debs-all
           path: output/debs/
           if_no_artifact_found: warn
+          # Le dernier run « reussi » peut etre un run SANS agregat (commit sans
+          # paquet, collect saute) : remonter jusqu'a un run qui en a un.
+          search_artifacts: true
         continue-on-error: true
 
       - name: Provenance des paquets

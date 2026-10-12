@@ -11,7 +11,7 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-12 — build-image : repli sur le dernier agrégat quand le commit n'en a pas (ref #2501)
 
-Un commit sans paquet lance quand même `build-packages.yml`, dont le job `collect` est sauté : le run existe, l'agrégat `secubox-debs-all` non. L'étape « commit exact » (`if_no_artifact_found: warn`) finissait en success avec 0 .deb, le repli ne partait pas et l'image échouait (« Aucun paquet SecuBox à installer », runs 38260593345 et 38262902039). Le repli se décide maintenant sur le nombre de .deb, et la provenance ne dit plus « agrégat du commit » avec 0 fichier. Test `tests/test_workflow_repli_paquets_2501.py`.
+Un commit sans paquet lance quand même `build-packages.yml`, dont le job `collect` est sauté : le run existe, l'agrégat `secubox-debs-all` non. L'étape « commit exact » (`if_no_artifact_found: warn`) finissait en success avec 0 .deb, le repli ne partait pas et l'image échouait (« Aucun paquet SecuBox à installer », runs 38260593345 et 38262902039). Le repli se décide maintenant sur le nombre de .deb, et la provenance ne dit plus « agrégat du commit » avec 0 fichier. Le repli remonte aussi (`search_artifacts: true`) jusqu'à un run qui possède l'agrégat : le « dernier run réussi » était lui-même vide (run 38266017460). Test `tests/test_workflow_repli_paquets_2501.py`.
 
 ## 2026-10-12 — image RPi400 : resolv.conf propre à l'image (ref #2499)
 
