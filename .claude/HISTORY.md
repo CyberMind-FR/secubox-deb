@@ -771,3 +771,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — autoload, journal d'audit hors du chevauchement logrotate (closes #2489)
 - secubox-autoload 0.5.3 : journal dans /var/log/secubox/autoload/audit.log (la règle générale de secubox-core ne le voit plus) ; logrotate.service ne doit plus échouer chaque nuit ; le service peut de nouveau écrire son audit. Constaté sur gk2 : échec 00:52, journal recréé en secubox:secubox.
+
+## 2026-10-12 — toolbox, dossier partagé de journaux (closes #2490)
+- secubox-toolbox 2.13.1 : /var/log/secubox en secubox-toolbox:secubox 0775 (la rotation générale de secubox-core, sous su secubox, peut de nouveau y créer ses .1.gz) ; logrotate.service ne doit plus échouer chaque nuit.

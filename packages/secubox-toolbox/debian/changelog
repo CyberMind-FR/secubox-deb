@@ -1,3 +1,15 @@
+secubox-toolbox (2.13.1-1~bookworm1) bookworm; urgency=medium
+
+  * Correction (#2490) : le postinst reprenait le dossier partagé /var/log/secubox
+    (secubox-toolbox:secubox-toolbox 0755) : la rotation générale de secubox-core, qui tourne sous
+    `su secubox secubox`, ne pouvait plus y créer ses fichiers .1.gz (« error creating output
+    file … Permission denied »). logrotate.service échouait chaque nuit et les journaux ne
+    tournaient plus (racine à 88 % sur gk2). Le dossier est maintenant secubox-toolbox:secubox
+    en 0775 : le service y écrit, le groupe de la rotation aussi, tous peuvent le traverser.
+    3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 12 Oct 2026 13:06:40 +0200
+
 secubox-toolbox (2.13.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: la profondeur d inspection (R-level : aucune, passive, active, reelle) est reglee dans l onglet Clients, a cote de chaque client du tunnel : choisi, plancher, force et effectif, les quatre modes expliques, confirmation integree quand l inspection devient plus profonde ; /rlevel/peers porte mac_hash ; la page /rlevel/ garde le libre-service et renvoie vers l onglet (ref #2432)

@@ -183,7 +183,12 @@ SBXRLEVEL
     # breaks WAF + SOC dashboards for the `secubox` user (#511, regressed
     # the /waf/ + /soc/ pages on gk2 2026-06-10).  Per-module log files +
     # subdirs inside keep their own restricted perms.
-    install -d -m 0755 -o secubox-toolbox -g secubox-toolbox /var/log/secubox
+    #
+    # PROPRIÉTÉ ET GROUPE (#2490). Le propriétaire reste secubox-toolbox (le service y crée ses journaux), mais le GROUPE est `secubox` et le mode 0775 : la rotation
+    # générale de secubox-core tourne sous `su secubox secubox` et doit pouvoir créer ses `.1.gz` dans ce dossier. Avec secubox-toolbox:secubox-toolbox 0755, elle ne
+    # le pouvait plus (« error creating output file … Permission denied »), logrotate.service échouait chaque nuit et les journaux ne tournaient plus. 0775 reste
+    # traversable par tous (>= 0755) ; logrotate accepte un dossier ouvert au groupe puisque la règle porte `su`.
+    install -d -m 0775 -o secubox-toolbox -g secubox /var/log/secubox
 
     # 4a. Phase 11.B (#507) — make /usr/share/secubox/www traversable so
     # the FastAPI StaticFiles mount can serve /toolbox/social.{css,js} +
