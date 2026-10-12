@@ -54,3 +54,26 @@ def test_l_etat_vide_distingue_moteur_actif_et_moteur_arrete():
         src = (pathlib.Path(__file__).resolve().parents[1] / "composants/ndpid/www/ndpid/empreintes.html").read_text(encoding="utf-8")
     assert "D.run===true" in src and "sbxdpi calcule JA3 et JA4" in src   # #2405 : sbxdpi lit le ClientHello lui-même
     assert "doit être actif pour relever" not in src
+
+
+def test_la_page_se_charge_sans_erreur_javascript_2418():
+    """#2418 : une erreur de syntaxe (parenthèse en trop, #2405) vidait toute la page sans qu'aucun test ne le voie : on la charge dans un vrai navigateur."""
+    import pathlib
+    import pytest
+    sync_api = pytest.importorskip("playwright.sync_api")
+    page_html = pathlib.Path(__file__).resolve().parents[1] / "composants/ndpid/www/ndpid/empreintes.html"
+    erreurs = []
+    with sync_api.sync_playwright() as p:
+        try:
+            nav = p.chromium.launch()
+        except Exception as e:   # navigateur absent de la machine de test
+            pytest.skip(f"chromium indisponible : {e}")
+        for q in ("?demo=1", ""):
+            pg = nav.new_page()
+            pg.on("pageerror", lambda e: erreurs.append(str(e)))
+            pg.goto("file://" + str(page_html) + q)
+            pg.wait_for_timeout(500)
+            if q:
+                assert pg.evaluate("document.querySelectorAll('#rang .fp').length") > 0   # la démonstration affiche des empreintes
+        nav.close()
+    assert erreurs == [], erreurs
