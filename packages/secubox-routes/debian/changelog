@@ -1,3 +1,20 @@
+secubox-routes (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /routes/ refaite au profil Aurora (#2571) : un seul fichier autonome (CSS et JS en ligne, plus de police Google ni
+    de skin hybrid-dark/CRT), tuiles, onglets Routes / Regles de politique / Voisins, ?demo=1 (donnees RFC 5737, aucune
+    ecriture), ?embed=1, hauteur annoncee (sbxVue), bandeau « session requise » sur 401/403 (au lieu de la redirection
+    vers /login.html), « — » pour toute mesure absente.
+  * Ecritures inchangees (memes routes, methodes, corps) : POST/DELETE /routes, POST /rules, DELETE /rules/{priorite},
+    POST /flush ; confirmation integree a la page a la place de confirm()/alert().
+  * Bogues de l'ancienne page corriges : donnees d'API injectees dans innerHTML et dans des onclick (injection) ;
+    suppression d'une regle IPv6 qui visait en fait la regle IPv4 de meme priorite (l'API ne gere que IPv4) : les regles
+    IPv6 sont desormais en lecture seule ; compteurs affiches a 0 quand la mesure manquait ; echec d'API (200 avec
+    success=false) signale dans la page ; badge de version code en dur « v1.0.0 » retire.
+  * Non repris : badge de version (l'API ne le fournit pas de facon fiable). L'API ne liste que la table principale et
+    n'ajoute que des regles IPv4 : inchange. Composant netdiag non touche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-routes (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-netdiag (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
