@@ -25,7 +25,7 @@ def test_toute_fonction_d_aide_appelee_est_definie():
     for ligne in TEXTE.splitlines():
         code = ligne.split("#", 1)[0]
         for nom in AIDES:
-            if re.search(rf"(?:^|[;&|(]\s*|\|\|\s*|&&\s*|\bthen\s+|\belse\s+|\bdo\s+)\s*{nom}\s+(?![=:])", code):   # `debug = false` (contenu d'un heredoc) n'est pas un appel
+            if re.search(rf"(?:^|[;&|(]\s*|\|\|\s*|&&\s*|\bthen\s+|\belse\s+|\bdo\s+)\s*{nom}[ \t]+(?![ \t]*[=:])", code):   # `debug = false` (contenu d'un heredoc) n'est pas un appel
                 appelees.add(nom)
     assert appelees <= definies, f"appelées sans être définies : {sorted(appelees - definies)}"
 
