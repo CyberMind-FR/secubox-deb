@@ -1,3 +1,23 @@
+secubox-backup (2.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /backup/ refaite au profil Aurora (#2556) : fichier autonome, tuiles (sauvegardes, archives en clair,
+    conteneurs, en marche, stockage, derniere sauvegarde), panneaux, recherche et filtre de type des archives,
+    ?demo=1 (donnees fictives, actions inertes) et ?embed=1, bandeau « session requise » sur 401/403.
+  * Memes appels d'ecriture qu'avant : POST /create {type, encrypt}, POST /container/backup {name, encrypt},
+    POST /cleanup. Confirmation integree a la page (plus de confirm()) pour le nettoyage irreversible, la
+    sauvegarde en clair et la sauvegarde d'un conteneur en marche (arret le temps de l'archive).
+  * Bogues corriges : noms de fichiers et de conteneurs injectes dans innerHTML et dans des onclick
+    (injection possible) ; liste tronquee a 15 sans le dire ; mesures absentes affichees « 0 » (stockage, tailles,
+    session refusee) au lieu de « — » ; refus 401 qui redirigeait au lieu d'un bandeau ; erreur serveur
+    (detail) remplacee par un message generique ; pas de garde contre le double lancement.
+  * Ajoute des donnees deja fournies par l'API et non lues : archives en clair (/encryption), derniere
+    sauvegarde (/status last_backup).
+  * Non repris : les polices Google, les effets CRT et les modales. La restauration reste une commande a lancer en
+    root (la page ne l'execute pas, comme avant) ; les routes /restore, /history, /schedules, /retention et
+    /remotes n'etaient pas utilisees par l'ancienne page et ne le sont pas non plus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 09:30:00 +0200
+
 secubox-backup (2.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-cloner (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
