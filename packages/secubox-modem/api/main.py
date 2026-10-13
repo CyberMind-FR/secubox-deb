@@ -37,7 +37,7 @@ from secubox_core.auth import require_lecture
 log = get_logger("modem")
 
 # Version
-__version__ = "1.0.0"
+__version__ = "1.3.0"
 
 # ═══════════════════════════════════════════════════════════════════════
 # Background Tasks

@@ -4,365 +4,578 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Modem 4G/5G au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Modem Management</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Modem 4G/5G</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5/lib/xterm.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/xterm@5/css/xterm.css" rel="stylesheet">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1a3320;
-            /* Module accent - cellular blue */
-            --modem-accent: #2196f3;
-            --modem-dim: #1976d2;
-            /* Signal colors */
-            --signal-excellent: #4caf50;
-            --signal-good: #8bc34a;
-            --signal-fair: #ffeb3b;
-            --signal-poor: #ff9800;
-            --signal-bad: #f44336;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(33,150,243,0.03) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; position: fixed; height: 100vh; }
-        .main { flex: 1; margin-left: 220px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--tube-soft); background: var(--tube-pale); }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; color: var(--modem-accent); text-shadow: 0 0 8px rgba(33,150,243,0.3); }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
-        .badge.connected { background: rgba(76,175,80,0.1); border-color: var(--signal-excellent); color: var(--signal-excellent); }
-        .badge.disconnected { background: rgba(244,67,54,0.1); border-color: var(--signal-bad); color: var(--signal-bad); }
-        .badge.searching { background: rgba(255,235,59,0.1); border-color: var(--signal-fair); color: #f9a825; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: inherit; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
-        .btn.primary { border-color: var(--modem-accent); color: var(--modem-accent); background: rgba(33,150,243,0.1); }
-        .btn.primary:hover { background: rgba(33,150,243,0.2); }
-        .btn.danger { border-color: var(--signal-bad); color: var(--signal-bad); background: rgba(244,67,54,0.1); }
-        .btn.success { border-color: var(--signal-excellent); color: var(--signal-excellent); background: rgba(76,175,80,0.1); }
-        .tabs { display: flex; border-bottom: 1px solid var(--p31-ghost); background: var(--tube-pale); padding: 0 1rem; }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active { color: var(--modem-accent); border-bottom-color: var(--modem-accent); }
-        .tab-content { display: none; padding: 1.5rem; }
-        .tab-content.active { display: block; }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.15em; }
-        .stat-card.blue .value { color: var(--modem-accent); }
-        .stat-card.green .value { color: var(--signal-excellent); }
-        .stat-card.yellow .value { color: var(--signal-fair); }
-        .stat-card.red .value { color: var(--signal-bad); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 0.85rem; color: var(--p31-decay); text-shadow: 0 0 3px var(--p31-decay); letter-spacing: 0.1em; text-transform: uppercase; }
-        .table { width: 100%; border-collapse: collapse; }
-        .table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; border-bottom: 1px solid var(--p31-ghost); }
-        .table td { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.9rem; color: var(--p31-mid); }
-        .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
-        .input-group input, .input-group select { flex: 1; padding: 0.5rem; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); border-radius: 6px; font-family: inherit; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--p31-dim); }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); border-radius: 6px; font-family: inherit; }
-        .signal-bar { display: flex; gap: 3px; align-items: flex-end; height: 30px; }
-        .signal-bar .bar { width: 8px; background: var(--tube-soft); border-radius: 2px; transition: background 0.3s; }
-        .signal-bar .bar.active { background: var(--signal-excellent); }
-        .signal-bar .bar.fair { background: var(--signal-fair); }
-        .signal-bar .bar.poor { background: var(--signal-poor); }
-        .signal-bar .bar:nth-child(1) { height: 20%; }
-        .signal-bar .bar:nth-child(2) { height: 40%; }
-        .signal-bar .bar:nth-child(3) { height: 60%; }
-        .signal-bar .bar:nth-child(4) { height: 80%; }
-        .signal-bar .bar:nth-child(5) { height: 100%; }
-        .chart-container { height: 250px; background: rgba(0,0,0,0.03); border-radius: 8px; padding: 1rem; }
-        .sms-list { max-height: 400px; overflow-y: auto; }
-        .sms-item { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); cursor: pointer; }
-        .sms-item:hover { background: rgba(33,150,243,0.05); }
-        .sms-item .from { font-weight: bold; color: var(--modem-accent); }
-        .sms-item .preview { color: var(--p31-dim); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .sms-item .time { font-size: 0.75rem; color: var(--p31-ghost); }
-        .terminal-container { height: 400px; background: #1e1e1e; border-radius: 8px; overflow: hidden; }
-        .terminal-container .xterm { height: 100%; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; box-shadow: 0 0 30px rgba(33,150,243,0.1); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h2 { color: var(--p31-decay); }
-        .modal-close { background: none; border: none; color: var(--p31-dim); font-size: 1.5rem; cursor: pointer; }
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        #conf span{flex:1 1 220px;min-width:0}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn,.pan h3 select{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .signal{display:flex;align-items:flex-end;gap:18px;margin-bottom:10px}
+        .barres{display:flex;gap:3px;align-items:flex-end;height:34px}
+        .barres i{display:block;width:8px;border-radius:2px;background:rgba(159,179,214,.2)}
+        .barres i:nth-child(1){height:20%}.barres i:nth-child(2){height:40%}.barres i:nth-child(3){height:60%}.barres i:nth-child(4){height:80%}.barres i:nth-child(5){height:100%}
+        .barres i.on{background:var(--vert)} .barres i.moy{background:var(--jaune)} .barres i.bas{background:var(--orange)}
+        .signal b{font-size:1.9rem;font-variant-numeric:tabular-nums;line-height:1;color:var(--cyan)}
+        .courbe{width:100%;height:auto;display:block;max-height:380px}
+        .courbe text{fill:var(--faible);font-size:10px} .courbe .grad{stroke:rgba(86,150,255,.14);stroke-width:1} .courbe .ligne{fill:none;stroke:var(--cyan);stroke-width:1.8;vector-effect:non-scaling-stroke}
+        .courbe .aire{fill:var(--cyan);fill-opacity:.14;stroke:none}
+        .liste{display:grid;gap:0;max-height:380px;overflow-y:auto}
+        .liste>button{font:inherit;text-align:left;color:var(--texte);background:none;border:0;border-top:1px solid rgba(86,150,255,.12);padding:8px 6px;cursor:pointer;display:grid;gap:2px;min-width:0}
+        .liste>button:hover,.liste>button:focus-visible{background:rgba(41,182,246,.07);outline:none}
+        .liste .de{font-weight:700;color:var(--cyan);display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+        .liste .ap{color:var(--doux);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .liste .t{color:var(--faible);font-size:.7rem}
+        .liste h4{margin:8px 0 2px;font-size:.7rem;letter-spacing:.06em;color:var(--faible);text-transform:uppercase}
+        .corps{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid var(--trait);border-radius:8px;padding:8px 10px;background:rgba(8,18,38,.7);margin:8px 0;font-size:.82rem}
+        form.saisie,.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        .saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .saisie label.coche{display:flex;gap:8px;align-items:center;font-size:.8rem}
+        .saisie input,.saisie select,.saisie textarea,.pan h3 select,.cmd input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        .pan h3 select{width:auto}
+        .saisie input[type=checkbox]{width:auto}
+        .saisie textarea{resize:none}
+        .saisie input:focus,.saisie select:focus,.saisie textarea:focus,.cmd input:focus,.pan h3 select:focus{outline:none;border-color:var(--cyan)}
+        .saisie .plein{grid-column:1/-1} .saisie .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+        .console{height:260px;overflow:auto;background:rgba(4,10,22,.9);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;margin:0 0 8px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.76rem}
+        .console .tx{color:var(--cyan)} .console .rx{color:var(--jaune)} .console .er{color:var(--rouge)} .console .ok{color:var(--vert)}
+        .cmd{display:flex;gap:8px;flex-wrap:wrap} .cmd input{flex:1 1 180px}
+        .actions{display:flex;flex-wrap:wrap;gap:8px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>Modem Management</h1>
-                <span class="badge disconnected" id="status-badge">Detecting...</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19V15M10 19V11M15 19V7M20 19V3"/></svg>
+                <div><h1>Modem 4G/5G</h1><small>Réseau cellulaire, signal, SMS et console AT</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refreshAll()">Refresh</button>
-                <button class="btn primary" id="connect-btn" onclick="toggleConnection()">Connect</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Détection…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="bascule" type="button" disabled>Connecter</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="conf" role="alertdialog" aria-live="assertive" hidden><span id="confTxt"></span><button class="btn sm danger" id="confOk" type="button">Confirmer</button><button class="btn sm" id="confNon" type="button">Annuler</button></div>
+        <div class="retour" id="rGlobal" role="status" hidden></div>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="status">Status</div>
-            <div class="tab" data-tab="signal">Signal</div>
-            <div class="tab" data-tab="sms">SMS</div>
-            <div class="tab" data-tab="terminal">Terminal</div>
-            <div class="tab" data-tab="settings">Settings</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Opérateur sur lequel le modem est enregistré."><span class="l">Opérateur</span><span class="v" id="tOp">—</span><span class="s">réseau enregistré</span></div>
+            <div class="tuile ok" title="Technologie d’accès radio utilisée (LTE, 5G…)."><span class="l">Technologie</span><span class="v" id="tTech">—</span><span class="s">accès radio</span></div>
+            <div class="tuile ok" id="cSig" title="Qualité du signal rapportée par le modem, en pourcentage. 0 % est la valeur par défaut de l’API : elle s’affiche « — » car on ne peut pas la distinguer d’une mesure absente."><span class="l">Signal</span><span class="v" id="tSig">—</span><span class="s">qualité rapportée</span></div>
+            <div class="tuile cy" title="Adresse IP attribuée à la connexion de données."><span class="l">Adresse IP</span><span class="v mono" id="tIp" style="font-size:1.05rem">—</span><span class="s">connexion de données</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections du modem">
+            <button type="button" role="tab" id="o-statut" data-t="statut" aria-selected="true" aria-controls="t-statut">Statut</button>
+            <button type="button" role="tab" id="o-signal" data-t="signal" aria-selected="false" aria-controls="t-signal">Signal</button>
+            <button type="button" role="tab" id="o-sms" data-t="sms" aria-selected="false" aria-controls="t-sms">SMS</button>
+            <button type="button" role="tab" id="o-terminal" data-t="terminal" aria-selected="false" aria-controls="t-terminal">Terminal</button>
+            <button type="button" role="tab" id="o-reglages" data-t="reglages" aria-selected="false" aria-controls="t-reglages">Réglages</button>
         </div>
 
-        <div class="content">
-            <!-- Status Tab -->
-            <div id="tab-status" class="tab-content active">
-                <div class="stats-row">
-                    <div class="stat-card blue">
-                        <div class="value" id="stat-operator">-</div>
-                        <div class="label">Operator</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="stat-tech">-</div>
-                        <div class="label">Technology</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <div class="value" id="stat-signal">-</div>
-                        <div class="label">Signal</div>
-                    </div>
-                    <div class="stat-card blue">
-                        <div class="value" id="stat-ip">-</div>
-                        <div class="label">IP Address</div>
-                    </div>
-                </div>
+        <section id="t-statut" role="tabpanel" aria-labelledby="o-statut" class="grille">
+            <div class="pan"><h3>Modem</h3>
+                <dl class="kv"><dt>Modèle</dt><dd id="iMod">—</dd><dt>Fabricant</dt><dd id="iFab">—</dd><dt>IMEI</dt><dd class="mono" id="iImei">—</dd><dt>Micrologiciel</dt><dd id="iFw">—</dd><dt>État</dt><dd id="iEtat">—</dd></dl></div>
+            <div class="pan"><h3>Force du signal</h3>
+                <div class="signal"><div class="barres" id="barres" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><b id="sPct">—</b></div>
+                <dl class="kv"><dt>RSSI</dt><dd id="sRssi">—</dd><dt>RSRP</dt><dd id="sRsrp">—</dd><dt>RSRQ</dt><dd id="sRsrq">—</dd><dt>SINR</dt><dd id="sSinr">—</dd></dl>
+                <p class="note">Pourcentage déduit du RSRP côté serveur (−140 dBm = 0 %, −44 dBm = 100 %).</p></div>
+        </section>
 
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>Modem Info</h2></div>
-                        <table class="table">
-                            <tr><td>Model</td><td id="info-model">-</td></tr>
-                            <tr><td>Manufacturer</td><td id="info-mfr">-</td></tr>
-                            <tr><td>IMEI</td><td id="info-imei">-</td></tr>
-                            <tr><td>Firmware</td><td id="info-fw">-</td></tr>
-                            <tr><td>State</td><td id="info-state">-</td></tr>
-                        </table>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h2>Signal Strength</h2></div>
-                        <div style="display: flex; align-items: center; gap: 2rem; margin-bottom: 1rem;">
-                            <div class="signal-bar" id="signal-bars">
-                                <div class="bar"></div>
-                                <div class="bar"></div>
-                                <div class="bar"></div>
-                                <div class="bar"></div>
-                                <div class="bar"></div>
-                            </div>
-                            <div style="font-size: 2rem; font-weight: bold; color: var(--modem-accent);" id="signal-percent">-</div>
-                        </div>
-                        <table class="table">
-                            <tr><td>RSSI</td><td id="sig-rssi">- dBm</td></tr>
-                            <tr><td>RSRP</td><td id="sig-rsrp">- dBm</td></tr>
-                            <tr><td>RSRQ</td><td id="sig-rsrq">- dB</td></tr>
-                            <tr><td>SINR</td><td id="sig-sinr">- dB</td></tr>
-                        </table>
-                    </div>
+        <section id="t-signal" role="tabpanel" aria-labelledby="o-signal" hidden>
+            <div class="grille">
+                <div class="pan" style="grid-column:1/-1"><h3>Historique du signal <i id="nbHisto">dernière heure</i>
+                    <select id="metrique" aria-label="Mesure affichée"><option value="rsrp">RSRP (dBm)</option><option value="rssi">RSSI (dBm)</option><option value="sinr">SINR (dB)</option><option value="quality_percent">Qualité (%)</option></select></h3>
+                    <div id="courbe"></div></div>
+                <div class="pan"><h3>Statistiques <i>1 h</i></h3>
+                    <dl class="kv"><dt>Échantillons</dt><dd id="stN">—</dd><dt>RSRP moyen</dt><dd id="stRsrp">—</dd><dt>RSRP min / max</dt><dd id="stRange">—</dd><dt>SINR moyen</dt><dd id="stSinr">—</dd></dl></div>
+            </div>
+        </section>
+
+        <section id="t-sms" role="tabpanel" aria-labelledby="o-sms" hidden>
+            <div class="retour" id="rSms" role="status" hidden></div>
+            <div class="grille">
+                <div class="pan"><h3>Messages <i id="nbSms"></i><button class="btn sm" id="smsActu" type="button">⟳</button><button class="btn sm prim" id="smsNouveau" type="button" style="margin-left:0">Écrire</button></h3>
+                    <div class="liste" id="listeSms"><div class="vide">Aucun relevé.</div></div></div>
+                <div>
+                    <form class="saisie" id="fSms" hidden autocomplete="off">
+                        <label class="plein">À (numéro)<input name="number" id="smsA" type="text" inputmode="tel" placeholder="+33612345678" maxlength="20" required></label>
+                        <label class="plein">Message <span id="smsN">0/160</span><textarea name="text" id="smsT" rows="4" maxlength="160" required></textarea></label>
+                        <div class="bout plein"><button class="btn prim" type="submit">Envoyer</button><button class="btn" type="button" id="smsFerme">Fermer</button></div>
+                    </form>
+                    <div class="pan" id="smsDet" hidden><h3>Message</h3>
+                        <dl class="kv"><dt>De</dt><dd id="dDe">—</dd><dt>Heure</dt><dd id="dHeure">—</dd></dl>
+                        <div class="corps" id="dTexte"></div>
+                        <div class="actions"><button class="btn prim sm" id="dRepondre" type="button">Répondre</button><button class="btn danger sm" id="dSuppr" type="button">Supprimer</button><button class="btn sm" id="dFerme" type="button">Fermer</button></div></div>
                 </div>
             </div>
+        </section>
 
-            <!-- Signal Tab -->
-            <div id="tab-signal" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Signal History (Last Hour)</h2>
-                        <select id="signal-metric" onchange="updateSignalChart()">
-                            <option value="rsrp">RSRP</option>
-                            <option value="rssi">RSSI</option>
-                            <option value="sinr">SINR</option>
-                            <option value="quality_percent">Quality %</option>
-                        </select>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="signal-chart"></canvas>
-                    </div>
-                </div>
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>Statistics (1h)</h2></div>
-                        <table class="table" id="signal-stats">
-                            <tr><td>Samples</td><td id="stats-count">-</td></tr>
-                            <tr><td>RSRP Avg</td><td id="stats-rsrp-avg">- dBm</td></tr>
-                            <tr><td>RSRP Min/Max</td><td id="stats-rsrp-range">-</td></tr>
-                            <tr><td>SINR Avg</td><td id="stats-sinr-avg">- dB</td></tr>
-                        </table>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h2>Network Info</h2></div>
-                        <table class="table" id="network-info">
-                            <tr><td>Cell ID</td><td id="net-cell">-</td></tr>
-                            <tr><td>TAC</td><td id="net-tac">-</td></tr>
-                            <tr><td>Band</td><td id="net-band">-</td></tr>
-                            <tr><td>EARFCN</td><td id="net-earfcn">-</td></tr>
-                        </table>
-                    </div>
-                </div>
-            </div>
+        <section id="t-terminal" role="tabpanel" aria-labelledby="o-terminal" hidden>
+            <div class="pan"><h3>Console de commandes AT <i id="wsEtat">non connectée</i><button class="btn sm" id="tReco" type="button">Reconnecter</button><button class="btn sm" id="tVider" type="button" style="margin-left:0">Effacer</button></h3>
+                <div class="console mono" id="console" role="log" aria-live="polite"></div>
+                <form class="cmd" id="fAt" autocomplete="off"><input id="atCmd" type="text" placeholder="Commande AT…" aria-label="Commande AT"><button class="btn prim" type="submit">Envoyer</button></form>
+                <p class="note">Usuelles : AT, ATI, AT+CSQ, AT+COPS?, AT+CREG?, AT+QCSQ. Les commandes qui coupent ou réinitialisent le modem sont refusées par le serveur.</p></div>
+        </section>
 
-            <!-- SMS Tab -->
-            <div id="tab-sms" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Messages</h2>
-                        <div>
-                            <button class="btn" onclick="loadSMS()">Refresh</button>
-                            <button class="btn primary" onclick="showComposeModal()">Compose</button>
-                        </div>
-                    </div>
-                    <div class="sms-list" id="sms-list">
-                        <p style="color: var(--p31-dim); text-align: center; padding: 2rem;">Loading messages...</p>
-                    </div>
-                </div>
+        <section id="t-reglages" role="tabpanel" aria-labelledby="o-reglages" hidden>
+            <div class="retour" id="rReg" role="status" hidden></div>
+            <div class="grille">
+                <div class="pan"><h3>Connexion</h3>
+                    <form class="saisie" id="fCfg" autocomplete="off">
+                        <label class="plein">APN<input name="apn" id="cApn" type="text" placeholder="internet, orange.m2m.spec…"></label>
+                        <label>Identifiant (facultatif)<input name="user" id="cUser" type="text"></label>
+                        <label>Mot de passe (facultatif)<input name="password" id="cPass" type="password" autocomplete="new-password"></label>
+                        <label>Type d’IP<select name="ip_type" id="cIp"><option value="ipv4">IPv4</option><option value="ipv6">IPv6</option><option value="ipv4v6">Double pile</option></select></label>
+                        <label class="coche plein"><input type="checkbox" id="cAuto"> Connexion automatique au démarrage</label>
+                        <div class="bout plein"><button class="btn prim" type="submit">Enregistrer la configuration</button></div>
+                    </form>
+                    <p class="note">Le mot de passe n’est jamais enregistré : il n’est utilisé que lors de la connexion.</p></div>
+                <div class="pan"><h3>APN connus <i>cliquer pour remplir</i></h3><div class="liste" id="listeApn"><div class="vide">Aucun relevé.</div></div></div>
             </div>
+            <div class="pan" style="margin-top:10px"><h3>Contrôle du modem</h3>
+                <div class="actions"><button class="btn danger" id="bReset" type="button">Réinitialiser le modem</button><button class="btn danger" id="bOff" type="button">Éteindre le modem</button><button class="btn" id="bOn" type="button">Allumer le modem</button></div>
+                <p class="note">Réinitialiser ou éteindre coupe la connexion de données (confirmation demandée).</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-            <!-- Terminal Tab -->
-            <div id="tab-terminal" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>AT Command Console</h2>
-                        <div>
-                            <button class="btn" onclick="terminalReconnect()">Reconnect</button>
-                            <button class="btn" onclick="terminalClear()">Clear</button>
-                        </div>
-                    </div>
-                    <div class="terminal-container" id="terminal"></div>
-                    <div class="input-group">
-                        <input type="text" id="at-input" placeholder="Enter AT command..." onkeypress="if(event.key==='Enter')sendATCommand()">
-                        <button class="btn primary" onclick="sendATCommand()">Send</button>
-                    </div>
-                    <p style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--p31-dim);">
-                        Common: AT, ATI, AT+CSQ, AT+COPS?, AT+CREG?, AT+QCSQ
-                    </p>
-                </div>
-            </div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/modem';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = (v, unite, dec) => (typeof v === 'number' && isFinite(v)) ? (dec != null ? v.toFixed(dec) : String(v)) + ' ' + unite : '—';
 
-            <!-- Settings Tab -->
-            <div id="tab-settings" class="tab-content">
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>Connection Settings</h2></div>
-                        <div class="form-group">
-                            <label>APN</label>
-                            <input type="text" id="cfg-apn" placeholder="e.g., internet, orange.m2m.spec">
-                        </div>
-                        <div class="form-group">
-                            <label>Username (optional)</label>
-                            <input type="text" id="cfg-user" placeholder="">
-                        </div>
-                        <div class="form-group">
-                            <label>Password (optional)</label>
-                            <input type="password" id="cfg-pass" placeholder="">
-                        </div>
-                        <div class="form-group">
-                            <label>IP Type</label>
-                            <select id="cfg-iptype">
-                                <option value="ipv4">IPv4</option>
-                                <option value="ipv6">IPv6</option>
-                                <option value="ipv4v6">Dual Stack</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="cfg-auto"> Auto-connect on boot
-                            </label>
-                        </div>
-                        <button class="btn primary" onclick="saveConfig()" style="width: 100%;">Save Configuration</button>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h2>Known APNs</h2></div>
-                        <div id="apn-list" style="max-height: 300px; overflow-y: auto;"></div>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header"><h2>Modem Control</h2></div>
-                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn" onclick="resetModem()">Reset Modem</button>
-                        <button class="btn" onclick="powerOff()">Power Off</button>
-                        <button class="btn" onclick="powerOn()">Power On</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
+        let ST = null, INFO = null, SIG = null, HISTO = null, SMS = null, APNS = null, SESSION_OK = true, ONGLET = 'statut';
+        let CONFIRM = null;     // { texte, fn } : confirmation en cours, jamais de dialogue natif
+        let SMS_COURANT = null; // message ouvert dans le détail
+        let WS = null, TERM_INIT = false, CFG_CHARGEE = false;
 
-    <!-- Compose SMS Modal -->
-    <div id="compose-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Compose SMS</h2>
-                <button class="modal-close" onclick="closeComposeModal()">&times;</button>
-            </div>
-            <div class="form-group">
-                <label>To (Phone Number)</label>
-                <input type="text" id="sms-to" placeholder="+33612345678">
-            </div>
-            <div class="form-group">
-                <label>Message <span id="sms-chars">0/160</span></label>
-                <textarea id="sms-text" rows="4" style="width:100%; resize:none; font-family:inherit; padding:0.5rem; border:1px solid var(--tube-soft); border-radius:6px;" oninput="updateCharCount()"></textarea>
-            </div>
-            <button class="btn primary" onclick="sendSMS()" style="width: 100%;">Send</button>
-        </div>
-    </div>
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        // Réussite réelle : HTTP 2xx et, quand l'API le dit, success non faux.
+        const reussi = r => r.ok && !(r.data && r.data.success === false);
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.data && res.data.error) return String(res.data.error);
+            if (res.data && res.data.detail) return typeof res.data.detail === 'string' ? res.data.detail : 'requête invalide';
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const d = new Date(ts);
+            return isNaN(d) ? '—' : d.toLocaleString('fr-FR');
+        }
 
-    <!-- SMS Detail Modal -->
-    <div id="sms-detail-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Message</h2>
-                <button class="modal-close" onclick="closeSMSDetailModal()">&times;</button>
-            </div>
-            <p><strong>From:</strong> <span id="sms-detail-from"></span></p>
-            <p><strong>Time:</strong> <span id="sms-detail-time"></span></p>
-            <div id="sms-detail-text" style="margin-top: 1rem; padding: 1rem; background: var(--tube-light); border-radius: 6px;"></div>
-            <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-                <button class="btn primary" onclick="replyToSMS()">Reply</button>
-                <button class="btn danger" onclick="deleteSMSDetail()">Delete</button>
-            </div>
-        </div>
-    </div>
+        // ---- Confirmation intégrée -------------------------------------------------
+        function demander(texte, fn) {
+            CONFIRM = { texte, fn };
+            $('confTxt').textContent = texte; $('conf').hidden = false; annoncer();
+            $('confNon').focus();
+        }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confOk').addEventListener('click', () => { const c = CONFIRM; fermerConf(); if (c) c.fn(); });
+        $('confNon').addEventListener('click', fermerConf);
 
-    <script src="js/modem.js"></script>
-    <script src="/shared/crt-engine.js"></script>
+        // ---- Données ---------------------------------------------------------------
+        function demoData() {
+            ST = { connected: true, state: 'connected', operator_name: 'Opérateur Démo', access_technology: 'lte', signal_quality: 72, ip_address: '192.0.2.57', model: 'EC25-EUX', imei: '000000000000000' };
+            INFO = { manufacturer: 'Quectel', model: 'EC25-EUX', firmware: 'EC25EUXGAR08A01M1G', imei: '000000000000000' };
+            SIG = { rssi: -68, rsrp: -92, rsrq: -11, sinr: 14, quality_percent: 50, network_type: 'LTE' };
+            const t0 = Date.now() - 59 * 60000, recs = [];
+            for (let i = 0; i < 60; i++) {
+                const rsrp = Math.round(-92 + 6 * Math.sin(i / 7) + (i % 5) - 2);
+                recs.push({ timestamp: new Date(t0 + i * 60000).toISOString(), rssi: rsrp + 24, rsrp, rsrq: -11, sinr: Math.round(14 + 3 * Math.sin(i / 5)), quality_percent: Math.round((rsrp + 140) / 96 * 100) });
+            }
+            const av = k => recs.reduce((a, r) => a + r[k], 0) / recs.length;
+            HISTO = { records: recs, stats: { count: recs.length, rsrp_avg: av('rsrp'), rsrp_min: Math.min(...recs.map(r => r.rsrp)), rsrp_max: Math.max(...recs.map(r => r.rsrp)), sinr_avg: av('sinr') }, period_minutes: 60 };
+            SMS = { messages: [
+                { id: '1', number: '+33639980001', text: 'Votre forfait de démonstration est actif.', timestamp: new Date(Date.now() - 3600e3).toISOString(), direction: 'incoming', state: 'received' },
+                { id: '2', number: '+33639980002', text: 'Message de démonstration envoyé.', timestamp: new Date(Date.now() - 7200e3).toISOString(), direction: 'outgoing', state: 'sent' }], total: 2 };
+            APNS = { apns: { demo: [{ operator: 'Opérateur Démo', apn: 'demo.example', user: '', auth: 'none' }] } };
+            CFG_CHARGEE = true;
+            $('cApn').value = 'demo.example'; $('cIp').value = 'ipv4';
+        }
+
+        async function charger() {
+            if (DEMO) { if (!ST) { demoData(); rendreApn(); } SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/info'), lire('/signal')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            ST = val(0); INFO = val(1); SIG = val(2);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le modem (service arrêté ou injoignable).';
+            rendre();
+            if (!CFG_CHARGEE && SESSION_OK) chargerConfig();
+            if (ONGLET === 'signal') chargerHisto();
+            if (ONGLET === 'sms') chargerSms();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = ST, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'Session requise'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'Aucun modem'; }
+            else if (s.connected) { etat.className = 'actif'; etat.textContent = s.state || 'connecté'; }
+            else if (s.state === 'searching' || s.state === 'registering') { etat.className = 'actif att'; etat.textContent = s.state; }
+            else { etat.className = 'actif hors'; etat.textContent = s.state || 'Aucun modem'; }
+            $('tOp').textContent = tiret(s && s.operator_name);
+            $('tTech').textContent = tiret(s && s.access_technology);
+            const q = s && s.signal_quality > 0 ? s.signal_quality : null;
+            $('tSig').textContent = q === null ? '—' : q + ' %';
+            $('cSig').className = 'tuile ' + (q === null ? 'cy' : q >= 60 ? 'ok' : q >= 30 ? 'att' : 'hors');
+            $('tIp').textContent = tiret(s && s.ip_address);
+            const b = $('bascule');
+            b.disabled = !s || !SESSION_OK;
+            b.textContent = s && s.connected ? 'Déconnecter' : 'Connecter';
+            b.className = 'btn ' + (s && s.connected ? 'danger' : 'prim');
+            // Modem
+            $('iMod').textContent = tiret((INFO && INFO.model) || (s && s.model));
+            $('iFab').textContent = tiret(INFO && INFO.manufacturer);
+            $('iImei').textContent = tiret((INFO && INFO.imei) || (s && s.imei));
+            $('iFw').textContent = tiret(INFO && INFO.firmware);
+            $('iEtat').textContent = tiret(s && s.state);
+            // Signal
+            const pct = SIG && typeof SIG.quality_percent === 'number' ? SIG.quality_percent : null;
+            $('sPct').textContent = pct === null ? '—' : pct + ' %';
+            const niveau = pct === null ? 0 : Math.ceil(pct / 20);
+            document.querySelectorAll('#barres i').forEach((i, k) => { i.className = k < niveau ? (pct >= 60 ? 'on' : pct >= 30 ? 'moy' : 'bas') : ''; });
+            $('sRssi').textContent = nombre(SIG && SIG.rssi, 'dBm'); $('sRsrp').textContent = nombre(SIG && SIG.rsrp, 'dBm');
+            $('sRsrq').textContent = nombre(SIG && SIG.rsrq, 'dB'); $('sSinr').textContent = nombre(SIG && SIG.sinr, 'dB');
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        // ---- Historique du signal : courbe SVG, une échelle, graduations réelles ------
+        async function chargerHisto() {
+            if (!DEMO) {
+                try { HISTO = await lire('/signal/history?minutes=60&limit=120'); } catch (e) { HISTO = null; }
+            }
+            rendreHisto();
+        }
+        const SVGNS = 'http://www.w3.org/2000/svg';
+        const sv = (tag, attrs, txt) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; return e; };
+        function graduations(min, max) {
+            if (min === max) { min -= 1; max += 1; }
+            const brut = (max - min) / 4, p = Math.pow(10, Math.floor(Math.log10(brut))), f = brut / p;
+            const pas = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+            const a = Math.floor(min / pas) * pas, b = Math.ceil(max / pas) * pas, g = [];
+            for (let v = a; v <= b + pas / 2; v += pas) g.push(Math.round(v * 1e6) / 1e6);
+            return g;
+        }
+        function rendreHisto() {
+            const zone = $('courbe'); zone.textContent = '';
+            const recs = (HISTO && HISTO.records) || [], st = (HISTO && HISTO.stats) || {};
+            const m = $('metrique').value;
+            const pts = recs.map(r => ({ t: new Date(r.timestamp).getTime(), v: r[m] })).filter(p => !isNaN(p.t));
+            const mesures = pts.filter(p => typeof p.v === 'number');
+            $('nbHisto').textContent = st.count ? st.count + ' échantillons' : 'dernière heure';
+            $('stN').textContent = tiret(st.count);
+            $('stRsrp').textContent = nombre(st.rsrp_avg, 'dBm', 1);
+            $('stRange').textContent = (typeof st.rsrp_min === 'number' && typeof st.rsrp_max === 'number') ? st.rsrp_min.toFixed(0) + ' / ' + st.rsrp_max.toFixed(0) + ' dBm' : '—';
+            $('stSinr').textContent = nombre(st.sinr_avg, 'dB', 1);
+            if (mesures.length < 2) { zone.appendChild(el('div', 'vide', HISTO ? 'Pas assez de mesures sur la dernière heure.' : 'Aucune mesure : historique indisponible.')); annoncer(); return; }
+            const W = 640, H = 230, L = 48, R = 12, T = 12, B = 26;
+            let lo = Math.min(...mesures.map(p => p.v)), hi = Math.max(...mesures.map(p => p.v));
+            const gr = m === 'quality_percent' ? [0, 25, 50, 75, 100] : graduations(lo, hi);
+            lo = gr[0]; hi = gr[gr.length - 1];
+            const t0 = pts[0].t, t1 = pts[pts.length - 1].t, dt = (t1 - t0) || 1;
+            const X = t => L + (t - t0) / dt * (W - L - R), Y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+            const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'courbe', role: 'img', 'aria-label': 'Historique ' + $('metrique').selectedOptions[0].textContent });
+            gr.forEach(v => { svg.appendChild(sv('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: 'grad' })); svg.appendChild(sv('text', { x: L - 6, y: Y(v) + 3, 'text-anchor': 'end' }, String(v))); });
+            for (let k = 0; k < 5; k++) {
+                const t = t0 + dt * k / 4, d = new Date(t);
+                svg.appendChild(sv('text', { x: X(t), y: H - 8, 'text-anchor': k === 0 ? 'start' : k === 4 ? 'end' : 'middle' }, String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')));
+            }
+            // segments continus (une mesure absente coupe la ligne, jamais interpolée)
+            let seg = [];
+            const tracer = () => {
+                if (seg.length > 1) {
+                    const d = seg.map((p, i) => (i ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join(' ');
+                    svg.appendChild(sv('path', { d: d + ' L' + X(seg[seg.length - 1].t).toFixed(1) + ' ' + Y(lo) + ' L' + X(seg[0].t).toFixed(1) + ' ' + Y(lo) + ' Z', class: 'aire' }));
+                    svg.appendChild(sv('path', { d, class: 'ligne' }));
+                }
+                seg = [];
+            };
+            pts.forEach(p => { if (typeof p.v === 'number') seg.push(p); else tracer(); }); tracer();
+            mesures.forEach(p => { const c = sv('circle', { cx: X(p.t), cy: Y(p.v), r: 2, fill: '#29b6f6' }); c.appendChild(sv('title', {}, new Date(p.t).toLocaleTimeString('fr-FR') + ' — ' + p.v)); svg.appendChild(c); });
+            zone.appendChild(svg);
+            zone.appendChild(el('p', 'note', 'Unité : ' + $('metrique').selectedOptions[0].textContent.replace(/^.*\(/, '').replace(')', '') + ' · une seule échelle, aucune valeur interpolée.'));
+            annoncer();
+        }
+        $('metrique').addEventListener('change', rendreHisto);
+
+        // ---- SMS -------------------------------------------------------------------
+        async function chargerSms() {
+            if (!DEMO) {
+                try { SMS = await lire('/sms'); } catch (e) { SMS = null; }
+            }
+            rendreSms();
+        }
+        function rendreSms() {
+            const liste = $('listeSms'); liste.textContent = '';
+            const ms = (SMS && SMS.messages) || [];
+            $('nbSms').textContent = SMS ? (SMS.total != null ? SMS.total : ms.length) + ' au total' : '';
+            if (!ms.length) { liste.appendChild(el('div', 'vide', SMS ? 'Aucun message.' : 'Aucune mesure : messages indisponibles.')); annoncer(); return; }
+            ms.forEach(m => {
+                const b = el('button'); b.type = 'button';
+                const de = el('span', 'de', tiret(m.number));
+                de.appendChild(el('span', 'pill ' + (m.direction === 'outgoing' ? 'cy' : 'ok'), m.direction === 'outgoing' ? 'ENVOYÉ' : 'REÇU'));
+                b.appendChild(de);
+                const txt = String(m.text == null ? '' : m.text);
+                b.appendChild(el('span', 'ap', txt.length > 50 ? txt.slice(0, 50) + '…' : txt));
+                b.appendChild(el('span', 't', quand(m.timestamp)));
+                b.addEventListener('click', () => ouvrirSms(m));
+                liste.appendChild(b);
+            });
+            annoncer();
+        }
+        function ouvrirSms(m) {
+            SMS_COURANT = m;
+            $('dDe').textContent = tiret(m.number); $('dHeure').textContent = quand(m.timestamp); $('dTexte').textContent = String(m.text == null ? '' : m.text);
+            $('smsDet').hidden = false; $('fSms').hidden = true; annoncer();
+        }
+        function fermerDetail() { SMS_COURANT = null; $('smsDet').hidden = true; annoncer(); }
+        $('dFerme').addEventListener('click', fermerDetail);
+        $('dRepondre').addEventListener('click', () => { const n = SMS_COURANT ? SMS_COURANT.number : ''; fermerDetail(); ouvrirRedaction(n); });
+        $('dSuppr').addEventListener('click', () => {
+            const m = SMS_COURANT; if (!m) return;
+            demander('Supprimer ce message de ' + tiret(m.number) + ' ? Cette action est définitive.', async () => {
+                const r = await ecrire('DELETE', '/sms/' + encodeURIComponent(m.id));
+                if (reussi(r)) { fermerDetail(); retour('rSms', true, 'Message supprimé.'); chargerSms(); }
+                else retour('rSms', false, 'Suppression impossible : ' + detail(r));
+            });
+        });
+        function ouvrirRedaction(numero) {
+            $('fSms').hidden = false; $('smsDet').hidden = true; $('smsA').value = numero || ''; majCompteur(); annoncer();
+            (numero ? $('smsT') : $('smsA')).focus();
+        }
+        function majCompteur() { $('smsN').textContent = $('smsT').value.length + '/160'; }
+        $('smsT').addEventListener('input', majCompteur);
+        $('smsNouveau').addEventListener('click', () => ouvrirRedaction(''));
+        $('smsFerme').addEventListener('click', () => { $('fSms').reset(); majCompteur(); $('fSms').hidden = true; annoncer(); });
+        $('smsActu').addEventListener('click', chargerSms);
+        $('fSms').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const number = $('smsA').value.trim(), text = $('smsT').value.trim();
+            if (!number || !text) { retour('rSms', false, 'Indiquez un numéro et un message.'); return; }
+            const r = await ecrire('POST', '/sms/send', { number, text });
+            if (reussi(r)) { $('fSms').reset(); majCompteur(); $('fSms').hidden = true; retour('rSms', true, 'Message envoyé.'); chargerSms(); }
+            else retour('rSms', false, 'Envoi impossible : ' + detail(r));
+        });
+
+        // ---- Terminal AT -----------------------------------------------------------
+        function ligne(cls, txt) { const d = el('div', cls, txt); const c = $('console'); c.appendChild(d); c.scrollTop = c.scrollHeight; annoncer(); }
+        function connecterWs() {
+            if (DEMO) { ligne('er', 'Démonstration : console inerte, aucune commande envoyée.'); $('wsEtat').textContent = 'démonstration'; return; }
+            try {
+                const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                WS = new WebSocket(proto + '//' + location.host + API + '/at/console');
+            } catch (e) { WS = null; ligne('er', '[WebSocket indisponible : repli sur l’API REST]'); return; }
+            WS.onopen = () => { $('wsEtat').textContent = 'connectée'; ligne('ok', '[Connecté]'); };
+            WS.onmessage = ev => {
+                try {
+                    const d = JSON.parse(ev.data);
+                    if (d.type === 'rx') ligne('rx', String(d.data));
+                    else if (d.type === 'tx') ligne('tx', '> ' + d.data);
+                    else if (d.type === 'error') ligne('er', 'ERREUR : ' + d.message);
+                    else if (d.type === 'status') ligne('ok', '[Port : ' + tiret(d.port) + ']');
+                } catch (e) { ligne('rx', String(ev.data)); }
+            };
+            WS.onclose = () => { $('wsEtat').textContent = 'non connectée'; ligne('er', '[Déconnecté]'); };
+            WS.onerror = () => { $('wsEtat').textContent = 'erreur'; };
+        }
+        function initTerminal() {
+            if (TERM_INIT) return; TERM_INIT = true;
+            ligne('ok', 'Console AT SecuBox — saisissez une commande puis Entrée.');
+            connecterWs();
+        }
+        $('tReco').addEventListener('click', () => { if (WS) try { WS.close(); } catch (e) { /* déjà fermé */ } setTimeout(connecterWs, 500); });
+        $('tVider').addEventListener('click', () => { $('console').textContent = ''; annoncer(); });
+        $('fAt').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const champ = $('atCmd'), command = champ.value.trim();
+            if (!command) return;
+            champ.value = '';
+            if (DEMO) { ligne('tx', '> ' + command); ligne('er', 'Démonstration : action inerte.'); return; }
+            if (WS && WS.readyState === WebSocket.OPEN) { WS.send(JSON.stringify({ type: 'command', command })); return; }
+            // Repli REST, comme l'ancienne page
+            ligne('tx', '> ' + command);
+            const r = await ecrire('POST', '/at/command', { command });
+            if (r.ok && r.data) (r.data.response || []).forEach(l => ligne('rx', String(l)));
+            else ligne('er', 'Erreur : ' + detail(r));
+        });
+
+        // ---- Réglages --------------------------------------------------------------
+        async function chargerConfig() {
+            CFG_CHARGEE = true;
+            try {
+                const c = await lire('/config');
+                $('cApn').value = c.apn || ''; $('cUser').value = c.user || ''; $('cIp').value = c.ip_type || 'ipv4'; $('cAuto').checked = !!c.auto_connect;
+            } catch (e) { CFG_CHARGEE = false; }
+            try { APNS = await lire('/apn/database'); } catch (e) { APNS = null; }
+            rendreApn();
+        }
+        function rendreApn() {
+            const l = $('listeApn'); l.textContent = '';
+            const bases = (APNS && APNS.apns) || null;
+            if (!bases) { l.appendChild(el('div', 'vide', 'Aucun relevé.')); annoncer(); return; }
+            const groupes = Array.isArray(bases) ? { '': bases } : bases;
+            Object.keys(groupes).forEach(pays => {
+                if (pays) l.appendChild(el('h4', null, pays));
+                (groupes[pays] || []).forEach(a => {
+                    const b = el('button'); b.type = 'button';
+                    b.appendChild(el('span', 'de', tiret(a.operator)));
+                    b.appendChild(el('span', 'ap mono', tiret(a.apn)));
+                    b.addEventListener('click', () => { $('cApn').value = a.apn || ''; $('cUser').value = a.user || ''; });
+                    l.appendChild(b);
+                });
+            });
+            annoncer();
+        }
+        $('fCfg').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const corps = { apn: $('cApn').value, user: $('cUser').value, password: $('cPass').value, ip_type: $('cIp').value, auto_connect: $('cAuto').checked };
+            const r = await ecrire('POST', '/config', corps);
+            $('cPass').value = '';
+            if (reussi(r)) retour('rReg', true, 'Configuration enregistrée.'); else retour('rReg', false, 'Enregistrement impossible : ' + detail(r));
+        });
+
+        // ---- Connexion et contrôle du modem ---------------------------------------
+        async function agir(chemin, corps, ok, ko, apres) {
+            const r = await ecrire('POST', chemin, corps);
+            if (reussi(r)) { retour('rGlobal', true, ok); if (apres) apres(); }
+            else retour('rGlobal', false, ko + ' : ' + detail(r));
+        }
+        $('bascule').addEventListener('click', () => {
+            if (ST && ST.connected) {
+                demander('Déconnecter le modem du réseau cellulaire ? La connexion de données sera coupée.', () => agir('/disconnect', undefined, 'Déconnecté.', 'Déconnexion impossible', charger));
+            } else {
+                const apn = $('cApn').value.trim();
+                if (!apn) { retour('rGlobal', false, 'Renseignez d’abord l’APN dans l’onglet Réglages.'); return; }
+                agir('/connect', { apn, user: $('cUser').value, password: $('cPass').value, ip_type: $('cIp').value }, 'Connexion demandée.', 'Connexion impossible', charger);
+            }
+        });
+        $('bReset').addEventListener('click', () => demander('Réinitialiser le modem ? La connexion sera perdue temporairement.', () => agir('/reset', undefined, 'Réinitialisation lancée.', 'Réinitialisation impossible', () => setTimeout(charger, 5000))));
+        $('bOff').addEventListener('click', () => demander('Éteindre le modem ? La connexion de données sera coupée jusqu’au rallumage.', () => agir('/power/off', undefined, 'Modem éteint.', 'Extinction impossible', charger)));
+        $('bOn').addEventListener('click', () => agir('/power/on', undefined, 'Allumage en cours.', 'Allumage impossible', () => setTimeout(charger, 3000)));
+
+        // ---- Onglets, hauteur annoncée, actualisation ------------------------------
+        const NOMS = ['statut', 'signal', 'sms', 'terminal', 'reglages'];
+        function onglet(nom) {
+            ONGLET = nom;
+            NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; $('o-' + t).setAttribute('aria-selected', t === nom ? 'true' : 'false'); });
+            if (nom === 'signal') chargerHisto();
+            if (nom === 'sms') chargerSms();
+            if (nom === 'terminal') initTerminal();
+            annoncer();
+        }
+        document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        $('rafraichir').addEventListener('click', charger);
+
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'modem' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        addEventListener('pagehide', () => { if (WS) try { WS.close(); } catch (e) { /* déjà fermé */ } });
+
+        function saisieEnCours() {
+            const a = document.activeElement;
+            if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+            if (!$('fSms').hidden && ($('smsA').value || $('smsT').value)) return true;
+            return !!($('cPass').value || $('atCmd').value);
+        }
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || saisieEnCours()) return;
+            charger();
+        }, 30000);
+
+        charger();
+        annoncer();
+    </script>
 </body>
 </html>

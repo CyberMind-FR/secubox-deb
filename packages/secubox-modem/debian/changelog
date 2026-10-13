@@ -1,3 +1,25 @@
+secubox-modem (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /modem/ refondue au profil Aurora (ref #2597) : un seul fichier autonome, plus de
+    Chart.js, xterm.js ni police distante (la CSP des vhosts les bloquait), onglets Statut /
+    Signal / SMS / Terminal / Réglages, mode ?demo=1 (données fictives, actions inertes) et
+    ?embed=1, hauteur annoncée à l'hôte, courbe du signal en SVG (une échelle, graduations réelles).
+  * Corrige : la page n'envoyait aucun jeton (routes toutes sous require_jwt) ; un 0 (SINR 0 dB,
+    RSRP min 0) s'affichait « - » ; un envoi de SMS, une connexion ou une déconnexion refusés par
+    le modem (success=false) n'étaient pas signalés ou l'étaient par alert() ; texte et numéro
+    des SMS injectés dans innerHTML et dans un gestionnaire onclick (XSS) ; identifiant de SMS
+    non encodé dans l'URL de suppression ; plus aucun alert()/confirm() (confirmation intégrée à
+    la page avant déconnexion, réinitialisation, extinction et suppression d'un SMS).
+  * Appels d'écriture inchangés (mêmes routes, méthodes et corps) : /connect, /disconnect,
+    /config, /reset, /power/on, /power/off, /sms/send, DELETE /sms/{id}, /at/command et la
+    console WebSocket /at/console.
+  * Non repris : le bloc « Network Info » (Cell ID, TAC, bande, EARFCN), qui n'était jamais
+    alimenté (l'ancienne page n'appelait pas /network) ; le PIN de la SIM et l'IMSI, jamais
+    affichés ; l'ancien terminal xterm (remplacé par une console texte simple) ; les fichiers
+    www/modem/js/modem.js et css/modem.css, devenus inutiles.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:10:00 +0200
+
 secubox-modem (1.2.4-1~bookworm1) bookworm; urgency=medium
 
   * /etc/secubox/secrets : plus de chmod 700 / chown secubox sur le parent partagé (#1689).
