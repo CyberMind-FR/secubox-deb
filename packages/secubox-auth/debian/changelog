@@ -1,3 +1,18 @@
+secubox-auth (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /auth/ au profil Aurora (ref #2556) : fichier autonome, sans police ni script externes, ?demo=1, ?embed=1,
+    bandeau « session requise » sur 401/403, « — » pour toute mesure absente, hauteur annoncee a l'hote.
+  * Corrige l'ancienne page : elle appelait /providers (inexistante, la route est /oauth_providers), lisait /status
+    comme des nombres a plat alors que sessions et vouchers sont des objets, affichait des champs que l'API ne
+    renvoie pas (user, provider, ip, last_active, name, type, users, logins_today), n'envoyait aucun jeton Bearer,
+    injectait les donnees d'API dans innerHTML sans echappement et ouvrait un alert() natif.
+  * Ajoute la revocation d'une session (POST /revoke_session?session_id=, route inchangee) avec confirmation integree
+    a la page ; inerte en demonstration. Identifiants de session et codes de bons tronques, jamais de jeton affiche.
+  * Non repris : « Add Provider » (simple alert, aucune ecriture n'existait), « Logins Today » et nombre
+    d'utilisateurs par fournisseur (l'API ne les fournit pas). Aucun nouveau stockage local ; login.html non touche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:00:00 +0200
+
 secubox-auth (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-oidc (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
