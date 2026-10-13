@@ -4,430 +4,444 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Mesh DNS (noms du maillage) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Meshname DNS</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Mesh DNS</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
-            --p31-decay: #ffb347; --p31-decay-dim: #cc7722;
-            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7;
-            --bg-dark: var(--tube-light); --bg-card: var(--tube-pale); --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft); --text: var(--tube-dark); --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak); --cyan: var(--p31-peak); --green: var(--p31-peak);
-            --red: var(--p31-decay); --yellow: var(--p31-decay); --purple: var(--p31-hot);
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-        .header h1 { font-size: 1.5rem; }
-        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.nodes .value { color: var(--cyan); }
-        .stat-card.mappings .value { color: var(--purple); }
-        .stat-card.domain .value { color: var(--green); font-size: 1rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; }
-        tr:hover { background: rgba(255,255,255,0.02); }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.available { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.unavailable { background: rgba(248,81,73,0.2); color: var(--red); }
-        .toggle { position: relative; display: inline-block; width: 50px; height: 26px; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 26px; transition: 0.3s; }
-        .toggle-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .toggle-slider { background: var(--green); }
-        .toggle input:checked + .toggle-slider:before { transform: translateX(24px); }
-        .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .status-dot.active { background: var(--green); }
-        .status-dot.inactive { background: var(--red); }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { font-size: 1.1rem; }
-        .close-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); }
-        .host-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.5rem; }
-        .host-item .info { flex: 1; }
-        .host-item .hostname { font-weight: 500; }
-        .host-item .ip { font-size: 0.8rem; color: var(--text-dim); font-family: monospace; }
-        .host-item .type { font-size: 0.7rem; color: var(--purple); }
-        .actions { display: flex; gap: 0.5rem; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-        .local-info { background: rgba(88,166,255,0.1); border: 1px solid var(--primary); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
-        .local-info .label { color: var(--text-dim); font-size: 0.8rem; }
-        .local-info .value { font-family: monospace; color: var(--primary); }
-        .resolve-box { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .resolve-box input { flex: 1; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); }
-        .resolve-result { padding: 0.75rem; background: var(--bg-dark); border-radius: 6px; font-family: monospace; font-size: 0.875rem; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .carte{width:100%;height:auto;display:block;max-height:460px}
+        .carte text{fill:var(--texte);font-size:12px;paint-order:stroke;stroke:#0a162e;stroke-width:4px;stroke-linejoin:round} .carte .sub{fill:var(--faible);font-size:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .conf{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 8px;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.1);font-size:.8rem} .conf .q{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        .retour{overflow-wrap:anywhere} td.nw{white-space:nowrap}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>Meshname DNS</h1>
-            <div class="header-actions">
-                <div class="status-indicator">
-                    <span class="status-dot" id="statusDot"></span>
-                    <span id="statusText">Loading...</span>
-                </div>
-                <label class="toggle">
-                    <input type="checkbox" id="enableToggle" onchange="toggleEnable()">
-                    <span class="toggle-slider"></span>
-                </label>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3z"/></svg>
+                <div><h1>Mesh DNS</h1><small>Noms du maillage : nœuds, mappages et résolution</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="local-info">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                <div>
-                    <div class="label">Local Hostname</div>
-                    <div class="value" id="localHostname">-</div>
-                </div>
-                <div>
-                    <div class="label">Local IPs</div>
-                    <div class="value" id="localIps">-</div>
-                </div>
-                <div>
-                    <div class="label">Mesh Domain</div>
-                    <div class="value" id="meshDomain">-</div>
-                </div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nœuds enregistrés dans le maillage (liste /nodes) : chacun reçoit un nom nœud.domaine dans dnsmasq."><span class="l">Nœuds du maillage</span><span class="v" id="tNoeuds">—</span><span class="s">enregistrés</span></div>
+            <div class="tuile cy" title="Noms personnalisés (liste /mappings) ajoutés tels quels à dnsmasq."><span class="l">Mappages</span><span class="v" id="tMappages">—</span><span class="s">personnalisés</span></div>
+            <div class="tuile cy" title="Domaine ajouté aux noms des nœuds (domain= et local=/domaine/ dans dnsmasq)."><span class="l">Domaine du maillage</span><span class="v" id="tDomaine" style="font-size:1.1rem">—</span><span class="s">suffixe des nœuds</span></div>
+            <div class="tuile" id="cAvahi" title="État du service systemd avahi-daemon (systemctl is-active). Nécessaire à la découverte mDNS."><span class="l">Avahi (mDNS)</span><span class="v" id="tAvahi">—</span><span class="s">découverte</span></div>
+            <div class="tuile" id="cDnsmasq" title="État du service systemd dnsmasq (systemctl is-active). Il sert les noms du maillage."><span class="l">dnsmasq</span><span class="v" id="tDnsmasq">—</span><span class="s">résolveur</span></div>
+        </section>
+
+        <section class="grille">
+            <div class="pan"><h3>Ce nœud</h3>
+                <dl class="kv"><dt>Nom d’hôte</dt><dd id="kNom">—</dd><dt>Adresses</dt><dd class="mono" id="kIps">—</dd><dt>Domaine</dt><dd class="mono" id="kDom">—</dd></dl></div>
+            <div class="pan"><h3>Service Mesh DNS <i id="nServ"></i><button class="btn prim sm" id="bascule" type="button" disabled>—</button></h3>
+                <div id="cService" class="conf" hidden></div>
+                <div id="rService" class="retour" hidden></div>
+                <p class="note" style="margin:0">Activer écrit la configuration dnsmasq du maillage et la recharge. Désactiver la supprime : les noms du maillage cessent alors de se résoudre.</p></div>
+        </section>
+
+        <div class="pan"><h3>Nœuds du maillage <i id="nNoeuds"></i><button class="btn prim sm" id="addNoeud" type="button">+ Ajouter un nœud</button></h3>
+            <div id="cNoeuds" class="conf" hidden></div>
+            <div id="rNoeuds" class="retour" hidden></div>
+            <form class="saisie" id="fNoeud" hidden>
+                <label>Nom du nœud<input name="name" placeholder="serveur1" required></label>
+                <label>Adresse IPv4<input name="ip" placeholder="192.0.2.10" inputmode="decimal" pattern="(\d{1,3}\.){3}\d{1,3}" title="Adresse IPv4, par exemple 192.0.2.10" required></label>
+                <label>Services (séparés par des virgules)<input name="services" placeholder="http, ssh, mqtt"></label>
+                <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fNoeud">Annuler</button></div>
+            </form>
+            <div class="tab"><table><thead><tr><th>Nom</th><th>Adresse IP</th><th>Nom complet</th><th>Services</th><th>Ajouté</th><th>Actions</th></tr></thead><tbody id="bNoeuds"></tbody></table></div>
+            <p class="note">Le nom complet est celui que dnsmasq sert : nom du nœud, point, domaine du maillage. Ajouter un nom déjà présent remplace son adresse.</p></div>
+
+        <div class="pan"><h3>Mappages personnalisés <i id="nMappages"></i><button class="btn prim sm" id="addMappage" type="button">+ Ajouter un mappage</button></h3>
+            <div id="cMappages" class="conf" hidden></div>
+            <div id="rMappages" class="retour" hidden></div>
+            <form class="saisie" id="fMappage" hidden>
+                <label>Nom complet<input name="hostname" placeholder="monservice.exemple.org" required></label>
+                <label>Adresse IPv4<input name="ip" placeholder="192.0.2.10" inputmode="decimal" pattern="(\d{1,3}\.){3}\d{1,3}" title="Adresse IPv4, par exemple 192.0.2.10" required></label>
+                <label>TTL (secondes)<input name="ttl" type="number" min="60" max="86400" value="300"></label>
+                <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fMappage">Annuler</button></div>
+            </form>
+            <div class="tab"><table><thead><tr><th>Nom complet</th><th>Adresse IP</th><th>TTL</th><th>Ajouté</th><th>Actions</th></tr></thead><tbody id="bMappages"></tbody></table></div>
+            <p class="note">Le TTL est enregistré avec le mappage, mais la configuration dnsmasq générée par l’API ne l’emploie pas (directive address=). Ajouter un nom déjà présent remplace son adresse.</p></div>
+
+        <div class="grille">
+            <div class="pan"><h3>Hôtes découverts (mDNS) <i id="nDecouv"></i><button class="btn sm" id="decouvrir" type="button">Découvrir</button></h3>
+                <div id="cDecouv" class="conf" hidden></div>
+                <div id="rDecouv" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Hôte</th><th>Adresse</th><th>Type</th><th>Actions</th></tr></thead><tbody id="bDecouv"></tbody></table></div>
+                <p class="note">La recherche interroge avahi-browse sur le réseau local (jusqu’à 30 s). Importer ajoute l’hôte comme nœud ; l’API n’écrase pas un nœud du même nom, elle l’ajoute en double.</p></div>
+            <div class="pan"><h3>Test de résolution</h3>
+                <form class="saisie" id="fResol">
+                    <label>Nom à résoudre<input name="nom" id="resolNom" placeholder="serveur1.mesh.local" autocomplete="off" required></label>
+                    <div class="bout"><button class="btn prim" type="submit">Résoudre</button></div>
+                </form>
+                <div class="retour" id="rResol">Saisir un nom puis Résoudre.</div>
+                <p class="note">Ordre de l’API : nœuds du maillage, mappages, puis résolveur du système. Lecture seule.</p></div>
         </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <div class="stats-grid">
-            <div class="stat-card nodes">
-                <div class="value" id="statNodes">-</div>
-                <div class="label">Mesh Nodes</div>
-            </div>
-            <div class="stat-card mappings">
-                <div class="value" id="statMappings">-</div>
-                <div class="label">Custom Mappings</div>
-            </div>
-            <div class="stat-card">
-                <div class="value"><span class="badge" id="avahiStatus">-</span></div>
-                <div class="label">Avahi (mDNS)</div>
-            </div>
-            <div class="stat-card">
-                <div class="value"><span class="badge" id="dnsmasqStatus">-</span></div>
-                <div class="label">dnsmasq</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>
-                Mesh Nodes
-                <div>
-                    <button class="btn btn-sm" onclick="discoverHosts()">Discover</button>
-                    <button class="btn btn-sm primary" onclick="showAddNode()">Add Node</button>
-                </div>
-            </h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>IP Address</th>
-                        <th>FQDN</th>
-                        <th>Services</th>
-                        <th>Added</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="nodesTable"></tbody>
-            </table>
-        </div>
-
-        <div class="card">
-            <h2>
-                Custom Mappings
-                <button class="btn btn-sm primary" onclick="showAddMapping()">Add Mapping</button>
-            </h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Hostname</th>
-                        <th>IP Address</th>
-                        <th>TTL</th>
-                        <th>Added</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="mappingsTable"></tbody>
-            </table>
-        </div>
-
-        <div class="card">
-            <h2>Discovered Hosts (mDNS)</h2>
-            <div id="discoveredHosts">
-                <p style="color:var(--text-dim);text-align:center;">Click "Discover" to scan for mDNS hosts</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>DNS Resolver Test</h2>
-            <div class="resolve-box">
-                <input type="text" id="resolveInput" placeholder="Enter hostname to resolve...">
-                <button class="btn primary" onclick="resolveHostname()">Resolve</button>
-            </div>
-            <div class="resolve-result" id="resolveResult">Enter a hostname and click Resolve</div>
-        </div>
-
-        <!-- Add Node Modal -->
-        <div class="modal" id="addNodeModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add Mesh Node</h3>
-                    <button class="close-btn" onclick="closeModal('addNodeModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>Node Name</label>
-                    <input type="text" id="nodeName" placeholder="e.g., server1">
-                </div>
-                <div class="form-group">
-                    <label>IP Address</label>
-                    <input type="text" id="nodeIp" placeholder="192.168.1.100">
-                </div>
-                <div class="form-group">
-                    <label>Services (comma separated)</label>
-                    <input type="text" id="nodeServices" placeholder="http, ssh, mqtt">
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('addNodeModal')">Cancel</button>
-                    <button class="btn primary" onclick="addNode()">Add</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Add Mapping Modal -->
-        <div class="modal" id="addMappingModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add Custom Mapping</h3>
-                    <button class="close-btn" onclick="closeModal('addMappingModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>Hostname (FQDN)</label>
-                    <input type="text" id="mappingHostname" placeholder="myservice.example.com">
-                </div>
-                <div class="form-group">
-                    <label>IP Address</label>
-                    <input type="text" id="mappingIp" placeholder="192.168.1.100">
-                </div>
-                <div class="form-group">
-                    <label>TTL (seconds)</label>
-                    <input type="number" id="mappingTtl" value="300" min="60" max="86400">
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('addMappingModal')">Cancel</button>
-                    <button class="btn primary" onclick="addMapping()">Add</button>
-                </div>
-            </div>
-        </div>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/meshname';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(path, opts = {}) {
+        let SERVICE = null, NOEUDS = null, MAPPAGES = null, DOMAINE = null, DECOUV = null, SESSION_OK = true, DECOUV_ERR = '';
+        let CONFIRM = null;   // identifiant du bandeau de confirmation ouvert : jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                if (!res.ok) return {};
-                const text = await res.text();
-                return text ? JSON.parse(text) : {};
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.statut === 401 || res.statut === 403) return 'session requise ou expirée';
+            const d = res.data && res.data.detail;
+            if (typeof d === 'string') return d;
+            if (Array.isArray(d)) return 'valeur refusée par le serveur';
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function quand(ts) {
+            if (!ts) return '—';
+            const d = new Date(ts);
+            return isNaN(d) ? '—' : d.toLocaleDateString('fr-FR');
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function nomNoeud(h) { return String(h).split('.local').join('').split('.').join('-'); }   // même transformation que l'API à l'import
+
+        // Confirmation intégrée : bandeau dans le panneau, Confirmer / Annuler. Rien n'est envoyé avant.
+        function demander(id, message, libelle, fn) {
+            const c = $(id); c.replaceChildren();
+            c.appendChild(el('span', 'q', message));
+            c.appendChild(btn(libelle, 'danger', () => { fermer(id); fn(); }));
+            c.appendChild(btn('Annuler', '', () => fermer(id)));
+            c.hidden = false; CONFIRM = id; annoncer();
+        }
+        function fermer(id) { const c = $(id); c.hidden = true; c.replaceChildren(); if (CONFIRM === id) CONFIRM = null; annoncer(); }
+
+        function demoData() {
+            const t = new Date(Date.now() - 86400000 * 3).toISOString();
+            SERVICE = { enabled: true, mesh_domain: 'mesh.local', avahi_available: true, dnsmasq_available: true, nodes_count: 3, mappings_count: 2, local_hostname: 'gk2', local_ips: ['192.0.2.1', '198.51.100.7'] };
+            DOMAINE = 'mesh.local';
+            NOEUDS = [
+                { name: 'serveur1', ip: '192.0.2.10', services: ['http', 'ssh'], added: t },
+                { name: 'capteur-a', ip: '192.0.2.21', services: ['mqtt'], added: t },
+                { name: 'imprimante', ip: '192.0.2.40', services: [], added: t }];
+            MAPPAGES = [
+                { hostname: 'wiki.exemple.org', ip: '192.0.2.10', ttl: 300, added: t },
+                { hostname: 'cloud.exemple.org', ip: '192.0.2.11', ttl: 3600, added: t }];
+            DECOUV = [{ hostname: 'passerelle.local', ip: '192.0.2.77', type: '_http._tcp' }, { hostname: 'serveur1.local', ip: '192.0.2.10', type: '_ssh._tcp' }];
         }
 
-        async function loadStatus() {
-            const d = await api('/service');
-            const enabled = d.enabled || false;
-            document.getElementById('enableToggle').checked = enabled;
-            document.getElementById('statusDot').className = 'status-dot ' + (enabled ? 'active' : 'inactive');
-            document.getElementById('statusText').textContent = enabled ? 'Active' : 'Disabled';
-
-            document.getElementById('localHostname').textContent = d.local_hostname || '-';
-            document.getElementById('localIps').textContent = (d.local_ips || []).join(', ') || '-';
-            document.getElementById('meshDomain').textContent = d.mesh_domain || 'mesh.local';
-
-            const avahiEl = document.getElementById('avahiStatus');
-            avahiEl.className = 'badge ' + (d.avahi_available ? 'available' : 'unavailable');
-            avahiEl.textContent = d.avahi_available ? 'Available' : 'Unavailable';
-
-            const dnsmasqEl = document.getElementById('dnsmasqStatus');
-            dnsmasqEl.className = 'badge ' + (d.dnsmasq_available ? 'available' : 'unavailable');
-            dnsmasqEl.textContent = d.dnsmasq_available ? 'Available' : 'Unavailable';
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/service'), lire('/nodes'), lire('/mappings')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            SERVICE = val(0);
+            const n = val(1); NOEUDS = n && Array.isArray(n.nodes) ? n.nodes : null; DOMAINE = (n && n.mesh_domain) || (SERVICE && SERVICE.mesh_domain) || null;
+            const m = val(2); MAPPAGES = m && Array.isArray(m.mappings) ? m.mappings : null;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le service Mesh DNS (service arrêté ou injoignable).';
+            rendre();
         }
 
-        async function loadStats() {
-            const d = await api('/stats');
-            document.getElementById('statNodes').textContent = d.nodes_count || 0;
-            document.getElementById('statMappings').textContent = d.mappings_count || 0;
+        function tuileService(idTuile, idVal, dispo) {
+            const v = $(idVal), c = $(idTuile);
+            if (dispo === null || dispo === undefined) { v.textContent = '—'; c.className = 'tuile'; return; }
+            v.textContent = dispo ? 'Actif' : 'Inactif'; c.className = 'tuile ' + (dispo ? 'ok' : 'hors');
         }
 
-        async function loadNodes() {
-            const d = await api('/nodes');
-            const tbody = document.getElementById('nodesTable');
-            const meshDomain = d.mesh_domain || 'mesh.local';
-            tbody.innerHTML = (d.nodes || []).map(n => `<tr>
-                <td>${n.name}</td>
-                <td><code>${n.ip}</code></td>
-                <td>${n.name}.${meshDomain}</td>
-                <td>${(n.services || []).join(', ') || '-'}</td>
-                <td>${n.added ? new Date(n.added).toLocaleDateString() : '-'}</td>
-                <td class="actions">
-                    <button class="btn btn-sm danger" onclick="removeNode('${n.name}')">Remove</button>
-                </td>
-            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No mesh nodes</td></tr>';
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = SERVICE;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!s.enabled) { etat.className = 'actif neutre'; etat.textContent = 'DÉSACTIVÉ'; }
+            else if (!s.dnsmasq_available) { etat.className = 'actif att'; etat.textContent = 'ACTIVÉ — DNSMASQ ARRÊTÉ'; }
+            else { etat.className = 'actif'; etat.textContent = 'ACTIF'; }
+            $('tNoeuds').textContent = NOEUDS ? NOEUDS.length : (s && s.nodes_count != null ? s.nodes_count : '—');
+            $('tMappages').textContent = MAPPAGES ? MAPPAGES.length : (s && s.mappings_count != null ? s.mappings_count : '—');
+            $('tDomaine').textContent = tiret(DOMAINE);
+            tuileService('cAvahi', 'tAvahi', s ? s.avahi_available : null);
+            tuileService('cDnsmasq', 'tDnsmasq', s ? s.dnsmasq_available : null);
+            $('kNom').textContent = tiret(s && s.local_hostname);
+            $('kIps').textContent = s && Array.isArray(s.local_ips) && s.local_ips.length ? s.local_ips.join(', ') : '—';
+            $('kDom').textContent = tiret(DOMAINE);
+            const b = $('bascule');
+            if (s) { b.disabled = false; b.textContent = s.enabled ? 'Désactiver' : 'Activer'; b.className = 'btn sm ' + (s.enabled ? 'danger' : 'prim'); }
+            else { b.disabled = true; b.textContent = '—'; b.className = 'btn sm'; }
+            $('nServ').textContent = s ? (s.enabled ? 'activé' : 'désactivé') : '';
+            rendreNoeuds(); rendreMappages(); rendreDecouverts();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadMappings() {
-            const d = await api('/mappings');
-            const tbody = document.getElementById('mappingsTable');
-            tbody.innerHTML = (d.mappings || []).map(m => `<tr>
-                <td>${m.hostname}</td>
-                <td><code>${m.ip}</code></td>
-                <td>${m.ttl}s</td>
-                <td>${m.added ? new Date(m.added).toLocaleDateString() : '-'}</td>
-                <td class="actions">
-                    <button class="btn btn-sm danger" onclick="removeMapping('${m.hostname}')">Remove</button>
-                </td>
-            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-dim)">No custom mappings</td></tr>';
+        function ligneVide(tb, colonnes, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = colonnes; tr.appendChild(td); tb.appendChild(tr); }
+
+        function rendreNoeuds() {
+            const tb = $('bNoeuds'); tb.replaceChildren();
+            $('nNoeuds').textContent = NOEUDS && NOEUDS.length ? NOEUDS.length + ' nœud' + (NOEUDS.length > 1 ? 's' : '') : '';
+            if (!NOEUDS || !NOEUDS.length) { ligneVide(tb, 6, NOEUDS && SESSION_OK ? 'Aucun nœud enregistré' : '—'); return; }
+            NOEUDS.forEach(n => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(n.name)));
+                tr.appendChild(el('td', 'mono', tiret(n.ip)));
+                tr.appendChild(el('td', 'mono', DOMAINE ? n.name + '.' + DOMAINE : '—'));
+                tr.appendChild(el('td', '', Array.isArray(n.services) && n.services.filter(Boolean).length ? n.services.filter(Boolean).join(', ') : '—'));
+                tr.appendChild(el('td', '', quand(n.added)));
+                const act = el('td', 'act');
+                act.appendChild(btn('Retirer', 'danger', () => demander('cNoeuds', 'Retirer le nœud « ' + n.name + ' » ? Le nom ' + (DOMAINE ? n.name + '.' + DOMAINE : n.name) + ' cessera de se résoudre.', 'Confirmer le retrait', () => retirerNoeud(n.name))));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
         }
 
-        async function discoverHosts() {
-            const div = document.getElementById('discoveredHosts');
-            div.innerHTML = '<p style="color:var(--text-dim);text-align:center;">Scanning...</p>';
+        function rendreMappages() {
+            const tb = $('bMappages'); tb.replaceChildren();
+            $('nMappages').textContent = MAPPAGES && MAPPAGES.length ? MAPPAGES.length + ' mappage' + (MAPPAGES.length > 1 ? 's' : '') : '';
+            if (!MAPPAGES || !MAPPAGES.length) { ligneVide(tb, 5, MAPPAGES && SESSION_OK ? 'Aucun mappage personnalisé' : '—'); return; }
+            MAPPAGES.forEach(m => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(m.hostname)));
+                tr.appendChild(el('td', 'mono', tiret(m.ip)));
+                tr.appendChild(el('td', 'nw', m.ttl != null ? m.ttl + ' s' : '—'));
+                tr.appendChild(el('td', '', quand(m.added)));
+                const act = el('td', 'act');
+                act.appendChild(btn('Retirer', 'danger', () => demander('cMappages', 'Retirer le mappage « ' + m.hostname + ' » ? Ce nom cessera de se résoudre.', 'Confirmer le retrait', () => retirerMappage(m.hostname))));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
 
-            const d = await api('/discover');
-            if (d.error) {
-                div.innerHTML = `<p style="color:var(--red);text-align:center;">${d.error}</p>`;
-                return;
+        function rendreDecouverts() {
+            const tb = $('bDecouv'); tb.replaceChildren();
+            $('nDecouv').textContent = DECOUV && DECOUV.length ? DECOUV.length + ' hôte' + (DECOUV.length > 1 ? 's' : '') : '';
+            if (DECOUV_ERR) { ligneVide(tb, 4, DECOUV_ERR); return; }
+            if (DECOUV === null) { ligneVide(tb, 4, 'Appuyer sur « Découvrir » pour chercher des hôtes mDNS'); return; }
+            if (!DECOUV.length) { ligneVide(tb, 4, 'Aucun hôte mDNS trouvé'); return; }
+            DECOUV.forEach(h => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(h.hostname)));
+                tr.appendChild(el('td', 'mono', tiret(h.ip)));
+                tr.appendChild(el('td', '', tiret(h.type)));
+                const act = el('td', 'act');
+                act.appendChild(btn('Importer', 'prim', () => {
+                    const nom = nomNoeud(h.hostname);
+                    if (NOEUDS && NOEUDS.some(n => n.name === nom)) demander('cDecouv', 'Un nœud « ' + nom + ' » existe déjà : l’import en ajoutera un second du même nom. Importer quand même ?', 'Importer quand même', () => importer(h.hostname));
+                    else importer(h.hostname);
+                }));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function basculer(actif) {
+            const r = await ecrire('POST', '/enable?enabled=' + actif);
+            if (r.ok) { retour('rService', true, actif ? 'Mesh DNS activé.' : 'Mesh DNS désactivé.'); charger(); } else retour('rService', false, 'Échec : ' + detail(r));
+        }
+        $('bascule').addEventListener('click', () => {
+            if (!SERVICE) return;
+            if (SERVICE.enabled) demander('cService', 'Désactiver le Mesh DNS ? La configuration dnsmasq du maillage sera supprimée et ses noms cesseront de se résoudre.', 'Confirmer la désactivation', () => basculer(false));
+            else basculer(true);
+        });
+        async function ajouterNoeud(corps) {
+            const r = await ecrire('POST', '/nodes', corps);
+            if (r.ok) { $('fNoeud').reset(); $('fNoeud').hidden = true; retour('rNoeuds', true, 'Nœud ' + corps.name + ' enregistré.'); charger(); } else retour('rNoeuds', false, 'Ajout impossible : ' + detail(r));
+        }
+        $('fNoeud').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const name = f.name.value.trim(), ip = f.ip.value.trim();
+            const services = f.services.value.split(',').map(s => s.trim()).filter(s => s);
+            if (!name || !ip) { retour('rNoeuds', false, 'Nom et adresse requis.'); return; }
+            const corps = { name, ip, services };
+            const existant = NOEUDS && NOEUDS.find(n => n.name === name);
+            if (existant) demander('cNoeuds', 'Le nœud « ' + name + ' » existe déjà (' + existant.ip + ') : le remplacer par ' + ip + ' ?', 'Confirmer le remplacement', () => ajouterNoeud(corps));
+            else ajouterNoeud(corps);
+        });
+        async function ajouterMappage(corps) {
+            const r = await ecrire('POST', '/mappings', corps);
+            if (r.ok) { $('fMappage').reset(); $('fMappage').hidden = true; retour('rMappages', true, 'Mappage ' + corps.hostname + ' enregistré.'); charger(); } else retour('rMappages', false, 'Ajout impossible : ' + detail(r));
+        }
+        $('fMappage').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const hostname = f.hostname.value.trim(), ip = f.ip.value.trim();
+            const ttl = parseInt(f.ttl.value, 10) || 300;
+            if (!hostname || !ip) { retour('rMappages', false, 'Nom et adresse requis.'); return; }
+            const corps = { hostname, ip, ttl };
+            const existant = MAPPAGES && MAPPAGES.find(m => m.hostname === hostname);
+            if (existant) demander('cMappages', 'Le mappage « ' + hostname + ' » existe déjà (' + existant.ip + ') : le remplacer par ' + ip + ' ?', 'Confirmer le remplacement', () => ajouterMappage(corps));
+            else ajouterMappage(corps);
+        });
+        async function retirerNoeud(nom) {
+            const r = await ecrire('DELETE', '/nodes/' + encodeURIComponent(nom));
+            if (r.ok) { retour('rNoeuds', true, 'Nœud ' + nom + ' retiré.'); charger(); } else retour('rNoeuds', false, 'Retrait impossible : ' + detail(r));
+        }
+        async function retirerMappage(nom) {
+            const r = await ecrire('DELETE', '/mappings/' + encodeURIComponent(nom));
+            if (r.ok) { retour('rMappages', true, 'Mappage ' + nom + ' retiré.'); charger(); } else retour('rMappages', false, 'Retrait impossible : ' + detail(r));
+        }
+        async function importer(hostname) {
+            const r = await ecrire('POST', '/discover/import', [hostname]);
+            if (r.ok) {
+                const n = r.data && Array.isArray(r.data.imported) ? r.data.imported : [];
+                retour('rDecouv', true, n.length ? 'Importé : ' + n.join(', ') + '.' : 'Aucun hôte importé (introuvable à la nouvelle recherche).'); charger();
+            } else retour('rDecouv', false, 'Import impossible : ' + detail(r));
+        }
+
+        // ----- Lectures à la demande -----
+        $('decouvrir').addEventListener('click', async () => {
+            const b = $('decouvrir'); DECOUV_ERR = ''; $('rDecouv').hidden = true;
+            if (DEMO) { demoData(); rendreDecouverts(); return; }
+            b.disabled = true; retour('rDecouv', true, 'Recherche en cours…');
+            try {
+                const d = await lire('/discover');
+                DECOUV = Array.isArray(d.hosts) ? d.hosts : [];
+                $('rDecouv').hidden = true;
+                if (d.error) { DECOUV_ERR = d.error === 'Avahi not available' ? 'Avahi n’est pas actif : découverte impossible.' : String(d.error); }
+            } catch (e) {
+                DECOUV = null; $('rDecouv').hidden = true;
+                DECOUV_ERR = (e.statut === 401 || e.statut === 403) ? 'Session requise.' : 'Découverte impossible (HTTP ' + (e.statut || '—') + ').';
             }
-
-            const hosts = d.hosts || [];
-            if (hosts.length === 0) {
-                div.innerHTML = '<p style="color:var(--text-dim);text-align:center;">No mDNS hosts found</p>';
-                return;
+            b.disabled = false; rendreDecouverts(); annoncer();
+        });
+        $('fResol').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const nom = $('resolNom').value.trim(); const r = $('rResol');
+            if (!nom) return;
+            r.className = 'retour'; r.textContent = 'Résolution…';
+            const source = { mesh: 'nœud du maillage', custom: 'mappage personnalisé', system: 'résolveur du système' };
+            const montre = d => { r.className = 'retour ok'; r.replaceChildren(el('b', 'mono', nom), document.createTextNode(' → '), el('b', 'mono', d.ip), document.createTextNode(' (' + (source[d.source] || tiret(d.source)) + ')')); };
+            if (DEMO) {
+                const n = (NOEUDS || []).find(x => x.name === nom || x.name + '.' + DOMAINE === nom), m = (MAPPAGES || []).find(x => x.hostname === nom);
+                if (n) montre({ ip: n.ip, source: 'mesh' }); else if (m) montre({ ip: m.ip, source: 'custom' }); else { r.className = 'retour ko'; r.textContent = 'Introuvable : ' + nom; }
+                annoncer(); return;
             }
-
-            div.innerHTML = hosts.map(h => `<div class="host-item">
-                <div class="info">
-                    <div class="hostname">${h.hostname}</div>
-                    <div class="ip">${h.ip}</div>
-                    <div class="type">${h.type || ''}</div>
-                </div>
-                <button class="btn btn-sm primary" onclick="importHost('${h.hostname}')">Import</button>
-            </div>`).join('');
-        }
-
-        async function importHost(hostname) {
-            await api('/discover/import', { method: 'POST', body: JSON.stringify([hostname]) });
-            refresh();
-        }
-
-        async function toggleEnable() {
-            const enabled = document.getElementById('enableToggle').checked;
-            await api('/enable?enabled=' + enabled, { method: 'POST' });
-            loadStatus();
-        }
-
-        function showAddNode() {
-            document.getElementById('addNodeModal').classList.add('active');
-        }
-
-        function showAddMapping() {
-            document.getElementById('addMappingModal').classList.add('active');
-        }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-        }
-
-        async function addNode() {
-            const name = document.getElementById('nodeName').value.trim();
-            const ip = document.getElementById('nodeIp').value.trim();
-            const services = document.getElementById('nodeServices').value.split(',').map(s => s.trim()).filter(s => s);
-            if (!name || !ip) return alert('Name and IP required');
-            await api('/nodes', { method: 'POST', body: JSON.stringify({ name, ip, services }) });
-            closeModal('addNodeModal');
-            refresh();
-        }
-
-        async function addMapping() {
-            const hostname = document.getElementById('mappingHostname').value.trim();
-            const ip = document.getElementById('mappingIp').value.trim();
-            const ttl = parseInt(document.getElementById('mappingTtl').value) || 300;
-            if (!hostname || !ip) return alert('Hostname and IP required');
-            await api('/mappings', { method: 'POST', body: JSON.stringify({ hostname, ip, ttl }) });
-            closeModal('addMappingModal');
-            refresh();
-        }
-
-        async function removeNode(name) {
-            if (!confirm('Remove node ' + name + '?')) return;
-            await api('/nodes/' + encodeURIComponent(name), { method: 'DELETE' });
-            refresh();
-        }
-
-        async function removeMapping(hostname) {
-            if (!confirm('Remove mapping for ' + hostname + '?')) return;
-            await api('/mappings/' + encodeURIComponent(hostname), { method: 'DELETE' });
-            refresh();
-        }
-
-        async function resolveHostname() {
-            const hostname = document.getElementById('resolveInput').value.trim();
-            if (!hostname) return;
-
-            const resultEl = document.getElementById('resolveResult');
-            resultEl.textContent = 'Resolving...';
-
-            const d = await api('/resolve/' + encodeURIComponent(hostname));
-            if (d.ip) {
-                resultEl.innerHTML = `<span style="color:var(--green)">${hostname}</span> -> <span style="color:var(--cyan)">${d.ip}</span> (source: ${d.source})`;
-            } else {
-                resultEl.innerHTML = `<span style="color:var(--red)">Not found: ${hostname}</span>`;
+            try { montre(await lire('/resolve/' + encodeURIComponent(nom))); }
+            catch (e) {
+                r.className = 'retour ko';
+                r.textContent = e.statut === 404 ? 'Introuvable : ' + nom : (e.statut === 401 || e.statut === 403) ? 'Session requise.' : 'Résolution impossible (HTTP ' + (e.statut || '—') + ').';
             }
-        }
+            annoncer();
+        });
 
-        function refresh() {
-            loadStatus();
-            loadStats();
-            loadNodes();
-            loadMappings();
-        }
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+        $('addNoeud').addEventListener('click', () => { $('fNoeud').hidden = !$('fNoeud').hidden; annoncer(); });
+        $('addMappage').addEventListener('click', () => { $('fMappage').hidden = !$('fMappage').hidden; annoncer(); });
+        $('rafraichir').addEventListener('click', charger);
 
-        refresh();
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'meshname' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte.
+        setInterval(() => {
+            const saisie = ['fNoeud', 'fMappage'].some(f => !$(f).hidden) || (document.activeElement && document.activeElement.tagName === 'INPUT');
+            if (document.hidden || DEMO || CONFIRM || saisie) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>
