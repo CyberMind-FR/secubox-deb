@@ -4,336 +4,453 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  Atelier Auto-Load au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — Auto-Load</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
-<script>
-// Encadré par le Hall : on masque la coquille, jamais le contenu (WEBUI-PANEL-GUIDELINES §9). Posé avant le premier rendu.
-(function () { var e; try { e = window.top !== window.self; } catch (x) { e = true; } if (e) document.documentElement.classList.add('sbx-embed'); })();
-</script>
-<style>
-:root{--p31-dim:#6b7b8b;--bg-dark:#0d1117;--bg-card:rgba(30,40,55,.8);--bg-row:rgba(20,30,45,.6);--border:rgba(100,150,200,.2);--text:#e8e6d9;
- --cyan:#00d4ff;--red:#ff4466;--orange:#ff9944;--yellow:#ffcc00;--green:#00dd44;--blue:#4488ff;--purple:#a371f7}
-:root.sbx-embed .sidebar,:root.sbx-embed .global-menu-bar,:root.sbx-embed .global-status-bar{display:none!important}
-:root.sbx-embed .main{margin-left:0!important}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Courier Prime',monospace;background:var(--bg-dark);color:var(--text);display:flex;min-height:100vh}
-.sidebar{width:220px;position:fixed;height:100vh;overflow-y:auto}
-.main{flex:1;margin-left:220px;padding:1.5rem;padding-top:60px;min-width:0}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
-.header h1{font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
-.header .sub{font-size:.75rem;color:var(--p31-dim)}
-.btn{padding:.4rem .8rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;font:inherit;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
-.btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.3)}
-.btn.primary{background:rgba(0,212,255,.15);border-color:var(--cyan);color:var(--cyan)}
-.btn.danger{background:rgba(255,68,102,.12);border-color:var(--red);color:var(--red)}
-.btn.good{background:rgba(0,221,68,.12);border-color:var(--green);color:var(--green)}
-.btn.sm{padding:.2rem .5rem;font-size:.68rem}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-group{display:flex;gap:.5rem;flex-wrap:wrap}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1rem}
-.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.6rem;text-align:center;backdrop-filter:blur(5px)}
-.stat-card .value{font-size:1.4rem;font-weight:700;text-shadow:0 0 10px currentColor;font-variant-numeric:tabular-nums}
-.stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;text-transform:uppercase;margin-top:.2rem}
-.stat-card.cyan .value{color:var(--cyan)}.stat-card.green .value{color:var(--green)}.stat-card.orange .value{color:var(--orange)}.stat-card.blue .value{color:var(--blue)}.stat-card.red .value{color:var(--red)}.stat-card.purple .value{color:var(--purple)}
-.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
-.card h3{color:var(--cyan);font-size:.95rem;margin-bottom:.7rem}
-.tabs{display:flex;gap:.25rem;border-bottom:1px solid var(--border);margin-bottom:1rem;flex-wrap:wrap}
-.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--p31-dim);cursor:pointer;font:inherit;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;padding:.55rem .9rem}
-.tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
-.tab-content{display:none}.tab-content.active{display:block}
-.tbl-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:.8rem}
-th{color:var(--p31-dim);font-weight:400;text-transform:uppercase;letter-spacing:.07em;font-size:.65rem;text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--border)}
-td{padding:.5rem .6rem;border-bottom:1px solid rgba(100,150,200,.08);vertical-align:middle}
-tr:hover td{background:rgba(0,212,255,.05)}
-td.num{font-variant-numeric:tabular-nums}
-.nom{color:var(--cyan)}.dim{color:var(--p31-dim);font-size:.72rem}
-.pill{display:inline-block;padding:.1rem .55rem;border-radius:99px;font-size:.68rem;border:1px solid currentColor}
-.pill.attente{color:var(--orange)}.pill.preparation{color:var(--blue)}.pill.cours{color:var(--cyan)}.pill.termine{color:var(--green)}.pill.revoque{color:var(--red)}.pill.actif{color:var(--green)}.pill.suspendu,.pill.echu{color:var(--orange)}
-.barre{height:8px;background:rgba(100,150,200,.15);border-radius:4px;overflow:hidden;min-width:90px}
-.barre>i{display:block;height:100%;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
-.barre>i.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
-.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;align-items:end}
-label{display:block;font-size:.62rem;color:var(--p31-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.25rem}
-input,select{width:100%;background:var(--bg-row);border:1px solid var(--border);border-radius:6px;color:var(--text);font:inherit;font-size:.82rem;padding:.45rem .6rem}
-input:focus,select:focus{outline:1px solid var(--cyan);border-color:var(--cyan)}
-.vide{color:var(--p31-dim);font-size:.82rem;padding:1rem;text-align:center}
-.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:50;padding:1rem}
-.modal.show{display:flex}
-.modal-content{background:#101826;border:1px solid var(--cyan);border-radius:10px;padding:1.2rem;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 0 24px rgba(0,212,255,.25)}
-.jeton{display:flex;gap:.5rem;align-items:center;background:var(--bg-row);border:1px solid var(--cyan);border-radius:6px;padding:.6rem;margin:.7rem 0;word-break:break-all;color:var(--cyan)}
-.alerte{color:var(--orange);font-size:.75rem;margin:.4rem 0}
-ul.liste{list-style:none;columns:2;font-size:.78rem;margin:.5rem 0}
-.toast{position:fixed;right:1rem;bottom:1rem;background:var(--cyan);color:#001018;border-radius:6px;padding:.6rem .9rem;font-size:.8rem;display:none;z-index:60;max-width:90vw}
-.toast.show{display:block}
-.erreur{position:fixed;left:50%;transform:translateX(-50%);bottom:1rem;background:rgba(255,68,102,.95);color:#fff;border-radius:6px;padding:.6rem 2.2rem .6rem .9rem;font-size:.8rem;display:none;z-index:61;max-width:90vw}
-.erreur.show{display:block}.erreur button{position:absolute;right:.5rem;top:.3rem;background:none;border:0;color:#fff;cursor:pointer;font-size:1rem}
-::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:var(--p31-dim);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--cyan)}
-@media (max-width:768px){.main{margin-left:0;padding:1rem;padding-top:60px}.sidebar{display:none}.hide-sm{display:none}ul.liste{columns:1}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Auto-Load</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.bon{border-color:var(--vert);color:var(--vert)} .btn.bon:hover{background:rgba(46,204,113,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)} .tuile.bl .v{color:var(--bleu)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .pan+.pan{margin-top:10px}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        td small{display:block;color:var(--faible);font-size:.68rem}
+        .nom{color:var(--cyan);overflow-wrap:anywhere}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.bl{border-color:var(--bleu);color:var(--bleu);background:rgba(59,130,246,.12)}
+        .barre{height:6px;background:rgba(159,179,214,.16);border-radius:999px;overflow:hidden;min-width:80px}
+        .barre i{display:block;height:100%;background:var(--cyan)} .barre i.ok{background:var(--vert)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.8rem;display:grid;gap:8px}
+        .conf .grp{display:flex;gap:6px;flex-wrap:wrap}
+        .jeton{border:1px solid var(--cyan);background:rgba(41,182,246,.08);border-radius:10px;padding:10px 12px;display:grid;gap:8px}
+        .jeton .val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;overflow-wrap:anywhere;background:rgba(8,18,38,.8);border:1px solid var(--trait2);border-radius:8px;padding:8px 10px;user-select:all}
+        .jeton .grp{display:flex;gap:6px;flex-wrap:wrap}
+        .jeton p{margin:0;font-size:.76rem;color:var(--orange)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        ul.liste{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px 14px;font-size:.78rem;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        ul.liste li{overflow-wrap:anywhere}
+        .detail p{margin:3px 0;font-size:.8rem;color:var(--doux);overflow-wrap:anywhere}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-<main class="main">
-  <header class="header">
-    <div><h1>🛰️ Auto-Load</h1><div class="sub" id="subline">Provisionnement réseau des box clientes</div></div>
-    <div class="btn-group"><button class="btn" data-act="rafraichir">↻ Actualiser</button></div>
-  </header>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>
+                <div><h1>Auto-Load</h1><small id="sous">Provisionnement réseau des box clientes</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-  <div class="grid" id="stats"></div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile att" title="Jetons émis qu’aucune box n’a encore présentés."><span class="l">En attente</span><span class="v" id="tAttente">—</span><span class="s">jeton non réclamé</span></div>
+            <div class="tuile bl" title="Box qui ont réclamé leur jeton mais n’ont pas encore rapporté d’avancement."><span class="l">Préparation</span><span class="v" id="tPrep">—</span><span class="s">jeton réclamé</span></div>
+            <div class="tuile cy" title="Box dont la mise en service avance (progression remontée)."><span class="l">En cours</span><span class="v" id="tCours">—</span><span class="s">installation</span></div>
+            <div class="tuile ok" title="Box dont la mise en service est terminée."><span class="l">Terminées</span><span class="v" id="tFin">—</span><span class="s">mise en service finie</span></div>
+            <div class="tuile hors" title="Jetons révoqués."><span class="l">Révoquées</span><span class="v" id="tRev">—</span><span class="s">jeton révoqué</span></div>
+            <div class="tuile vi" title="Pré-rapports reçus et non refusés : la liste de ce qu’une box s’apprête à installer."><span class="l">Pré-rapports</span><span class="v" id="tPre">—</span><span class="s">à valider</span></div>
+        </section>
 
-  <div class="tabs" role="tablist">
-    <button class="tab active" data-tab="boxes">📦 Box en provisioning</button>
-    <button class="tab" data-tab="jetons">🎟️ Jetons &amp; abonnements</button>
-    <button class="tab" data-tab="prerapports">📝 Pré-rapports <span id="nbpre"></span></button>
-    <button class="tab" data-tab="rapports">📄 Rapports</button>
-  </div>
+        <div class="onglets" role="tablist" aria-label="Sections de l’atelier">
+            <button type="button" role="tab" id="o-boxes" data-t="boxes" aria-selected="true" aria-controls="t-boxes">Box en provisioning</button>
+            <button type="button" role="tab" id="o-jetons" data-t="jetons" aria-selected="false" aria-controls="t-jetons">Jetons et abonnements</button>
+            <button type="button" role="tab" id="o-prerapports" data-t="prerapports" aria-selected="false" aria-controls="t-prerapports">Pré-rapports <span id="nbpre"></span></button>
+            <button type="button" role="tab" id="o-rapports" data-t="rapports" aria-selected="false" aria-controls="t-rapports">Rapports</button>
+        </div>
 
-  <section id="boxes" class="tab-content active">
-    <div class="card"><div class="tbl-wrap"><table>
-      <thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th class="hide-sm">Étape</th><th class="hide-sm">Mise à jour</th></tr></thead>
-      <tbody id="lignesBoxes"></tbody></table></div><div class="vide" id="videBoxes" hidden>Aucune box pour l'instant. Générez un jeton dans « Jetons &amp; abonnements » et remettez-le au client.</div></div>
-  </section>
+        <div class="conf" id="conf" role="alertdialog" aria-live="assertive" hidden>
+            <span id="confTexte"></span>
+            <div class="grp"><button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        </div>
+        <div class="jeton" id="jetonGenere" hidden>
+            <strong>Jeton généré</strong>
+            <span class="note" id="mjClient" style="margin:0"></span>
+            <div class="val" id="mjValeur"></div>
+            <p>Ce jeton ne sera plus jamais affiché. Notez-le ou copiez-le maintenant.</p>
+            <div class="grp"><button class="btn sm" id="copier" type="button">Copier</button><button class="btn prim sm" id="fermeJeton" type="button">J’ai noté le jeton</button></div>
+        </div>
 
-  <section id="jetons" class="tab-content">
-    <div class="card">
-      <h3>🔑 Gestion des jetons clients &amp; abonnements</h3>
-      <form class="form" id="formJeton" autocomplete="off">
-        <div><label for="fClient">Client</label><input id="fClient" required maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="boulangerie-dupont"></div>
-        <div><label for="fProfil">Profil</label><select id="fProfil"><option value="lite">Lite — protection</option><option value="isp">ISP — protection + hébergement</option><option value="full">Full — tout le Hall</option></select></div>
-        <div><label for="fMois">Durée de l'abonnement</label><select id="fMois"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option></select></div>
-        <div><label for="fValidite">Validité du jeton avant usage</label><select id="fValidite"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90" selected>90 jours</option><option value="365">365 jours</option></select></div>
-        <div><label for="fEmail">Courriel du client (rapport final)</label><input id="fEmail" type="email" maxlength="254" placeholder="gerant@exemple.fr"></div>
-        <div><label for="fLot">Lot (facultatif)</label><input id="fLot" maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="lot-2026-10"></div>
-        <div><button class="btn primary" type="submit" id="btnGenerer">➕ Générer le jeton</button></div>
-      </form>
-      <p class="dim" style="margin-top:.6rem">Le jeton est affiché <b>une seule fois</b>. Il est à usage unique : la première box qui le présente en devient l'identité.</p>
-    </div>
-    <div class="card"><h3>🎟️ Jetons</h3><div class="tbl-wrap"><table>
-      <thead><tr><th>#</th><th>Client</th><th>Profil</th><th class="hide-sm">Lot</th><th>État</th><th>Abonnement</th><th class="hide-sm">Échéance</th><th></th></tr></thead>
-      <tbody id="lignesJetons"></tbody></table></div><div class="vide" id="videJetons" hidden>Aucun jeton émis.</div></div>
-  </section>
+        <section id="t-boxes" role="tabpanel" aria-labelledby="o-boxes">
+            <div class="pan"><h3>Box en provisioning <i id="nBoxes"></i></h3>
+                <div class="tab"><table><thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th>Étape</th><th>Mise à jour</th></tr></thead><tbody id="bBoxes"></tbody></table></div>
+                <p class="note">La progression n’est mesurée que lorsque la box la remonte : « — » avant (jeton non réclamé, ou réclamé sans avancement).</p></div>
+        </section>
 
-  <section id="prerapports" class="tab-content">
-    <div class="card"><div class="tbl-wrap"><table>
-      <thead><tr><th>Reçu</th><th>Box (nom saisi)</th><th>Client (jeton)</th><th>Profil</th><th>Mode</th><th class="num">Paquets</th><th>Décision</th><th></th></tr></thead>
-      <tbody id="lignesPre"></tbody></table></div><div class="vide" id="videPre" hidden>Aucun pré-rapport reçu.</div></div>
-  </section>
-  <section id="rapports" class="tab-content">
-    <div class="card"><div class="tbl-wrap"><table>
-      <thead><tr><th>Reçu</th><th>Client</th><th>Profil</th><th class="num">Paquets</th><th>Courrier</th><th></th></tr></thead>
-      <tbody id="lignesRap"></tbody></table></div><div class="vide" id="videRap" hidden>Aucun rapport final reçu. Une box l'envoie quand sa mise en service est terminée ; il part par courrier au client si son courriel est renseigné.</div></div>
-  </section>
-</main>
+        <section id="t-jetons" role="tabpanel" aria-labelledby="o-jetons" hidden>
+            <div class="pan"><h3>Gestion des jetons clients et abonnements</h3>
+                <form class="saisie" id="formJeton" autocomplete="off">
+                    <label>Client<input id="fClient" required maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="boulangerie-dupont"></label>
+                    <label>Profil<select id="fProfil"><option value="lite">Lite — protection</option><option value="isp">ISP — protection + hébergement</option><option value="full">Full — tout le Hall</option></select></label>
+                    <label>Durée de l’abonnement<select id="fMois"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option></select></label>
+                    <label>Validité du jeton avant usage<select id="fValidite"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90" selected>90 jours</option><option value="365">365 jours</option></select></label>
+                    <label>Courriel du client (rapport final)<input id="fEmail" type="email" maxlength="254" placeholder="gerant@exemple.fr"></label>
+                    <label>Lot (facultatif)<input id="fLot" maxlength="40" pattern="[a-z0-9]([a-z0-9\-]{0,38}[a-z0-9])?" placeholder="lot-2026-10"></label>
+                    <div><button class="btn prim" type="submit" id="btnGenerer">+ Générer le jeton</button></div>
+                </form>
+                <p class="note" style="margin:0 0 10px">Le jeton est affiché une seule fois. Il est à usage unique : la première box qui le présente en devient l’identité.</p>
+                <div id="rJetons" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>#</th><th>Client</th><th>Profil</th><th>Lot</th><th>État</th><th>Abonnement</th><th>Échéance</th><th>Actions</th></tr></thead><tbody id="bJetons"></tbody></table></div></div>
+        </section>
 
-<div class="modal" id="modalJeton"><div class="modal-content">
-  <h3 style="color:var(--cyan)">🔑 Jeton généré</h3>
-  <p class="dim" id="mjClient"></p>
-  <div class="jeton"><span id="mjValeur"></span><button class="btn sm" data-act="copier">📋 Copier</button></div>
-  <p class="alerte">⚠️ Ce jeton ne sera plus jamais affiché. Notez-le ou copiez-le maintenant.</p>
-  <div class="btn-group"><button class="btn primary" data-act="fermer-modal">J'ai noté le jeton</button></div>
-</div></div>
-<div class="modal" id="modalPre"><div class="modal-content" id="detailPre"></div></div>
+        <section id="t-prerapports" role="tabpanel" aria-labelledby="o-prerapports" hidden>
+            <div class="pan"><h3>Pré-rapports <i id="nPre"></i></h3>
+                <div id="rPre" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Reçu</th><th>Box (nom saisi)</th><th>Client (jeton)</th><th>Profil</th><th>Mode</th><th>Paquets</th><th>Décision</th><th>Actions</th></tr></thead><tbody id="bPre"></tbody></table></div></div>
+        </section>
 
-<div class="toast" id="toast" role="status"></div>
-<div class="erreur" id="erreur" role="alert"><span id="erreurTexte"></span><button data-act="fermer-erreur" aria-label="Fermer">✕</button></div>
+        <section id="t-rapports" role="tabpanel" aria-labelledby="o-rapports" hidden>
+            <div class="pan"><h3>Rapports finaux <i id="nRap"></i></h3>
+                <div class="tab"><table><thead><tr><th>Reçu</th><th>Client</th><th>Profil</th><th>Paquets</th><th>Courrier</th><th>Actions</th></tr></thead><tbody id="bRap"></tbody></table></div>
+                <p class="note">Une box envoie son rapport final quand sa mise en service est terminée ; il part par courrier au client si son courriel est renseigné.</p></div>
+        </section>
 
-<script>
-(function () {
-  'use strict';
-  var API = '/api/v1/autoload';
-  var ETATS = {'en attente': 'attente', 'préparation': 'preparation', 'en cours': 'cours', 'terminé': 'termine', 'révoqué': 'revoque'};
-  var PROFILS = {lite: 'Lite', isp: 'ISP', full: 'Full'};
-  var CACHE = {boxes: [], jetons: [], pre: [], rap: []};        // dernière réponse conservée : réaffichée pendant la relecture (double cache, §7)
-  var tt = null;
+        <div class="pan detail" id="detail" hidden></div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-  function $(id) { return document.getElementById(id); }
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
-  function num(x) { x = Number(x); return isFinite(x) ? x : 0; }
-  function heure(ts) { if (!ts) return '—'; var d = new Date(num(ts) * 1000); return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}); }
-  function jour(ts) { return ts ? new Date(num(ts) * 1000).toLocaleDateString('fr-FR') : '—'; }
-  function toast(m) { var t = $('toast'); t.textContent = m; t.className = 'toast show'; clearTimeout(tt); tt = setTimeout(function () { t.className = 'toast'; }, 3000); }
-  function errorToast(m) { $('erreurTexte').textContent = m; $('erreur').className = 'erreur show'; }       // persistant : se ferme au clic
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/autoload';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const PROFILS = { lite: 'Lite', isp: 'ISP', full: 'Full' };
+        const profil = p => PROFILS[p] || tiret(p);
+        const STATUTS = { 'en attente': 'att', 'préparation': 'bl', 'en cours': 'cy', 'terminé': 'ok', 'révoqué': 'hors' };
 
-  function api(chemin, methode, corps) {
-    var jeton = ''; try { jeton = localStorage.getItem('sbx_token') || ''; } catch (e) { jeton = ''; }
-    var opts = {method: methode || 'GET', headers: {'Accept': 'application/json'}};
-    if (jeton) opts.headers['Authorization'] = 'Bearer ' + jeton;
-    if (corps !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(corps); }
-    return fetch(API + chemin, opts).then(function (r) {
-      return r.text().then(function (t) {
-        var d = null; try { d = t ? JSON.parse(t) : null; } catch (e) { d = null; }
-        if (r.status === 401) { toast('🔒 Connexion requise'); return {ok: false, status: 401, data: d}; }
-        return {ok: r.ok, status: r.status, data: d};
-      });
-    }).catch(function () { return {ok: false, status: 0, data: null}; });
-  }
-  function detail(r, repli) { return (r.data && typeof r.data.detail === 'string') ? r.data.detail : repli; }
+        let BOXES = [], JETONS = [], PRE = [], RAP = [], SESSION_OK = true, LUS = false, PANNE = null, MAJ = null;
+        let CONFIRM = null;   // { texte, faire } : confirmation en cours, jamais de dialogue natif
 
-  function rendStats() {
-    var c = {attente: 0, preparation: 0, cours: 0, termine: 0, revoque: 0};
-    CACHE.boxes.forEach(function (b) { var k = ETATS[b.statut]; if (k) c[k]++; });
-    var aValider = CACHE.pre.filter(function (p) { return !p.refuse; }).length;
-    function carte(cl, v, l) { return '<div class="stat-card ' + cl + '"><div class="value">' + num(v) + '</div><div class="label">' + l + '</div></div>'; }
-    $('stats').innerHTML = carte('orange', c.attente, '⏳ en attente') + carte('blue', c.preparation, '🔧 préparation') + carte('cyan', c.cours, '⚙️ en cours')
-      + carte('green', c.termine, '💚 terminées') + carte('red', c.revoque, '⛔ révoquées') + carte('purple', aValider, '📝 pré-rapports');
-    $('subline').textContent = CACHE.boxes.length + ' box · ' + CACHE.jetons.length + ' jeton' + (CACHE.jetons.length > 1 ? 's' : '');
-    $('nbpre').textContent = aValider ? '(' + aValider + ')' : '';
-  }
-  function rendBoxes() {
-    $('videBoxes').hidden = CACHE.boxes.length > 0;
-    $('lignesBoxes').innerHTML = CACHE.boxes.map(function (b) {
-      var k = ETATS[b.statut] || 'attente', pct = Math.max(0, Math.min(100, num(b.progression)));
-      return '<tr><td><span class="nom">' + esc(b.client) + '</span><div class="dim">' + esc(b.serie || '') + (b.lot ? ' · ' + esc(b.lot) : '') + '</div></td>'
-        + '<td>' + esc(PROFILS[b.profil] || b.profil) + '</td><td><span class="pill ' + k + '">' + esc(b.statut) + '</span></td>'
-        + '<td><div class="barre" title="' + pct + ' %"><i class="' + (k === 'termine' ? 'ok' : '') + '" style="width:' + pct + '%"></i></div><div class="dim num">' + pct + ' %</div></td>'
-        + '<td class="hide-sm dim">' + esc(b.etape || '—') + '</td><td class="hide-sm dim">' + heure(b.maj_le) + '</td></tr>';
-    }).join('');
-  }
-  function rendJetons() {
-    $('videJetons').hidden = CACHE.jetons.length > 0;
-    $('lignesJetons').innerHTML = CACHE.jetons.map(function (j) {
-      var k = ETATS[j.etat === 'emis' ? 'en attente' : j.etat === 'reclame' ? 'terminé' : 'révoqué'] || 'attente';
-      var etat = j.etat === 'emis' ? 'émis' : j.etat === 'reclame' ? 'réclamé' : 'révoqué';
-      var ab = esc(j.abonnement), actions = '';
-      if (j.etat !== 'revoque') actions += '<button class="btn sm danger" data-act="revoquer" data-id="' + num(j.id) + '" data-client="' + esc(j.client) + '">⛔ Révoquer</button> ';
-      actions += j.abonnement === 'actif'
-        ? '<button class="btn sm" data-act="suspendre" data-client="' + esc(j.client) + '">⏸ Suspendre</button>'
-        : '<button class="btn sm good" data-act="reactiver" data-client="' + esc(j.client) + '">▶ Réactiver</button>';
-      return '<tr><td class="num">' + num(j.id) + '</td><td><span class="nom">' + esc(j.client) + '</span></td><td>' + esc(PROFILS[j.profil] || j.profil) + '</td>'
-        + '<td class="hide-sm dim">' + esc(j.lot || '—') + '</td><td><span class="pill ' + k + '">' + etat + '</span></td>'
-        + '<td><span class="pill ' + ab + '">' + ab + '</span><div class="dim">' + esc(j.formule || '') + '</div></td>'
-        + '<td class="hide-sm dim">' + jour(j.abonnement_expire_le) + '</td><td>' + actions + '</td></tr>';
-    }).join('');
-  }
-  function rendPre() {
-    $('videPre').hidden = CACHE.pre.length > 0;
-    $('lignesPre').innerHTML = CACHE.pre.map(function (p) {
-      var dec = p.refuse ? '<span class="pill revoque">refusé</span>' : '<span class="pill actif">en attente</span>';
-      return '<tr><td class="dim">' + heure(p.recu_le) + '</td><td><span class="nom">' + esc(p.box || '—') + '</span></td><td class="dim">' + esc(p.client) + '</td><td>' + esc(PROFILS[p.profil] || p.profil) + '</td>'
-        + '<td>' + esc(p.mode) + '</td><td class="num">' + num(p.paquets) + '</td><td>' + dec + '</td>'
-        + '<td><button class="btn sm" data-act="voir-pre" data-id="' + esc(p.empreinte) + '">🔍 Voir</button> '
-        + (p.refuse ? '' : '<button class="btn sm danger" data-act="refuser-pre" data-id="' + esc(p.empreinte) + '">✋ Refuser</button>') + '</td></tr>';
-    }).join('');
-  }
-  function rendRap() {
-    $('videRap').hidden = CACHE.rap.length > 0;
-    $('lignesRap').innerHTML = CACHE.rap.map(function (r) {
-      return '<tr><td class="dim">' + heure(r.recu_le) + '</td><td><span class="nom">' + esc(r.client) + '</span></td><td>' + esc(PROFILS[r.profil] || r.profil) + '</td>'
-        + '<td class="num">' + num(r.paquets) + '</td><td>' + (r.envoye ? '<span class="pill actif">✉️ envoyé</span>' : '<span class="dim">—</span>') + '</td>'
-        + '<td><button class="btn sm" data-act="voir-rap" data-id="' + num(r.id) + '">🔍 Voir</button></td></tr>';
-    }).join('');
-  }
-  function tout() { rendStats(); rendBoxes(); rendJetons(); rendPre(); rendRap(); }
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detailErr(res, repli) { return res.demo ? 'Démonstration : action inerte.' : (res.data && typeof res.data.detail === 'string') ? res.data.detail : (res.statut ? 'HTTP ' + res.statut : repli || 'Serveur injoignable'); }
 
-  function rafraichir() {
-    return Promise.all([api('/boxes'), api('/jetons'), api('/prerapports'), api('/rapports')]).then(function (r) {
-      if (r[0].ok && Array.isArray(r[0].data)) CACHE.boxes = r[0].data;
-      if (r[1].ok && Array.isArray(r[1].data)) CACHE.jetons = r[1].data;
-      if (r[2].ok && Array.isArray(r[2].data)) CACHE.pre = r[2].data;
-      if (r[3].ok && Array.isArray(r[3].data)) CACHE.rap = r[3].data;
-      if (!r[0].ok && r[0].status !== 401) errorToast('Lecture impossible (' + (r[0].status || 'réseau') + ') : ' + detail(r[0], 'service indisponible'));
-      tout();
-    });
-  }
+        // Les horodatages de l'API sont en SECONDES (epoch) ; absent = « — ».
+        function heure(ts) { if (!ts) return '—'; const d = new Date(Number(ts) * 1000); return isNaN(d) ? '—' : d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+        function jour(ts) { if (!ts) return '—'; const d = new Date(Number(ts) * 1000); return isNaN(d) ? '—' : d.toLocaleDateString('fr-FR'); }
+        function pill(cls, txt) { return el('span', 'pill ' + cls, txt); }
 
-  function generer(ev) {
-    ev.preventDefault();
-    var client = $('fClient').value.trim(), profil = $('fProfil').value, mois = num($('fMois').value), lot = $('fLot').value.trim();
-    var b = $('btnGenerer'); b.disabled = true;
-    var corps = {client: client, profil: profil, duree_jours: num($('fValidite').value)}; if (lot) corps.lot = lot;
-    api('/jetons', 'POST', corps).then(function (r) {
-      if (!r.ok) { b.disabled = false; if (r.status !== 401) errorToast('Jeton non généré : ' + detail(r, 'refusé')); return; }
-      var jeton = r.data;
-      var email = $('fEmail').value.trim();
-      return api('/clients/' + encodeURIComponent(client) + '/abonnement', 'POST', {statut: 'actif', mois: mois, formule: profil + '_' + mois + 'm'}).then(function (a) {
-        if (!a.ok) errorToast('Jeton généré, mais l\'abonnement n\'a pas été posé : ' + detail(a, 'refusé') + ' — réglez-le dans la liste.');
-        return email ? api('/clients/' + encodeURIComponent(client) + '/contact', 'POST', {email: email}) : {ok: true};
-      }).then(function (c) {
-        b.disabled = false;
-        if (!c.ok) errorToast('Jeton généré, mais le courriel n\'a pas été enregistré : ' + detail(c, 'refusé'));
-        $('mjClient').textContent = client + ' · ' + (PROFILS[profil] || profil) + ' · ' + mois + ' mois';
-        $('mjValeur').textContent = jeton.valeur;
-        $('modalJeton').className = 'modal show';
-        $('formJeton').reset();
-        rafraichir();
-      });
-    });
-  }
-  function copier() {
-    var v = $('mjValeur').textContent;
-    function repli() { var r = document.createRange(); r.selectNodeContents($('mjValeur')); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); toast('Sélectionné : copiez avec Ctrl+C'); }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(function () { toast('📋 Copié'); }, repli); else repli();
-  }
-  function action(el) {
-    var act = el.getAttribute('data-act'), id = el.getAttribute('data-id'), client = el.getAttribute('data-client');
-    if (act === 'rafraichir') { rafraichir(); toast('↻ Actualisé'); }
-    else if (act === 'copier') copier();
-    else if (act === 'fermer-modal') $('modalJeton').className = 'modal';
-    else if (act === 'fermer-erreur') $('erreur').className = 'erreur';
-    else if (act === 'revoquer') {
-      if (!confirm('Révoquer ce jeton ?\nSi la box l\'a déjà utilisé, son tunnel est retiré et elle ne reçoit plus de nouvelle livraison.')) return;
-      api('/jetons/' + num(id) + '/revoquer', 'POST', {motif: 'révoqué depuis le panneau'}).then(function (r) {
-        if (r.ok) { toast(r.data && r.data.tunnel_applique === false ? '⚠️ Révoqué, tunnel à resynchroniser' : '⛔ Jeton révoqué'); rafraichir(); } else if (r.status !== 401) errorToast('Révocation refusée : ' + detail(r, 'erreur'));
-      });
-    } else if (act === 'suspendre' || act === 'reactiver') {
-      var statut = act === 'suspendre' ? 'suspendu' : 'actif';
-      if (act === 'suspendre' && !confirm('Suspendre l\'abonnement de « ' + client + ' » ?\nPlus de nouvelle livraison ni d\'admission ; la box garde ses fonctions locales.')) return;
-      api('/clients/' + encodeURIComponent(client) + '/abonnement', 'POST', act === 'reactiver' ? {statut: statut, mois: 12} : {statut: statut}).then(function (r) {
-        if (r.ok) { toast(act === 'suspendre' ? '⏸ Abonnement suspendu' : '▶ Abonnement réactivé (12 mois)'); rafraichir(); } else if (r.status !== 401) errorToast('Abonnement non modifié : ' + detail(r, 'erreur'));
-      });
-    } else if (act === 'voir-pre') {
-      api('/prerapports/' + encodeURIComponent(id)).then(function (r) {
-        if (!r.ok) { if (r.status !== 401) errorToast('Pré-rapport illisible : ' + detail(r, 'erreur')); return; }
-        var p = r.data || {}, rs = p.reseau || {};
-        $('detailPre').innerHTML = '<h3 style="color:var(--cyan)">📝 Pré-rapport — ' + esc(p.box) + '</h3>'
-          + '<p class="dim">Profil ' + esc(PROFILS[p.profil] || p.profil) + ' · mode ' + esc(p.mode) + ' · réseau ' + esc(rs.mode) + ' ' + esc(rs.domaine) + '</p>'
-          + '<p class="dim">Comptes créés : ' + esc((p.comptes || []).join(', ')) + ' · secrets : ' + esc((p.secrets || []).join(', ') || 'aucun') + ' (jamais leur valeur)</p>'
-          + '<h3 style="margin-top:.8rem;color:var(--cyan)">📦 ' + (p.paquets || []).length + ' paquets</h3><ul class="liste">' + (p.paquets || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>'
-          + '<p class="dim">Empreinte ' + esc(String(id).slice(0, 16)) + '…</p><div class="btn-group" style="margin-top:.8rem"><button class="btn" data-act="fermer-pre">Fermer</button></div>';
-        $('modalPre').className = 'modal show';
-      });
-    } else if (act === 'voir-rap') {
-      api('/rapports/' + num(id)).then(function (r) {
-        if (!r.ok) { if (r.status !== 401) errorToast('Rapport illisible : ' + detail(r, 'erreur')); return; }
-        var p = r.data || {}, mn = Math.max(1, Math.round((num(p.fin) - num(p.debut)) / 60));
-        $('detailPre').innerHTML = '<h3 style="color:var(--cyan)">📄 Rapport final — ' + esc(p.client) + '</h3>'
-          + '<p class="dim">Profil ' + esc(PROFILS[p.profil] || p.profil) + ' · ' + esc(p.domaine) + ' · ' + mn + ' min · comptes : ' + esc((p.comptes || []).join(', ')) + '</p>'
-          + '<h3 style="margin-top:.8rem;color:var(--cyan)">📦 ' + (p.paquets || []).length + ' paquets</h3><ul class="liste">' + (p.paquets || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>'
-          + '<div class="btn-group" style="margin-top:.8rem"><button class="btn" data-act="fermer-pre">Fermer</button></div>';
-        $('modalPre').className = 'modal show';
-      });
-    } else if (act === 'fermer-pre') $('modalPre').className = 'modal';
-    else if (act === 'refuser-pre') {
-      if (!confirm('Refuser ce pré-rapport ?\nLa box n\'installera rien tant qu\'un nouveau pré-rapport n\'aura pas été accepté.')) return;
-      api('/prerapports/' + encodeURIComponent(id) + '/refuser', 'POST', {motif: 'refusé depuis le panneau'}).then(function (r) {
-        if (r.ok) { toast('✋ Pré-rapport refusé'); rafraichir(); } else if (r.status !== 401) errorToast('Refus impossible : ' + detail(r, 'erreur'));
-      });
-    }
-  }
+        function demoData() {
+            const n = Math.floor(Date.now() / 1000);
+            BOXES = [
+                { id: 1, client: 'boulangerie-exemple', profil: 'lite', lot: 'lot-demo', serie: null, statut: 'en cours', progression: 72, etape: 'installation', maj_le: n - 240 },
+                { id: 2, client: 'atelier-demo', profil: 'isp', lot: null, serie: null, statut: 'terminé', progression: 100, etape: 'application', maj_le: n - 86400 },
+                { id: 3, client: 'cabinet-fictif', profil: 'lite', lot: null, serie: null, statut: 'en attente', progression: 0, etape: null, maj_le: null },
+                { id: 4, client: 'mairie-test', profil: 'full', lot: 'lot-demo', serie: null, statut: 'préparation', progression: 0, etape: null, maj_le: null },
+                { id: 5, client: 'ancien-client', profil: 'lite', lot: null, serie: null, statut: 'révoqué', progression: 0, etape: null, maj_le: null }];
+            JETONS = [
+                { id: 1, client: 'boulangerie-exemple', profil: 'lite', lot: 'lot-demo', etat: 'reclame', abonnement: 'actif', formule: 'lite_12m', abonnement_expire_le: n + 300 * 86400 },
+                { id: 3, client: 'cabinet-fictif', profil: 'lite', lot: null, etat: 'emis', abonnement: 'suspendu', formule: null, abonnement_expire_le: null },
+                { id: 5, client: 'ancien-client', profil: 'lite', lot: null, etat: 'revoque', abonnement: 'echu', formule: 'lite_1m', abonnement_expire_le: n - 86400 }];
+            PRE = [{ empreinte: 'd'.repeat(64), client: 'boulangerie-exemple', box: 'essai-demo', profil: 'lite', mode: 'auto', paquets: 3, recu_le: n - 3000, refuse: false }];
+            RAP = [{ id: 5, client: 'atelier-demo', profil: 'isp', paquets: 12, recu_le: n - 80000, envoye: true }];
+        }
 
-  document.addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-tab]');
-    if (t) {
-      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.remove('active'); });
-      Array.prototype.forEach.call(document.querySelectorAll('.tab-content'), function (x) { x.classList.remove('active'); });
-      t.classList.add('active'); $(t.getAttribute('data-tab')).classList.add('active'); return;
-    }
-    var a = ev.target.closest('[data-act]'); if (a) { action(a); return; }
-    if (ev.target.classList.contains('modal')) ev.target.className = 'modal';                           // clic sur le fond : ferme
-  });
-  $('formJeton').addEventListener('submit', generer);
-  rafraichir();
-  setInterval(function () { if (!document.hidden) rafraichir(); }, 15000);
-}());
-</script>
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; LUS = true; PANNE = null; MAJ = new Date(); rendre(); return; }
+            const routes = ['/boxes', '/jetons', '/prerapports', '/rapports'];
+            const rs = await Promise.allSettled(routes.map(lire));
+            const refus = rs.filter(r => r.status === 'rejected' && (r.reason.statut === 401 || r.reason.statut === 403)).length;
+            const bons = rs.filter(r => r.status === 'fulfilled').length;
+            SESSION_OK = !(refus > 0 && bons === 0);
+            const val = i => (rs[i].status === 'fulfilled' && Array.isArray(rs[i].value)) ? rs[i].value : null;
+            // double cache : une relecture qui échoue garde la dernière réponse
+            if (val(0)) BOXES = val(0); if (val(1)) JETONS = val(1); if (val(2)) PRE = val(2); if (val(3)) RAP = val(3);
+            LUS = LUS || bons > 0;
+            PANNE = (bons === 0 && SESSION_OK) ? 'Lecture impossible : service indisponible.' : null;
+            if (bons > 0) MAJ = new Date();
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !PANNE; if (PANNE) $('erreur').textContent = PANNE;
+            const e = $('etat');
+            if (!SESSION_OK) { e.textContent = 'SESSION REQUISE'; e.className = 'actif att'; }
+            else if (PANNE) { e.textContent = 'INDISPONIBLE'; e.className = 'actif hors'; }
+            else if (!LUS) { e.textContent = 'CHARGEMENT…'; e.className = 'actif neutre'; }
+            else { e.textContent = DEMO ? 'DÉMONSTRATION' : 'EN LIGNE'; e.className = 'actif'; }
+            $('maj').textContent = MAJ ? MAJ.toLocaleTimeString('fr-FR') : '—';
+            const mesure = SESSION_OK && LUS;
+            const c = { 'en attente': 0, 'préparation': 0, 'en cours': 0, 'terminé': 0, 'révoqué': 0 };
+            BOXES.forEach(b => { if (b.statut in c) c[b.statut]++; });
+            const aValider = PRE.filter(p => !p.refuse).length;
+            const t = (id, v) => { $(id).textContent = mesure ? String(v) : '—'; };
+            t('tAttente', c['en attente']); t('tPrep', c['préparation']); t('tCours', c['en cours']); t('tFin', c['terminé']); t('tRev', c['révoqué']); t('tPre', aValider);
+            $('sous').textContent = mesure ? BOXES.length + ' box · ' + JETONS.length + ' jeton' + (JETONS.length > 1 ? 's' : '') : 'Provisionnement réseau des box clientes';
+            $('nbpre').textContent = mesure && aValider ? '(' + aValider + ')' : '';
+            $('nBoxes').textContent = mesure ? BOXES.length + ' box' : '';
+            $('nPre').textContent = mesure ? PRE.length + ' reçu' + (PRE.length > 1 ? 's' : '') : '';
+            $('nRap').textContent = mesure ? RAP.length + ' reçu' + (RAP.length > 1 ? 's' : '') : '';
+            rendBoxes(mesure); rendJetons(mesure); rendPre(mesure); rendRap(mesure);
+            annoncer();
+        }
+        function vide(tb, n, msg) { const tr = el('tr'), td = el('td', 'vide', msg); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function cellule(tr, contenu, cls) { const td = el('td', cls); if (contenu instanceof Node) td.appendChild(contenu); else td.textContent = contenu; tr.appendChild(td); return td; }
+
+        function rendBoxes(mesure) {
+            const tb = $('bBoxes'); tb.replaceChildren();
+            if (!mesure) return vide(tb, 6, '—');
+            if (!BOXES.length) return vide(tb, 6, 'Aucune box pour l’instant. Générez un jeton dans « Jetons et abonnements » et remettez-le au client.');
+            BOXES.forEach(b => {
+                const tr = el('tr');
+                const c1 = el('div'); c1.appendChild(el('span', 'nom', tiret(b.client)));
+                const sous = [b.serie, b.lot].filter(Boolean).join(' · '); if (sous) c1.appendChild(el('small', null, sous));
+                cellule(tr, c1);
+                cellule(tr, profil(b.profil));
+                cellule(tr, pill(STATUTS[b.statut] || 'neutre', tiret(b.statut)));
+                // progression mesurée seulement quand la box en remonte une (statuts « en cours » et « terminé »)
+                const mes = b.statut === 'en cours' || b.statut === 'terminé';
+                const pc = Math.max(0, Math.min(100, Number(b.progression) || 0));
+                const cp = el('div');
+                if (mes) { const ba = el('div', 'barre'); ba.title = pc + ' %'; const i = el('i', b.statut === 'terminé' ? 'ok' : ''); i.style.width = pc + '%'; ba.appendChild(i); cp.appendChild(ba); cp.appendChild(el('small', null, pc + ' %')); }
+                else cp.textContent = '—';
+                cellule(tr, cp);
+                cellule(tr, tiret(b.etape)); cellule(tr, heure(b.maj_le));
+                tb.appendChild(tr);
+            });
+        }
+        function bouton(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function rendJetons(mesure) {
+            const tb = $('bJetons'); tb.replaceChildren();
+            if (!mesure) return vide(tb, 8, '—');
+            if (!JETONS.length) return vide(tb, 8, 'Aucun jeton émis.');
+            JETONS.forEach(j => {
+                const tr = el('tr');
+                cellule(tr, String(Number(j.id)));
+                cellule(tr, el('span', 'nom', tiret(j.client)));
+                cellule(tr, profil(j.profil)); cellule(tr, tiret(j.lot));
+                cellule(tr, j.etat === 'emis' ? pill('att', 'émis') : j.etat === 'reclame' ? pill('ok', 'réclamé') : pill('hors', 'révoqué'));
+                const ab = el('div'); ab.appendChild(pill(j.abonnement === 'actif' ? 'ok' : j.abonnement === 'revoque' ? 'hors' : 'att', tiret(j.abonnement)));
+                if (j.formule) ab.appendChild(el('small', null, j.formule));
+                cellule(tr, ab); cellule(tr, jour(j.abonnement_expire_le));
+                const td = el('td', 'act'), g = el('div', 'grp');
+                if (j.etat !== 'revoque') g.appendChild(bouton('Révoquer', 'danger', () => demander('Révoquer le jeton n° ' + Number(j.id) + ' du client « ' + tiret(j.client) + ' » ? Si la box l’a déjà utilisé, son tunnel est retiré et elle ne reçoit plus de nouvelle livraison.', () => revoquer(j))));
+                if (j.abonnement === 'actif') g.appendChild(bouton('Suspendre', '', () => demander('Suspendre l’abonnement du client « ' + tiret(j.client) + ' » ? Plus de nouvelle livraison ni d’admission ; la box garde ses fonctions locales.', () => abonnement(j.client, 'suspendre'))));
+                else g.appendChild(bouton('Réactiver', 'bon', () => abonnement(j.client, 'reactiver')));
+                td.appendChild(g); tr.appendChild(td); tb.appendChild(tr);
+            });
+        }
+        function rendPre(mesure) {
+            const tb = $('bPre'); tb.replaceChildren();
+            if (!mesure) return vide(tb, 8, '—');
+            if (!PRE.length) return vide(tb, 8, 'Aucun pré-rapport reçu.');
+            PRE.forEach(p => {
+                const tr = el('tr');
+                cellule(tr, heure(p.recu_le)); cellule(tr, el('span', 'nom', tiret(p.box))); cellule(tr, tiret(p.client)); cellule(tr, profil(p.profil));
+                cellule(tr, tiret(p.mode)); cellule(tr, p.paquets == null ? '—' : String(Number(p.paquets)));
+                cellule(tr, p.refuse ? pill('hors', 'refusé') : pill('ok', 'en attente'));
+                const td = el('td', 'act'), g = el('div', 'grp');
+                g.appendChild(bouton('Voir', '', () => voirPre(p.empreinte)));
+                if (!p.refuse) g.appendChild(bouton('Refuser', 'danger', () => demander('Refuser le pré-rapport de la box « ' + tiret(p.box) + ' » (client « ' + tiret(p.client) + ' ») ? La box n’installera rien tant qu’un nouveau pré-rapport n’aura pas été accepté.', () => refuserPre(p))));
+                td.appendChild(g); tr.appendChild(td); tb.appendChild(tr);
+            });
+        }
+        function rendRap(mesure) {
+            const tb = $('bRap'); tb.replaceChildren();
+            if (!mesure) return vide(tb, 6, '—');
+            if (!RAP.length) return vide(tb, 6, 'Aucun rapport final reçu.');
+            RAP.forEach(r => {
+                const tr = el('tr');
+                cellule(tr, heure(r.recu_le)); cellule(tr, el('span', 'nom', tiret(r.client))); cellule(tr, profil(r.profil));
+                cellule(tr, r.paquets == null ? '—' : String(Number(r.paquets)));
+                cellule(tr, r.envoye ? pill('ok', 'envoyé') : '—');
+                const td = el('td', 'act'); td.appendChild(bouton('Voir', '', () => voirRap(r.id))); tr.appendChild(td); tb.appendChild(tr);
+            });
+        }
+
+        // ── confirmation intégrée (jamais de dialogue natif) ──────────────────────────────────────────────────────
+        function demander(texte, faire) { CONFIRM = { faire }; $('confTexte').textContent = texte; $('conf').hidden = false; annoncer(); $('confNon').focus(); }
+        function ferme() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', ferme);
+        $('confOui').addEventListener('click', () => { const c = CONFIRM; ferme(); if (c) c.faire(); });
+
+        function refusSession(r) { if (r.statut === 401 || r.statut === 403) { SESSION_OK = false; rendre(); return true; } return false; }
+
+        async function revoquer(j) {
+            const r = await ecrire('/jetons/' + Number(j.id) + '/revoquer', { motif: 'révoqué depuis le panneau' });
+            if (r.ok) { retour('rJetons', true, r.data && r.data.tunnel_applique === false ? 'Jeton révoqué, tunnel à resynchroniser.' : 'Jeton révoqué.'); charger(); }
+            else if (!refusSession(r)) retour('rJetons', false, 'Révocation refusée : ' + detailErr(r));
+        }
+        async function abonnement(client, genre) {
+            const corps = genre === 'reactiver' ? { statut: 'actif', mois: 12 } : { statut: 'suspendu' };
+            const r = await ecrire('/clients/' + encodeURIComponent(client) + '/abonnement', corps);
+            if (r.ok) { retour('rJetons', true, genre === 'suspendre' ? 'Abonnement suspendu.' : 'Abonnement réactivé (12 mois).'); charger(); }
+            else if (!refusSession(r)) retour('rJetons', false, 'Abonnement non modifié : ' + detailErr(r));
+        }
+        async function refuserPre(p) {
+            const r = await ecrire('/prerapports/' + encodeURIComponent(p.empreinte) + '/refuser', { motif: 'refusé depuis le panneau' });
+            if (r.ok) { retour('rPre', true, 'Pré-rapport refusé.'); charger(); }
+            else if (!refusSession(r)) retour('rPre', false, 'Refus impossible : ' + detailErr(r));
+        }
+
+        // ── détail d'un pré-rapport / d'un rapport (lecture seule) ────────────────────────────────────────
+        function listeDe(noms) { const u = el('ul', 'liste'); (Array.isArray(noms) ? noms : []).forEach(n => u.appendChild(el('li', null, String(n)))); return u; }
+        function montreDetail(titre, lignes, paquets) {
+            const d = $('detail'); d.replaceChildren(); d.hidden = false;
+            d.appendChild(el('h3', null, titre));
+            lignes.forEach(l => d.appendChild(el('p', null, l)));
+            d.appendChild(el('h3', null, (Array.isArray(paquets) ? paquets.length : 0) + ' paquets')); d.appendChild(listeDe(paquets));
+            const f = bouton('Fermer', '', () => { d.hidden = true; annoncer(); }); f.style.marginTop = '8px'; d.appendChild(f);
+            annoncer(); d.scrollIntoView({ block: 'nearest' });
+        }
+        async function voirPre(empreinte) {
+            if (DEMO) return montreDetail('Pré-rapport — essai-demo', ['Profil Lite · mode auto · réseau routeur demo.example.org', 'Comptes créés : admin · secrets : jeton (jamais leur valeur)'], ['secubox-core', 'secubox-hub', 'secubox-waf-ng']);
+            try {
+                const p = await lire('/prerapports/' + encodeURIComponent(empreinte)), rs = p.reseau || {};
+                montreDetail('Pré-rapport — ' + tiret(p.box), [
+                    'Profil ' + profil(p.profil) + ' · mode ' + tiret(p.mode) + ' · réseau ' + tiret(rs.mode) + ' ' + tiret(rs.domaine),
+                    'Comptes créés : ' + ((p.comptes || []).join(', ') || '—') + ' · secrets : ' + ((p.secrets || []).join(', ') || 'aucun') + ' (jamais leur valeur)',
+                    'Empreinte ' + String(empreinte).slice(0, 16) + '…'], p.paquets);
+            } catch (e) { if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; rendre(); } else retour('rPre', false, 'Pré-rapport illisible : ' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable')); }
+        }
+        async function voirRap(id) {
+            if (DEMO) return montreDetail('Rapport final — atelier-demo', ['Profil ISP · demo.example.org · 14 min · comptes : admin'], ['secubox-core', 'secubox-hub']);
+            try {
+                const p = await lire('/rapports/' + Number(id));
+                const mn = (p.debut && p.fin) ? Math.max(1, Math.round((Number(p.fin) - Number(p.debut)) / 60)) + ' min' : '—';
+                montreDetail('Rapport final — ' + tiret(p.client), ['Profil ' + profil(p.profil) + ' · ' + tiret(p.domaine) + ' · ' + mn + ' · comptes : ' + ((p.comptes || []).join(', ') || '—')], p.paquets);
+            } catch (e) { if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; rendre(); } else toast('Rapport illisible : ' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable')); }
+        }
+
+        // ── génération d'un jeton : mêmes trois appels, mêmes corps que l'ancienne page ───────────────────
+        async function generer(ev) {
+            ev.preventDefault();
+            const client = $('fClient').value.trim(), prof = $('fProfil').value, mois = Number($('fMois').value), lot = $('fLot').value.trim(), email = $('fEmail').value.trim();
+            const b = $('btnGenerer'); b.disabled = true;
+            const corps = { client, profil: prof, duree_jours: Number($('fValidite').value) }; if (lot) corps.lot = lot;
+            const r = await ecrire('/jetons', corps);
+            if (!r.ok) { b.disabled = false; if (!refusSession(r)) retour('rJetons', false, 'Jeton non généré : ' + detailErr(r, 'refusé')); return; }
+            const valeur = r.data && r.data.valeur;
+            const msgs = [];
+            const a = await ecrire('/clients/' + encodeURIComponent(client) + '/abonnement', { statut: 'actif', mois, formule: prof + '_' + mois + 'm' });
+            if (!a.ok) msgs.push('Jeton généré, mais l’abonnement n’a pas été posé : ' + detailErr(a, 'refusé') + ' — réglez-le dans la liste.');
+            if (email) {
+                const c = await ecrire('/clients/' + encodeURIComponent(client) + '/contact', { email });
+                if (!c.ok) msgs.push('Jeton généré, mais le courriel n’a pas été enregistré : ' + detailErr(c, 'refusé'));
+            }
+            b.disabled = false;
+            if (msgs.length) retour('rJetons', false, msgs.join(' ')); else retour('rJetons', true, 'Jeton généré pour « ' + client + ' ».');
+            $('mjClient').textContent = client + ' · ' + profil(prof) + ' · ' + mois + ' mois';
+            $('mjValeur').textContent = tiret(valeur);
+            $('jetonGenere').hidden = false;
+            $('formJeton').reset();
+            annoncer(); $('jetonGenere').scrollIntoView({ block: 'nearest' });
+            charger();
+        }
+        function fermeJeton() { $('mjValeur').textContent = ''; $('mjClient').textContent = ''; $('jetonGenere').hidden = true; annoncer(); }
+        function copier() {
+            const v = $('mjValeur').textContent;
+            const repli = () => { const rg = document.createRange(); rg.selectNodeContents($('mjValeur')); const s = getSelection(); s.removeAllRanges(); s.addRange(rg); toast('Sélectionné : copiez avec Ctrl+C'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(() => toast('Copié'), repli); else repli();
+        }
+        $('formJeton').addEventListener('submit', generer);
+        $('copier').addEventListener('click', copier);
+        $('fermeJeton').addEventListener('click', fermeJeton);
+
+        // ── onglets, hauteur annoncée, actualisation ──────────────────────────────────────────────────────
+        const ONGLETS = ['boxes', 'jetons', 'prerapports', 'rapports'];
+        function onglet(nom) {
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; $('o-' + t).setAttribute('aria-selected', String(t === nom)); });
+            annoncer();
+        }
+        document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        $('rafraichir').addEventListener('click', () => { charger(); toast('Actualisé'); });
+
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'autoload' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        function saisieEnCours() {
+            return ['fClient', 'fEmail', 'fLot'].some(i => $(i).value !== '') || (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName));
+        }
+        charger().then(annoncer);
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM || saisieEnCours()) return; charger(); }, 20000);
+    </script>
 </body>
 </html>

@@ -1,3 +1,25 @@
+secubox-autoload (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refonte (#2597) : la page /autoload/ passe au profil Aurora (page autonome, sans police ni
+    feuille de style distantes, thème sombre unique, tuiles, panneaux, onglets, ?embed=1 sans menu,
+    hauteur annoncée à l'hôte par postMessage). ?demo=1 : données fictives (adresses de
+    documentation), bandeau orange, aucune écriture.
+  * Appels d'écriture inchangés (mêmes routes, méthodes et corps) : émission du jeton, abonnement,
+    contact, révocation, suspension/réactivation, refus d'un pré-rapport.
+  * Corrections de l'ancienne page : plus de confirm() natif (le navigateur du viewer l'ignore et
+    renvoie faux sans rien dire : révoquer, suspendre et refuser ne partaient alors jamais) — une
+    confirmation intégrée nomme le client ou la box visée ; sans session (401/403), tuiles en « — »
+    et bandeau « session requise » au lieu de zéros trompeurs ; une panne totale de lecture ne vide
+    plus les tableaux (dernière réponse conservée) ; la progression d'une box non commencée est « — »
+    et non « 0 % » ; l'actualisation automatique (20 s) s'arrête pendant une saisie, une
+    confirmation ouverte ou un onglet masqué ; l'échec d'abonnement ou de courriel après un jeton
+    émis est dit sans masquer le jeton. Le jeton n'est plus conservé dans la page une fois fermé.
+  * Non repris : fenêtres modales (remplacées par des panneaux dans la page) et notifications
+    flottantes persistantes ; la page ne propose toujours ni préenregistrement de série ni
+    révocation de lot (routes API existantes, jamais exposées par l'ancienne page non plus).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:30:00 +0200
+
 secubox-autoload (0.5.3-1~bookworm1) bookworm; urgency=medium
 
   * Correction (#2489) : le journal d'audit passe dans un sous-dossier
