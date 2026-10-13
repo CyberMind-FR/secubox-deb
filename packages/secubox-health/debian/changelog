@@ -1,3 +1,23 @@
+secubox-health (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /watchdog/ refaite au profil Aurora (#2584) : page autonome (CSS/JS en ligne, plus de police ni de skin
+    externes), tuiles, tableaux, ?demo=1 et ?embed=1, hauteur annoncee a l'hote (sbxVue, onglet watchdog).
+  * Confirmation integree a la page avant tout redemarrage (conteneur, service) et avant le vidage du journal :
+    plus aucun confirm(). Les appels d'ecriture sont inchanges (POST /container/restart, /service/restart,
+    /check, /logs/clear, memes corps).
+  * Bogues de l'ancienne page corriges : la pastille d'etat lisait enabled/running, absents de GET /status
+    (toujours « Disabled ») : elle lit maintenant health (sain, degrade, critique) et la configuration ;
+    un 401 redirigeait de force vers /login.html : bandeau « session requise » et tirets a la place ;
+    noms et lignes de journal injectes dans innerHTML sans echappement (XSS) : tout est construit en textContent ;
+    un journal vide affichait une ligne vide ; un point d'acces injoignable affichait « code 0 » ;
+    noms de conteneur/service places dans un gestionnaire onclick en ligne.
+  * Ajoute en lecture seule : evenements recents (GET /history), reglages de surveillance (GET /config),
+    PID, criticite et adresse des points d'acces.
+  * Non repris : les webhooks (GET/POST/DELETE /webhooks) et la modification des reglages (POST /config), que
+    l'ancienne page n'utilisait pas ; aucune duree ni latence (non fournies par l'API).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 17:00:00 +0200
+
 secubox-health (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-watchdog (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

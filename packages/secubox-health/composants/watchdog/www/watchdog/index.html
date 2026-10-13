@@ -4,584 +4,386 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Watchdog au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Watchdog</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Watchdog</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
-        .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
-        .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
-        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
-
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
-        .btn-blue { background: rgba(88,166,255,0.15); border-color: var(--primary); color: var(--primary); }
-        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
-        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } .grid-3 { grid-template-columns: 1fr; } }
-        @media (max-width: 768px) { .grid-4 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
-
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 2rem; font-weight: bold; }
-        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        td { font-size: 0.875rem; }
-        tr:hover { background: rgba(255,255,255,0.02); }
-
-        .status-running { color: var(--green); }
-        .status-stopped { color: var(--red); }
-        .status-healthy { color: var(--green); }
-        .status-unhealthy { color: var(--red); }
-
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
-        .toast-success { border-color: var(--green); }
-        .toast-error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .logs { background: #e8f5e9; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; line-height: 1.5; }
-        .log-line { color: var(--text-dim); }
-        .log-line:hover { color: var(--text); }
-
-        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:1100px){.grille.trois{grid-template-columns:1fr 1fr 1fr}}
+        @container a (min-width:900px){.grille.deux{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} td.adr{overflow-wrap:anywhere;min-width:90px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 6px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .conf{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:.72rem;color:var(--orange)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .confpan{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.1);font-size:.78rem}
+        .journal{max-height:300px;overflow:auto;border:1px solid var(--trait);border-radius:10px;background:rgba(6,13,27,.7);padding:6px 8px}
+        .ligne{display:grid;grid-template-columns:max-content max-content 1fr;gap:2px 10px;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(86,150,255,.08);font-size:.76rem}
+        .ligne .pill{justify-self:start}.ligne .t{color:var(--faible);font-variant-numeric:tabular-nums;white-space:nowrap} .ligne .m{min-width:0;overflow-wrap:anywhere;color:var(--doux)}
+        @media (max-width:520px){.ligne{grid-template-columns:max-content 1fr}.ligne .m{grid-column:1/-1}}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>🔍 Watchdog <span class="badge" id="status-badge">Loading...</span></h1>
-            <div class="actions">
-                <button class="btn btn-green" onclick="runCheck()">▶ Run Check</button>
-                <button class="btn" onclick="refresh()">↻ Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v5.5c0 4.6 3.2 8.2 8 9.5 4.8-1.3 8-4.9 8-9.5V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+                <div><h1>Watchdog</h1><small>Surveillance des services et conteneurs, avec relance automatique</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn prim" id="verifier" type="button" title="Lance une vérification immédiate (POST /check)">▶ Lancer une vérification</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="rGlobal" class="retour" hidden></div>
 
-        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Service and container health monitoring with auto-recovery</p>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile ok" id="cConteneurs" title="Conteneurs LXC surveillés dont l’état est « running », sur le total surveillé."><span class="l">Conteneurs OK</span><span class="v" id="tConteneurs">—</span><span class="s">en marche / surveillés</span></div>
+            <div class="tuile ok" id="cServices" title="Services surveillés dont le processus est présent (pgrep), sur le total surveillé."><span class="l">Services OK</span><span class="v" id="tServices">—</span><span class="s">en marche / surveillés</span></div>
+            <div class="tuile ok" id="cPoints" title="Points d’accès HTTP surveillés ayant répondu 200, sur le total surveillé."><span class="l">Points d’accès OK</span><span class="v" id="tPoints">—</span><span class="s">répondent / surveillés</span></div>
+            <div class="tuile ok" id="cProblemes" title="Conteneurs, services et points d’accès actuellement en défaut."><span class="l">Problèmes</span><span class="v" id="tProblemes">—</span><span class="s">éléments en défaut</span></div>
+            <div class="tuile cy" id="cSurv" title="Surveillance périodique du démon et relance automatique, d’après la configuration (GET /config)."><span class="l">Surveillance</span><span class="v" id="tSurv">—</span><span class="s" id="sSurv">intervalle</span></div>
+            <div class="tuile cy" title="Événements enregistrés dans l’historique durant les dernières 24 h (comptés dans les 500 plus récents)."><span class="l">Événements 24 h</span><span class="v" id="tEvt">—</span><span class="s">historique du démon</span></div>
+        </section>
 
-        <!-- Stats -->
-        <div class="grid-4" id="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value status-running" id="stat-containers">0</div>
-                <div class="stat-label">Containers OK</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value status-running" id="stat-services">0</div>
-                <div class="stat-label">Services OK</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value status-healthy" id="stat-endpoints">0</div>
-                <div class="stat-label">Endpoints OK</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--yellow);" id="stat-issues">0</div>
-                <div class="stat-label">Issues</div>
-            </div>
-        </div>
+        <section class="grille trois">
+            <div class="pan"><h3>Conteneurs <i id="nCont"></i></h3>
+                <div id="rCont" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>État</th><th>PID</th><th>Action</th></tr></thead><tbody id="bCont"></tbody></table></div></div>
+            <div class="pan"><h3>Services <i id="nServ"></i></h3>
+                <div id="rServ" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>État</th><th>PID</th><th>Action</th></tr></thead><tbody id="bServ"></tbody></table></div></div>
+            <div class="pan"><h3>Points d’accès <i id="nPts"></i></h3>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Adresse</th><th>Code</th><th>État</th></tr></thead><tbody id="bPts"></tbody></table></div></div>
+        </section>
 
-        <!-- Three Column Layout -->
-        <div class="grid-3">
-            <!-- Containers -->
-            <div class="card">
-                <div class="card-title">
-                    <span>🐳 Containers</span>
-                    <span class="badge badge-blue" id="container-badge">0</span>
-                </div>
-                <div id="containers-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
+        <section class="grille deux">
+            <div class="pan"><h3>Événements récents <i id="nEvt"></i></h3>
+                <div class="journal" id="evts"></div>
+                <p class="note">Historique du démon (relances tentées, réussies ou échouées) ; l’API ne fournit pas de durée ni de latence.</p></div>
+            <div class="pan"><h3>Journal <i id="nLog"></i><button class="btn danger sm" id="viderLogs" type="button">Vider le journal</button></h3>
+                <div id="confLogs" class="confpan" hidden></div>
+                <div id="rLogs" class="retour" hidden></div>
+                <div class="journal" id="logs"></div></div>
+        </section>
 
-            <!-- Services -->
-            <div class="card">
-                <div class="card-title">
-                    <span>⚙️ Services</span>
-                    <span class="badge badge-blue" id="service-badge">0</span>
-                </div>
-                <div id="services-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-
-            <!-- Endpoints -->
-            <div class="card">
-                <div class="card-title">
-                    <span>🌐 Endpoints</span>
-                    <span class="badge badge-blue" id="endpoint-badge">0</span>
-                </div>
-                <div id="endpoints-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Logs -->
-        <div class="card">
-            <div class="card-title">
-                <span>📋 Event Log</span>
-                <button class="btn btn-red btn-sm" onclick="clearLogs()">Clear Logs</button>
-            </div>
-            <div class="logs" id="logs">
-                <div class="empty">No logs</div>
-            </div>
-        </div>
-    </main>
-
-    <div id="toast"></div>
-
+        <section class="pan"><h3>Réglages de surveillance <i>lecture seule</i></h3>
+            <dl class="kv"><dt>Surveillance</dt><dd id="kAct">—</dd><dt>Intervalle</dt><dd id="kInt">—</dd><dt>Relance automatique</dt><dd id="kAuto">—</dd><dt>Délai entre alertes</dt><dd id="kCool">—</dd></dl>
+            <p class="note">Les réglages se lisent ici ; cette page ne les modifie pas (comme l’ancienne). Les webhooks d’alerte ne sont pas affichés.</p></section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/watchdog';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(path, opts = {}) {
+        let STATUT = null, CONF = null, HIST = null, LOGS = null, SESSION_OK = true, MAJ = null;
+        let CONFIRM = null;   // { genre: 'conteneur'|'service', cle } : confirmation en cours dans la ligne ; jamais de dialogue natif
+        let CONFIRM_LOGS = false, OCCUPE = false;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch (e) { console.error(e); return null; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.statut === 401 || res.statut === 403) return 'session requise (HTTP ' + res.statut + ')';
+            if (res.data && res.data.detail) return String(res.data.detail);
+            if (res.data && res.data.error) return String(res.data.error);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
         }
 
-        function showToast(msg, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
-            setTimeout(() => toast.innerHTML = '', 3000);
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const d = typeof ts === 'number' ? new Date(ts < 1e12 ? ts * 1000 : ts) : new Date(ts);
+            if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR');
+        }
+        const pastille = (classe, texte, titre) => { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; };
+        const EVT = { container_down: ['hors', 'Conteneur arrêté'], container_up: ['ok', 'Conteneur reparti'], service_down: ['hors', 'Service arrêté'], service_up: ['ok', 'Service reparti'],
+                      endpoint_down: ['hors', 'Point d’accès en défaut'], endpoint_up: ['ok', 'Point d’accès rétabli'], recovery_attempted: ['att', 'Relance tentée'],
+                      recovery_success: ['ok', 'Relance réussie'], recovery_failed: ['hors', 'Relance échouée'] };
+
+        function demoData() {
+            const t = Math.floor(Date.now() / 1000), iso = s => new Date((t - s) * 1000).toISOString();
+            STATUT = { health: 'degraded', timestamp: iso(5), cached: false,
+                containers: [{ name: 'mailserver', state: 'running', pid: 4121, critical: true }, { name: 'nextcloud', state: 'running', pid: 5230, critical: false }, { name: 'gitea', state: 'stopped', pid: 0, critical: false }],
+                services: [{ name: 'nginx', process: 'nginx', state: 'running', pid: 812, critical: true }, { name: 'haproxy', process: 'haproxy', state: 'running', pid: 930, critical: true }],
+                endpoints: [{ name: 'Portail', host: '192.0.2.10', path: '/portal/', code: 200, healthy: true }, { name: 'API Hub', host: '192.0.2.10', path: '/api/v1/hub/status', code: 0, healthy: false }] };
+            CONF = { enabled: true, interval: 60, alert_cooldown: 300, auto_recovery: true };
+            HIST = { events: [
+                { id: 'a1', type: 'recovery_failed', target: 'gitea', details: { error: 'échec du démarrage' }, timestamp: iso(240) },
+                { id: 'a2', type: 'recovery_attempted', target: 'gitea', details: { type: 'container', action: 'restart' }, timestamp: iso(260) },
+                { id: 'a3', type: 'recovery_success', target: 'nginx', details: { pid: 812 }, timestamp: iso(7200) }], total: 3 };
+            LOGS = { lines: ['[2026-10-13 06:02:11] [WARNING] recovery_failed: gitea', '[2026-10-13 06:01:51] [WARNING] recovery_attempted: gitea', '[2026-10-13 04:00:03] [INFO] recovery_success: nginx'], total: 3 };
+            MAJ = new Date();
         }
 
-        let statusData = {};
-
-        async function loadStatus() {
-            statusData = await api('/status') || {};
-
-            // Update status badge
-            const badge = document.getElementById('status-badge');
-            if (statusData.enabled) {
-                badge.textContent = statusData.running ? 'Active' : 'Enabled';
-                badge.className = 'badge badge-green';
-            } else {
-                badge.textContent = 'Disabled';
-                badge.className = 'badge badge-red';
-            }
-
-            // Count stats
-            const containers = statusData.containers || [];
-            const services = statusData.services || [];
-            const endpoints = statusData.endpoints || [];
-
-            const containersOK = containers.filter(c => c.state === 'running').length;
-            const servicesOK = services.filter(s => s.state === 'running').length;
-            const endpointsOK = endpoints.filter(e => e.healthy).length;
-            const issues = (containers.length - containersOK) + (services.length - servicesOK) + (endpoints.length - endpointsOK);
-
-            document.getElementById('stat-containers').textContent = `${containersOK}/${containers.length}`;
-            document.getElementById('stat-services').textContent = `${servicesOK}/${services.length}`;
-            document.getElementById('stat-endpoints').textContent = `${endpointsOK}/${endpoints.length}`;
-            document.getElementById('stat-issues').textContent = issues;
-
-            // Render tables
-            renderContainers(containers);
-            renderServices(services);
-            renderEndpoints(endpoints);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/config'), lire('/history?limit=500'), lire('/logs?lines=50')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0); CONF = val(1); HIST = val(2); LOGS = val(3);
+            if (!tous) MAJ = new Date();
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le Watchdog (service arrêté ou injoignable).';
+            rendre();
         }
 
-        function renderContainers(containers) {
-            document.getElementById('container-badge').textContent = containers.length;
+        const enMarche = x => x.state === 'running';
+        function tuile(idV, idC, texte, classe) { $(idV).textContent = texte; if (idC) $(idC).className = 'tuile ' + classe; }
 
-            if (containers.length === 0) {
-                document.getElementById('containers-table').innerHTML = '<div class="empty">No containers monitored</div>';
-                return;
-            }
-
-            const rows = containers.map(c => `
-                <tr>
-                    <td style="font-weight: 600;">${c.name}</td>
-                    <td class="status-${c.state}">${c.state === 'running' ? '● Running' : '○ Stopped'}</td>
-                    <td><button class="btn btn-blue btn-sm" onclick="restartContainer('${c.name}')">Restart</button></td>
-                </tr>
-            `).join('');
-
-            document.getElementById('containers-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>State</th><th>Action</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('maj').textContent = MAJ ? 'Mis à jour ' + MAJ.toLocaleTimeString('fr-FR') : '—';
+            const s = STATUT, c = CONF;
+            const conts = s && Array.isArray(s.containers) ? s.containers : null, servs = s && Array.isArray(s.services) ? s.services : null, pts = s && Array.isArray(s.endpoints) ? s.endpoints : null;
+            // Pastille d'état : la santé globale vient de /status.health (l'ancienne page lisait enabled/running, absents de cette réponse).
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (c && c.enabled === false) { etat.className = 'actif att'; etat.textContent = 'SURVEILLANCE DÉSACTIVÉE'; }
+            else if (s.health === 'healthy') { etat.className = 'actif'; etat.textContent = 'SAIN'; }
+            else if (s.health === 'degraded') { etat.className = 'actif att'; etat.textContent = 'DÉGRADÉ'; }
+            else if (s.health === 'critical') { etat.className = 'actif hors'; etat.textContent = 'CRITIQUE'; }
+            else { etat.className = 'actif neutre'; etat.textContent = 'INCONNU'; }
+            // Tuiles
+            const ok = (a, f) => a.filter(f).length;
+            const cOk = conts ? ok(conts, enMarche) : null, sOk = servs ? ok(servs, enMarche) : null, pOk = pts ? ok(pts, e => e.healthy) : null;
+            tuile('tConteneurs', 'cConteneurs', conts ? cOk + '/' + conts.length : '—', conts && cOk < conts.length ? 'att' : 'ok');
+            tuile('tServices', 'cServices', servs ? sOk + '/' + servs.length : '—', servs && sOk < servs.length ? 'att' : 'ok');
+            tuile('tPoints', 'cPoints', pts ? pOk + '/' + pts.length : '—', pts && pOk < pts.length ? 'att' : 'ok');
+            const pb = conts && servs && pts ? (conts.length - cOk) + (servs.length - sOk) + (pts.length - pOk) : null;
+            tuile('tProblemes', 'cProblemes', pb === null ? '—' : String(pb), pb ? 'hors' : 'ok');
+            $('tSurv').textContent = c ? (c.enabled === false ? 'Arrêtée' : 'Active') : '—';
+            $('sSurv').textContent = c && c.interval != null ? 'toutes les ' + c.interval + ' s' + (c.auto_recovery ? ', relance auto' : '') : 'intervalle';
+            const evts = HIST && Array.isArray(HIST.events) ? HIST.events : null;
+            const coupe = Date.now() - 24 * 3600 * 1000;
+            $('tEvt').textContent = evts ? String(evts.filter(e => { const d = new Date(e.timestamp); return !isNaN(d) && d.getTime() > coupe; }).length) : '—';
+            // Réglages
+            $('kAct').textContent = c ? (c.enabled === false ? 'Désactivée' : 'Activée') : '—';
+            $('kInt').textContent = c && c.interval != null ? c.interval + ' s' : '—';
+            $('kAuto').textContent = c && c.auto_recovery != null ? (c.auto_recovery ? 'Oui' : 'Non') : '—';
+            $('kCool').textContent = c && c.alert_cooldown != null ? c.alert_cooldown + ' s' : '—';
+            // Tableaux
+            rendreEtats('bCont', 'nCont', conts, 'conteneur', 'Aucun conteneur surveillé');
+            rendreEtats('bServ', 'nServ', servs, 'service', 'Aucun service surveillé');
+            rendrePoints(pts);
+            rendreEvts(evts);
+            rendreLogs(LOGS);
+            rendreConfLogs();
+            annoncer();
         }
 
-        function renderServices(services) {
-            document.getElementById('service-badge').textContent = services.length;
-
-            if (services.length === 0) {
-                document.getElementById('services-table').innerHTML = '<div class="empty">No services monitored</div>';
-                return;
-            }
-
-            const rows = services.map(s => `
-                <tr>
-                    <td style="font-weight: 600;">${s.name}</td>
-                    <td class="status-${s.state}">${s.state === 'running' ? '● Running' : '○ Stopped'}</td>
-                    <td><button class="btn btn-blue btn-sm" onclick="restartService('${s.name}')">Restart</button></td>
-                </tr>
-            `).join('');
-
-            document.getElementById('services-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>State</th><th>Action</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        function renderEndpoints(endpoints) {
-            document.getElementById('endpoint-badge').textContent = endpoints.length;
-
-            if (endpoints.length === 0) {
-                document.getElementById('endpoints-table').innerHTML = '<div class="empty">No endpoints monitored</div>';
-                return;
-            }
-
-            const rows = endpoints.map(e => `
-                <tr>
-                    <td style="font-weight: 600;">${e.name}</td>
-                    <td class="${e.healthy ? 'status-healthy' : 'status-unhealthy'}">${e.healthy ? '✓ OK' : '✗ ' + e.code}</td>
-                </tr>
-            `).join('');
-
-            document.getElementById('endpoints-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>Status</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        async function loadLogs() {
-            const data = await api('/logs?lines=50') || {};
-            const lines = data.lines || [];
-
-            if (lines.length === 0) {
-                document.getElementById('logs').innerHTML = '<div class="empty">No log entries</div>';
-                return;
-            }
-
-            document.getElementById('logs').innerHTML = lines.map(l => `<div class="log-line">${l}</div>`).join('');
-        }
-
-        async function restartContainer(name) {
-            showToast(`Restarting container ${name}...`);
-            const res = await api('/container/restart', {
-                method: 'POST',
-                body: JSON.stringify({ name })
-            });
-
-            if (res && res.success) {
-                showToast(`Container ${name} restarted`);
-            } else {
-                showToast(res?.error || 'Restart failed', 'error');
-            }
-            refresh();
-        }
-
-        async function restartService(name) {
-            showToast(`Restarting service ${name}...`);
-            const res = await api('/service/restart', {
-                method: 'POST',
-                body: JSON.stringify({ name })
-            });
-
-            if (res && res.success) {
-                showToast(`Service ${name} restarted`);
-            } else {
-                showToast(res?.error || 'Restart failed', 'error');
-            }
-            refresh();
-        }
-
-        async function runCheck() {
-            showToast('Running health check...');
-            const res = await api('/check', { method: 'POST' });
-
-            if (res && res.success) {
-                if (res.issues && res.issues.length > 0) {
-                    showToast(`Found ${res.issues.length} issues`, 'error');
+        function rendreEtats(idCorps, idN, liste, genre, vide) {
+            const b = $(idCorps); b.textContent = '';
+            $(idN).textContent = liste ? liste.length + ' surveillé(s)' : '';
+            if (!liste) { const tr = el('tr'), td = el('td', 'vide', '—'); td.colSpan = 4; tr.appendChild(td); b.appendChild(tr); return; }
+            if (!liste.length) { const tr = el('tr'), td = el('td', 'vide', vide); td.colSpan = 4; tr.appendChild(td); b.appendChild(tr); return; }
+            liste.forEach(x => {
+                const tr = el('tr');
+                const tn = el('td', null, x.name);
+                if (x.critical) { tn.appendChild(document.createTextNode(' ')); tn.appendChild(pastille('att', 'CRITIQUE', 'Un défaut critique rend la santé globale « critique ».')); }
+                tr.appendChild(tn);
+                const te = el('td'); te.appendChild(enMarche(x) ? pastille('ok', 'EN MARCHE') : pastille('hors', 'ARRÊTÉ')); tr.appendChild(te);
+                tr.appendChild(el('td', 'mono', enMarche(x) && x.pid ? x.pid : '—'));
+                const ta = el('td', 'act');
+                if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === x.name) {
+                    const bloc = el('div', 'conf'); bloc.appendChild(el('span', null, 'Redémarrer ' + x.name + ' ?'));
+                    const oui = el('button', 'btn danger sm', 'Confirmer'); oui.type = 'button'; oui.addEventListener('click', () => redemarrer(genre, x.name));
+                    const non = el('button', 'btn sm', 'Annuler'); non.type = 'button'; non.addEventListener('click', () => { CONFIRM = null; rendre(); });
+                    bloc.appendChild(oui); bloc.appendChild(non); ta.appendChild(bloc);
                 } else {
-                    showToast('All systems healthy');
+                    const r = el('button', 'btn danger sm', 'Redémarrer'); r.type = 'button'; r.disabled = OCCUPE;
+                    r.title = genre === 'conteneur' ? 'Arrête puis relance le conteneur (POST /container/restart).' : 'Redémarre le service (POST /service/restart).';
+                    r.addEventListener('click', () => { CONFIRM = { genre, cle: x.name }; rendre(); });
+                    ta.appendChild(r);
                 }
-            } else {
-                showToast('Health check failed', 'error');
-            }
-            refresh();
+                tr.appendChild(ta); b.appendChild(tr);
+            });
         }
 
-        async function clearLogs() {
-            if (!confirm('Clear all watchdog logs?')) return;
-            await api('/logs/clear', { method: 'POST' });
-            showToast('Logs cleared');
-            loadLogs();
+        function rendrePoints(pts) {
+            const b = $('bPts'); b.textContent = '';
+            $('nPts').textContent = pts ? pts.length + ' surveillé(s)' : '';
+            if (!pts || !pts.length) { const tr = el('tr'), td = el('td', 'vide', pts ? 'Aucun point d’accès surveillé' : '—'); td.colSpan = 4; tr.appendChild(td); b.appendChild(tr); return; }
+            pts.forEach(e => {
+                const tr = el('tr');
+                tr.appendChild(el('td', null, e.name));
+                tr.appendChild(el('td', 'mono adr', tiret(e.host) + tiret(e.path === undefined ? '' : e.path)));
+                tr.appendChild(el('td', 'mono', e.code ? e.code : '—'));   // 0 = injoignable (aucun code reçu)
+                const te = el('td'); te.appendChild(e.healthy ? pastille('ok', 'OK') : pastille('hors', e.code ? 'EN DÉFAUT' : 'INJOIGNABLE')); tr.appendChild(te);
+                b.appendChild(tr);
+            });
         }
 
-        async function refresh() {
-            await Promise.all([loadStatus(), loadLogs()]);
+        function rendreEvts(evts) {
+            const z = $('evts'); z.textContent = '';
+            $('nEvt').textContent = evts ? evts.length + ' au total' : '';
+            if (!evts || !evts.length) { z.appendChild(el('div', 'vide', evts ? 'Aucun événement enregistré' : '—')); return; }
+            evts.slice(0, 15).forEach(e => {
+                const l = el('div', 'ligne');
+                l.appendChild(el('span', 't', quand(e.timestamp)));
+                const m = EVT[e.type] || ['', tiret(e.type)];
+                l.appendChild(pastille(m[0], m[1]));
+                const err = e.details && e.details.error ? ' — ' + e.details.error : '';
+                l.appendChild(el('span', 'm', tiret(e.target) + err));
+                z.appendChild(l);
+            });
         }
 
-        refresh();
-        // Auto-refresh every 30 seconds
-        setInterval(refresh, 30000);
+        function rendreLogs(d) {
+            const z = $('logs'); z.textContent = '';
+            const lignes = d && Array.isArray(d.lines) ? d.lines.filter(x => x && x.trim()) : null;   // un fichier vide renvoie une ligne vide
+            $('nLog').textContent = lignes ? lignes.length + ' ligne(s)' : '';
+            $('viderLogs').disabled = !lignes;
+            if (!lignes || !lignes.length) { z.appendChild(el('div', 'vide', lignes ? 'Journal vide' : '—')); return; }
+            lignes.slice().reverse().forEach(txt => {
+                const l = el('div', 'ligne'), m = /^\[([^\]]*)\]\s*\[([A-Z]+)\]\s*(.*)$/.exec(txt);
+                if (m) {
+                    l.appendChild(el('span', 't', m[1]));
+                    l.appendChild(pastille(m[2] === 'WARNING' || m[2] === 'WARN' ? 'att' : m[2] === 'ERROR' ? 'hors' : 'cy', m[2]));
+                    l.appendChild(el('span', 'm', m[3]));
+                } else { l.appendChild(el('span', 't', '—')); l.appendChild(el('span')); l.appendChild(el('span', 'm', txt)); }
+                z.appendChild(l);
+            });
+        }
+
+        function rendreConfLogs() {
+            const z = $('confLogs'); z.textContent = ''; z.hidden = !CONFIRM_LOGS;
+            if (!CONFIRM_LOGS) return;
+            z.appendChild(el('span', null, 'Vider tout le journal du Watchdog (irréversible) ?'));
+            const oui = el('button', 'btn danger sm', 'Confirmer'); oui.type = 'button'; oui.id = 'okLogs'; oui.addEventListener('click', viderLogs);
+            const non = el('button', 'btn sm', 'Annuler'); non.type = 'button'; non.addEventListener('click', () => { CONFIRM_LOGS = false; rendre(); });
+            z.appendChild(oui); z.appendChild(non);
+        }
+
+        // ----- Actions : mêmes routes et mêmes corps que l'ancienne page -----
+        async function redemarrer(genre, nom) {
+            const route = genre === 'conteneur' ? '/container/restart' : '/service/restart', zone = genre === 'conteneur' ? 'rCont' : 'rServ';
+            CONFIRM = null; OCCUPE = true; rendre();
+            retour(zone, true, 'Redémarrage de ' + nom + ' en cours…');
+            const r = await ecrire('POST', route, { name: nom });
+            OCCUPE = false;
+            if (r.ok && r.data && r.data.success) retour(zone, true, (genre === 'conteneur' ? 'Conteneur ' : 'Service ') + nom + ' redémarré.');
+            else retour(zone, false, 'Redémarrage impossible : ' + ((r.data && r.data.error) || detail(r)));
+            charger();
+        }
+        async function lancerVerification() {
+            const r = await ecrire('POST', '/check');
+            if (r.ok && r.data && r.data.success) {
+                const n = (r.data.issues || []).length;
+                retour('rGlobal', n === 0, n ? n + ' problème(s) : ' + r.data.issues.join(' ; ') : 'Vérification terminée : tout est sain.');
+            } else retour('rGlobal', false, 'Vérification impossible : ' + detail(r));
+            charger();
+        }
+        async function viderLogs() {
+            CONFIRM_LOGS = false;
+            const r = await ecrire('POST', '/logs/clear');
+            if (r.ok) retour('rLogs', true, 'Journal vidé.'); else retour('rLogs', false, 'Échec : ' + detail(r));
+            charger();
+        }
+        $('verifier').addEventListener('click', lancerVerification);
+        $('viderLogs').addEventListener('click', () => { CONFIRM_LOGS = true; rendre(); });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'watchdog' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une confirmation ou une action en cours.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM || CONFIRM_LOGS || OCCUPE) return; charger(); }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
