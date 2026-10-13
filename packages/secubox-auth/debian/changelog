@@ -1,3 +1,26 @@
+secubox-auth (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /users/ au profil Aurora (ref #2571) : fichier autonome, sans police Google ni skin partage, onglets
+    Comptes systeme / Personnes SBX OS / Demandes / Sessions, ?demo=1, ?embed=1, bandeau « session requise » sur
+    401/403, « — » pour toute mesure absente, hauteur annoncee a l'hote. Formulaires et confirmations integres a la
+    page : plus aucun confirm(), modales, onclick ni innerHTML ; aucune donnee d'API injectee sans textContent.
+  * Corrige l'ancienne page : /import renvoie created/skipped/errors (listes), elle lisait success/imported et
+    affichait toujours un echec ; /status ne fournit que user_count et service_count, elle affichait donc un domaine
+    « secubox.local » invente, 0 service actif et 0 groupe (tuiles recalculees depuis /users, /services, /sessions) ;
+    dates de session en secondes lues comme des millisecondes (1970) ; bouton « Reset 2FA » montre pour tout compte
+    ayant un objet totp meme non enrole (seul totp_enabled compte desormais) ; redirection vers /login (inexistante)
+    apres « tout revoquer », remplacee par /login.html ; 401 muets sur les lectures ; actualisation sans garde
+    document.hidden ni saisie ouverte.
+  * Les appels d'ecriture gardent exactement les memes routes, methodes et corps (POST/PUT/DELETE /user, password,
+    totp/disable, services/<s>/<action>, services/tout, password/reinitialiser, import, export, session,
+    sessions/revoke-all, auth/settings, sbxid demandes accepter/refuser).
+  * Non repris : le mot de passe provisoire n'est plus JAMAIS affiche (l'ancienne page l'affichait une fois) : toute
+    action qui en cree un (creer, reparer un compte absent, tout, reinitialiser) exige l'envoi a l'adresse de
+    recuperation ; la tuile « Domaine » et le compteur de groupes (l'API ne les fournit pas) ; l'icone par service.
+    Aucun nouveau stockage local ; login.html non touche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-auth (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /auth/ au profil Aurora (ref #2556) : fichier autonome, sans police ni script externes, ?demo=1, ?embed=1,
