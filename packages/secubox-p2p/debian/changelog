@@ -1,3 +1,11 @@
+secubox-p2p (1.15.1-1~bookworm1) bookworm; urgency=medium
+
+  * Page /master-link/ (jonction d'un nouveau nœud) au profil Aurora (#2584) : page autonome sombre, tuiles (rôle, profondeur, nœuds approuvés, en attente, invitations actives), identité du maître, étapes, `?demo=1` annoncée et inerte, `?embed=1`, aucun dialogue natif. L'unique écriture est celle de l'ancienne page : POST /master-link/join avec {token, fingerprint, hostname}. 10 tests (statique + vrai navigateur).
+  * Erreurs de l'ancienne page corrigées : les données du maître (nom d'hôte, empreinte, rôle) étaient injectées en innerHTML sans échappement, elles sont maintenant écrites en texte ; la lecture /status n'envoyait pas le jeton (la route exige une lecture autorisée) : il est lu sous `sbx_token` (repli sur `secubox_token`) ; une erreur HTTP à corps non JSON levait une exception obscure ; l'empreinte du navigateur était refabriquée à chaque clic, donc un nouvel essai créait une demande en double (elle est désormais calculée une fois par chargement) ; le nom d'hôte était pré-rempli avec celui du maître au lieu de celui du nœud qui rejoint ; la profondeur « 1 » était inventée quand la réponse n'en donnait pas.
+  * Non repris : le suivi d'approbation après envoi (l'API n'a pas de route de suivi par empreinte, la page ne fait pas de relevé) ; le jeton d'invitation n'est jamais affiché ni conservé. www/master-link/admin.html est inchangée (ancienne peau).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 17:00:00 +0200
+
 secubox-p2p (1.15.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /meshname/ (Mesh DNS) au profil Aurora (#2584) : page autonome sombre (tuiles nœuds, mappages, domaine, Avahi, dnsmasq ; ce nœud ; service ; nœuds ; mappages ; hôtes mDNS ; test de résolution), `?demo=1` annoncée et inerte, `?embed=1`, aucun dialogue natif. Les appels d'écriture sont ceux de l'ancienne page : POST /enable?enabled=, POST/DELETE /nodes, POST/DELETE /mappings, POST /discover/import (liste de noms d'hôte).
