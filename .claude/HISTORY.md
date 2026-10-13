@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — dns-guard 1.4.6 : la détection de tunneling ne lève plus de faux positifs (ref #2520)
+
+Lancée sur les 2 728 domaines réels les plus demandés de gk2, l'analyse du module levait 452 alertes dont 443 « tunneling high » fausses (règle base64 appliquée à la concaténation des sous-domaines). Chaque label est jugé seul, les TLD de sonde et les zones DNSBL sont ignorés : 18 alertes sur les mêmes domaines. Reste hors périmètre : brancher le détecteur sur le journal DNS d'ad-guard (rien ne l'alimente, `alerts.jsonl` absent depuis mai) et la règle DGA (2 douteux). Test `packages/secubox-dns-guard/tests/test_tunneling_faux_positifs_2520.py`.
+
 ## 2026-10-12 — en-têtes CMSD-1.0 manquants (ref #2518)
 
 Le contrôle « License Headers » échouait sur master : trois `tests/__init__.py` (interceptor, cdn, repo) et `docs/dossiers/automesh.md` n'avaient pas l'en-tête. Posé par `scripts/license-headers.py --fix` ; `--check` passe sur tout le dépôt.

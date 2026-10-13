@@ -365,44 +365,62 @@ class DnsGuard:
         return None
 
     # DNS Tunneling Detection
+    # TLD de sonde ou d'usage local : jamais du trafic exfiltré vers l'extérieur (les sondes Chrome
+    # `this-url-does-not-exist-<uuid>.invalid` portent un label de plus de 50 caractères).
+    _TLD_SANS_TUNNEL = {"invalid", "test", "localhost", "local", "example"}
+    _RE_BASE64 = re.compile(r"^[A-Za-z0-9+/=]{20,}$")
+    _RE_MOTS_A_TIRETS = re.compile(r"^[a-z0-9]+(?:-+[a-z0-9]+){2,}$")
+    _RE_MOT_ET_SUFFIXE_NUM = re.compile(r"^[A-Za-z]{12,}\d{1,3}$")        # productionresultssa13 : un nom, pas des données
+    # Listes DNSBL/DNSWL interrogées par un serveur de courrier : le label est un haché PAR CONCEPTION (pas du tunneling).
+    _ZONES_DNSBL = ("rspamd.com", "dnswl.org", "msbl.org", "spamhaus.org", "uribl.com", "surbl.org", "barracudacentral.org",
+                    "spamcop.net", "sorbs.net", "mailspike.net", "abuseat.org", "spameatingmonkey.net")
+
     def detect_tunneling(self, domain: str, query_length: int = 0) -> Optional[DnsAlert]:
-        """Detect DNS tunneling attempts."""
-        # Tunneling indicators:
-        # - Very long subdomain labels
-        # - Base64-like patterns
-        # - High query frequency to same domain
+        """Detect DNS tunneling attempts.
 
-        parts = domain.split(".")
-        max_label_len = max(len(p) for p in parts) if parts else 0
+        Chaque label est jugé SEUL (#2520) : la version précédente testait la concaténation de tous les sous-domaines, donc tout nom à
+        trois labels ou plus fait de lettres (firefox.settings.services.mozilla.com) passait pour du base64 — 443 faux positifs sur
+        452 alertes dans le trafic réel d'une box."""
+        parts = [p for p in domain.rstrip(".").split(".") if p]       # casse conservée : le base64 la mêle
+        if len(parts) < 2 or parts[-1].lower() in self._TLD_SANS_TUNNEL:
+            return None
+        sous_domaines = parts[:-2] if len(parts) > 2 else parts[:-1]
+        max_label_len = max(len(p) for p in parts)
 
-        # Check for long labels (base64 encoded data)
-        if max_label_len > 50:
-            alert = DnsAlert(
-                id=self._generate_alert_id(),
-                type=DetectionType.TUNNELING,
-                severity=Severity.CRITICAL,
-                domain=domain,
-                description=f"DNS tunneling detected: abnormally long subdomain ({max_label_len} chars)",
-                details={
-                    "max_label_length": max_label_len,
-                    "total_length": len(domain)
-                },
-                timestamp=datetime.utcnow().isoformat() + "Z"
-            )
-            self.record_alert(alert)
-            return alert
+        # Étiquette très longue : des données encodées, sauf du texte à mots séparés par des tirets.
+        for label in parts:
+            if len(label) > 50 and not self._RE_MOTS_A_TIRETS.match(label.lower()):
+                alert = DnsAlert(
+                    id=self._generate_alert_id(),
+                    type=DetectionType.TUNNELING,
+                    severity=Severity.CRITICAL,
+                    domain=domain,
+                    description=f"DNS tunneling detected: abnormally long subdomain ({max_label_len} chars)",
+                    details={
+                        "max_label_length": max_label_len,
+                        "total_length": len(domain)
+                    },
+                    timestamp=datetime.utcnow().isoformat() + "Z"
+                )
+                self.record_alert(alert)
+                return alert
 
-        # Check for base64-like patterns
-        if len(parts) > 2:
-            subdomain = ".".join(parts[:-2])
-            if re.match(r'^[A-Za-z0-9+/=]{20,}$', subdomain.replace(".", "")):
+        # Étiquette de type base64 : 20 caractères ou plus, lettres ET chiffres mêlés, entropie élevée.
+        hote = ".".join(parts).lower()
+        if any(hote == z or hote.endswith("." + z) for z in self._ZONES_DNSBL):
+            return None
+        for brut in sous_domaines:
+            if self._RE_MOT_ET_SUFFIXE_NUM.match(brut):
+                continue
+            if (self._RE_BASE64.match(brut) and any(c.isdigit() for c in brut) and any(c.isalpha() for c in brut)
+                    and self.calculate_entropy(brut) >= 3.5):
                 alert = DnsAlert(
                     id=self._generate_alert_id(),
                     type=DetectionType.TUNNELING,
                     severity=Severity.HIGH,
                     domain=domain,
-                    description=f"Possible DNS tunneling: base64-like subdomain pattern",
-                    details={"subdomain": subdomain},
+                    description="Possible DNS tunneling: base64-like subdomain pattern",
+                    details={"label": brut},
                     timestamp=datetime.utcnow().isoformat() + "Z"
                 )
                 self.record_alert(alert)
