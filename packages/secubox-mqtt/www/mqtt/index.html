@@ -4,160 +4,228 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  Courtier MQTT au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, lecture seule, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives.
+  Aucun identifiant ni mot de passe du courtier n'est affiché (comptes ACL non listés).
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — Lyrion</title>
-<link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-<style>
-  html, body { margin: 0; padding: 0; height: 100%; }
-  .layout {
-    display: grid;
-    grid-template-columns: 260px 1fr;
-    height: 100vh;
-  }
-  .lyrion-frame {
-    border: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--bg-1, #0f1320);
-  }
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 1rem;
-    background: var(--bg-2, #181c2c);
-    border-bottom: 1px solid var(--border, #2a3354);
-    color: var(--root-main, #00d49b);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
-  }
-  .topbar .actions a {
-    color: var(--root-main, #00d49b);
-    margin-left: 1rem;
-    text-decoration: none;
-  }
-  .topbar .actions a:hover { text-decoration: underline; }
-  .threefold {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--bg-1);
-  }
-  .threefold article {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    padding: 0.75rem 1rem;
-    border-radius: 4px;
-  }
-  .threefold h3 {
-    margin: 0 0 0.5rem 0;
-    color: var(--root-main);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-  }
-  .threefold .v { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
-  .container { display: flex; flex-direction: column; height: 100vh; }
-  .iframe-wrap { flex: 1; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Courtier MQTT</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        td.mono{overflow-wrap:anywhere}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>
+                <div><h1>Courtier MQTT</h1><small>Mosquitto en conteneur LXC — zigbee2mqtt et domotique</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-<div class="layout">
-  <nav class="sidebar" id="sidebar"></nav>
-  <div class="container">
-    <div class="topbar">
-      <div><strong>SecuBox</strong> · Lyrion — Music server</div>
-      <div class="actions">
-        <a href="/" title="Back to SecuBox hub">← hub</a>
-        <a href="#" id="open-native" title="Open native Lyrion in this tab">native UI</a>
-      </div>
-    </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cGlobal" title="Synthèse : sain si le conteneur, le courtier et la sonde authentifiée répondent ; dégradé si le conteneur tourne mais pas tout le reste ; arrêté sinon."><span class="l">État global</span><span class="v" id="tGlobal">—</span><span class="s">conteneur + courtier + sonde</span></div>
+            <div class="tuile" id="cLxc" title="Conteneur LXC du courtier, déduit d’une connexion TCP (le service n’a pas les droits de lxc-info)."><span class="l">Conteneur</span><span class="v" id="tLxc">—</span><span class="s" id="sLxc">LXC</span></div>
+            <div class="tuile" id="cBroker" title="Le port du courtier accepte une connexion TCP."><span class="l">Courtier</span><span class="v" id="tBroker">—</span><span class="s" id="sBroker">port MQTT</span></div>
+            <div class="tuile" id="cHealth" title="Publication d’un message de contrôle avec le compte technique du service : prouve que le courtier accepte l’authentification."><span class="l">Sonde authentifiée</span><span class="v" id="tHealth">—</span><span class="s">aller-retour de publication</span></div>
+            <div class="tuile cy" title="Nombre de règles « topic » du cache ACL de l’hôte. Les comptes eux-mêmes ne sont jamais affichés."><span class="l">Règles d’accès</span><span class="v" id="tRegles">—</span><span class="s" id="sRegles">motifs de topics</span></div>
+        </section>
 
-    <section class="threefold" id="threefold">
-      <article id="components-card">
-        <h3>Components</h3>
-        <div class="v" id="components-v">loading…</div>
-      </article>
-      <article id="status-card">
-        <h3>Status</h3>
-        <div class="v" id="status-v">loading…</div>
-      </article>
-      <article id="access-card">
-        <h3>Access</h3>
-        <div class="v" id="access-v">loading…</div>
-      </article>
-    </section>
+        <div class="grille">
+            <div class="pan"><h3>Composants <i id="nComp"></i></h3>
+                <div class="tab"><table><thead><tr><th>Composant</th><th>État</th><th>Détail</th></tr></thead><tbody id="bComp"></tbody></table></div></div>
+            <div class="pan"><h3>Module</h3>
+                <dl class="kv"><dt>Version</dt><dd id="kVer">—</dd><dt>Synthèse</dt><dd id="kSyn">—</dd></dl>
+                <p class="note">Lecture seule : la page ne démarre, n’arrête ni ne reconfigure le courtier.</p></div>
+            <div class="pan" style="grid-column:1/-1"><h3>Règles d’accès (ACL) <i id="nAcl"></i></h3>
+                <div class="tab"><table><thead><tr><th>Droit</th><th>Motif de topic</th><th>Portée</th></tr></thead><tbody id="bAcl"></tbody></table></div>
+                <p class="note" id="noteAcl">Lues dans le cache ACL de l’hôte. Les noms de comptes et les mots de passe du courtier ne sont volontairement pas affichés.</p></div>
+            <div class="pan" style="grid-column:1/-1"><h3>Ce que cette page ne montre pas</h3>
+                <p class="note" style="margin:0">L’API ne fournit ni clients connectés, ni débit de messages, ni liste de topics actifs : ces mesures sont omises plutôt qu’inventées.</p></div>
+        </div>
+    </div></div></main>
 
-    <div class="iframe-wrap">
-      <iframe class="lyrion-frame"
-              src="/lyrion/d////-overview?kiosk=tv&theme=light"
-              title="Lyrion dashboards"
-              referrerpolicy="no-referrer"></iframe>
-    </div>
-  </div>
-</div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/mqtt';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-<script src="/shared/sidebar.js"></script>
-<script src="/shared/api-utils.js"></script>
-<script>
-// Mandatory auth wrapper (matches docs/MODULE-GUIDELINES.md §4)
-(function() {
-  function getToken() { return localStorage.getItem('sbx_token'); }
-  function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine). Seule une
-            // vraie 401 redirige (gere dans les appels fetch).
-            return true;
+        let COMP = null, STAT = null, ACL = null, ACL_KO = null, SESSION_OK = true;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-  if (!checkAuth()) {
-    document.body.innerHTML = '<div style="padding:2rem;color:var(--root-main);">Redirecting to login...</div>';
-    return;
-  }
+        function pastille(classe, texte) { return el('span', 'pill ' + classe, texte); }
 
-  // Fill the threefold cards from /api/v1/lyrion/*
-  function get(path) {
-    return fetch('/api/v1/lyrion' + path, {
-      headers: { 'Authorization': 'Bearer ' + getToken() }
-    }).then(r => r.ok ? r.json() : Promise.reject(r.status));
-  }
+        const ETATS = {
+            running: ['ok', 'EN MARCHE'], stopped: ['hors', 'ARRÊTÉ'], absent: ['hors', 'ABSENT'], ok: ['ok', 'OK'], degraded: ['att', 'DÉGRADÉ']
+        };
+        const NOMS = { lxc: 'Conteneur LXC', broker: 'Courtier Mosquitto', health: 'Sonde authentifiée' };
+        const GLOBAL = { green: ['ok', 'Sain', 'SAIN'], yellow: ['att', 'Dégradé', 'DÉGRADÉ'], red: ['hors', 'Arrêté', 'ARRÊTÉ'] };
+        const DROITS = { read: 'Lecture', write: 'Écriture', readwrite: 'Lecture et écriture' };
 
-  get('/components').then(d => {
-    document.getElementById('components-v').innerHTML =
-      d.components.map(c => '<div>' + c.name + ': <strong>' + c.state + '</strong></div>').join('');
-  }).catch(() => {
-    document.getElementById('components-v').textContent = 'unavailable';
-  });
+        function demoData() {
+            COMP = { module: 'mqtt', version: '2.6.0', components: [
+                { name: 'lxc', state: 'running', detail: 'mqtt @ 192.0.2.110 on br-lxc' },
+                { name: 'broker', state: 'running', detail: 'mosquitto, port 1883' },
+                { name: 'health', state: 'ok', detail: 'pub round-trip via secubox-api' }] };
+            STAT = { module: 'mqtt', version: '2.6.0', overall: 'green', states: { lxc: 'running', broker: 'running', health: 'ok' } };
+            ACL = { module: 'mqtt', access: [
+                { user: 'a', mode: 'readwrite', topic: 'zigbee2mqtt/#', scope: 'lan' },
+                { user: 'b', mode: 'read', topic: 'homeassistant/#', scope: 'lan' },
+                { user: 'c', mode: 'write', topic: 'secubox/healthcheck', scope: 'lan' }] };
+            ACL_KO = null;
+        }
 
-  get('/status').then(d => {
-    document.getElementById('status-v').innerHTML =
-      '<span style="color:var(--' + (d.overall === 'green' ? 'root-main' : d.overall === 'yellow' ? 'wall-main' : 'root-main') + ')">'
-      + (d.overall || 'unknown').toUpperCase() + '</span>';
-  }).catch(() => {
-    document.getElementById('status-v').textContent = 'unavailable';
-  });
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/components'), lire('/status'), lire('/access')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            SESSION_OK = !refus;
+            COMP = val(0); STAT = val(1); ACL = val(2);
+            ACL_KO = essais[2].status === 'rejected' && !refus ? essais[2].reason.statut || 0 : null;
+            const tous = essais.every(e => e.status === 'rejected');
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire l’API MQTT (service arrêté ou injoignable).';
+            rendre();
+        }
 
-  get('/access').then(d => {
-    document.getElementById('access-v').innerHTML =
-      (d.access || []).map(a => '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>').join('');
-  }).catch(() => {
-    document.getElementById('access-v').textContent = 'unavailable';
-  });
+        function tuileEtat(id, sid, etat, sous) {
+            const e = etat ? ETATS[etat] : null;
+            $('t' + id).textContent = e ? e[1] : (etat ? String(etat).toUpperCase() : '—');
+            $('c' + id).className = 'tuile ' + (e ? e[0] : '');
+            if (sous) $('s' + id).textContent = sous;
+        }
 
-  document.getElementById('open-native').addEventListener('click', e => {
-    e.preventDefault();
-    window.location.href = '/lyrion/';
-  });
-})();
-</script>
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            const g = STAT && GLOBAL[STAT.overall];
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!g) { etat.className = 'actif neutre'; etat.textContent = 'INCONNU'; }
+            else { etat.className = 'actif' + (g[0] === 'ok' ? '' : g[0] === 'att' ? ' att' : ' hors'); etat.textContent = g[2]; }
 
+            const comps = COMP && Array.isArray(COMP.components) ? COMP.components : [];
+            const parNom = {}; comps.forEach(c => { parNom[c.name] = c; });
+            const etatDe = n => (parNom[n] && parNom[n].state) || (STAT && STAT.states && STAT.states[n]) || null;
+            $('tGlobal').textContent = g ? g[1] : '—'; $('cGlobal').className = 'tuile ' + (g ? g[0] : '');
+            tuileEtat('Lxc', 'sLxc', etatDe('lxc'));
+            tuileEtat('Broker', 'sBroker', etatDe('broker'), parNom.broker && parNom.broker.detail ? parNom.broker.detail : 'port MQTT');
+            tuileEtat('Health', 'sHealth', etatDe('health'));
+            $('sLxc').textContent = parNom.lxc && parNom.lxc.detail ? parNom.lxc.detail : 'LXC';
+
+            const regles = ACL && Array.isArray(ACL.access) ? ACL.access : null;
+            $('tRegles').textContent = regles ? regles.length : '—';
+            $('sRegles').textContent = ACL_KO ? 'cache ACL indisponible' : 'motifs de topics';
+            $('kVer').textContent = tiret((STAT && STAT.version) || (COMP && COMP.version));
+            $('kSyn').textContent = g ? g[1] : '—';
+
+            // Composants
+            const tb = $('bComp'); tb.replaceChildren();
+            $('nComp').textContent = comps.length ? comps.length + ' composant' + (comps.length > 1 ? 's' : '') : '';
+            if (!comps.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucun composant lu' : '—'); td.colSpan = 3; tr.appendChild(td); tb.appendChild(tr); }
+            comps.forEach(c => {
+                const tr = el('tr'); const e = ETATS[c.state];
+                tr.appendChild(el('td', '', NOMS[c.name] || tiret(c.name)));
+                const t = el('td'); t.appendChild(pastille(e ? e[0] : '', e ? e[1] : tiret(c.state).toUpperCase())); tr.appendChild(t);
+                tr.appendChild(el('td', 'mono', tiret(c.detail)));
+                tb.appendChild(tr);
+            });
+
+            // ACL : sans le nom de compte
+            const ta = $('bAcl'); ta.replaceChildren();
+            $('nAcl').textContent = regles && regles.length ? regles.length + ' règle' + (regles.length > 1 ? 's' : '') : '';
+            if (!regles || !regles.length) {
+                const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : ACL_KO ? 'Cache ACL indisponible (le cache est écrit à l’installation : « mqttctl install »)' : 'Aucune règle');
+                td.colSpan = 3; tr.appendChild(td); ta.appendChild(tr);
+            } else regles.forEach(a => {
+                const tr = el('tr'); const t = el('td'); t.appendChild(pastille(a.mode === 'write' ? 'att' : a.mode === 'readwrite' ? 'cy' : 'ok', DROITS[a.mode] || tiret(a.mode))); tr.appendChild(t);
+                tr.appendChild(el('td', 'mono', tiret(a.topic))); tr.appendChild(el('td', '', a.scope === 'lan' ? 'Réseau local' : tiret(a.scope)));
+                ta.appendChild(tr);
+            });
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        $('rafraichir').addEventListener('click', charger);
+
+        // Hauteur annoncée à l'hôte (iframes)
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'mqtt' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        setInterval(() => { if (document.hidden || DEMO) return; charger(); }, 30000);
+    </script>
 </body>
 </html>
