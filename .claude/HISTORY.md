@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — CI release : un seul publieur (ref #2610)
+
+La release v3.0.0-alpha.15 est restée incomplète (images RPi400, live x64, full VM absentes), comme l'alpha.14. Cause : `build-image.yml` (job release), `build-all-live-usb.yml` (job release) et `release.yml` (create-release) publiaient les mêmes noms de fichiers dans la même release en même temps et s'effaçaient mutuellement leurs envois (« Deleting previously uploaded asset » puis « Not Found »). Une relance ne corrige rien : elle réutilise le workflow du tag. Correctif : `release.yml` passe `publier: 'non'` aux deux appelés, `create-release` (qui télécharge lui-même tous les artefacts) reste le seul publieur ; appelés seuls, les workflows gardent leur comportement. À valider sur le prochain tag (alpha.16) ; l'alpha.15 reste incomplète.
+
 ## 2026-10-13 — Panneaux Aurora, vague 4 : 12 paquets, 12 pages (closes #2597)
 
 `/master-link/admin.html`, `/annuaire/`, `/mesh/`, `/config-advisor/`, `/zia/admin.html`, `/mqtt/`, `/netboot/`, `/ai-gateway/`, `/freebox/`, `/autoload/`, `/sentinelle/`, `/modem/` (PR #2598 à #2609), relues (aucun script externe, dialogue natif, innerHTML ni police distante) et déployées sur gk2, gk1 et gk3, dépôt apt à jour pour gk2. Versions : p2p 1.16.0, annuaire 0.13.0, mesh 2.1.0, config-advisor 1.2.0, zia 0.2.0, mqtt 2.6.0, netboot 0.5.0, ai-gateway 1.4.0, freebox 0.5.0, autoload 0.6.0, sentinelle-gsm 0.5.0, modem 1.3.0. Exclus : vault/coffre (redéployer re-scelle le coffre) et premier-pas (assistant de premier démarrage).

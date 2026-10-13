@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: 'trixie'
+      publier:
+        description: "'non' = ne pas publier ici (release.yml publie en un seul job, #2610)"
+        required: false
+        type: string
+        default: 'oui'
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -348,7 +353,9 @@ jobs:
     #
     # Le garde-fou « zero image » plus bas rattrape le cas ou TOUT a echoue :
     # sans lui, ce relachement publierait une release vide en silence.
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
+    # UN SEUL PUBLIEUR (#2610) : appele par release.yml, ce job laisse create-release publier. Trois jobs ecrivant les memes noms de
+    # fichiers dans la meme release se supprimaient mutuellement leurs envois (alpha.14, alpha.15 : images absentes).
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && inputs.publier != 'non' }}
 
     steps:
       # Le checkout passe EN PREMIER : l'action composite vit dans le depot, on
