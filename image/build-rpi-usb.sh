@@ -1074,6 +1074,9 @@ KIOSKSVC
     # reads /var/lib/secubox/boot-mode; seed it so DEFAULT_MODE=kiosk.
     install -d "${ROOTFS}/var/lib/secubox"
     echo "kiosk" > "${ROOTFS}/var/lib/secubox/boot-mode"
+    # Sentinelle exigee par le drop-in de secubox-console (#2332, ConditionPathExists) :
+    # sans elle l'unite kiosque est ignoree a chaque demarrage (#2522).
+    : > "${ROOTFS}/var/lib/secubox/.kiosk-enabled"
 
     # Fail-loud — graphical.target must exist now that xserver-xorg is installed.
     chroot "${ROOTFS}" systemctl set-default graphical.target \
@@ -1105,6 +1108,7 @@ KIOSKSVC
         "${ROOTFS}/root/.xinitrc" \
         "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" \
         "${ROOTFS}/var/lib/secubox/boot-mode" \
+        "${ROOTFS}/var/lib/secubox/.kiosk-enabled" \
     ; do
         [[ -e "${_f}" ]] || { warn "MISSING: ${_f}"; _kiosk_fail=1; }
     done
