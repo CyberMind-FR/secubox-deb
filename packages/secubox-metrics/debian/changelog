@@ -1,3 +1,12 @@
+secubox-metrics (1.22.1-1~bookworm1) bookworm; urgency=medium
+
+  * feat: page /reporter/ au profil Aurora (page autonome, tuiles, onglets Rapports / Générer / Planification, ?demo=1 et ?embed=1, hauteur annoncée à l hôte, confirmation de suppression dans la page, plus aucun confirm()) (ref #2584)
+  * fix: la page n est plus redirigée de force vers /login.html (absence de jeton ou 401) : bandeau « session requise » et tirets ; titres et identifiants de rapports construits en textContent (plus d innerHTML ni de gestionnaires en ligne alimentés par l API) ; jeton Bearer envoyé seulement s il existe (repli « Bearer null » supprimé) ; mesures absentes en « — » et non 0 ; retours d échec lus sur detail/error de l API et affichés dans la page (ref #2584)
+  * Écritures inchangées : POST /reports/generate, DELETE /reports/{id}, POST /schedule (mêmes routes, méthodes et corps)
+  * Non repris : bascule du thème CRT/phosphore (hybrid-dark, crt-light, crt-engine), aperçu des sections (doublon de la liste cochable), badge de version figé v1.0.0. Constat affiché dans la page : la période et les sections sont transmises mais le générateur de l API ne les lit pas ; le compteur « en attente » de l API ne compte pas les rapports en cours de génération ; aucune dernière exécution de planification n est fournie, donc non affichée. Aucun envoi par courriel n existe dans l API du Reporter : aucune action ajoutée
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 09:30:00 +0200
+
 secubox-metrics (1.22.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: la page /glances/ passe au profil Aurora (page autonome, sans police ni script externe hors menu ; onglets Tableau de bord, Processus, Capteurs, Configuration ; ?demo=1 et ?embed=1 ; hauteur annoncée à l hôte) (ref #2584)

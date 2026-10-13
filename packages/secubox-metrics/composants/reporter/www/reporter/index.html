@@ -4,584 +4,351 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Reporter au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox Reporter</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Reporter</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1a1a2e;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Main content */
-        .main { flex: 1; margin-left: 220px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; font-weight: 600; color: var(--p31-hot); text-shadow: var(--bloom-text); }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; font-family: 'Courier Prime', monospace; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
-        .badge.version { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); text-shadow: var(--bloom-soft); }
-        .header-actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: 'Courier Prime', monospace; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); box-shadow: 0 0 12px rgba(51,255,102,0.1); }
-        .btn.primary { border-color: var(--p31-peak); color: var(--p31-peak); background: rgba(51,255,102,0.1); }
-        .btn.primary:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); }
-        .btn.danger { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-        .btn.danger:hover { background: rgba(255,68,102,0.2); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .content { padding: 1.5rem; }
-        .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem; }
-
-        /* Tabs */
-        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--p31-ghost); margin-bottom: 1.5rem; background: var(--tube-pale); padding: 0.5rem 1rem 0; border-radius: 8px 8px 0 0; }
-        .tab { padding: 0.75rem 1.5rem; cursor: pointer; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active { color: var(--p31-peak); text-shadow: var(--bloom-soft); border-bottom-color: var(--p31-peak); }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Stats row */
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.15em; }
-        .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        /* Card */
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
-        .card:hover { border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3); }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 0.85rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; }
-
-        /* Table */
-        .data-table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
-        .data-table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.15em; border-bottom: 1px solid var(--p31-ghost); }
-        .data-table td { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.9rem; color: var(--p31-mid); }
-        .data-table tr:hover { background: rgba(51,255,102,0.03); }
-
-        .status-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-family: monospace; }
-        .status-badge.completed { background: rgba(63,185,80,0.2); color: var(--green); }
-        .status-badge.pending, .status-badge.generating { background: rgba(255,179,71,0.2); color: var(--yellow); }
-        .status-badge.failed { background: rgba(255,68,102,0.2); color: #ff4466; }
-
-        .action-btn { background: none; border: none; cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--p31-mid); font-size: 0.9rem; }
-        .action-btn:hover { background: rgba(51,255,102,0.1); color: var(--p31-peak); }
-        .action-btn.delete:hover { background: rgba(255,68,102,0.1); color: #ff4466; }
-
-        /* Forms */
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; font-size: 0.8rem; color: var(--p31-dim); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em; }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%; padding: 0.75rem; border: 1px solid var(--tube-soft); border-radius: 6px;
-            background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace;
-        }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-            outline: none; border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-
-        /* Checkbox group */
-        .checkbox-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
-        .checkbox-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--tube-light); border-radius: 4px; cursor: pointer; }
-        .checkbox-item:hover { background: rgba(51,255,102,0.05); }
-        .checkbox-item input[type="checkbox"] { accent-color: var(--p31-peak); }
-
-        /* Preview panel */
-        .preview-panel { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.5rem; min-height: 300px; }
-        .preview-panel h3 { color: var(--p31-decay); font-size: 0.9rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.1em; }
-        .preview-placeholder { color: var(--p31-dim); text-align: center; padding: 3rem; font-style: italic; }
-
-        /* Schedule items */
-        .schedule-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--tube-light); border-radius: 6px; margin-bottom: 0.75rem; }
-        .schedule-info { flex: 1; }
-        .schedule-info .name { font-weight: bold; color: var(--p31-mid); }
-        .schedule-info .cron { font-size: 0.8rem; color: var(--p31-dim); font-family: monospace; }
-        .schedule-toggle { position: relative; width: 50px; height: 26px; }
-        .schedule-toggle input { opacity: 0; width: 0; height: 0; }
-        .schedule-toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--tube-soft); border-radius: 26px; transition: 0.3s; }
-        .schedule-toggle .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s; }
-        .schedule-toggle input:checked + .slider { background-color: var(--p31-peak); box-shadow: 0 0 8px var(--p31-peak); }
-        .schedule-toggle input:checked + .slider:before { transform: translateX(24px); }
-
-        /* Cron presets */
-        .cron-presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
-        .cron-preset { padding: 0.25rem 0.75rem; background: rgba(51,255,102,0.1); border: 1px solid var(--p31-dim); border-radius: 4px; cursor: pointer; font-size: 0.75rem; color: var(--p31-mid); transition: all 0.2s; }
-        .cron-preset:hover { background: rgba(51,255,102,0.2); border-color: var(--p31-peak); color: var(--p31-peak); }
-
-        /* Grid layout */
-        .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
-
-        /* Empty state */
-        .empty-state { text-align: center; padding: 3rem; color: var(--p31-dim); }
-        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
-
-        /* Toast */
-        .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 1000; }
-        .toast { padding: 1rem 1.5rem; background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 6px; margin-bottom: 0.5rem; font-family: 'Courier Prime', monospace; animation: slideIn 0.3s ease; }
-        .toast.success { border-color: var(--p31-peak); }
-        .toast.error { border-color: #ff4466; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        /* Loading */
-        .loading { text-align: center; padding: 2rem; color: var(--p31-dim); }
-        .spinner { display: inline-block; width: 24px; height: 24px; border: 2px solid var(--tube-soft); border-top-color: var(--p31-peak); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 0.5rem; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) {
-            .grid-2 { grid-template-columns: 1fr; }
-            .sidebar { display: none; }
-            .main { margin-left: 0; }
-            .form-row { grid-template-columns: 1fr; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 select{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille.deux{grid-template-columns:3fr 2fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act>*{margin-right:5px}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie .large{grid-column:1/-1}
+        input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%;color-scheme:dark}
+        .pan h3 select{width:auto}
+        input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:6px}
+        form.saisie .sections label{display:flex;flex-direction:row;align-items:center;gap:7px;font-size:.78rem;color:var(--texte);padding:6px 9px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.5)}
+        .sections input{width:auto;accent-color:var(--cyan)}
+        .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .presets{display:flex;flex-wrap:wrap;gap:6px}
+        .plan{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(86,150,255,.12)} .plan:first-child{border-top:0}
+        .plan .nom{font-weight:700;font-size:.84rem} .plan .cron{color:var(--faible);font-size:.74rem;overflow-wrap:anywhere}
+        .plan .gauche{flex:1 1 220px;min-width:0}
+        .inter{position:relative;display:inline-block;width:44px;height:24px;flex:none}
+        .inter input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;z-index:1}
+        .inter span{position:absolute;inset:0;background:rgba(159,179,214,.25);border:1px solid var(--trait2);border-radius:24px;transition:.2s}
+        .inter span:before{content:"";position:absolute;height:16px;width:16px;left:3px;top:3px;background:#eaf1ff;border-radius:50%;transition:.2s}
+        .inter input:checked+span{background:rgba(46,204,113,.35);border-color:var(--vert)} .inter input:checked+span:before{transform:translateX(20px)}
+        .inter input:focus-visible+span{outline:2px solid var(--cyan);outline-offset:2px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>SecuBox Reporter</h1>
-                <span class="badge version">v1.0.0</span>
-                <span class="badge active" id="status-badge">- Reports</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h8l4 4V21.5H6z"/><path d="M14 2.5v4h4"/><path d="M9 12h6M9 15.5h6M9 18.5h3"/></svg>
+                <div><h1>Reporter</h1><small>Rapports système en PDF ou HTML</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refreshData()">Refresh</button>
-                <button class="btn primary" onclick="showTab('generate')">+ New Report</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="content">
-            <p class="subtitle">System report generation - PDF/HTML exports</p>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Rapports connus du module (terminés, en attente et en échec)."><span class="l">Rapports</span><span class="v" id="tTotal">—</span><span class="s">au total</span></div>
+            <div class="tuile ok" title="Rapports dont la génération est terminée et le fichier téléchargeable."><span class="l">Terminés</span><span class="v" id="tOk">—</span><span class="s">téléchargeables</span></div>
+            <div class="tuile att" title="Rapports en file d’attente. Le compteur de l’API ne compte pas ceux dont la génération est en cours."><span class="l">En attente</span><span class="v" id="tAtt">—</span><span class="s">hors génération en cours</span></div>
+            <div class="tuile hors" title="Rapports dont la génération a échoué."><span class="l">En échec</span><span class="v" id="tKo">—</span><span class="s">à régénérer</span></div>
+        </section>
 
-            <div class="stats-row">
-                <div class="stat-card green">
-                    <div class="value" id="total-reports">-</div>
-                    <div class="label">Total Reports</div>
-                </div>
-                <div class="stat-card green">
-                    <div class="value" id="completed-reports">-</div>
-                    <div class="label">Completed</div>
-                </div>
-                <div class="stat-card yellow">
-                    <div class="value" id="pending-reports">-</div>
-                    <div class="label">Pending</div>
-                </div>
-                <div class="stat-card red">
-                    <div class="value" id="failed-reports">-</div>
-                    <div class="label">Failed</div>
-                </div>
-            </div>
-
-            <div class="tabs">
-                <div class="tab active" data-tab="reports" onclick="showTab('reports')">Reports</div>
-                <div class="tab" data-tab="generate" onclick="showTab('generate')">Generate</div>
-                <div class="tab" data-tab="schedule" onclick="showTab('schedule')">Schedule</div>
-            </div>
-
-            <!-- Reports Tab -->
-            <div id="tab-reports" class="tab-content active">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Generated Reports</h2>
-                        <select id="filter-type" onchange="loadReports()" style="padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light);">
-                            <option value="">All Types</option>
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="security">Security</option>
-                            <option value="network">Network</option>
-                        </select>
-                    </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Title</th>
-                                <th>Type</th>
-                                <th>Format</th>
-                                <th>Status</th>
-                                <th>Created</th>
-                                <th>Size</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reports-table">
-                            <tr><td colspan="7" class="loading"><span class="spinner"></span> Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Generate Tab -->
-            <div id="tab-generate" class="tab-content">
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Generate New Report</h2>
-                        </div>
-                        <form id="generate-form" onsubmit="generateReport(event)">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Report Type</label>
-                                    <select id="report-type" required onchange="updateSections()">
-                                        <option value="daily">Daily Report</option>
-                                        <option value="weekly">Weekly Report</option>
-                                        <option value="security">Security Report</option>
-                                        <option value="network">Network Report</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Format</label>
-                                    <select id="report-format">
-                                        <option value="pdf">PDF</option>
-                                        <option value="html">HTML</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Report Title (optional)</label>
-                                <input type="text" id="report-title" placeholder="Auto-generated if empty">
-                            </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Start Date</label>
-                                    <input type="date" id="start-date">
-                                </div>
-                                <div class="form-group">
-                                    <label>End Date</label>
-                                    <input type="date" id="end-date">
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Sections to Include</label>
-                                <div class="checkbox-group" id="sections-group">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                            <button type="submit" class="btn primary" style="width: 100%;">Generate Report</button>
-                        </form>
-                    </div>
-
-                    <div class="preview-panel">
-                        <h3>Preview</h3>
-                        <div id="preview-content" class="preview-placeholder">
-                            Select a report type to see available sections
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Schedule Tab -->
-            <div id="tab-schedule" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Scheduled Reports</h2>
-                    </div>
-                    <div id="schedules-list">
-                        <div class="loading"><span class="spinner"></span> Loading...</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Add/Edit Schedule</h2>
-                    </div>
-                    <form id="schedule-form" onsubmit="saveSchedule(event)">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Report Type</label>
-                                <select id="schedule-type" required>
-                                    <option value="daily">Daily Report</option>
-                                    <option value="weekly">Weekly Report</option>
-                                    <option value="security">Security Report</option>
-                                    <option value="network">Network Report</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Format</label>
-                                <select id="schedule-format">
-                                    <option value="pdf">PDF</option>
-                                    <option value="html">HTML</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Cron Expression</label>
-                            <input type="text" id="schedule-cron" placeholder="0 6 * * *" required>
-                            <div class="cron-presets">
-                                <span class="cron-preset" onclick="setCron('0 6 * * *')">Daily 6:00 AM</span>
-                                <span class="cron-preset" onclick="setCron('0 7 * * 1')">Weekly Monday 7:00 AM</span>
-                                <span class="cron-preset" onclick="setCron('0 0 1 * *')">Monthly 1st</span>
-                                <span class="cron-preset" onclick="setCron('0 */6 * * *')">Every 6 hours</span>
-                                <span class="cron-preset" onclick="setCron('0 8 * * 1-5')">Weekdays 8:00 AM</span>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; gap: 1rem;">
-                            <label class="schedule-toggle" style="flex: 0;">
-                                <input type="checkbox" id="schedule-enabled" checked>
-                                <span class="slider"></span>
-                            </label>
-                            <span style="color: var(--p31-dim); font-size: 0.9rem;">Enable this schedule</span>
-                        </div>
-
-                        <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Save Schedule</button>
-                    </form>
-                </div>
-            </div>
-
+        <div class="onglets" role="tablist" aria-label="Sections du Reporter">
+            <button type="button" role="tab" id="o-rapports" data-t="rapports" aria-selected="true" aria-controls="t-rapports">Rapports</button>
+            <button type="button" role="tab" id="o-generer" data-t="generer" aria-selected="false" aria-controls="t-generer">Générer</button>
+            <button type="button" role="tab" id="o-planification" data-t="planification" aria-selected="false" aria-controls="t-planification">Planification</button>
         </div>
-    </main>
 
-    <div class="toast-container" id="toast-container"></div>
+        <section id="t-rapports" role="tabpanel" aria-labelledby="o-rapports">
+            <div class="pan"><h3>Rapports générés <i id="nRap"></i>
+                <select id="filtre" aria-label="Filtrer par type"><option value="">Tous les types</option><option value="daily">Quotidien</option><option value="weekly">Hebdomadaire</option><option value="security">Sécurité</option><option value="network">Réseau</option></select></h3>
+                <div id="rRap" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Titre</th><th>Type</th><th>Format</th><th>État</th><th>Créé</th><th>Taille</th><th>Actions</th></tr></thead><tbody id="bRap"></tbody></table></div>
+                <p class="note">Les 50 derniers rapports, du plus récent au plus ancien.</p></div>
+        </section>
 
+        <section id="t-generer" role="tabpanel" aria-labelledby="o-generer" hidden>
+            <div class="pan"><h3>Générer un rapport</h3>
+                <div id="rGen" class="retour" hidden></div>
+                <form class="saisie" id="fGen">
+                    <label>Type de rapport<select id="gType" required><option value="daily">Quotidien</option><option value="weekly">Hebdomadaire</option><option value="security">Sécurité</option><option value="network">Réseau</option></select></label>
+                    <label>Format<select id="gFormat"><option value="pdf">PDF</option><option value="html">HTML</option></select></label>
+                    <label class="large">Titre (facultatif)<input id="gTitre" type="text" maxlength="120" placeholder="Généré automatiquement si vide"></label>
+                    <label>Début<input id="gDebut" type="date"></label>
+                    <label>Fin<input id="gFin" type="date"></label>
+                    <div class="champ large">Sections demandées<div class="sections" id="gSections"></div></div>
+                    <div class="bout large"><button class="btn prim" type="submit">Générer le rapport</button></div>
+                </form>
+                <p class="note">Constat sur le code actuel de l’API : la période et les sections sont transmises, mais le générateur ne les lit pas encore ; il produit l’état courant du système (santé, services). Le rapport peut donc être identique quelles que soient les sections cochées.</p></div>
+        </section>
+
+        <section id="t-planification" role="tabpanel" aria-labelledby="o-planification" class="grille deux" hidden>
+            <div class="pan"><h3>Rapports planifiés <i id="nPlan"></i></h3>
+                <div id="rPlan" class="retour" hidden></div>
+                <div id="lPlan"></div>
+                <p class="note">L’API enregistre la planification (type, format, cron, activée). La page ne peut pas confirmer qu’un exécuteur la lance : aucune dernière exécution n’est fournie.</p></div>
+            <div class="pan"><h3>Ajouter ou modifier</h3>
+                <form class="saisie" id="fPlan">
+                    <label>Type de rapport<select id="pType" required><option value="daily">Quotidien</option><option value="weekly">Hebdomadaire</option><option value="security">Sécurité</option><option value="network">Réseau</option></select></label>
+                    <label>Format<select id="pFormat"><option value="pdf">PDF</option><option value="html">HTML</option></select></label>
+                    <label class="large">Expression cron<input id="pCron" type="text" placeholder="0 6 * * *" required class="mono" maxlength="60"></label>
+                    <div class="presets large" id="presets"></div>
+                    <label class="large" style="display:flex;flex-direction:row;align-items:center;gap:8px"><span class="inter"><input id="pActive" type="checkbox" checked><span></span></span> Activer cette planification</label>
+                    <div class="bout large"><button class="btn prim" type="submit">Enregistrer</button></div>
+                </form></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/reporter';
-        let refreshInterval = null;
-
-        // Section definitions by report type
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const TYPES = { daily: 'Quotidien', weekly: 'Hebdomadaire', security: 'Sécurité', network: 'Réseau' };
+        // Sections proposées par type : mêmes identifiants que _get_default_sections de l'API.
         const SECTIONS = {
-            daily: [
-                { id: 'system_health', name: 'System Health', default: true },
-                { id: 'services_status', name: 'Services Status', default: true },
-                { id: 'alerts_summary', name: 'Alerts Summary', default: true },
-                { id: 'network_stats', name: 'Network Statistics', default: true },
-            ],
-            weekly: [
-                { id: 'system_health', name: 'System Health', default: true },
-                { id: 'services_status', name: 'Services Status', default: true },
-                { id: 'alerts_summary', name: 'Alerts Summary', default: true },
-                { id: 'network_stats', name: 'Network Statistics', default: true },
-                { id: 'security_events', name: 'Security Events', default: true },
-                { id: 'bandwidth_usage', name: 'Bandwidth Usage', default: true },
-                { id: 'top_clients', name: 'Top Clients', default: true },
-            ],
-            security: [
-                { id: 'security_events', name: 'Security Events', default: true },
-                { id: 'blocked_ips', name: 'Blocked IPs', default: true },
-                { id: 'auth_failures', name: 'Auth Failures', default: true },
-                { id: 'waf_alerts', name: 'WAF Alerts', default: true },
-                { id: 'vulnerability_scan', name: 'Vulnerability Scan', default: false },
-            ],
-            network: [
-                { id: 'interface_stats', name: 'Interface Statistics', default: true },
-                { id: 'bandwidth_usage', name: 'Bandwidth Usage', default: true },
-                { id: 'top_protocols', name: 'Top Protocols', default: true },
-                { id: 'top_clients', name: 'Top Clients', default: true },
-                { id: 'dns_queries', name: 'DNS Queries', default: true },
-                { id: 'connection_summary', name: 'Connection Summary', default: true },
-            ],
+            daily: [['system_health', 'Santé du système', 1], ['services_status', 'État des services', 1], ['alerts_summary', 'Résumé des alertes', 1], ['network_stats', 'Statistiques réseau', 1]],
+            weekly: [['system_health', 'Santé du système', 1], ['services_status', 'État des services', 1], ['alerts_summary', 'Résumé des alertes', 1], ['network_stats', 'Statistiques réseau', 1], ['security_events', 'Événements de sécurité', 1], ['bandwidth_usage', 'Bande passante', 1], ['top_clients', 'Principaux clients', 1]],
+            security: [['security_events', 'Événements de sécurité', 1], ['blocked_ips', 'Adresses bloquées', 1], ['auth_failures', 'Échecs d’authentification', 1], ['waf_alerts', 'Alertes WAF', 1], ['vulnerability_scan', 'Analyse de vulnérabilités', 0]],
+            network: [['interface_stats', 'Interfaces', 1], ['bandwidth_usage', 'Bande passante', 1], ['top_protocols', 'Principaux protocoles', 1], ['top_clients', 'Principaux clients', 1], ['dns_queries', 'Requêtes DNS', 1], ['connection_summary', 'Résumé des connexions', 1]]
         };
+        const PRESETS = [['0 6 * * *', 'Tous les jours à 6 h'], ['0 7 * * 1', 'Le lundi à 7 h'], ['0 0 1 * *', 'Le 1er du mois'], ['0 */6 * * *', 'Toutes les 6 h'], ['0 8 * * 1-5', 'Jours ouvrés à 8 h']];
 
-        async function api(endpoint, method = 'GET', data = null) {
-            const token = localStorage.getItem('sbx_token');
-            const opts = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-                }
-            };
-            if (data) opts.body = JSON.stringify(data);
+        let STATS = null, RAPPORTS = null, PLANS = null, SESSION_OK = true, INJOIGNABLE = false;
+        let CONFIRM = null;   // id du rapport dont la suppression attend confirmation, jamais de dialogue natif
+        let SUIVI = 0;        // nombre de relevés rapprochés restants après une génération
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + endpoint, opts);
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
-                    return {};
-                }
-                return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return {};
-            }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !(data && data.success === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && (res.data.detail || res.data.error);
+            return d ? String(typeof d === 'string' ? d : JSON.stringify(d)).slice(0, 200) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable');
+        }
+        function octets(n) {
+            if (n === null || n === undefined || n === '' || isNaN(n)) return '—';
+            if (n < 1024) return n + ' o';
+            if (n < 1048576) return (n / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            return (n / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+        }
+        function quand(ts) {
+            if (!ts) return '—';
+            const d = new Date(ts); if (isNaN(d)) return '—';
+            return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function etatRapport(s) {
+            return s === 'completed' ? ['ok', 'TERMINÉ'] : s === 'failed' ? ['hors', 'ÉCHEC'] : s === 'generating' ? ['cy', 'EN COURS'] : s === 'pending' ? ['att', 'EN ATTENTE'] : ['', tiret(s).toUpperCase()];
         }
 
-        function checkAuth() {
-            const token = localStorage.getItem('sbx_token');
-            if (!token) {
-                if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
-            }
+        function demoData() {
+            const il = h => new Date(Date.now() - h * 3600e3).toISOString();
+            STATS = { reports_summary: { total: 5, completed: 3, pending: 1, failed: 1 } };
+            RAPPORTS = [
+                { id: 'a1b2c3d4', report_type: 'daily', format: 'pdf', status: 'completed', created_at: il(2), title: 'Rapport quotidien - 2026-10-13', file_size: 48213 },
+                { id: 'e5f6a7b8', report_type: 'security', format: 'html', status: 'completed', created_at: il(20), title: 'Rapport de sécurité - démonstration', file_size: 12840 },
+                { id: 'c9d0e1f2', report_type: 'network', format: 'pdf', status: 'pending', created_at: il(0.1), title: 'Rapport réseau - démonstration', file_size: null },
+                { id: '13243546', report_type: 'weekly', format: 'pdf', status: 'failed', created_at: il(50), title: 'Rapport hebdomadaire - semaine 41', file_size: null, error: 'moteur PDF indisponible (démonstration)' },
+                { id: '57687990', report_type: 'daily', format: 'html', status: 'completed', created_at: il(26), title: 'Rapport quotidien - 2026-10-12', file_size: 9120 }];
+            PLANS = { enabled: true, schedules: [
+                { id: 'daily', cron: '0 6 * * *', report_type: 'daily', format: 'pdf', enabled: true, description: 'Rapport quotidien à 6 h' },
+                { id: 'weekly', cron: '0 7 * * 1', report_type: 'weekly', format: 'pdf', enabled: false, description: 'Rapport hebdomadaire le lundi à 7 h' }] };
         }
 
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const filtre = $('filtre').value;
+            const essais = await Promise.allSettled([lire('/stats'), lire('/reports?limit=50' + (filtre ? '&report_type=' + encodeURIComponent(filtre) : '')), lire('/schedule')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            SESSION_OK = !refus;
+            INJOIGNABLE = !refus && essais.every(e => e.status === 'rejected');
+            STATS = val(0); const r = val(1); RAPPORTS = r && Array.isArray(r.reports) ? r.reports : null; PLANS = val(2);
+            rendre();
+            // Après une génération : relevés rapprochés tant qu'un rapport est en file ou en cours (borné).
+            if (SUIVI > 0 && RAPPORTS && RAPPORTS.some(x => x.status === 'pending' || x.status === 'generating')) { SUIVI--; setTimeout(charger, 3000); } else SUIVI = 0;
         }
 
-        function formatBytes(bytes) {
-            if (!bytes) return '-';
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire le Reporter (service arrêté ou injoignable).';
+            const etat = $('etat'), s = STATS && STATS.reports_summary;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (INJOIGNABLE) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s && s.completed != null) { etat.className = 'actif'; etat.textContent = s.completed + (s.completed > 1 ? ' RAPPORTS PRÊTS' : ' RAPPORT PRÊT'); }
+            else { etat.className = 'actif neutre'; etat.textContent = '—'; }
+            const nb = k => (s && s[k] !== null && s[k] !== undefined) ? s[k] : '—';
+            $('tTotal').textContent = nb('total'); $('tOk').textContent = nb('completed'); $('tAtt').textContent = nb('pending'); $('tKo').textContent = nb('failed');
+            rendreRapports(); rendrePlans();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        function formatDate(dateStr) {
-            if (!dateStr) return '-';
-            const d = new Date(dateStr);
-            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function ligneVide(tb, n, txt) { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+
+        function rendreRapports() {
+            const tb = $('bRap'); tb.replaceChildren();
+            const L = RAPPORTS || [];
+            $('nRap').textContent = L.length ? L.length + (L.length > 1 ? ' rapports' : ' rapport') : '';
+            if (!L.length) { ligneVide(tb, 7, !SESSION_OK || !RAPPORTS ? '—' : 'Aucun rapport'); return; }
+            L.forEach(r => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(r.title)));
+                tr.appendChild(el('td', '', TYPES[r.report_type] || tiret(r.report_type)));
+                tr.appendChild(el('td', '', r.format ? String(r.format).toUpperCase() : '—'));
+                const [c, l] = etatRapport(r.status); const e = el('td'); e.appendChild(pastille(c, l, r.status === 'failed' && r.error ? String(r.error).slice(0, 200) : '')); tr.appendChild(e);
+                tr.appendChild(el('td', '', quand(r.created_at)));
+                tr.appendChild(el('td', '', octets(r.file_size)));
+                const act = el('td', 'act'); const id = r.id;
+                if (r.status === 'completed') act.appendChild(btn('Télécharger', '', () => telecharger(id)));
+                if (CONFIRM === id) {
+                    act.appendChild(el('span', 'note', 'Supprimer ce rapport ?'));
+                    act.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; supprimer(id); }));
+                    act.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                } else act.appendChild(btn('Supprimer', 'danger', () => { CONFIRM = id; rendre(); }));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
         }
 
-        function showTab(tabId) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
-            document.getElementById(`tab-${tabId}`).classList.add('active');
-
-            if (tabId === 'generate') {
-                updateSections();
-            } else if (tabId === 'schedule') {
-                loadSchedule();
-            }
+        function rendrePlans() {
+            const box = $('lPlan'); box.replaceChildren();
+            const L = PLANS && Array.isArray(PLANS.schedules) ? PLANS.schedules : null;
+            $('nPlan').textContent = L && L.length ? L.length + (L.length > 1 ? ' planifications' : ' planification') : '';
+            if (!L || !L.length) { box.appendChild(el('div', 'vide', !SESSION_OK || !L ? '—' : 'Aucune planification')); return; }
+            L.forEach(s => {
+                const ligne = el('div', 'plan'); const g = el('div', 'gauche');
+                g.appendChild(el('div', 'nom', (TYPES[s.report_type] || tiret(s.report_type)) + ' (' + (s.format ? String(s.format).toUpperCase() : '—') + ')'));
+                g.appendChild(el('div', 'cron mono', tiret(s.cron) + (s.description ? ' — ' + s.description : '')));
+                ligne.appendChild(g);
+                ligne.appendChild(pastille(s.enabled ? 'ok' : '', s.enabled ? 'ACTIVE' : 'INACTIVE'));
+                const lab = el('label', 'inter'); lab.title = s.enabled ? 'Désactiver' : 'Activer';
+                const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!s.enabled; cb.setAttribute('aria-label', 'Planification ' + (TYPES[s.report_type] || s.report_type));
+                cb.addEventListener('change', () => basculer(s.report_type, cb.checked));
+                lab.appendChild(cb); lab.appendChild(el('span')); ligne.appendChild(lab);
+                box.appendChild(ligne);
+            });
         }
 
-        async function loadStats() {
-            const data = await api('/stats');
-            if (data && data.reports_summary) {
-                const s = data.reports_summary;
-                document.getElementById('total-reports').textContent = s.total || 0;
-                document.getElementById('completed-reports').textContent = s.completed || 0;
-                document.getElementById('pending-reports').textContent = s.pending || 0;
-                document.getElementById('failed-reports').textContent = s.failed || 0;
-                document.getElementById('status-badge').textContent = `${s.completed || 0} Reports`;
-            }
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function supprimer(id) {
+            const r = await ecrire('DELETE', '/reports/' + encodeURIComponent(id));
+            if (r.ok) { retour('rRap', true, 'Rapport ' + id + ' supprimé.'); charger(); } else { retour('rRap', false, 'Suppression impossible : ' + detail(r)); rendre(); }
         }
-
-        async function loadReports() {
-            const filterType = document.getElementById('filter-type').value;
-            let endpoint = '/reports?limit=50';
-            if (filterType) endpoint += `&report_type=${filterType}`;
-
-            const data = await api(endpoint);
-            const tbody = document.getElementById('reports-table');
-
-            if (!data.reports || data.reports.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="icon">📄</div>No reports found</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = data.reports.map(r => `
-                <tr>
-                    <td>${r.title}</td>
-                    <td>${r.report_type}</td>
-                    <td>${r.format.toUpperCase()}</td>
-                    <td><span class="status-badge ${r.status}">${r.status}</span></td>
-                    <td>${formatDate(r.created_at)}</td>
-                    <td>${formatBytes(r.file_size)}</td>
-                    <td>
-                        ${r.status === 'completed' ? `<button class="action-btn" onclick="downloadReport('${r.id}')" title="Download">Download</button>` : ''}
-                        <button class="action-btn delete" onclick="deleteReport('${r.id}')" title="Delete">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function updateSections() {
-            const type = document.getElementById('report-type').value;
-            const sections = SECTIONS[type] || [];
-            const group = document.getElementById('sections-group');
-
-            group.innerHTML = sections.map(s => `
-                <label class="checkbox-item">
-                    <input type="checkbox" name="section" value="${s.id}" ${s.default ? 'checked' : ''}>
-                    <span>${s.name}</span>
-                </label>
-            `).join('');
-
-            // Update preview
-            const preview = document.getElementById('preview-content');
-            const typeLabels = { daily: 'Daily', weekly: 'Weekly', security: 'Security', network: 'Network' };
-            preview.innerHTML = `
-                <div style="text-align: left;">
-                    <p><strong>Report Type:</strong> ${typeLabels[type] || type}</p>
-                    <p><strong>Sections:</strong></p>
-                    <ul style="margin-left: 1rem; color: var(--p31-mid);">
-                        ${sections.filter(s => s.default).map(s => `<li>${s.name}</li>`).join('')}
-                    </ul>
-                </div>
-            `;
-        }
-
-        async function generateReport(e) {
-            e.preventDefault();
-
-            const selectedSections = Array.from(document.querySelectorAll('input[name="section"]:checked')).map(cb => cb.value);
-
-            const data = {
-                report_type: document.getElementById('report-type').value,
-                format: document.getElementById('report-format').value,
-                title: document.getElementById('report-title').value || null,
-                start_date: document.getElementById('start-date').value || null,
-                end_date: document.getElementById('end-date').value || null,
-                sections: selectedSections.length > 0 ? selectedSections : null,
+        async function generer(ev) {
+            ev.preventDefault();
+            const cochees = Array.from(document.querySelectorAll('#gSections input:checked')).map(c => c.value);
+            const corps = {
+                report_type: $('gType').value, format: $('gFormat').value, title: $('gTitre').value || null,
+                start_date: $('gDebut').value || null, end_date: $('gFin').value || null, sections: cochees.length > 0 ? cochees : null
             };
-
-            const result = await api('/reports/generate', 'POST', data);
-
-            if (result.success) {
-                showToast(`Report generation started (ID: ${result.report_id})`);
-                showTab('reports');
-                // Poll for completion
-                setTimeout(loadReports, 2000);
-                setTimeout(loadReports, 5000);
-                setTimeout(loadStats, 5000);
-            } else {
-                showToast(result.error || 'Failed to generate report', 'error');
-            }
+            const r = await ecrire('POST', '/reports/generate', corps);
+            if (r.ok) {
+                retour('rGen', true, 'Génération lancée (identifiant ' + tiret(r.data && r.data.report_id) + ').');
+                SUIVI = 10; onglet('rapports'); charger();
+            } else retour('rGen', false, 'Échec de la génération : ' + detail(r));
+        }
+        async function enregistrerPlan(ev) {
+            ev.preventDefault();
+            const corps = { report_type: $('pType').value, format: $('pFormat').value, cron: $('pCron').value, enabled: $('pActive').checked };
+            const r = await ecrire('POST', '/schedule', corps);
+            if (r.ok) { retour('rPlan', true, 'Planification enregistrée.'); charger(); } else retour('rPlan', false, 'Enregistrement impossible : ' + detail(r));
+        }
+        async function basculer(type, actif) {
+            if (DEMO) { retour('rPlan', false, 'Démonstration : action inerte.'); rendre(); return; }
+            let courant = null;
+            try { const d = await lire('/schedule'); courant = (d.schedules || []).find(s => s.report_type === type); } catch (e) { /* traité plus bas */ }
+            if (!courant) { retour('rPlan', false, 'Planification introuvable : relevé impossible.'); charger(); return; }
+            const r = await ecrire('POST', '/schedule', { report_type: type, format: courant.format, cron: courant.cron, enabled: actif });
+            if (r.ok) { retour('rPlan', true, 'Planification ' + (actif ? 'activée' : 'désactivée') + '.'); } else retour('rPlan', false, 'Changement impossible : ' + detail(r));
+            charger();
         }
 
         // Déclenche un téléchargement par un lien ordinaire. Firefox traite une navigation
@@ -597,10 +364,10 @@
             return a;
         }
 
-        async function downloadReport(id) {
-            const token = localStorage.getItem('sbx_token');
-            const url = `${API}/reports/${id}/download`;
-
+        async function telecharger(id) {
+            if (DEMO) { retour('rRap', false, 'Démonstration : téléchargement inerte.'); return; }
+            const token = jeton();
+            const url = `${API}/reports/${encodeURIComponent(id)}/download`;
             try {
                 // 1. Le cookie de session suffit-il ? (l'API accepte cookie ou jeton Bearer)
                 //    Oui : lien direct, aucune URL blob.
@@ -613,14 +380,12 @@
                 // 2. Repli : jeton Bearer seul (pas de cookie). Téléchargement par blob, ancre
                 //    dans le document et révocation différée (révoquer tout de suite coupait
                 //    le téléchargement avant qu'il ne démarre).
-                const res = await fetch(url, {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
+                const res = await fetch(url, { headers: token ? { 'Authorization': 'Bearer ' + token } : {} });
                 if (!res.ok) throw new Error('Download failed');
 
                 const blob = await res.blob();
                 const contentDisp = res.headers.get('Content-Disposition');
-                let filename = 'report';
+                let filename = 'rapport';
                 if (contentDisp) {
                     const match = contentDisp.match(/filename="?([^";]+)"?/);
                     if (match) filename = match[1];
@@ -629,103 +394,55 @@
                 const a = lanceTelechargement(href, filename);
                 setTimeout(() => { URL.revokeObjectURL(href); a.remove(); }, 60000);
             } catch (e) {
-                showToast('Download failed', 'error');
+                retour('rRap', false, 'Téléchargement impossible.');
             }
         }
 
-        async function deleteReport(id) {
-            if (!confirm('Delete this report?')) return;
-
-            const result = await api(`/reports/${id}`, 'DELETE');
-            if (result.success) {
-                showToast('Report deleted');
-                loadReports();
-                loadStats();
-            } else {
-                showToast(result.error || 'Failed to delete', 'error');
-            }
+        // ----- Formulaires -----
+        function sections() {
+            const g = $('gSections'); g.replaceChildren();
+            (SECTIONS[$('gType').value] || []).forEach(([id, nom, defaut]) => {
+                const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.value = id; c.checked = !!defaut;
+                l.appendChild(c); l.appendChild(el('span', '', nom)); g.appendChild(l);
+            });
+            annoncer();
         }
+        PRESETS.forEach(([cron, nom]) => { const b = el('button', 'btn sm', nom); b.type = 'button'; b.title = cron; b.addEventListener('click', () => { $('pCron').value = cron; }); $('presets').appendChild(b); });
+        $('gType').addEventListener('change', sections);
+        $('fGen').addEventListener('submit', generer);
+        $('fPlan').addEventListener('submit', enregistrerPlan);
+        $('filtre').addEventListener('change', charger);
+        $('rafraichir').addEventListener('click', charger);
 
-        async function loadSchedule() {
-            const data = await api('/schedule');
-            const list = document.getElementById('schedules-list');
-
-            if (!data.schedules || data.schedules.length === 0) {
-                list.innerHTML = '<div class="empty-state">No schedules configured</div>';
-                return;
-            }
-
-            list.innerHTML = data.schedules.map(s => `
-                <div class="schedule-item">
-                    <div class="schedule-info">
-                        <div class="name">${s.report_type.charAt(0).toUpperCase() + s.report_type.slice(1)} Report (${s.format.toUpperCase()})</div>
-                        <div class="cron">${s.cron} - ${s.description || ''}</div>
-                    </div>
-                    <label class="schedule-toggle">
-                        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSchedule('${s.report_type}', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-            `).join('');
+        // ----- Onglets -----
+        const NOMS = ['rapports', 'generer', 'planification'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
 
-        function setCron(cron) {
-            document.getElementById('schedule-cron').value = cron;
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'reporter' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function saveSchedule(e) {
-            e.preventDefault();
-
-            const data = {
-                report_type: document.getElementById('schedule-type').value,
-                format: document.getElementById('schedule-format').value,
-                cron: document.getElementById('schedule-cron').value,
-                enabled: document.getElementById('schedule-enabled').checked,
-            };
-
-            const result = await api('/schedule', 'POST', data);
-
-            if (result.success) {
-                showToast('Schedule saved');
-                loadSchedule();
-            } else {
-                showToast(result.error || 'Failed to save schedule', 'error');
-            }
-        }
-
-        async function toggleSchedule(reportType, enabled) {
-            const scheduleData = await api('/schedule');
-            const schedule = scheduleData.schedules?.find(s => s.report_type === reportType);
-
-            if (schedule) {
-                await api('/schedule', 'POST', {
-                    report_type: reportType,
-                    format: schedule.format,
-                    cron: schedule.cron,
-                    enabled: enabled,
-                });
-                showToast(`Schedule ${enabled ? 'enabled' : 'disabled'}`);
-            }
-        }
-
-        async function refreshData() {
-            await Promise.all([loadStats(), loadReports()]);
-            showToast('Data refreshed');
-        }
-
-        // Initialize
-        checkAuth();
-        loadStats();
-        loadReports();
-        updateSections();
-
-        // Auto-refresh every 60 seconds
-        refreshInterval = setInterval(() => {
-            loadStats();
-            loadReports();
-        }, 60000);
+        sections();
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/sidebar.js"></script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
