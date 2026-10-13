@@ -4,515 +4,351 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  DNS Master (BIND) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - DNS Master</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — DNS Master</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .grid-2 { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .zone-list { display: flex; flex-direction: column; gap: 0.5rem; }
-        .zone-item { padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .zone-item:hover { background: rgba(255,255,255,0.03); }
-        .zone-item.active { border-color: var(--primary); background: rgba(88,166,255,0.1); }
-        .zone-item .name { font-weight: 600; }
-        .zone-item .count { font-size: 0.75rem; color: var(--text-dim); }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-        .type-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; font-weight: 700; font-family: monospace; }
-        .type-A { background: rgba(63,185,80,0.2); color: var(--green); }
-        .type-AAAA { background: rgba(88,166,255,0.2); color: var(--primary); }
-        .type-CNAME { background: rgba(0,212,255,0.2); color: var(--cyan); }
-        .type-MX { background: rgba(163,113,247,0.2); color: var(--purple); }
-        .type-TXT { background: rgba(210,153,34,0.2); color: var(--yellow); }
-        .type-NS { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .mono { font-family: monospace; font-size: 0.8rem; }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
-        .modal-content h3 { margin-bottom: 1rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .filter-btn { padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text-dim); cursor: pointer; font-size: 0.75rem; }
-        .filter-btn.active { border-color: var(--primary); color: var(--primary); background: rgba(88,166,255,0.1); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .carte{width:100%;height:auto;display:block;max-height:460px}
+        .carte text{fill:var(--texte);font-size:12px;paint-order:stroke;stroke:#0a162e;stroke-width:4px;stroke-linejoin:round} .carte .sub{fill:var(--faible);font-size:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .zones{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+        .zone{display:flex;align-items:center;gap:8px;width:100%;font:inherit;text-align:left;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.6);color:var(--texte);cursor:pointer;min-width:0}
+        .zone:hover{border-color:var(--cyan)} .zone:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .zone[aria-pressed=true]{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .zone .nom{font-weight:600;overflow-wrap:anywhere;flex:1;min-width:0} .zone .nb{color:var(--faible);font-size:.7rem;white-space:nowrap}
+        .filtres{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px;align-items:center}
+        .filtres button{font:inherit;font-size:.72rem;padding:3px 10px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer}
+        .filtres button[aria-pressed=true]{border-color:var(--cyan);color:#d9f2ff;background:rgba(41,182,246,.22)}
+        .filtres input{font:inherit;font-size:.78rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:4px 9px;min-width:0;flex:1 1 120px}
+        td.val{max-width:340px;overflow-wrap:anywhere}
+        .pill.t-A{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.t-AAAA{border-color:var(--bleu);color:var(--bleu);background:rgba(59,130,246,.12)}
+        .pill.t-CNAME{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.t-MX{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .pill.t-TXT{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .grille.dns{grid-template-columns:1fr} @container a (min-width:900px){.grille.dns{grid-template-columns:minmax(220px,300px) 1fr}}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>DNS Master</h1>
-            <div>
-                <button class="btn" onclick="reloadBind()">Reload BIND</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+                <div><h1>DNS Master</h1><small>Zones et enregistrements BIND</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <span id="cRecharge"></span><button class="btn" id="recharge" type="button" title="Recharge la configuration de BIND (POST /reload).">Recharger BIND</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="retour" id="rGlobal" hidden></div>
 
-        <div class="stats-row">
-            <div class="stat-card"><div class="value" id="bind-status">-</div><div class="label">BIND Status</div></div>
-            <div class="stat-card"><div class="value" id="zone-count">-</div><div class="label">Zones</div></div>
-            <div class="stat-card"><div class="value" id="record-count">-</div><div class="label">Records</div></div>
-            <div class="stat-card"><div class="value" id="default-ttl">-</div><div class="label">Default TTL</div></div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile ok" id="cBind" title="État du service BIND selon dnsmaster (status-json). Si la commande est absente ou en échec, l’API renvoie « arrêté » : la page ne peut pas distinguer arrêt et indisponibilité."><span class="l">BIND</span><span class="v" id="tBind">—</span><span class="s">service</span></div>
+            <div class="tuile cy" title="Zones déclarées sur ce serveur."><span class="l">Zones</span><span class="v" id="tZones">—</span><span class="s">gérées</span></div>
+            <div class="tuile cy" title="Nombre total d’enregistrements, tel que compté par dnsmaster."><span class="l">Enregistrements</span><span class="v" id="tRecs">—</span><span class="s">toutes zones</span></div>
+            <div class="tuile cy" title="TTL par défaut annoncé par dnsmaster. « — » s’il n’est pas fourni : la page n’en suppose plus un."><span class="l">TTL par défaut</span><span class="v" id="tTtl">—</span><span class="s">secondes</span></div>
+        </section>
 
-        <div class="grid-2">
-            <div class="card">
-                <h2>Zones <button class="btn success" onclick="showAddZone()">+ Add</button></h2>
-                <div class="zone-list" id="zone-list">Loading...</div>
+        <div class="grille dns">
+            <div class="pan"><h3>Zones <i id="nZones"></i><button class="btn sm prim" id="addZone" type="button">+ Zone</button></h3>
+                <div class="retour" id="rZones" hidden></div>
+                <form class="saisie" id="fZone" hidden>
+                    <label>Nom de la zone<input name="name" required placeholder="exemple.org" autocomplete="off"></label>
+                    <div class="bout"><button class="btn prim sm" type="submit">Créer</button><button class="btn sm" type="button" data-ferme="fZone">Annuler</button></div>
+                </form>
+                <ul class="zones" id="listeZones"></ul>
             </div>
-
-            <div class="card">
-                <h2>Records <span id="current-zone"></span> <button class="btn success" id="add-record-btn" style="display:none" onclick="showAddRecord()">+ Add</button></h2>
-                <div class="filter-bar" id="filter-bar" style="display:none">
-                    <button class="filter-btn active" data-type="ALL">ALL</button>
-                    <button class="filter-btn" data-type="A">A</button>
-                    <button class="filter-btn" data-type="AAAA">AAAA</button>
-                    <button class="filter-btn" data-type="CNAME">CNAME</button>
-                    <button class="filter-btn" data-type="MX">MX</button>
-                    <button class="filter-btn" data-type="TXT">TXT</button>
-                    <button class="filter-btn" data-type="NS">NS</button>
-                </div>
-                <div id="records-container"><p style="color:var(--text-dim)">Select a zone to view records</p></div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Add Zone Modal -->
-    <div class="modal" id="zone-modal">
-        <div class="modal-content">
-            <h3>Add Zone</h3>
-            <div class="form-group">
-                <label>Zone Name</label>
-                <input type="text" id="zone-name" placeholder="example.com">
-            </div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('zone-modal')">Cancel</button>
-                <button class="btn success" onclick="addZone()">Create</button>
+            <div class="pan"><h3>Enregistrements <i id="zoneCourante"></i><button class="btn sm prim" id="addRec" type="button" hidden>+ Enregistrement</button></h3>
+                <div class="retour" id="rRecs" hidden></div>
+                <form class="saisie" id="fRec" hidden>
+                    <label>Type<select name="type">
+                        <option value="A">A — adresse IPv4</option><option value="AAAA">AAAA — adresse IPv6</option><option value="CNAME">CNAME — nom canonique</option>
+                        <option value="MX">MX — serveur de courrier</option><option value="TXT">TXT — texte</option><option value="NS">NS — serveur de noms</option>
+                        <option value="SRV">SRV — service</option><option value="CAA">CAA — autorité de certification</option></select></label>
+                    <label>Nom<input name="name" placeholder="@ ou www" autocomplete="off"></label>
+                    <label>Valeur<input name="value" required placeholder="192.0.2.10" autocomplete="off"></label>
+                    <label>TTL (s)<input name="ttl" type="number" value="300" min="60" max="86400"></label>
+                    <div class="bout"><button class="btn prim sm" type="submit">Enregistrer</button><button class="btn sm" type="button" data-ferme="fRec">Annuler</button></div>
+                </form>
+                <div class="filtres" id="filtres" hidden></div>
+                <div class="tab"><table><thead><tr><th>Type</th><th>Nom</th><th>Valeur</th><th>TTL</th><th></th></tr></thead><tbody id="bRecs"></tbody></table></div>
+                <p class="note">Filtre et recherche côté page, sur les enregistrements déjà lus. Un TTL absent est affiché « — ».</p>
             </div>
         </div>
-    </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-    <!-- Add Record Modal -->
-    <div class="modal" id="record-modal">
-        <div class="modal-content">
-            <h3 id="record-modal-title">Add Record</h3>
-            <div class="form-group">
-                <label>Type</label>
-                <select id="record-type">
-                    <option value="A">A - IPv4 Address</option>
-                    <option value="AAAA">AAAA - IPv6 Address</option>
-                    <option value="CNAME">CNAME - Canonical Name</option>
-                    <option value="MX">MX - Mail Exchange</option>
-                    <option value="TXT">TXT - Text Record</option>
-                    <option value="NS">NS - Nameserver</option>
-                    <option value="SRV">SRV - Service</option>
-                    <option value="CAA">CAA - Cert Authority</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Name</label>
-                <input type="text" id="record-name" placeholder="@ or www">
-            </div>
-            <div class="form-group">
-                <label>Value</label>
-                <input type="text" id="record-value" placeholder="192.168.1.1">
-            </div>
-            <div class="form-group">
-                <label>TTL (seconds)</label>
-                <input type="number" id="record-ttl" value="300">
-            </div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('record-modal')">Cancel</button>
-                <button class="btn success" onclick="addRecord()">Save</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/dns';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        let currentZone = null;
-        let currentRecords = [];
-        let typeFilter = 'ALL';
+        let STATUT = null, ZONES = [], RECS = [], ZONE = null, FILTRE = 'TOUS', RECHERCHE = '', SESSION_OK = true, INJOIGNABLE = false;
+        let CONFIRM = null;   // { genre, cle } : confirmation en cours dans la page, jamais de dialogue natif
 
-        async function api(path, opts = {}) {
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => x && x.msg ? x.msg : String(x)).join(' ; ');
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        // L'API répond 200 avec { success:false, output } quand dnsmaster échoue.
+        const reussi = r => r.ok && r.data && r.data.success === true;
+        const motif = r => (r.data && r.data.success === false && r.data.output) ? String(r.data.output) : detail(r);
+
+        function demoData() {
+            STATUT = { running: true, zones: 2, records: 7, default_ttl: 3600 };
+            ZONES = [{ name: 'example.com', records: 5, valid: true }, { name: 'example.net', records: 2, valid: true }];
+            ZONE = ZONE || 'example.com';
+            RECS = [
+                { type: 'NS', name: '@', value: 'ns1.example.com.', ttl: 3600 }, { type: 'A', name: '@', value: '192.0.2.10', ttl: 300 },
+                { type: 'A', name: 'www', value: '198.51.100.20', ttl: 300 }, { type: 'MX', name: '@', value: '10 mail.example.com.', ttl: 3600 },
+                { type: 'TXT', name: '@', value: 'v=spf1 mx -all', ttl: 3600 }];
         }
 
-        async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('bind-status').textContent = d.running ? 'UP' : 'DOWN';
-            document.getElementById('bind-status').style.color = d.running ? 'var(--green)' : 'var(--red)';
-            document.getElementById('zone-count').textContent = d.zones || 0;
-            document.getElementById('record-count').textContent = d.records || 0;
-            document.getElementById('default-ttl').textContent = (d.default_ttl || 300) + 's';
+        const nomZone = z => (z && typeof z === 'object') ? z.name : z;
+
+        async function chargerZone() {
+            if (DEMO || !ZONE) return;
+            try { const d = await lire('/zone/' + encodeURIComponent(ZONE) + '/records'); RECS = Array.isArray(d.records) ? d.records : []; }
+            catch (e) { RECS = []; if (e.statut === 401 || e.statut === 403) SESSION_OK = false; }
         }
 
-        async function loadZones() {
-            const d = await api('/zones');
-            const list = document.getElementById('zone-list');
-            const zones = d.zones || [];
-            if (!zones.length) { list.innerHTML = '<p style="color:var(--text-dim)">No zones configured</p>'; return; }
-            list.innerHTML = zones.map(z => `
-                <div class="zone-item ${currentZone === z.name ? 'active' : ''}" onclick="selectZone('${z.name}')">
-                    <div>
-                        <div class="name">${z.name}</div>
-                        <div class="count">${z.records || 0} records</div>
-                    </div>
-                    <span style="color:${z.valid ? 'var(--green)' : 'var(--red)'}">${z.valid ? '✓' : '✗'}</span>
-                </div>
-            `).join('');
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/zones')]);
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            INJOIGNABLE = essais.every(e => e.status === 'rejected') && !refus;
+            SESSION_OK = !refus;
+            STATUT = essais[0].status === 'fulfilled' ? essais[0].value : null;
+            const z = essais[1].status === 'fulfilled' ? essais[1].value : null;
+            ZONES = z && Array.isArray(z.zones) ? z.zones : [];
+            if (ZONE && !ZONES.some(x => nomZone(x) === ZONE)) { ZONE = null; RECS = []; }
+            await chargerZone();
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire le service DNS (arrêté ou injoignable).';
+            rendre();
         }
 
-        async function selectZone(name) {
-            currentZone = name;
-            document.getElementById('current-zone').textContent = ': ' + name;
-            document.getElementById('add-record-btn').style.display = '';
-            document.getElementById('filter-bar').style.display = '';
-            loadZones();
-            const d = await api(`/zone/${name}/records`);
-            currentRecords = d.records || [];
-            renderRecords();
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (s.running ? '' : ' hors'); etat.textContent = s.running ? 'BIND ACTIF' : 'BIND ARRÊTÉ'; }
+            const nb = x => (x === null || x === undefined) ? '—' : x;
+            $('tBind').textContent = s ? (s.running ? 'Actif' : 'Arrêté') : '—';
+            $('cBind').className = 'tuile ' + (s && s.running ? 'ok' : s ? 'hors' : 'cy');
+            $('tZones').textContent = s ? nb(s.zones) : '—';
+            $('tRecs').textContent = s ? nb(s.records) : '—';
+            $('tTtl').textContent = s && s.default_ttl != null ? s.default_ttl + ' s' : '—';
+            rendreZones(); rendreRecs();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        function renderRecords() {
-            const container = document.getElementById('records-container');
-            let filtered = currentRecords;
-            if (typeFilter !== 'ALL') filtered = filtered.filter(r => r.type === typeFilter);
-            if (!filtered.length) {
-                container.innerHTML = '<p style="color:var(--text-dim)">No records</p>';
-                return;
-            }
-            container.innerHTML = `<table>
-                <thead><tr><th>Type</th><th>Name</th><th>Value</th><th>TTL</th><th></th></tr></thead>
-                <tbody>${filtered.map(r => `<tr>
-                    <td><span class="type-badge type-${r.type}">${r.type}</span></td>
-                    <td class="mono">${r.name}</td>
-                    <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${r.value}</td>
-                    <td>${r.ttl || '-'}</td>
-                    <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteRecord('${r.type}','${r.name}','${r.value}')">Del</button></td>
-                </tr>`).join('')}</tbody>
-            </table>`;
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+
+        function rendreZones() {
+            const ul = $('listeZones'); ul.replaceChildren();
+            $('nZones').textContent = ZONES.length ? ZONES.length + ' zone' + (ZONES.length > 1 ? 's' : '') : '';
+            if (!ZONES.length) { ul.appendChild(el('li', 'vide', SESSION_OK ? 'Aucune zone configurée' : '—')); return; }
+            ZONES.forEach(z => {
+                const nom = nomZone(z), li = el('li');
+                const b = el('button', 'zone'); b.type = 'button'; b.setAttribute('aria-pressed', String(nom === ZONE));
+                b.appendChild(el('span', 'nom', tiret(nom)));
+                if (z && typeof z === 'object') {
+                    if (z.records != null) b.appendChild(el('span', 'nb', z.records + ' enr.'));
+                    if (z.valid !== undefined) b.appendChild(el('span', 'pill ' + (z.valid ? 'ok' : 'hors'), z.valid ? 'VALIDE' : 'INVALIDE'));
+                }
+                b.addEventListener('click', () => choisir(nom));
+                li.appendChild(b); ul.appendChild(li);
+            });
         }
 
-        document.getElementById('filter-bar').addEventListener('click', e => {
-            if (e.target.classList.contains('filter-btn')) {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                typeFilter = e.target.dataset.type;
-                renderRecords();
-            }
+        async function choisir(nom) {
+            ZONE = nom; FILTRE = 'TOUS'; RECHERCHE = ''; CONFIRM = null; $('rRecs').hidden = true;
+            await chargerZone(); rendre();
+        }
+
+        function rendreRecs() {
+            const tb = $('bRecs'); tb.replaceChildren();
+            $('zoneCourante').textContent = ZONE || '';
+            $('addRec').hidden = !ZONE;
+            const barre = $('filtres'); barre.hidden = !ZONE; barre.replaceChildren();
+            if (!ZONE) { const tr = el('tr'), td = el('td', 'vide', SESSION_OK ? 'Choisir une zone pour voir ses enregistrements' : '—'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            const types = ['TOUS'].concat([...new Set(RECS.map(r => r.type).filter(Boolean))].sort());
+            types.forEach(t => { const b = el('button', '', t === 'TOUS' ? 'Tous' : t); b.type = 'button'; b.setAttribute('aria-pressed', String(t === FILTRE)); b.addEventListener('click', () => { FILTRE = t; rendreRecs(); annoncer(); }); barre.appendChild(b); });
+            const rech = el('input'); rech.type = 'search'; rech.placeholder = 'Rechercher nom ou valeur'; rech.value = RECHERCHE; rech.setAttribute('aria-label', 'Rechercher');
+            rech.addEventListener('input', () => { RECHERCHE = rech.value; rendreLignes(); });
+            barre.appendChild(rech);
+            rendreLignes();
+        }
+
+        function rendreLignes() {
+            const tb = $('bRecs'); tb.replaceChildren();
+            const q = RECHERCHE.trim().toLowerCase();
+            const liste = RECS.filter(r => (FILTRE === 'TOUS' || r.type === FILTRE) && (!q || String(r.name).toLowerCase().includes(q) || String(r.value).toLowerCase().includes(q)));
+            if (!liste.length) { const tr = el('tr'), td = el('td', 'vide', RECS.length ? 'Aucun enregistrement ne correspond' : 'Aucun enregistrement'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            liste.forEach(r => {
+                const tr = el('tr'); const t = el('td'); t.appendChild(el('span', 'pill t-' + String(r.type).replace(/[^A-Z]/g, ''), tiret(r.type))); tr.appendChild(t);
+                tr.appendChild(el('td', 'mono', tiret(r.name))); tr.appendChild(el('td', 'mono val', tiret(r.value))); tr.appendChild(el('td', '', r.ttl != null ? r.ttl : '—'));
+                const act = el('td', 'act'), cle = [r.type, r.name, r.value].join('\u0001');
+                if (CONFIRM && CONFIRM.genre === 'rec' && CONFIRM.cle === cle) {
+                    act.appendChild(el('span', 'note', 'Supprimer ?'));
+                    act.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; supprimer(r); }));
+                    act.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendreLignes(); }));
+                } else act.appendChild(btn('Supprimer', 'danger', () => { CONFIRM = { genre: 'rec', cle }; rendreLignes(); }));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function supprimer(r) {
+            const res = await ecrire('DELETE', '/record', { zone: ZONE, type: r.type, name: r.name, value: r.value });
+            if (reussi(res)) { retour('rRecs', true, 'Enregistrement ' + r.type + ' « ' + r.name + ' » supprimé.'); await chargerZone(); charger(); }
+            else { retour('rRecs', false, 'Suppression impossible : ' + motif(res)); rendreLignes(); }
+        }
+        $('fRec').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const corps = { zone: ZONE, type: f.type.value, name: f.name.value.trim() || '@', value: f.value.value.trim(), ttl: parseInt(f.ttl.value, 10) || 300 };
+            const res = await ecrire('POST', '/record', corps);
+            if (reussi(res)) { f.reset(); f.hidden = true; retour('rRecs', true, 'Enregistrement ajouté.'); charger(); } else retour('rRecs', false, 'Ajout impossible : ' + motif(res));
         });
+        $('fZone').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const res = await ecrire('POST', '/zone', { name: f.name.value.trim() });
+            if (reussi(res)) { f.reset(); f.hidden = true; retour('rZones', true, 'Zone créée.'); charger(); } else retour('rZones', false, 'Création impossible : ' + motif(res));
+        });
+        $('recharge').addEventListener('click', () => {
+            if (CONFIRM && CONFIRM.genre === 'reload') return;
+            CONFIRM = { genre: 'reload' }; const c = $('cRecharge'); c.replaceChildren();
+            c.appendChild(el('span', 'note', 'Recharger BIND ?'));
+            c.appendChild(btn('Confirmer', 'danger', async () => {
+                CONFIRM = null; c.replaceChildren();
+                const res = await ecrire('POST', '/reload');
+                if (reussi(res)) retour('rGlobal', true, 'BIND rechargé.'); else retour('rGlobal', false, 'Rechargement impossible : ' + motif(res));
+            }));
+            c.appendChild(btn('Annuler', '', () => { CONFIRM = null; c.replaceChildren(); annoncer(); }));
+            annoncer();
+        });
+        $('addZone').addEventListener('click', () => { $('fZone').hidden = !$('fZone').hidden; annoncer(); });
+        $('addRec').addEventListener('click', () => { $('fRec').hidden = !$('fRec').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+        $('rafraichir').addEventListener('click', charger);
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showAddZone() { showModal('zone-modal'); }
-        function showAddRecord() { showModal('record-modal'); }
-
-        async function addZone() {
-            const name = document.getElementById('zone-name').value.trim();
-            if (!name) { alert('Zone name required'); return; }
-            const r = await api('/zone', { method: 'POST', body: JSON.stringify({ name }) });
-            if (r.success) { hideModal('zone-modal'); refresh(); document.getElementById('zone-name').value = ''; }
-            else alert('Error: ' + (r.output || 'Failed'));
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'dns' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function addRecord() {
-            const type = document.getElementById('record-type').value;
-            const name = document.getElementById('record-name').value.trim() || '@';
-            const value = document.getElementById('record-value').value.trim();
-            const ttl = parseInt(document.getElementById('record-ttl').value) || 300;
-            if (!value) { alert('Value required'); return; }
-            const r = await api('/record', { method: 'POST', body: JSON.stringify({ zone: currentZone, type, name, value, ttl }) });
-            if (r.success) { hideModal('record-modal'); selectZone(currentZone); }
-            else alert('Error: ' + (r.output || 'Failed'));
-        }
-
-        async function deleteRecord(type, name, value) {
-            if (!confirm(`Delete ${type} record for "${name}"?`)) return;
-            const r = await api('/record', { method: 'DELETE', body: JSON.stringify({ zone: currentZone, type, name, value }) });
-            if (r.success) selectZone(currentZone);
-            else alert('Error: ' + (r.output || 'Failed'));
-        }
-
-        async function reloadBind() {
-            const r = await api('/reload', { method: 'POST' });
-            alert(r.success ? 'BIND reloaded' : 'Error: ' + (r.output || 'Failed'));
-        }
-
-        function refresh() { loadStatus(); loadZones(); if (currentZone) selectZone(currentZone); }
-        refresh();
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || !$('fZone').hidden || !$('fRec').hidden || (document.activeElement && document.activeElement.tagName === 'INPUT')) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
