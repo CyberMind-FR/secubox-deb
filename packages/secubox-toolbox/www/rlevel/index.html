@@ -2,250 +2,244 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  SecuBox-Deb :: ToolBoX — /rlevel panel (per-peer MITM inspection level,
-  #rlevel-per-peer task 7). Admin table (floor/force via sbxmitm-policyctl,
-  task 4/6) + peer self-service (chosen, bounded by floor/forced).
+  SecuBox-Deb :: ToolBoX — panneau /rlevel/ (niveau d'inspection MITM par pair, #rlevel-per-peer),
+  au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, mesure absente = « — ».
+  Vue admin (plancher / forçage via sbxmitm-policyctl) + libre-service « Mon niveau » (borné par plancher/forçage).
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox — R-Level (ToolBoX)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-            --cyan: #00d4ff;
-            --grey: #8a97a3;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem; backdrop-filter: blur(10px); }
-        .card h2 { font-size: 0.95rem; color: var(--cyan); margin-bottom: 0.75rem; }
-        .muted { color: var(--p31-dim); font-size: 0.8rem; }
-
-        /* mode badges — 4 distinct colours, one glyph-free pill each */
-        .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid currentColor; background: rgba(255,255,255,0.03); }
-        .badge-off{color:var(--grey);}
-        .badge-passive{color:var(--cyan);}
-        .badge-active{color:var(--orange);}
-        .badge-reel{color:var(--purple);}
-
-        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-        th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
-        th { color: var(--cyan); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; }
-        tr:hover td { background: rgba(0,212,255,0.04); }
-        .peer-label { color: var(--text); font-weight: bold; }
-        .peer-key { color: var(--p31-dim); font-size: 0.65rem; }
-        .sel { background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: 'Courier Prime', monospace; font-size: 0.72rem; padding: 0.25rem 0.35rem; }
-        .sel:focus { outline: none; border-color: var(--cyan); }
-        .empty { color: var(--p31-dim); font-style: italic; text-align: center; padding: 1rem !important; }
-        .live { text-align: center; }
-
-        .me-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
-        .me-row .k { color: var(--p31-dim); font-size: 0.75rem; min-width: 6.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
-
-        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 340px; cursor: pointer; }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            table, thead, tbody, th, td, tr { display: block; }
-            thead { display: none; }
-            td { border-bottom: none; }
-            tr { border-bottom: 1px solid var(--border); padding: 0.4rem 0; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;--gris:#8a97a3}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(167,139,250,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 10px;font-size:.72rem;min-height:28px} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)} .tuile.or .v{color:var(--orange)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .legende{display:grid;gap:6px;font-size:.78rem;color:var(--doux)} .legende div{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+        /* modes : 4 teintes distinctes */
+        .badge{display:inline-block;padding:1px 10px;border-radius:999px;font-size:.68rem;font-weight:700;letter-spacing:.04em;border:1px solid currentColor;background:rgba(255,255,255,.04);white-space:nowrap}
+        .badge-off{color:#8a97a3;}
+        .badge-passive{color:#29b6f6;}
+        .badge-active{color:#ff9f1c;}
+        .badge-reel{color:#a78bfa;}
+        .moi{display:grid;grid-template-columns:minmax(80px,max-content) 1fr;gap:8px 14px;align-items:center;font-size:.8rem}
+        .moi .k{color:var(--doux)} .moi .reg{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        .sel{font:inherit;font-size:.78rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 8px;min-height:30px}
+        .sel:focus{outline:none;border-color:var(--cyan)}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pair-nom{font-weight:700;overflow-wrap:anywhere} .pair-cle{color:var(--faible);font-size:.68rem;font-family:ui-monospace,Menlo,Consolas,monospace}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .act{white-space:nowrap}
+        .led{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--faible);vertical-align:middle;margin-right:6px} .led.on{background:var(--vert);box-shadow:0 0 8px rgba(46,204,113,.6)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.error{border-color:var(--rouge)} .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;cursor:pointer}
+        @container a (max-width:640px){
+            table,thead,tbody,tr,td{display:block} thead{display:none}
+            tr{border-top:1px solid rgba(86,150,255,.18);padding:6px 0} td{border-top:0;padding:3px 4px}
+            td[data-l]::before{content:attr(data-l);display:inline-block;min-width:92px;color:var(--faible);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em}
         }
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div>
-                <h1>🎚️ R-Level — inspection MITM par peer</h1>
-                <div class="sub" id="subline">chosen / floor / forced / effective — sbxmitm-policyctl</div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+                <div><h1>R-Level</h1><small id="subline">Inspection MITM par pair — choisi, plancher, forcé, effectif</small></div>
             </div>
-            <div class="btn-group">
-                <button class="btn" onclick="loadPeers()">↻ Refresh</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
 
-        <section class="card" id="avis-fusion">
-            <div class="muted">ℹ️ <b>À quoi ça sert :</b> choisir jusqu'où la box inspecte le trafic web de ton appareil dans le tunnel
-            (aucune · passive · active · réelle). L'<b>administration</b> (plancher, forçage) est désormais dans
-            <a href="/toolbox/#clients" target="_top">Toolbox → Clients</a>, à côté de chaque client ; cette page reste le libre-service « Mon niveau ».</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Pairs enregistrés sur le tunnel wg-toolbox."><span class="l">Pairs</span><span class="v" id="tPairs">—</span><span class="s">wg-toolbox</span></div>
+            <div class="tuile ok" title="Pairs avec une poignée de main WireGuard récente."><span class="l">En ligne</span><span class="v" id="tLive">—</span><span class="s">poignée de main récente</span></div>
+            <div class="tuile or" title="Pairs dont l’administrateur a forcé le niveau : leur libre-service est désactivé."><span class="l">Forcés</span><span class="v" id="tForces">—</span><span class="s">par l’administration</span></div>
+            <div class="tuile vi" title="Pairs dont le niveau effectif est « réelle » (inspection la plus profonde)."><span class="l">Inspection réelle</span><span class="v" id="tReel">—</span><span class="s">niveau effectif</span></div>
         </section>
 
-        <section class="card" id="meCard-wrap">
-            <h2>🙋 Mon niveau (self-service)</h2>
-            <div id="meCard"><p class="muted">Loading…</p></div>
-        </section>
+        <div class="grille">
+            <section class="pan" id="meCard-wrap"><h3>Mon niveau <i>libre-service</i></h3>
+                <div id="meCard"><p class="note">—</p></div></section>
+            <section class="pan"><h3>À quoi ça sert</h3>
+                <p class="note" style="margin:0 0 8px">Choisir jusqu’où la box inspecte le trafic web d’un appareil dans le tunnel. Effectif = forcé, sinon le choix borné par le plancher. L’administration par client est aussi dans <a href="/toolbox/#clients" target="_top" style="color:var(--cyan)">Toolbox → Clients</a>.</p>
+                <div class="legende">
+                    <div><span class="badge badge-off">OFF</span> aucune inspection : le trafic passe tel quel</div>
+                    <div><span class="badge badge-passive">PASSIVE</span> observation sans modifier</div>
+                    <div><span class="badge badge-active">ACTIVE</span> filtrage et réécriture (bandeaux, blocages)</div>
+                    <div><span class="badge badge-reel">REEL</span> inspection complète du déchiffré</div>
+                </div></section>
+        </div>
 
-        <section class="card">
-            <h2>👥 Peers — vue admin</h2>
-            <div style="overflow-x:auto">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Peer</th>
-                            <th>Chosen</th>
-                            <th>Floor</th>
-                            <th>Forced</th>
-                            <th>Effective</th>
-                            <th>Live</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="peersBody">
-                        <tr><td colspan="7" class="empty">Loading…</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </main>
+        <section class="pan"><h3>Pairs <i>vue admin</i></h3>
+            <div class="tab"><table>
+                <thead><tr><th>Pair</th><th>Choisi</th><th>Plancher</th><th>Forcé</th><th>Effectif</th><th>En ligne</th><th>Actions</th></tr></thead>
+                <tbody id="peersBody"><tr><td colspan="7" class="vide">—</td></tr></tbody>
+            </table></div></section>
+    </div></div></main>
 
-    <div class="toast" id="toast"></div>
-
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/toolbox';
         const MODES = ['off', 'passive', 'active', 'reel'];
+        const $ = id => document.getElementById(id);
+        let PEERS = [], ME = null, ADMIN_REFUSE = false, ME_REFUSE = false, SESSION = true, ERREUR_PAIRS = '', ERREUR_ME = '';
 
         function esc(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
-
-        function shortKey(pk) {
-            pk = String(pk || '');
-            return pk.length > 18 ? pk.slice(0, 8) + '…' + pk.slice(-6) : pk;
-        }
-
+        function shortKey(pk) { pk = String(pk || ''); return pk.length > 18 ? pk.slice(0, 8) + '…' + pk.slice(-6) : pk; }
         function badge(mode) {
-            const m = MODES.includes(mode) ? mode : 'off';
-            return '<span class="badge badge-' + m + '">' + m.toUpperCase() + '</span>';
+            const m = MODES.includes(mode) ? mode : null;
+            return m ? '<span class="badge badge-' + m + '">' + m.toUpperCase() + '</span>' : '<span class="note">—</span>';
         }
+        function modeOptions(selected) { return MODES.map(m => '<option value="' + m + '"' + (m === selected ? ' selected' : '') + '>' + m.toUpperCase() + '</option>').join(''); }
 
-        function modeOptions(selected) {
-            return MODES.map(m => '<option value="' + m + '"' + (m === selected ? ' selected' : '') + '>' + m.toUpperCase() + '</option>').join('');
-        }
-
-        // Every rlevel call carries the fleet-standard bearer token + rides
-        // the same-origin session cookie (see WEBUI-PANEL-GUIDELINES §6).
+        // Chaque appel porte le jeton standard de la flotte et le cookie de session de même origine.
         async function api(path, opts) {
             opts = opts || {};
             const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
-            headers['Authorization'] = 'Bearer ' + (localStorage.getItem('sbx_token') || '');
+            let t = ''; try { t = localStorage.getItem('sbx_token') || ''; } catch (e) { /* stockage indisponible */ }
+            headers['Authorization'] = 'Bearer ' + t;
             return fetch(API + path, Object.assign({}, opts, { headers, credentials: 'same-origin' }));
         }
-
         function toast(msg, isError) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = 'toast show' + (isError ? ' error' : '');
+            const t = $('toast');
+            t.textContent = msg; t.className = 'toast show' + (isError ? ' error' : '');
             t.onclick = () => { t.className = 'toast'; };
-            if (!isError) setTimeout(() => { t.className = 'toast'; }, 3000);
+            clearTimeout(toast.h); if (!isError) toast.h = setTimeout(() => { t.className = 'toast'; }, 3000);
         }
 
-        // ── Admin: GET /rlevel/peers + POST /rlevel/peer ──────────────────
+        function demoData() {
+            const now = true;
+            PEERS = [
+                { pubkey: 'aB3dEfGhIjKlMnOpQrStUvWxYz0123456789abcdE=', label: 'iPhone de Camille', chosen: 'passive', floor: 'off', forced: null, effective: 'passive', live: now },
+                { pubkey: 'Zy9xWvUtSrQpOnMlKjIhGfEdCbA9876543210zyxwV=', label: 'Portable atelier', chosen: 'active', floor: 'passive', forced: 'reel', effective: 'reel', live: now },
+                { pubkey: 'Mn0pQrStUvWxYzAbCdEfGhIjKl1234567890mnopQ=', label: '(sans nom)', chosen: 'off', floor: 'off', forced: null, effective: 'off', live: false }];
+            ME = { chosen: 'passive', forced: null, floor: 'off', effective: 'passive' };
+        }
 
-        async function loadPeers() {
-            const tbody = document.getElementById('peersBody');
+        async function charger() {
+            if (DEMO) { demoData(); rendre(); return; }
+            SESSION = true; ADMIN_REFUSE = ME_REFUSE = false; ERREUR_PAIRS = ERREUR_ME = '';
             try {
-                const res = await api('/rlevel/peers');
-                if (res.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="empty">🔒 Admin view unavailable from this vantage (tunnel-peer source).</td></tr>';
-                    return;
-                }
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                renderPeers((data && data.peers) || []);
-            } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty">⚠️ ' + esc(e.message) + '</td></tr>';
-            }
+                const r = await api('/rlevel/peers');
+                if (r.status === 401) SESSION = false;
+                else if (r.status === 403) ADMIN_REFUSE = true;
+                else if (!r.ok) throw new Error('HTTP ' + r.status);
+                else { const d = await r.json(); PEERS = (d && d.peers) || []; }
+            } catch (e) { ERREUR_PAIRS = e.message; PEERS = []; }
+            try {
+                const r = await api('/rlevel/me');
+                if (r.status === 401) SESSION = false;
+                else if (r.status === 403) ME_REFUSE = true;
+                else if (!r.ok) throw new Error('HTTP ' + r.status);
+                else ME = await r.json();
+            } catch (e) { ERREUR_ME = e.message; ME = null; }
+            rendre();
         }
 
-        function renderPeers(list) {
-            const tbody = document.getElementById('peersBody');
-            if (!list.length) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty">No wg-toolbox peers registered.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = list.map(p => {
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION;
+            const etat = $('etat');
+            if (!SESSION) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (ERREUR_PAIRS && ERREUR_ME) { etat.className = 'actif hors'; etat.textContent = 'INJOIGNABLE'; }
+            else { etat.className = 'actif'; etat.textContent = 'ACTIF'; }
+            const mesure = SESSION && !ADMIN_REFUSE && !ERREUR_PAIRS;
+            $('tPairs').textContent = mesure ? PEERS.length : '—';
+            $('tLive').textContent = mesure ? PEERS.filter(p => p.live).length : '—';
+            $('tForces').textContent = mesure ? PEERS.filter(p => p.forced != null).length : '—';
+            $('tReel').textContent = mesure ? PEERS.filter(p => p.effective === 'reel').length : '—';
+            rendrePairs(); rendreMoi();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendrePairs() {
+            const tbody = $('peersBody');
+            const vide = txt => { tbody.innerHTML = '<tr><td colspan="7" class="vide">' + esc(txt) + '</td></tr>'; };
+            if (!SESSION) return vide('—');
+            if (ADMIN_REFUSE) return vide('🔒 Vue admin indisponible depuis ce point de vue (source : pair du tunnel).');
+            if (ERREUR_PAIRS) return vide('⚠ ' + ERREUR_PAIRS);
+            if (!PEERS.length) return vide('Aucun pair wg-toolbox enregistré.');
+            tbody.innerHTML = PEERS.map(p => {
                 const pk = esc(p.pubkey);
-                const label = esc(p.label || '(unlabeled)');
-                const short = esc(shortKey(p.pubkey));
-                const forcedVal = p.forced || '';
-                const live = p.live ? '🟢' : '⚪';
-                return '' +
-                    '<tr data-pubkey="' + pk + '">' +
-                    '<td><div class="peer-label">' + label + '</div><div class="peer-key" title="' + pk + '">' + short + '</div></td>' +
-                    '<td>' + badge(p.chosen) + '</td>' +
-                    '<td><select class="sel floor-sel" data-pubkey="' + pk + '">' + modeOptions(p.floor) + '</select></td>' +
-                    '<td><select class="sel forced-sel" data-pubkey="' + pk + '"><option value="">(none)</option>' + modeOptions(forcedVal) + '</select></td>' +
-                    '<td>' + badge(p.effective) + '</td>' +
-                    '<td class="live">' + live + '</td>' +
-                    '<td>' +
-                    '<button class="btn sm primary" data-action="apply" data-pubkey="' + pk + '">Apply</button> ' +
-                    '<button class="btn sm" data-action="unlock" data-pubkey="' + pk + '">Unlock</button>' +
-                    '</td>' +
-                    '</tr>';
+                return '<tr data-pubkey="' + pk + '">' +
+                    '<td data-l="Pair"><div class="pair-nom">' + esc(p.label || '(sans nom)') + '</div><div class="pair-cle" title="' + pk + '">' + esc(shortKey(p.pubkey)) + '</div></td>' +
+                    '<td data-l="Choisi">' + badge(p.chosen) + '</td>' +
+                    '<td data-l="Plancher"><select class="sel floor-sel" aria-label="Plancher" data-pubkey="' + pk + '">' + modeOptions(p.floor) + '</select></td>' +
+                    '<td data-l="Forcé"><select class="sel forced-sel" aria-label="Forcé" data-pubkey="' + pk + '"><option value="">(aucun)</option>' + modeOptions(p.forced || '') + '</select></td>' +
+                    '<td data-l="Effectif">' + badge(p.effective) + '</td>' +
+                    '<td data-l="En ligne"><span class="led' + (p.live ? ' on' : '') + '"></span>' + (p.live ? 'oui' : 'non') + '</td>' +
+                    '<td class="act" data-l="Actions"><button class="btn sm prim" data-action="apply" data-pubkey="' + pk + '">Appliquer</button> ' +
+                    '<button class="btn sm" data-action="unlock" data-pubkey="' + pk + '">Déverrouiller</button></td></tr>';
             }).join('');
         }
 
         async function setPeer(body) {
+            if (DEMO) return toast('Démonstration : action inerte.');
             try {
                 const res = await api('/rlevel/peer', { method: 'POST', body: JSON.stringify(body) });
                 const d = await res.json().catch(() => ({}));
-                if (!res.ok) { toast('❌ ' + (d.detail || ('HTTP ' + res.status)), true); return; }
-                toast('✅ Updated ' + shortKey(body.pubkey));
-                loadPeers();
-            } catch (e) { toast('❌ ' + e.message, true); }
+                if (!res.ok) { toast('Échec : ' + (d.detail || ('HTTP ' + res.status)), true); return; }
+                toast('Pair ' + shortKey(body.pubkey) + ' mis à jour.');
+                charger();
+            } catch (e) { toast('Échec : ' + e.message, true); }
         }
 
-        // Delegated listener — pubkey/label never touch an inline handler
-        // string (proxypac XSS lesson): actions carry data-action/data-pubkey,
-        // read back here via .dataset, never interpolated into onclick="...".
-        document.getElementById('peersBody').addEventListener('click', e => {
+        // Écouteur délégué — pubkey/label ne touchent jamais un gestionnaire en ligne (leçon XSS proxypac) :
+        // les actions portent data-action/data-pubkey, relus ici via .dataset.
+        $('peersBody').addEventListener('click', e => {
             const btn = e.target.closest('[data-action]');
             if (!btn) return;
-            const pubkey = btn.dataset.pubkey;
-            const action = btn.dataset.action;
-            const row = btn.closest('tr');
+            const pubkey = btn.dataset.pubkey, action = btn.dataset.action, row = btn.closest('tr');
             if (action === 'apply') {
-                const floor = row.querySelector('.floor-sel').value;
+                const body = { pubkey: pubkey, floor: row.querySelector('.floor-sel').value };
                 const forcedRaw = row.querySelector('.forced-sel').value;
-                const body = { pubkey: pubkey, floor: floor };
                 if (forcedRaw !== '') body.forced = forcedRaw;
                 setPeer(body);
             } else if (action === 'unlock') {
@@ -253,56 +247,46 @@
             }
         });
 
-        // ── Self-service: GET/POST /rlevel/me ──────────────────────────────
-
-        async function loadMe() {
-            const card = document.getElementById('meCard');
-            try {
-                const res = await api('/rlevel/me');
-                if (res.status === 403) {
-                    card.innerHTML = '<p class="muted">Not reachable as a wg-toolbox tunnel peer from this vantage — self-service unavailable.</p>';
-                    return;
-                }
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const me = await res.json();
-                renderMe(me);
-            } catch (e) {
-                card.innerHTML = '<p class="muted">⚠️ ' + esc(e.message) + '</p>';
-            }
-        }
-
-        function renderMe(me) {
-            const card = document.getElementById('meCard');
-            const locked = me.forced != null;
+        // ── Libre-service : GET/POST /rlevel/me ──
+        function rendreMoi() {
+            const card = $('meCard');
+            if (!SESSION) { card.innerHTML = '<p class="note">—</p>'; return; }
+            if (ME_REFUSE) { card.innerHTML = '<p class="note">Cet appareil n’est pas joignable comme pair du tunnel wg-toolbox : libre-service indisponible.</p>'; return; }
+            if (ERREUR_ME || !ME) { card.innerHTML = '<p class="note">⚠ ' + esc(ERREUR_ME || '—') + '</p>'; return; }
+            const locked = ME.forced != null;
             card.innerHTML =
-                '<div class="me-row"><span class="k">Effective</span>' + badge(me.effective) + '</div>' +
-                '<div class="me-row"><span class="k">Chosen</span>' + badge(me.chosen) + '</div>' +
-                '<div class="me-row"><span class="k">Floor</span>' + badge(me.floor) + '</div>' +
+                '<div class="moi"><span class="k">Effectif</span><span>' + badge(ME.effective) + '</span>' +
+                '<span class="k">Choisi</span><span>' + badge(ME.chosen) + '</span>' +
+                '<span class="k">Plancher</span><span>' + badge(ME.floor) + '</span>' +
                 (locked
-                    ? '<p class="muted">🔒 Forcé à <b>' + esc(me.forced) + '</b> par l\'admin — self-service désactivé.</p>'
-                    : '<div class="me-row"><span class="k">Régler</span><select class="sel" id="meChosenSel">' + modeOptions(me.chosen) + '</select> ' +
-                      '<button class="btn sm primary" id="meApplyBtn">Apply</button></div>');
-            if (!locked) {
-                document.getElementById('meApplyBtn').addEventListener('click', applyMe);
-            }
+                    ? '<span class="k">Forcé</span><span>🔒 <b>' + esc(ME.forced) + '</b> par l’administration — libre-service désactivé.</span>'
+                    : '<span class="k">Régler</span><span class="reg"><select class="sel" id="meChosenSel" aria-label="Mon niveau">' + modeOptions(ME.chosen) + '</select> <button class="btn sm prim" id="meApplyBtn" type="button">Appliquer</button></span>') +
+                '</div>';
+            if (!locked) $('meApplyBtn').addEventListener('click', applyMe);
         }
-
         async function applyMe() {
-            const sel = document.getElementById('meChosenSel');
+            const sel = $('meChosenSel');
             if (!sel) return;
+            if (DEMO) return toast('Démonstration : action inerte.');
             try {
                 const res = await api('/rlevel/me', { method: 'POST', body: JSON.stringify({ chosen: sel.value }) });
                 const d = await res.json().catch(() => ({}));
-                if (!res.ok) { toast('❌ ' + (d.detail || ('HTTP ' + res.status)), true); return; }
-                toast('✅ Set to ' + sel.value);
-                loadMe();
-            } catch (e) { toast('❌ ' + e.message, true); }
+                if (!res.ok) { toast('Échec : ' + (d.detail || ('HTTP ' + res.status)), true); return; }
+                toast('Niveau réglé sur ' + sel.value.toUpperCase() + '.');
+                charger();
+            } catch (e) { toast('Échec : ' + e.message, true); }
         }
 
-        loadPeers();
-        loadMe();
-        setInterval(loadPeers, 20000);
-        setInterval(loadMe, 20000);
+        $('rafraichir').addEventListener('click', charger);
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'rlevel' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué ni pendant que l'utilisateur règle un sélecteur.
+        setInterval(() => { if (!document.hidden && !DEMO && !(document.activeElement && document.activeElement.tagName === 'SELECT')) charger(); }, 20000);
     </script>
 </body>
 </html>
