@@ -1,3 +1,18 @@
+secubox-freebox (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau refait au profil Aurora (ref #2597) : page autonome, tuiles (connexion Internet, appareils actifs, debits max, pare-feu IPv6,
+    redirections), onglets Appareils / Connexion / Pare-feu IPv6 / Redirections (avec UPnP) / Auto-config, ?demo=1 (donnees fictives, actions inertes),
+    ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet « freebox »). Les appels d'ecriture sont inchanges
+    (memes routes, methodes et corps) : /autoriser, /revoquer, /upnp, /pare-feu/ipv6, /autoconfig.
+  * Corrige : plus aucun confirm() natif (revocation, UPnP, pare-feu IPv6, auto-config, DMZ) : confirmation integree a la page, que le navigateur du
+    viewer n'ignore plus ; le jeton de session sbx_token est envoye aussi sur les lectures (seules les ecritures le portaient) ; sur 401/403 de
+    /status les onglets affichent « — » au lieu d'un simple toast ; les etapes de validation « appuyez sur ✓ » ne s'affichent plus quand la
+    Freebox est deja connectee ; actualisation suspendue onglet masque ou pendant une confirmation (3 s fixes en attente de validation, desormais 15 s).
+  * Non repris : l'ancien menu « hybrid-dark » et sa police distante (Courier Prime). L'adresse MAC de la box n'est plus affichee en entier dans
+    Auto-config (trois derniers octets). Rien n'est invente : l'API ne fournit pas de debit mesure ni d'historique, la page n'en montre pas.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:30:00 +0200
+
 secubox-freebox (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Panneau : des apostrophes s'affichaient « \\u2019 » dans les textes d'introduction des onglets Redirections (UPnP) et Auto-config ; le caractere
