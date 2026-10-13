@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — haproxy 1.10.4 : `haproxyctl generate` sur une box neuve (ref #2526)
+
+Après l'`apt upgrade` de la RPi400 (photo), le postinst de `secubox-haproxy` échouait : `bind : missing port specification in '*:'`, donc aucun frontal. Le `|| echo "80"` des lectures de port portait sur le dernier maillon du tube (`tr`), qui réussit toujours : sans clé dans `haproxy.toml`, la valeur était vide. Fonction `cle_conf` (défaut si la clé est absente ou vide) pour les ports et `waf_backend_ip`. Test `packages/secubox-haproxy/tests/test_ports_par_defaut_2526.py` (à lancer en root : `generate` crée `/run/haproxy`). Deux tests d'`acme_wiring` échouent déjà sur master.
+
 ## 2026-10-13 — secubox-core 1.7.4 : le premier démarrage ne meurt plus sur l'extension de la carte (ref #2524)
 
 Sur la RPi400, `secubox-firstboot` s'arrêtait à l'étape 0 : `parted -s … resizepart` sur la partition montée demande une confirmation et échoue, puis `warn` (appelé 8 fois, jamais défini) répondait « command not found » (127) et, sous `set -e`, tuait le script — pas de frontal HAProxy, pas de nginx 80/443, pas de kiosque. `warn` défini, parted répond « Yes » (`---pretend-input-tty`), l'extension n'est plus fatale. Test `tests/test_firstboot_expansion_2524.py`. Diagnostiqué sur le journal affiché par la carte (photo).

@@ -1,3 +1,9 @@
+secubox-haproxy (1.10.4-1~bookworm1) bookworm; urgency=high
+
+  * haproxyctl generate sur une box neuve (#2526) : sans cles de port dans haproxy.toml, le cfg sortait avec `bind *:` et HAProxy le refusait (« missing port specification in '*:' »), donc aucun frontal (ni 80, ni 443, ni stats 8404) — constate sur une RPi400 fraichement installee, au postinst. Cause : `$(grep … | cut … | tr -d ' ' || echo "80")` ; le `||` porte sur le dernier maillon du tube (tr), qui reussit toujours, la valeur par defaut n'etait donc jamais appliquee. Nouvelle fonction cle_conf (defaut quand la cle est absente ou vide), utilisee pour http_port, https_port, stats_port et waf_backend_port, dans cmd_generate et cmd_access ; waf_backend_ip corrige de meme. 4 tests (bout en bout, sur un haproxy.toml sans ports et sur un fichier vide).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 11:00:00 +0200
+
 secubox-haproxy (1.10.3-1~bookworm1) bookworm; urgency=high
 
   * cert sync et l'installation acme.sh ecrivent les .pem en 0640 haproxy:secubox, comme certsctl deploy (ref #2383) : en 0600 root, le module certs ne pouvait pas les lire et les montrait « expired ». 1 test.
