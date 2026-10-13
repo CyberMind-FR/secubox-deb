@@ -4,546 +4,315 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  KSM (fusion de pages mémoire) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - KSM Memory Optimization</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Fusion de pages mémoire (KSM)</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1a3320;
-            /* KSM accent - memory purple */
-            --ksm-accent: #9c27b0;
-            --ksm-accent-dim: #7b1fa2;
-            /* Legacy */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--ksm-accent);
-            --cyan: #00bcd4;
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: var(--ksm-accent);
-            /* Bloom */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-purple: 0 0 6px var(--ksm-accent), 0 0 14px rgba(156,39,176,0.5);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(156,39,176,0.02) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; }
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
-            background: var(--bg-card);
-        }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 {
-            font-size: 1.5rem; font-weight: 600;
-            color: var(--ksm-accent);
-            text-shadow: var(--bloom-purple);
-        }
-        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
-        .badge {
-            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-        }
-        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
-        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
-        .badge-purple { background: rgba(156,39,176,0.1); border: 1px solid var(--purple); color: var(--purple); }
-        .badge-yellow { background: rgba(255,179,71,0.1); border: 1px solid var(--yellow); color: var(--yellow); }
-
-        .btn {
-            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
-            background: var(--bg-card); color: var(--text); cursor: pointer;
-            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
-            transition: all 0.2s;
-        }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
-        .btn.primary { background: rgba(156,39,176,0.1); border-color: var(--purple); color: var(--purple); }
-        .btn.primary:hover { background: rgba(156,39,176,0.2); }
-        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .content { padding: 1.5rem; }
-
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.25rem; text-align: center;
-        }
-        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
-        .stat-card.purple .value { color: var(--purple); text-shadow: var(--bloom-purple); }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
-        .stat-card.yellow .value { color: var(--yellow); }
-
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
-        }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 {
-            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.1em; color: var(--p31-decay);
-        }
-
-        /* Toggle switch */
-        .toggle-container {
-            display: flex; align-items: center; gap: 1rem;
-            padding: 1rem;
-            background: var(--tube-light); border-radius: 6px;
-        }
-        .toggle-label { font-size: 1.1rem; font-weight: 600; }
-        .toggle {
-            position: relative; width: 60px; height: 30px;
-            background: var(--border); border-radius: 15px;
-            cursor: pointer; transition: background 0.3s;
-        }
-        .toggle.enabled { background: var(--green); }
-        .toggle::after {
-            content: ''; position: absolute;
-            width: 26px; height: 26px; top: 2px; left: 2px;
-            background: white; border-radius: 50%;
-            transition: transform 0.3s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        .toggle.enabled::after { transform: translateX(30px); }
-
-        /* Slider */
-        .slider-container { margin-bottom: 1.5rem; }
-        .slider-header {
-            display: flex; justify-content: space-between;
-            margin-bottom: 0.5rem;
-        }
-        .slider-label { color: var(--text-dim); font-size: 0.85rem; }
-        .slider-value {
-            font-weight: bold; color: var(--purple);
-            background: rgba(156,39,176,0.1);
-            padding: 0.25rem 0.5rem; border-radius: 4px;
-        }
-        .slider {
-            width: 100%; height: 8px;
-            appearance: none; background: var(--border);
-            border-radius: 4px; outline: none;
-        }
-        .slider::-webkit-slider-thumb {
-            appearance: none; width: 20px; height: 20px;
-            background: var(--purple); border-radius: 50%;
-            cursor: pointer; box-shadow: var(--bloom-purple);
-        }
-        .slider::-moz-range-thumb {
-            width: 20px; height: 20px;
-            background: var(--purple); border-radius: 50%;
-            cursor: pointer; border: none;
-        }
-
-        /* Info box */
-        .info-box {
-            background: var(--tube-light); border-radius: 6px;
-            padding: 1rem; margin-top: 1rem;
-        }
-        .info-row {
-            display: flex; justify-content: space-between;
-            padding: 0.5rem 0; border-bottom: 1px solid var(--border);
-        }
-        .info-row:last-child { border-bottom: none; }
-        .info-label { color: var(--text-dim); }
-        .info-value { font-weight: 600; }
-
-        /* Explanation section */
-        .explanation {
-            background: rgba(156,39,176,0.05);
-            border: 1px solid rgba(156,39,176,0.2);
-            border-radius: 8px; padding: 1rem;
-            margin-top: 1rem; font-size: 0.85rem;
-            line-height: 1.6;
-        }
-        .explanation h3 {
-            color: var(--purple); margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-        }
-        .explanation ul {
-            margin-left: 1.5rem; margin-top: 0.5rem;
-        }
-        .explanation li { margin-bottom: 0.25rem; }
-
-        /* Toast */
-        .toast {
-            position: fixed; bottom: 2rem; right: 2rem;
-            padding: 1rem 1.5rem; border-radius: 8px;
-            background: var(--bg-card); border: 1px solid var(--border);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1000; display: none;
-        }
-        .toast.show { display: block; animation: slideIn 0.3s ease; }
-        .toast.success { border-color: var(--green); }
-        .toast.error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        /* Not available state */
-        .not-available {
-            text-align: center; padding: 3rem;
-            background: rgba(255,68,102,0.05);
-            border: 1px solid rgba(255,68,102,0.2);
-            border-radius: 8px;
-        }
-        .not-available h2 { color: var(--red); margin-bottom: 1rem; }
-        .not-available p { color: var(--text-dim); }
-
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0 0;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.08);font-size:.8rem}
+        .conf span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        .ligne{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 10px}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));align-items:start;margin:0}
+        form.saisie label{display:grid;gap:3px;font-size:.74rem;color:var(--doux);min-width:0}
+        form.saisie input{font:inherit;font-size:.85rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%;font-variant-numeric:tabular-nums}
+        form.saisie input:focus{outline:none;border-color:var(--cyan)} form.saisie input:disabled{opacity:.5}
+        form.saisie small{color:var(--faible);font-size:.68rem}
+        form.saisie .bout{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+        .texte p{margin:0 0 8px;font-size:.8rem;color:var(--doux)} .texte ul{margin:0 0 8px;padding-left:18px;font-size:.8rem;color:var(--doux)} .texte h4{margin:8px 0 4px;font-size:.8rem;color:var(--texte)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>KSM Memory Optimization</h1>
-                <span id="status-badge" class="badge badge-yellow">CHECKING</span>
-                <span id="last-update" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="8.5" y="14" width="7" height="7" rx="1.5"/><path d="M6.5 11v1.5h5M17.5 11v1.5h-5M12 12.5V14"/></svg>
+                <div><h1>Fusion de pages mémoire</h1><small>KSM — Kernel Same-page Merging</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refresh()">Refresh</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="content" id="main-content">
-            <!-- Loading state -->
-            <div id="loading" class="card" style="text-align: center; padding: 3rem;">
-                <p style="color: var(--text-dim);">Loading KSM status...</p>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile vi" title="Mémoire récupérée par la fusion : (pages partageantes − pages partagées) × taille de page. Calculée par l’API avec des pages de 4 Kio."><span class="l">Mémoire économisée</span><span class="v" id="tEco">—</span><span class="s">pages fusionnées</span></div>
+            <div class="tuile cy" title="pages_sharing : nombre d’emplacements mémoire qui pointent vers une page fusionnée."><span class="l">Pages partageantes</span><span class="v" id="tSharing">—</span><span class="s">emplacements fusionnés</span></div>
+            <div class="tuile ok" title="pages_shared : nombre de pages uniques, en lecture seule, qui servent de support à la fusion."><span class="l">Pages partagées</span><span class="v" id="tShared">—</span><span class="s">pages support</span></div>
+            <div class="tuile cy" title="pages_unshared : pages analysées mais sans doublon pour l’instant."><span class="l">Pages non partagées</span><span class="v" id="tUnshared">—</span><span class="s">sans doublon trouvé</span></div>
+            <div class="tuile cy" title="full_scans : nombre de passes complètes de KSM sur toute la mémoire déclarée fusionnable."><span class="l">Analyses complètes</span><span class="v" id="tScans">—</span><span class="s">passes terminées</span></div>
+            <div class="tuile" id="cEtat" title="Valeur de /sys/kernel/mm/ksm/run : 0 arrêté, 1 en marche, 2 arrêté avec défusion des pages."><span class="l">Noyau (run)</span><span class="v" id="tRun">—</span><span class="s" id="sRun">état du démon</span></div>
+        </section>
 
-            <!-- Not available state -->
-            <div id="not-available" class="not-available" style="display: none;">
-                <h2>KSM Not Available</h2>
-                <p>Kernel Same-page Merging is not available on this system.</p>
-                <p style="margin-top: 1rem;">KSM requires kernel support. Check if CONFIG_KSM is enabled in your kernel.</p>
-            </div>
+        <div class="grille">
+            <div class="pan"><h3>Contrôle</h3>
+                <div id="rCtl" class="retour" hidden></div>
+                <div class="ligne"><span>KSM :</span><span class="pill" id="pEtat">—</span>
+                    <button class="btn prim" id="bascule" type="button" disabled>—</button></div>
+                <div class="conf" id="confCtl" hidden><span id="txtCtl"></span><button class="btn danger" id="okCtl" type="button">Confirmer</button><button class="btn" id="noCtl" type="button">Annuler</button></div>
+                <dl class="kv" style="margin-top:10px"><dt>Chaînes de nœuds</dt><dd id="kChaines">—</dd><dt>Doublons de nœuds</dt><dd id="kDups">—</dd><dt>Rapport de fusion</dt><dd id="kRatio">—</dd></dl>
+                <p class="note">Rapport de fusion : pages partageantes ÷ pages partagées, calculé par la page à partir des deux compteurs. « — » tant qu’aucune page n’est partagée. Chaînes et doublons de nœuds : « — » si le noyau ne les expose pas.</p></div>
 
-            <!-- Main content (shown when KSM is available) -->
-            <div id="ksm-content" style="display: none;">
-                <!-- Stats Row -->
-                <div class="stats-row">
-                    <div class="stat-card purple">
-                        <div class="value" id="memory-saved">-</div>
-                        <div class="label">Memory Saved</div>
-                    </div>
-                    <div class="stat-card cyan">
-                        <div class="value" id="pages-sharing">-</div>
-                        <div class="label">Pages Sharing</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="pages-shared">-</div>
-                        <div class="label">Pages Shared</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <div class="value" id="full-scans">-</div>
-                        <div class="label">Full Scans</div>
-                    </div>
-                </div>
+            <div class="pan"><h3>Réglage du balayage <i id="nCfg"></i></h3>
+                <div id="rCfg" class="retour" hidden></div>
+                <form class="saisie" id="fCfg" novalidate>
+                    <label>Pages par cycle<input id="iPages" name="pages_to_scan" type="number" min="1" max="10000" step="1" inputmode="numeric" disabled><small>1 à 10 000 — plus haut = fusion plus rapide, plus de processeur.</small></label>
+                    <label>Pause entre cycles (ms)<input id="iSommeil" name="sleep_millisecs" type="number" min="10" max="1000" step="1" inputmode="numeric" disabled><small>10 à 1 000 — plus bas = balayage plus agressif.</small></label>
+                    <div class="bout"><button class="btn prim" id="enreg" type="submit" disabled>Enregistrer le réglage</button></div>
+                </form>
+                <div class="conf" id="confCfg" hidden><span id="txtCfg"></span><button class="btn danger" id="okCfg" type="button">Confirmer</button><button class="btn" id="noCfg" type="button">Annuler</button></div>
+                <p class="note" id="nCfgNote">Le réglage est écrit dans le noyau puis dans /etc/secubox/ksm.toml. Lecture et écriture du réglage exigent une session administrateur.</p></div>
 
-                <div class="grid-2">
-                    <!-- Status & Control Card -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>KSM Control</h2>
-                        </div>
-                        <div class="toggle-container">
-                            <span class="toggle-label">KSM Status:</span>
-                            <div class="toggle" id="ksm-toggle" onclick="toggleKSM()"></div>
-                            <span id="ksm-status-text" style="color: var(--text-dim);">-</span>
-                        </div>
-
-                        <div class="info-box">
-                            <div class="info-row">
-                                <span class="info-label">Pages Unshared</span>
-                                <span class="info-value" id="pages-unshared">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Stable Node Chains</span>
-                                <span class="info-value" id="stable-chains">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Stable Node Dups</span>
-                                <span class="info-value" id="stable-dups">-</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Configuration Card -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Configuration</h2>
-                        </div>
-
-                        <div class="slider-container">
-                            <div class="slider-header">
-                                <span class="slider-label">Pages to Scan (per cycle)</span>
-                                <span class="slider-value" id="pages-to-scan-value">100</span>
-                            </div>
-                            <input type="range" class="slider" id="pages-to-scan"
-                                   min="100" max="10000" step="100" value="100"
-                                   oninput="updateSliderValue('pages-to-scan')">
-                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">
-                                <span>100</span>
-                                <span>10000</span>
-                            </div>
-                        </div>
-
-                        <div class="slider-container">
-                            <div class="slider-header">
-                                <span class="slider-label">Sleep Between Scans (ms)</span>
-                                <span class="slider-value" id="sleep-millisecs-value">20</span>
-                            </div>
-                            <input type="range" class="slider" id="sleep-millisecs"
-                                   min="10" max="1000" step="10" value="20"
-                                   oninput="updateSliderValue('sleep-millisecs')">
-                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">
-                                <span>10ms</span>
-                                <span>1000ms</span>
-                            </div>
-                        </div>
-
-                        <button class="btn primary" onclick="saveConfig()" style="width: 100%;">
-                            Save Configuration
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Explanation Card -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2>About KSM</h2>
-                    </div>
-                    <div class="explanation">
-                        <h3>What is Kernel Same-page Merging?</h3>
-                        <p>KSM is a memory-saving de-duplication feature that scans memory looking for pages with identical content. When identical pages are found, they are merged into a single page, with copy-on-write semantics.</p>
-
-                        <h3>Best For</h3>
-                        <ul>
-                            <li>Virtual machines running similar operating systems</li>
-                            <li>Container environments with shared base images</li>
-                            <li>Systems with many similar processes</li>
-                        </ul>
-
-                        <h3>Configuration Tips</h3>
-                        <ul>
-                            <li><strong>Pages to Scan:</strong> Higher values = faster merging but more CPU usage</li>
-                            <li><strong>Sleep Time:</strong> Lower values = more aggressive scanning but higher CPU usage</li>
-                            <li>Default values (100 pages, 20ms) provide a good balance</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
+            <div class="pan texte" style="grid-column:1/-1"><h3>À propos de KSM</h3>
+                <p>KSM recherche en mémoire les pages au contenu identique et les fusionne en une seule, avec copie à l’écriture. Il économise de la mémoire quand plusieurs machines virtuelles ou conteneurs partagent un même socle.</p>
+                <h4>Utile pour</h4>
+                <ul><li>des machines virtuelles qui font tourner des systèmes proches ;</li><li>des conteneurs bâtis sur des images de base communes ;</li><li>des systèmes avec de nombreux processus semblables.</li></ul>
+                <h4>Conseils de réglage</h4>
+                <ul><li><b>Pages par cycle</b> : plus la valeur est haute, plus la fusion est rapide et plus le processeur travaille.</li><li><b>Pause</b> : plus elle est courte, plus le balayage est agressif.</li><li>Les valeurs par défaut du noyau (100 pages, 20 ms) sont un bon compromis.</li></ul>
+                <p class="note" style="margin:0">Cette page ne fournit pas d’historique : l’API ne donne que les compteurs instantanés du noyau, aucune courbe n’est donc tracée.</p></div>
         </div>
-    </main>
+    </div></div></main>
+    <div id="toast" class="toast" role="status"></div>
 
-    <div id="toast" class="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/ksm';
-        let ksmEnabled = false;
-        let ksmAvailable = false;
+        const $ = id => document.getElementById(id);
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        let STATUT = null, STATS = null, CFG = null, SESSION_OK = true, INJOIGNABLE = false, CFG_REFUSE = false;
+        let CONFIRM = null;   // 'ctl' | 'cfg' : confirmation ouverte dans la page, jamais de dialogue natif
+        let SAISIE = false;   // champs de réglage modifiés par l'utilisateur et non enregistrés
+        let OCCUPE = false;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine), accepte par
-            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
-            // seule une vraie 401 redirige (gere dans les appels fetch).
-            return true;
-        }
-
-        async function api(endpoint, options = {}) {
-            const token = getToken();
-            const headers = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = 'Bearer ' + token;
-
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API +  endpoint, { ...options, headers });
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                    return null;
-                }
-                return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return null;
+                const opts = { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide ou non JSON */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (d) return typeof d === 'string' ? d : JSON.stringify(d);
+            if (res.statut === 401 || res.statut === 403) return 'Session administrateur requise (HTTP ' + res.statut + ')';
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+
+        const nb = n => (typeof n === 'number' && isFinite(n)) ? n.toLocaleString('fr-FR') : '—';
+        function octets(n) {
+            if (typeof n !== 'number' || !isFinite(n)) return '—';
+            const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0, v = n;
+            while (Math.abs(v) >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+            return (i === 0 ? String(v) : v.toLocaleString('fr-FR', { maximumFractionDigits: 1 })) + ' ' + u[i];
+        }
+
+        function demoData() {
+            STATUT = { available: true, enabled: true, run_value: 1 };
+            STATS = { pages_shared: 1840, pages_sharing: 9120, pages_unshared: 48210, full_scans: 37, memory_saved_bytes: (9120 - 1840) * 4096, stable_node_chains: 0, stable_node_dups: 0 };
+            CFG = { pages_to_scan: 200, sleep_millisecs: 20 };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; INJOIGNABLE = false; CFG_REFUSE = false; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/stats'), lire('/config')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = i => essais[i].status === 'rejected' && (essais[i].reason.statut === 401 || essais[i].reason.statut === 403);
+            // /status et /stats sont en lecture ; /config exige un administrateur : son refus seul n'est pas une perte de session.
+            SESSION_OK = !(refus(0) || refus(1));
+            CFG_REFUSE = refus(2);
+            STATUT = val(0); STATS = val(1); CFG = val(2);
+            INJOIGNABLE = essais.every(e => e.status === 'rejected') && SESSION_OK && !CFG_REFUSE;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire KSM (service arrêté ou injoignable).';
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = SESSION_OK ? STATUT : null;
+            const dispo = !!(s && s.available);
+            const st = SESSION_OK && dispo && STATS && !STATS.error ? STATS : null;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!dispo) { etat.className = 'actif hors'; etat.textContent = 'NON DISPONIBLE'; }
+            else if (s.enabled) { etat.className = 'actif'; etat.textContent = 'KSM ACTIF'; }
+            else { etat.className = 'actif att'; etat.textContent = 'KSM ARRÊTÉ'; }
+
+            $('tEco').textContent = st ? octets(st.memory_saved_bytes) : '—';
+            $('tSharing').textContent = st ? nb(st.pages_sharing) : '—';
+            $('tShared').textContent = st ? nb(st.pages_shared) : '—';
+            $('tUnshared').textContent = st ? nb(st.pages_unshared) : '—';
+            $('tScans').textContent = st ? nb(st.full_scans) : '—';
+            const run = dispo ? s.run_value : null;
+            $('tRun').textContent = (run === null || run === undefined) ? '—' : String(run);
+            $('sRun').textContent = run === 0 ? 'arrêté' : run === 1 ? 'en marche' : run === 2 ? 'arrêté, pages défusionnées' : 'état du démon';
+            $('cEtat').className = 'tuile ' + (run === 1 ? 'ok' : (run === 0 || run === 2) ? 'att' : '');
+
+            const p = $('pEtat');
+            if (!SESSION_OK || !s) { p.className = 'pill'; p.textContent = '—'; }
+            else if (!dispo) { p.className = 'pill hors'; p.textContent = 'ABSENT DU NOYAU'; }
+            else if (s.enabled) { p.className = 'pill ok'; p.textContent = 'ACTIF'; }
+            else { p.className = 'pill att'; p.textContent = 'ARRÊTÉ'; }
+            const b = $('bascule');
+            b.disabled = !dispo; b.textContent = dispo ? (s.enabled ? 'Désactiver KSM' : 'Activer KSM') : '—';
+            $('kChaines').textContent = st ? tiret(st.stable_node_chains) : '—';
+            $('kDups').textContent = st ? tiret(st.stable_node_dups) : '—';
+            $('kRatio').textContent = (st && typeof st.pages_shared === 'number' && st.pages_shared > 0 && typeof st.pages_sharing === 'number')
+                ? (st.pages_sharing / st.pages_shared).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' ×' : '—';
+            if (s && !dispo && !$('rCtl').textContent) retour('rCtl', false, 'KSM n’est pas disponible sur ce système : le noyau doit être compilé avec CONFIG_KSM.');
+
+            // Réglage : les champs ne sont réécrits que si l'utilisateur n'est pas en train de les modifier.
+            const cfgOk = !!(dispo && CFG && !CFG.error && typeof CFG.pages_to_scan === 'number');
+            if (!SAISIE) {
+                $('iPages').value = cfgOk ? CFG.pages_to_scan : '';
+                $('iSommeil').value = cfgOk ? CFG.sleep_millisecs : '';
             }
+            $('iPages').disabled = $('iSommeil').disabled = !cfgOk;
+            $('enreg').disabled = !cfgOk;
+            $('nCfg').textContent = cfgOk ? 'valeurs du noyau' : '';
+            $('nCfgNote').textContent = CFG_REFUSE
+                ? 'Réglage non lu : la lecture du réglage exige une session administrateur.'
+                : 'Le réglage est écrit dans le noyau puis dans /etc/secubox/ksm.toml. Lecture et écriture du réglage exigent une session administrateur.';
+            $('confCtl').hidden = CONFIRM !== 'ctl';
+            $('confCfg').hidden = CONFIRM !== 'cfg';
+            $('maj').textContent = (SESSION_OK && s) ? 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR') : '—';
         }
 
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast show ' + type;
-            setTimeout(() => toast.classList.remove('show'), 3000);
+        // --- Interrupteur : confirmation intégrée, puis POST /enable ou /disable (comme avant) ---
+        $('bascule').addEventListener('click', () => {
+            if (!STATUT || !STATUT.available) return;
+            $('rCtl').hidden = true;
+            $('txtCtl').textContent = STATUT.enabled
+                ? 'Désactiver KSM ? Le noyau cesse de fusionner de nouvelles pages (les pages déjà fusionnées restent partagées).'
+                : 'Activer KSM ? Le noyau se met à balayer la mémoire pour fusionner les pages identiques, ce qui consomme du processeur.';
+            CONFIRM = 'ctl'; rendre();
+        });
+        $('noCtl').addEventListener('click', () => { CONFIRM = null; rendre(); });
+        $('okCtl').addEventListener('click', async () => {
+            if (OCCUPE) return;
+            const activer = !(STATUT && STATUT.enabled);
+            CONFIRM = null; OCCUPE = true; rendre();
+            const res = await ecrire(activer ? '/enable' : '/disable');
+            OCCUPE = false;
+            if (res.ok && res.data && res.data.success) { retour('rCtl', true, activer ? 'KSM activé.' : 'KSM désactivé.'); toast(activer ? 'KSM activé' : 'KSM désactivé'); await charger(); }
+            else { retour('rCtl', false, 'Échec : ' + detail(res)); rendre(); }
+        });
+
+        // --- Réglage : validation selon les bornes de l'API, confirmation, puis POST /config { pages_to_scan, sleep_millisecs } ---
+        function lireChamps() {
+            const p = $('iPages').value.trim(), m = $('iSommeil').value.trim();
+            const ent = x => /^\d+$/.test(x) ? parseInt(x, 10) : NaN;
+            return { pages_to_scan: ent(p), sleep_millisecs: ent(m) };
         }
+        function champsValides(c) { return c.pages_to_scan >= 1 && c.pages_to_scan <= 10000 && c.sleep_millisecs >= 10 && c.sleep_millisecs <= 1000; }
+        ['iPages', 'iSommeil'].forEach(id => $(id).addEventListener('input', () => { SAISIE = true; }));
+        $('fCfg').addEventListener('submit', ev => {
+            ev.preventDefault();
+            $('rCfg').hidden = true;
+            const c = lireChamps();
+            if (!champsValides(c)) { retour('rCfg', false, 'Valeurs refusées : pages par cycle de 1 à 10 000, pause de 10 à 1 000 ms.'); return; }
+            const avant = CFG && typeof CFG.pages_to_scan === 'number' ? ' (actuellement ' + CFG.pages_to_scan + ' pages, ' + CFG.sleep_millisecs + ' ms)' : '';
+            $('txtCfg').textContent = 'Écrire dans le noyau : ' + c.pages_to_scan + ' pages par cycle, pause de ' + c.sleep_millisecs + ' ms' + avant + ' ?';
+            CONFIRM = 'cfg'; rendre();
+        });
+        $('noCfg').addEventListener('click', () => { CONFIRM = null; rendre(); });
+        $('okCfg').addEventListener('click', async () => {
+            if (OCCUPE) return;
+            const c = lireChamps();
+            CONFIRM = null;
+            if (!champsValides(c)) { retour('rCfg', false, 'Valeurs refusées : pages par cycle de 1 à 10 000, pause de 10 à 1 000 ms.'); rendre(); return; }
+            OCCUPE = true; rendre();
+            const res = await ecrire('/config', { pages_to_scan: c.pages_to_scan, sleep_millisecs: c.sleep_millisecs });
+            OCCUPE = false;
+            if (res.ok && res.data && res.data.success) { SAISIE = false; retour('rCfg', true, 'Réglage enregistré.'); toast('Réglage enregistré'); await charger(); }
+            else { retour('rCfg', false, 'Échec : ' + detail(res)); rendre(); }
+        });
 
-        function formatNumber(n) {
-            if (n === null || n === undefined) return '-';
-            return n.toLocaleString();
+        $('rafraichir').addEventListener('click', charger);
+
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'ksm' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        window.addEventListener('resize', annoncer);
 
-        function updateSliderValue(id) {
-            const slider = document.getElementById(id);
-            const valueEl = document.getElementById(id + '-value');
-            valueEl.textContent = slider.value;
-        }
-
-        async function loadStatus() {
-            const data = await api('/status');
-            if (!data) return;
-
-            ksmAvailable = data.available;
-            ksmEnabled = data.enabled;
-
-            document.getElementById('loading').style.display = 'none';
-
-            if (!ksmAvailable) {
-                document.getElementById('not-available').style.display = 'block';
-                document.getElementById('ksm-content').style.display = 'none';
-                document.getElementById('status-badge').textContent = 'UNAVAILABLE';
-                document.getElementById('status-badge').className = 'badge badge-red';
-                return;
-            }
-
-            document.getElementById('not-available').style.display = 'none';
-            document.getElementById('ksm-content').style.display = 'block';
-
-            const badge = document.getElementById('status-badge');
-            const toggle = document.getElementById('ksm-toggle');
-            const statusText = document.getElementById('ksm-status-text');
-
-            if (ksmEnabled) {
-                badge.textContent = 'ENABLED';
-                badge.className = 'badge badge-green';
-                toggle.classList.add('enabled');
-                statusText.textContent = 'Enabled';
-                statusText.style.color = 'var(--green)';
-            } else {
-                badge.textContent = 'DISABLED';
-                badge.className = 'badge badge-red';
-                toggle.classList.remove('enabled');
-                statusText.textContent = 'Disabled';
-                statusText.style.color = 'var(--red)';
-            }
-        }
-
-        async function loadStats() {
-            const data = await api('/stats');
-            if (!data || data.error) return;
-
-            document.getElementById('memory-saved').textContent = data.memory_saved_human || '0 B';
-            document.getElementById('pages-sharing').textContent = formatNumber(data.pages_sharing);
-            document.getElementById('pages-shared').textContent = formatNumber(data.pages_shared);
-            document.getElementById('full-scans').textContent = formatNumber(data.full_scans);
-            document.getElementById('pages-unshared').textContent = formatNumber(data.pages_unshared);
-            document.getElementById('stable-chains').textContent = formatNumber(data.stable_node_chains);
-            document.getElementById('stable-dups').textContent = formatNumber(data.stable_node_dups);
-
-            document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
-        }
-
-        async function loadConfig() {
-            const data = await api('/config');
-            if (!data || data.error) return;
-
-            document.getElementById('pages-to-scan').value = data.pages_to_scan || 100;
-            document.getElementById('pages-to-scan-value').textContent = data.pages_to_scan || 100;
-
-            document.getElementById('sleep-millisecs').value = data.sleep_millisecs || 20;
-            document.getElementById('sleep-millisecs-value').textContent = data.sleep_millisecs || 20;
-        }
-
-        async function toggleKSM() {
-            if (!ksmAvailable) return;
-
-            const endpoint = ksmEnabled ? '/disable' : '/enable';
-            const result = await api(endpoint, { method: 'POST' });
-
-            if (result && result.success) {
-                showToast(result.message || (ksmEnabled ? 'KSM disabled' : 'KSM enabled'));
-                ksmEnabled = !ksmEnabled;
-                await loadStatus();
-            } else {
-                showToast('Failed: ' + (result?.detail || 'Unknown error'), 'error');
-            }
-        }
-
-        async function saveConfig() {
-            const config = {
-                pages_to_scan: parseInt(document.getElementById('pages-to-scan').value),
-                sleep_millisecs: parseInt(document.getElementById('sleep-millisecs').value)
-            };
-
-            const result = await api('/config', {
-                method: 'POST',
-                body: JSON.stringify(config)
-            });
-
-            if (result && result.success) {
-                showToast('Configuration saved');
-            } else {
-                showToast('Failed: ' + (result?.detail || 'Unknown error'), 'error');
-            }
-        }
-
-        function refresh() {
-            loadStatus();
-            loadStats();
-            loadConfig();
-        }
-
-        // Initial load
-        if (checkAuth()) {
-            refresh();
-            // Auto-refresh every 10 seconds
-            setInterval(() => {
-                loadStats();
-            }, 10000);
-        }
+        charger().then(annoncer);
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || SAISIE || OCCUPE) return;
+            charger();
+        }, 20000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

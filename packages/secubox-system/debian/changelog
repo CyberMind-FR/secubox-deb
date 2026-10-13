@@ -1,3 +1,25 @@
+secubox-system (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * ksm : page /ksm/ refaite au profil Aurora (#2584), un seul fichier autonome (plus de police Google, de crt-light, de hybrid-dark
+    ni de crt-engine), en francais, mode demonstration (?demo=1) et integre (?embed=1), hauteur annoncee a l'hote
+    (sbxVue, onglet ksm), bandeau « session requise ».
+  * Bogues de l'ancienne page corriges : sur 401 elle redirigeait vers /login.html meme dans un cadre, et sur 403 ou reponse non JSON
+    elle restait bloquee sur « Loading » ; la mesure absente s'affichait « 0 B » ou « - » au lieu de « — » ; les curseurs
+    (minimum 100 pages, pas de 100) ramenaient silencieusement a 100 ou arrondissaient une valeur noyau reelle (64, 1250, ...) puis la
+    reecrivaient a l'enregistrement, alors que l'API accepte 1 a 10000 pages et 10 a 1000 ms (champs numeriques aux vraies bornes) ;
+    l'interrupteur et l'enregistrement ecrivaient dans le noyau sans confirmation ; l'unite de la memoire economisee venait de
+    l'API en anglais (KB/MB), elle est reformatee en octets francais (Ko/Mo/Go) a partir de memory_saved_bytes ; le rafraichissement
+    ne relisait pas l'etat ni le reglage et n'etait pas suspendu onglet masque ni pendant une saisie.
+  * Les ecritures gardent exactement les memes appels : POST /enable, POST /disable, POST /config {pages_to_scan, sleep_millisecs}
+    (jeton sbx_token, repli secubox_token conserve). Confirmation integree a la page avant chaque ecriture ; inertes en demonstration.
+  * Ajouts de lecture sans nouvel appel : etat du noyau (run 0/1/2), pages non partagees, rapport de fusion (calcule par la page,
+    annonce comme tel).
+  * Non repris / non fourni par l'API : aucun historique ni courbe (l'API ne donne que des compteurs instantanes), pas de mesure de
+    charge processeur de KSM ; la taille de page est celle supposee par l'API (4 Kio) ; le texte d'aide anglais est traduit.
+  * Tests : composants/ksm/tests/test_ksm_aurora_2584.py (statique + navigateur Playwright, API simulee).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 13:00:00 +0200
+
 secubox-system (1.9.0-1~bookworm1) bookworm; urgency=medium
 
   * system : page /system/ refaite au profil Aurora (#2556), un seul fichier autonome (plus de police Google, de crt-engine ni de
