@@ -1,295 +1,345 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-<html lang="fr" class="hybrid-dark">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  ProxyPAC au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Garde XSS (leçon proxypac) : aucune donnée d'API n'entre dans un gestionnaire en ligne ni en
+  HTML brut ; le texte passe par textContent, les valeurs par data-* lues par un écouteur délégué.
+-->
+<html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuBox — ProxyPAC</title>
-<link rel="stylesheet" href="/shared/hybrid-dark.css">
-<style>
-  :root{
-    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
-    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
-    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44; --yellow:#ffcc00;
-  }
-  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
-  .header{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
-  .header h1{font-size:1.3rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
-  .header .sub{font-size:.72rem;color:var(--p31-dim);margin-top:.2rem}
-  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.35rem;vertical-align:middle}
-  .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)} .dot.off{background:var(--red)}
-  .btns{display:flex;flex-wrap:wrap;gap:.4rem}
-  .btn{font-family:inherit;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;
-    color:var(--text);background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
-    padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
-  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
-  .btn.primary{border-color:var(--cyan);color:var(--cyan)}
-  .btn.danger{border-color:var(--red);color:var(--red)}
-  .btn[disabled]{opacity:.4;cursor:not-allowed}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1rem}
-  .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.7rem;text-align:center;backdrop-filter:blur(10px)}
-  .stat-card .value{font-size:1.15rem;font-weight:bold;text-shadow:0 0 10px currentColor;color:var(--text)}
-  .stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;margin-top:.2rem;text-transform:uppercase}
-  .stat-card.ok .value{color:var(--green)} .stat-card.off .value{color:var(--red)} .stat-card.cyan .value{color:var(--cyan)}
-  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
-  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
-  .row{display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.84rem}
-  .row:last-child{border-bottom:0}
-  .row .k{color:var(--p31-dim)} .row .v{font-variant-numeric:tabular-nums;text-align:right}
-  code{color:var(--cyan);font-size:.78rem;word-break:break-all}
-  ul#rules,ul#candidates{list-style:none;margin:0;padding:0;font-size:.82rem}
-  ul#rules li,ul#candidates li{display:flex;justify-content:space-between;gap:.6rem;align-items:center;
-    padding:.4rem 0;border-bottom:1px solid var(--border)}
-  ul#rules li:last-child,ul#candidates li:last-child{border-bottom:0}
-  .empty{color:var(--p31-dim);font-size:.8rem;font-style:italic}
-  .form-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
-  .form-row input,.form-row select{font-family:inherit;font-size:.78rem;color:var(--text);
-    background:var(--bg-row);border:1px solid var(--border);border-radius:6px;padding:.4rem .5rem}
-  .form-row input{flex:1;min-width:9rem}
-  .note{font-size:.76rem;color:var(--p31-dim);line-height:1.5;margin-top:.5rem}
-  .note code{color:var(--yellow)}
-  .toggle-label{display:flex;align-items:center;gap:.5rem;font-size:.8rem}
-  .switch{position:relative;display:inline-block;width:2.6rem;height:1.4rem}
-  .switch input{opacity:0;width:0;height:0}
-  .slider{position:absolute;cursor:pointer;inset:0;background:var(--bg-row);border:1px solid var(--border);
-    border-radius:1rem;transition:.15s}
-  .slider:before{content:"";position:absolute;height:1rem;width:1rem;left:.15rem;top:.14rem;
-    background:var(--p31-dim);border-radius:50%;transition:.15s}
-  .switch input:checked + .slider{border-color:var(--green)}
-  .switch input:checked + .slider:before{transform:translateX(1.2rem);background:var(--green);box-shadow:0 0 6px var(--green)}
-  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;border-radius:6px;
-    font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
-  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
-  @media(max-width:768px){.main{margin-left:0}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — ProxyPAC</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #confirm{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        #confirm span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .v.txt{font-size:1.05rem;line-height:1.15} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono,code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        code{color:var(--cyan)}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0;line-height:1.45}
+        ul.pref{margin:6px 0 0;padding-left:18px;font-size:.78rem;color:var(--doux);display:grid;gap:5px;line-height:1.4}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;text-align:right}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:10px 0 0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        .etat-tr{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
+                <div><h1>ProxyPAC</h1><small>Fichier PAC, WPAD et règles de routage des clients</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="confirm" role="alertdialog" aria-live="assertive" hidden>
+            <span id="confirmTexte"></span>
+            <button class="btn prim" id="confirmOui" type="button">Confirmer</button>
+            <button class="btn" id="confirmNon" type="button">Annuler</button>
+        </div>
 
-<main class="main">
-  <header class="header">
-    <div>
-      <h1>🧭 ProxyPAC</h1>
-      <div class="sub" id="sub"><span class="dot" id="dot"></span>chargement…</div>
-    </div>
-    <div class="btns">
-      <button class="btn primary" onclick="applyWpad()">⚙ Appliquer WPAD</button>
-      <button class="btn" onclick="loadAll()">↻ Rafraîchir</button>
-    </div>
-  </header>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Rôle détecté de ce nœud sur le LAN (master : DHCP sur le LAN ; slave : sinon) et niveau (1 = DHCP, 2 = résolveur DNS, 3 = ni l’un ni l’autre)."><span class="l">Rôle / niveau</span><span class="v txt" id="tRole">—</span><span class="s">détection passive</span></div>
+            <div class="tuile cy" title="Mode de publication WPAD effectivement choisi par proxypac-wpad (master : option DHCP 252 ; slave-dns : enregistrement DNS wpad ; off/slave : aucune publication)."><span class="l">Publication WPAD</span><span class="v txt" id="tWpad">—</span><span class="s">mode appliqué</span></div>
+            <div class="tuile cy" title="Adresse du SOCKS Tor utilisée dans les directives du fichier PAC."><span class="l">Point SOCKS</span><span class="v txt mono" id="tSocks">—</span><span class="s">hôte:port</span></div>
+            <div class="tuile" id="cTrans" title="Mode transparent : redirection nft implicite, sans configuration côté client."><span class="l">Mode transparent</span><span class="v" id="tTrans">—</span><span class="s">redirection nft</span></div>
+            <div class="tuile cy" title="Adresse LAN détectée de ce nœud."><span class="l">Adresse LAN</span><span class="v txt mono" id="tLan">—</span><span class="s">de ce nœud</span></div>
+            <div class="tuile cy" title="Nombre de règles de routage lues dans les fichiers rules.d (fournies par le paquet et ajoutées ici)."><span class="l">Règles actives</span><span class="v" id="tRegles">—</span><span class="s">hôtes routés</span></div>
+        </section>
 
-  <div class="grid">
-    <div class="stat-card cyan"><div class="value" id="c-role" style="font-size:.9rem">–</div><div class="label">🎭 Rôle / tier</div></div>
-    <div class="stat-card cyan"><div class="value" id="c-wpad" style="font-size:.85rem">–</div><div class="label">📡 Échelon WPAD</div></div>
-    <div class="stat-card cyan"><div class="value" id="c-socks" style="font-size:.85rem">–</div><div class="label">🧦 SOCKS endpoint</div></div>
-    <div class="stat-card" id="c-transparent"><div class="value">–</div><div class="label">🕶 Transparent</div></div>
-    <div class="stat-card cyan"><div class="value" id="c-lan" style="font-size:.9rem">–</div><div class="label">🖧 IP LAN</div></div>
-  </div>
+        <div class="grille">
+            <div class="pan"><h3>Mode transparent</h3>
+                <div class="etat-tr"><span class="pill" id="pTrans">—</span>
+                    <button class="btn prim" id="bascule" type="button" disabled>Basculer</button>
+                    <button class="btn" id="wpadApply" type="button">Appliquer WPAD</button></div>
+                <div id="rTrans" class="retour" hidden style="margin-top:8px"></div>
+                <p class="note">Transparent activé : redirection nft implicite, aucune configuration côté client. Désactivé : le client doit utiliser explicitement le PAC ou le SOCKS. « Appliquer WPAD » réécrit la publication WPAD (DHCP 252 ou DNS) selon le rôle.</p></div>
+            <div class="pan"><h3>Accès client <i>runbook</i></h3>
+                <dl class="kv"><dt>Fichier PAC (LAN)</dt><dd><code id="dPac">—</code></dd><dt>URL WPAD</dt><dd><code id="dWpad">—</code></dd><dt>Domaine WPAD</dt><dd id="dDom">—</dd></dl>
+                <p class="note" style="margin-top:8px">Firefox, réglages recommandés (about:config) :</p>
+                <ul class="pref">
+                    <li><code>network.proxy.socks_remote_dns = true</code> — la résolution DNS passe par le proxy (indispensable pour les hôtes .onion, évite les fuites DNS locales).</li>
+                    <li><code>network.dns.blockDotOnion = false</code> — laisse Firefox transmettre les hôtes .onion au résolveur proxy au lieu de les bloquer avant l’appel PAC.</li>
+                    <li><code>network.trr.mode = 0</code> — désactive le DoH natif pour que la résolution suive <code>socks_remote_dns</code>.</li>
+                </ul></div>
+        </div>
 
-  <div class="card">
-    <h3>Basculer le mode transparent</h3>
-    <label class="toggle-label">
-      <span class="switch">
-        <input type="checkbox" id="t-transparent" onchange="toggleTransparent(this.checked)">
-        <span class="slider"></span>
-      </span>
-      <span id="t-label">chargement…</span>
-    </label>
-    <div class="note">Transparent ON = redirection nft implicite (pas de config client). Transparent OFF = le client
-      doit utiliser le PAC/SOCKS ci-dessous explicitement.</div>
-  </div>
+        <div class="pan"><h3>Règles actives <i id="nRegles"></i></h3>
+            <div id="rRegles" class="retour" hidden></div>
+            <div class="tab"><table><thead><tr><th>Hôte (glob)</th><th>Directive PAC</th><th>Actions</th></tr></thead><tbody id="bRegles"></tbody></table></div>
+            <p class="note">Seules les règles ajoutées ici (fichier 50-webui.rules) sont supprimables ; les règles fournies par le paquet restent en place.</p>
+            <form class="saisie" id="fOverride">
+                <label>Hôte (glob)<input id="host" name="host" placeholder="bank.example" required></label>
+                <label>Proxy<select id="proxy" name="proxy"><option value="direct">direct</option><option value="socks5">socks5</option><option value="http">http</option><option value="gateway">gateway</option></select></label>
+                <label>Adresse (socks5 / http)<input id="address" name="address" placeholder="192.0.2.10:9050"></label>
+                <div><button class="btn prim" type="submit">+ Ajouter une règle</button></div>
+            </form></div>
 
-  <div class="card">
-    <h3>Accès / runbook client</h3>
-    <div class="row"><span class="k">📄 URL du fichier PAC</span><span class="v"><code id="d-pac">—</code></span></div>
-    <div class="row"><span class="k">🌐 URL WPAD</span><span class="v"><code id="d-wpad-url">http://wpad/wpad.dat</code></span></div>
-    <div class="row"><span class="k">🔧 État WPAD (serveur)</span><span class="v" id="d-wpad-state">—</span></div>
-    <div class="note">
-      <strong>Firefox — réglages recommandés (about:config)</strong> :<br>
-      • <code>network.proxy.socks_remote_dns = true</code> — force la résolution DNS à travers le proxy PAC/SOCKS
-      (indispensable pour les hôtes .onion et pour éviter les fuites DNS locales).<br>
-      • <code>network.dns.blockDotOnion = false</code> — autorise Firefox à transmettre les hôtes .onion au résolveur proxy
-      au lieu de les bloquer avant même l'appel PAC.<br>
-      • <code>network.trr.mode = 0</code> — désactive le DoH natif Firefox (Trusted Recursive Resolver) pour que la
-      résolution passe bien par <code>socks_remote_dns</code> et non par un résolveur DoH tiers en dur.
-    </div>
-  </div>
+        <div class="pan"><h3>Candidats détectés <i id="nCand"></i></h3>
+            <div class="tab"><table><thead><tr><th>Hôte</th></tr></thead><tbody id="bCand"></tbody></table></div>
+            <p class="note">Lecture seule. Cette liste est celle de candidates.json ; elle reste vide tant que le détecteur d’auto-apprentissage n’y écrit rien.</p></div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-  <div class="card">
-    <h3>Règles actives</h3>
-    <ul id="rules"><li class="empty">chargement…</li></ul>
-    <h3 style="margin-top:1rem">Ajouter un override</h3>
-    <div class="form-row">
-      <input id="host" placeholder="host glob (ex: bank.example)">
-      <select id="proxy">
-        <option value="direct">direct</option>
-        <option value="socks5">socks5</option>
-        <option value="http">http</option>
-        <option value="gateway">gateway</option>
-      </select>
-      <input id="address" placeholder="ip:port (socks5/http)">
-      <button class="btn primary" onclick="addOverride()">+ Ajouter</button>
-    </div>
-  </div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/proxypac';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-  <div class="card">
-    <h3>Candidats détectés</h3>
-    <ul id="candidates"><li class="empty">chargement…</li></ul>
-  </div>
-</main>
+        let STATUT = null, ETAT_WPAD = null, REGLES = null, CAND = null, SESSION_OK = true, PANNES = {};
+        let CONFIRM = null;   // { texte, run } : confirmation intégrée, jamais de dialogue natif
 
-<div class="toast" id="toast"></div>
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !(data && data.ok === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
 
-<script>
-const API = '/api/v1/proxypac';
-const $ = (id) => document.getElementById(id);
+        function demoData() {
+            STATUT = { role: 'master', tier: 1, dns_resolver: true, lan_ip: '192.0.2.1', socks_endpoint: '192.0.2.1:9050', transparent: true, pac_url: 'http://wpad.example.net/wpad.dat' };
+            ETAT_WPAD = { role: 'master', domain: 'example.net', lan_ip: '192.0.2.1', pac_url: 'http://wpad.example.net/wpad.dat' };
+            REGLES = { rules: [{ host: '*.onion', directive: 'SOCKS5 192.0.2.1:9050' }, { host: 'bank.example', directive: 'DIRECT' }, { host: '*.intranet.example', directive: 'PROXY 198.51.100.8:3128' }] };
+            CAND = { candidates: ['tracker.example.org', 'cdn.example.net'] };
+        }
 
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function token(){ return localStorage.getItem('sbx_token') || ''; }
-function authHeaders(extra){
-  return Object.assign({'Authorization': 'Bearer ' + token()}, extra || {});
-}
-function toast(msg, isErr){
-  const t = $('toast'); t.textContent = msg;
-  t.className = 'toast show' + (isErr ? ' error' : '');
-  setTimeout(() => { t.className = 'toast'; }, 2600);
-}
-async function J(path, opts){
-  const o = Object.assign({credentials:'same-origin'}, opts || {});
-  o.headers = authHeaders(o.headers);
-  const url = path.startsWith('/api/') ? path : (API + path);
-  const r = await fetch(url, o);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
-}
-function badge(el, on, onT, offT){
-  el.className = 'stat-card ' + (on ? 'ok' : 'off');
-  el.querySelector('.value').textContent = on ? onT : offT;
-}
+        async function charger() {
+            PANNES = {};
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            SESSION_OK = true;
+            const lots = [['statut', '/status'], ['wpad', '/wpad/state'], ['regles', '/rules'], ['cand', '/candidates']];
+            const rep = await Promise.all(lots.map(([k, c]) => lire(c).then(d => [k, d], e => [k, null, e])));
+            let refus = false;
+            for (const [k, d, e] of rep) {
+                if (e) { PANNES[k] = e; if (e.statut === 401 || e.statut === 403) refus = true; }
+                if (k === 'statut') STATUT = d; else if (k === 'wpad') ETAT_WPAD = d; else if (k === 'regles') REGLES = d; else CAND = d;
+            }
+            if (refus) SESSION_OK = false;
+            rendre();
+        }
 
-async function loadStatus(){
-  try {
-    const d = await J('/api/v1/proxypac/status');
-    $('dot').className = 'dot on';
-    $('sub').innerHTML = '<span class="dot on"></span>panneau actif';
-    $('c-role').textContent = (d.role || '—') + ' / ' + (d.tier || '—');
-    $('c-wpad').textContent = d.dns_resolver ? 'résolveur DNS' : (d.role || '—');
-    $('c-socks').textContent = d.socks_endpoint || '—';
-    $('c-lan').textContent = d.lan_ip || '—';
-    const on = !!d.transparent;
-    badge($('c-transparent'), on, 'ON', 'OFF');
-    $('t-transparent').checked = on;
-    $('t-label').textContent = on ? 'Transparent activé (nft)' : 'Transparent désactivé (client explicite)';
-    $('d-pac').textContent = d.pac_url || 'http://' + (d.lan_ip || '<box>') + '/proxy.pac';
-  } catch (e) {
-    $('dot').className = 'dot off';
-    $('sub').innerHTML = '<span class="dot off"></span>statut indisponible (' + esc(e.message) + ')';
-    toast('Statut indisponible : ' + e.message, true);
-  }
-}
+        function majTuile(id, texte, classe) { $(id).textContent = texte; if (classe !== undefined) $(id).parentElement.className = 'tuile ' + classe; }
 
-async function loadWpadState(){
-  try {
-    const d = await J('/api/v1/proxypac/wpad/state');
-    $('d-wpad-state').textContent = d.error ? d.error : JSON.stringify(d);
-  } catch (e) {
-    $('d-wpad-state').textContent = 'indisponible (' + e.message + ')';
-  }
-}
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = SESSION_OK ? STATUT : null, w = SESSION_OK ? ETAT_WPAD : null;
+            const reglesOk = SESSION_OK && REGLES && Array.isArray(REGLES.rules) ? REGLES.rules : null;
+            const candOk = SESSION_OK && CAND && Array.isArray(CAND.candidates) ? CAND.candidates : null;
 
-async function applyWpad(){
-  try {
-    const d = await J('/api/v1/proxypac/wpad/apply', {method:'POST'});
-    toast(d.ok === false ? 'Application WPAD échouée' : 'WPAD appliqué', d.ok === false);
-  } catch (e) {
-    toast('Application WPAD impossible : ' + e.message, true);
-  }
-  loadWpadState();
-}
+            const toutKo = Object.keys(PANNES).length === 4;
+            const e = $('erreur');
+            e.hidden = !(toutKo && SESSION_OK === true);
+            if (!e.hidden) e.textContent = 'Le service ProxyPAC ne répond pas (' + (PANNES.statut ? PANNES.statut.message : '—') + ').';
+            const pil = $('etat');
+            if (!SESSION_OK) { pil.className = 'actif att'; pil.textContent = 'SESSION REQUISE'; }
+            else if (DEMO) { pil.className = 'actif att'; pil.textContent = 'DÉMONSTRATION'; }
+            else if (s) { pil.className = 'actif'; pil.textContent = 'ACTIF'; }
+            else if (STATUT === null && Object.keys(PANNES).length === 0) { pil.className = 'actif neutre'; pil.textContent = 'CHARGEMENT…'; }
+            else { pil.className = 'actif hors'; pil.textContent = 'INDISPONIBLE'; }
 
-async function toggleTransparent(on){
-  try {
-    const d = await J('/api/v1/proxypac/transparent', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body: JSON.stringify({on})});
-    if (d.ok === false) { toast('Bascule transparent échouée', true); }
-    else toast('Transparent ' + (on ? 'activé' : 'désactivé'));
-  } catch (e) {
-    toast('Bascule transparent impossible : ' + e.message, true);
-  }
-  loadStatus();
-}
+            majTuile('tRole', s ? tiret(s.role) + ' / niveau ' + tiret(s.tier) : '—');
+            majTuile('tWpad', w ? tiret(w.role) : '—');
+            majTuile('tSocks', s ? tiret(s.socks_endpoint) : '—');
+            majTuile('tLan', s ? tiret(s.lan_ip) : '—');
+            majTuile('tRegles', reglesOk ? String(reglesOk.length) : '—');
+            const trans = s ? !!s.transparent : null;
+            majTuile('tTrans', trans === null ? '—' : (trans ? 'ACTIF' : 'INACTIF'), trans === null ? '' : (trans ? 'ok' : 'att'));
+            $('pTrans').textContent = trans === null ? '—' : (trans ? 'Transparent activé (nft)' : 'Transparent désactivé (client explicite)');
+            $('pTrans').className = 'pill ' + (trans === null ? '' : (trans ? 'ok' : 'att'));
+            const bt = $('bascule'); bt.disabled = trans === null;
+            bt.textContent = trans ? 'Désactiver le transparent' : 'Activer le transparent';
+            bt.dataset.cible = trans ? 'off' : 'on';
 
-async function loadRules(){
-  try {
-    const d = await J('/api/v1/proxypac/rules');
-    const rules = d.rules || [];
-    $('rules').innerHTML = rules.length ? rules.map(r =>
-      `<li><span>${esc(r.host)} → ${esc(r.directive)}</span>` +
-      `<button class="btn danger" data-action="del-override" data-host="${esc(r.host)}">✕</button></li>`
-    ).join('') : '<li class="empty">aucune règle</li>';
-  } catch (e) {
-    $('rules').innerHTML = '<li class="empty">règles indisponibles (' + esc(e.message) + ')</li>';
-  }
-}
+            // Accès client : valeurs réelles uniquement (état WPAD du serveur, sinon statut).
+            $('dPac').textContent = s && s.lan_ip ? 'http://' + s.lan_ip + '/proxy.pac' : '—';
+            $('dWpad').textContent = tiret((w && w.pac_url) || (s && s.pac_url));
+            $('dDom').textContent = w ? tiret(w.domain) : '—';
 
-// Délégation d'événements : aucune donnée d'API n'est jamais interpolée dans un
-// attribut d'événement inline (onclick/onchange/...). Les valeurs dynamiques sont
-// portées par des data-* attributs (échappés HTML via esc()) et lues ici via
-// `dataset`, qui renvoie la valeur décodée en tant que STRING JS — jamais
-// réinterprétée comme du code. Empêche toute évasion de chaîne (XSS stockée).
-$('rules').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-action]');
-  if (!btn) return;
-  if (btn.dataset.action === 'del-override') {
-    delOverride(btn.dataset.host);
-  }
-});
+            // Règles
+            const tb = $('bRegles'); tb.replaceChildren();
+            if (reglesOk && reglesOk.length) {
+                for (const r of reglesOk) {
+                    const tr = el('tr');
+                    tr.append(el('td', 'mono', tiret(r.host)), el('td', 'mono', tiret(r.directive)));
+                    const td = el('td', 'act');
+                    if (CONFIRM && CONFIRM.cle === 'del:' + r.host) {
+                        td.append(el('span', 'pill att', 'À confirmer ci-dessus'));
+                    } else {
+                        const b = el('button', 'btn sm danger', 'Supprimer'); b.type = 'button';
+                        b.dataset.action = 'supprimer'; b.dataset.host = String(r.host);
+                        td.append(b);
+                    }
+                    tr.append(td); tb.append(tr);
+                }
+            } else {
+                const tr = el('tr'), td = el('td', 'vide', SESSION_OK ? (PANNES.regles ? 'Règles indisponibles (' + PANNES.regles.message + ').' : 'Aucune règle.') : '—'); td.colSpan = 3; tr.append(td); tb.append(tr);
+            }
+            $('nRegles').textContent = reglesOk ? reglesOk.length + ' règle' + (reglesOk.length > 1 ? 's' : '') : '';
 
-async function loadCandidates(){
-  try {
-    const d = await J('/api/v1/proxypac/candidates');
-    const cand = d.candidates || [];
-    $('candidates').innerHTML = cand.length ? cand.map(c => {
-      const host = typeof c === 'string' ? c : (c.host || JSON.stringify(c));
-      return `<li><span>${esc(host)}</span></li>`;
-    }).join('') : '<li class="empty">aucun candidat</li>';
-  } catch (e) {
-    $('candidates').innerHTML = '<li class="empty">candidats indisponibles (' + esc(e.message) + ')</li>';
-  }
-}
+            // Candidats
+            const tc = $('bCand'); tc.replaceChildren();
+            if (candOk && candOk.length) {
+                for (const c of candOk) {
+                    const h = typeof c === 'string' ? c : (c && c.host) || JSON.stringify(c);
+                    const tr = el('tr'); tr.append(el('td', 'mono', h)); tc.append(tr);
+                }
+            } else {
+                const tr = el('tr'), td = el('td', 'vide', SESSION_OK ? (PANNES.cand ? 'Candidats indisponibles (' + PANNES.cand.message + ').' : 'Aucun candidat.') : '—'); tr.append(td); tc.append(tr);
+            }
+            $('nCand').textContent = candOk ? candOk.length + ' hôte' + (candOk.length > 1 ? 's' : '') : '';
 
-async function addOverride(){
-  const host = $('host').value.trim();
-  if (!host) { toast('Host requis', true); return; }
-  try {
-    await J('/api/v1/proxypac/override', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({host, proxy: $('proxy').value, address: $('address').value.trim()})});
-    toast('Override ajouté');
-    $('host').value = ''; $('address').value = '';
-    loadRules();
-  } catch (e) {
-    toast('Ajout impossible : ' + e.message, true);
-  }
-}
+            $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-async function delOverride(host){
-  try {
-    await J('/api/v1/proxypac/override/' + encodeURIComponent(host), {method:'DELETE'});
-    toast('Override supprimé');
-    loadRules();
-  } catch (e) {
-    toast('Suppression impossible : ' + e.message, true);
-  }
-}
+        // --- Confirmation intégrée à la page ---
+        function demande(cle, texte, run) {
+            CONFIRM = { cle, run }; $('confirmTexte').textContent = texte; $('confirm').hidden = false; rendre(); try { $('confirm').scrollIntoView({ block: 'nearest' }); } catch (e) { /* ancien navigateur */ }
+        }
+        function ferme() { CONFIRM = null; $('confirm').hidden = true; rendre(); }
+        $('confirmNon').addEventListener('click', ferme);
+        $('confirmOui').addEventListener('click', async () => { const c = CONFIRM; $('confirm').hidden = true; CONFIRM = null; if (c) await c.run(); rendre(); });
 
-async function loadAll(){
-  loadStatus();
-  loadWpadState();
-  loadRules();
-  loadCandidates();
-}
-loadAll();
-</script>
+        // --- Actions (mêmes routes, méthodes et corps que l'ancienne page) ---
+        async function appliquerWpad() {
+            const r = await ecrire('POST', '/wpad/apply');
+            if (r.ok) { retour('rTrans', true, 'WPAD appliqué.' + (r.data && r.data.detail ? ' ' + r.data.detail : '')); toast('WPAD appliqué'); }
+            else retour('rTrans', false, 'Application WPAD échouée : ' + detail(r));
+            charger();
+        }
+        async function basculer(on) {
+            const r = await ecrire('POST', '/transparent', { on });
+            if (r.ok) { retour('rTrans', true, 'Transparent ' + (on ? 'activé' : 'désactivé') + '.'); toast('Transparent ' + (on ? 'activé' : 'désactivé')); }
+            else retour('rTrans', false, 'Bascule transparent échouée : ' + detail(r));
+            charger();
+        }
+        async function supprimer(host) {
+            const r = await ecrire('DELETE', '/override/' + encodeURIComponent(host));
+            if (!r.ok) { retour('rRegles', false, 'Suppression impossible : ' + detail(r)); return; }
+            await charger();
+            const reste = REGLES && Array.isArray(REGLES.rules) && REGLES.rules.some(x => x.host === host);
+            if (reste) retour('rRegles', false, 'La règle « ' + host + ' » est toujours présente : elle vient d’un fichier du paquet et ne se supprime pas ici.');
+            else retour('rRegles', true, 'Règle « ' + host + ' » supprimée.');
+        }
+
+        // Écouteur délégué : les valeurs d'API sont lues dans dataset (chaîne JS), jamais réinterprétées.
+        $('bRegles').addEventListener('click', ev => {
+            const b = ev.target.closest('[data-action]');
+            if (!b || b.dataset.action !== 'supprimer') return;
+            const host = b.dataset.host;
+            demande('del:' + host, 'Supprimer la règle « ' + host + ' » ? Le fichier PAC sera régénéré pour tous les clients.', () => supprimer(host));
+        });
+        $('bascule').addEventListener('click', () => {
+            const on = $('bascule').dataset.cible === 'on';
+            demande('trans', on ? 'Activer le mode transparent ? Le trafic des clients sera redirigé par nft.' : 'Désactiver le mode transparent ? Les clients devront utiliser explicitement le PAC ou le SOCKS.', () => basculer(on));
+        });
+        $('wpadApply').addEventListener('click', () => demande('wpad', 'Appliquer la publication WPAD ? Les fichiers DHCP/DNS correspondants seront réécrits selon le rôle.', appliquerWpad));
+        $('fOverride').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const host = $('host').value.trim();
+            if (!host) { retour('rRegles', false, 'Hôte requis.'); return; }
+            const r = await ecrire('POST', '/override', { host, proxy: $('proxy').value, address: $('address').value.trim() });
+            if (r.ok) { $('host').value = ''; $('address').value = ''; retour('rRegles', true, 'Règle ajoutée.'); charger(); }
+            else retour('rRegles', false, 'Ajout impossible : ' + detail(r));
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // --- Hauteur annoncée à l'hôte (iframe) ---
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'proxypac' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM) return;
+            if ($('host').value || $('address').value || document.activeElement === $('host') || document.activeElement === $('address')) return;
+            charger();
+        }, 30000);
+    </script>
 </body>
 </html>

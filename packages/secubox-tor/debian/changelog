@@ -1,3 +1,24 @@
+secubox-tor (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /proxypac/ refaite au profil Aurora (ref #2556) : page autonome, tuiles (role/niveau, publication
+    WPAD, point SOCKS, mode transparent, adresse LAN, nombre de regles), panneaux mode transparent, acces
+    client, regles, candidats ; ?demo=1 (donnees fictives, actions inertes), ?embed=1, bandeau session requise,
+    actualisation 30 s hors saisie et hors confirmation, hauteur annoncee a l'hote (sbxVue).
+  * Confirmation integree a la page (suppression de regle, bascule transparent, application WPAD) ; plus
+    aucun dialogue natif. Appels d'ecriture inchanges : POST /wpad/apply, POST /transparent {on},
+    POST /override {host,proxy,address}, DELETE /override/<host>. Garde XSS conservee (data-* + ecouteur
+    delegue, aucun innerHTML ni gestionnaire en ligne).
+  * Corrige : l'URL WPAD etait ecrite en dur (http://wpad/wpad.dat) au lieu de celle de /wpad/state ; l'etat
+    WPAD etait affiche en JSON brut ; la tuile « Echelon WPAD » affichait « resolveur DNS » ou le role au lieu
+    du mode de publication ; l URL du PAC retombait sur un texte « <box> » invente ; l'en-tete Authorization
+    partait vide sans jeton ; la suppression d'une regle fournie par le paquet annoncait un succes alors
+    qu'elle restait en place (la page le dit maintenant) ; un 401 n'etait signale que par un message bref.
+  * Non repris : l'ancien commutateur a bascule (remplace par un bouton avec confirmation) ; accepter/rejeter
+    un candidat reste absent (routes API existantes mais jamais exposees par l'ancienne page) ; aucune
+    mesure de trafic ni d'historique (l'API n'en fournit pas).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-tor (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-macro (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
