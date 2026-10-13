@@ -16,6 +16,7 @@ Mutating endpoints: require JWT via Depends(require_jwt).
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import subprocess
 import sys
@@ -733,7 +734,7 @@ async def list_bans():
 
 
 @app.get("/log/export", dependencies=[Depends(lecture_ou_pair)])
-async def export_log():
+async def export_log(ops: Optional[str] = None):
     """Export the full signed log for a peer to pull (public).
 
     Distinct from GET /log (a truncated recent view): this returns every entry
@@ -742,7 +743,9 @@ async def export_log():
     from annuaire.verbs import export_entries  # noqa: PLC0415
     # Hors de la boucle d'événements (#1530) : servi par un seul worker, un
     # export long gelait TOUTES les routes de l'annuaire.
-    return {"entries": await asyncio.to_thread(export_entries, get_journal())}
+    # ?ops=assist_ (#2540) : la voie rapide ne tire que l'assistance (quelques Ko) au lieu du journal entier (3 Mo).
+    prefixes = tuple(x for x in (ops or "").split(",") if x.strip()) or None
+    return {"entries": await asyncio.to_thread(export_entries, get_journal(), prefixes)}
 
 
 @app.post("/node/publish", dependencies=[Depends(_require_jwt)])
@@ -1205,19 +1208,57 @@ async def _start_dir_sync():
         return
     await asyncio.to_thread(_publish_self_node)
     asyncio.create_task(_dir_sync_loop())
+    asyncio.create_task(_assist_sync_loop())
+
+
+_sync_log = logging.getLogger("secubox.annuaire.sync")
+
+
+def _cycle_sync(peers_path: str, ops: Optional[str] = None):
+    """Un passage de synchronisation (#2540). Rend les totaux, ou None si rien n'a pu être tenté.
+
+    Jamais d'exception vers l'appelant, mais plus de silence : un échec est journalisé (c'était `except Exception: pass`), et un passage qui
+    ingère quelque chose aussi. Un passage sans changement reste muet (la voie rapide tourne toutes les 20 s)."""
+    from annuaire.mesh_sync import read_mesh_peers, sync_once  # noqa: PLC0415
+    voie = f"voie « {ops} »" if ops else "journal complet"
+    try:
+        peers = read_mesh_peers(peers_path)
+        if not peers:
+            return None
+        res = sync_once(get_journal(), peers, ops=ops) if ops else sync_once(get_journal(), peers)
+    except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
+        _sync_log.warning("synchronisation (%s) échouée : %s", voie, e)
+        return None
+    if res.get("ingested") or res.get("rejected") or res.get("errors"):
+        _sync_log.info("synchronisation (%s) : %s ingéré(s), %s rejeté(s), %s pair(s) injoignable(s) sur %s", voie,
+                       res.get("ingested", 0), res.get("rejected", 0), res.get("errors", 0), res.get("peers", 0) + res.get("errors", 0))
+    return res
 
 
 async def _dir_sync_loop():
     import asyncio  # noqa: PLC0415
-    from annuaire.mesh_sync import read_mesh_peers, sync_once  # noqa: PLC0415
 
     interval = int(os.environ.get("ANNUAIRE_DIR_SYNC_INTERVAL", "300"))
     peers_path = os.environ.get("ANNUAIRE_PEERS_PATH", "/var/lib/secubox/p2p/wg_mesh.json")
     while True:
-        try:
-            peers = read_mesh_peers(peers_path)
-            if peers:
-                await asyncio.to_thread(sync_once, get_journal(), peers)
-        except Exception:
-            pass
+        await asyncio.to_thread(_cycle_sync, peers_path)
         await asyncio.sleep(interval)
+
+
+async def _assist_sync_loop():
+    """Voie rapide (#2540) : les demandes et offres d'assistance seulement, toutes les 20 s. Le journal entier (bannissements compris) garde ses 300 s."""
+    import asyncio  # noqa: PLC0415
+
+    interval = int(os.environ.get("ANNUAIRE_ASSIST_SYNC_INTERVAL", "20"))
+    peers_path = os.environ.get("ANNUAIRE_PEERS_PATH", "/var/lib/secubox/p2p/wg_mesh.json")
+    while True:
+        await asyncio.sleep(interval)
+        await asyncio.to_thread(_cycle_sync, peers_path, "assist_")
+
+
+@app.post("/sync/now", dependencies=[Depends(_require_jwt)])
+async def sync_maintenant():
+    """Un passage immédiat de la voie rapide (bouton « Synchroniser » de /assist/)."""
+    peers_path = os.environ.get("ANNUAIRE_PEERS_PATH", "/var/lib/secubox/p2p/wg_mesh.json")
+    res = await asyncio.to_thread(_cycle_sync, peers_path, "assist_")
+    return {"ok": res is not None, "resultat": res}

@@ -33,6 +33,8 @@
 <nav class="sidebar" id="sidebar"></nav>
 <div class="main">
   <h1 style="color:#00d4ff">🆘 Assistance</h1>
+  <!-- #2540 : les demandes et offres voyagent par le journal du maillage (voie rapide, ~20 s) ; ce bouton force un passage tout de suite. -->
+  <div style="margin:-6px 0 10px"><button class="btn" id="sync-now" type="button">↻ Synchroniser avec le maillage</button> <span id="sync-etat" style="font-size:.8rem;opacity:.8" role="status"></span></div>
   <div class="card" id="active-card"><h2>Session active</h2><div id="active">—</div>
     <button class="btn danger" data-act="close">Kill session</button>
     <!-- #1720 : le second consentement. Tant qu'il vaut, le centre de la session
@@ -290,6 +292,22 @@ async function refresh() {
   refreshActiveMarketTab();
   refreshDelegations();
 }
+
+// Synchronisation immédiate (#2540) : un passage de la voie rapide de l'annuaire, puis on relit tout.
+document.getElementById('sync-now').addEventListener('click', async () => {
+  const bt = document.getElementById('sync-now'), et = document.getElementById('sync-etat');
+  bt.disabled = true; et.textContent = 'Synchronisation…';
+  try {
+    const r = await fetch('/api/v1/annuaire/sync/now', {method: 'POST', headers: H()});
+    if (r.status === 401 || r.status === 403) throw new Error('session requise');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json(), res = d.resultat || {};
+    et.textContent = !d.ok ? 'Aucun pair du maillage à interroger.'
+      : (res.ingested ? res.ingested + ' entrée(s) reçue(s)' : 'Déjà à jour') + (res.errors ? ' · ' + res.errors + ' pair(s) injoignable(s)' : '') + ' — ' + new Date().toLocaleTimeString();
+    await refresh();
+  } catch (e) { et.textContent = 'Échec : ' + e.message; }
+  finally { bt.disabled = false; }
+});
 
 document.getElementById('mtabs').addEventListener('click', (ev) => {
   const t = ev.target.closest('[data-tab]'); if (!t) return;

@@ -29,7 +29,7 @@ import json
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Tuple, Any, Dict, List, Optional
 
 from . import assist, assist_match, grants, releases
 from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
@@ -2016,13 +2016,16 @@ def banned_ips(journal: Journal) -> List[str]:
 # last-writer-wins at the state layer (_get_nodes/_get_configs/_get_offers).
 # ---------------------------------------------------------------------------
 
-def export_entries(journal: Journal) -> List[Dict[str, Any]]:
+def export_entries(journal: Journal, ops: Optional[Tuple[str, ...]] = None) -> List[Dict[str, Any]]:
     """Serialize the local log for a peer to pull.
 
     Each item: {op, payload_type, payload, author, author_pubkey, sig}. The
     author_pubkey is resolved from the author's Identity entry so a consumer
     can verify without prior knowledge (and check the self-certifying binding).
     Entries are emitted in height order so version ties resolve consistently.
+
+    `ops` (#2540) : ne garder que les opérations dont le nom commence par l'un de ces préfixes (« assist_ » : demandes et offres
+    d'assistance, une cinquantaine d'entrées sur 5 000). Les clés des auteurs sont toujours résolues sur le journal COMPLET.
     """
     # UNE CLÉ PAR AUTEUR, PAS PAR ENTRÉE (#1530). _get_inviter_pubkey relit le
     # journal : l'appeler pour chaque entrée faisait un export QUADRATIQUE
@@ -2032,6 +2035,9 @@ def export_entries(journal: Journal) -> List[Dict[str, Any]]:
     cles: Dict[str, Optional[str]] = {}
     out: List[Dict[str, Any]] = []
     for entry in journal.iter_entries():
+        nom_op = entry.op.value if hasattr(entry.op, "value") else entry.op
+        if ops and not str(nom_op).startswith(tuple(ops)):
+            continue
         if entry.author not in cles:
             cles[entry.author] = _get_inviter_pubkey(journal, entry.author)
         out.append({

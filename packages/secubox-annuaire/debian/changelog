@@ -1,3 +1,9 @@
+secubox-annuaire (0.11.2-1~bookworm1) bookworm; urgency=medium
+
+  * Demandes et offres d'assistance : synchronisation rapide (#2540). Mesure sur deux box : la replication marchait mais tirait TOUT le journal (/log/export = 3 Mo, 5 136 entrees dont 5 061 bannissements) toutes les 300 s pour une cinquantaine d'entrees d'assistance, et le premier passage d'une RPi (5 135 ajouts un a un) bloquait plus de 7 minutes ; `except Exception: pass` ne laissait aucune trace d'un echec. /log/export?ops=assist_ n'exporte que l'assistance ; une voie rapide (ANNUAIRE_ASSIST_SYNC_INTERVAL, 20 s par defaut) ne tire que assist_* ; un echec de synchro est journalise (« synchronisation (voie « assist_ ») echouee : … »), un passage qui ingere quelque chose aussi, un passage sans changement reste muet ; POST /sync/now (JWT) force un passage. 8 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:00:00 +0200
+
 secubox-annuaire (0.11.1-1~bookworm1) bookworm; urgency=medium
 
   * Page /fleet/ au profil Aurora (#2487) : tuiles (nœuds, en ligne, périmés, modules à l'arrêt,
