@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — p2p 1.13.2 : la jonction automatique joint un parent distant en HTTPS (ref #2536)
+
+Essai réel gk1 → gk2 avec un code d'invitation déposé dans `automesh.code` : échec. `sbx-mesh-join` n'utilisait que HTTP:7331 (filtré par le pare-feu de gk2 depuis le LAN, et injoignable derrière une Freebox) ; l'état disait « RuntimeError ». Parent local → HTTP:7331 inchangé ; parent distant → HTTPS par le nginx du parent, certificat vérifié. Message d'échec lisible, jeton jamais journalisé. Test `packages/secubox-p2p/tests/test_transport_jonction_2536.py`.
+
 ## 2026-10-13 — premier-pas 0.5.7 : le kiosque ouvre l'administration, pas le Hall (ref #2534)
 
 Sur la RPi400, le kiosque ouvrait `hall.localhost:9078`. Le Hall est une réalisation personnelle de gk2 ; le kiosque d'une box ouvre l'administration : `admin.localhost:9078` (console locale, sans authentification pour le seul kiosque), puis `:9080`, après vérification que la page est le tableau de bord et non le Hall. `KIOSK_START="hall"` (dans `/etc/default/secubox-kiosk`) rend l'ancien comportement. Test `packages/secubox-premier-pas/tests/test_url_kiosque_admin_2534.py`.
