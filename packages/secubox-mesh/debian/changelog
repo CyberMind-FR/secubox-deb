@@ -1,3 +1,12 @@
+secubox-mesh (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /mesh/ refaite au profil Aurora (#2597) : fichier autonome (plus de police ni de feuille CRT distantes), tuiles (pairs, liens etablis, clients AP, canal, puissance TX), panneaux radio, vivacite, pairs et clients, bandeau « session requise » sur 401/403, ?demo=1 (donnees fictives, action inerte) et ?embed=1.
+  * Corrige : jeton sbx_token jamais envoye (Authorization: Bearer) ; MAC et valeurs de l'API injectees par innerHTML (remplace par textContent) ; confirm() et alert() natifs remplaces par une confirmation dans la page ; rotation SAE donnee pour reussie alors que le module repond HTTP 200 avec status=error (wpa_cli absent ou en echec) : le corps est desormais lu ; badge de version « vundefined » quand /health ne repond pas ; actualisation a 8 s meme onglet masque ou pendant une confirmation (15 s, onglet visible seulement).
+  * Ajoute (donnees deja fournies par l'API, non affichees avant) : octets recus/emis des pairs et des clients.
+  * Non repris : aucune action nouvelle ; la route POST /reg/domain n'avait pas de bouton et n'en a toujours pas ; le panneau « liveness » montre la version renvoyee par /health (fixee a 2.0.0 dans le code), pas celle du paquet ; aucune courbe, l'API ne fournit pas d'historique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:10:00 +0200
+
 secubox-mesh (2.0.8-1~bookworm1) bookworm; urgency=medium
 
   * Socket Unix /run/secubox/mesh.sock a la place du port TCP 127.0.0.1:8743 (regle du projet, #2050) : meme patron que les autres modules (retrait de la socket perimee, chmod 660, Group=secubox).
