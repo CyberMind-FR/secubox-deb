@@ -2,193 +2,270 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  SecuBox-Deb :: MESH dashboard (P31 light skin, hommage CRT-phosphor)
-  Spec : CM-MESH-MPCIE-2026-06 v0.2.1
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  MESH 802.11s au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Spec : CM-MESH-MPCIE-2026-06 v0.2.1.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, action inerte.
 -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox — MESH 802.11s</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak);
-            --bloom-soft: 0 0 6px var(--p31-peak);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--p31-mid); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: 100%; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border: 1px solid var(--border); background: var(--bg-card); margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--p31-hot); text-shadow: var(--bloom-text); }
-        .header .badge { font-size: 0.85rem; color: var(--p31-dim); padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 3px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); padding: 1rem; box-shadow: var(--bloom-soft); }
-        .card h2 { font-size: 1rem; color: var(--p31-hot); text-shadow: var(--bloom-text); margin-bottom: 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
-        .kv { display: grid; grid-template-columns: 1fr 2fr; gap: 0.3rem 0.8rem; font-size: 0.9rem; }
-        .kv .k { color: var(--p31-dim); }
-        .kv .v { color: var(--p31-peak); text-shadow: var(--bloom-text); }
-        .kv .v.null { color: var(--text-dim); opacity: 0.5; }
-        .toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        button { font-family: inherit; font-size: 0.9rem; padding: 0.4rem 0.9rem; background: transparent; color: var(--p31-peak); border: 1px solid var(--p31-mid); cursor: pointer; text-shadow: var(--bloom-text); }
-        button:hover { background: var(--p31-ghost); border-color: var(--p31-hot); }
-        button.danger { color: var(--red); border-color: var(--red); text-shadow: 0 0 4px var(--red); }
-        button.danger:hover { background: rgba(255, 68, 102, 0.1); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
-        th { color: var(--p31-hot); text-shadow: var(--bloom-text); }
-        td { color: var(--p31-mid); }
-        .empty { color: var(--text-dim); font-style: italic; padding: 1rem; text-align: center; }
-        .opad-banner { background: var(--p31-ghost); border: 1px solid var(--p31-mid); padding: 0.6rem 0.8rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--p31-dim); }
-        .opad-banner strong { color: var(--p31-hot); text-shadow: var(--bloom-text); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .opad{border:1px solid var(--trait2);background:rgba(8,18,38,.6);border-radius:10px;padding:8px 12px;font-size:.78rem;color:var(--doux)} .opad b{color:var(--texte)}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .large{grid-column:1/-1}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;white-space:nowrap}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem;white-space:normal}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);white-space:pre-wrap;overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .action{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
     </style>
 </head>
 <body>
-<div class="sidebar" id="sidebar"></div>
-<div class="main">
-    <div class="header">
-        <h1>📡 MESH 802.11s</h1>
-        <span class="badge" id="version-badge">v—</span>
-    </div>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 9.5a11 11 0 0 1 15 0M7.5 12.8a6.6 6.6 0 0 1 9 0M10.4 16a2.3 2.3 0 0 1 3.2 0"/><circle cx="12" cy="19" r="1.2"/></svg>
+                <div><h1>MESH 802.11s</h1><small>Backhaul maillé et point d’accès Passpoint</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="version" title="Version annoncée par la route /health du module">—</span><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, action inerte</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="opad"><b>OPAD :</b> posture passive par défaut — aucune action RF offensive automatisée. Spec : CM-MESH-MPCIE-2026-06 v0.2.1.</div>
 
-    <div class="opad-banner">
-        <strong>OPAD :</strong> posture passive par défaut — aucune action RF offensive automatisée.
-        Spec : CM-MESH-MPCIE-2026-06 v0.2.1.
-    </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Voisins mesh vus par l’interface radio (station dump, HWMP)."><span class="l">Pairs mesh</span><span class="v" id="tPairs">—</span><span class="s">voisins vus</span></div>
+            <div class="tuile ok" id="cEstab" title="Pairs dont le lien mesh est établi (état ESTAB). Les autres sont en cours d’ouverture ou fermés."><span class="l">Liens établis</span><span class="v" id="tEstab">—</span><span class="s">mesh_plink = ESTAB</span></div>
+            <div class="tuile cy" title="Stations associées au point d’accès. Zéro si le point d’accès est désactivé dans la configuration."><span class="l">Clients AP</span><span class="v" id="tClients">—</span><span class="s">stations associées</span></div>
+            <div class="tuile cy" title="Canal et fréquence de l’interface radio."><span class="l">Canal</span><span class="v" id="tCanal">—</span><span class="s" id="sCanal">fréquence</span></div>
+            <div class="tuile cy" title="Puissance d’émission de l’interface radio."><span class="l">Puissance TX</span><span class="v" id="tTx">—</span><span class="s">dBm</span></div>
+        </section>
 
-    <div class="toolbar">
-        <button onclick="refreshAll()">🔁 Refresh</button>
-        <button class="danger" onclick="rotateKey()">🔑 Rotate SAE</button>
-    </div>
-
-    <div class="grid">
-        <div class="card">
-            <h2>RF state</h2>
-            <div class="kv" id="rf"><span class="k">loading…</span><span class="v"></span></div>
+        <div class="grille">
+            <div class="pan"><h3>État radio <i>RF</i></h3>
+                <dl class="kv"><dt>Interface</dt><dd class="mono" id="kIface">—</dd><dt>Type</dt><dd id="kType">—</dd><dt>Canal</dt><dd id="kCanal">—</dd><dt>Fréquence</dt><dd id="kFreq">—</dd><dt>Largeur</dt><dd id="kLarg">—</dd><dt>Puissance TX</dt><dd id="kTx">—</dd><dt>Pays réglementaire</dt><dd id="kPays">—</dd><dt>DFS</dt><dd id="kDfs">—</dd></dl></div>
+            <div class="pan"><h3>Vivacité du module <i>/health</i></h3>
+                <dl class="kv"><dt>Statut</dt><dd id="kStatut">—</dd><dt>Module</dt><dd id="kModule">—</dd><dt>Version</dt><dd id="kVer">—</dd></dl>
+                <p class="note">La version affichée est celle que renvoie la route de vivacité, pas forcément celle du paquet installé.</p>
+                <div class="action" style="margin-top:10px"><button class="btn danger sm" id="rotation" type="button">Rotation SAE</button></div>
+                <div id="confirm" hidden>
+                    <p class="note" style="color:var(--texte)">Déclencher la rotation SAE ? À n’utiliser que si la maturité SAE-mesh du chipset est vérifiée.</p>
+                    <div class="action"><button class="btn danger sm" id="confirmer" type="button">Confirmer</button><button class="btn sm" id="annuler" type="button">Annuler</button></div>
+                </div>
+                <div id="rRot" class="retour" role="status" hidden></div></div>
+            <div class="pan large"><h3>Pairs mesh <i id="nPairs">HWMP</i></h3>
+                <div class="tab"><table><thead><tr><th>MAC</th><th>Lien</th><th>Signal</th><th>Débit TX</th><th>Inactif</th><th>Reçu</th><th>Émis</th></tr></thead><tbody id="bPairs"></tbody></table></div></div>
+            <div class="pan large"><h3>Clients du point d’accès <i id="nClients"></i></h3>
+                <div class="tab"><table><thead><tr><th>MAC</th><th>Signal</th><th>Connecté depuis</th><th>Passpoint</th><th>Reçu</th><th>Émis</th></tr></thead><tbody id="bClients"></tbody></table></div></div>
         </div>
-        <div class="card">
-            <h2>Mesh peers (HWMP)</h2>
-            <div id="peers"><div class="empty">loading…</div></div>
-        </div>
-        <div class="card">
-            <h2>AP clients</h2>
-            <div id="clients"><div class="empty">loading…</div></div>
-        </div>
-        <div class="card">
-            <h2>Liveness</h2>
-            <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
-        </div>
-    </div>
-</div>
+    </div></div></main>
 
-<script src="/shared/sidebar.js"></script>
-<script>
-const API = '/api/v1/mesh';
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/mesh';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const avec = (v, u) => (v === null || v === undefined || v === '') ? '—' : v + u;
 
-function vSpan(v, suffix='') {
-    if (v === null || v === undefined || v === '') return '<span class="v null">—</span>';
-    return `<span class="v">${v}${suffix}</span>`;
-}
+        let RF = null, PAIRS = [], CLIENTS = [], SANTE = null, SESSION_OK = true, CONFIRM = false, AUCUNE = false;
 
-async function fetchJSON(path) {
-    try {
-        const r = await fetch(API + path, { credentials: 'same-origin' });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return await r.json();
-    } catch (e) {
-        return { __error: e.message };
-    }
-}
+        // Jeton : clé actuelle, repli sur l'ancienne ; localStorage peut lever.
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : même route, même méthode, sans corps (comme l'ancienne page). Inerte en démonstration.
+        async function ecrire(methode, chemin) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: methode, credentials: 'same-origin', headers: entetes() });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
 
-async function loadRF() {
-    const d = await fetchJSON('/mesh/rf');
-    const el = document.getElementById('rf');
-    if (d.__error) { el.innerHTML = `<span class="k">error</span><span class="v" style="color:var(--red)">${d.__error}</span>`; return; }
-    el.innerHTML = `
-        <span class="k">iface</span>      ${vSpan(d.iface)}
-        <span class="k">type</span>       ${vSpan(d.type)}
-        <span class="k">channel</span>    ${vSpan(d.channel)}
-        <span class="k">freq</span>       ${vSpan(d.freq_mhz, ' MHz')}
-        <span class="k">width</span>      ${vSpan(d.width_mhz, ' MHz')}
-        <span class="k">tx power</span>   ${vSpan(d.txpower_dbm, ' dBm')}
-        <span class="k">reg country</span>${vSpan(d.reg_country)}
-        <span class="k">DFS</span>        ${vSpan(d.reg_dfs_state)}
-    `;
-}
+        function octets(n) {
+            if (n === null || n === undefined || n === '') return '—';
+            const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0, v = Number(n);
+            while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+            return (i ? v.toFixed(1) : String(v)) + ' ' + u[i];
+        }
+        function duree(s) {
+            if (s === null || s === undefined || s === '') return '—';
+            s = Number(s); if (s < 90) return s + ' s'; if (s < 5400) return Math.round(s / 60) + ' min';
+            if (s < 172800) return (s / 3600).toFixed(1) + ' h'; return Math.round(s / 86400) + ' j';
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function lien(p) {
+            if (!p) return '—';
+            return p === 'ESTAB' ? pastille('ok', 'ESTAB', 'Lien mesh établi') : pastille(p === 'BLOCKED' || p === 'LISTEN' ? 'hors' : 'att', p, 'Lien mesh en cours d’ouverture ou fermé');
+        }
 
-async function loadPeers() {
-    const d = await fetchJSON('/mesh/peers');
-    const el = document.getElementById('peers');
-    if (d.__error) { el.innerHTML = `<div class="empty" style="color:var(--red)">${d.__error}</div>`; return; }
-    if (!Array.isArray(d) || d.length === 0) { el.innerHTML = '<div class="empty">no peers</div>'; return; }
-    let html = '<table><thead><tr><th>MAC</th><th>plink</th><th>signal</th><th>tx</th><th>inactive</th></tr></thead><tbody>';
-    for (const p of d) {
-        html += `<tr><td>${p.mac}</td><td>${p.mesh_plink || '—'}</td><td>${p.signal_dbm ?? '—'}</td><td>${p.tx_bitrate_mbps ?? '—'}</td><td>${p.inactive_ms ?? '—'} ms</td></tr>`;
-    }
-    html += '</tbody></table>';
-    el.innerHTML = html;
-}
+        function demoData() {
+            RF = { iface: 'wlan0', type: 'mesh point', channel: 6, freq_mhz: 2437, txpower_dbm: 20, width_mhz: 20, reg_country: 'FR', reg_dfs_state: 'usable' };
+            PAIRS = [
+                { mac: '02:00:5e:00:53:01', mesh_plink: 'ESTAB', signal_dbm: -58, tx_bitrate_mbps: 72.2, inactive_ms: 120, rx_bytes: 48213377, tx_bytes: 9113220 },
+                { mac: '02:00:5e:00:53:02', mesh_plink: 'ESTAB', signal_dbm: -71, tx_bitrate_mbps: 26, inactive_ms: 340, rx_bytes: 1503221, tx_bytes: 902114 },
+                { mac: '02:00:5e:00:53:03', mesh_plink: 'OPN_SNT', signal_dbm: -84, tx_bitrate_mbps: null, inactive_ms: 4100, rx_bytes: null, tx_bytes: null }];
+            CLIENTS = [
+                { mac: '02:00:5e:00:53:a1', signal_dbm: -49, connected_time_s: 5230, passpoint: true, rx_bytes: 7233011, tx_bytes: 38211002 },
+                { mac: '02:00:5e:00:53:a2', signal_dbm: -63, connected_time_s: 85, passpoint: false, rx_bytes: 80211, tx_bytes: 120993 }];
+            SANTE = { status: 'ok', module: 'mesh', version: '2.0.0' };
+        }
 
-async function loadClients() {
-    const d = await fetchJSON('/ap/clients');
-    const el = document.getElementById('clients');
-    if (d.__error) { el.innerHTML = `<div class="empty" style="color:var(--red)">${d.__error}</div>`; return; }
-    if (!Array.isArray(d) || d.length === 0) { el.innerHTML = '<div class="empty">AP disabled or no clients</div>'; return; }
-    let html = '<table><thead><tr><th>MAC</th><th>signal</th><th>connected</th><th>Passpoint</th></tr></thead><tbody>';
-    for (const c of d) {
-        html += `<tr><td>${c.mac}</td><td>${c.signal_dbm ?? '—'}</td><td>${c.connected_time_s ?? '—'} s</td><td>${c.passpoint ? '✅' : '—'}</td></tr>`;
-    }
-    html += '</tbody></table>';
-    el.innerHTML = html;
-}
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; AUCUNE = false; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/mesh/rf'), lire('/mesh/peers'), lire('/ap/clients'), lire('/health')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            SESSION_OK = !essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            RF = val(0); SANTE = val(3);
+            const p = val(1), c = val(2);
+            PAIRS = Array.isArray(p) ? p : []; CLIENTS = Array.isArray(c) ? c : [];
+            AUCUNE = essais.every(e => e.status === 'rejected') && SESSION_OK;
+            $('erreur').hidden = !AUCUNE;
+            if (AUCUNE) $('erreur').textContent = 'Impossible de lire le module MESH (service arrêté ou injoignable).';
+            rendre();
+        }
 
-async function loadHealth() {
-    const d = await fetchJSON('/health');
-    const el = document.getElementById('health');
-    if (d.__error) { el.innerHTML = `<span class="k">error</span><span class="v" style="color:var(--red)">${d.__error}</span>`; return; }
-    el.innerHTML = `
-        <span class="k">status</span>  ${vSpan(d.status)}
-        <span class="k">module</span>  ${vSpan(d.module)}
-        <span class="k">version</span> ${vSpan(d.version)}
-    `;
-    document.getElementById('version-badge').textContent = `v${d.version}`;
-}
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!SANTE) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (SANTE.status === 'ok') { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            else { etat.className = 'actif att'; etat.textContent = String(SANTE.status).toUpperCase(); }
+            $('version').textContent = SANTE && SANTE.version ? 'v' + SANTE.version : '—';
+            const ok = SESSION_OK && !AUCUNE;
+            const estab = PAIRS.filter(p => p.mesh_plink === 'ESTAB').length;
+            $('tPairs').textContent = ok && (RF || PAIRS.length) ? PAIRS.length : '—';
+            $('tEstab').textContent = ok && (RF || PAIRS.length) ? estab : '—';
+            $('cEstab').className = 'tuile ' + (ok && PAIRS.length && estab < PAIRS.length ? 'att' : 'ok');
+            $('tClients').textContent = ok && (RF || CLIENTS.length) ? CLIENTS.length : '—';
+            $('tCanal').textContent = tiret(RF && RF.channel);
+            $('sCanal').textContent = RF && RF.freq_mhz != null ? RF.freq_mhz + ' MHz' : 'fréquence';
+            $('tTx').textContent = tiret(RF && RF.txpower_dbm);
+            // Panneau RF
+            $('kIface').textContent = tiret(RF && RF.iface); $('kType').textContent = tiret(RF && RF.type); $('kCanal').textContent = tiret(RF && RF.channel);
+            $('kFreq').textContent = avec(RF && RF.freq_mhz, ' MHz'); $('kLarg').textContent = avec(RF && RF.width_mhz, ' MHz');
+            $('kTx').textContent = avec(RF && RF.txpower_dbm, ' dBm'); $('kPays').textContent = tiret(RF && RF.reg_country); $('kDfs').textContent = tiret(RF && RF.reg_dfs_state);
+            $('kStatut').textContent = tiret(SANTE && SANTE.status); $('kModule').textContent = tiret(SANTE && SANTE.module); $('kVer').textContent = tiret(SANTE && SANTE.version);
+            rendrePairs(); rendreClients(); rendreConfirm();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-async function refreshAll() {
-    await Promise.all([loadRF(), loadPeers(), loadClients(), loadHealth()]);
-}
+        function ligneVide(tb, n, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function rendrePairs() {
+            const tb = $('bPairs'); tb.replaceChildren();
+            $('nPairs').textContent = PAIRS.length ? 'HWMP · ' + PAIRS.length + ' pair' + (PAIRS.length > 1 ? 's' : '') : 'HWMP';
+            if (!PAIRS.length) { ligneVide(tb, 7, SESSION_OK && !AUCUNE ? 'Aucun pair mesh' : '—'); return; }
+            PAIRS.forEach(p => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(p.mac)));
+                const l = el('td'); const v = lien(p.mesh_plink); l.appendChild(typeof v === 'string' ? document.createTextNode(v) : v); tr.appendChild(l);
+                tr.appendChild(el('td', '', avec(p.signal_dbm, ' dBm'))); tr.appendChild(el('td', '', avec(p.tx_bitrate_mbps, ' Mb/s')));
+                tr.appendChild(el('td', '', avec(p.inactive_ms, ' ms'))); tr.appendChild(el('td', '', octets(p.rx_bytes))); tr.appendChild(el('td', '', octets(p.tx_bytes)));
+                tb.appendChild(tr);
+            });
+        }
+        function rendreClients() {
+            const tb = $('bClients'); tb.replaceChildren();
+            $('nClients').textContent = CLIENTS.length ? CLIENTS.length + ' station' + (CLIENTS.length > 1 ? 's' : '') : '';
+            if (!CLIENTS.length) { ligneVide(tb, 6, SESSION_OK && !AUCUNE ? 'Point d’accès désactivé ou aucun client' : '—'); return; }
+            CLIENTS.forEach(c => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(c.mac)));
+                tr.appendChild(el('td', '', avec(c.signal_dbm, ' dBm'))); tr.appendChild(el('td', '', duree(c.connected_time_s)));
+                const pp = el('td'); pp.appendChild(c.passpoint ? pastille('ok', 'OUI') : pastille('', 'NON')); tr.appendChild(pp);
+                tr.appendChild(el('td', '', octets(c.rx_bytes))); tr.appendChild(el('td', '', octets(c.tx_bytes)));
+                tb.appendChild(tr);
+            });
+        }
 
-async function rotateKey() {
-    if (!confirm('Déclencher la rotation SAE ? (à n\'utiliser que si la maturité SAE-mesh du chipset est vérifiée)')) return;
-    const r = await fetch(API + '/mesh/key/rotate', { method: 'POST', credentials: 'same-origin' });
-    const j = await r.json();
-    alert(`Rotate result: ${JSON.stringify(j, null, 2)}`);
-    await loadPeers();
-}
+        // ----- Rotation SAE : même appel que l'ancienne page, confirmation dans la page -----
+        function rendreConfirm() { $('confirm').hidden = !CONFIRM; $('rotation').hidden = CONFIRM; }
+        function retour(ok, msg) { const r = $('rRot'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        $('rotation').addEventListener('click', () => { CONFIRM = true; rendreConfirm(); annoncer(); });
+        $('annuler').addEventListener('click', () => { CONFIRM = false; rendreConfirm(); annoncer(); });
+        $('confirmer').addEventListener('click', async () => {
+            CONFIRM = false; rendreConfirm();
+            const r = await ecrire('POST', '/mesh/key/rotate');
+            if (r.demo) { retour(false, 'Démonstration : action inerte.'); return; }
+            const d = r.data || {};
+            // Le module répond HTTP 200 même quand wpa_cli échoue : on lit le statut du corps.
+            if (r.ok && d.status === 'ok') { retour(true, 'Rotation SAE demandée.' + (d.stdout ? '\n' + d.stdout : '')); charger(); }
+            else retour(false, 'Rotation SAE en échec : ' + (d.reason || d.stderr || d.detail || (r.statut ? 'HTTP ' + r.statut : 'serveur injoignable')));
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-refreshAll();
-setInterval(refreshAll, 8000);
-</script>
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'mesh' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une confirmation ouverte.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM) return; charger(); }, 15000);
+    </script>
 </body>
 </html>
