@@ -1,3 +1,11 @@
+secubox-p2p (1.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /p2p/ au profil Aurora (#2550) : page autonome sombre (aperçu, pairs, services, maillage, menaces), tuiles, onglets au clavier, carte du maillage en SVG (le canvas clair d'avant etait illisible), `?demo=1` annoncee, `?embed=1`, aucun dialogue natif (confirmation dans la ligne). Les appels d'ecriture sont ceux de l'ancienne page : POST/DELETE /peers, POST/DELETE /services, auto-register, request, activate, revoke-access. 10 tests (vrai navigateur).
+  * Trois erreurs de l'ancienne page corrigees au passage : la sonde appelait /peers/<id>/ping, route qui n'a jamais existe (c'est /probe) ; la liste des menaces lisait l'objet {"threats": ...} comme si chaque cle etait une adresse (une seule ligne « threats ») ; la derniere poignee de main, en secondes, etait lue en millisecondes (« 1970 »).
+  * Non repris : le panneau « Activite recente » (l'API n'a pas de route /activity) ; la latence reste « — » (jamais mesuree). Le jeton est lu sous `sbx_token` (repli sur l'ancien `secubox_token`).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 08:42:22 +0200
+
 secubox-p2p (1.13.2-1~bookworm1) bookworm; urgency=medium
 
   * Jonction automatique vers un parent DISTANT (#2536). Essai reel gk1 -> gk2 : `sbx-mesh-join` ne parlait au parent qu'en HTTP sur le port du module (7331), injoignable d'une box derriere une Freebox (le cas voulu : la box APPELLE son parent) ; la jonction notait « RuntimeError » sans dire pourquoi. Le script choisit maintenant le transport : adresse locale (RFC 1918, 127/8, 169.254/16, *.local, localhost) -> HTTP:7331 comme avant ; autre -> HTTPS par le nginx du parent, certificat verifie (jamais -k), route Debian seulement. Le message d'echec porte le texte de l'exception, jeton masque dans tous les cas. 20 tests.

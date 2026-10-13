@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — p2p 1.14.0 : /p2p/ au profil Aurora (ref #2550)
+
+Page autonome (aperçu, pairs, services, maillage SVG, menaces), tests navigateur, captures 1400 et 420 px lues. Écritures identiques à l'ancienne page. Corrigés : sonde `/ping` inexistante (→ `/probe`), menaces lues comme `{ip: …}` alors que l'API enveloppe dans `threats`, `last_seen` en secondes lu en ms. Non repris : « Activité récente » (pas de route), latence jamais mesurée.
+
 ## 2026-10-13 — profiles 0.20.5 : l'annuaire ne dort plus (ref #2548)
 
 « La flotte est illisible (HTTP 502) » sur gk1. Cause : `secubox-sleeper` avait arrêté `secubox-annuaire` (et l'avait désactivé), la politique livrée le classant `on-demand`. Or il porte la synchro du maillage, la voie rapide assist, l'inscription au maître et la flotte ; le waker ne réveille que sur les vhosts de sites. Politique : `annuaire = always-on` (+ test `test_l_annuaire_ne_dort_pas`). Un manifeste déjà dérivé garde l'ancienne valeur : `secubox-profilectl set-lifecycle annuaire always-on`. 3 échecs `test_web.py::test_wake_route_*` préexistants.
