@@ -254,7 +254,9 @@ cmd_synchroniser() {
         cmd_ouvrir "$maitre" "$PORT_PAIR" | sed 's/^/  /'
     fi
 
-    local pairs; pairs="$(pairs_32)"
+    # `wg show wg-mesh` echoue quand l'interface n'existe pas (box sans maillage) : sous set -e/pipefail cela tuait le script AVANT
+    # la garde ci-dessous (#2532). Pas de pair, ce n'est pas une erreur.
+    local pairs; pairs="$(pairs_32 || true)"
     [ -n "$pairs" ] || { log "aucun pair à relayer (pas de pair /32 sur wg-mesh)"; return 0; }
     [ "$(reglage auto true)" = "true" ] || { log "exposition automatique désactivée ($REGLAGES : auto = false)"; return 0; }
     local dom exclus labels

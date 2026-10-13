@@ -21,6 +21,10 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+# CacheDirectory cree le dossier AVANT l'espace de noms (#2532) : avec ProtectSystem=strict, un ReadWritePaths= sur un dossier absent
+# fait echouer l'unite en 226/NAMESPACE avant d'executer quoi que ce soit.
+CacheDirectory=secubox/dpi
+CacheDirectoryMode=0750
 ReadWritePaths=/var/cache/secubox/dpi
 ReadOnlyPaths=/var/lib/secubox/dpi /var/lib/secubox/ad-guard /etc/secubox/dpi
 RestrictAddressFamilies=AF_UNIX
