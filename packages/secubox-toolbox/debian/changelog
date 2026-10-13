@@ -1,3 +1,9 @@
+secubox-toolbox (2.13.2-1~bookworm1) bookworm; urgency=medium
+
+  * Page /rlevel/ au profil Aurora (#2552) : page autonome sombre, tuiles (pairs, en ligne, forces, inspection reelle), « Mon niveau » et vue admin en cartes sur telephone, legende des quatre modes, `?demo=1` annoncee, `?embed=1`. Appels et corps identiques (GET /rlevel/peers, POST /rlevel/peer, GET/POST /rlevel/me), delegation d'evenements et echappement conserves (garde XSS proxypac). Plus de skin partage ni de police distante. 5 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 08:48:09 +0200
+
 secubox-toolbox (2.13.1-1~bookworm1) bookworm; urgency=medium
 
   * Correction (#2490) : le postinst reprenait le dossier partagé /var/log/secubox

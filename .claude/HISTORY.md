@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — toolbox 2.13.2 : /rlevel/ au profil Aurora (ref #2552)
+
+Page autonome (tuiles, Mon niveau, vue admin, légende des modes), appels inchangés, garde XSS conservée, 44 tests rlevel verts, captures 1400/420 lues.
+
 ## 2026-10-13 — p2p 1.14.0 : /p2p/ au profil Aurora (ref #2550)
 
 Page autonome (aperçu, pairs, services, maillage SVG, menaces), tests navigateur, captures 1400 et 420 px lues. Écritures identiques à l'ancienne page. Corrigés : sonde `/ping` inexistante (→ `/probe`), menaces lues comme `{ip: …}` alors que l'API enveloppe dans `threats`, `last_seen` en secondes lu en ms. Non repris : « Activité récente » (pas de route), latence jamais mesurée.
