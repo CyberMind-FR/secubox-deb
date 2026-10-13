@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — Panneaux Aurora, vague 2 : 10 paquets, 12 pages (closes #2571)
+
+`/users/`, `/tor/`, `/routes/`, `/netdiag/`, `/nettweak/`, `/traffic/`, `/vortex-firewall/`, `/mail/`, `/cloner/`, `/profiles/`, `/appstore/`, `/cookies/` (PR #2572 à #2583), relues (aucun script externe, dialogue natif, innerHTML ni police distante) et déployées sur gk2, gk1 et gk3, dépôt apt à jour pour gk2. Versions : auth 1.6.0, tor 1.6.0, routes 1.4.1 (routes 1.4.0 puis netdiag 1.4.1), qos 1.6.1 (nettweak 1.6.0 puis traffic 1.6.1), ipblock 1.5.0, mail 2.15.0, backup 2.4.0, profiles 0.21.0, appstore 0.6.0, cookies 1.4.0. Coffre/vault exclu (redéployer secubox-vault re-scelle le coffre).
+
+Bogues d'ancienne page corrigés : imports/tuiles/dates mal lus (users : `[object Object]`, 1970), tableaux toujours vides (routes, qos), `confirm()` natifs jamais honorés (profiles : apply/rollback ne partaient pas), succès affichés après échec (tor : sortie transparente armée), identifiants injectés dans `onclick`/`innerHTML` (presque partout). Changement de comportement : cloner refuse un nettoyage à 0 (supprimait tout).
+
+À noter, non corrigé (API) : mail `/logs` passe `lines` à un `lxc-attach` sans validation ; routes `DELETE default` IPv6 sans `-6` ; qos compteur `dropped` ; tor retrait d'un service caché de la route exposure ; appstore `installed` = présent au catalogue ; DKIM mail domaine codé en dur. Tests mail `api/tests` : 30 échecs préexistants (identiques avant la refonte). Restent environ 83 pages hors Aurora (vague 3 : vault/coffre à part).
+
 ## 2026-10-13 — annuaire 0.12.0 : maillage automatique, pairs découverts dans le répertoire (ref #2569)
 
 « Comment mesh expander pour que gk3 et gk1 s'auto-découvrent par gk2 » : l'IP était déjà joignable (satellites routent 10.10.0.0/24 par gk2), seule la liste des pairs de synchro manquait. Pairs = wg_mesh.json + nœuds du répertoire à mesh_ip interne au réseau du maillage. 15 échecs annuaire préexistants inchangés.
