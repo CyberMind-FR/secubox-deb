@@ -1,3 +1,13 @@
+secubox-profiles (0.21.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /profiles/ refaite au profil Aurora (#2571) : page autonome (CSS et JS en ligne, plus de police Google Fonts ni de skin hybrid), tuiles (modules, actifs, arretes, inconnus, RAM connue, exposes publics), taxonomie par categorie/execution/exposition, bascule, liste des modules, diff. `?embed=1` sans menu, `?demo=1` donnees fictives et actions inertes, hauteur annoncee a l'hote (sbxVue, onglet « profiles »).
+  * Les confirmations de l'application, du rollback et de l'endormissement d'un module etaient des `confirm()` natifs que le navigateur du viewer ignore (l'action ne partait jamais, sans message) : elles sont maintenant integrees a la page (Confirmer/Annuler). L'apercu est presente comme une simulation ; le plan est relu avant la confirmation de l'application.
+  * Corrige : une session absente ou refusee (401/403) affiche le bandeau « session requise » et des tirets, au lieu d'un toast ephemere ; la RAM sans aucune mesure s'affiche « — » (et non « 0.0 MB ») et est annoncee comme somme partielle ; les erreurs 422 (detail en liste) sont lisibles ; plus aucune donnee d'API n'est injectee en innerHTML ; l'actualisation (45 s) saute l'onglet masque, une action ou une confirmation en cours et un menu/une saisie actifs.
+  * Les ecritures gardent exactement les memes routes, methodes et corps (POST /active, /apply, /rollback, /profiles/<nom>/members, /pins, /wake, /sleep, /lifecycle).
+  * Non repris : les emoji de statut de l'ancienne peau, le toast persistant a croix et le menu deroulant « follows profile » (remplace par le bouton « ⟳ »). Rien n'est ajoute : l'API ne fournit ni historique des bascules ni mesure de RAM pour les modules non mesures (« — »).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:40:00 +0200
+
 secubox-profiles (0.20.5-1~bookworm1) bookworm; urgency=medium
 
   * L'annuaire ne dort plus (#2548). La politique livree le classait `on-demand` : le sleeper l'arretait (et le desactivait) apres inactivite, alors qu'il porte la synchro du maillage, la voie rapide assist, l'inscription au maitre et la flotte. Sur gk1 la page /fleet/ rendait « HTTP 502 ». Il passe `always-on`, avec un test. Un manifeste deja derive garde son ancienne valeur : `secubox-profilectl set-lifecycle annuaire always-on`.
