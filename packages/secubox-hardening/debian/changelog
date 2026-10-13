@@ -1,3 +1,13 @@
+secubox-hardening (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /hardening/ refaite au profil Aurora (#2556) : page autonome sans police ni script externes, tuiles (score, contrôles réussis, paramètres noyau, modules bloqués, ports non gardés), contrôles du noyau, garde des ports de backend, composants, actions. ?demo=1 (données fictives, actions inertes) et ?embed=1 (sans menu), hauteur annoncée à l'hôte, « — » pour toute mesure absente, bandeau « session requise » sur 401/403.
+  * Actions inchangées : POST /apply et POST /benchmark, sans corps, mêmes routes. Appliquer demande désormais une confirmation dans la page (plus de dialogue natif).
+  * Bogues de l'ancienne page corrigés : l'API rend 200 avec success:false quand hardeningctl échoue, et la page annonçait « appliqué » / « terminé » et affichait 0 % ; noms et valeurs des contrôles injectés en innerHTML sans échappement ; échec de /status affiché comme score « N/A » au lieu d'un état inconnu ; session refusée non distinguée d'une panne ; polices Google chargées (CSP) et dialogues CRT.
+  * Nouveau, déjà fourni par l'API : sorties de apply et benchmark (codes ANSI retirés), état des paramètres noyau et de la liste noire de modules (/status), composants (/components), détail de la garde WAN (ports coupés, en écoute, non gardés).
+  * Non repris : aucune route nouvelle ; POST /install et les routes avancées de l'API (historique, tendance, planification, webhooks, recommandations) n'étaient pas appelées par la page et ne le sont toujours pas ; aucune courbe (l'API ne fournit pas de série par la route lue) ; la page ne vérifie pas que la table nft de garde est chargée (réservé à root).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:00:00 +0200
+
 secubox-hardening (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Une seule base de pare-feu pour toutes les SecuBox (#1306) : /etc/nftables.conf est livré par ce paquet (/usr/share/secubox/hardening/nftables.conf) et remplace la base écrite à la main (gk2) comme celle de firstboot (gk3, images). Elle reprend les deux : ICMP/ICMPv6, DHCP, WireGuard 51820-51825, maillage (53, 8798, 8799, relais 9080, mDNS), ports 80/443/9443/9000/8888/9043/3483, masquerade LXC. Propre à la box : interfaces de confiance dans /etc/secubox/hardening/nft-input-trust.d/, tables NAT dans nft-site.d/ (reprises de l'ancienne base à la montée de version), services dans /etc/nftables.d/. Validation par nft -c, ancien fichier sauvé en /etc/nftables.conf.avant-hardening, aucun nft -f à l'installation (effet au prochain démarrage de nftables).
