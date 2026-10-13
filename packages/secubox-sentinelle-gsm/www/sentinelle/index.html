@@ -1,454 +1,551 @@
 <!DOCTYPE html>
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gerald Kerma <devel@cybermind.fr>
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox-Deb :: SENTINELLE-GSM webui (MIND layer)
-  Standalone single-page UI. All API calls hit /api/v1/sensor/gsm/* via nginx.
+  SENTINELLE-GSM au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Capteur passif de fausses stations de base (RX seul). Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
-<html lang="en">
+<html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SecuBox — SENTINELLE-GSM</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="sentinelle.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Sentinelle GSM</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan+.pan{margin-top:10px}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn:first-of-type{margin-left:auto}
+        .barre{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0 0 8px}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 8px;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.10);font-size:.8rem}
+        .conf span{flex:1 1 220px;min-width:0}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        form.saisie small{color:var(--faible);font-size:.66rem}
+        .seuils{display:grid;gap:6px;grid-template-columns:1fr}
+        @container a (min-width:900px){.seuils{grid-template-columns:1fr 1fr}}
+        .seuil{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border:1px solid var(--trait);border-radius:10px;padding:7px 10px;background:rgba(8,18,38,.5);min-width:0}
+        .seuil b{flex:1 1 150px;font-size:.78rem;overflow-wrap:anywhere}
+        .seuil label{font-size:.72rem;color:var(--doux);display:flex;align-items:center;gap:5px}
+        .seuil input[type=number]{width:70px;font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:4px 6px}
+        .seuil small{flex-basis:100%;color:var(--faible);font-size:.66rem}
+        details{margin-top:8px} summary{cursor:pointer;color:var(--doux);font-size:.76rem}
+        pre.sortie{margin:6px 0 0;padding:8px;max-height:160px;overflow:auto;border:1px solid var(--trait);border-radius:8px;background:rgba(4,10,22,.8);font-size:.7rem;white-space:pre-wrap;overflow-wrap:anywhere}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="hybrid-dark">
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12v9M8 21h8"/><circle cx="12" cy="9" r="2"/><path d="M7.8 4.8a6 6 0 0 0 0 8.4M16.2 4.8a6 6 0 0 1 0 8.4M5 2.5a9.8 9.8 0 0 0 0 13M19 2.5a9.8 9.8 0 0 1 0 13"/></svg>
+                <div><h1>Sentinelle GSM</h1><small>Capteur passif de fausses stations de base — réception seule, hors chemin</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="son" type="button" aria-pressed="false" title="Bip sonore à l’arrivée d’une nouvelle alerte (le navigateur peut exiger un clic préalable).">Bip : activé</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-<!-- Canonical SecuBox global menu bar — injected by /shared/sidebar.js
-     (position:fixed, top:0, height:48px, z-index:998). The CSS already
-     reserves --gmb-h = 48px of top-padding for .main below. -->
-<nav class="sidebar" id="sidebar"></nav>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile hors" id="cAlertes" title="Alertes de l’historique du capteur (les 100 plus récentes au plus). Une alerte est émise quand le score cumulé des heuristiques franchit le seuil du moteur de score."><span class="l">Alertes</span><span class="v" id="tAlertes">—</span><span class="s">dans l’historique (100 max)</span></div>
+            <div class="tuile cy" id="cScore" title="Score le plus élevé parmi les alertes affichées (0 à 100)."><span class="l">Score maximal</span><span class="v" id="tScore">—</span><span class="s">parmi ces alertes</span></div>
+            <div class="tuile cy" title="Date de l’alerte la plus récente de l’historique."><span class="l">Dernière alerte</span><span class="v" id="tDerniere" style="font-size:1.05rem">—</span><span class="s" id="sDerniere">&nbsp;</span></div>
+            <div class="tuile cy" title="Téléphones de confiance enregistrés. Leur IMSI est haché (HMAC) à l’enregistrement ; le clair n’est jamais conservé."><span class="l">Téléphones de confiance</span><span class="v" id="tTel">—</span><span class="s">IMSI haché</span></div>
+            <div class="tuile" id="cGsm" title="État du balayage GSM (récepteur RTL-SDR via gr-gsm)."><span class="l">Balayage GSM</span><span class="v" id="tGsm" style="font-size:1.05rem">—</span><span class="s" id="sGsm">&nbsp;</span></div>
+            <div class="tuile" id="cRds" title="État de la réception FM / RDS. Elle partage le récepteur RTL-SDR avec le balayage GSM."><span class="l">Radio FM / RDS</span><span class="v" id="tRds" style="font-size:1.05rem">—</span><span class="s" id="sRds">&nbsp;</span></div>
+        </section>
 
-<aside class="local-nav" aria-label="Sentinelle navigation">
-  <div class="local-nav-brand">
-    <div class="brand-tag">MIND</div>
-    <div class="brand-name">sentinelle-gsm</div>
-    <div class="brand-sub">passive rogue-BTS sensor</div>
-  </div>
-  <nav class="local-nav-list">
-    <a href="#status" class="nav-link">Status</a>
-    <a href="#alerts" class="nav-link">Alerts</a>
-    <a href="#trusted" class="nav-link">Trusted phones</a>
-    <a href="#logs" class="nav-link">Live logs</a>
-    <a href="#scan-control" class="nav-link">Scan control</a>
-    <a href="#observations" class="nav-link">Observations</a>
-    <a href="#rds" class="nav-link">RDS / FM</a>
-    <a href="#baseline" class="nav-link">Baseline</a>
-    <a href="#scoring" class="nav-link">Scoring</a>
-    <a href="#actions" class="nav-link">Actions</a>
-  </nav>
-  <div class="local-nav-foot">
-    <a href="/" class="back-hub">← hub</a>
-  </div>
-</aside>
-
-<main class="main">
-
-  <header class="page-header">
-    <h1><span aria-hidden="true">📡</span> SENTINELLE-GSM</h1>
-    <p class="subtitle">Passive GSM rogue-BTS sensor — RX only, off-path.</p>
-  </header>
-
-  <!-- STATUS strip ------------------------------------------------------- -->
-  <section id="status" class="status-strip" aria-label="Live status">
-    <div class="status-cell">
-      <div class="status-label">SSE stream</div>
-      <div class="status-value">
-        <span id="stream-dot" class="dot dot-idle" aria-hidden="true"></span>
-        <span id="stream-status">connecting…</span>
-      </div>
-    </div>
-    <div class="status-cell">
-      <div class="status-label">Trusted phones</div>
-      <div class="status-value mono"><span id="trusted-count">—</span></div>
-    </div>
-    <div class="status-cell">
-      <div class="status-label">Last alert</div>
-      <div class="status-value mono"><span id="last-alert-ts">—</span></div>
-    </div>
-    <div class="status-cell">
-      <div class="status-label">Notifications</div>
-      <div class="status-value">
-        <span id="notif-dot" class="dot dot-idle" aria-hidden="true"></span>
-        <span id="notif-status">unknown</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ALERTS panel ------------------------------------------------------- -->
-  <section id="alerts" class="panel">
-    <div class="panel-head">
-      <h2>Alerts <span class="badge" id="alerts-count">0</span></h2>
-      <div class="panel-actions">
-        <button class="btn" id="btn-refresh-alerts" type="button">Refresh history</button>
-      </div>
-    </div>
-    <div class="table-wrap" aria-live="polite" id="alerts-region">
-      <table class="data-table" id="alerts-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Cell ID</th>
-            <th>ARFCN</th>
-            <th>Score</th>
-            <th>Reason</th>
-            <th>Target</th>
-          </tr>
-        </thead>
-        <tbody id="alerts-tbody">
-          <tr class="empty"><td colspan="6">no alerts yet — waiting for stream…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- TRUSTED panel ------------------------------------------------------ -->
-  <section id="trusted" class="panel">
-    <div class="panel-head">
-      <h2>Trusted phones</h2>
-      <div class="panel-actions">
-        <button class="btn primary" id="btn-add-trusted" type="button">+ Add phone</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Label</th>
-            <th>Added</th>
-            <th class="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="trusted-tbody">
-          <tr class="empty"><td colspan="4">loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="hint">
-      IMSI values are HMAC-hashed at registration. Plaintext IMSI is never stored.
-    </p>
-  </section>
-
-  <!-- LIVE LOGS panel (v0.2.2) ------------------------------------------- -->
-  <section id="logs" class="panel">
-    <div class="panel-head">
-      <h2>Live logs <span class="badge" id="logs-count">0</span></h2>
-      <div class="panel-actions">
-        <label class="inline-toggle">
-          <input type="checkbox" id="toggle-autoscroll" checked>
-          auto-scroll
-        </label>
-        <button class="btn" id="btn-clear-logs" type="button">Clear</button>
-      </div>
-    </div>
-    <pre id="logs-pre" class="logs-pre" role="log" aria-live="polite" aria-label="Service journal stream">waiting for journal stream…</pre>
-    <p class="hint">
-      Tail of <code>journalctl -u secubox-sentinelle-gsm -f</code>. The
-      stream auto-reconnects on transient network errors.
-    </p>
-  </section>
-
-  <!-- SCAN CONTROL panel (v0.3) ----------------------------------------- -->
-  <section id="scan-control" class="panel">
-    <div class="panel-head">
-      <h2>Scan control</h2>
-      <div class="panel-actions">
-        <button class="btn primary" id="btn-scan-start" type="button">Start</button>
-        <button class="btn danger" id="btn-scan-stop" type="button">Stop</button>
-      </div>
-    </div>
-    <div class="scan-status-row" aria-live="polite">
-      <div class="status-cell">
-        <div class="status-label">State</div>
-        <div class="status-value">
-          <span id="scan-state-dot" class="dot dot-idle" aria-hidden="true"></span>
-          <span id="scan-state-text">idle</span>
+        <div class="onglets" role="tablist" aria-label="Sections de la sentinelle">
+            <button type="button" role="tab" id="o-alertes" data-t="alertes" aria-selected="true" aria-controls="t-alertes">Alertes</button>
+            <button type="button" role="tab" id="o-tel" data-t="tel" aria-selected="false" aria-controls="t-tel">Téléphones de confiance</button>
+            <button type="button" role="tab" id="o-gsm" data-t="gsm" aria-selected="false" aria-controls="t-gsm">Balayage GSM</button>
+            <button type="button" role="tab" id="o-fm" data-t="fm" aria-selected="false" aria-controls="t-fm">Radio FM / RDS</button>
+            <button type="button" role="tab" id="o-ref" data-t="ref" aria-selected="false" aria-controls="t-ref">Référence et score</button>
         </div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Freq</div>
-        <div class="status-value mono"><span id="scan-freq-cell">—</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">PID</div>
-        <div class="status-value mono"><span id="scan-pid-cell">—</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Started</div>
-        <div class="status-value mono"><span id="scan-started-cell">—</span></div>
-      </div>
-    </div>
-    <div class="scan-input-row">
-      <label class="field">
-        <span class="field-label">Frequency</span>
-        <input type="text" id="scan-freq" name="freq"
-               placeholder="925.4M" value="925.4M" autocomplete="off">
-        <small class="field-help">
-          GSM-900 downlink: ARFCN 0 = 935 MHz, ARFCN 124 = 959.8 MHz, step 0.2 MHz.
-          Default <code>925.4M</code> corresponds to E-GSM 900 ARFCN 975.
-        </small>
-      </label>
-    </div>
-    <details class="scan-stderr-details">
-      <summary>stderr (last 2 KB)</summary>
-      <pre id="scan-stderr-tail" class="scan-stderr">(no output)</pre>
-    </details>
-  </section>
 
-  <!-- OBSERVATIONS panel (v0.3) ----------------------------------------- -->
-  <section id="observations" class="panel">
-    <div class="panel-head">
-      <h2>Observations <span class="badge" id="obs-count">0</span></h2>
-      <div class="panel-actions">
-        <button class="btn" id="btn-refresh-obs" type="button">Refresh</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table class="data-table" id="obs-table">
-        <thead>
-          <tr>
-            <th>Cell ID</th>
-            <th>ARFCN</th>
-            <th>MCC</th>
-            <th>MNC</th>
-            <th>LAC</th>
-            <th>CI</th>
-            <th>First seen</th>
-            <th>Last seen</th>
-            <th>Sightings</th>
-          </tr>
-        </thead>
-        <tbody id="obs-tbody">
-          <tr class="empty"><td colspan="9">no observations yet — start a scan</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
+        <section id="t-alertes" role="tabpanel" aria-labelledby="o-alertes">
+            <div class="pan"><h3>Alertes <i id="nAlertes"></i><button class="btn sm" id="testAlerte" type="button" title="Écrit une alerte synthétique de bout en bout (puits, historique, interface).">Alerte de test</button></h3>
+                <div id="rAlertes" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Reçue</th><th>Cellule</th><th>ARFCN</th><th>Score</th><th>Motif</th><th>Cible</th></tr></thead><tbody id="bAlertes"></tbody></table></div>
+                <p class="note">La liste se relit toutes les 15 s tant que la page est visible (le flux temps réel d’origine n’est pas repris). Aucun identifiant d’abonné n’est affiché : seule la cible de confiance reconnue l’est.</p></div>
+        </section>
 
-  <!-- RDS / FM panel (v0.4.0) ------------------------------------------- -->
-  <section id="rds" class="panel">
-    <div class="panel-head">
-      <h2>RDS / FM <span class="badge" id="rds-stations-count">0</span></h2>
-      <div class="panel-actions">
-        <button class="btn primary" id="btn-rds-start" type="button">Start single freq</button>
-        <button class="btn danger" id="btn-rds-stop" type="button">Stop</button>
-        <button class="btn primary" id="btn-rds-sweep" type="button">Sweep 87.5–108 MHz</button>
-        <button class="btn" id="btn-rds-sweep-cancel" type="button">Cancel sweep</button>
-        <button class="btn" id="btn-rds-refresh-stations" type="button">Refresh</button>
-      </div>
-    </div>
-    <div class="scan-status-row" aria-live="polite">
-      <div class="status-cell">
-        <div class="status-label">State</div>
-        <div class="status-value">
-          <span id="rds-state-dot" class="dot dot-idle" aria-hidden="true"></span>
-          <span id="rds-state-text">idle</span>
-        </div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Freq</div>
-        <div class="status-value mono"><span id="rds-freq-cell">—</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Frames</div>
-        <div class="status-value mono"><span id="rds-frames-cell">0</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Last PI</div>
-        <div class="status-value mono"><span id="rds-pi-cell">—</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Last PS</div>
-        <div class="status-value mono"><span id="rds-ps-cell">—</span></div>
-      </div>
-    </div>
-    <div class="scan-input-row">
-      <label class="field">
-        <span class="field-label">FM frequency</span>
-        <input type="text" id="rds-freq" name="freq"
-               placeholder="100.6M" value="100.6M" autocomplete="off">
-        <small class="field-help">
-          87.5–108.0 MHz. rtl_fm accepts <code>100.6M</code>, <code>100600000</code>,
-          or any form. Single-freq mode dwells on one station; the sweep button
-          walks the whole band in 200 kHz steps × 10 s dwell (~17 min).
-        </small>
-      </label>
-      <label class="field">
-        <span class="field-label">PPM correction</span>
-        <input type="number" id="rds-ppm" name="ppm"
-               placeholder="0" value="" autocomplete="off" step="1" min="-200" max="200">
-        <small class="field-help">
-          R820T tuners drift ±50-80 ppm without a TCXO. Leave empty for 0,
-          or try values like <code>50</code> / <code>60</code> / <code>70</code>
-          until RDS frames start flowing. Same value can then be applied to
-          GSM scans.
-        </small>
-      </label>
-      <label class="field">
-        <span class="field-label">Tuner gain (dB)</span>
-        <input type="number" id="rds-gain" name="gain"
-               placeholder="auto" value="" autocomplete="off" step="0.1" min="0" max="50">
-        <small class="field-help">
-          Leave empty for automatic gain. R820T max is ~49 dB. Strong nearby
-          stations decode best at 20-30 dB; weak ones need closer to max.
-        </small>
-      </label>
-    </div>
-    <div class="scan-status-row" aria-live="polite" id="rds-sweep-progress" hidden>
-      <div class="status-cell">
-        <div class="status-label">Sweep state</div>
-        <div class="status-value mono"><span id="rds-sweep-state">—</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Step</div>
-        <div class="status-value mono"><span id="rds-sweep-step">—</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Current freq</div>
-        <div class="status-value mono"><span id="rds-sweep-current">—</span></div>
-      </div>
-      <div class="status-cell">
-        <div class="status-label">Stations found</div>
-        <div class="status-value mono"><span id="rds-sweep-found">0</span></div>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table class="data-table" id="rds-stations-table">
-        <thead>
-          <tr>
-            <th>PI</th>
-            <th>PS</th>
-            <th>RadioText</th>
-            <th>PTY</th>
-            <th>TP / TA</th>
-            <th>Freq</th>
-            <th>Count</th>
-            <th>Last seen</th>
-          </tr>
-        </thead>
-        <tbody id="rds-stations-tbody">
-          <tr class="empty"><td colspan="8">no stations yet — start a sweep or single-freq scan</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="hint">
-      FM RDS shares the RTL-SDR with GSM scanning. Starting an RDS scan while
-      a GSM scan or scan-auto job is in flight returns 409 with the holder's
-      name. PI (Programme Identification) is the natural station key; PS is
-      the 8-char display name. RadioText (up to 64 chars) carries song titles
-      or news tickers.
-    </p>
-  </section>
+        <section id="t-tel" role="tabpanel" aria-labelledby="o-tel" hidden>
+            <div class="pan"><h3>Téléphones de confiance <i id="nTel"></i><button class="btn prim sm" id="addTel" type="button">+ Ajouter un téléphone</button></h3>
+                <div id="rTel" class="retour" hidden></div><div id="cTel" class="conf" hidden></div>
+                <form class="saisie" id="fTel" hidden autocomplete="off">
+                    <label>IMSI<input name="imsi" required inputmode="numeric" pattern="\d{14,15}" placeholder="001010123456789" autocomplete="off"><small>14 à 15 chiffres, sans espace ni tiret. Haché (HMAC-SHA256) avant stockage.</small></label>
+                    <label>Libellé<input name="label" required maxlength="64" placeholder="Téléphone du propriétaire"><small>Affiché à côté des alertes quand cet IMSI est observé.</small></label>
+                    <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fTel">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Identifiant</th><th>Libellé</th><th>Ajouté</th><th>Actions</th></tr></thead><tbody id="bTel"></tbody></table></div>
+                <p class="note">Les IMSI sont hachés à l’enregistrement ; le clair n’est jamais stocké ni relu. L’identifiant affiché est tronqué à 8 caractères.</p></div>
+        </section>
 
-  <!-- BASELINE panel (v0.3.1) ------------------------------------------- -->
-  <section id="baseline" class="panel">
-    <div class="panel-head">
-      <h2>Operator baseline <span class="badge" id="baseline-count">0</span></h2>
-      <div class="panel-actions">
-        <button class="btn" id="btn-refresh-baseline" type="button">Refresh</button>
-        <button class="btn primary" id="btn-baseline-learn" type="button">Start learn (5 min)</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Cell ID</th><th>MCC</th><th>MNC</th><th>LAC</th><th>ARFCN</th>
-            <th>Cipher</th><th>Learn count</th><th>Last learned</th>
-          </tr>
-        </thead>
-        <tbody id="baseline-tbody">
-          <tr class="empty"><td colspan="8">no baseline yet — start a scan + click "Start learn"</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="hint">
-      Cells graduate to baseline after 3 sightings under normal scan. The "Start learn" button accepts every cell observed within the next 5 minutes immediately.
-    </p>
-  </section>
+        <section id="t-gsm" role="tabpanel" aria-labelledby="o-gsm" hidden>
+            <div class="pan"><h3>Contrôle du balayage <i id="nGsm"></i></h3>
+                <div id="rGsm" class="retour" hidden></div><div id="cGsmC" class="conf" hidden></div>
+                <dl class="kv"><dt>État</dt><dd id="kGEtat">—</dd><dt>Fréquence</dt><dd id="kGFreq">—</dd><dt>PID</dt><dd id="kGPid">—</dd><dt>Démarré</dt><dd id="kGDebut">—</dd></dl>
+                <form class="saisie" id="fGsm" autocomplete="off">
+                    <label>Fréquence<input name="freq" value="925.4M" placeholder="925.4M" autocomplete="off"><small>Voie descendante GSM-900 : ARFCN 0 = 935 MHz, ARFCN 124 = 959,8 MHz, pas de 0,2 MHz ; 925,4 MHz = ARFCN 976 (E-GSM).</small></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="gsmStart">Démarrer</button><button class="btn danger" type="button" id="gsmStop">Arrêter</button></div>
+                </form>
+                <details><summary>stderr (2 Ko max)</summary><pre class="sortie" id="gsmErr">(aucune sortie)</pre></details></div>
+            <div class="pan"><h3>Cellules observées <i id="nObs"></i><button class="btn sm" id="majObs" type="button">Actualiser</button></h3>
+                <div class="tab"><table><thead><tr><th>Cellule</th><th>ARFCN</th><th>MCC</th><th>MNC</th><th>LAC</th><th>CI</th><th>Première vue</th><th>Dernière vue</th><th>Vues</th></tr></thead><tbody id="bObs"></tbody></table></div></div>
+        </section>
 
-  <!-- SCORING panel (v0.3.1) -------------------------------------------- -->
-  <section id="scoring" class="panel">
-    <div class="panel-head">
-      <h2>Scoring heuristics</h2>
-      <div class="panel-actions">
-        <button class="btn" id="btn-refresh-scoring" type="button">Refresh</button>
-        <button class="btn primary" id="btn-save-scoring" type="button">Apply changes</button>
-      </div>
-    </div>
-    <div class="threshold-grid" id="threshold-grid">
-      <!-- rows injected by JS -->
-    </div>
-    <p class="hint">
-      Score sum ≥ 60 (default) emits an alert. Each heuristic can be enabled/disabled and its contribution adjusted. Changes are audit-logged to the live journal stream.
-    </p>
-  </section>
+        <section id="t-fm" role="tabpanel" aria-labelledby="o-fm" hidden>
+            <div class="pan"><h3>Réception FM / RDS <i id="nFm"></i></h3>
+                <div id="rFm" class="retour" hidden></div><div id="cFm" class="conf" hidden></div>
+                <dl class="kv"><dt>État</dt><dd id="kFEtat">—</dd><dt>Fréquence</dt><dd id="kFFreq">—</dd><dt>Trames</dt><dd id="kFTrames">—</dd><dt>Dernier PI</dt><dd class="mono" id="kFPi">—</dd><dt>Dernier PS</dt><dd id="kFPs">—</dd></dl>
+                <form class="saisie" id="fFm" autocomplete="off">
+                    <label>Fréquence FM<input name="freq" value="100.6M" placeholder="100.6M" autocomplete="off"><small>87,5 à 108,0 MHz ; « 100.6M » ou « 100600000 ».</small></label>
+                    <label>Correction PPM<input name="ppm" type="number" step="1" min="-200" max="200" placeholder="0"><small>Les R820T dérivent de ±50 à 80 ppm sans TCXO. Vide = 0.</small></label>
+                    <label>Gain du tuner (dB)<input name="gain" type="number" step="0.1" min="0" max="50" placeholder="auto"><small>Vide = gain automatique ; maximum de l’ordre de 49 dB.</small></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="fmStart">Démarrer (fréquence unique)</button><button class="btn danger" type="button" id="fmStop">Arrêter</button><button class="btn prim" type="button" id="fmSweep">Balayer 87,5–108 MHz</button><button class="btn" type="button" id="fmAnnule">Annuler le balayage</button></div>
+                </form>
+                <dl class="kv" id="sweepInfo" hidden><dt>Balayage</dt><dd id="kSEtat">—</dd><dt>Étape</dt><dd id="kSEtape">—</dd><dt>Fréquence courante</dt><dd id="kSFreq">—</dd><dt>Stations trouvées</dt><dd id="kSTrouvees">—</dd></dl>
+                <p class="note">Le balayage parcourt la bande par pas de 200 kHz avec 10 s d’attente par fréquence (environ 17 min). La FM partage le RTL-SDR avec le GSM : démarrer l’une pendant que l’autre tourne renvoie 409 avec le nom du détenteur.</p></div>
+            <div class="pan"><h3>Stations reçues <i id="nSta"></i><button class="btn sm" id="majSta" type="button">Actualiser</button></h3>
+                <div class="tab"><table><thead><tr><th>PI</th><th>PS</th><th>RadioText</th><th>PTY</th><th>TP / TA</th><th>Fréquence</th><th>Trames</th><th>Dernière vue</th></tr></thead><tbody id="bSta"></tbody></table></div>
+                <p class="note">PI (identification du programme) est la clé naturelle d’une station ; PS est son nom d’affichage sur 8 caractères ; RadioText (64 max) porte titres ou bandeaux d’actualités.</p></div>
+        </section>
 
-  <!-- ACTIONS panel ------------------------------------------------------ -->
-  <section id="actions" class="panel">
-    <div class="panel-head">
-      <h2>Actions</h2>
-    </div>
-    <div class="actions-grid">
-      <button class="btn primary" id="btn-test-alert" type="button">
-        Test alert
-      </button>
-      <button class="btn" id="btn-request-notif" type="button">
-        Request desktop notification permission
-      </button>
-      <button class="btn" id="btn-mute-beep" type="button" aria-pressed="false">
-        <span id="mute-label">Beep: on</span>
-      </button>
-    </div>
-    <p class="hint">
-      Test alert writes a synthetic event through the full pipeline (sink → SSE → UI).
-      Desktop notifications require an HTTPS context and a one-time user gesture.
-    </p>
-  </section>
+        <section id="t-ref" role="tabpanel" aria-labelledby="o-ref" hidden>
+            <div class="pan"><h3>Référence opérateur <i id="nRef"></i><button class="btn sm" id="majRef" type="button">Actualiser</button><button class="btn prim sm" id="apprend" type="button">Apprendre (5 min)</button></h3>
+                <div id="rRef" class="retour" hidden></div><div id="cRef" class="conf" hidden></div>
+                <div class="tab"><table><thead><tr><th>Cellule</th><th>MCC</th><th>MNC</th><th>LAC</th><th>ARFCN</th><th>Chiffrement A5</th><th>Apprentissages</th><th>Dernier apprentissage</th></tr></thead><tbody id="bRef"></tbody></table></div>
+                <p class="note">Une cellule entre dans la référence après 3 observations en balayage normal. « Apprendre » accepte immédiatement toute cellule observée pendant les 5 minutes suivantes : à n’utiliser que dans un environnement radio sain.</p></div>
+            <div class="pan"><h3>Heuristiques de score <i id="nSeuils"></i><button class="btn sm" id="majSeuils" type="button">Actualiser</button><button class="btn prim sm" id="appliquer" type="button">Appliquer les changements</button></h3>
+                <div id="rSeuils" class="retour" hidden></div><div id="cSeuils" class="conf" hidden></div>
+                <div class="seuils" id="seuils"></div>
+                <p class="note">Chaque heuristique peut être activée ou non et son score ajusté (0 à 100). Les autres paramètres de l’heuristique sont conservés tels quels à l’envoi. Les changements sont tracés dans le journal du service.</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-</main>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/sensor/gsm';
+        const CLE_BIP = 'sgsm.beep.muted';   // clé d'origine conservée
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-<!-- Modal: add trusted phone ------------------------------------------- -->
-<div class="modal" id="modal-add" role="dialog" aria-modal="true" aria-labelledby="modal-add-title" aria-hidden="true">
-  <div class="modal-content">
-    <h3 id="modal-add-title">Add trusted phone</h3>
-    <p class="modal-hint">
-      Enter the IMSI in clear; it's hashed (HMAC-SHA256) before storage.
-      The label is displayed alongside alerts whenever the IMSI is observed.
-    </p>
-    <form id="form-add-trusted" autocomplete="off">
-      <label class="field">
-        <span class="field-label">IMSI</span>
-        <input type="text" id="field-imsi" name="imsi" required
-               inputmode="numeric" pattern="\d{14,15}"
-               placeholder="208011000000123" autocomplete="off">
-        <small class="field-help">14–15 digits, no spaces or dashes.</small>
-      </label>
-      <label class="field">
-        <span class="field-label">Label</span>
-        <input type="text" id="field-label" name="label" required
-               maxlength="64" placeholder="Owner's iPhone">
-      </label>
-      <div class="modal-actions">
-        <button type="button" class="btn" id="btn-cancel-add">Cancel</button>
-        <button type="submit" class="btn primary">Add</button>
-      </div>
-    </form>
-  </div>
-</div>
+        let ALERTES = null, TEL = null, GSM = null, OBS = null, REF = null, SEUILS = null, ETAT_SEUILS = {}, RDS = null, STATIONS = null, SWEEP = null;
+        let SESSION_OK = true, ONGLET = 'alertes', CONFIRM = null, DERNIER_ID = null, MUET = false;
+        try { MUET = localStorage.getItem(CLE_BIP) === '1'; } catch (e) { /* stockage indisponible */ }
 
-<!-- Toast banner ------------------------------------------------------- -->
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (typeof d === 'string' && d) return d;
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '' || ts === 0) return '—';
+            const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+            if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR');
+        }
+        function heure(ts) { if (!ts) return '—'; const d = new Date(ts < 1e12 ? ts * 1000 : ts); return isNaN(d) ? '—' : d.toLocaleTimeString('fr-FR'); }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function ligneVide(tb, n, msg) { const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function cellule(tr, txt, cls) { const td = el('td', cls || '', txt); tr.appendChild(td); return td; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function classeScore(n) { return n >= 70 ? 'hors' : n >= 40 ? 'att' : 'cy'; }
 
-<script src="/shared/sidebar.js"></script>
-<script defer src="sentinelle.js"></script>
+        // Confirmation intégrée à la page : jamais de dialogue natif.
+        function demander(zone, libelle, fn) {
+            CONFIRM = { zone, libelle, fn }; rendreConfirmation();
+        }
+        function rendreConfirmation() {
+            ['cTel', 'cGsmC', 'cFm', 'cRef', 'cSeuils'].forEach(z => { $(z).hidden = true; $(z).replaceChildren(); });
+            if (!CONFIRM) { annoncer(); return; }
+            const z = $(CONFIRM.zone); z.hidden = false;
+            z.appendChild(el('span', '', CONFIRM.libelle + ' ?'));
+            z.appendChild(btn('Confirmer', 'danger', () => { const f = CONFIRM.fn; CONFIRM = null; rendreConfirmation(); f(); }));
+            z.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendreConfirmation(); }));
+            annoncer();
+        }
+
+        function demoData() {
+            const t = Math.floor(Date.now() / 1000);
+            ALERTES = [
+                { id: 3, ts: t - 95, cell_id: '001-01-100-4021', arfcn: 976, score: 82, reason: 'cipher_downgrade+ghost_bts', trusted_label: 'Téléphone démo' },
+                { id: 2, ts: t - 3200, cell_id: '001-01-100-4021', arfcn: 976, score: 55, reason: 'relocalization_storm', trusted_label: null },
+                { id: 1, ts: t - 86400, cell_id: '001-01-200-1177', arfcn: 20, score: 35, reason: 'operator-test', trusted_label: null }];
+            TEL = [{ id: 'a1b2c3d4e5f6a7b8', imsi_hash: 'x', label: 'Téléphone démo', added_at: t - 7 * 86400 }, { id: '99ff00aa11223344', imsi_hash: 'y', label: 'Poste de test', added_at: t - 2 * 86400 }];
+            GSM = { running: true, pid: 4242, freq: '925.4M', started_at: t - 1800, stderr_tail: '' };
+            OBS = [
+                { cell_id: '001-01-100-4021', arfcn: 976, mcc: 1, mnc: 1, lac: 100, ci: 4021, first_seen: t - 3 * 86400, last_seen: t - 20, sighting_count: 412 },
+                { cell_id: '001-01-200-1177', arfcn: 20, mcc: 1, mnc: 1, lac: 200, ci: 1177, first_seen: t - 86400, last_seen: t - 600, sighting_count: 37 }];
+            REF = [{ cell_id: '001-01-100-4021', mcc: 1, mnc: 1, lac: 100, arfcn: 976, cipher_a5: 3, learn_count: 5, first_learned: t - 86400, last_learned: t - 3600 }];
+            SEUILS = { cipher_downgrade: { enabled: true, score: 40 }, ghost_bts: { enabled: true, score: 35 }, relocalization_storm: { enabled: true, score: 25, window_s: 60, lac_threshold: 3 }, orphan_arfcn: { enabled: false, score: 20 } };
+            ETAT_SEUILS = JSON.parse(JSON.stringify(SEUILS));
+            RDS = { running: false, pid: null, freq: null, started_at: null, last_pi: 'F201', last_ps: 'RADIODEM', frames: 128 };
+            STATIONS = [{ pi: 'F201', ps: 'RADIODEM', rt: 'Émission fictive', pty: 10, tp: 1, ta: 0, freq: '100.6M', count: 128, last_seen: t - 240 }];
+            SWEEP = null;
+        }
+
+        async function essai(chemin) { try { return { v: await lire(chemin) }; } catch (e) { return { e: e }; } }
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const [al, te, sc, rs, jb] = await Promise.all([essai('/alerts?limit=100'), essai('/trusted'), essai('/scan/status'), essai('/rds/status'), essai('/rds/sweep/jobs?limit=1')]);
+            const sup = [];
+            if (ONGLET === 'gsm') sup.push(essai('/observations?limit=200').then(r => { OBS = r.v ? (r.v.sightings || []) : null; return r; }));
+            if (ONGLET === 'fm') sup.push(essai('/rds/stations?limit=200').then(r => { STATIONS = r.v ? (r.v.stations || []) : null; return r; }));
+            if (ONGLET === 'ref') sup.push(essai('/baseline?limit=200').then(r => { REF = r.v ? (r.v.cells || []) : null; return r; }));
+            const extra = await Promise.all(sup);
+            const tous = [al, te, sc, rs].concat(extra);
+            SESSION_OK = !tous.some(r => r.e && (r.e.statut === 401 || r.e.statut === 403));
+            const nouvelles = al.v ? (al.v.alerts || []) : null;
+            if (nouvelles && nouvelles.length) {
+                const maxId = Math.max.apply(null, nouvelles.map(a => Number(a.id) || 0));
+                if (DERNIER_ID !== null && maxId > DERNIER_ID) bip();
+                DERNIER_ID = maxId;
+            } else if (nouvelles && DERNIER_ID === null) DERNIER_ID = 0;
+            ALERTES = nouvelles ? nouvelles.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)) : null;
+            TEL = te.v ? (te.v.phones || []).slice().sort((a, b) => (b.added_at || 0) - (a.added_at || 0)) : null;
+            GSM = sc.v || null; RDS = rs.v || null;
+            const job = jb.v && jb.v.jobs && jb.v.jobs[0];
+            SWEEP = job && !['stopped', 'cancelled', 'failed'].includes(job.state) ? job : null;
+            const ko = tous.every(r => r.e) && SESSION_OK;
+            $('erreur').hidden = !ko;
+            if (ko) $('erreur').textContent = 'Impossible de lire la sentinelle (service arrêté ou injoignable).';
+            rendre();
+        }
+        async function chargerSeuils() {
+            if (DEMO) { rendre(); return; }
+            const r = await essai('/scoring/thresholds');
+            if (r.v) { SEUILS = r.v.thresholds || {}; ETAT_SEUILS = {}; Object.keys(SEUILS).forEach(n => { ETAT_SEUILS[n] = Object.assign({}, SEUILS[n] || {}); }); }
+            else { SEUILS = null; if (r.e && (r.e.statut === 401 || r.e.statut === 403)) SESSION_OK = false; }
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!GSM && !RDS && !ALERTES) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { const recent = ALERTES && ALERTES.length && ALERTES[0].score >= 70; etat.className = 'actif' + (recent ? ' hors' : ''); etat.textContent = recent ? 'ALERTE ÉLEVÉE RÉCENTE' : 'CAPTEUR EN LIGNE'; }
+            // Tuiles
+            $('tAlertes').textContent = ALERTES ? ALERTES.length : '—';
+            const smax = ALERTES && ALERTES.length ? Math.max.apply(null, ALERTES.map(a => Number(a.score) || 0)) : null;
+            $('tScore').textContent = smax === null ? '—' : smax;
+            $('cScore').className = 'tuile ' + (smax === null ? 'cy' : classeScore(smax));
+            $('tDerniere').textContent = ALERTES && ALERTES.length ? quand(ALERTES[0].ts) : '—';
+            $('sDerniere').textContent = ALERTES && ALERTES.length ? heure(ALERTES[0].ts) : ' ';
+            $('tTel').textContent = TEL ? TEL.length : '—';
+            const g = GSM;
+            $('tGsm').textContent = g ? (g.running ? 'EN COURS' : 'ARRÊTÉ') : '—';
+            $('cGsm').className = 'tuile ' + (g ? (g.running ? 'ok' : 'cy') : 'cy');
+            $('sGsm').textContent = g && g.running ? tiret(g.freq) : ' ';
+            const r = RDS;
+            $('tRds').textContent = r ? (r.running ? 'EN COURS' : 'ARRÊTÉ') : '—';
+            $('cRds').className = 'tuile ' + (r && r.running ? 'ok' : 'cy');
+            $('sRds').textContent = r && r.running ? tiret(r.freq) : ' ';
+            rendreAlertes(); rendreTel(); rendreGsm(); rendreFm(); rendreRef(); rendreSeuils();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreAlertes() {
+            const tb = $('bAlertes'); tb.replaceChildren();
+            $('nAlertes').textContent = ALERTES && ALERTES.length ? ALERTES.length + ' alerte' + (ALERTES.length > 1 ? 's' : '') : '';
+            if (!ALERTES || !ALERTES.length) { ligneVide(tb, 6, ALERTES ? 'Aucune alerte dans l’historique' : '—'); return; }
+            ALERTES.forEach(a => {
+                const tr = el('tr'); const hd = cellule(tr, quand(a.ts)); hd.title = a.ts ? new Date(a.ts < 1e12 ? a.ts * 1000 : a.ts).toLocaleString('fr-FR') : ''; cellule(tr, tiret(a.cell_id), 'mono'); cellule(tr, tiret(a.arfcn));
+                const s = el('td'); s.appendChild(pastille(classeScore(Number(a.score) || 0), tiret(a.score))); tr.appendChild(s);
+                cellule(tr, tiret(a.reason));
+                const c = el('td'); if (a.trusted_label) c.appendChild(pastille('ok', a.trusted_label)); else c.textContent = '—'; tr.appendChild(c);
+                tb.appendChild(tr);
+            });
+        }
+        function rendreTel() {
+            const tb = $('bTel'); tb.replaceChildren();
+            $('nTel').textContent = TEL && TEL.length ? TEL.length + ' téléphone' + (TEL.length > 1 ? 's' : '') : '';
+            if (!TEL || !TEL.length) { ligneVide(tb, 4, TEL ? 'Aucun téléphone de confiance — « + Ajouter un téléphone » pour en enregistrer un' : '—'); return; }
+            TEL.forEach(p => {
+                const tr = el('tr'); const id = el('td', 'mono', String(p.id || '').slice(0, 8)); id.title = String(p.id || ''); tr.appendChild(id);
+                cellule(tr, tiret(p.label)); cellule(tr, quand(p.added_at));
+                const act = el('td', 'act'); act.appendChild(btn('Supprimer', 'danger', () => demander('cTel', 'Supprimer le téléphone ' + String(p.id || '').slice(0, 8), () => supprimerTel(p.id)))); tr.appendChild(act);
+                tb.appendChild(tr);
+            });
+        }
+        function rendreGsm() {
+            const g = GSM;
+            $('kGEtat').textContent = g ? (g.running ? 'En cours' : 'Arrêté') : '—';
+            $('kGFreq').textContent = g ? tiret(g.freq) : '—'; $('kGPid').textContent = g ? tiret(g.pid) : '—';
+            $('kGDebut').textContent = g && g.started_at ? heure(g.started_at) : '—';
+            $('gsmErr').textContent = g && g.stderr_tail ? String(g.stderr_tail) : '(aucune sortie)';
+            $('gsmStart').disabled = !!(g && g.running); $('gsmStop').disabled = !(g && g.running);
+            $('nObs').textContent = OBS && OBS.length ? OBS.length + ' cellule' + (OBS.length > 1 ? 's' : '') : '';
+            $('nGsm').textContent = '';
+            const tb = $('bObs'); tb.replaceChildren();
+            if (!OBS || !OBS.length) { ligneVide(tb, 9, OBS ? 'Aucune observation — démarrer un balayage' : '—'); return; }
+            OBS.forEach(s => {
+                const tr = el('tr'); cellule(tr, tiret(s.cell_id), 'mono'); cellule(tr, tiret(s.arfcn)); cellule(tr, tiret(s.mcc)); cellule(tr, tiret(s.mnc)); cellule(tr, tiret(s.lac)); cellule(tr, tiret(s.ci));
+                cellule(tr, quand(s.first_seen)); cellule(tr, quand(s.last_seen)); cellule(tr, tiret(s.sighting_count)); tb.appendChild(tr);
+            });
+        }
+        function rendreFm() {
+            const r = RDS;
+            $('kFEtat').textContent = r ? (r.running ? 'En cours' : 'Arrêté') : '—'; $('kFFreq').textContent = r ? tiret(r.freq) : '—';
+            $('kFTrames').textContent = r && typeof r.frames === 'number' ? r.frames : '—'; $('kFPi').textContent = r ? tiret(r.last_pi) : '—'; $('kFPs').textContent = r ? tiret(r.last_ps) : '—';
+            $('fmStart').disabled = !!(r && r.running); $('fmStop').disabled = !(r && r.running);
+            const sw = SWEEP;
+            $('sweepInfo').hidden = !sw;
+            if (sw) {
+                $('kSEtat').textContent = tiret(sw.state);
+                $('kSEtape').textContent = typeof sw.step_index === 'number' && typeof sw.step_total === 'number' ? sw.step_index + ' / ' + sw.step_total : '—';
+                $('kSFreq').textContent = sw.current_freq_mhz != null ? sw.current_freq_mhz + ' MHz' : '—';
+                $('kSTrouvees').textContent = typeof sw.stations_found === 'number' ? sw.stations_found : '—';
+            }
+            $('fmSweep').disabled = !!sw; $('fmAnnule').disabled = !sw;
+            $('nFm').textContent = '';
+            $('nSta').textContent = STATIONS && STATIONS.length ? STATIONS.length + ' station' + (STATIONS.length > 1 ? 's' : '') : '';
+            const tb = $('bSta'); tb.replaceChildren();
+            if (!STATIONS || !STATIONS.length) { ligneVide(tb, 8, STATIONS ? 'Aucune station — lancer un balayage ou une réception' : '—'); return; }
+            STATIONS.forEach(s => {
+                const tr = el('tr'); cellule(tr, tiret(s.pi), 'mono'); cellule(tr, tiret(s.ps)); cellule(tr, tiret(s.rt)); cellule(tr, tiret(s.pty));
+                cellule(tr, [s.tp ? 'TP' : '', s.ta ? 'TA' : ''].filter(Boolean).join(' / ') || '—'); cellule(tr, tiret(s.freq)); cellule(tr, tiret(s.count)); cellule(tr, quand(s.last_seen)); tb.appendChild(tr);
+            });
+        }
+        function rendreRef() {
+            $('nRef').textContent = REF && REF.length ? REF.length + ' cellule' + (REF.length > 1 ? 's' : '') : '';
+            const tb = $('bRef'); tb.replaceChildren();
+            if (!REF || !REF.length) { ligneVide(tb, 8, REF ? 'Aucune référence — lancer un balayage puis « Apprendre »' : '—'); return; }
+            REF.forEach(c => {
+                const tr = el('tr'); cellule(tr, tiret(c.cell_id), 'mono'); cellule(tr, tiret(c.mcc)); cellule(tr, tiret(c.mnc)); cellule(tr, tiret(c.lac)); cellule(tr, tiret(c.arfcn));
+                cellule(tr, tiret(c.cipher_a5)); cellule(tr, tiret(c.learn_count)); cellule(tr, quand(c.last_learned)); tb.appendChild(tr);
+            });
+        }
+        function bornerScore(n) { n = Number(n); if (!Number.isFinite(n)) return 0; return Math.max(0, Math.min(100, Math.round(n))); }
+        function rendreSeuils() {
+            const grille = $('seuils');
+            if (grille.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;   // pas de rendu pendant la saisie
+            grille.replaceChildren();
+            const noms = SEUILS ? Object.keys(SEUILS).sort() : [];
+            $('nSeuils').textContent = noms.length ? noms.length + ' heuristique' + (noms.length > 1 ? 's' : '') : '';
+            if (!noms.length) { grille.appendChild(el('div', 'vide', SEUILS ? 'Aucune heuristique définie' : '—')); return; }
+            noms.forEach(nom => {
+                const t = ETAT_SEUILS[nom] || {};
+                const ligne = el('div', 'seuil'); ligne.appendChild(el('b', 'mono', nom));
+                const l1 = el('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.checked = !!t.enabled;
+                c.addEventListener('change', () => { ETAT_SEUILS[nom].enabled = c.checked; }); l1.appendChild(c); l1.appendChild(document.createTextNode('activée')); ligne.appendChild(l1);
+                const l2 = el('label', '', 'score '); const n = document.createElement('input'); n.type = 'number'; n.min = '0'; n.max = '100'; n.step = '1'; n.value = String(bornerScore(t.score));
+                n.addEventListener('change', () => { const v = bornerScore(n.value); n.value = String(v); ETAT_SEUILS[nom].score = v; }); l2.appendChild(n); ligne.appendChild(l2);
+                const autres = Object.keys(t).filter(k => k !== 'enabled' && k !== 'score');
+                if (autres.length) ligne.appendChild(el('small', '', 'Conservés : ' + autres.map(k => k + ' = ' + t[k]).join(', ')));
+                grille.appendChild(ligne);
+            });
+        }
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function supprimerTel(id) {
+            const r = await ecrire('DELETE', '/trusted/' + encodeURIComponent(id));
+            if (r.ok) { retour('rTel', true, 'Téléphone retiré.'); charger(); } else retour('rTel', false, 'Suppression impossible : ' + detail(r));
+        }
+        $('fTel').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target; const imsi = f.imsi.value.trim(), label = f.label.value.trim();
+            if (!imsi || !label) return;
+            const r = await ecrire('POST', '/trusted', { imsi: imsi, label: label });
+            if (r.ok) { f.reset(); f.hidden = true; retour('rTel', true, 'Téléphone de confiance ajouté.'); charger(); } else retour('rTel', false, 'Ajout impossible : ' + detail(r));
+        });
+        $('testAlerte').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/alerts/test', {});
+            if (r.ok) { retour('rAlertes', true, 'Alerte de test émise (id ' + tiret(r.data && r.data.id) + ').'); charger(); } else retour('rAlertes', false, 'Test impossible : ' + detail(r));
+        });
+        $('fGsm').addEventListener('submit', async ev => {
+            ev.preventDefault(); const freq = ev.target.freq.value.trim();
+            if (!freq) { retour('rGsm', false, 'Saisir une fréquence (ex. 925.4M).'); return; }
+            const r = await ecrire('POST', '/scan/start', { freq: freq });
+            if (r.ok) { retour('rGsm', true, 'Balayage démarré sur ' + freq + '.'); charger(); } else { retour('rGsm', false, 'Démarrage impossible : ' + detail(r)); charger(); }
+        });
+        $('gsmStop').addEventListener('click', () => demander('cGsmC', 'Arrêter le balayage GSM (la détection est suspendue)', async () => {
+            const r = await ecrire('POST', '/scan/stop', {});
+            if (r.ok) { retour('rGsm', true, 'Balayage arrêté.'); charger(); } else { retour('rGsm', false, 'Arrêt impossible : ' + detail(r)); charger(); }
+        }));
+        $('fFm').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target; const freq = f.freq.value.trim();
+            if (!freq) { retour('rFm', false, 'Saisir une fréquence (ex. 100.6M).'); return; }
+            const corps = { freq: freq }; const ppm = f.ppm.value.trim(), gain = f.gain.value.trim();
+            if (ppm) corps.ppm = Number(ppm);
+            if (gain) corps.gain = Number(gain);
+            if ((ppm && !Number.isFinite(corps.ppm)) || (gain && !Number.isFinite(corps.gain))) { retour('rFm', false, 'PPM et gain doivent être numériques.'); return; }
+            const r = await ecrire('POST', '/rds/start', corps);
+            if (r.ok) { retour('rFm', true, 'Réception RDS démarrée sur ' + freq + '.'); charger(); } else { retour('rFm', false, 'Démarrage impossible : ' + detail(r)); charger(); }
+        });
+        $('fmStop').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/rds/stop', {});
+            if (r.ok) { retour('rFm', true, 'Réception RDS arrêtée.'); charger(); } else { retour('rFm', false, 'Arrêt impossible : ' + detail(r)); charger(); }
+        });
+        $('fmSweep').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/rds/sweep', {});
+            if (r.ok) { retour('rFm', true, 'Balayage FM lancé.'); charger(); } else retour('rFm', false, 'Lancement impossible : ' + detail(r));
+        });
+        $('fmAnnule').addEventListener('click', async () => {
+            if (!SWEEP || !SWEEP.id) return;
+            const r = await ecrire('POST', '/rds/sweep/jobs/' + encodeURIComponent(SWEEP.id) + '/cancel', {});
+            if (r.ok) { retour('rFm', true, 'Balayage annulé.'); charger(); } else retour('rFm', false, 'Annulation impossible : ' + detail(r));
+        });
+        $('apprend').addEventListener('click', () => demander('cRef', 'Accepter comme normale toute cellule observée pendant 5 minutes', async () => {
+            const r = await ecrire('POST', '/baseline/learn', { sweep_seconds: 300 });
+            if (r.ok) { retour('rRef', true, 'Mode apprentissage armé pour 5 minutes : la table se met à jour toutes les 15 s.'); charger(); } else retour('rRef', false, 'Apprentissage impossible : ' + detail(r));
+        }));
+        $('appliquer').addEventListener('click', () => demander('cSeuils', 'Appliquer les nouveaux réglages de score (cela change la sensibilité de la détection)', async () => {
+            Object.keys(ETAT_SEUILS).forEach(n => { if ('score' in ETAT_SEUILS[n]) ETAT_SEUILS[n].score = bornerScore(ETAT_SEUILS[n].score); });
+            const r = await ecrire('POST', '/scoring/thresholds', ETAT_SEUILS);
+            if (r.ok && r.data) {
+                const th = r.data.thresholds || r.data; SEUILS = th; ETAT_SEUILS = {}; Object.keys(th).forEach(n => { ETAT_SEUILS[n] = Object.assign({}, th[n] || {}); });
+                retour('rSeuils', true, 'Réglages de score appliqués.'); rendre();
+            } else retour('rSeuils', false, 'Enregistrement impossible : ' + detail(r));
+        }));
+
+        $('addTel').addEventListener('click', () => { $('fTel').hidden = !$('fTel').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+        $('majObs').addEventListener('click', charger); $('majSta').addEventListener('click', charger); $('majRef').addEventListener('click', charger);
+        $('majSeuils').addEventListener('click', chargerSeuils);
+
+        // ----- Bip sonore (synthèse Web Audio, aucun fichier) -----
+        let AUDIO = null;
+        function majBip() { $('son').setAttribute('aria-pressed', String(!MUET)); $('son').textContent = MUET ? 'Bip : coupé' : 'Bip : activé'; }
+        function bip() {
+            if (MUET || DEMO) return;
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+                if (!AUDIO) AUDIO = new AC(); if (AUDIO.state === 'suspended') AUDIO.resume();
+                const o = AUDIO.createOscillator(), g = AUDIO.createGain(), t = AUDIO.currentTime;
+                o.type = 'sine'; o.frequency.setValueAtTime(880, t);
+                g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+                o.connect(g).connect(AUDIO.destination); o.start(); o.stop(t + 0.22);
+            } catch (e) { /* pas de son */ }
+        }
+        $('son').addEventListener('click', () => { MUET = !MUET; try { localStorage.setItem(CLE_BIP, MUET ? '1' : '0'); } catch (e) { /* ignoré */ } majBip(); });
+        majBip();
+
+        // ----- Onglets -----
+        const NOMS = ['alertes', 'tel', 'gsm', 'fm', 'ref'];
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'ref' && SEUILS === null) chargerSeuils();
+            if (nom !== 'alertes' && nom !== 'tel') charger(); else annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', () => { charger(); if (ONGLET === 'ref') chargerSeuils(); });
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'sentinelle' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, pendant une saisie ou une confirmation ouverte.
+        setInterval(() => {
+            const saisie = !$('fTel').hidden || (document.activeElement && document.activeElement.tagName === 'INPUT');
+            if (document.hidden || DEMO || CONFIRM || saisie) return;
+            charger();
+        }, 15000);
+    </script>
 </body>
 </html>
