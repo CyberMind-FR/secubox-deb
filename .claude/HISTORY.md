@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — Panneaux Aurora, vague 3 : 9 paquets, 12 pages (closes #2584)
+
+`/exposure/`, `/dns-provider/`, `/metacatalog/`, `/glances/`, `/reporter/`, `/watchdog/`, `/ksm/`, `/cve-triage/`, `/antirootkit/`, `/ai-insights/`, `/meshname/`, `/master-link/` (PR #2585 à #2596), relues (aucun script externe, dialogue natif, innerHTML ni police distante) et déployées sur gk2, gk1 et gk3, dépôt apt à jour pour gk2. Versions : haproxy 1.12.0, dns 1.5.0, appstore 0.7.0, metrics 1.22.1 (glances 1.22.0 puis reporter 1.22.1), health 1.3.0, system 1.10.0, security-posture 2.3.1 (cve-triage 2.3.0 puis antirootkit 2.3.1), threats 1.6.0, p2p 1.15.1 (meshname 1.15.0 puis master-link 1.15.1).
+
+Bogues d'ancienne page corrigés, entre autres : recherche CVE toujours vide (route masquée), pastille watchdog toujours « Disabled » (champs absents), score de risque et confiance ML inventés (ai-insights), nom de processus exécuté dans la page (glances), curseurs ksm arrondissant les valeurs réelles, flèches du graphe de dépendances à l'envers (metacatalog), écritures annoncées réussies après échec (cve-triage, meshname). Reste `www/master-link/admin.html` (ancienne peau).
+
+À noter, non corrigé (API) : cve `/cves/search` masqué par `/cves/{cve_id}` ; ai-insights `POST /config` remet `max_correlations` à 100 ; glances `POST /config` écrase `network_interfaces`, état « en marche » par `pgrep -f` ; ksm mémoire économisée en pages de 4 Kio ; meshname import mDNS duplique au lieu d'écraser ; reporter `start_date`/`sections` ignorés, aucun exécuteur de planification ; antirootkit `test_packaging.py` cherche un changelog disparu. Restent environ 70 pages hors Aurora (vague 4 ; vault/coffre à part).
+
 ## 2026-10-13 — Panneaux Aurora, vague 2 : 10 paquets, 12 pages (closes #2571)
 
 `/users/`, `/tor/`, `/routes/`, `/netdiag/`, `/nettweak/`, `/traffic/`, `/vortex-firewall/`, `/mail/`, `/cloner/`, `/profiles/`, `/appstore/`, `/cookies/` (PR #2572 à #2583), relues (aucun script externe, dialogue natif, innerHTML ni police distante) et déployées sur gk2, gk1 et gk3, dépôt apt à jour pour gk2. Versions : auth 1.6.0, tor 1.6.0, routes 1.4.1 (routes 1.4.0 puis netdiag 1.4.1), qos 1.6.1 (nettweak 1.6.0 puis traffic 1.6.1), ipblock 1.5.0, mail 2.15.0, backup 2.4.0, profiles 0.21.0, appstore 0.6.0, cookies 1.4.0. Coffre/vault exclu (redéployer secubox-vault re-scelle le coffre).
