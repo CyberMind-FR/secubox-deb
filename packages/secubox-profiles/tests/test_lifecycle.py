@@ -106,3 +106,13 @@ def test_les_modules_a_api_du_panneau_ne_dorment_pas():
     lc = _politique_livree()["lifecycle"]
     for mod in ("metablogizer", "podcaster"):
         assert lc.get(mod) == "always-on", f"{mod} doit rester always-on"
+
+
+def test_l_annuaire_ne_dort_pas():
+    """CE QUI A ETE SUBI (#2548). `annuaire` etait `on-demand` : le sleeper
+    l'arretait apres inactivite, or il porte les boucles de synchro du maillage
+    (journal, voie rapide assist), l'inscription au maitre et la flotte. Endormi,
+    la page /fleet/ rendait 502 (HTTP) et la box cessait de se synchroniser ;
+    le waker ne reveille que sur les vhosts de sites."""
+    lc = _politique_livree()["lifecycle"]
+    assert lc.get("annuaire") == "always-on"
