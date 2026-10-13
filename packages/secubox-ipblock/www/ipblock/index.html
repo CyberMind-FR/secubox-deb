@@ -4,694 +4,591 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Listes de blocage d'adresses au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives (RFC 5737), actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - IP Blocklist Manager</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Blocage d’adresses</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --accent: #ef4444;
-            --accent-dim: rgba(239, 68, 68, 0.3);
-            --accent-glow: 0 0 12px rgba(239, 68, 68, 0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-        .header h1 { font-size: 1.5rem; color: var(--accent); text-shadow: var(--accent-glow); }
-        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; transition: all 0.2s; }
-        .btn:hover { background: var(--tube-bezel); color: var(--p31-peak); }
-        .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-        .btn.primary:hover { background: var(--accent); color: white; }
-        .btn.success { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-hot); }
-        .btn.danger { background: rgba(239,68,68,0.1); border-color: var(--accent); color: var(--accent); }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-        .tab { padding: 0.5rem 1rem; border: 1px solid var(--tube-soft); border-radius: 6px 6px 0 0; background: var(--tube-pale); color: var(--p31-dim); cursor: pointer; font-family: 'Courier Prime', monospace; }
-        .tab:hover { background: var(--tube-bezel); color: var(--p31-mid); }
-        .tab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); border-bottom-color: var(--tube-light); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--accent); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.75rem; font-weight: bold; color: var(--accent); text-shadow: var(--accent-glow); }
-        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.25rem; }
-        .stat-card.blocked .value { color: var(--accent); }
-        .stat-card.sources .value { color: var(--p31-peak); text-shadow: var(--bloom-text); }
-        .stat-card.whitelist .value { color: var(--p31-hot); }
-        .stat-card.dropped .value { color: var(--p31-decay); text-shadow: var(--bloom-amber); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
-        th { color: var(--p31-dim); font-weight: 500; }
-        tr:hover { background: rgba(239,68,68,0.05); }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.enabled { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
-        .badge.disabled { background: rgba(15,136,34,0.2); color: var(--p31-dim); }
-        .badge.spam { background: rgba(239,68,68,0.2); color: var(--accent); }
-        .badge.threats { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
-        .badge.botnet { background: rgba(156,39,176,0.2); color: #9c27b0; }
-        .badge.malware { background: rgba(233,30,99,0.2); color: #e91e63; }
-        .badge.anonymizer { background: rgba(103,58,183,0.2); color: #673ab7; }
-        .badge.aggregated { background: rgba(33,150,243,0.2); color: #2196f3; }
-        .badge.attacks { background: rgba(255,87,34,0.2); color: #ff5722; }
-        .badge.imported { background: rgba(0,150,136,0.2); color: #009688; }
-        .badge.general { background: rgba(158,158,158,0.2); color: #9e9e9e; }
-        .badge.manual { background: var(--accent-dim); color: var(--accent); }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--tube-pale); border: 1px solid var(--accent); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { font-size: 1.1rem; color: var(--accent); }
-        .close-btn { background: none; border: none; color: var(--p31-dim); cursor: pointer; font-size: 1.5rem; }
-        .close-btn:hover { color: var(--accent); }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.875rem; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--accent-glow); }
-        .form-group textarea { min-height: 150px; resize: vertical; }
-        .source-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--tube-soft); border-radius: 6px; margin-bottom: 0.5rem; }
-        .source-item .info { flex: 1; }
-        .source-item .name { font-weight: 500; color: var(--p31-mid); }
-        .source-item .url { font-size: 0.75rem; color: var(--p31-dim); word-break: break-all; }
-        .actions { display: flex; gap: 0.5rem; }
-        .status-indicator { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.875rem; }
-        .status-indicator.available { background: rgba(51,255,102,0.1); border: 1px solid var(--p31-mid); color: var(--p31-peak); }
-        .status-indicator.unavailable { background: rgba(239,68,68,0.1); border: 1px solid var(--accent); color: var(--accent); }
-        .ip-code { font-family: 'JetBrains Mono', monospace; background: var(--tube-bezel); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85rem; }
-        .empty-state { text-align: center; padding: 2rem; color: var(--p31-dim); }
-        .chart-container { height: 200px; display: flex; align-items: flex-end; gap: 2px; padding: 1rem; background: var(--tube-bezel); border-radius: 6px; margin-top: 1rem; }
-        .chart-bar { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 4px; transition: height 0.3s; }
-        .search-box { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .search-box input { flex: 1; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn:first-of-type{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        td.cassable{overflow-wrap:anywhere;min-width:110px}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        @container a (max-width:600px){th,td{padding:6px 4px;font-size:.74rem} td.cassable{min-width:56px} .mono{font-size:.66rem} td.act .btn{padding:3px 5px;font-size:.68rem}}
+        td.act .ligne{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie,.bloc-saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label,.bloc-saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie label.large{grid-column:1/-1}
+        form.saisie label.case{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--texte)}
+        form.saisie input,form.saisie select,form.saisie textarea{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input[type=checkbox]{width:auto}
+        form.saisie textarea{min-height:110px;resize:vertical;font-family:ui-monospace,Menlo,Consolas,monospace}
+        form.saisie input:focus,form.saisie select:focus,form.saisie textarea:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .conf{border:1px solid var(--rouge);background:rgba(255,77,94,.08);border-radius:10px;padding:8px 10px;margin:0 0 10px;font-size:.8rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+        .conf .txt{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        .conf .ligne{display:flex;gap:6px}
+        .liste-dispo{display:grid;gap:6px}
+        .dispo{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 8px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.45)}
+        .dispo .nom{flex:1 1 180px;min-width:0} .dispo .nom b{font-size:.8rem} .dispo .nom span{display:block;color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>IP Blocklist Manager</h1>
-            <div class="header-actions">
-                <div id="nftStatus" class="status-indicator">Checking nftables...</div>
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="applyRules()">Apply Rules</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+                <div><h1>Blocage d’adresses</h1><small>Listes de blocage, adresses bloquées à la main et liste blanche</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="appliquer" type="button" title="Régénère la configuration nftables puis recharge les ensembles d’adresses.">Appliquer les règles</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="rGlobal" class="retour" hidden></div>
 
-        <div class="stats-grid">
-            <div class="stat-card blocked">
-                <div class="value" id="statBlocked">-</div>
-                <div class="label">Total Blocked IPs</div>
-            </div>
-            <div class="stat-card sources">
-                <div class="value" id="statSources">-</div>
-                <div class="label">Active Sources</div>
-            </div>
-            <div class="stat-card whitelist">
-                <div class="value" id="statWhitelist">-</div>
-                <div class="label">Whitelisted</div>
-            </div>
-            <div class="stat-card dropped">
-                <div class="value" id="statDropped">-</div>
-                <div class="label">Packets Dropped</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile hors" title="Total des adresses bloquées : adresses des listes actives (une adresse présente dans deux listes compte deux fois) plus les blocages manuels."><span class="l">Adresses bloquées</span><span class="v" id="tTotal">—</span><span class="s">listes + manuel</span></div>
+            <div class="tuile cy" title="Sources de blocage activées."><span class="l">Sources actives</span><span class="v" id="tSources">—</span><span class="s" id="sSources">listes activées</span></div>
+            <div class="tuile cy" title="Adresses issues des listes de blocage activées (fichiers téléchargés)."><span class="l">Adresses des listes</span><span class="v" id="tListes">—</span><span class="s">téléchargées</span></div>
+            <div class="tuile att" title="Adresses bloquées à la main (onglet Adresses bloquées)."><span class="l">Blocages manuels</span><span class="v" id="tManuel">—</span><span class="s">posés à la main</span></div>
+            <div class="tuile ok" title="Adresses de la liste blanche : jamais bloquées, elles sont retirées de l’export."><span class="l">Liste blanche</span><span class="v" id="tBlanche">—</span><span class="s">adresses autorisées</span></div>
+            <div class="tuile hors" title="Paquets écartés d’après les compteurs nftables de la table ipblock, depuis le dernier chargement des règles."><span class="l">Paquets écartés</span><span class="v" id="tPaquets">—</span><span class="s">compteurs nftables</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections du blocage d’adresses">
+            <button type="button" role="tab" id="o-apercu" data-t="apercu" aria-selected="true" aria-controls="t-apercu">Aperçu</button>
+            <button type="button" role="tab" id="o-listes" data-t="listes" aria-selected="false" aria-controls="t-listes">Listes</button>
+            <button type="button" role="tab" id="o-bloquees" data-t="bloquees" aria-selected="false" aria-controls="t-bloquees">Adresses bloquées</button>
+            <button type="button" role="tab" id="o-blanche" data-t="blanche" aria-selected="false" aria-controls="t-blanche">Liste blanche</button>
+            <button type="button" role="tab" id="o-historique" data-t="historique" aria-selected="false" aria-controls="t-historique">Historique</button>
+            <button type="button" role="tab" id="o-reglages" data-t="reglages" aria-selected="false" aria-controls="t-reglages">Réglages</button>
         </div>
 
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
-            <div class="tab" onclick="showTab('blocklists')">Blocklists</div>
-            <div class="tab" onclick="showTab('blocked')">Blocked IPs</div>
-            <div class="tab" onclick="showTab('whitelist')">Whitelist</div>
-            <div class="tab" onclick="showTab('history')">History</div>
-            <div class="tab" onclick="showTab('settings')">Settings</div>
-        </div>
+        <section id="t-apercu" role="tabpanel" aria-labelledby="o-apercu" class="grille">
+            <div class="pan"><h3>Sources de blocage <i id="nApSrc"></i></h3>
+                <div class="tab"><table><thead><tr><th>Source</th><th>Catégorie</th><th>Adresses</th><th>État</th></tr></thead><tbody id="bApSrc"></tbody></table></div></div>
+            <div class="pan"><h3>Activité récente <i>10 dernières entrées</i></h3>
+                <div class="tab"><table><thead><tr><th>Quand</th><th>Action</th><th>Adresse</th><th>Source</th></tr></thead><tbody id="bApAct"></tbody></table></div></div>
+            <div class="pan" style="grid-column:1/-1"><h3>État du pare-feu</h3>
+                <dl class="kv"><dt>nftables</dt><dd id="kNft">—</dd><dt>Blocage actif</dt><dd id="kActif">—</dd><dt>Dernière mise à jour des listes</dt><dd id="kMaj">—</dd></dl>
+                <p class="note">L’API ne fournit ni débit de paquets écartés ni répartition par liste : seuls les compteurs cumulés nftables sont affichés, « — » sinon.</p></div>
+        </section>
 
-        <!-- Dashboard Tab -->
-        <div class="tab-content active" id="tab-dashboard">
-            <div class="card">
-                <h2>Active Blocklist Sources</h2>
-                <div id="dashboardSources"></div>
-            </div>
-            <div class="card">
-                <h2>Recent Activity</h2>
-                <table>
-                    <thead>
-                        <tr><th>Time</th><th>Action</th><th>IP</th><th>Source</th></tr>
-                    </thead>
-                    <tbody id="recentActivity"></tbody>
-                </table>
-            </div>
-        </div>
+        <section id="t-listes" role="tabpanel" aria-labelledby="o-listes" hidden>
+            <div class="pan"><h3>Listes configurées <i id="nSrc"></i><button class="btn sm" id="majTout" type="button" title="Retélécharge les listes activées avec mise à jour automatique.">Tout mettre à jour</button><button class="btn prim sm" id="addSrc" type="button">+ Ajouter une source</button></h3>
+                <div id="rSrc" class="retour" hidden></div>
+                <div id="cSrc"></div>
+                <form class="saisie" novalidate id="fSrc" hidden>
+                    <label>Nom<input name="name" placeholder="ma-liste" required></label>
+                    <label>Adresse de téléchargement (URL)<input name="url" placeholder="https://listes.example.net/liste.txt" required></label>
+                    <label>Format<select name="format"><option value="plain">Simple (une adresse par ligne)</option><option value="cidr">Notation CIDR</option><option value="csv">CSV (adresse en première colonne)</option></select></label>
+                    <label>Catégorie<select name="category"><option value="general">Général</option><option value="spam">Spam</option><option value="threats">Menaces</option><option value="botnet">Botnet</option><option value="malware">Logiciels malveillants</option><option value="attacks">Attaques</option></select></label>
+                    <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fSrc">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Catégorie</th><th>Adresses</th><th>Dernière mise à jour</th><th>Mise à jour auto</th><th>État</th><th>Actions</th></tr></thead><tbody id="bSrc"></tbody></table></div></div>
+            <div class="pan" style="margin-top:10px"><h3>Sources proposées <i id="nDispo"></i></h3>
+                <div class="liste-dispo" id="lDispo"></div>
+                <p class="note">Ajouter une source télécharge la liste immédiatement et l’active.</p></div>
+        </section>
 
-        <!-- Blocklists Tab -->
-        <div class="tab-content" id="tab-blocklists">
-            <div class="card">
-                <h2>
-                    Configured Blocklists
-                    <div>
-                        <button class="btn btn-sm" onclick="updateAllLists()">Update All</button>
-                        <button class="btn btn-sm primary" onclick="showModal('addSourceModal')">Add Source</button>
-                    </div>
-                </h2>
-                <table>
-                    <thead>
-                        <tr><th>Name</th><th>Category</th><th>IPs</th><th>Last Updated</th><th>Status</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody id="sourcesList"></tbody>
-                </table>
-            </div>
-            <div class="card">
-                <h2>Available Sources</h2>
-                <div id="availableSources"></div>
-            </div>
-        </div>
+        <section id="t-bloquees" role="tabpanel" aria-labelledby="o-bloquees" hidden>
+            <div class="pan"><h3>Adresses bloquées à la main <i id="nBlq"></i><button class="btn prim sm" id="addBlq" type="button">+ Bloquer une adresse</button></h3>
+                <div id="rBlq" class="retour" hidden></div>
+                <div id="cBlq"></div>
+                <form class="saisie" novalidate id="fBlq" hidden>
+                    <label>Adresse IP ou réseau CIDR<input name="ip" placeholder="203.0.113.50 ou 198.51.100.0/24" required></label>
+                    <label>Motif (facultatif)<input name="reason" placeholder="Attaquant connu"></label>
+                    <label>Durée en heures (vide = permanent)<input name="duration" type="number" min="1" step="1" placeholder="permanent"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Bloquer</button><button class="btn" type="button" data-ferme="fBlq">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Adresse</th><th>Motif</th><th>Ajoutée</th><th>Échéance</th><th>Actions</th></tr></thead><tbody id="bBlq"></tbody></table></div>
+                <p class="note">Seuls les blocages manuels sont listés ici ; les adresses issues des listes se consultent par l’export (onglet Historique).</p></div>
+        </section>
 
-        <!-- Blocked IPs Tab -->
-        <div class="tab-content" id="tab-blocked">
-            <div class="card">
-                <h2>
-                    Manually Blocked IPs
-                    <button class="btn btn-sm primary" onclick="showModal('blockModal')">Block IP</button>
-                </h2>
-                <table>
-                    <thead>
-                        <tr><th>IP Address</th><th>Reason</th><th>Added</th><th>Expires</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody id="blockedList"></tbody>
-                </table>
-            </div>
-        </div>
+        <section id="t-blanche" role="tabpanel" aria-labelledby="o-blanche" hidden>
+            <div class="pan"><h3>Liste blanche <i id="nBl"></i><button class="btn prim sm" id="addBl" type="button">+ Autoriser une adresse</button></h3>
+                <div id="rBl" class="retour" hidden></div>
+                <div id="cBl"></div>
+                <form class="saisie" novalidate id="fBl" hidden>
+                    <label>Adresse IP ou réseau CIDR<input name="ip" placeholder="192.0.2.10 ou 198.51.100.0/24" required></label>
+                    <label>Motif (facultatif)<input name="reason" placeholder="Serveur de confiance"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fBl">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Adresse</th><th>Motif</th><th>Ajoutée</th><th>Actions</th></tr></thead><tbody id="bBl"></tbody></table></div></div>
+        </section>
 
-        <!-- Whitelist Tab -->
-        <div class="tab-content" id="tab-whitelist">
-            <div class="card">
-                <h2>
-                    Whitelisted IPs
-                    <button class="btn btn-sm primary" onclick="showModal('whitelistModal')">Add to Whitelist</button>
-                </h2>
-                <table>
-                    <thead>
-                        <tr><th>IP Address</th><th>Reason</th><th>Added</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody id="whitelistList"></tbody>
-                </table>
-            </div>
-        </div>
+        <section id="t-historique" role="tabpanel" aria-labelledby="o-historique" hidden>
+            <div class="pan"><h3>Historique des blocages <i id="nHis"></i><button class="btn sm" id="addImp" type="button">Importer</button><button class="btn sm" id="exporter" type="button">Exporter</button></h3>
+                <div id="rHis" class="retour" hidden></div>
+                <form class="saisie" novalidate id="fImp" hidden>
+                    <label>Nom de la liste<input name="name" placeholder="ma-liste-importee" required></label>
+                    <label>Format<select name="format"><option value="plain">Simple (une adresse par ligne)</option><option value="csv">CSV (adresse en première colonne)</option></select></label>
+                    <label class="large">Adresses (une par ligne)<textarea name="content" placeholder="192.0.2.1&#10;198.51.100.0/24" required></textarea></label>
+                    <div class="bout"><button class="btn prim" type="submit">Importer</button><button class="btn" type="button" data-ferme="fImp">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Quand</th><th>Action</th><th>Adresse</th><th>Source</th><th>Motif</th></tr></thead><tbody id="bHis"></tbody></table></div>
+                <div style="text-align:center;margin-top:8px"><button class="btn sm" id="plus" type="button" hidden>Charger la suite</button></div></div>
+        </section>
 
-        <!-- History Tab -->
-        <div class="tab-content" id="tab-history">
-            <div class="card">
-                <h2>
-                    Block History
-                    <div>
-                        <button class="btn btn-sm" onclick="showModal('importModal')">Import</button>
-                        <button class="btn btn-sm" onclick="exportList()">Export</button>
-                    </div>
-                </h2>
-                <table>
-                    <thead>
-                        <tr><th>Time</th><th>Action</th><th>IP</th><th>Source</th><th>Reason</th></tr>
-                    </thead>
-                    <tbody id="historyList"></tbody>
-                </table>
-                <div style="margin-top: 1rem; text-align: center;">
-                    <button class="btn btn-sm" id="loadMoreBtn" onclick="loadMoreHistory()">Load More</button>
-                </div>
-            </div>
-        </div>
+        <section id="t-reglages" role="tabpanel" aria-labelledby="o-reglages" hidden>
+            <div class="pan"><h3>Configuration</h3>
+                <div id="rCfg" class="retour" hidden></div>
+                <form class="saisie" novalidate id="fCfg">
+                    <label class="case"><input type="checkbox" name="auto" id="cfgAuto"> Mise à jour automatique des listes</label>
+                    <label>Intervalle de mise à jour (heures, 1 à 168)<input name="interval" id="cfgInterval" type="number" min="1" max="168" step="1"></label>
+                    <label class="case"><input type="checkbox" name="log" id="cfgLog"> Journaliser les paquets bloqués</label>
+                    <label>Action de blocage<select name="action" id="cfgAction"><option value="drop">Écarter (silencieux)</option><option value="reject">Rejeter (avec ICMP)</option></select></label>
+                    <div class="bout"><button class="btn prim" type="submit">Enregistrer</button></div>
+                </form>
+                <p class="note" id="nCfg">Les valeurs par défaut sont affichées tant qu’aucune configuration n’est enregistrée.</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- Settings Tab -->
-        <div class="tab-content" id="tab-settings">
-            <div class="card">
-                <h2>Configuration</h2>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="cfgAutoUpdate"> Enable Auto-Update
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>Update Interval (hours)</label>
-                    <input type="number" id="cfgInterval" min="1" max="168" value="24">
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="cfgLogBlocked"> Log Blocked Packets
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>Block Action</label>
-                    <select id="cfgAction">
-                        <option value="drop">Drop (silent)</option>
-                        <option value="reject">Reject (with ICMP)</option>
-                    </select>
-                </div>
-                <button class="btn primary" onclick="saveConfig()">Save Configuration</button>
-            </div>
-        </div>
-
-        <!-- Add Source Modal -->
-        <div class="modal" id="addSourceModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add Blocklist Source</h3>
-                    <button class="close-btn" onclick="closeModal('addSourceModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" id="srcName" placeholder="e.g., my-blocklist">
-                </div>
-                <div class="form-group">
-                    <label>URL</label>
-                    <input type="text" id="srcUrl" placeholder="https://...">
-                </div>
-                <div class="form-group">
-                    <label>Format</label>
-                    <select id="srcFormat">
-                        <option value="plain">Plain (one IP per line)</option>
-                        <option value="cidr">CIDR notation</option>
-                        <option value="csv">CSV (IP in first column)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Category</label>
-                    <select id="srcCategory">
-                        <option value="general">General</option>
-                        <option value="spam">Spam</option>
-                        <option value="threats">Threats</option>
-                        <option value="botnet">Botnet</option>
-                        <option value="malware">Malware</option>
-                        <option value="attacks">Attacks</option>
-                    </select>
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('addSourceModal')">Cancel</button>
-                    <button class="btn primary" onclick="addSource()">Add</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Block IP Modal -->
-        <div class="modal" id="blockModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Block IP Address</h3>
-                    <button class="close-btn" onclick="closeModal('blockModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>IP Address or CIDR</label>
-                    <input type="text" id="blockIp" placeholder="192.168.1.100 or 10.0.0.0/8">
-                </div>
-                <div class="form-group">
-                    <label>Reason (optional)</label>
-                    <input type="text" id="blockReason" placeholder="e.g., Known attacker">
-                </div>
-                <div class="form-group">
-                    <label>Duration (hours, empty = permanent)</label>
-                    <input type="number" id="blockDuration" min="1" placeholder="Leave empty for permanent">
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('blockModal')">Cancel</button>
-                    <button class="btn primary" onclick="blockIP()">Block</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Whitelist Modal -->
-        <div class="modal" id="whitelistModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add to Whitelist</h3>
-                    <button class="close-btn" onclick="closeModal('whitelistModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>IP Address or CIDR</label>
-                    <input type="text" id="whitelistIp" placeholder="192.168.1.100 or 10.0.0.0/8">
-                </div>
-                <div class="form-group">
-                    <label>Reason (optional)</label>
-                    <input type="text" id="whitelistReason" placeholder="e.g., Trusted server">
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('whitelistModal')">Cancel</button>
-                    <button class="btn primary" onclick="addWhitelist()">Add</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Import Modal -->
-        <div class="modal" id="importModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Import IP List</h3>
-                    <button class="close-btn" onclick="closeModal('importModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>List Name</label>
-                    <input type="text" id="importName" placeholder="e.g., my-imported-list">
-                </div>
-                <div class="form-group">
-                    <label>Format</label>
-                    <select id="importFormat">
-                        <option value="plain">Plain (one IP per line)</option>
-                        <option value="csv">CSV (IP in first column)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>IP List (one per line)</label>
-                    <textarea id="importContent" placeholder="192.168.1.1&#10;10.0.0.0/8&#10;..."></textarea>
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('importModal')">Cancel</button>
-                    <button class="btn primary" onclick="importList()">Import</button>
-                </div>
-            </div>
-        </div>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/ipblock';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
-        let historyOffset = 0;
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = v => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('fr-FR') : '—';
 
-        async function api(path, opts = {}) {
+        let STATS = null, SOURCES = [], DISPO = [], BLOQUEES = [], BLANCHE = [], HIST = [], HIST_TOTAL = null, CFG = null;
+        let SESSION_OK = true, CONFIRM = null, SALE = false;   // CONFIRM : { genre, cle } ; SALE : réglages modifiés non enregistrés
+
+        // Jeton : sbx_token, puis l'ancienne clé de repli. Lecture protégée (localStorage peut lever).
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                if (!res.ok) return {};
-                const text = await res.text();
-                return text ? JSON.parse(text) : {};
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !(data && data.success === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (d) return typeof d === 'string' ? d : JSON.stringify(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
         }
 
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`.tab:nth-child(${['dashboard','blocklists','blocked','whitelist','history','settings'].indexOf(name) + 1})`).classList.add('active');
-            document.getElementById('tab-' + name).classList.add('active');
-            if (name === 'history') { historyOffset = 0; loadHistory(); }
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const d = typeof ts === 'number' ? new Date(ts < 1e12 ? ts * 1000 : ts) : new Date(ts);
+            if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        const CATEGORIES = { spam: ['hors', 'SPAM'], threats: ['att', 'MENACES'], botnet: ['vi', 'BOTNET'], malware: ['hors', 'MALWARE'], anonymizer: ['vi', 'ANONYMISEUR'], aggregated: ['cy', 'AGRÉGÉE'], attacks: ['att', 'ATTAQUES'], imported: ['cy', 'IMPORTÉE'], general: ['', 'GÉNÉRALE'] };
+        function pastilleCategorie(c) { const k = CATEGORIES[c || 'general']; return k ? pastille(k[0], k[1]) : pastille('', tiret(c).toUpperCase()); }
+        const ACTIONS = { blocked: ['hors', 'BLOQUÉE'], unblocked: ['ok', 'DÉBLOQUÉE'], whitelisted: ['ok', 'AUTORISÉE'], whitelist_removed: ['att', 'AUTORISATION RETIRÉE'], list_added: ['cy', 'LISTE AJOUTÉE'], list_removed: ['att', 'LISTE RETIRÉE'], imported: ['cy', 'IMPORTÉE'] };
+        function pastilleAction(a) { const k = ACTIONS[a]; return k ? pastille(k[0], k[1]) : pastille('', tiret(a).toUpperCase()); }
+        function ligneVide(tb, n, txt) { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+
+        const ILOT = Date.now();
+        function demoData() {
+            STATS = { enabled: true, total_blocked_ips: 18423, list_ips: 18420, manual_blocks: 3, whitelisted: 2, active_sources: 3, packets_dropped: 52814, last_update: new Date(ILOT - 3 * 3600e3).toISOString(), nftables_available: true };
+            SOURCES = [
+                { id: 'a1b2c3d4', name: 'liste-demo-spam', url: 'https://listes.example.net/spam.txt', enabled: true, format: 'cidr', category: 'spam', auto_update: true, ip_count: 1204, last_updated: new Date(ILOT - 3 * 3600e3).toISOString() },
+                { id: 'e5f6a7b8', name: 'liste-demo-botnet', url: 'https://listes.example.net/botnet.txt', enabled: true, format: 'plain', category: 'botnet', auto_update: true, ip_count: 17016, last_updated: new Date(ILOT - 3 * 3600e3).toISOString() },
+                { id: 'c9d0e1f2', name: 'import-demo', url: 'imported', enabled: true, format: 'plain', category: 'imported', auto_update: false, ip_count: 200, last_updated: new Date(ILOT - 86400e3).toISOString() }];
+            DISPO = [
+                { id: 'demo-spam', name: 'liste-demo-spam', url: 'https://listes.example.net/spam.txt', format: 'cidr', category: 'spam' },
+                { id: 'demo-attaques', name: 'liste-demo-attaques', url: 'https://listes.example.net/attaques.txt', format: 'plain', category: 'attacks' }];
+            BLOQUEES = [
+                { ip: '203.0.113.9', reason: 'Balayage de ports', added: new Date(ILOT - 5 * 3600e3).toISOString(), expires: null, source: 'manual' },
+                { ip: '198.51.100.0/24', reason: 'Réseau hostile', added: new Date(ILOT - 26 * 3600e3).toISOString(), expires: new Date(ILOT + 48 * 3600e3).toISOString(), source: 'manual' },
+                { ip: '203.0.113.77', reason: null, added: new Date(ILOT - 90 * 3600e3).toISOString(), expires: new Date(ILOT - 2 * 3600e3).toISOString(), source: 'manual' }];
+            BLANCHE = [
+                { ip: '192.0.2.10', reason: 'Serveur de supervision', added: new Date(ILOT - 400 * 3600e3).toISOString() },
+                { ip: '192.0.2.0/28', reason: null, added: new Date(ILOT - 300 * 3600e3).toISOString() }];
+            HIST = [
+                { id: 'h1', timestamp: new Date(ILOT - 5 * 3600e3).toISOString(), action: 'blocked', ip: '203.0.113.9', source: 'manual', reason: 'Balayage de ports' },
+                { id: 'h2', timestamp: new Date(ILOT - 3 * 3600e3).toISOString(), action: 'list_added', ip: '-', source: 'liste-demo-spam', reason: 'Added blocklist with 1204 IPs' },
+                { id: 'h3', timestamp: new Date(ILOT - 26 * 3600e3).toISOString(), action: 'blocked', ip: '198.51.100.0/24', source: 'manual', reason: 'Réseau hostile' },
+                { id: 'h4', timestamp: new Date(ILOT - 40 * 3600e3).toISOString(), action: 'whitelisted', ip: '192.0.2.10', source: 'manual', reason: 'Serveur de supervision' },
+                { id: 'h5', timestamp: new Date(ILOT - 86400e3).toISOString(), action: 'imported', ip: '-', source: 'import-demo', reason: 'Imported 200 IPs' }];
+            HIST_TOTAL = HIST.length;
+            CFG = { auto_update_enabled: true, update_interval: 86400, log_blocked: true, block_action: 'drop' };
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('active'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const limite = Math.max(50, HIST.length);
+            const essais = await Promise.allSettled([lire('/stats'), lire('/lists'), lire('/lists/available'), lire('/blocked'), lire('/whitelist'), lire('/history?limit=' + limite + '&offset=0'), lire('/config')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATS = val(0);
+            const l = val(1); SOURCES = l && Array.isArray(l.sources) ? l.sources : [];
+            const d = val(2); DISPO = d && Array.isArray(d.sources) ? d.sources : [];
+            const b = val(3); BLOQUEES = b && Array.isArray(b.blocked) ? b.blocked : [];
+            const w = val(4); BLANCHE = w && Array.isArray(w.whitelist) ? w.whitelist : [];
+            const h = val(5); HIST = h && Array.isArray(h.history) ? h.history : []; HIST_TOTAL = h && typeof h.total === 'number' ? h.total : null;
+            CFG = val(6);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le blocage d’adresses (service arrêté ou injoignable).';
+            rendre();
+        }
 
-        async function loadStats() {
-            const d = await api('/stats');
-            document.getElementById('statBlocked').textContent = (d.total_blocked_ips || 0).toLocaleString();
-            document.getElementById('statSources').textContent = d.active_sources || 0;
-            document.getElementById('statWhitelist').textContent = d.whitelisted || 0;
-            document.getElementById('statDropped').textContent = (d.packets_dropped || 0).toLocaleString();
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATS, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s.nftables_available === false) { etat.className = 'actif hors'; etat.textContent = 'NFTABLES INDISPONIBLE'; }
+            else if (s.enabled === false) { etat.className = 'actif att'; etat.textContent = 'BLOCAGE DÉSACTIVÉ'; }
+            else { etat.className = 'actif'; etat.textContent = 'BLOCAGE ACTIF'; }
+            // Une mesure absente reste « — » : 0 est une mesure.
+            const m = k => s ? nombre(s[k]) : '—';
+            $('tTotal').textContent = m('total_blocked_ips'); $('tSources').textContent = m('active_sources'); $('tListes').textContent = m('list_ips');
+            $('tManuel').textContent = m('manual_blocks'); $('tBlanche').textContent = m('whitelisted'); $('tPaquets').textContent = m('packets_dropped');
+            $('kNft').textContent = s && typeof s.nftables_available === 'boolean' ? (s.nftables_available ? 'disponible' : 'indisponible') : '—';
+            $('kActif').textContent = s && typeof s.enabled === 'boolean' ? (s.enabled ? 'oui' : 'non') : '—';
+            $('kMaj').textContent = s ? quand(s.last_update) : '—';
+            rendreSources(); rendreDispo(); rendreBloquees(); rendreBlanche(); rendreHistorique(); rendreApercu(); rendreConfig();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-            const nft = document.getElementById('nftStatus');
-            if (d.nftables_available) {
-                nft.className = 'status-indicator available';
-                nft.textContent = 'nftables OK';
-            } else {
-                nft.className = 'status-indicator unavailable';
-                nft.textContent = 'nftables unavailable';
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        // Confirmation intégrée : jamais de dialogue natif. Bandeau au-dessus du tableau, Confirmer/Annuler.
+        function rendreConfirm(zone, genre, texte, fn) {
+            const z = $(zone); z.replaceChildren();
+            if (!CONFIRM || CONFIRM.genre !== genre) return;
+            const c = el('div', 'conf'); c.setAttribute('role', 'alertdialog');
+            c.appendChild(el('span', 'txt', texte(CONFIRM.cle)));
+            const l = el('span', 'ligne');
+            l.appendChild(btn('Confirmer', 'danger', () => { const cle = CONFIRM.cle; CONFIRM = null; fn(cle); }));
+            l.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            c.appendChild(l); z.appendChild(c);
+        }
+        function demande(act, genre, cle, libelle) {
+            act.appendChild(btn(libelle, 'danger', () => { CONFIRM = { genre, cle }; rendre(); }));
+        }
+
+        function rendreSources() {
+            const tb = $('bSrc'); tb.replaceChildren();
+            $('nSrc').textContent = SOURCES.length ? SOURCES.length + ' source' + (SOURCES.length > 1 ? 's' : '') : '';
+            rendreConfirm('cSrc', 'source', cle => {
+                const s = SOURCES.find(x => x.id === cle);
+                return 'Retirer la liste « ' + (s ? s.name : cle) + ' » ? Ses ' + (s && typeof s.ip_count === 'number' ? nombre(s.ip_count) : '—') + ' adresses seront débloquées en une fois et le fichier de la liste supprimé.';
+            }, retirerSource);
+            if (!SOURCES.length) { ligneVide(tb, 7, SESSION_OK ? 'Aucune liste configurée' : '—'); return; }
+            SOURCES.forEach(s => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'cassable', tiret(s.name)));
+                const c = el('td'); c.appendChild(pastilleCategorie(s.category)); tr.appendChild(c);
+                tr.appendChild(el('td', '', nombre(s.ip_count)));
+                tr.appendChild(el('td', '', quand(s.last_updated)));
+                tr.appendChild(el('td', '', s.auto_update === undefined ? '—' : (s.auto_update ? 'oui' : 'non')));
+                const e = el('td'); e.appendChild(s.enabled === false ? pastille('', 'DÉSACTIVÉE') : pastille('ok', 'ACTIVE')); tr.appendChild(e);
+                const act = el('td', 'act'); const li = el('div', 'ligne'); act.appendChild(li);
+                li.appendChild(btn('Mettre à jour', '', () => majListe(s.id)));
+                demande(li, 'source', s.id, 'Retirer');
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+        function rendreDispo() {
+            const z = $('lDispo'); z.replaceChildren();
+            $('nDispo').textContent = DISPO.length ? DISPO.length + ' proposée' + (DISPO.length > 1 ? 's' : '') : '';
+            if (!DISPO.length) { z.appendChild(el('div', 'vide', SESSION_OK ? 'Aucune source proposée' : '—')); return; }
+            const connues = new Set(SOURCES.map(x => x.name));
+            DISPO.forEach(d => {
+                const r = el('div', 'dispo'); const n = el('div', 'nom');
+                n.appendChild(el('b', '', tiret(d.name))); n.appendChild(el('span', 'mono', tiret(d.url))); r.appendChild(n);
+                r.appendChild(pastilleCategorie(d.category));
+                if (connues.has(d.name)) r.appendChild(pastille('ok', 'DÉJÀ AJOUTÉE'));
+                else r.appendChild(btn('Ajouter', 'prim', () => ajouterSource({ name: d.name, url: d.url, format: d.format, category: d.category })));
+                z.appendChild(r);
+            });
+        }
+        function rendreBloquees() {
+            const tb = $('bBlq'); tb.replaceChildren();
+            $('nBlq').textContent = BLOQUEES.length ? BLOQUEES.length + ' adresse' + (BLOQUEES.length > 1 ? 's' : '') : '';
+            rendreConfirm('cBlq', 'debloque', cle => 'Débloquer ' + cle + ' ? Le trafic de cette adresse ne sera plus écarté.', debloquer);
+            if (!BLOQUEES.length) { ligneVide(tb, 5, SESSION_OK ? 'Aucune adresse bloquée à la main' : '—'); return; }
+            BLOQUEES.forEach(b => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono cassable', tiret(b.ip)));
+                tr.appendChild(el('td', 'cassable', tiret(b.reason)));
+                tr.appendChild(el('td', '', quand(b.added)));
+                const e = el('td');
+                if (!b.expires) e.appendChild(document.createTextNode('Jamais'));
+                else {
+                    e.appendChild(document.createTextNode(quand(b.expires)));
+                    if (new Date(b.expires).getTime() < Date.now()) { e.appendChild(document.createTextNode(' ')); e.appendChild(pastille('att', 'ÉCHUE', 'Échéance dépassée (déduit côté page) : l’API ne purge pas d’elle-même la ligne à l’échéance.')); }
+                }
+                tr.appendChild(e);
+                const act = el('td', 'act'); const li = el('div', 'ligne'); act.appendChild(li);
+                demande(li, 'debloque', b.ip, 'Débloquer');
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+        function rendreBlanche() {
+            const tb = $('bBl'); tb.replaceChildren();
+            $('nBl').textContent = BLANCHE.length ? BLANCHE.length + ' adresse' + (BLANCHE.length > 1 ? 's' : '') : '';
+            rendreConfirm('cBl', 'blanche', cle => 'Retirer ' + cle + ' de la liste blanche ? Elle redeviendra bloquable.', retirerBlanche);
+            if (!BLANCHE.length) { ligneVide(tb, 4, SESSION_OK ? 'Aucune adresse autorisée' : '—'); return; }
+            BLANCHE.forEach(w => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono cassable', tiret(w.ip)));
+                tr.appendChild(el('td', 'cassable', tiret(w.reason)));
+                tr.appendChild(el('td', '', quand(w.added)));
+                const act = el('td', 'act'); const li = el('div', 'ligne'); act.appendChild(li);
+                demande(li, 'blanche', w.ip, 'Retirer');
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+        function rendreHistorique() {
+            const tb = $('bHis'); tb.replaceChildren();
+            $('nHis').textContent = HIST_TOTAL != null ? HIST.length + ' sur ' + HIST_TOTAL : (HIST.length ? String(HIST.length) : '');
+            if (!HIST.length) ligneVide(tb, 5, SESSION_OK ? 'Aucun historique' : '—');
+            HIST.forEach(h => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', quand(h.timestamp)));
+                const a = el('td'); a.appendChild(pastilleAction(h.action)); tr.appendChild(a);
+                tr.appendChild(el('td', 'mono cassable', tiret(h.ip)));
+                tr.appendChild(el('td', 'cassable', tiret(h.source)));
+                tr.appendChild(el('td', 'cassable', tiret(h.reason)));
+                tb.appendChild(tr);
+            });
+            $('plus').hidden = !(HIST_TOTAL != null && HIST.length < HIST_TOTAL);
+        }
+        function rendreApercu() {
+            const t1 = $('bApSrc'); t1.replaceChildren();
+            $('nApSrc').textContent = SOURCES.length > 5 ? '5 premières sur ' + SOURCES.length : '';
+            if (!SOURCES.length) ligneVide(t1, 4, SESSION_OK ? 'Aucune liste configurée' : '—');
+            SOURCES.slice(0, 5).forEach(s => {
+                const tr = el('tr'); tr.appendChild(el('td', 'cassable', tiret(s.name)));
+                const c = el('td'); c.appendChild(pastilleCategorie(s.category)); tr.appendChild(c);
+                tr.appendChild(el('td', '', nombre(s.ip_count)));
+                const e = el('td'); e.appendChild(s.enabled === false ? pastille('', 'DÉSACTIVÉE') : pastille('ok', 'ACTIVE')); tr.appendChild(e);
+                t1.appendChild(tr);
+            });
+            const t2 = $('bApAct'); t2.replaceChildren();
+            if (!HIST.length) ligneVide(t2, 4, SESSION_OK ? 'Aucune activité récente' : '—');
+            HIST.slice(0, 10).forEach(h => {
+                const tr = el('tr'); tr.appendChild(el('td', '', quand(h.timestamp)));
+                const a = el('td'); a.appendChild(pastilleAction(h.action)); tr.appendChild(a);
+                tr.appendChild(el('td', 'mono cassable', tiret(h.ip))); tr.appendChild(el('td', 'cassable', tiret(h.source)));
+                t2.appendChild(tr);
+            });
+        }
+        function rendreConfig() {
+            if (SALE) return;   // ne jamais écraser une saisie en cours
+            const c = CFG || {};
+            $('cfgAuto').checked = c.auto_update_enabled !== false;
+            $('cfgInterval').value = typeof c.update_interval === 'number' ? Math.floor(c.update_interval / 3600) : 24;
+            $('cfgLog').checked = c.log_blocked !== false;
+            $('cfgAction').value = c.block_action === 'reject' ? 'reject' : 'drop';
+            $('nCfg').hidden = !!(CFG && Object.keys(CFG).length);
+        }
+
+        // ----- Actions : mêmes routes et mêmes corps que l'ancienne page -----
+        async function ajouterSource(corps) {
+            const r = await ecrire('POST', '/list/add', Object.assign({ enabled: true, auto_update: true }, corps));
+            if (r.ok) { $('fSrc').reset(); $('fSrc').hidden = true; retour('rSrc', true, 'Source « ' + corps.name + ' » ajoutée' + (r.data && typeof r.data.ip_count === 'number' ? ' (' + nombre(r.data.ip_count) + ' adresses).' : '.')); charger(); }
+            else retour('rSrc', false, 'Ajout impossible : ' + detail(r));
+        }
+        async function majListe(id) {
+            const r = await ecrire('POST', '/list/' + encodeURIComponent(id) + '/update');
+            if (r.ok) { retour('rSrc', true, 'Liste mise à jour' + (r.data && typeof r.data.ip_count === 'number' ? ' : ' + nombre(r.data.ip_count) + ' adresses.' : '.')); charger(); }
+            else retour('rSrc', false, 'Mise à jour impossible : ' + detail(r));
+        }
+        async function retirerSource(id) {
+            const r = await ecrire('DELETE', '/list/' + encodeURIComponent(id));
+            if (r.ok) { retour('rSrc', true, 'Liste retirée.'); charger(); } else { retour('rSrc', false, 'Retrait impossible : ' + detail(r)); rendre(); }
+        }
+        async function debloquer(ip) {
+            const r = await ecrire('DELETE', '/block/' + encodeURIComponent(ip));
+            if (r.ok) { retour('rBlq', true, ip + ' débloquée.'); charger(); } else { retour('rBlq', false, 'Déblocage impossible : ' + detail(r)); rendre(); }
+        }
+        async function retirerBlanche(ip) {
+            const r = await ecrire('DELETE', '/whitelist/' + encodeURIComponent(ip));
+            if (r.ok) { retour('rBl', true, ip + ' retirée de la liste blanche.'); charger(); } else { retour('rBl', false, 'Retrait impossible : ' + detail(r)); rendre(); }
+        }
+        $('majTout').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/lists/update-all');
+            if (r.ok && r.data && Array.isArray(r.data.results)) { const ok = r.data.results.filter(x => x.success).length; retour('rSrc', ok === r.data.results.length, ok + ' liste(s) mise(s) à jour sur ' + r.data.results.length + '.'); charger(); }
+            else retour('rSrc', false, 'Mise à jour impossible : ' + detail(r));
+        });
+        $('appliquer').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/apply');
+            if (r.ok && r.data) { retour('rGlobal', true, 'Règles appliquées : ' + nombre(r.data.blocked_v4) + ' adresses IPv4, ' + nombre(r.data.blocked_v6) + ' adresses IPv6.'); charger(); }
+            else retour('rGlobal', false, 'Application impossible : ' + detail(r));
+        });
+        $('fSrc').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const name = f.name.value.trim(), url = f.url.value.trim();
+            if (!name || !url) { retour('rSrc', false, 'Nom et adresse de téléchargement requis.'); return; }
+            ajouterSource({ name, url, format: f.format.value, category: f.category.value });
+        });
+        $('fBlq').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const ip = f.ip.value.trim(); if (!ip) { retour('rBlq', false, 'Adresse requise.'); return; }
+            const h = f.duration.value.trim();
+            if (h && !/^[1-9][0-9]*$/.test(h)) { retour('rBlq', false, 'La durée est un nombre entier d’heures, ou vide pour un blocage permanent.'); return; }
+            const r = await ecrire('POST', '/block', { ip, reason: f.reason.value.trim() || null, duration: h ? parseInt(h, 10) * 3600 : null });
+            if (r.ok) { f.reset(); f.hidden = true; retour('rBlq', true, ip + ' bloquée.'); charger(); } else retour('rBlq', false, 'Blocage impossible : ' + detail(r));
+        });
+        $('fBl').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const ip = f.ip.value.trim(); if (!ip) { retour('rBl', false, 'Adresse requise.'); return; }
+            const r = await ecrire('POST', '/whitelist', { ip, reason: f.reason.value.trim() || null });
+            if (r.ok) { f.reset(); f.hidden = true; retour('rBl', true, ip + ' ajoutée à la liste blanche.'); charger(); } else retour('rBl', false, 'Ajout impossible : ' + detail(r));
+        });
+        $('fImp').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const name = f.name.value.trim(), content = f.content.value.trim();
+            if (!name || !content) { retour('rHis', false, 'Nom et contenu requis.'); return; }
+            const r = await ecrire('POST', '/import', { name, format: f.format.value, content });
+            if (r.ok) { f.reset(); f.hidden = true; retour('rHis', true, (r.data && typeof r.data.imported === 'number' ? nombre(r.data.imported) : '—') + ' adresses importées.'); charger(); }
+            else retour('rHis', false, 'Import impossible : ' + detail(r));
+        });
+        $('fCfg').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const h = $('cfgInterval').value.trim();
+            if (!/^[0-9]+$/.test(h) || +h < 1 || +h > 168) { retour('rCfg', false, 'L’intervalle est un nombre entier d’heures entre 1 et 168.'); return; }
+            const r = await ecrire('POST', '/config', { auto_update_enabled: $('cfgAuto').checked, update_interval: parseInt(h, 10) * 3600, log_blocked: $('cfgLog').checked, block_action: $('cfgAction').value });
+            if (r.ok) { SALE = false; retour('rCfg', true, 'Configuration enregistrée et règles rechargées.'); charger(); } else retour('rCfg', false, 'Enregistrement impossible : ' + detail(r));
+        });
+        $('fCfg').addEventListener('input', () => { SALE = true; });
+        $('exporter').addEventListener('click', async () => {
+            let contenu;
+            if (DEMO) contenu = BLOQUEES.map(b => b.ip).sort().join('\n');
+            else {
+                try { contenu = (await lire('/export?include_manual=true&include_lists=true')).content; }
+                catch (e) { retour('rHis', false, 'Export impossible : ' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable')); return; }
             }
+            if (typeof contenu !== 'string') { retour('rHis', false, 'Export vide.'); return; }
+            const url = URL.createObjectURL(new Blob([contenu], { type: 'text/plain' }));
+            const a = document.createElement('a'); a.href = url; a.download = 'ipblock-export-' + new Date().toISOString().slice(0, 10) + '.txt'; a.click(); URL.revokeObjectURL(url);
+            retour('rHis', true, 'Export généré (' + (contenu ? contenu.split('\n').length : 0) + ' adresses).');
+        });
+        $('plus').addEventListener('click', async () => {
+            try {
+                const d = await lire('/history?limit=50&offset=' + HIST.length);
+                HIST = HIST.concat(Array.isArray(d.history) ? d.history : []); if (typeof d.total === 'number') HIST_TOTAL = d.total;
+                rendreHistorique(); rendreApercu(); annoncer();
+            } catch (e) { retour('rHis', false, 'Chargement impossible : ' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable')); }
+        });
+        [['addSrc', 'fSrc'], ['addBlq', 'fBlq'], ['addBl', 'fBl'], ['addImp', 'fImp']].forEach(([b, f]) => $(b).addEventListener('click', () => { $(f).hidden = !$(f).hidden; annoncer(); }));
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+
+        // ----- Onglets -----
+        const ONGLETS = ['apercu', 'listes', 'bloquees', 'blanche', 'historique', 'reglages'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-        async function loadSources() {
-            const d = await api('/lists');
-            const sources = d.sources || [];
-
-            // Dashboard view
-            const dashDiv = document.getElementById('dashboardSources');
-            dashDiv.innerHTML = sources.slice(0, 5).map(s => `<div class="source-item">
-                <div class="info">
-                    <div class="name">${s.name}</div>
-                    <div class="url">${(s.ip_count || 0).toLocaleString()} IPs - ${s.category || 'general'}</div>
-                </div>
-                <span class="badge ${s.enabled ? 'enabled' : 'disabled'}">${s.enabled ? 'Active' : 'Disabled'}</span>
-            </div>`).join('') || '<div class="empty-state">No blocklists configured</div>';
-
-            // Full list view
-            const tbody = document.getElementById('sourcesList');
-            tbody.innerHTML = sources.map(s => `<tr>
-                <td><strong>${s.name}</strong></td>
-                <td><span class="badge ${s.category || 'general'}">${s.category || 'general'}</span></td>
-                <td>${(s.ip_count || 0).toLocaleString()}</td>
-                <td>${s.last_updated ? new Date(s.last_updated).toLocaleString() : '-'}</td>
-                <td><span class="badge ${s.enabled ? 'enabled' : 'disabled'}">${s.enabled ? 'Active' : 'Disabled'}</span></td>
-                <td class="actions">
-                    <button class="btn btn-sm" onclick="updateList('${s.id}')">Update</button>
-                    <button class="btn btn-sm danger" onclick="removeSource('${s.id}')">Remove</button>
-                </td>
-            </tr>`).join('') || '<tr><td colspan="6" class="empty-state">No blocklists configured</td></tr>';
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'ipblock' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function loadAvailableSources() {
-            const d = await api('/lists/available');
-            const div = document.getElementById('availableSources');
-            div.innerHTML = (d.sources || []).map(s => `<div class="source-item">
-                <div class="info">
-                    <div class="name">${s.name}</div>
-                    <div class="url"><span class="badge ${s.category}">${s.category}</span> ${s.url}</div>
-                </div>
-                <button class="btn btn-sm primary" onclick="quickAddSource('${s.name}', '${s.url}', '${s.format}', '${s.category}')">Add</button>
-            </div>`).join('');
-        }
-
-        async function loadBlocked() {
-            const d = await api('/blocked');
-            const tbody = document.getElementById('blockedList');
-            tbody.innerHTML = (d.blocked || []).map(b => `<tr>
-                <td><code class="ip-code">${b.ip}</code></td>
-                <td>${b.reason || '-'}</td>
-                <td>${b.added ? new Date(b.added).toLocaleString() : '-'}</td>
-                <td>${b.expires ? new Date(b.expires).toLocaleString() : 'Never'}</td>
-                <td class="actions">
-                    <button class="btn btn-sm" onclick="unblockIP('${b.ip}')">Unblock</button>
-                </td>
-            </tr>`).join('') || '<tr><td colspan="5" class="empty-state">No manually blocked IPs</td></tr>';
-        }
-
-        async function loadWhitelist() {
-            const d = await api('/whitelist');
-            const tbody = document.getElementById('whitelistList');
-            tbody.innerHTML = (d.whitelist || []).map(w => `<tr>
-                <td><code class="ip-code">${w.ip}</code></td>
-                <td>${w.reason || '-'}</td>
-                <td>${w.added ? new Date(w.added).toLocaleString() : '-'}</td>
-                <td class="actions">
-                    <button class="btn btn-sm danger" onclick="removeWhitelist('${w.ip}')">Remove</button>
-                </td>
-            </tr>`).join('') || '<tr><td colspan="4" class="empty-state">No whitelisted IPs</td></tr>';
-        }
-
-        async function loadHistory() {
-            const d = await api('/history?limit=50&offset=' + historyOffset);
-            const tbody = document.getElementById('historyList');
-            const rows = (d.history || []).map(h => `<tr>
-                <td>${new Date(h.timestamp).toLocaleString()}</td>
-                <td><span class="badge ${h.action}">${h.action}</span></td>
-                <td><code class="ip-code">${h.ip}</code></td>
-                <td>${h.source}</td>
-                <td>${h.reason || '-'}</td>
-            </tr>`).join('');
-
-            if (historyOffset === 0) {
-                tbody.innerHTML = rows || '<tr><td colspan="5" class="empty-state">No history</td></tr>';
-            } else {
-                tbody.innerHTML += rows;
-            }
-
-            document.getElementById('loadMoreBtn').style.display = (d.history || []).length < 50 ? 'none' : 'inline-block';
-        }
-
-        function loadMoreHistory() {
-            historyOffset += 50;
-            loadHistory();
-        }
-
-        async function loadRecentActivity() {
-            const d = await api('/history?limit=10');
-            const tbody = document.getElementById('recentActivity');
-            tbody.innerHTML = (d.history || []).map(h => `<tr>
-                <td>${new Date(h.timestamp).toLocaleString()}</td>
-                <td><span class="badge ${h.action}">${h.action}</span></td>
-                <td><code class="ip-code">${h.ip}</code></td>
-                <td>${h.source}</td>
-            </tr>`).join('') || '<tr><td colspan="4" class="empty-state">No recent activity</td></tr>';
-        }
-
-        async function loadConfig() {
-            const d = await api('/config');
-            document.getElementById('cfgAutoUpdate').checked = d.auto_update_enabled !== false;
-            document.getElementById('cfgInterval').value = Math.floor((d.update_interval || 86400) / 3600);
-            document.getElementById('cfgLogBlocked').checked = d.log_blocked !== false;
-            document.getElementById('cfgAction').value = d.block_action || 'drop';
-        }
-
-        async function saveConfig() {
-            const cfg = {
-                auto_update_enabled: document.getElementById('cfgAutoUpdate').checked,
-                update_interval: parseInt(document.getElementById('cfgInterval').value) * 3600,
-                log_blocked: document.getElementById('cfgLogBlocked').checked,
-                block_action: document.getElementById('cfgAction').value
-            };
-            const d = await api('/config', { method: 'POST', body: JSON.stringify(cfg) });
-            if (d.success) alert('Configuration saved');
-            else alert('Failed to save configuration');
-        }
-
-        async function addSource() {
-            const name = document.getElementById('srcName').value.trim();
-            const url = document.getElementById('srcUrl').value.trim();
-            const format = document.getElementById('srcFormat').value;
-            const category = document.getElementById('srcCategory').value;
-            if (!name || !url) return alert('Name and URL required');
-
-            const d = await api('/list/add', { method: 'POST', body: JSON.stringify({ name, url, format, category, enabled: true, auto_update: true }) });
-            if (d.success) {
-                closeModal('addSourceModal');
-                refresh();
-            } else {
-                alert('Failed to add source');
-            }
-        }
-
-        async function quickAddSource(name, url, format, category) {
-            const d = await api('/list/add', { method: 'POST', body: JSON.stringify({ name, url, format, category, enabled: true, auto_update: true }) });
-            if (d.success) refresh();
-            else alert('Failed to add source');
-        }
-
-        async function removeSource(id) {
-            if (!confirm('Remove this blocklist source?')) return;
-            await api('/list/' + id, { method: 'DELETE' });
-            refresh();
-        }
-
-        async function updateList(id) {
-            const d = await api('/list/' + id + '/update', { method: 'POST' });
-            if (d.success) {
-                alert('Updated: ' + d.ip_count + ' IPs');
-                refresh();
-            } else {
-                alert('Failed to update');
-            }
-        }
-
-        async function updateAllLists() {
-            const d = await api('/lists/update-all', { method: 'POST' });
-            if (d.results) {
-                const success = d.results.filter(r => r.success).length;
-                alert(`Updated ${success}/${d.results.length} lists`);
-                refresh();
-            }
-        }
-
-        async function blockIP() {
-            const ip = document.getElementById('blockIp').value.trim();
-            const reason = document.getElementById('blockReason').value.trim() || null;
-            const durationHours = parseInt(document.getElementById('blockDuration').value);
-            const duration = durationHours ? durationHours * 3600 : null;
-
-            if (!ip) return alert('IP address required');
-
-            const d = await api('/block', { method: 'POST', body: JSON.stringify({ ip, reason, duration }) });
-            if (d.success) {
-                closeModal('blockModal');
-                document.getElementById('blockIp').value = '';
-                document.getElementById('blockReason').value = '';
-                document.getElementById('blockDuration').value = '';
-                refresh();
-            } else {
-                alert('Failed to block IP');
-            }
-        }
-
-        async function unblockIP(ip) {
-            if (!confirm('Unblock ' + ip + '?')) return;
-            await api('/block/' + encodeURIComponent(ip), { method: 'DELETE' });
-            refresh();
-        }
-
-        async function addWhitelist() {
-            const ip = document.getElementById('whitelistIp').value.trim();
-            const reason = document.getElementById('whitelistReason').value.trim() || null;
-
-            if (!ip) return alert('IP address required');
-
-            const d = await api('/whitelist', { method: 'POST', body: JSON.stringify({ ip, reason }) });
-            if (d.success) {
-                closeModal('whitelistModal');
-                document.getElementById('whitelistIp').value = '';
-                document.getElementById('whitelistReason').value = '';
-                refresh();
-            } else {
-                alert('Failed to add to whitelist');
-            }
-        }
-
-        async function removeWhitelist(ip) {
-            if (!confirm('Remove ' + ip + ' from whitelist?')) return;
-            await api('/whitelist/' + encodeURIComponent(ip), { method: 'DELETE' });
-            refresh();
-        }
-
-        async function importList() {
-            const name = document.getElementById('importName').value.trim();
-            const format = document.getElementById('importFormat').value;
-            const content = document.getElementById('importContent').value.trim();
-
-            if (!name || !content) return alert('Name and content required');
-
-            const d = await api('/import', { method: 'POST', body: JSON.stringify({ name, format, content }) });
-            if (d.success) {
-                closeModal('importModal');
-                alert('Imported ' + d.imported + ' IPs');
-                refresh();
-            } else {
-                alert('Failed to import');
-            }
-        }
-
-        async function exportList() {
-            const d = await api('/export?include_manual=true&include_lists=true');
-            if (d.content) {
-                const blob = new Blob([d.content], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'ipblock-export-' + new Date().toISOString().slice(0,10) + '.txt';
-                a.click();
-                URL.revokeObjectURL(url);
-            }
-        }
-
-        async function applyRules() {
-            const d = await api('/apply', { method: 'POST' });
-            if (d.success) {
-                alert(`Rules applied! IPv4: ${d.blocked_v4}, IPv6: ${d.blocked_v6}`);
-                refresh();
-            } else {
-                alert('Failed to apply rules');
-            }
-        }
-
-        function refresh() {
-            loadStats();
-            loadSources();
-            loadAvailableSources();
-            loadBlocked();
-            loadWhitelist();
-            loadRecentActivity();
-            loadConfig();
-        }
-
-        refresh();
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, un réglage modifié ou une confirmation ouverte.
+        function saisieOuverte() { return ['fSrc', 'fBlq', 'fBl', 'fImp'].some(f => !$(f).hidden); }
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || SALE || saisieOuverte()) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>

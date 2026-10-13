@@ -1,3 +1,26 @@
+secubox-ipblock (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /ipblock/ refaite au profil Aurora (#2556) : page autonome sans bibliotheque, tuiles, six onglets (Apercu, Listes,
+    Adresses bloquees, Liste blanche, Historique, Reglages), ?demo=1 (donnees fictives RFC 5737, aucune ecriture), ?embed=1,
+    hauteur annoncee a l'hote (sbxVue, onglet ipblock), jeton sbx_token (repli secubox_token). Textes en francais.
+  * Appels d'ecriture inchanges (memes routes, methodes et corps) : /list/add, /list/{id}/update, DELETE /list/{id},
+    /lists/update-all, /block, DELETE /block/{ip}, /whitelist, DELETE /whitelist/{ip}, /import, /apply, /config.
+  * Corrige : plus aucun confirm()/alert() (le navigateur du viewer les ignore : retrait et deblocage echouaient sans rien dire) ;
+    confirmation integree a la page avant retrait d'une liste (le volume d'adresses debloquees est annonce), deblocage d'une
+    adresse et retrait de la liste blanche ; resultat ou detail d'erreur de l'API affiches dans la page.
+  * Corrige : une erreur d'API (autre que 401) etait avalee et les tuiles tombaient a 0 ; une mesure absente affiche maintenant
+    « — », un 401/403 affiche le bandeau « session requise » au lieu de rediriger vers /login.html.
+  * Corrige : donnees d'API injectees dans innerHTML et dans des gestionnaires onclick (nom de liste, URL, adresse) ; tout est
+    maintenant construit en texte. Intervalle des reglages non numerique (NaN envoye) et duree de blocage invalide refuses
+    avant l'envoi. Historique : « Charger la suite » se base sur le total fourni par l'API ; l'actualisation ne reinitialise plus
+    les pages deja chargees. Actualisation 30 s seulement si l'onglet est visible et sans saisie, reglage modifie ni confirmation.
+  * Non repris : aucune action ni donnee nouvelle. L'API ne fournit ni debit de paquets ecartes, ni compteurs par liste, ni
+    activation/desactivation d'une source, ni purge des blocages echus : la page l'indique (pastille ECHUE deduite cote page).
+    Les anciennes fenetres modales sont remplacees par des formulaires dans les panneaux ; aucun bouton de vidage des listes.
+  * Ajout de tests (statique + navigateur) sous tests/.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:00:00 +0200
+
 secubox-ipblock (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-cyberfeed (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
