@@ -4,479 +4,427 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Cloner (sauvegarde et restauration du système) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloner - SecuBox</title>
+    <title>SecuBox — Cloner</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
     <style>
-        .main-content {
-            margin-left: 200px;
-            padding: 2rem;
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .tuile .v.petit{font-size:1.05rem;line-height:1.15}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        @container a (max-width:699px){
+            #bSauv{display:block} #bSauv tr{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;padding:8px 0;border-top:1px solid rgba(86,150,255,.12)}
+            #bSauv td{border:0;padding:1px 8px;min-width:0;overflow-wrap:anywhere} #bSauv td.mono{grid-column:1/-1;font-weight:600}
+            #bSauv td.act{grid-column:1/-1;padding-top:6px} #bSauv td.vide{grid-column:1/-1}
+            table:has(#bSauv) thead{display:none}
         }
-        .status-card {
-            background: var(--card-bg, #1a1a2e);
-            border: 1px solid var(--border-color, #333);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .status-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--border-color, #333);
-        }
-        .status-row:last-child { border-bottom: none; }
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        .badge-success { background: #2d5a27; color: #7fff7f; }
-        .badge-warning { background: #5a5a27; color: #ffff7f; }
-        .badge-danger { background: #5a2727; color: #ff7f7f; }
-        .badge-info { background: #27455a; color: #7fd4ff; }
-        .btn {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            margin-right: 0.5rem;
-        }
-        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
-        .btn-success { background: #27ae60; color: #fff; }
-        .btn-danger { background: #c0392b; color: #fff; }
-        .btn-secondary { background: #555; color: #fff; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .section-title {
-            margin: 2rem 0 1rem 0;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid var(--accent-color, #4a9eff);
-        }
-        .backup-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        .backup-item {
-            background: var(--card-bg, #1a1a2e);
-            border: 1px solid var(--border-color, #333);
-            border-radius: 8px;
-            padding: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .backup-info h4 {
-            margin: 0 0 0.25rem 0;
-            color: var(--accent-color, #4a9eff);
-            font-family: monospace;
-        }
-        .backup-info .meta {
-            font-size: 0.85rem;
-            color: #888;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #333;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 0.5rem;
-        }
-        .progress-fill {
-            height: 100%;
-            background: var(--accent-color, #4a9eff);
-            transition: width 0.3s;
-        }
-        .progress-fill.warning { background: #f39c12; }
-        .progress-fill.danger { background: #c0392b; }
-        .disk-usage {
-            display: flex;
-            gap: 2rem;
-            margin-top: 0.5rem;
-        }
-        .disk-stat {
-            text-align: center;
-        }
-        .disk-stat .value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--accent-color, #4a9eff);
-        }
-        .disk-stat .label {
-            font-size: 0.8rem;
-            color: #888;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal.active { display: flex; }
-        .modal-content {
-            background: #1a1a2e;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 2rem;
-            max-width: 500px;
-            width: 90%;
-        }
-        .modal-content h3 { margin-top: 0; }
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #aaa;
-        }
-        .form-group input, .form-group textarea, .form-group select {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #333;
-            border-radius: 4px;
-            background: #0a0a0a;
-            color: #fff;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .checkbox-group input[type="checkbox"] {
-            width: auto;
-        }
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{margin:0 0 10px;padding:10px 12px;border:1px solid var(--rouge);border-radius:10px;background:rgba(255,77,94,.09);font-size:.8rem;display:grid;gap:8px}
+        .conf .bout{display:flex;gap:6px;flex-wrap:wrap}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie label.case{display:flex;align-items:center;gap:7px;font-size:.78rem}
+        form.saisie input:not([type=checkbox]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .barre{height:8px;border-radius:999px;background:rgba(159,179,214,.16);overflow:hidden;margin:6px 0 4px}
+        .barre i{display:block;height:100%;background:var(--cyan);width:0}
+        .barre.att i{background:var(--orange)} .barre.hors i{background:var(--rouge)}
+        .liste{max-height:240px;overflow:auto;border:1px solid var(--trait);border-radius:8px;padding:6px 8px;background:rgba(8,18,38,.5);margin:0;list-style:none}
+        .liste li{display:flex;justify-content:space-between;gap:10px;padding:2px 0;font-size:.76rem}
+        .liste li span:first-child{overflow-wrap:anywhere;min-width:0}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+                <div><h1>Cloner</h1><small>Sauvegarde et restauration du système</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-    <div class="main-content">
-        <h1>💾 Cloner</h1>
-        <p>System backup and restore</p>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre d’archives .tar ou .tar.gz présentes dans le dossier de sauvegardes."><span class="l">Sauvegardes</span><span class="v" id="tNb">—</span><span class="s">archives conservées</span></div>
+            <div class="tuile cy" title="Somme de la taille des archives de sauvegarde."><span class="l">Taille des archives</span><span class="v" id="tTaille">—</span><span class="s">cumulée</span></div>
+            <div class="tuile" id="cDisque" title="Part utilisée du système de fichiers qui porte le dossier de sauvegardes (pas seulement les archives)."><span class="l">Disque utilisé</span><span class="v" id="tDisque">—</span><span class="s">dossier de sauvegardes</span></div>
+            <div class="tuile ok" title="Espace libre sur le système de fichiers des sauvegardes."><span class="l">Espace libre</span><span class="v" id="tLibre">—</span><span class="s" id="sLibre">sur le disque</span></div>
+            <div class="tuile" id="cEtat" title="Une sauvegarde est synchrone : tant qu’elle tourne, aucune autre ne peut démarrer."><span class="l">Activité</span><span class="v petit" id="tEtat">—</span><span class="s">sauvegarde</span></div>
+            <div class="tuile cy" title="Heure de la dernière sauvegarde réussie, d’après l’état du service."><span class="l">Dernière sauvegarde</span><span class="v petit" id="tDerniere">—</span><span class="s" id="sDerniere">réussie</span></div>
+        </section>
 
-        <div class="status-card">
-            <h3>Backup Status</h3>
-            <div class="status-row">
-                <span>Status</span>
-                <span id="backup-status" class="badge badge-success">Idle</span>
-            </div>
-            <div class="status-row">
-                <span>Last Backup</span>
-                <span id="last-backup">-</span>
-            </div>
-            <div class="status-row">
-                <span>Total Backups</span>
-                <span id="backup-count" class="badge badge-info">-</span>
-            </div>
-            <div class="status-row">
-                <span>Total Size</span>
-                <span id="total-size">-</span>
-            </div>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-primary" onclick="showBackupModal()" id="btn-backup">Create Backup</button>
-                <button class="btn btn-secondary" onclick="cleanupBackups()">Cleanup Old</button>
-            </div>
+        <div class="grille">
+            <div class="pan"><h3>État du service</h3>
+                <dl class="kv"><dt>Activité</dt><dd id="kEtat">—</dd><dt>Dernier fichier</dt><dd class="mono" id="kFichier">—</dd><dt>Dernière erreur</dt><dd id="kErreur">—</dd>
+                <dt>Planification</dt><dd id="kPlan">—</dd></dl>
+                <p class="note">La planification est celle enregistrée par le service ; cette page ne la modifie pas.</p></div>
+            <div class="pan"><h3>Disque <i>dossier de sauvegardes</i></h3>
+                <dl class="kv"><dt>Utilisé</dt><dd id="dUtilise">—</dd><dt>Libre</dt><dd id="dLibre">—</dd><dt>Total</dt><dd id="dTotal">—</dd></dl>
+                <div class="barre" id="barre" role="img" aria-label="Occupation du disque"><i id="barreI"></i></div>
+                <p class="note" id="nDisque">Orange au-dessus de 70 %, rouge au-dessus de 90 %.</p></div>
         </div>
 
-        <div class="status-card">
-            <h3>Disk Usage</h3>
-            <div class="disk-usage">
-                <div class="disk-stat">
-                    <div class="value" id="disk-used">-</div>
-                    <div class="label">Used</div>
-                </div>
-                <div class="disk-stat">
-                    <div class="value" id="disk-free">-</div>
-                    <div class="label">Free</div>
-                </div>
-                <div class="disk-stat">
-                    <div class="value" id="disk-total">-</div>
-                    <div class="label">Total</div>
-                </div>
+        <div class="pan"><h3>Sauvegardes <i id="nSauv"></i><button class="btn sm" id="nettoyer" type="button">Nettoyer les anciennes</button><button class="btn prim sm" id="creer" type="button" style="margin-left:0">+ Créer une sauvegarde</button></h3>
+            <div id="retour" class="retour" hidden></div>
+            <div class="conf" id="conf" role="alertdialog" aria-labelledby="confMsg" hidden>
+                <span id="confMsg"></span>
+                <div class="bout"><button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
             </div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="disk-progress" style="width: 0%"></div>
-            </div>
+            <form class="saisie" id="fCreer" hidden>
+                <label>Nom (facultatif)<input name="name" placeholder="généré si vide" autocomplete="off"></label>
+                <label>Description<input name="description" placeholder="Facultative" autocomplete="off"></label>
+                <label class="case"><input type="checkbox" name="compress" checked> Compresser (gzip)</label>
+                <div class="bout"><button class="btn prim" id="creerOk" type="submit">Créer</button><button class="btn" type="button" data-ferme="fCreer">Annuler</button></div>
+            </form>
+            <form class="saisie" id="fNettoyer" hidden>
+                <label>Sauvegardes récentes à conserver<input name="keep" type="number" min="1" step="1" value="7" required></label>
+                <div class="bout"><button class="btn danger" type="submit">Nettoyer…</button><button class="btn" type="button" data-ferme="fNettoyer">Annuler</button></div>
+            </form>
+            <div class="tab"><table><thead><tr><th>Sauvegarde</th><th>Taille</th><th>Créée</th><th>Description</th><th>Actions</th></tr></thead><tbody id="bSauv"></tbody></table></div>
+            <p class="note">Créer une archive sous un nom déjà pris écrase l’existante : la page demande alors confirmation. Les dates sont l’heure du serveur.</p>
         </div>
 
-        <h2 class="section-title">Backups</h2>
-        <div id="backup-list" class="backup-list">
-            <p>Loading backups...</p>
+        <div class="pan" id="pDetail" hidden><h3>Détail <i class="mono" id="dNom"></i><button class="btn sm" id="dFerme" type="button">Fermer</button></h3>
+            <dl class="kv"><dt>Taille</dt><dd id="xTaille">—</dd><dt>Créée</dt><dd id="xCree">—</dd><dt>Description</dt><dd id="xDesc">—</dd><dt>Chemins inclus</dt><dd class="mono" id="xChemins">—</dd></dl>
+            <h3 style="margin-top:10px">Contenu <i id="xNb"></i></h3>
+            <ul class="liste" id="xContenu"></ul>
+            <p class="note" id="xNote"></p>
+            <p style="margin:8px 0 0"><button class="btn danger sm" id="dRestaurer" type="button">Restaurer cette sauvegarde</button>
+            <button class="btn danger sm" id="dSupprimer" type="button">Supprimer</button></p>
         </div>
-    </div>
-
-    <!-- Create Backup Modal -->
-    <div id="backup-modal" class="modal">
-        <div class="modal-content">
-            <h3>Create Backup</h3>
-            <div class="form-group">
-                <label>Backup Name (optional)</label>
-                <input type="text" id="backup-name" placeholder="Leave empty for auto-generated name">
-            </div>
-            <div class="form-group">
-                <label>Description</label>
-                <input type="text" id="backup-desc" placeholder="Optional description">
-            </div>
-            <div class="form-group checkbox-group">
-                <input type="checkbox" id="backup-compress" checked>
-                <label for="backup-compress">Compress (gzip)</label>
-            </div>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-success" onclick="createBackup()">Create</button>
-                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Backup Details Modal -->
-    <div id="details-modal" class="modal">
-        <div class="modal-content">
-            <h3 id="details-title">Backup Details</h3>
-            <div class="form-group">
-                <label>Size</label>
-                <div id="details-size">-</div>
-            </div>
-            <div class="form-group">
-                <label>Created</label>
-                <div id="details-created">-</div>
-            </div>
-            <div class="form-group">
-                <label>Paths Included</label>
-                <div id="details-paths" style="font-family: monospace; font-size: 0.85rem; color: #7fff7f;">-</div>
-            </div>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-success" onclick="restoreBackup()">Restore</button>
-                <button class="btn btn-danger" onclick="deleteCurrentBackup()">Delete</button>
-                <button class="btn btn-secondary" onclick="closeDetailsModal()">Close</button>
-            </div>
-        </div>
-    </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/cloner';
-        let currentBackup = null;
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function loadStatus() {
+        let STATUT = null, SAUV = [], SESSION_OK = true, DETAIL = null, DETAIL_ID = null;
+        let CONFIRM = null;   // { fn } : confirmation intégrée en cours, jamais de dialogue natif
+        let OCCUPE = false;   // une écriture est en cours
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(`${API}/status`);
-                const data = await res.json();
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            return d ? (typeof d === 'string' ? d : JSON.stringify(d)) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable');
+        }
+        // « 12.3 KB » (API) -> « 12,3 Ko » ; octets bruts -> idem. Absent = « — ».
+        const UNITES = { B: 'o', KB: 'Ko', MB: 'Mo', GB: 'Go', TB: 'To' };
+        function unite(s) {
+            const m = /^([\d.]+) (B|KB|MB|GB|TB)$/.exec(String(s || ''));
+            return m ? Number(m[1]).toLocaleString('fr-FR') + ' ' + UNITES[m[2]] : tiret(s);
+        }
+        function octets(n) {
+            if (typeof n !== 'number' || isNaN(n)) return '—';
+            const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0;
+            while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+            return (i ? n.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : String(n)) + ' ' + u[i];
+        }
+        function date(ts) {
+            if (!ts) return '—';
+            const d = new Date(ts);
+            return isNaN(d) ? '—' : d.toLocaleString('fr-FR');
+        }
 
-                const statusEl = document.getElementById('backup-status');
-                if (data.running) {
-                    statusEl.textContent = 'Running...';
-                    statusEl.className = 'badge badge-warning';
-                    document.getElementById('btn-backup').disabled = true;
-                } else {
-                    statusEl.textContent = 'Idle';
-                    statusEl.className = 'badge badge-success';
-                    document.getElementById('btn-backup').disabled = false;
-                }
+        function demoData() {
+            const base = Date.now();
+            const iso = h => new Date(base - h * 3600e3).toISOString().slice(0, 19);
+            STATUT = { running: false, last_backup: 'sauvegarde-20261013-030000.tar.gz', last_backup_time: iso(9), last_error: null, backup_count: 3, total_backup_size: '412.6 MB',
+                disk: { total: 500e9, used: 180e9, free: 320e9, total_human: '465.7 GB', used_human: '167.6 GB', free_human: '298.0 GB', percent_used: 36 },
+                schedule: { enabled: true, interval: 'daily', retention: 7, time: '03:00' } };
+            SAUV = [
+                { id: 'sauvegarde-20261013-030000.tar.gz', size: 150e6, size_human: '143.1 MB', created: iso(9), description: 'Nocturne planifiée', paths: ['/etc/secubox', '/var/lib/secubox'] },
+                { id: 'sauvegarde-20261012-030000.tar.gz', size: 140e6, size_human: '133.5 MB', created: iso(33), description: 'Nocturne planifiée', paths: ['/etc/secubox', '/var/lib/secubox'] },
+                { id: 'avant-migration.tar', size: 140e6, size_human: '135.9 MB', created: iso(120), description: 'Avant migration du nœud demo.example', paths: ['/etc/secubox'] }];
+        }
 
-                document.getElementById('last-backup').textContent = data.last_backup || '-';
-                document.getElementById('backup-count').textContent = data.backup_count;
-                document.getElementById('total-size').textContent = data.total_backup_size;
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/backups')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0);
+            const b = val(1); SAUV = b && Array.isArray(b.backups) ? b.backups : [];
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le service Cloner (arrêté ou injoignable).';
+            rendre();
+        }
 
-                // Disk usage
-                if (data.disk) {
-                    document.getElementById('disk-used').textContent = data.disk.used_human;
-                    document.getElementById('disk-free').textContent = data.disk.free_human;
-                    document.getElementById('disk-total').textContent = data.disk.total_human;
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s.running) { etat.className = 'actif att'; etat.textContent = 'SAUVEGARDE EN COURS'; }
+            else { etat.className = 'actif'; etat.textContent = 'AU REPOS'; }
 
-                    const progress = document.getElementById('disk-progress');
-                    progress.style.width = data.disk.percent_used + '%';
-                    progress.className = 'progress-fill';
-                    if (data.disk.percent_used > 90) progress.className += ' danger';
-                    else if (data.disk.percent_used > 70) progress.className += ' warning';
-                }
-            } catch (e) {
-                console.error('Failed to load status:', e);
+            $('tNb').textContent = s && s.backup_count != null ? s.backup_count : '—';
+            $('tTaille').textContent = s ? unite(s.total_backup_size) : '—';
+            const dk = s && s.disk;
+            const pc = dk && typeof dk.percent_used === 'number' ? dk.percent_used : null;
+            $('tDisque').textContent = pc === null ? '—' : pc.toLocaleString('fr-FR') + ' %';
+            $('cDisque').className = 'tuile ' + (pc === null ? 'cy' : pc > 90 ? 'hors' : pc > 70 ? 'att' : 'ok');
+            $('tLibre').textContent = dk ? unite(dk.free_human) : '—';
+            const te = $('tEtat'), ce = $('cEtat');
+            if (!s) { te.textContent = '—'; ce.className = 'tuile'; }
+            else if (s.running) { te.textContent = 'En cours'; ce.className = 'tuile att'; }
+            else { te.textContent = 'Au repos'; ce.className = 'tuile ok'; }
+            $('tDerniere').textContent = s ? date(s.last_backup_time) : '—';
+            $('sDerniere').textContent = s && s.last_error ? 'dernière tentative en erreur' : 'réussie';
+
+            $('kEtat').textContent = s ? (s.running ? 'Sauvegarde en cours' : 'Au repos') : '—';
+            $('kFichier').textContent = tiret(s && s.last_backup);
+            $('kErreur').textContent = s ? (s.last_error ? String(s.last_error) : 'Aucune') : '—';
+            const pl = s && s.schedule;
+            const IV = { daily: 'chaque jour', weekly: 'chaque semaine', monthly: 'chaque mois' };
+            $('kPlan').textContent = pl && pl.enabled !== undefined
+                ? (pl.enabled ? (IV[pl.interval] || tiret(pl.interval)) + ' à ' + tiret(pl.time) + ', ' + tiret(pl.retention) + ' conservées' : 'Désactivée')
+                : '—';
+            $('dUtilise').textContent = dk ? unite(dk.used_human) : '—';
+            $('dLibre').textContent = dk ? unite(dk.free_human) : '—';
+            $('dTotal').textContent = dk ? unite(dk.total_human) : '—';
+            $('barre').className = 'barre' + (pc !== null && pc > 90 ? ' hors' : pc !== null && pc > 70 ? ' att' : '');
+            $('barreI').style.width = (pc === null ? 0 : Math.max(0, Math.min(100, pc))) + '%';
+
+            $('creerOk').disabled = !!(s && s.running) || OCCUPE;
+            rendreListe();
+            const d = new Date(); $('maj').textContent = 'Relevé ' + d.toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+
+        // Confirmation intégrée : un seul panneau, message explicite, Confirmer / Annuler.
+        function demander(message, fn) {
+            CONFIRM = { fn };
+            $('confMsg').textContent = message;
+            $('conf').hidden = false;
+            annoncer();
+            try { $('conf').scrollIntoView({ block: 'nearest' }); } catch (e) { /* ancien navigateur */ }
+        }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confOui').addEventListener('click', () => { const c = CONFIRM; fermerConf(); if (c) c.fn(); });
+        $('confNon').addEventListener('click', fermerConf);
+
+        function rendreListe() {
+            const tb = $('bSauv'); tb.replaceChildren();
+            $('nSauv').textContent = SAUV.length ? SAUV.length + ' archive' + (SAUV.length > 1 ? 's' : '') : '';
+            if (!SAUV.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucune sauvegarde' : '—'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            SAUV.forEach(b => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(b.id)));
+                tr.appendChild(el('td', '', typeof b.size === 'number' ? octets(b.size) : unite(b.size_human)));
+                tr.appendChild(el('td', '', date(b.created)));
+                tr.appendChild(el('td', '', tiret(b.description)));
+                const a = el('td', 'act');
+                a.appendChild(btn('Détails', 'prim', () => voir(b.id)));
+                a.appendChild(btn('Supprimer', 'danger', () => demanderSuppression(b.id)));
+                tr.appendChild(a); tb.appendChild(tr);
+            });
+        }
+
+        // ----- Détail d'une sauvegarde (GET /backups/{id}) -----
+        async function voir(id) {
+            DETAIL_ID = id; DETAIL = null;
+            $('pDetail').hidden = false; $('dNom').textContent = id;
+            ['xTaille', 'xCree', 'xDesc', 'xChemins'].forEach(k => { $(k).textContent = '—'; });
+            $('xContenu').replaceChildren(); $('xNb').textContent = ''; $('xNote').textContent = '';
+            $('dRestaurer').disabled = $('dSupprimer').disabled = false;
+            if (DEMO) {
+                const b = SAUV.find(x => x.id === id) || {};
+                afficherDetail({ id, size: b.size, created: b.created, description: b.description, paths: b.paths || [],
+                    contents: [{ name: 'etc/secubox/secubox.toml', size: 2048, type: 'file' }, { name: 'etc/secubox', size: 0, type: 'dir' }, { name: 'var/lib/secubox/etat.json', size: 9216, type: 'file' }], contents_truncated: false });
+                return;
             }
-        }
-
-        async function loadBackups() {
-            try {
-                const res = await fetch(`${API}/backups`);
-                const data = await res.json();
-
-                const list = document.getElementById('backup-list');
-                if (data.backups && data.backups.length > 0) {
-                    list.innerHTML = data.backups.map(b => `
-                        <div class="backup-item">
-                            <div class="backup-info">
-                                <h4>${b.id}</h4>
-                                <div class="meta">
-                                    ${b.size_human} • ${new Date(b.created).toLocaleString()}
-                                    ${b.description ? ` • ${b.description}` : ''}
-                                </div>
-                            </div>
-                            <div>
-                                <button class="btn btn-sm btn-primary" onclick="viewBackup('${b.id}')">Details</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteBackup('${b.id}')">Delete</button>
-                            </div>
-                        </div>
-                    `).join('');
-                } else {
-                    list.innerHTML = '<p>No backups found</p>';
-                }
-            } catch (e) {
-                console.error('Failed to load backups:', e);
+            try { afficherDetail(await lire('/backups/' + encodeURIComponent(id))); }
+            catch (e) {
+                $('xNote').textContent = e.statut === 401 || e.statut === 403 ? 'Session requise pour lire le détail.' : 'Détail indisponible (' + (e.message || 'erreur') + ').';
             }
+            annoncer();
         }
-
-        function showBackupModal() {
-            document.getElementById('backup-name').value = '';
-            document.getElementById('backup-desc').value = '';
-            document.getElementById('backup-compress').checked = true;
-            document.getElementById('backup-modal').classList.add('active');
+        function afficherDetail(d) {
+            DETAIL = d;
+            $('xTaille').textContent = typeof d.size === 'number' ? octets(d.size) : '—';
+            $('xCree').textContent = date(d.created);
+            $('xDesc').textContent = tiret(d.description);
+            $('xChemins').textContent = d.paths && d.paths.length ? d.paths.join('\n') : '—';
+            $('xChemins').style.whiteSpace = 'pre-wrap';
+            const ul = $('xContenu'); ul.replaceChildren();
+            (d.contents || []).forEach(c => {
+                const li = el('li'); li.appendChild(el('span', 'mono', (c.type === 'dir' ? '[dossier] ' : '') + c.name));
+                li.appendChild(el('span', '', c.type === 'dir' ? '' : octets(c.size))); ul.appendChild(li);
+            });
+            const n = (d.contents || []).length;
+            $('xNb').textContent = n ? n + ' entrée' + (n > 1 ? 's' : '') : '';
+            $('xNote').textContent = n ? (d.contents_truncated ? 'Seules les 100 premières entrées sont listées par le service.' : '') : 'Contenu non listé par le service.';
+            annoncer();
         }
+        $('dFerme').addEventListener('click', () => { $('pDetail').hidden = true; DETAIL_ID = null; DETAIL = null; annoncer(); });
 
-        function closeModal() {
-            document.getElementById('backup-modal').classList.remove('active');
+        // ----- Actions d'écriture -----
+        function demanderSuppression(id) {
+            demander('Supprimer définitivement la sauvegarde « ' + id + ' » ? Il n’y a pas de retour arrière.', () => supprimer(id));
         }
-
-        async function createBackup() {
-            const name = document.getElementById('backup-name').value.trim();
-            const description = document.getElementById('backup-desc').value.trim();
-            const compress = document.getElementById('backup-compress').checked;
-
-            closeModal();
-
-            try {
-                const res = await fetch(`${API}/backups`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, description, compress })
-                });
-
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.detail);
-                }
-
-                const data = await res.json();
-                alert('Backup created: ' + data.backup_id);
-                loadStatus();
-                loadBackups();
-            } catch (e) {
-                alert('Backup failed: ' + e.message);
-            }
+        async function supprimer(id) {
+            const r = await ecrire('DELETE', '/backups/' + encodeURIComponent(id));
+            if (r.ok) {
+                retour(true, 'Sauvegarde supprimée : ' + id + '.');
+                if (DETAIL_ID === id) { $('pDetail').hidden = true; DETAIL_ID = null; }
+                charger();
+            } else retour(false, 'Suppression impossible : ' + detail(r));
         }
+        $('dSupprimer').addEventListener('click', () => { if (DETAIL_ID) demanderSuppression(DETAIL_ID); });
 
-        async function viewBackup(id) {
-            try {
-                const res = await fetch(`${API}/backups/${id}`);
-                const data = await res.json();
-
-                currentBackup = id;
-                document.getElementById('details-title').textContent = id;
-                document.getElementById('details-size').textContent = data.size_human;
-                document.getElementById('details-created').textContent = new Date(data.created).toLocaleString();
-                document.getElementById('details-paths').textContent = data.paths?.join('\n') || '-';
-
-                document.getElementById('details-modal').classList.add('active');
-            } catch (e) {
-                alert('Failed to load backup details');
-            }
-        }
-
-        function closeDetailsModal() {
-            document.getElementById('details-modal').classList.remove('active');
-            currentBackup = null;
-        }
-
-        async function restoreBackup() {
-            if (!currentBackup) return;
-            if (!confirm(`Restore from ${currentBackup}? This will overwrite existing files.`)) return;
-
-            try {
-                const res = await fetch(`${API}/backups/${currentBackup}/restore`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ backup_id: currentBackup })
-                });
-
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.detail);
-                }
-
-                alert('Restore completed!');
-                closeDetailsModal();
-            } catch (e) {
-                alert('Restore failed: ' + e.message);
-            }
-        }
-
-        async function deleteBackup(id) {
-            if (!confirm(`Delete backup ${id}?`)) return;
-
-            try {
-                await fetch(`${API}/backups/${id}`, { method: 'DELETE' });
-                loadStatus();
-                loadBackups();
-            } catch (e) {
-                alert('Failed to delete backup');
-            }
-        }
-
-        function deleteCurrentBackup() {
-            if (currentBackup) {
-                deleteBackup(currentBackup);
-                closeDetailsModal();
-            }
-        }
-
-        async function cleanupBackups() {
-            const keep = prompt('Keep how many recent backups?', '7');
-            if (!keep) return;
-
-            try {
-                const res = await fetch(`${API}/cleanup?keep=${keep}`, { method: 'POST' });
-                const data = await res.json();
-                alert(`Deleted ${data.deleted} old backups, kept ${data.kept}`);
-                loadStatus();
-                loadBackups();
-            } catch (e) {
-                alert('Cleanup failed');
-            }
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadStatus();
-            loadBackups();
+        $('dRestaurer').addEventListener('click', () => {
+            const id = DETAIL_ID; if (!id) return;
+            demander('Restaurer « ' + id + ' » dans / (racine du système) ? Les fichiers existants portant le même chemin seront ÉCRASÉS. Pas de retour arrière.', async () => {
+                const r = await ecrire('POST', '/backups/' + encodeURIComponent(id) + '/restore', { backup_id: id });
+                if (r.ok) retour(true, 'Restauration terminée : ' + id + '.'); else retour(false, 'Restauration impossible : ' + detail(r));
+            });
         });
 
-        // Auto-refresh
-        setInterval(loadStatus, 10000);
+        $('creer').addEventListener('click', () => { $('fNettoyer').hidden = true; $('fCreer').hidden = !$('fCreer').hidden; annoncer(); });
+        $('nettoyer').addEventListener('click', () => { $('fCreer').hidden = true; $('fNettoyer').hidden = !$('fNettoyer').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
 
-        // Close modals on escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeModal();
-                closeDetailsModal();
-            }
+        async function creer(corps) {
+            OCCUPE = true; $('creerOk').disabled = true;
+            retour(true, 'Sauvegarde en cours… (peut durer plusieurs minutes)');
+            const r = await ecrire('POST', '/backups', corps);
+            OCCUPE = false;
+            if (r.ok) { $('fCreer').hidden = true; $('fCreer').reset(); retour(true, 'Sauvegarde créée : ' + tiret(r.data && r.data.backup_id) + '.'); }
+            else retour(false, 'Sauvegarde impossible : ' + detail(r));
+            charger();
+        }
+        $('fCreer').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const corps = { name: f.name.value.trim(), description: f.description.value.trim(), compress: f.compress.checked };
+            const fichier = corps.name ? corps.name + (corps.compress ? '.tar.gz' : '.tar') : null;
+            if (fichier && SAUV.some(b => b.id === fichier)) {
+                demander('Une sauvegarde « ' + fichier + ' » existe déjà : la créer l’ÉCRASERA définitivement. Continuer ?', () => creer(corps));
+            } else creer(corps);
         });
+
+        $('fNettoyer').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const keep = parseInt(ev.target.keep.value, 10);
+            if (!(keep >= 1)) { retour(false, 'Indiquez un nombre entier supérieur ou égal à 1.'); return; }
+            const aSupprimer = Math.max(0, SAUV.length - keep);
+            if (!aSupprimer) { retour(true, 'Rien à supprimer : ' + SAUV.length + ' sauvegarde(s), ' + keep + ' à conserver.'); return; }
+            demander('Supprimer définitivement les ' + aSupprimer + ' sauvegarde(s) les plus anciennes et conserver les ' + keep + ' plus récentes ? Pas de retour arrière.', async () => {
+                const r = await ecrire('POST', '/cleanup?keep=' + keep);
+                if (r.ok) { $('fNettoyer').hidden = true; retour(true, (r.data ? r.data.deleted : '?') + ' sauvegarde(s) supprimée(s).'); charger(); }
+                else retour(false, 'Nettoyage impossible : ' + detail(r));
+            });
+        });
+
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'cloner' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie, une confirmation ou une écriture, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || OCCUPE || !$('fCreer').hidden || !$('fNettoyer').hidden) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>
