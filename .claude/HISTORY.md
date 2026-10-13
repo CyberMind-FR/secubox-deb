@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — secubox-core 1.7.5 : SSH root par mot de passe depuis le LAN, livré par apt (ref #2528)
+
+Sur trixie, OpenSSH refuse root par mot de passe (`prohibit-password`) : la RPi400 neuve n'était joignable que par clé ou à la console. Les images serveur et live l'autorisaient déjà par `sed`, la RPi non, et `apt upgrade` ne corrigeait rien. `secubox-core` livre `/etc/ssh/sshd_config.d/20-secubox-root-lan.conf` : root + mot de passe uniquement depuis les réseaux privés (RFC 1918) ; ailleurs, clé seulement. Vérifié avec `sshd -T` sur gk2 (config temporaire, rien de modifié). Le postinst recharge ssh après `sshd -t`. Test `packages/secubox-core/tests/test_ssh_root_lan_2528.py`.
+
 ## 2026-10-13 — haproxy 1.10.4 : `haproxyctl generate` sur une box neuve (ref #2526)
 
 Après l'`apt upgrade` de la RPi400 (photo), le postinst de `secubox-haproxy` échouait : `bind : missing port specification in '*:'`, donc aucun frontal. Le `|| echo "80"` des lectures de port portait sur le dernier maillon du tube (`tr`), qui réussit toujours : sans clé dans `haproxy.toml`, la valeur était vide. Fonction `cle_conf` (défaut si la clé est absente ou vide) pour les ports et `waf_backend_ip`. Test `packages/secubox-haproxy/tests/test_ports_par_defaut_2526.py` (à lancer en root : `generate` crée `/run/haproxy`). Deux tests d'`acme_wiring` échouent déjà sur master.

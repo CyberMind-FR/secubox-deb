@@ -1,3 +1,9 @@
+secubox-core (1.7.5-1~bookworm1) bookworm; urgency=medium
+
+  * SSH (#2528) : sur trixie OpenSSH refuse root par mot de passe par defaut (PermitRootLogin prohibit-password) ; une box neuve (RPi400) n'etait joignable que par cle ou a la console, meme avec le bon mot de passe, et rien ne le corrigeait par `apt upgrade`. Le paquet livre le drop-in /etc/ssh/sshd_config.d/20-secubox-root-lan.conf (fichier de configuration) : root + mot de passe UNIQUEMENT depuis les reseaux prives (Match Address 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16) ; hors reseau local le defaut Debian (cle seulement) reste. Verifie avec sshd -T : 192.168.1.9 => yes, 203.0.113.5 => without-password. Le postinst ne recharge ssh qu'apres `sshd -t`. Pour durcir : supprimer le fichier.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-core (1.7.4-1~bookworm1) bookworm; urgency=medium
 
   * Premier demarrage (#2524) : secubox-firstboot mourait des l'etape 0 sur une carte SD (RPi400) : `parted -s … resizepart` sur la partition montee demande une confirmation et echoue, puis `warn` — appele 8 fois, jamais defini — repondait « command not found » (127) et, sous `set -e`, tuait tout le script (ni HAProxy, ni nginx 80/443, ni kiosque). `warn` est defini ; parted recoit sa reponse (---pretend-input-tty) ; une extension qui echoue n'arrete plus le premier demarrage.

@@ -69,6 +69,11 @@ override_dh_auto_install:
 	install -D -m 0644 etc/default/secubox debian/secubox-core/etc/default/secubox
 	install -D -m 0755 sbin/secubox-defaults-aligner debian/secubox-core/usr/sbin/secubox-defaults-aligner
 
+	# SSH : root par mot de passe depuis le reseau local seulement (#2528). Fichier de configuration (conffile) :
+	# supprime par l'operateur, il n'est pas repose.
+	install -D -m 0644 ssh/20-secubox-root-lan.conf \
+	               debian/secubox-core/etc/ssh/sshd_config.d/20-secubox-root-lan.conf
+
 	# Script firstboot
 	install -d debian/secubox-core/usr/bin
 	install -m 755 ../../image/firstboot.sh \
