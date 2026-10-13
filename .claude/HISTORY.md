@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — premier-pas 0.5.6 : l'assistant propose `<nom>.secubox.in` comme domaine (ref #2530)
+
+Sur la RPi400, `firstboot` gardait nginx seul : « frontal : domaine de la box inconnu », le domaine n'étant posé que par l'étape « Réseau et domaine », dont le champ était vide. Décision du mainteneur : le DNS est `secubox.in`, géré par gk2 (`gk1.secubox.in` résout déjà vers l'adresse publique que gk2 reçoit et route). L'assistant propose `<nom>.secubox.in` (web et console), sans l'imposer. Test `packages/secubox-premier-pas/tests/test_domaine_propose_2530.py`.
+
 ## 2026-10-13 — secubox-core 1.7.5 : SSH root par mot de passe depuis le LAN, livré par apt (ref #2528)
 
 Sur trixie, OpenSSH refuse root par mot de passe (`prohibit-password`) : la RPi400 neuve n'était joignable que par clé ou à la console. Les images serveur et live l'autorisaient déjà par `sed`, la RPi non, et `apt upgrade` ne corrigeait rien. `secubox-core` livre `/etc/ssh/sshd_config.d/20-secubox-root-lan.conf` : root + mot de passe uniquement depuis les réseaux privés (RFC 1918) ; ailleurs, clé seulement. Vérifié avec `sshd -T` sur gk2 (config temporaire, rien de modifié). Le postinst recharge ssh après `sshd -t`. Test `packages/secubox-core/tests/test_ssh_root_lan_2528.py`.

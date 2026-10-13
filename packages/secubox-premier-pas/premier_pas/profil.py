@@ -192,6 +192,17 @@ FUSEAU_DEFAUT = "Europe/Paris"
 _FUSEAUX_NEUTRES = {"", "UTC", "Etc/UTC", "Etc/Universal", "Universal", "Zulu", "GMT", "Etc/GMT"}
 
 
+# Le DNS de secubox.in est géré par gk2 : `<nom>.secubox.in` résout déjà vers l'adresse publique que gk2 reçoit et route (#2530).
+# L'assistant le PROPOSE, il ne l'impose pas : le champ reste modifiable, et le mode « LAN seul » n'a pas de domaine.
+DOMAINE_PAR_DEFAUT = "secubox.in"
+
+
+def domaine_propose(nom) -> str:
+    """`<nom>.secubox.in` d'après le nom de la box, ou "" si le nom n'en donne pas un valide (étiquette DNS : a-z, 0-9, tirets)."""
+    etiquette = re.sub(r"[^a-z0-9-]", "", str(nom or "").strip().lower()).strip("-")
+    return f"{etiquette}.{DOMAINE_PAR_DEFAUT}" if etiquette else ""
+
+
 def fuseau_propose(chemin: Path = Path("/etc/timezone")) -> str:
     try:
         actuel = chemin.read_text().strip()

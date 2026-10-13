@@ -1,3 +1,9 @@
+secubox-premier-pas (0.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * Le domaine est PROPOSE a l'etape « Reseau et domaine » (#2530) : `<nom de la box>.secubox.in`, en web comme en console. Le DNS de secubox.in est gere par gk2 (gk1.secubox.in resout deja vers l'adresse publique que gk2 recoit et route). Sans domaine, firstboot gardait nginx seul (« frontal : domaine de la box inconnu ») et la box n'avait ni frontal HAProxy ni WAF. Le champ reste modifiable, un domaine deja choisi n'est pas ecrase, et le mode « LAN seul » n'a toujours pas de domaine. 8 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 13:00:00 +0200
+
 secubox-premier-pas (0.5.5-1~bookworm1) bookworm; urgency=medium
 
   * Le lanceur du kiosque ouvre la session par `su -s /bin/bash -l` (#2506) : il ne depend plus du shell du compte secubox-kiosk (nologin => « This account is currently not available », Xorg demarre mais la session non).
