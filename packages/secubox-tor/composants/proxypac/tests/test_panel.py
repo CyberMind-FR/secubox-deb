@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_panel_has_navbar_and_status_and_runbook():
     h = (ROOT/"www/proxypac/index.html").read_text()
     assert 'class="sidebar"' in h and '/shared/sidebar.js' in h, "navbar manquante"
-    assert '/api/v1/proxypac/status' in h, "carte statut manquante"
+    assert "const API = '/api/v1/proxypac'" in h and "'/status'" in h, "carte statut manquante"
     assert 'socks_remote_dns' in h, "runbook client manquant"
     assert 'sbx_token' in h, "doit lire le jeton sbx_token"
     assert '/transparent' in h, "toggle transparent manquant"
