@@ -1,3 +1,23 @@
+secubox-routes (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Page /netdiag/ au profil Aurora (ref #2571) : un seul fichier autonome (CSS et JS en ligne, plus de crt-light, hybrid-dark ni
+    police externe), tuiles (outils disponibles, interfaces UP, routes, voisins, connexions, etablies, ports en ecoute), quatre
+    onglets (Outils, Interfaces, Routes, Connexions), ?demo=1 (donnees RFC 5737, outils inertes), ?embed=1, bandeau « session
+    requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet netdiag). Aucune API modifiee : les six outils (ping,
+    traceroute, dns, whois, mtr, portscan) envoient exactement les memes POST et les memes corps.
+  * Bogues de l'ancienne page corriges : (1) un refus HTTP 400/403/503 (hote invalide, scan hors reseau local, mtr absent) etait
+    lu comme une reussite ou affiche « Failed » car le message est dans « detail » et non « error » ; (2) un ping, une
+    traceroute ou un whois en echec (code retour non nul) perdait sa sortie brute, desormais affichee avec l'erreur ; (3) une
+    401 redirigeait vers /login.html et faisait perdre la saisie (inutilisable en onglet encadre) : bandeau a la place ; (4) les
+    donnees d'API (noms d'interface, processus, hotes, sorties) etaient injectees par innerHTML sans echappement : tout est
+    construit en textContent ; (5) six alert() natifs remplaces par un message dans la page ; (6) une metrique de route a 0
+    s'affichait « - » ; (7) les routes IPv6, fournies par l'API mais ignorees, sont affichees ; (8) la liste des connexions et
+    celle des ports restaient sur « Loading... » en cas d'echec, et le plafond de 100 lignes etait silencieux (il est annonce) ;
+    (9) l'interface lo (etat UNKNOWN) etait peinte comme « down » ; (10) l'objet global event servait a retrouver le bouton.
+  * Non repris : le compteur « N Tools » de l'en-tete devient la tuile « Outils disponibles » ; aucune action d'ecriture ajoutee
+    (l'API propose aussi /nmap et /bandwidth, que l'ancienne page n'appelait pas : toujours absents) ; l'API ne fournit ni debit
+    par interface ni historique : aucune courbe.
+
 secubox-routes (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /routes/ refaite au profil Aurora (#2571) : un seul fichier autonome (CSS et JS en ligne, plus de police Google ni
