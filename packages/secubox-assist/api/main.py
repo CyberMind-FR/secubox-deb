@@ -288,10 +288,15 @@ async def request_answer(b: AnswerBody):
 
 @app.get("/matches", dependencies=[Depends(require_jwt)])
 async def matches():
+    """Les paires compatibles qui nous concernent, avec l'état des deux côtés (#2546) — pas seulement celles déjà acceptées : sinon on ne peut jamais les accepter."""
     sid = _self_did()
     if sid is None:
         return []
-    return rendezvous.ready_matches(_entries(), sid, _now())
+    entries = _entries()
+    noms = _noeuds(entries)
+    nom = lambda did: noms.get(did) or (did.split(":")[-1][:8] if did else "?")  # noqa: E731
+    return [{**m, "noeud_offre": nom(m["offerer_did"]), "noeud_demande": nom(m["requester_did"])}
+            for m in rendezvous.candidate_matches(entries, sid, _now())]
 
 
 class OfferBody(BaseModel):

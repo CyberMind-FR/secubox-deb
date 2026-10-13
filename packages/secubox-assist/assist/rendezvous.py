@@ -34,6 +34,46 @@ def ready_matches(entries: List[Mapping[str, Any]], self_did: str,
     return out
 
 
+def _cotes_acceptes(entries: List[Mapping[str, Any]], mid: str, offre: dict, demande: dict):
+    """(offre_acceptee, demande_acceptee) pour `mid`. Même règle que `match_ready` (annuaire) : chaque acceptation n'est créditée que si ses propres
+    identifiants produisent `mid` ET si son auteur possède le côté qu'il prétend (l'auteur de l'offre pour « offer », celui de la demande pour « request »)."""
+    off_ok = dem_ok = False
+    for e in entries:
+        op, auteur, payload = _mm._op_author_payload(e)
+        if op != "assist_match_accept" or auteur is None or payload.get("match_id") != mid:
+            continue
+        oid, rid = payload.get("offer_id"), payload.get("req_id")
+        if oid is None or rid is None or _mm.match_id(oid, rid) != mid:
+            continue
+        if payload.get("side") == "offer" and oid == offre.get("offer_id") and auteur == offre.get("issued_by"):
+            off_ok = True
+        elif payload.get("side") == "request" and rid == demande.get("req_id") and auteur == demande.get("issued_by"):
+            dem_ok = True
+    return off_ok, dem_ok
+
+
+def candidate_matches(entries: List[Mapping[str, Any]], self_did: str, now_ts: str) -> List[dict]:
+    """Les paires offre ↔ demande COMPATIBLES qui nous concernent (offreur OU demandeur), avec l'état des deux côtés (#2546).
+
+    `ready_matches` n'en rend que les paires déjà acceptées des deux côtés, et seulement pour NOS demandes : les boutons « Accepter » posés sur cette liste
+    n'apparaissaient donc jamais. Ici, une paire compatible est visible dès qu'elle existe ; `prete` = les deux côtés ont accepté (c'est `ready_matches`,
+    inchangé, qui sert à ouvrir la session)."""
+    if _mm is None or not self_did:
+        return []
+    out = []
+    for offre, demande, mid in _mm.matches(entries, now_ts):
+        o_de, d_de = offre.get("issued_by"), demande.get("issued_by")
+        if o_de == d_de or self_did not in (o_de, d_de):
+            continue                                                       # pas de paire avec soi-même, ni celles des autres
+        off_ok, dem_ok = _cotes_acceptes(entries, mid, offre, demande)
+        out.append({"match_id": mid, "offer_id": offre["offer_id"], "req_id": demande["req_id"],
+                    "offerer_did": o_de, "requester_did": d_de,
+                    "mon_cote": "offer" if o_de == self_did else "request",
+                    "offre_acceptee": off_ok, "demande_acceptee": dem_ok, "prete": off_ok and dem_ok,
+                    "tags": sorted(set(offre.get("tags", [])) & set(demande.get("tags", [])))})
+    return out
+
+
 def should_open(entries: List[Mapping[str, Any]], self_did: str,
                 now_ts: str) -> Optional[dict]:
     if _assist is not None and _assist.active_session(entries, self_did, now_ts) is not None:
