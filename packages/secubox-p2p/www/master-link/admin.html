@@ -4,469 +4,339 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Administration du lien maître (master-link) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Invitations (jeton, adresse, commande), pairs, approbation, arborescence. Le jeton d'invitation n'est jamais conservé par la page.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives (RFC 5737), actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Master-Link Admin - SecuBox</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Administration du lien maître</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        /* CRT P31 Phosphor Light Theme */
-        :root {
-            --bg: #e8f5e9;
-            --bg-card: #f1f8f2;
-            --bg-input: #ffffff;
-            --text: #1b4332;
-            --text-dim: #2d6a4f;
-            --text-muted: #52796f;
-            --border: #a7c4a0;
-            --accent: #006622;
-            --accent-light: #40916c;
-            --success: #2d6a4f;
-            --danger: #c1121f;
-            --warning: #e07b00;
-            --glow: rgba(0, 102, 34, 0.15);
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-        }
-
-        .main-content {
-            flex: 1;
-            margin-left: 250px;
-            padding: 20px;
-            min-height: 100vh;
-        }
-
-        .page-header {
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .page-header h1 {
-            font-size: 24px;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .page-header h1 svg {
-            width: 28px;
-            height: 28px;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background: var(--bg-card);
-            color: var(--text);
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-        .btn:hover { border-color: var(--accent); background: var(--glow); }
-        .btn.primary { background: var(--glow); border-color: var(--accent); color: var(--accent); }
-        .btn.danger { border-color: var(--danger); color: var(--danger); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .stat {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .stat .value { font-size: 2rem; font-weight: bold; color: var(--accent); }
-        .stat .label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; text-transform: uppercase; }
-        .stat.warning .value { color: var(--warning); }
-
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 1.25rem;
-            margin-bottom: 1.5rem;
-        }
-        .card h2 {
-            font-size: 1rem;
-            color: var(--accent);
-            margin-bottom: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .tabs {
-            display: flex;
-            gap: 0;
-            border-bottom: 2px solid var(--border);
-            margin-bottom: 1rem;
-        }
-        .tab {
-            padding: 0.75rem 1.25rem;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.9rem;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-            margin-bottom: -2px;
-        }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: bold; }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-muted); font-weight: normal; text-transform: uppercase; font-size: 0.7rem; }
-        tr:hover { background: var(--glow); }
-
-        .badge {
-            padding: 0.2rem 0.5rem;
-            border-radius: 3px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        .badge.master { background: var(--glow); color: var(--accent); }
-        .badge.peer { background: rgba(99,102,241,0.2); color: #6366f1; }
-        .badge.approved { background: rgba(45,106,79,0.2); color: var(--success); }
-        .badge.pending { background: rgba(224,123,0,0.2); color: var(--warning); }
-        .badge.online { background: rgba(45,106,79,0.2); color: var(--success); }
-        .badge.offline { background: rgba(193,18,31,0.2); color: var(--danger); }
-
-        .token-box {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 1rem;
-            margin: 1rem 0;
-            font-family: monospace;
-        }
-        .token-box .token { font-size: 0.9rem; word-break: break-all; color: var(--accent); margin-bottom: 0.5rem; }
-        .token-box .url { font-size: 0.75rem; color: var(--text-muted); word-break: break-all; }
-        .token-box .cmd { font-size: 0.8rem; color: var(--text); margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-card); border-radius: 3px; }
-
-        .tree { font-family: monospace; font-size: 0.85rem; }
-        .tree-node { padding: 0.25rem 0; padding-left: 1.5rem; border-left: 1px dashed var(--border); margin-left: 0.5rem; }
-        .tree-node:first-child { border-left: none; padding-left: 0; margin-left: 0; }
-        .tree-node .node-info { display: flex; align-items: center; gap: 0.5rem; }
-        .tree-node .fp { color: var(--accent); }
-        .tree-node .hostname { color: var(--text); }
-        .tree-node .addr { color: var(--text-muted); font-size: 0.75rem; }
-
-        .empty { text-align: center; padding: 2rem; color: var(--text-muted); }
-        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .copy-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.25rem; }
-        .copy-btn:hover { color: var(--accent); }
-
-        .toast {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            padding: 0.75rem 1rem;
-            background: var(--bg-card);
-            border: 1px solid var(--accent);
-            border-radius: 4px;
-            transform: translateY(100px);
-            opacity: 0;
-            transition: all 0.3s;
-            z-index: 100;
-        }
-        .toast.show { transform: translateY(0); opacity: 1; }
-        .toast.error { border-color: var(--danger); color: var(--danger); }
-
-        @media (max-width: 768px) {
-            .main-content { margin-left: 0; padding: 15px; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .etapes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+        .etapes li{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(86,150,255,.12)} .etapes li:first-child{border-top:0}
+        .etapes .n{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;border:1px solid var(--faible);color:var(--faible)}
+        .etapes li.fait .n{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .etapes li.cours .n{border-color:var(--cyan);color:#d9f2ff;background:rgba(41,182,246,.22)}
+        .etapes b{display:block;font-size:.84rem} .etapes span{color:var(--faible);font-size:.74rem}
+        .empreinte{color:var(--cyan);letter-spacing:.04em}
+            .tabs-c{display:none} .tabs-c.on{display:block}
+        .jeton{border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6);padding:10px 12px;display:grid;gap:8px;margin-top:10px}
+        .jeton .lig{display:grid;gap:3px;min-width:0} .jeton .lig>b{font-size:.7rem;color:var(--doux);font-weight:600}
+        .jeton .val{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:flex-start} .jeton .val code{flex:1 1 220px;min-width:0;overflow-wrap:anywhere;color:var(--cyan)}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.8rem;display:grid;gap:8px;margin:0 0 10px}
+        .conf .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .arbre{display:grid;gap:4px;font-size:.8rem}
+        .noeud{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;border-left:2px solid var(--trait2);padding:4px 0 4px 10px;min-width:0}
+        .noeud code{overflow-wrap:anywhere}
+        form.saisie label.coche{display:flex;align-items:center;gap:8px;font-size:.78rem} form.saisie label.coche input{width:auto}
     </style>
 </head>
-<body class="crt-light">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-
-    <div class="main-content">
-        <header class="page-header">
-            <h1>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                Master-Link Admin
-            </h1>
-            <div class="header-actions">
-                <button class="btn" onclick="loadAll()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                <div><h1>Lien maître</h1><small>Invitations, pairs et arborescence du maillage</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="grid" id="stats">
-            <div class="stat">
-                <div class="value" id="stat-role">--</div>
-                <div class="label">Role</div>
-            </div>
-            <div class="stat">
-                <div class="value" id="stat-peers">--</div>
-                <div class="label">Peers</div>
-            </div>
-            <div class="stat">
-                <div class="value" id="stat-pending">--</div>
-                <div class="label">Pending</div>
-            </div>
-            <div class="stat">
-                <div class="value" id="stat-tokens">--</div>
-                <div class="label">Active Tokens</div>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Rôle de ce nœud dans le lien maître (maître ou sous-maître)."><span class="l">Rôle</span><span class="v" id="tRole">—</span><span class="s">lien maître</span></div>
+            <div class="tuile cy" title="Profondeur de ce nœud dans la hiérarchie du maillage."><span class="l">Profondeur</span><span class="v" id="tProf">—</span><span class="s" id="sProf">sur —</span></div>
+            <div class="tuile ok" title="Demandes de jonction déjà approuvées."><span class="l">Pairs approuvés</span><span class="v" id="tAppr">—</span><span class="s">demandes approuvées</span></div>
+            <div class="tuile att" title="Demandes de jonction en attente d’approbation par l’administrateur."><span class="l">En attente</span><span class="v" id="tAtt">—</span><span class="s">demandes à valider</span></div>
+            <div class="tuile cy" title="Jetons d’invitation encore valides (non expirés, non utilisés)."><span class="l">Invitations actives</span><span class="v" id="tTok">—</span><span class="s">jetons valides</span></div>
+        </section>
 
-        <div class="card">
-            <div class="tabs">
-                <button class="tab active" onclick="showTab('overview')">Overview</button>
-                <button class="tab" onclick="showTab('peers')">Peers</button>
-                <button class="tab" onclick="showTab('tree')">Mesh Tree</button>
-                <button class="tab" onclick="showTab('invite')">Generate Invite</button>
-            </div>
+        <nav class="onglets" role="tablist" aria-label="Sections">
+            <button type="button" role="tab" data-onglet="vue" aria-selected="true">Vue d’ensemble</button>
+            <button type="button" role="tab" data-onglet="pairs" aria-selected="false">Pairs</button>
+            <button type="button" role="tab" data-onglet="arbre" aria-selected="false">Arborescence</button>
+            <button type="button" role="tab" data-onglet="inviter" aria-selected="false">Inviter</button>
+        </nav>
 
-            <div id="tab-overview" class="tab-content active">
-                <table>
-                    <tr><th>Property</th><th>Value</th></tr>
-                    <tr><td>Fingerprint</td><td id="info-fp" style="font-family:monospace;color:var(--accent)">--</td></tr>
-                    <tr><td>Hostname</td><td id="info-hostname">--</td></tr>
-                    <tr><td>Role</td><td id="info-role">--</td></tr>
-                    <tr><td>Depth</td><td id="info-depth">--</td></tr>
-                    <tr><td>Upstream</td><td id="info-upstream">--</td></tr>
-                    <tr><td>Auto-Approve</td><td id="info-auto">--</td></tr>
-                </table>
-            </div>
+        <section class="pan tabs-c on" id="o-vue"><h3>Identité de ce nœud <i>lien maître</i></h3>
+            <dl class="kv"><dt>Empreinte</dt><dd class="mono empreinte" id="kFp">—</dd><dt>Nom d’hôte</dt><dd id="kNom">—</dd><dt>Rôle</dt><dd id="kRole">—</dd><dt>Profondeur</dt><dd id="kProf">—</dd><dt>Amont</dt><dd id="kAmont">—</dd><dt>Approbation</dt><dd id="kAuto">—</dd></dl>
+        </section>
 
-            <div id="tab-peers" class="tab-content">
-                <div id="peers-list"><div class="empty"><span class="spinner"></span> Loading...</div></div>
+        <section class="pan tabs-c" id="o-pairs"><h3>Demandes de jonction <i id="nPairs">—</i></h3>
+            <div id="rPairs" class="retour" hidden></div>
+            <div id="confirm" class="conf" hidden>
+                <div id="confTexte"></div>
+                <div class="bout"><button class="btn prim" type="button" id="confOui">Confirmer</button><button class="btn" type="button" id="confNon">Annuler</button></div>
             </div>
+            <div class="tab"><table><thead><tr><th>Empreinte</th><th>Nom d’hôte</th><th>Adresse</th><th>État</th><th>Date</th><th>Action</th></tr></thead><tbody id="bPairs"></tbody></table></div>
+        </section>
 
-            <div id="tab-tree" class="tab-content">
-                <div id="tree-view"><div class="empty"><span class="spinner"></span> Loading...</div></div>
-            </div>
+        <section class="pan tabs-c" id="o-arbre"><h3>Arborescence du maillage <i>ce nœud et ses pairs approuvés</i></h3>
+            <div class="arbre" id="arbre"><div class="vide">—</div></div>
+            <p class="note">L’API ne fournit pas l’état en ligne des nœuds ni les enfants des sous-maîtres : ils ne sont pas affichés.</p>
+        </section>
 
-            <div id="tab-invite" class="tab-content">
-                <p style="color:var(--text-muted);margin-bottom:1rem;">Generate an invite token for new nodes to join the mesh.</p>
-                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
-                    <label style="display:flex;align-items:center;gap:0.5rem;">
-                        <input type="checkbox" id="auto-approve" checked> Auto-approve
-                    </label>
-                    <label style="display:flex;align-items:center;gap:0.5rem;margin-left:1rem;">
-                        TTL: <input type="number" id="ttl" value="3600" style="width:80px;padding:0.25rem;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:3px;">s
-                    </label>
-                </div>
-                <button class="btn primary" onclick="generateToken()">Generate Invite Token</button>
-                <div id="token-result"></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="toast" id="toast"></div>
+        <section class="pan tabs-c" id="o-inviter"><h3>Générer une invitation <i>pour qu’un nouveau nœud rejoigne le maillage</i></h3>
+            <div id="rInv" class="retour" hidden></div>
+            <form class="saisie" id="fInv">
+                <label class="coche"><input type="checkbox" id="auto" checked> Approuver automatiquement</label>
+                <label>Durée de validité (secondes)<input type="number" id="ttl" value="3600" min="1" step="1"></label>
+                <div class="bout"><button class="btn prim" type="submit" id="btnInv">Générer le jeton d’invitation</button></div>
+            </form>
+            <div id="jeton" class="jeton" hidden></div>
+            <p class="note">Le jeton n’est affiché qu’ici, une fois, et n’est jamais conservé par la page. Quiconque le détient peut demander à rejoindre le maillage.</p>
+        </section>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
-    const API = '/api/v1/p2p';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/p2p/master-link';
+        const $ = id => document.getElementById(id);
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        let ST = null, PAIRS = null, ARBRE = null, CONF = null, OCCUPE = false, ONGLET = 'vue';
 
-    // Les routes d'administration du maillage exigent le JWT de l'administrateur (#2476).
-    function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
-    async function api(endpoint, options = {}) {
-        const opts = Object.assign({}, options), t = jeton();
-        if (t) opts.headers = Object.assign({}, opts.headers || {}, { 'Authorization': 'Bearer ' + t });
-        const r = await fetch(API + endpoint, opts);
-        return r.json();
-    }
-
-    async function loadAll() {
-        await Promise.all([loadStatus(), loadPeers(), loadTree()]);
-    }
-
-    async function loadStatus() {
-        try {
-            const data = await api('/master-link/status');
-            document.getElementById('stat-role').textContent = data.role || 'master';
-            document.getElementById('stat-peers').textContent = data.peers?.approved || 0;
-            document.getElementById('stat-pending').textContent = data.peers?.pending || 0;
-            document.getElementById('stat-tokens').textContent = data.active_tokens || 0;
-
-            if (data.peers?.pending > 0) {
-                document.getElementById('stat-pending').parentElement.classList.add('warning');
-            }
-
-            document.getElementById('info-fp').textContent = data.fingerprint || '-';
-            document.getElementById('info-hostname').textContent = data.hostname || '-';
-            document.getElementById('info-role').innerHTML = '<span class="badge ' + (data.role || 'master') + '">' + (data.role || 'master') + '</span>';
-            document.getElementById('info-depth').textContent = data.depth ?? 0;
-            document.getElementById('info-upstream').textContent = data.upstream || '(none - root master)';
-            document.getElementById('info-auto').textContent = data.auto_approve ? 'Yes' : 'No';
-        } catch (e) {
-            toast('Failed to load status: ' + e.message, true);
+        // Les routes d'administration du maillage exigent le JWT de l'administrateur (#2476).
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) {
+            const h = Object.assign({ Accept: 'application/json' }, extra || {}), t = jeton();
+            return t ? Object.assign({}, h, { 'Authorization': 'Bearer ' + t }) : h;
         }
-    }
-
-    async function loadPeers() {
-        try {
-            const data = await api('/master-link/peers');
-            const peers = data.peers || [];
-
-            if (peers.length === 0) {
-                document.getElementById('peers-list').innerHTML = '<div class="empty">No peers yet</div>';
-                return;
-            }
-
-            let html = '<table><tr><th>Fingerprint</th><th>Hostname</th><th>Address</th><th>Status</th><th>Joined</th><th>Actions</th></tr>';
-            peers.forEach(p => {
-                const statusClass = p.status === 'approved' ? 'approved' : 'pending';
-                html += '<tr>' +
-                    '<td style="font-family:monospace;color:var(--accent)">' + (p.fingerprint || '-') + '</td>' +
-                    '<td>' + (p.hostname || '-') + '</td>' +
-                    '<td style="color:var(--text-muted)">' + (p.address || '-') + '</td>' +
-                    '<td><span class="badge ' + statusClass + '">' + (p.status || 'unknown') + '</span></td>' +
-                    '<td style="font-size:0.75rem;color:var(--text-muted)">' + (p.approved_at || p.joined_at || '-') + '</td>' +
-                    '<td>' + (p.status === 'pending' ? '<button class="btn" onclick="approvePeer(\'' + p.fingerprint + '\')">Approve</button>' : '') + '</td>' +
-                    '</tr>';
-            });
-            html += '</table>';
-            document.getElementById('peers-list').innerHTML = html;
-        } catch (e) {
-            document.getElementById('peers-list').innerHTML = '<div class="empty" style="color:var(--danger)">Error: ' + e.message + '</div>';
+        async function appel(chemin, opts) {
+            const r = await fetch(API + chemin, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts || {}, { headers: entetes((opts || {}).headers) }));
+            let d = null; try { d = await r.json(); } catch (e) { /* corps vide ou non JSON */ }
+            if (r.status === 401 || r.status === 403) { const e = new Error('session'); e.session = true; e.detail = d && typeof d.detail === 'string' ? d.detail : ''; throw e; }
+            if (!r.ok || (d && (d.error || d.detail))) throw new Error((d && (d.error || (typeof d.detail === 'string' ? d.detail : ''))) || 'HTTP ' + r.status);
+            return d || {};
         }
-    }
-
-    async function loadTree() {
-        try {
-            const data = await api('/master-link/tree');
-            const tree = data.tree;
-            if (!tree) {
-                document.getElementById('tree-view').innerHTML = '<div class="empty">No tree data</div>';
-                return;
-            }
-            document.getElementById('tree-view').innerHTML = '<div class="tree">' + renderNode(tree, 0) + '</div>';
-        } catch (e) {
-            document.getElementById('tree-view').innerHTML = '<div class="empty" style="color:var(--danger)">Error: ' + e.message + '</div>';
+        function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined && txt !== null) e.textContent = txt; return e; }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function pastille(statut) {
+            const s = statut === 'approved' ? ['ok', 'APPROUVÉ'] : statut === 'pending' ? ['att', 'EN ATTENTE'] : statut === 'rejected' ? ['hors', 'REFUSÉ'] : ['', statut ? String(statut).toUpperCase() : '—'];
+            return el('span', 'pill ' + s[0], s[1]);
         }
-    }
+        function dateLisible(v) { if (!v) return '—'; const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleString('fr-FR'); }
 
-    function renderNode(node, depth) {
-        const online = node.online !== false;
-        let html = '<div class="tree-node" style="margin-left:' + (depth * 20) + 'px">' +
-            '<div class="node-info">' +
-            '<span class="badge ' + (node.role || 'peer') + '">' + (node.role || 'peer') + '</span> ' +
-            '<span class="fp">' + (node.fingerprint || '-').substring(0, 12) + '</span> ' +
-            '<span class="hostname">' + (node.hostname || 'unknown') + '</span> ' +
-            (node.address ? '<span class="addr">(' + node.address + ')</span>' : '') +
-            (online ? ' <span class="badge online">ON</span>' : ' <span class="badge offline">OFF</span>') +
-            '</div></div>';
+        const DEMO_ST = { enabled: true, role: 'master', depth: 0, max_depth: 3, upstream: null, fingerprint: '4f9a1c7be2d08a35', hostname: 'maitre-demo',
+                          auto_approve: false, peers: { pending: 1, approved: 2, rejected: 0, total: 3 }, active_tokens: 2 };
+        const DEMO_PAIRS = [
+            { fingerprint: 'a1b2c3d4e5f60718', hostname: 'noeud-demo-1', address: '192.0.2.11', status: 'approved', approved_at: '2026-10-01T09:00:00' },
+            { fingerprint: '0918273645afbecd', hostname: 'noeud-demo-2', address: '198.51.100.7', status: 'approved', approved_at: '2026-10-05T14:30:00' },
+            { fingerprint: 'ffeeddccbbaa9988', hostname: 'noeud-demo-3', address: '203.0.113.20', status: 'pending', joined_at: '2026-10-12T08:15:00' }];
+        const DEMO_ARBRE = { fingerprint: '4f9a1c7be2d08a35', hostname: 'maitre-demo', role: 'master', depth: 0, address: '192.0.2.1', children: [
+            { fingerprint: 'a1b2c3d4e5f60718', hostname: 'noeud-demo-1', role: 'peer', depth: 1, address: '192.0.2.11', children: [] },
+            { fingerprint: '0918273645afbecd', hostname: 'noeud-demo-2', role: 'peer', depth: 1, address: '198.51.100.7', children: [] }] };
 
-        if (node.children && node.children.length > 0) {
-            node.children.forEach(child => {
-                html += renderNode(child, depth + 1);
+        function rendre() {
+            const ok = !!ST, s = ST || {}, p = s.peers || {};
+            $('tRole').textContent = ok ? (s.role === 'master' ? 'Maître' : s.role === 'sub-master' ? 'Sous-maître' : tiret(s.role)) : '—';
+            $('tProf').textContent = ok ? tiret(s.depth) : '—';
+            $('sProf').textContent = 'sur ' + (ok ? tiret(s.max_depth) : '—');
+            $('tAppr').textContent = ok ? tiret(p.approved) : '—';
+            $('tAtt').textContent = ok ? tiret(p.pending) : '—';
+            $('tTok').textContent = ok ? tiret(s.active_tokens) : '—';
+            $('kFp').textContent = ok ? tiret(s.fingerprint) : '—';
+            $('kNom').textContent = ok ? tiret(s.hostname) : '—';
+            $('kRole').textContent = ok ? tiret(s.role) : '—';
+            $('kProf').textContent = ok ? tiret(s.depth) : '—';
+            $('kAmont').textContent = !ok ? '—' : (s.upstream ? String(s.upstream) : (s.role === 'master' ? 'aucun (maître racine)' : '—'));
+            $('kAuto').textContent = ok ? (s.auto_approve ? 'automatique' : 'par l’administrateur') : '—';
+            if (ok) { const e = $('etat'); e.className = 'actif' + (s.enabled === false ? ' hors' : ''); e.textContent = s.enabled === false ? 'MAÎTRE DÉSACTIVÉ' : 'MAÎTRE ACTIF'; }
+            rendrePairs(); rendreArbre(); annoncer();
+        }
+
+        function rendrePairs() {
+            const b = $('bPairs'); b.replaceChildren();
+            $('nPairs').textContent = PAIRS ? PAIRS.length + ' demande(s)' : '—';
+            if (!PAIRS || !PAIRS.length) { const tr = el('tr'), td = el('td', 'vide', PAIRS ? 'Aucune demande de jonction.' : '—'); td.colSpan = 6; tr.appendChild(td); b.appendChild(tr); return; }
+            PAIRS.forEach(p => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(p.fingerprint)));
+                tr.appendChild(el('td', '', tiret(p.hostname)));
+                tr.appendChild(el('td', '', tiret(p.address)));
+                const te = el('td'); te.appendChild(pastille(p.status)); tr.appendChild(te);
+                tr.appendChild(el('td', '', dateLisible(p.approved_at || p.joined_at)));
+                const ta = el('td');
+                if (p.status === 'pending') {
+                    const bt = el('button', 'btn sm', 'Approuver'); bt.type = 'button';
+                    bt.addEventListener('click', () => demanderConfirmation(p));
+                    ta.appendChild(bt);
+                } else ta.textContent = '—';
+                tr.appendChild(ta); b.appendChild(tr);
             });
         }
-        return html;
-    }
 
-    async function generateToken() {
-        const autoApprove = document.getElementById('auto-approve').checked;
-        const ttl = parseInt(document.getElementById('ttl').value) || 3600;
+        function noeud(n, prof) {
+            const d = el('div', 'noeud'); d.style.marginLeft = (prof * 18) + 'px';
+            d.appendChild(el('span', 'pill ' + (n.role === 'master' ? 'cy' : ''), n.role ? String(n.role).toUpperCase() : '—'));
+            d.appendChild(el('code', 'mono', n.fingerprint ? String(n.fingerprint).substring(0, 12) : '—'));
+            d.appendChild(el('span', '', tiret(n.hostname)));
+            if (n.address) d.appendChild(el('span', 'note', '(' + n.address + ')'));
+            const out = [d];
+            (n.children || []).forEach(c => noeud(c, prof + 1).forEach(x => out.push(x)));
+            return out;
+        }
+        function rendreArbre() {
+            const a = $('arbre'); a.replaceChildren();
+            if (!ARBRE) { a.appendChild(el('div', 'vide', '—')); return; }
+            noeud(ARBRE, 0).forEach(x => a.appendChild(x));
+        }
 
-        try {
-            const data = await api('/master-link/invite-local?auto_approve=' + autoApprove + '&ttl=' + ttl, {
-                method: 'POST'
-            });
+        async function charger() {
+            $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            $('erreur').hidden = true;
+            if (DEMO) { ST = DEMO_ST; PAIRS = DEMO_PAIRS; ARBRE = DEMO_ARBRE; $('demo').hidden = false; rendre(); return; }
+            let session = false, echec = null;
+            const lire = async (chemin) => { try { return await appel(chemin); } catch (e) { if (e.session) session = true; else echec = echec || e; return null; } };
+            const [s, p, t] = await Promise.all([lire('/status'), lire('/peers'), lire('/tree')]);
+            ST = s; PAIRS = p ? (p.peers || []) : null; ARBRE = t ? (t.tree || null) : null;
+            $('session').hidden = !session;
+            rendre();
+            if (session) { const e = $('etat'); e.className = 'actif att'; e.textContent = 'SESSION REQUISE'; }
+            else if (echec && !ST) { const e = $('etat'); e.className = 'actif hors'; e.textContent = 'NŒUD INJOIGNABLE'; const r = $('erreur'); r.hidden = false; r.textContent = 'Lecture impossible (' + echec.message + ').'; }
+        }
 
-            if (data.error || data.detail) {
-                throw new Error(data.error || data.detail);
+        // Approbation : confirmation intégrée (jamais de dialogue natif).
+        function demanderConfirmation(p) {
+            CONF = p;
+            $('confTexte').textContent = 'Approuver le nœud « ' + tiret(p.hostname) + ' » (empreinte ' + tiret(p.fingerprint) + ') ? Il recevra une identité WireGuard du maillage.';
+            $('confirm').hidden = false; $('confOui').focus(); annoncer();
+        }
+        function fermerConfirmation() { CONF = null; $('confirm').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConfirmation);
+        $('confOui').addEventListener('click', async () => {
+            const p = CONF; if (!p) return;
+            if (DEMO) { fermerConfirmation(); retour('rPairs', false, 'Démonstration : action inerte.'); return; }
+            OCCUPE = true; $('confOui').disabled = true;
+            try {
+                const d = await appel('/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fingerprint: p.fingerprint, action: 'approve' }) });
+                fermerConfirmation(); retour('rPairs', true, d.status === 'already_approved' ? 'Ce nœud était déjà approuvé.' : 'Nœud approuvé.');
+                await charger();
+            } catch (e) {
+                fermerConfirmation();
+                if (e.session) { $('session').hidden = false; retour('rPairs', false, 'Session requise pour approuver.'); } else retour('rPairs', false, 'Échec : ' + e.message);
             }
+            $('confOui').disabled = false; OCCUPE = false;
+        });
 
-            const joinUrl = data.url || 'https://' + location.hostname + '/master-link/?token=' + data.token;
-            const joinCmd = data.cli || 'sbx-mesh-join ' + location.hostname + ' ' + data.token;
-
-            document.getElementById('token-result').innerHTML =
-                '<div class="token-box">' +
-                '<div><strong>Token:</strong></div>' +
-                '<div class="token">' + data.token + ' <button class="copy-btn" onclick="copy(\'' + data.token + '\')">Copy</button></div>' +
-                '<div><strong>Join URL:</strong></div>' +
-                '<div class="url">' + joinUrl + ' <button class="copy-btn" onclick="copy(\'' + joinUrl + '\')">Copy</button></div>' +
-                '<div><strong>CLI Command:</strong></div>' +
-                '<div class="cmd">' + joinCmd + ' <button class="copy-btn" onclick="copy(\'' + joinCmd + '\')">Copy</button></div>' +
-                '<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted)">Expires: ' + (data.expires_ts ? new Date(data.expires_ts * 1000).toLocaleString() : data.expires) + '</div>' +
-                '</div>';
-
-            toast('Token generated');
-            loadStatus();
-        } catch (e) {
-            toast('Failed: ' + e.message, true);
+        // Invitation : même appel que l'ancienne page (POST invite-local?auto_approve=…&ttl=…, sans corps).
+        function ligne(titre, valeur) {
+            const l = el('div', 'lig'); l.appendChild(el('b', '', titre));
+            const v = el('div', 'val'); v.appendChild(el('code', 'mono', valeur));
+            const c = el('button', 'btn sm', 'Copier'); c.type = 'button';
+            c.addEventListener('click', async () => { try { await navigator.clipboard.writeText(valeur); c.textContent = 'Copié'; } catch (e) { c.textContent = 'Copie impossible'; } });
+            v.appendChild(c); l.appendChild(v); return l;
         }
-    }
+        $('fInv').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            if (OCCUPE) return;
+            if (DEMO) { retour('rInv', false, 'Démonstration : action inerte.'); return; }
+            const auto = $('auto').checked, ttl = parseInt($('ttl').value, 10) || 3600;
+            OCCUPE = true; const btn = $('btnInv'); btn.disabled = true; $('jeton').hidden = true; $('jeton').replaceChildren();
+            try {
+                const d = await appel('/invite-local?auto_approve=' + auto + '&ttl=' + ttl, { method: 'POST' });
+                if (!d.token) throw new Error('réponse sans jeton');
+                const j = $('jeton');
+                j.appendChild(ligne('Jeton', String(d.token)));
+                j.appendChild(ligne('Adresse de jonction', String(d.url || 'https://' + location.hostname + '/master-link/?token=' + d.token)));
+                j.appendChild(ligne('Commande', String(d.cli || 'sbx-mesh-join ' + location.hostname + ' ' + d.token)));
+                j.appendChild(el('div', 'note', 'Expire : ' + (d.expires_ts ? new Date(d.expires_ts * 1000).toLocaleString('fr-FR') : tiret(d.expires))));
+                j.hidden = false; retour('rInv', true, 'Jeton généré.');
+                charger();
+            } catch (e) {
+                if (e.session) { $('session').hidden = false; retour('rInv', false, 'Session requise pour générer une invitation.'); } else retour('rInv', false, 'Échec : ' + e.message);
+            }
+            btn.disabled = false; OCCUPE = false; annoncer();
+        });
 
-    async function approvePeer(fp) {
-        try {
-            await api('/master-link/approve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fingerprint: fp, action: 'approve' })
-            });
-            toast('Peer approved');
-            loadAll();
-        } catch (e) {
-            toast('Failed: ' + e.message, true);
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', b.dataset.onglet === nom ? 'true' : 'false'));
+            document.querySelectorAll('.tabs-c').forEach(s => s.classList.toggle('on', s.id === 'o-' + nom));
+            annoncer();
         }
-    }
+        document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => onglet(b.dataset.onglet)));
+        $('rafraichir').addEventListener('click', charger);
 
-    function showTab(name) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.querySelector('.tab[onclick*="' + name + '"]').classList.add('active');
-        document.getElementById('tab-' + name).classList.add('active');
-    }
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'master-link-admin' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-    function copy(text) {
-        navigator.clipboard.writeText(text).then(() => toast('Copied!'));
-    }
-
-    function toast(msg, isError = false) {
-        const t = document.getElementById('toast');
-        t.textContent = msg;
-        t.className = 'toast show' + (isError ? ' error' : '');
-        setTimeout(() => t.classList.remove('show'), 3000);
-    }
-
-    // Initial load
-    loadAll();
+        charger();
+        // Pas d'actualisation onglet masqué, en démonstration, pendant une saisie, une confirmation ou un envoi.
+        setInterval(() => { if (document.hidden || DEMO || OCCUPE || CONF || (document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName))) return; charger(); }, 30000);
     </script>
 </body>
 </html>
