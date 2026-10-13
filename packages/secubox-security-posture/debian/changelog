@@ -1,3 +1,20 @@
+secubox-security-posture (2.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Page /antirootkit/ au profil Aurora (ref #2584) : page autonome (CSS/JS en ligne, plus de police Google Fonts ni de skin
+    hybrid-dark), tuiles (evenements journalises, alertes dont IOC, mises en cage et executions sans paquet sur les 100
+    dernieres, dernier evenement), file d'alertes et chronologie d'execution en tableaux (filtre cote client), mode ?demo=1
+    (donnees RFC 5737, action inerte) et ?embed=1, hauteur annoncee a l'hote (sbxVue, onglet antirootkit).
+  * Bogues de l'ancienne page corriges : les lectures /status, /execlog et /alerts (gardees par require_lecture) partaient
+    SANS jeton Bearer ; une erreur 401 ou une panne s'affichait comme « No active alerts » / « No exec events » (faux vide)
+    au lieu d'un bandeau « session requise » et de tirets ; le sous-titre disait « live » meme quand le statut etait
+    indisponible ; les erreurs HTTP du plan ne disaient pas si la session manquait ; double clic = double requete.
+  * Inchange : POST /quarantine-prep, meme route, meme corps {path, c2_ip, unit}. Le plan reste un calcul, rien n'est
+    execute (aucun changement d'etat de la detection : pas de confirmation a ajouter).
+  * Non repris / non fourni par l'API : aucune courbe (pas de serie temporelle), pas d'etat du demon ni de la regle nft,
+    pas d'horodatage des alertes, arguments (argv) du journal non affiches.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-security-posture (2.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /cve-triage/ au profil Aurora (#2584, #2571) : un seul fichier autonome, sans script ni police externes
