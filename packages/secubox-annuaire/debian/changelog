@@ -1,3 +1,9 @@
+secubox-annuaire (0.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * Maillage automatique (#2569) : gk1 et gk3 se decouvrent par le maitre. Sur une etoile WireGuard, un satellite n'a que le maitre comme pair, donc l'annuaire ne tirait que depuis lui : deux sauts entre satellites, et les pages de pairs ne les voyaient pas l'un chez l'autre. Les pairs de synchro sont maintenant les pairs de wg_mesh.json PLUS les noeuds du repertoire qui portent une mesh_ip (champ signe de leur fiche), sans doublon et sans soi-meme. Une fiche est auto-declaree : seule une adresse interne au reseau du maillage (champ network de wg_mesh.json, 10.10.0.0/24 par defaut) est suivie. Aucun changement WireGuard : les satellites routent deja le maillage par le maitre. 4 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:21:03 +0200
+
 secubox-annuaire (0.11.3-1~bookworm1) bookworm; urgency=medium
 
   * Une box qui rejoint le maillage APRES le demarrage de l'annuaire s'inscrit chez le maitre (#2544). `_publish_self_node` ne tournait qu'au demarrage : sans maillage a ce moment-la (box neuve, preparee par Auto-Load), il ne reessayait jamais, et le maitre ne voyait la box ni dans la flotte ni dans l'assistance. Il rend maintenant un booleen (inscrite ou non), est retente a chaque passage de synchronisation (cycle complet et voie rapide) jusqu'a l'inscription, puis se tait ; l'echec est journalise. Idempotent : aucun doublon dans le journal. 5 tests.

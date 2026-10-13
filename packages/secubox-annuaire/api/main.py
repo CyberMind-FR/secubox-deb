@@ -1237,12 +1237,18 @@ def _cycle_sync(peers_path: str, ops: Optional[str] = None):
 
     Jamais d'exception vers l'appelant, mais plus de silence : un échec est journalisé (c'était `except Exception: pass`), et un passage qui
     ingère quelque chose aussi. Un passage sans changement reste muet (la voie rapide tourne toutes les 20 s)."""
-    from annuaire.mesh_sync import read_mesh_peers, sync_once  # noqa: PLC0415
+    from annuaire import mesh_sync  # noqa: PLC0415
+    from annuaire.mesh_sync import read_mesh_peers  # noqa: PLC0415
     voie = f"voie « {ops} »" if ops else "journal complet"
     try:
         peers = read_mesh_peers(peers_path)
         if not peers:
             return None
+        # Maillage automatique (#2569) : les nœuds du répertoire s'ajoutent aux pairs WireGuard (étoile : satellite <-> satellite).
+        meta = mesh_sync.read_self_meta(peers_path) or {}
+        peers = mesh_sync.completer_pairs(peers, mesh_sync.noeuds_du_repertoire(get_journal()), soi=meta.get("mesh_ip", ""),
+                                          reseau=mesh_sync.reseau_maillage(peers_path))
+        sync_once = mesh_sync.sync_once
         res = sync_once(get_journal(), peers, ops=ops) if ops else sync_once(get_journal(), peers)
     except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
         _sync_log.warning("synchronisation (%s) échouée : %s", voie, e)

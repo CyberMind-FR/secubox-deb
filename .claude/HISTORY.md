@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — annuaire 0.12.0 : maillage automatique, pairs découverts dans le répertoire (ref #2569)
+
+« Comment mesh expander pour que gk3 et gk1 s'auto-découvrent par gk2 » : l'IP était déjà joignable (satellites routent 10.10.0.0/24 par gk2), seule la liste des pairs de synchro manquait. Pairs = wg_mesh.json + nœuds du répertoire à mesh_ip interne au réseau du maillage. 15 échecs annuaire préexistants inchangés.
+
 ## 2026-10-13 — Panneaux Aurora, vague 1 : 10 paquets, 12 pages (closes #2556)
 
 Refonte Aurora de `/hardening/`, `/dns/`, `/backup/`, `/admin/`, `/system/`, `/proxypac/`, `/qos/`, `/certs/`, `/ipblock/`, `/auth/`, `/haproxy/`, `/vhost/` (PR #2557 à #2568), une page par agent en parallèle, relue (aucun script externe, aucun dialogue natif, aucun innerHTML, aucune police distante) et déployée sur gk2, gk1 et gk3. Versions : hardening 1.6.0, dns 1.4.0, backup 2.3.0, tor 1.5.0 (proxypac), qos 1.5.0, certs 1.3.0, auth 1.5.0, ipblock 1.4.0, system 1.9.0 (admin 1.8.0 puis system 1.9.0), haproxy 1.11.1 (haproxy 1.11.0 puis vhost 1.11.1).
