@@ -4,1068 +4,604 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Fournisseurs DNS au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret n'est affiché ni conservé côté navigateur : les identifiants saisis partent dans la requête puis le champ est vidé.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - DNS Provider</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Fournisseurs DNS</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* DNS Provider accent - Blue */
-            --accent: #3b82f6;
-            --accent-dim: #1d4ed8;
-            --accent-glow: rgba(59, 130, 246, 0.3);
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: #1a1a2e;
-            --text-dim: var(--p31-dim);
-            --primary: var(--accent);
-            --cyan: var(--accent);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            /* Bloom effects */
-            --bloom-accent: 0 0 6px var(--accent), 0 0 14px var(--accent-glow);
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, var(--accent-glow) 0%, transparent 70%);
-            color: var(--text);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; color: var(--accent); text-shadow: var(--bloom-accent); }
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--bg-card);
-            color: var(--text);
-            cursor: pointer;
-            margin-left: 0.5rem;
-            font-family: inherit;
-            letter-spacing: 0.05em;
-            transition: all 0.2s;
-        }
-        .btn:hover { border-color: var(--accent); color: var(--accent); }
-        .btn.primary { background: rgba(59,130,246,0.1); border-color: var(--accent); color: var(--accent); }
-        .btn.primary:hover { background: rgba(59,130,246,0.2); box-shadow: var(--bloom-accent); }
-        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
-
-        /* Stats Row */
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
-
-        /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 0;
-            margin-bottom: 1.5rem;
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-card);
-            border-radius: 8px 8px 0 0;
-            overflow: hidden;
-        }
-        .tab {
-            padding: 0.75rem 1.25rem;
-            cursor: pointer;
-            color: var(--text-dim);
-            border-bottom: 2px solid transparent;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            transition: all 0.2s;
-        }
-        .tab:hover { color: var(--accent); }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); text-shadow: var(--bloom-accent); }
-
-        /* Tab Content */
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Cards */
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1.5rem;
-        }
-        .card h2 {
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-            color: var(--p31-decay);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* Provider Cards */
-        .providers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .provider-card {
-            background: var(--tube-light);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            position: relative;
-        }
-        .provider-card.enabled { border-left: 3px solid var(--green); }
-        .provider-card.disabled { border-left: 3px solid var(--text-dim); opacity: 0.7; }
-        .provider-card .provider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
-        .provider-card .provider-name { font-weight: bold; font-size: 1rem; }
-        .provider-card .provider-type { font-size: 0.75rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; }
-        .provider-card .provider-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-dim); }
-        .provider-card .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .provider-card .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
-        .provider-card .status-dot.inactive { background: var(--text-dim); }
-        .provider-card .provider-actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
-        .provider-card .provider-actions .btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-
-        /* Domain List */
-        .domain-list { display: flex; flex-direction: column; gap: 0.5rem; }
-        .domain-item {
-            padding: 0.75rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .domain-item:hover { background: rgba(59,130,246,0.05); border-color: var(--accent); }
-        .domain-item.active { background: rgba(59,130,246,0.1); border-color: var(--accent); }
-        .domain-item .domain-name { font-weight: 600; }
-        .domain-item .domain-provider { font-size: 0.75rem; color: var(--text-dim); }
-        .domain-item .domain-records { font-size: 0.8rem; color: var(--accent); }
-
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--p31-decay); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; }
-        tr:hover { background: rgba(59,130,246,0.03); }
-
-        /* Type Badges */
-        .type-badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            font-family: monospace;
-        }
-        .type-A { background: rgba(59,130,246,0.2); color: var(--accent); }
-        .type-AAAA { background: rgba(139,92,246,0.2); color: #8b5cf6; }
-        .type-CNAME { background: rgba(0,221,68,0.2); color: var(--green); }
-        .type-MX { background: rgba(255,179,71,0.2); color: var(--yellow); }
-        .type-TXT { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .type-NS { background: rgba(236,72,153,0.2); color: #ec4899; }
-
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            /* #301: must be > .global-menu-bar (z-index 998 !important from
-               shared/hybrid-skin.css) otherwise the modal opens behind the
-               navbar and looks unviewable. */
-            z-index: 1500;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal.show { display: flex; }
-        .modal-content {
-            background: var(--bg-card);
-            border: 1px solid var(--accent);
-            border-radius: 8px;
-            padding: 1.5rem;
-            min-width: 450px;
-            max-width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 0 30px var(--accent-glow);
-        }
-        .modal-content h3 {
-            margin-bottom: 1rem;
-            color: var(--accent);
-            letter-spacing: 0.1em;
-        }
-
-        /* Forms */
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background: var(--tube-light);
-            color: var(--text);
-            font-family: inherit;
-        }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 8px var(--accent-glow);
-        }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-
-        /* ACME Section */
-        .acme-status {
-            padding: 1rem;
-            border-radius: 8px;
-            background: var(--tube-light);
-            border: 1px solid var(--border);
-        }
-        .acme-status.pending { border-color: var(--yellow); }
-        .acme-status.valid { border-color: var(--green); }
-        .acme-status .status-icon { font-size: 1.5rem; margin-right: 0.5rem; }
-
-        /* Log Entries */
-        .log-entry {
-            padding: 0.5rem;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.8rem;
-            display: flex;
-            gap: 1rem;
-        }
-        .log-entry .timestamp { color: var(--text-dim); min-width: 150px; }
-        .log-entry .action { color: var(--accent); min-width: 120px; font-weight: 600; }
-        .log-entry .details { color: var(--text); }
-
-        /* Grid layouts */
-        .grid-2 { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-
-        /* DDNS Form */
-        .ddns-form {
-            display: grid;
-            grid-template-columns: 1fr 1fr auto;
-            gap: 1rem;
-            align-items: end;
-        }
-
-        /* Empty state */
-        .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .grid-2 { grid-template-columns: 1fr; }
-            .stats-row { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            .sidebar { display: none; }
-            .stats-row { grid-template-columns: 1fr; }
-            .modal-content { min-width: 95%; }
-        }
-
-        .mono { font-family: monospace; font-size: 0.85rem; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.ok:hover{background:rgba(46,204,113,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr} .grille.etroit{grid-template-columns:minmax(220px,1fr) 2fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)} tbody tr.sel{background:rgba(41,182,246,.14)}
+        td.act,td.nb{white-space:nowrap}
+        td.act>*{margin:0 5px 3px 0}
+        td.long{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.vio{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)} .pill.jau{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select,.recherche{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus,.recherche:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        form.saisie .large{grid-column:1/-1}
+        .recherche{width:auto;min-width:140px;max-width:100%;margin-bottom:8px}
+        .fil{margin:0 0 8px;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+        .liste{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+        .liste button{width:100%;text-align:left;font:inherit;color:var(--texte);background:rgba(10,22,46,.5);border:1px solid var(--trait);border-radius:9px;padding:7px 10px;cursor:pointer;display:grid;gap:2px;min-height:38px}
+        .liste button:hover{border-color:var(--cyan)} .liste button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .liste button[aria-pressed=true]{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .liste button small{color:var(--faible);font-size:.68rem}
+        .alerte{color:var(--orange);font-size:.76rem;margin:0 0 6px;overflow-wrap:anywhere}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>DNS Provider</h1>
-            <div>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.1 8.6 4.7 4.7 0 0 0 7 18Z"/><path d="M9 13h6M9 15.5h3"/></svg>
+                <div><h1>Fournisseurs DNS</h1><small>Gandi, Cloudflare, OVH, Route 53 : domaines, enregistrements, ACME et DNS dynamique</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="stats-row">
-            <div class="stat-card"><div class="value" id="stat-providers">-</div><div class="label">Providers</div></div>
-            <div class="stat-card"><div class="value" id="stat-domains">-</div><div class="label">Domains</div></div>
-            <div class="stat-card"><div class="value" id="stat-records">-</div><div class="label">Records</div></div>
-            <div class="stat-card"><div class="value" id="stat-status">-</div><div class="label">Status</div></div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Fournisseurs DNS enregistrés (source : /summary)."><span class="l">Fournisseurs</span><span class="v" id="tFourn">—</span><span class="s" id="sFourn">enregistrés</span></div>
+            <div class="tuile cy" title="Domaines visibles chez les fournisseurs actifs, lus en direct chez eux (/domains). Un fournisseur en erreur n’est pas compté."><span class="l">Domaines</span><span class="v" id="tDom">—</span><span class="s" id="sDom">chez les fournisseurs actifs</span></div>
+            <div class="tuile cy" title="Nombre d’enregistrements du domaine ouvert dans l’onglet Enregistrements. L’API ne fournit pas de total tous domaines : la tuile reste à « — » tant qu’aucun domaine n’est ouvert."><span class="l">Enregistrements</span><span class="v" id="tEnr">—</span><span class="s" id="sEnr">ouvrir un domaine</span></div>
+            <div class="tuile ok" id="cEtat" title="OK si au moins un fournisseur est actif ; « Aucun actif » si tous sont désactivés."><span class="l">État</span><span class="v" id="tEtat">—</span><span class="s" id="sEtat">fournisseurs actifs</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections des fournisseurs DNS">
+            <button type="button" role="tab" id="o-fournisseurs" data-t="fournisseurs" aria-selected="true" aria-controls="t-fournisseurs">Fournisseurs</button>
+            <button type="button" role="tab" id="o-domaines" data-t="domaines" aria-selected="false" aria-controls="t-domaines">Domaines</button>
+            <button type="button" role="tab" id="o-enregistrements" data-t="enregistrements" aria-selected="false" aria-controls="t-enregistrements">Enregistrements</button>
+            <button type="button" role="tab" id="o-acme" data-t="acme" aria-selected="false" aria-controls="t-acme">ACME</button>
+            <button type="button" role="tab" id="o-ddns" data-t="ddns" aria-selected="false" aria-controls="t-ddns">DNS dynamique</button>
+            <button type="button" role="tab" id="o-reglages" data-t="reglages" aria-selected="false" aria-controls="t-reglages">Réglages</button>
         </div>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="providers">Providers</div>
-            <div class="tab" data-tab="domains">Domains</div>
-            <div class="tab" data-tab="records">Records</div>
-            <div class="tab" data-tab="acme">ACME</div>
-            <div class="tab" data-tab="ddns">Dynamic DNS</div>
-            <div class="tab" data-tab="settings">Settings</div>
-        </div>
+        <section id="t-fournisseurs" role="tabpanel" aria-labelledby="o-fournisseurs">
+            <div class="pan"><h3>Fournisseurs <i id="nFourn"></i><button class="btn prim sm" id="addFourn" type="button">+ Ajouter un fournisseur</button></h3>
+                <div id="rFourn" class="retour" hidden></div>
+                <form class="saisie" id="fFourn" hidden autocomplete="off">
+                    <label>Nom<input name="name" placeholder="Mon Cloudflare" autocomplete="off" required></label>
+                    <label>Type<select name="ptype" id="ptype"><option value="gandi">Gandi LiveDNS</option><option value="cloudflare">Cloudflare</option><option value="ovh">OVH</option><option value="route53">AWS Route 53</option></select></label>
+                    <div id="champsCred" style="display:contents"></div>
+                    <p class="note large">Les identifiants partent dans la requête puis les champs sont vidés : la page ne les affiche ni ne les conserve jamais. Côté serveur ils sont stockés dans /var/lib/secubox/dns-provider/providers.json (conservé par apt upgrade, perdu par apt purge) et l’API ne les renvoie que masqués.</p>
+                    <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fFourn">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Type</th><th>Identifiant</th><th>État</th><th>Ajouté le</th><th>Actions</th></tr></thead><tbody id="bFourn"></tbody></table></div>
+                <p class="note">Les identifiants enregistrés ne sont jamais affichés, même tronqués.</p></div>
+        </section>
 
-        <!-- Providers Tab -->
-        <div class="tab-content active" id="tab-providers">
-            <div class="card">
-                <h2>DNS Providers <button class="btn primary" onclick="showAddProvider()">+ Add Provider</button></h2>
-                <div class="providers-grid" id="providers-list">
-                    <div class="empty">Loading providers...</div>
-                </div>
-            </div>
-        </div>
+        <section id="t-domaines" role="tabpanel" aria-labelledby="o-domaines" hidden>
+            <div class="pan"><h3>Domaines gérés <i id="nDom"></i></h3>
+                <div id="alertesDom"></div>
+                <div class="tab"><table><thead><tr><th>Domaine</th><th>Fournisseur</th><th>Type</th><th>Statut</th><th>Actions</th></tr></thead><tbody id="bDom"></tbody></table></div>
+                <p class="note">Liste lue en direct chez chaque fournisseur actif. Le statut est celui renvoyé par le fournisseur ; « — » s’il n’en donne pas.</p></div>
+        </section>
 
-        <!-- Domains Tab -->
-        <div class="tab-content" id="tab-domains">
-            <div class="card">
-                <h2>Managed Domains</h2>
-                <div class="domain-list" id="domains-list">
-                    <div class="empty">Loading domains...</div>
-                </div>
+        <section id="t-enregistrements" role="tabpanel" aria-labelledby="o-enregistrements" hidden>
+            <div class="grille etroit">
+                <div class="pan"><h3>Choisir un domaine</h3><ul class="liste" id="lDom"></ul></div>
+                <div class="pan"><h3>Enregistrements <i id="nEnr"></i><button class="btn prim sm" id="addEnr" type="button" hidden>+ Ajouter</button></h3>
+                    <div id="rEnr" class="retour" hidden></div>
+                    <form class="saisie" id="fEnr" hidden autocomplete="off">
+                        <label>Type<select name="type"><option value="A">A — adresse IPv4</option><option value="AAAA">AAAA — adresse IPv6</option><option value="CNAME">CNAME — nom canonique</option><option value="MX">MX — serveur de messagerie</option><option value="TXT">TXT — texte</option><option value="NS">NS — serveur de noms</option><option value="SRV">SRV — service</option><option value="CAA">CAA — autorité de certification</option></select></label>
+                        <label>Nom<input name="name" placeholder="@ ou www"></label>
+                        <label>Valeur<input name="value" placeholder="192.0.2.10" required></label>
+                        <label>TTL (secondes)<input name="ttl" type="number" min="60" max="86400" value="300"></label>
+                        <label>Priorité (MX, SRV)<input name="priority" type="number" placeholder="10"></label>
+                        <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fEnr">Annuler</button></div>
+                    </form>
+                    <input class="recherche" id="rechEnr" type="search" placeholder="Filtrer (type, nom, valeur)" aria-label="Filtrer les enregistrements" hidden>
+                    <div class="tab"><table><thead><tr><th>Type</th><th>Nom</th><th>Valeur</th><th>TTL</th><th>Actions</th></tr></thead><tbody id="bEnr"></tbody></table></div></div>
             </div>
-        </div>
+        </section>
 
-        <!-- Records Tab -->
-        <div class="tab-content" id="tab-records">
-            <div class="grid-2">
-                <div class="card">
-                    <h2>Select Domain</h2>
-                    <div class="domain-list" id="records-domain-list">
-                        <div class="empty">Select a domain</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <h2>DNS Records <span id="current-domain-name"></span>
-                        <button class="btn primary" id="add-record-btn" style="display:none" onclick="showAddRecord()">+ Add Record</button>
-                    </h2>
-                    <div id="records-container">
-                        <div class="empty">Select a domain to view records</div>
-                    </div>
-                </div>
+        <section id="t-acme" role="tabpanel" aria-labelledby="o-acme" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Défi ACME DNS-01</h3>
+                    <div id="rAcme" class="retour" hidden></div>
+                    <form class="saisie" id="fAcme" autocomplete="off">
+                        <label>Domaine<input name="domain" placeholder="example.com" required></label>
+                        <label>Fournisseur<select name="provider" id="selAcme"></select></label>
+                        <label>Jeton (token)<input name="token" placeholder="Jeton du défi ACME" required></label>
+                        <label>Autorisation de clé<input name="keyauth" placeholder="Valeur d’autorisation de clé" required></label>
+                        <div class="bout"><button class="btn ok" type="submit">Créer le défi</button><span id="cAcme"></span></div>
+                    </form>
+                    <p class="note">Crée l’enregistrement TXT _acme-challenge pour la validation d’un certificat. La suppression demande le domaine et le jeton.</p></div>
+                <div class="pan"><h3>Activité ACME récente <i>journal d’audit</i></h3>
+                    <div class="tab"><table><thead><tr><th>Date</th><th>Action</th><th>Domaine</th></tr></thead><tbody id="bAcmeJ"></tbody></table></div>
+                    <p class="note">L’API ne liste pas les défis actifs : seules les créations et suppressions des 50 dernières entrées du journal sont montrées.</p></div>
             </div>
-        </div>
+        </section>
 
-        <!-- ACME Tab -->
-        <div class="tab-content" id="tab-acme">
-            <div class="card">
-                <h2>ACME DNS-01 Challenge</h2>
-                <p style="margin-bottom: 1rem; color: var(--text-dim);">Create DNS TXT records for Let's Encrypt certificate validation.</p>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Domain</label>
-                        <input type="text" id="acme-domain" placeholder="example.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Provider</label>
-                        <select id="acme-provider"></select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Token</label>
-                        <input type="text" id="acme-token" placeholder="ACME challenge token">
-                    </div>
-                    <div class="form-group">
-                        <label>Key Authorization</label>
-                        <input type="text" id="acme-keyauth" placeholder="Key authorization value">
-                    </div>
-                </div>
-                <div class="form-actions" style="justify-content: flex-start;">
-                    <button class="btn success" onclick="createAcmeChallenge()">Create Challenge</button>
-                    <button class="btn danger" onclick="deleteAcmeChallenge()">Delete Challenge</button>
-                </div>
+        <section id="t-ddns" role="tabpanel" aria-labelledby="o-ddns" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Mise à jour DNS dynamique</h3>
+                    <div id="rDdns" class="retour" hidden></div>
+                    <form class="saisie" id="fDdns" autocomplete="off">
+                        <label>Domaine<input name="domain" placeholder="example.com" required></label>
+                        <label>Sous-domaine<input name="subdomain" value="@" placeholder="@ ou www"></label>
+                        <label>Fournisseur<select name="provider" id="selDdns"></select></label>
+                        <label>IPv4 manuelle (facultative)<input name="ip" placeholder="Détection automatique"></label>
+                        <div class="bout"><button class="btn prim" type="submit">Mettre à jour l’IP</button></div>
+                    </form>
+                    <p class="note">Met à jour (ou crée) l’enregistrement A. Sans adresse saisie, le serveur détecte l’IP publique en interrogeant un service externe (api.ipify.org).</p></div>
+                <div class="pan"><h3>Mises à jour récentes <i>journal d’audit</i></h3>
+                    <div class="tab"><table><thead><tr><th>Date</th><th>Nom</th><th>IP</th><th>Résultat</th></tr></thead><tbody id="bDdnsJ"></tbody></table></div>
+                    <p class="note">Extrait des 50 dernières entrées du journal.</p></div>
             </div>
-            <div class="card">
-                <h2>Active Challenges</h2>
-                <div id="acme-challenges">
-                    <div class="empty">No active ACME challenges</div>
-                </div>
-            </div>
-        </div>
+        </section>
 
-        <!-- DDNS Tab -->
-        <div class="tab-content" id="tab-ddns">
-            <div class="card">
-                <h2>Dynamic DNS Update</h2>
-                <p style="margin-bottom: 1rem; color: var(--text-dim);">Update DNS A/AAAA records with your current IP address.</p>
-                <div class="ddns-form">
-                    <div class="form-group">
-                        <label>Domain</label>
-                        <input type="text" id="ddns-domain" placeholder="example.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Subdomain</label>
-                        <input type="text" id="ddns-subdomain" placeholder="@ or www" value="@">
-                    </div>
-                    <button class="btn primary" onclick="updateDdns()">Update IP</button>
-                </div>
-                <div class="form-row" style="margin-top: 1rem;">
-                    <div class="form-group">
-                        <label>Provider</label>
-                        <select id="ddns-provider"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Manual IPv4 (optional)</label>
-                        <input type="text" id="ddns-ipv4" placeholder="Auto-detect">
-                    </div>
-                </div>
+        <section id="t-reglages" role="tabpanel" aria-labelledby="o-reglages" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Configuration</h3>
+                    <div id="rConf" class="retour" hidden></div>
+                    <form class="saisie" id="fConf" autocomplete="off">
+                        <label>TTL par défaut (s)<input name="default_ttl" type="number" min="0" placeholder="—"></label>
+                        <label>TTL des défis ACME (s)<input name="acme_ttl" type="number" min="0" placeholder="—"></label>
+                        <label>Intervalle de contrôle DDNS (s)<input name="ddns_check_interval" type="number" min="0" placeholder="—"></label>
+                        <label>Conservation du journal (jours)<input name="audit_retention_days" type="number" min="0" placeholder="—"></label>
+                        <div class="bout"><button class="btn prim" type="submit">Enregistrer</button></div>
+                    </form></div>
+                <div class="pan"><h3>Journal d’audit <i id="nLog"></i></h3>
+                    <div class="tab" style="max-height:420px;overflow-y:auto"><table><thead><tr><th>Date</th><th>Action</th><th>Utilisateur</th><th>Détails</th></tr></thead><tbody id="bLog"></tbody></table></div>
+                    <p class="note">Les 50 dernières entrées, la plus récente d’abord.</p></div>
             </div>
-            <div class="card">
-                <h2>Recent DDNS Updates</h2>
-                <div id="ddns-history">
-                    <div class="empty">No recent DDNS updates</div>
-                </div>
-            </div>
-        </div>
+        </section>
+    </div></div></main>
 
-        <!-- Settings Tab -->
-        <div class="tab-content" id="tab-settings">
-            <div class="card">
-                <h2>Configuration</h2>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Default TTL (seconds)</label>
-                        <input type="number" id="config-ttl" value="300">
-                    </div>
-                    <div class="form-group">
-                        <label>ACME Challenge TTL</label>
-                        <input type="number" id="config-acme-ttl" value="60">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>DDNS Check Interval (seconds)</label>
-                        <input type="number" id="config-ddns-interval" value="300">
-                    </div>
-                    <div class="form-group">
-                        <label>Audit Log Retention (days)</label>
-                        <input type="number" id="config-audit-retention" value="90">
-                    </div>
-                </div>
-                <div class="form-actions" style="justify-content: flex-start;">
-                    <button class="btn primary" onclick="saveConfig()">Save Configuration</button>
-                </div>
-            </div>
-            <div class="card">
-                <h2>Audit Log</h2>
-                <div id="audit-log" style="max-height: 400px; overflow-y: auto;">
-                    <div class="empty">Loading logs...</div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Add Provider Modal -->
-    <div class="modal" id="provider-modal">
-        <div class="modal-content">
-            <h3>Add DNS Provider</h3>
-            <div class="form-group">
-                <label>Provider Name</label>
-                <input type="text" id="provider-name" placeholder="My Cloudflare">
-            </div>
-            <div class="form-group">
-                <label>Provider Type</label>
-                <select id="provider-type" onchange="updateCredentialFields()">
-                    <option value="gandi" selected>Gandi LiveDNS</option>
-                    <option value="cloudflare">Cloudflare</option>
-                    <option value="ovh">OVH</option>
-                    <option value="route53">AWS Route53</option>
-                </select>
-            </div>
-            <div id="credential-fields">
-                <!-- Dynamic credential fields -->
-            </div>
-            <p class="hint" style="font-size:0.8rem;color:var(--text-dim);margin:0.5rem 0;">
-              Credentials persist in <code>/var/lib/secubox/dns-provider/providers.json</code>
-              (kept across <code>apt upgrade</code>, lost on <code>apt purge</code>). For
-              full migration safety also drop the raw key in
-              <code>/etc/secubox/secrets/dns-provider-gandi.key</code> (mode 600).
-            </p>
-            <div id="add-provider-status" style="font-size:0.85rem;margin:0.5rem 0;"></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('provider-modal')">Cancel</button>
-                <button class="btn primary" id="add-provider-btn" onclick="addProvider()">Add Provider</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Add Record Modal -->
-    <div class="modal" id="record-modal">
-        <div class="modal-content">
-            <h3>Add DNS Record</h3>
-            <div class="form-group">
-                <label>Type</label>
-                <select id="record-type">
-                    <option value="A">A - IPv4 Address</option>
-                    <option value="AAAA">AAAA - IPv6 Address</option>
-                    <option value="CNAME">CNAME - Canonical Name</option>
-                    <option value="MX">MX - Mail Exchange</option>
-                    <option value="TXT">TXT - Text Record</option>
-                    <option value="NS">NS - Nameserver</option>
-                    <option value="SRV">SRV - Service</option>
-                    <option value="CAA">CAA - Cert Authority</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Name</label>
-                <input type="text" id="record-name" placeholder="@ or www">
-            </div>
-            <div class="form-group">
-                <label>Value</label>
-                <input type="text" id="record-value" placeholder="192.168.1.1">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>TTL (seconds)</label>
-                    <input type="number" id="record-ttl" value="300">
-                </div>
-                <div class="form-group">
-                    <label>Priority (MX/SRV)</label>
-                    <input type="number" id="record-priority" placeholder="10">
-                </div>
-            </div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('record-modal')">Cancel</button>
-                <button class="btn primary" onclick="addRecord()">Create Record</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/dns-provider';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({
-            'Content-Type': 'application/json',
-            ...(token() ? { 'Authorization': 'Bearer ' + token() } : {})
-        });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const court = (s, n) => { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
-        let providers = [];
-        let domains = [];
-        let currentDomain = null;
-        let currentProviderId = null;
+        let SUMMARY = null, FOURN = [], DOMAINES = [], DOM_ERR = [], CONFIG = null, LOGS = [];
+        let SESSION_OK = true, TOUS_KO = false;
+        let SEL = null;           // { name, pid } : domaine ouvert dans l'onglet Enregistrements
+        let RECS = null, RECS_ERR = '';
+        let CONFIRM = null;       // { genre, cle } : confirmation intégrée, jamais de dialogue natif
+        let SALI = false;         // saisie en cours : pas d'actualisation automatique
 
-        async function api(path, opts = {}) {
-            try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch (e) { console.error(e); return {}; }
+        const CRED = {
+            gandi: [{ n: 'api_key', l: 'Clé d’API', t: 'password' }],
+            cloudflare: [{ n: 'api_token', l: 'Jeton d’API', t: 'password' }],
+            ovh: [{ n: 'application_key', l: 'Application Key', t: 'text' }, { n: 'application_secret', l: 'Application Secret', t: 'password' },
+                  { n: 'consumer_key', l: 'Consumer Key', t: 'password' }, { n: 'endpoint', l: 'Endpoint', t: 'text', d: 'ovh-eu' }],
+            route53: [{ n: 'access_key_id', l: 'Access Key ID', t: 'text' }, { n: 'secret_access_key', l: 'Secret Access Key', t: 'password' }, { n: 'region', l: 'Région', t: 'text', d: 'us-east-1' }]
+        };
+        const TYPES = { gandi: 'GANDI', cloudflare: 'CLOUDFLARE', ovh: 'OVH', route53: 'ROUTE 53' };
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-        // Like api() but surfaces non-2xx as a real error instead of silently
-        // returning the FastAPI {detail: …} body as if it were a success
-        // (legacy behaviour rendered 422 validation errors as `[object Object]`
-        // in alerts — see #299). Returns { ok, status, data, error }.
-        async function apiStrict(path, opts = {}) {
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return { ok: false, status: 401, error: 'unauthorised' }; }
-                let data = null;
-                try { data = await res.json(); } catch { /* non-JSON response body */ }
-                if (!res.ok) {
-                    let error = 'HTTP ' + res.status;
-                    if (data && data.detail) {
-                        error = typeof data.detail === 'string'
-                            ? data.detail
-                            : JSON.stringify(data.detail);
-                    }
-                    return { ok: false, status: res.status, data, error };
-                }
-                return { ok: true, status: res.status, data: data || {} };
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !(data && data.success === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (d) return court(typeof d === 'string' ? d : JSON.stringify(d), 300);
+            if (res.statut === 401 || res.statut === 403) return 'session requise';
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function quand(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            return isNaN(d) ? '—' : d.toLocaleString('fr-FR');
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function confirmation(cell, genre, cle, libelle, fn) {
+            if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === cle) {
+                cell.appendChild(el('span', 'note', libelle + ' ?'));
+                cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else {
+                cell.appendChild(btn(libelle, 'danger', () => { CONFIRM = { genre, cle }; rendre(); }));
+            }
+        }
+        const cleDom = d => d.name + '|' + d.pid;
+        const FOURN_PAR_ID = id => FOURN.find(p => p.id === id);
+
+        function demoData() {
+            const t = Date.now();
+            FOURN = [{ id: 'a1b2c3d4', name: 'Gandi principal', provider: 'gandi', enabled: true, created_at: new Date(t - 86400e3 * 40).toISOString() },
+                     { id: 'e5f6a7b8', name: 'Cloudflare vitrine', provider: 'cloudflare', enabled: true, created_at: new Date(t - 86400e3 * 12).toISOString() },
+                     { id: 'c9d0e1f2', name: 'OVH ancien', provider: 'ovh', enabled: false, created_at: new Date(t - 86400e3 * 200).toISOString() }];
+            SUMMARY = { providers: { total: 3, active: 2, by_type: { gandi: 1, cloudflare: 1, ovh: 1, route53: 0 } }, domains: 3 };
+            DOMAINES = [{ name: 'example.com', status: 'active', provider_id: 'a1b2c3d4', provider_name: 'Gandi principal', provider_type: 'gandi' },
+                        { name: 'example.net', status: 'active', provider_id: 'a1b2c3d4', provider_name: 'Gandi principal', provider_type: 'gandi' },
+                        { name: 'example.org', status: 'active', provider_id: 'e5f6a7b8', provider_name: 'Cloudflare vitrine', provider_type: 'cloudflare' }];
+            DOM_ERR = [];
+            CONFIG = { default_ttl: 300, acme_ttl: 60, ddns_check_interval: 300, audit_retention_days: 90 };
+            LOGS = [{ timestamp: new Date(t - 600e3).toISOString(), action: 'ddns_update', user: 'admin', details: { domain: 'example.com', subdomain: 'box', ip: '198.51.100.7', action: 'updated' } },
+                    { timestamp: new Date(t - 3600e3).toISOString(), action: 'acme_challenge_created', user: 'admin', details: { domain: 'example.org', provider: 'e5f6a7b8' } },
+                    { timestamp: new Date(t - 3500e3).toISOString(), action: 'acme_challenge_deleted', user: 'admin', details: { domain: 'example.org', provider: 'e5f6a7b8' } },
+                    { timestamp: new Date(t - 86400e3).toISOString(), action: 'record_created', user: 'admin', details: { domain: 'example.com', type: 'A', name: 'www' } },
+                    { timestamp: new Date(t - 86400e3 * 12).toISOString(), action: 'provider_added', user: 'admin', details: { id: 'e5f6a7b8', name: 'Cloudflare vitrine', provider: 'cloudflare' } }];
+        }
+        const DEMO_RECS = [{ id: 'r1', type: 'A', name: '@', value: '192.0.2.10', ttl: 300 }, { id: 'r2', type: 'A', name: 'www', value: '192.0.2.10', ttl: 300 },
+                           { id: 'r3', type: 'MX', name: '@', value: 'mail.example.com.', ttl: 3600 }, { id: 'r4', type: 'TXT', name: '@', value: 'v=spf1 mx -all', ttl: 3600 },
+                           { id: 'r5', type: 'AAAA', name: 'www', value: '2001:db8::10', ttl: 300 }];
+
+        function estAuth(e) { return e && (e.statut === 401 || e.statut === 403); }
+        async function charger() {
+            SALI = false;
+            if (DEMO) { demoData(); SESSION_OK = true; TOUS_KO = false; if (SEL) await chargerRecords(false); rendre(); remplirConfig(); return; }
+            const essais = await Promise.allSettled([lire('/summary'), lire('/providers'), lire('/domains'), lire('/config'), lire('/logs?limit=50')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            SESSION_OK = !essais.some(e => e.status === 'rejected' && estAuth(e.reason));
+            TOUS_KO = essais.every(e => e.status === 'rejected');
+            SUMMARY = val(0);
+            const p = val(1); FOURN = p && Array.isArray(p.providers) ? p.providers : [];
+            const d = val(2); const tous = d && Array.isArray(d.domains) ? d.domains : null;
+            DOMAINES = tous ? tous.filter(x => !x.error && x.name) : [];
+            DOM_ERR = tous ? tous.filter(x => x.error) : [];
+            if (!d) DOMAINES = null;
+            CONFIG = val(3);
+            const l = val(4); LOGS = l && Array.isArray(l.logs) ? l.logs : [];
+            $('erreur').hidden = !(TOUS_KO && SESSION_OK);
+            if (TOUS_KO && SESSION_OK) $('erreur').textContent = 'Impossible de lire le service des fournisseurs DNS (arrêté ou injoignable).';
+            if (SEL) await chargerRecords(false);
+            rendre(); remplirConfig();
+        }
+        function remplirConfig() {
+            const f = $('fConf'); const c = CONFIG || {};
+            ['default_ttl', 'acme_ttl', 'ddns_check_interval', 'audit_retention_days'].forEach(k => { f[k].value = (c[k] === undefined || c[k] === null) ? '' : c[k]; });
+        }
+
+        async function chargerRecords(rend) {
+            RECS_ERR = '';
+            if (!SEL) { RECS = null; return; }
+            if (DEMO) { RECS = DEMO_RECS.slice(); if (rend !== false) rendre(); return; }
+            try {
+                const d = await lire('/domain/' + encodeURIComponent(SEL.name) + '/records?provider_id=' + encodeURIComponent(SEL.pid));
+                RECS = Array.isArray(d.records) ? d.records : [];
             } catch (e) {
-                console.error('[dns-provider] apiStrict()', e);
-                return { ok: false, status: 0, error: String(e) };
+                RECS = null; RECS_ERR = estAuth(e) ? 'session requise' : (e.statut === 404 ? 'Domaine introuvable chez ce fournisseur.' : 'Lecture impossible (' + (e.statut ? 'HTTP ' + e.statut : 'injoignable') + ').');
+                if (estAuth(e)) SESSION_OK = false;
             }
+            if (rend !== false) rendre();
         }
 
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            const tot = SUMMARY && SUMMARY.providers ? SUMMARY.providers.total : (SESSION_OK && FOURN.length ? FOURN.length : null);
+            const act = SUMMARY && SUMMARY.providers ? SUMMARY.providers.active : null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (TOUS_KO) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (act === null) { etat.className = 'actif neutre'; etat.textContent = 'ÉTAT INCONNU'; }
+            else if (act > 0) { etat.className = 'actif'; etat.textContent = 'FOURNISSEUR ACTIF'; }
+            else { etat.className = 'actif att'; etat.textContent = 'AUCUN FOURNISSEUR ACTIF'; }
+            const ok = SESSION_OK && !TOUS_KO;
+            $('tFourn').textContent = ok && tot !== null && tot !== undefined ? tot : '—';
+            $('sFourn').textContent = ok && act !== null && act !== undefined ? act + ' actif' + (act > 1 ? 's' : '') : 'enregistrés';
+            $('tDom').textContent = ok && DOMAINES ? DOMAINES.length : '—';
+            $('sDom').textContent = ok && DOM_ERR.length ? DOM_ERR.length + ' fournisseur(s) en erreur' : 'chez les fournisseurs actifs';
+            $('tEnr').textContent = ok && SEL && RECS ? RECS.length : '—';
+            $('sEnr').textContent = SEL ? SEL.name : 'ouvrir un domaine';
+            $('tEtat').textContent = ok && act !== null && act !== undefined ? (act > 0 ? 'OK' : 'Aucun actif') : '—';
+            $('cEtat').className = 'tuile ' + (ok && act > 0 ? 'ok' : (ok && act === 0 ? 'att' : 'cy'));
+            rendreFournisseurs(); rendreDomaines(); rendreRecords(); remplirSelects(); rendreAcme(); rendreJournaux();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function ligneVide(tb, n, txt) { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+
+        function rendreFournisseurs() {
+            const tb = $('bFourn'); tb.replaceChildren();
+            $('nFourn').textContent = FOURN.length ? FOURN.length + ' fournisseur' + (FOURN.length > 1 ? 's' : '') : '';
+            if (!FOURN.length) { ligneVide(tb, 6, SESSION_OK && !TOUS_KO ? 'Aucun fournisseur configuré. Ajoutez-en un pour commencer.' : '—'); return; }
+            FOURN.forEach(p => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(p.name)));
+                const t = el('td'); t.appendChild(pastille('vio', tiret(TYPES[p.provider] || String(p.provider).toUpperCase()))); tr.appendChild(t);
+                tr.appendChild(el('td', 'mono', tiret(p.id)));
+                const e = el('td'); e.appendChild(p.enabled ? pastille('ok', 'ACTIF') : pastille('', 'DÉSACTIVÉ')); tr.appendChild(e);
+                tr.appendChild(el('td', '', quand(p.created_at)));
+                const act = el('td', 'act');
+                act.appendChild(btn(p.enabled ? 'Désactiver' : 'Activer', p.enabled ? '' : 'ok', () => basculer(p)));
+                confirmation(act, 'fournisseur', p.id, 'Supprimer', () => supprimerFourn(p));
+                tr.appendChild(act); tb.appendChild(tr);
             });
-        });
-
-        // Load data
-        async function loadSummary() {
-            const d = await api('/summary');
-            document.getElementById('stat-providers').textContent = d.providers?.total || 0;
-            document.getElementById('stat-domains').textContent = d.domains || 0;
-            document.getElementById('stat-status').textContent = d.providers?.active > 0 ? 'OK' : '-';
-            document.getElementById('stat-status').style.color = d.providers?.active > 0 ? 'var(--green)' : 'var(--text-dim)';
         }
 
-        async function loadProviders() {
-            const d = await api('/providers');
-            providers = d.providers || [];
-            const list = document.getElementById('providers-list');
-
-            if (!providers.length) {
-                list.innerHTML = '<div class="empty">No providers configured. Add a provider to get started.</div>';
-                return;
+        function ouvrirDomaine(d) {
+            SEL = { name: d.name, pid: d.provider_id }; RECS = null; RECS_ERR = ''; $('fEnr').hidden = true;
+            onglet('enregistrements'); chargerRecords();
+        }
+        function rendreDomaines() {
+            const tb = $('bDom'); tb.replaceChildren();
+            const al = $('alertesDom'); al.replaceChildren();
+            DOM_ERR.forEach(x => al.appendChild(el('p', 'alerte', '⚠ ' + tiret(x.provider_name) + ' (' + tiret(x.provider_type) + ') : ' + court(x.error, 200))));
+            $('nDom').textContent = DOMAINES && DOMAINES.length ? DOMAINES.length + ' domaine' + (DOMAINES.length > 1 ? 's' : '') : '';
+            const ul = $('lDom'); ul.replaceChildren();
+            if (!DOMAINES || !DOMAINES.length) {
+                const msg = !SESSION_OK || TOUS_KO || !DOMAINES ? '—' : 'Aucun domaine visible. Ajoutez un fournisseur actif.';
+                ligneVide(tb, 5, msg); const li = el('li', 'vide', msg); ul.appendChild(li); return;
             }
-
-            list.innerHTML = providers.map(p => `
-                <div class="provider-card ${p.enabled ? 'enabled' : 'disabled'}">
-                    <div class="provider-header">
-                        <div>
-                            <div class="provider-name">${escapeHtml(p.name)}</div>
-                            <div class="provider-type">${p.provider.toUpperCase()}</div>
-                        </div>
-                        <div class="provider-status">
-                            <span class="status-dot ${p.enabled ? 'active' : 'inactive'}"></span>
-                            ${p.enabled ? 'Active' : 'Disabled'}
-                        </div>
-                    </div>
-                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem;">
-                        ID: ${p.id}
-                    </div>
-                    <div class="provider-actions">
-                        <button class="btn ${p.enabled ? 'danger' : 'success'}" onclick="toggleProvider('${p.id}', ${!p.enabled})">
-                            ${p.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                        <button class="btn danger" onclick="deleteProvider('${p.id}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
-
-            // Update provider selects
-            updateProviderSelects();
-        }
-
-        async function loadDomains() {
-            const d = await api('/domains');
-            domains = d.domains || [];
-
-            // Update domains list
-            const list = document.getElementById('domains-list');
-            const recordsList = document.getElementById('records-domain-list');
-
-            if (!domains.length) {
-                list.innerHTML = '<div class="empty">No domains found. Add a provider first.</div>';
-                recordsList.innerHTML = '<div class="empty">No domains available</div>';
-                return;
-            }
-
-            const html = domains.map(d => `
-                <div class="domain-item" onclick="selectDomain('${d.name}', '${d.provider_id}')">
-                    <div>
-                        <div class="domain-name">${escapeHtml(d.name)}</div>
-                        <div class="domain-provider">${escapeHtml(d.provider_name || d.provider_type)}</div>
-                    </div>
-                    <div class="domain-records">${d.status || 'active'}</div>
-                </div>
-            `).join('');
-
-            list.innerHTML = html;
-            recordsList.innerHTML = html;
-
-            // Update total records count (rough estimate)
-            document.getElementById('stat-records').textContent = domains.length * 5 + '+';
-        }
-
-        async function selectDomain(name, providerId) {
-            currentDomain = name;
-            currentProviderId = providerId;
-            document.getElementById('current-domain-name').textContent = ': ' + name;
-            document.getElementById('add-record-btn').style.display = '';
-
-            // Highlight selected
-            document.querySelectorAll('#records-domain-list .domain-item').forEach(el => {
-                el.classList.toggle('active', el.textContent.includes(name));
+            DOMAINES.forEach(d => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', d.name));
+                tr.appendChild(el('td', '', tiret(d.provider_name)));
+                const t = el('td'); t.appendChild(pastille('vio', tiret(TYPES[d.provider_type] || d.provider_type))); tr.appendChild(t);
+                const s = el('td'); if (d.status) s.appendChild(pastille(d.status === 'active' ? 'ok' : 'att', String(d.status).toUpperCase())); else s.textContent = '—'; tr.appendChild(s);
+                const a = el('td', 'act'); a.appendChild(btn('Voir les enregistrements', '', () => ouvrirDomaine(d))); tr.appendChild(a);
+                tb.appendChild(tr);
+                const li = el('li'); const b = el('button'); b.type = 'button';
+                b.setAttribute('aria-pressed', String(!!SEL && cleDom({ name: d.name, pid: d.provider_id }) === cleDom(SEL)));
+                b.appendChild(el('span', '', d.name)); b.appendChild(el('small', '', tiret(d.provider_name)));
+                b.addEventListener('click', () => ouvrirDomaine(d)); li.appendChild(b); ul.appendChild(li);
             });
-
-            // Load records
-            const d = await api(`/domain/${encodeURIComponent(name)}/records?provider_id=${providerId}`);
-            const records = d.records || [];
-
-            const container = document.getElementById('records-container');
-            if (!records.length) {
-                container.innerHTML = '<div class="empty">No records found</div>';
-                return;
-            }
-
-            container.innerHTML = `<table>
-                <thead><tr><th>Type</th><th>Name</th><th>Value</th><th>TTL</th><th></th></tr></thead>
-                <tbody>${records.map(r => `<tr>
-                    <td><span class="type-badge type-${r.type}">${r.type}</span></td>
-                    <td class="mono">${escapeHtml(r.name)}</td>
-                    <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.value)}</td>
-                    <td>${r.ttl || '-'}</td>
-                    <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteRecord('${r.id}')">Del</button></td>
-                </tr>`).join('')}</tbody>
-            </table>`;
         }
 
-        async function loadConfig() {
-            const d = await api('/config');
-            document.getElementById('config-ttl').value = d.default_ttl || 300;
-            document.getElementById('config-acme-ttl').value = d.acme_ttl || 60;
-            document.getElementById('config-ddns-interval').value = d.ddns_check_interval || 300;
-            document.getElementById('config-audit-retention').value = d.audit_retention_days || 90;
-        }
-
-        async function loadAuditLog() {
-            const d = await api('/logs?limit=50');
-            const logs = d.logs || [];
-            const container = document.getElementById('audit-log');
-
-            if (!logs.length) {
-                container.innerHTML = '<div class="empty">No audit logs</div>';
-                return;
-            }
-
-            container.innerHTML = logs.map(l => `
-                <div class="log-entry">
-                    <span class="timestamp">${formatDate(l.timestamp)}</span>
-                    <span class="action">${l.action}</span>
-                    <span class="details">${JSON.stringify(l.details || {})}</span>
-                </div>
-            `).join('');
-        }
-
-        function updateProviderSelects() {
-            const html = providers.filter(p => p.enabled).map(p =>
-                `<option value="${p.id}">${escapeHtml(p.name)} (${p.provider})</option>`
-            ).join('');
-
-            document.getElementById('acme-provider').innerHTML = html || '<option>No providers</option>';
-            document.getElementById('ddns-provider').innerHTML = html || '<option>No providers</option>';
-        }
-
-        // Provider management
-        function showAddProvider() {
-            updateCredentialFields();
-            showModal('provider-modal');
-        }
-
-        function updateCredentialFields() {
-            const type = document.getElementById('provider-type').value;
-            const fields = document.getElementById('credential-fields');
-
-            const configs = {
-                cloudflare: [{ name: 'api_token', label: 'API Token', type: 'password' }],
-                gandi: [{ name: 'api_key', label: 'API Key', type: 'password' }],
-                ovh: [
-                    { name: 'application_key', label: 'Application Key', type: 'text' },
-                    { name: 'application_secret', label: 'Application Secret', type: 'password' },
-                    { name: 'consumer_key', label: 'Consumer Key', type: 'password' },
-                    { name: 'endpoint', label: 'Endpoint', type: 'text', default: 'ovh-eu' }
-                ],
-                route53: [
-                    { name: 'access_key_id', label: 'Access Key ID', type: 'text' },
-                    { name: 'secret_access_key', label: 'Secret Access Key', type: 'password' },
-                    { name: 'region', label: 'Region', type: 'text', default: 'us-east-1' }
-                ]
-            };
-
-            const config = configs[type] || [];
-            fields.innerHTML = config.map(f => `
-                <div class="form-group">
-                    <label>${f.label}</label>
-                    <input type="${f.type}" id="cred-${f.name}" placeholder="${f.label}" value="${f.default || ''}">
-                </div>
-            `).join('');
-        }
-
-        async function addProvider() {
-            const type = document.getElementById('provider-type').value;
-            const name = document.getElementById('provider-name').value.trim();
-            const btn   = document.getElementById('add-provider-btn');
-            const stat  = document.getElementById('add-provider-status');
-            stat.textContent = '';
-            stat.style.color = '';
-
-            if (!name) {
-                stat.textContent = 'Provider name required';
-                stat.style.color = 'var(--red, #ff4466)';
-                return;
-            }
-
-            const credentials = {};
-            const missing = [];
-            document.querySelectorAll('#credential-fields input').forEach(input => {
-                const key = input.id.replace('cred-', '');
-                const val = (input.value || '').trim();
-                if (!val) missing.push(key);
-                credentials[key] = val;
+        const COUL_TYPE = { A: 'cy', AAAA: 'cy', CNAME: 'vio', MX: 'jau', TXT: 'att', NS: 'ok', SRV: 'vio', CAA: 'hors', PTR: 'vio' };
+        function rendreRecords() {
+            const tb = $('bEnr'); tb.replaceChildren();
+            $('addEnr').hidden = !SEL; $('rechEnr').hidden = !(SEL && RECS && RECS.length);
+            $('nEnr').textContent = SEL ? SEL.name : '';
+            if (!SEL) { ligneVide(tb, 5, 'Choisissez un domaine'); return; }
+            if (!RECS) { ligneVide(tb, 5, RECS_ERR || (SESSION_OK ? 'Chargement…' : '—')); return; }
+            const f = $('rechEnr').value.trim().toLowerCase();
+            const lignes = RECS.filter(r => !f || [r.type, r.name, r.value].some(x => String(x == null ? '' : x).toLowerCase().includes(f)));
+            $('nEnr').textContent = SEL.name + ' · ' + lignes.length + (f ? ' / ' + RECS.length : '') + ' enregistrement' + (RECS.length > 1 ? 's' : '');
+            if (!lignes.length) { ligneVide(tb, 5, RECS.length ? 'Aucun enregistrement ne correspond au filtre' : 'Aucun enregistrement'); return; }
+            lignes.forEach(r => {
+                const tr = el('tr');
+                const t = el('td'); t.appendChild(pastille(COUL_TYPE[r.type] || '', tiret(r.type))); tr.appendChild(t);
+                tr.appendChild(el('td', 'mono', tiret(r.name)));
+                const v = el('td', 'mono long', tiret(r.value)); v.title = tiret(r.value); tr.appendChild(v);
+                tr.appendChild(el('td', 'nb', r.ttl ? r.ttl + ' s' : '—'));
+                const a = el('td', 'act');
+                confirmation(a, 'enregistrement', r.id, 'Supprimer', () => supprimerRecord(r));
+                tr.appendChild(a); tb.appendChild(tr);
             });
-            if (missing.length) {
-                stat.textContent = 'Missing credentials: ' + missing.join(', ');
-                stat.style.color = 'var(--red, #ff4466)';
-                return;
-            }
+        }
 
-            btn.disabled = true;
-            const origLabel = btn.textContent;
-            btn.textContent = 'Adding…';
-            stat.textContent = 'Saving provider…';
-            stat.style.color = 'var(--text-dim)';
-
-            const r = await apiStrict('/provider', {
-                method: 'POST',
-                body: JSON.stringify({ provider: type, name, credentials, enabled: true })
+        function remplirSelects() {
+            [$('selAcme'), $('selDdns')].forEach(s => {
+                const avant = s.value; s.replaceChildren();
+                const actifs = FOURN.filter(p => p.enabled);
+                if (!actifs.length) { const o = el('option', '', 'Aucun fournisseur actif'); o.value = ''; s.appendChild(o); return; }
+                actifs.forEach(p => { const o = el('option', '', p.name + ' (' + (TYPES[p.provider] || p.provider) + ')'); o.value = p.id; s.appendChild(o); });
+                if (actifs.some(p => p.id === avant)) s.value = avant;
             });
-
-            if (!r.ok) {
-                btn.disabled = false;
-                btn.textContent = origLabel;
-                stat.textContent = 'Error: ' + (r.error || 'add failed');
-                stat.style.color = 'var(--red, #ff4466)';
-                return;
-            }
-
-            const id = r.data.id;
-            // #304: provider is persisted — close the modal IMMEDIATELY and
-            // surface the probe verdict as a non-modal toast. The previous
-            // behaviour kept the modal open on a yellow warning even when
-            // the underlying issue (e.g. outbound down) got resolved, so the
-            // operator saw a stale message contradicting the providers list.
-            btn.disabled = false;
-            btn.textContent = origLabel;
-            hideModal('provider-modal');
-            document.getElementById('provider-name').value = '';
-            stat.textContent = '';
-            refresh();
-
-            // Background probe — even a slow Gandi response can't block the
-            // modal close anymore.
-            (async () => {
-                const probe = await apiStrict('/domains?provider_id=' + encodeURIComponent(id));
-                if (!probe.ok) {
-                    showToast('warn', 'Saved, /domains probe failed: ' + (probe.error || probe.status));
-                    return;
-                }
-                const domains = (probe.data.domains || []).filter(d => !d.error);
-                const errored = (probe.data.domains || []).filter(d => d.error);
-                if (errored.length) {
-                    showToast('warn', 'Saved, but ' + type + ' returned: ' + (errored[0].error || 'unknown') + '. Check key scope.');
-                } else if (domains.length === 0) {
-                    showToast('warn', 'Saved. Authenticated to ' + type + ' but no domains visible — check API token scope.');
-                } else {
-                    showToast('ok', '✓ ' + name + ': ' + domains.length + ' domain(s) visible.');
-                }
-                refresh();
-            })();
+        }
+        function rendreAcme() {
+            const c = $('cAcme'); c.replaceChildren();
+            confirmation(c, 'acme', 'defi', 'Supprimer le défi', supprimerDefi);
+        }
+        function rendreJournaux() {
+            const ligne = (tb, cols, vide) => { if (!cols.length) ligneVide(tb, vide, SESSION_OK && !TOUS_KO ? 'Aucune entrée récente' : '—'); };
+            const det = l => (l && typeof l.details === 'object' && l.details) || {};
+            const ac = $('bAcmeJ'); ac.replaceChildren();
+            const acl = LOGS.filter(l => String(l.action).startsWith('acme_challenge'));
+            acl.forEach(l => { const tr = el('tr'); tr.appendChild(el('td', '', quand(l.timestamp))); tr.appendChild(el('td', '', l.action === 'acme_challenge_created' ? 'Défi créé' : l.action === 'acme_challenge_deleted' ? 'Défi supprimé' : tiret(l.action))); tr.appendChild(el('td', 'mono', tiret(det(l).domain))); ac.appendChild(tr); });
+            ligne(ac, acl, 3);
+            const dd = $('bDdnsJ'); dd.replaceChildren();
+            const ddl = LOGS.filter(l => l.action === 'ddns_update');
+            ddl.forEach(l => { const d = det(l); const tr = el('tr'); tr.appendChild(el('td', '', quand(l.timestamp)));
+                tr.appendChild(el('td', 'mono', tiret(d.subdomain) + '.' + tiret(d.domain))); tr.appendChild(el('td', 'mono', tiret(d.ip))); tr.appendChild(el('td', '', d.action === 'created' ? 'Créé' : d.action === 'updated' ? 'Mis à jour' : tiret(d.action))); dd.appendChild(tr); });
+            ligne(dd, ddl, 4);
+            const lg = $('bLog'); lg.replaceChildren();
+            $('nLog').textContent = LOGS.length ? LOGS.length + ' entrée' + (LOGS.length > 1 ? 's' : '') : '';
+            LOGS.forEach(l => { const tr = el('tr'); tr.appendChild(el('td', '', quand(l.timestamp))); tr.appendChild(el('td', 'mono', tiret(l.action))); tr.appendChild(el('td', '', tiret(l.user)));
+                const j = JSON.stringify(l.details || {}); const dt = el('td', 'mono long', court(j, 160)); dt.title = j; tr.appendChild(dt); lg.appendChild(tr); });
+            ligne(lg, LOGS, 4);
         }
 
-        // #304 — simple toast, auto-dismiss 6s, no extra deps.
-        function showToast(kind, message) {
-            let host = document.getElementById('sbx-toast-host');
-            if (!host) {
-                host = document.createElement('div');
-                host.id = 'sbx-toast-host';
-                host.style.cssText = 'position:fixed;top:80px;right:24px;z-index:2000;display:flex;flex-direction:column;gap:0.5rem;max-width:420px;';
-                document.body.appendChild(host);
-            }
-            const t = document.createElement('div');
-            const palette = kind === 'ok'
-                ? 'background:rgba(0,221,68,0.12);border:1px solid #00dd44;color:#00dd44;'
-                : kind === 'warn'
-                ? 'background:rgba(255,179,71,0.12);border:1px solid #ffb347;color:#ffb347;'
-                : 'background:rgba(255,68,102,0.12);border:1px solid #ff4466;color:#ff4466;';
-            t.style.cssText = 'padding:0.6rem 1rem;border-radius:6px;font-family:JetBrains Mono,monospace;font-size:0.85rem;opacity:0;transition:opacity 0.2s;' + palette;
-            t.textContent = message;
-            host.appendChild(t);
-            requestAnimationFrame(() => { t.style.opacity = '1'; });
-            setTimeout(() => {
-                t.style.opacity = '0';
-                setTimeout(() => t.remove(), 250);
-            }, 6000);
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function basculer(p) {
+            const r = await ecrire('PUT', '/provider/' + encodeURIComponent(p.id), { enabled: !p.enabled });
+            if (r.ok) { retour('rFourn', true, 'Fournisseur ' + p.name + (p.enabled ? ' désactivé.' : ' activé.')); charger(); } else retour('rFourn', false, 'Changement impossible : ' + detail(r));
+        }
+        async function supprimerFourn(p) {
+            const r = await ecrire('DELETE', '/provider/' + encodeURIComponent(p.id));
+            if (r.ok) { retour('rFourn', true, 'Fournisseur ' + p.name + ' supprimé.'); charger(); } else { retour('rFourn', false, 'Suppression impossible : ' + detail(r)); rendre(); }
+        }
+        async function supprimerRecord(rec) {
+            if (!SEL) return;
+            const r = await ecrire('DELETE', '/domain/' + encodeURIComponent(SEL.name) + '/record/' + encodeURIComponent(rec.id) + '?provider_id=' + encodeURIComponent(SEL.pid));
+            if (r.ok) { retour('rEnr', true, 'Enregistrement ' + rec.type + ' ' + rec.name + ' supprimé.'); await chargerRecords(); } else { retour('rEnr', false, 'Suppression impossible : ' + detail(r)); rendre(); }
+        }
+        async function supprimerDefi() {
+            const f = $('fAcme'); const domain = f.domain.value.trim(), token = f.token.value.trim(), pid = f.provider.value;
+            if (!domain || !token) { retour('rAcme', false, 'Domaine et jeton requis pour supprimer un défi.'); return; }
+            if (!pid) { retour('rAcme', false, 'Aucun fournisseur actif.'); return; }
+            const r = await ecrire('DELETE', '/acme/challenge?domain=' + encodeURIComponent(domain) + '&token=' + encodeURIComponent(token) + '&provider_id=' + encodeURIComponent(pid));
+            if (r.ok) { retour('rAcme', true, 'Défi supprimé.'); charger(); } else retour('rAcme', false, 'Échec : ' + detail(r));
         }
 
-        async function toggleProvider(id, enabled) {
-            await api(`/provider/${id}`, {
-                method: 'PUT',
-                body: JSON.stringify({ enabled })
+        function champsCred() {
+            const type = $('ptype').value, box = $('champsCred'); box.replaceChildren();
+            (CRED[type] || []).forEach(c => {
+                const lab = el('label', '', c.l); const i = el('input'); i.type = c.t; i.dataset.cred = c.n; i.placeholder = c.l; i.autocomplete = c.t === 'password' ? 'new-password' : 'off';
+                if (c.d) i.value = c.d; lab.appendChild(i); box.appendChild(lab);
             });
-            refresh();
         }
-
-        async function deleteProvider(id) {
-            if (!confirm('Delete this provider?')) return;
-            await api(`/provider/${id}`, { method: 'DELETE' });
-            refresh();
-        }
-
-        // Record management
-        function showAddRecord() {
-            showModal('record-modal');
-        }
-
-        async function addRecord() {
-            const type = document.getElementById('record-type').value;
-            const name = document.getElementById('record-name').value.trim() || '@';
-            const value = document.getElementById('record-value').value.trim();
-            const ttl = parseInt(document.getElementById('record-ttl').value) || 300;
-            const priority = parseInt(document.getElementById('record-priority').value) || null;
-
-            if (!value) { alert('Value required'); return; }
-            if (!currentDomain || !currentProviderId) { alert('Select a domain first'); return; }
-
-            const body = { type, name, value, ttl };
-            if (priority) body.priority = priority;
-
-            const r = await api(`/domain/${encodeURIComponent(currentDomain)}/record?provider_id=${currentProviderId}`, {
-                method: 'POST',
-                body: JSON.stringify(body)
-            });
-
-            if (r.success) {
-                hideModal('record-modal');
-                selectDomain(currentDomain, currentProviderId);
-            } else {
-                alert('Error: ' + (r.detail || 'Failed to create record'));
-            }
-        }
-
-        async function deleteRecord(recordId) {
-            if (!confirm('Delete this record?')) return;
-            if (!currentDomain || !currentProviderId) return;
-
-            await api(`/domain/${encodeURIComponent(currentDomain)}/record/${recordId}?provider_id=${currentProviderId}`, {
-                method: 'DELETE'
-            });
-            selectDomain(currentDomain, currentProviderId);
-        }
-
-        // ACME
-        async function createAcmeChallenge() {
-            const domain = document.getElementById('acme-domain').value.trim();
-            const token = document.getElementById('acme-token').value.trim();
-            const keyauth = document.getElementById('acme-keyauth').value.trim();
-            const providerId = document.getElementById('acme-provider').value;
-
-            if (!domain || !token || !keyauth) {
-                alert('All fields required');
-                return;
-            }
-
-            const r = await api(`/acme/challenge?provider_id=${providerId}`, {
-                method: 'POST',
-                body: JSON.stringify({ domain, token, key_authorization: keyauth })
-            });
-
-            if (r.success) {
-                alert('ACME challenge created: ' + r.record);
-            } else {
-                alert('Error: ' + (r.detail || 'Failed'));
-            }
-        }
-
-        async function deleteAcmeChallenge() {
-            const domain = document.getElementById('acme-domain').value.trim();
-            const token = document.getElementById('acme-token').value.trim();
-            const providerId = document.getElementById('acme-provider').value;
-
-            if (!domain || !token) {
-                alert('Domain and token required');
-                return;
-            }
-
-            const r = await api(`/acme/challenge?domain=${encodeURIComponent(domain)}&token=${encodeURIComponent(token)}&provider_id=${providerId}`, {
-                method: 'DELETE'
-            });
-
-            alert(r.success ? 'Challenge deleted' : 'Error: ' + (r.detail || 'Failed'));
-        }
-
-        // DDNS
-        async function updateDdns() {
-            const domain = document.getElementById('ddns-domain').value.trim();
-            const subdomain = document.getElementById('ddns-subdomain').value.trim() || '@';
-            const ip = document.getElementById('ddns-ipv4').value.trim() || null;
-            const providerId = document.getElementById('ddns-provider').value;
-
-            if (!domain) { alert('Domain required'); return; }
-
-            const body = { domain, subdomain };
-            if (ip) body.ip = ip;
-
-            const r = await api(`/ddns/update?provider_id=${providerId}`, {
-                method: 'POST',
-                body: JSON.stringify(body)
-            });
-
-            if (r.success) {
-                alert(`DDNS updated: ${r.subdomain}.${r.domain} -> ${r.ipv4}`);
-            } else {
-                alert('Error: ' + (r.detail || 'Failed'));
-            }
-        }
-
-        // Config
-        async function saveConfig() {
-            const config = {
-                default_ttl: parseInt(document.getElementById('config-ttl').value),
-                acme_ttl: parseInt(document.getElementById('config-acme-ttl').value),
-                ddns_check_interval: parseInt(document.getElementById('config-ddns-interval').value),
-                audit_retention_days: parseInt(document.getElementById('config-audit-retention').value)
-            };
-
-            const r = await api('/config', {
-                method: 'POST',
-                body: JSON.stringify(config)
-            });
-
-            alert(r.success ? 'Configuration saved' : 'Error saving configuration');
-        }
-
-        // Utils
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text || '';
-            return div.innerHTML;
-        }
-
-        function formatDate(iso) {
+        function viderFormFourn() { const f = $('fFourn'); f.reset(); champsCred(); f.hidden = true; }
+        $('ptype').addEventListener('change', champsCred);
+        $('fFourn').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const type = $('ptype').value, name = f.name.value.trim();
+            if (!name) { retour('rFourn', false, 'Nom du fournisseur requis.'); return; }
+            const credentials = {}, manque = [];
+            f.querySelectorAll('[data-cred]').forEach(i => { const v = i.value.trim(); if (!v) manque.push(i.dataset.cred); credentials[i.dataset.cred] = v; });
+            if (manque.length) { retour('rFourn', false, 'Identifiants manquants : ' + manque.join(', ')); return; }
+            const r = await ecrire('POST', '/provider', { provider: type, name, credentials, enabled: true });
+            viderFormFourn();   // dans tous les cas : aucun identifiant ne reste dans la page
+            if (!r.ok) { retour('rFourn', false, 'Ajout impossible : ' + detail(r)); return; }
+            retour('rFourn', true, 'Fournisseur ' + name + ' ajouté. Vérification de l’accès…');
+            const id = r.data && r.data.id;
+            await charger();
+            if (!id) return;
             try {
-                return new Date(iso).toLocaleString();
-            } catch { return iso; }
-        }
+                const d = await lire('/domains?provider_id=' + encodeURIComponent(id));
+                const liste = d.domains || [], err = liste.filter(x => x.error), bons = liste.filter(x => !x.error);
+                if (err.length) retour('rFourn', false, 'Enregistré, mais ' + TYPES[type] + ' répond : ' + court(err[0].error || 'erreur inconnue', 200) + ' Vérifiez la portée de la clé.');
+                else if (!bons.length) retour('rFourn', false, 'Enregistré. Authentifié chez ' + TYPES[type] + ' mais aucun domaine visible : vérifiez la portée de la clé.');
+                else retour('rFourn', true, name + ' : ' + bons.length + ' domaine(s) visible(s).');
+            } catch (e) { retour('rFourn', false, 'Enregistré, mais la vérification des domaines a échoué (' + (e.statut ? 'HTTP ' + e.statut : 'injoignable') + ').'); }
+        });
+        $('fEnr').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const value = f.value.value.trim();
+            if (!value) { retour('rEnr', false, 'Valeur requise.'); return; }
+            if (!SEL) { retour('rEnr', false, 'Choisissez d’abord un domaine.'); return; }
+            const body = { type: f.type.value, name: f.name.value.trim() || '@', value, ttl: parseInt(f.ttl.value, 10) || 300 };
+            const prio = parseInt(f.priority.value, 10) || null; if (prio) body.priority = prio;
+            const r = await ecrire('POST', '/domain/' + encodeURIComponent(SEL.name) + '/record?provider_id=' + encodeURIComponent(SEL.pid), body);
+            if (r.ok) { f.reset(); f.hidden = true; SALI = false; retour('rEnr', true, 'Enregistrement ajouté.'); await chargerRecords(); } else retour('rEnr', false, 'Ajout impossible : ' + detail(r));
+        });
+        $('fAcme').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const domain = f.domain.value.trim(), token = f.token.value.trim(), keyauth = f.keyauth.value.trim(), pid = f.provider.value;
+            if (!domain || !token || !keyauth) { retour('rAcme', false, 'Domaine, jeton et autorisation de clé sont requis.'); return; }
+            if (!pid) { retour('rAcme', false, 'Aucun fournisseur actif.'); return; }
+            const r = await ecrire('POST', '/acme/challenge?provider_id=' + encodeURIComponent(pid), { domain, token, key_authorization: keyauth });
+            if (r.ok) { f.keyauth.value = ''; retour('rAcme', true, 'Défi ACME créé : ' + ((r.data && r.data.record) || '_acme-challenge.' + domain)); charger(); } else retour('rAcme', false, 'Échec : ' + detail(r));
+        });
+        $('fDdns').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const domain = f.domain.value.trim(), subdomain = f.subdomain.value.trim() || '@', ip = f.ip.value.trim(), pid = f.provider.value;
+            if (!domain) { retour('rDdns', false, 'Domaine requis.'); return; }
+            if (!pid) { retour('rDdns', false, 'Aucun fournisseur actif.'); return; }
+            const body = { domain, subdomain }; if (ip) body.ip = ip;
+            const r = await ecrire('POST', '/ddns/update?provider_id=' + encodeURIComponent(pid), body);
+            if (r.ok) { const d = r.data || {}; retour('rDdns', true, 'DNS dynamique ' + (d.action === 'created' ? 'créé' : 'mis à jour') + ' : ' + tiret(d.subdomain) + '.' + tiret(d.domain) + ' → ' + tiret(d.ipv4)); charger(); } else retour('rDdns', false, 'Échec : ' + detail(r));
+        });
+        $('fConf').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target; const cfg = {};
+            for (const k of ['default_ttl', 'acme_ttl', 'ddns_check_interval', 'audit_retention_days']) {
+                const n = parseInt(f[k].value, 10);
+                if (isNaN(n)) { retour('rConf', false, 'Renseignez les quatre valeurs (nombres entiers) avant d’enregistrer.'); return; }
+                cfg[k] = n;
+            }
+            const r = await ecrire('POST', '/config', cfg);
+            if (r.ok) { retour('rConf', true, 'Configuration enregistrée.'); SALI = false; charger(); } else retour('rConf', false, 'Échec : ' + detail(r));
+        });
+        $('addFourn').addEventListener('click', () => { const f = $('fFourn'); f.hidden = !f.hidden; if (f.hidden) viderFormFourn(); else champsCred(); annoncer(); });
+        $('addEnr').addEventListener('click', () => { $('fEnr').hidden = !$('fEnr').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { if (b.dataset.ferme === 'fFourn') viderFormFourn(); else $(b.dataset.ferme).hidden = true; SALI = false; annoncer(); }));
+        document.querySelectorAll('form.saisie').forEach(f => f.addEventListener('input', () => { SALI = true; }));
+        $('rechEnr').addEventListener('input', () => { SALI = false; rendreRecords(); annoncer(); });
 
-        async function refresh() {
-            await Promise.all([
-                loadSummary(),
-                loadProviders(),
-                loadDomains(),
-                loadConfig(),
-                loadAuditLog()
-            ]);
+        // ----- Onglets -----
+        const ONGLETS = ['fournisseurs', 'domaines', 'enregistrements', 'acme', 'ddns', 'reglages'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            rendre();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-        refresh();
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'dns-provider' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        champsCred();
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        // Les domaines sont lus en direct chez les fournisseurs : on ne descend pas sous 60 s.
+        setInterval(() => {
+            const ouvert = [...document.querySelectorAll('form.saisie')].some(f => !f.hidden && f.id !== 'fAcme' && f.id !== 'fDdns' && f.id !== 'fConf');
+            if (document.hidden || DEMO || CONFIRM || SALI || ouvert) return;
+            charger();
+        }, 60000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
