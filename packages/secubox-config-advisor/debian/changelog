@@ -1,3 +1,30 @@
+secubox-config-advisor (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /config-advisor/ refaite au profil Aurora (ref #2597) : un seul
+    fichier autonome, sans police ni script externe, tuiles, recommandations,
+    répartition par catégorie, courbe du score, tableau des contrôles ;
+    ?demo=1 (données fictives, actions inertes), ?embed=1 (sans menu),
+    bandeau « session requise » sur 401/403, hauteur annoncée à l'hôte.
+  * Bogues de l'ancienne page corrigés : elle lisait /status pour des champs
+    qui n'existent pas (security_score, checks_passed, critical_issues...) et
+    affichait donc des zéros ; elle appelait /recommendations, route qui
+    n'existe pas, et testait fix_available, champ jamais fourni : le bouton
+    « Apply Fix » n'apparaissait jamais. La page lit désormais /report et
+    /history. Confirmation par confirm() natif (ignoré par certains
+    navigateurs) remplacée par une confirmation intégrée qui dit ce que le
+    correctif modifie. Le 401 ne redirige plus d'office vers la connexion :
+    bandeau et tirets. Données d'API injectées en innerHTML : remplacé par
+    textContent.
+  * Écritures inchangées : POST /audit et POST /fix/<id>, sans corps.
+  * Non repris : le score issu de /status (remplacé par celui du rapport),
+    les textes de recommandation inventés ; aucun correctif pour les
+    contrôles hors des six que l'API sait corriger (ils affichent la
+    remédiation à la main). Le nombre d'échecs critiques est calculé par la
+    page à partir du rapport.
+  * Tests : test statique et tests navigateur (Playwright, API simulée).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:30:00 +0200
+
 secubox-config-advisor (1.1.3-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

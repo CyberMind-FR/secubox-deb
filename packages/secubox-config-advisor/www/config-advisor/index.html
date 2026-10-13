@@ -4,189 +4,327 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Conseiller de configuration au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Config Advisor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Conseiller de configuration</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root { --p31-peak: #00dd44; --p31-mid: #009933; --p31-dim: #006622; --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --bg-card: var(--tube-pale); --border: var(--tube-soft); --text: #1b3d1c; --text-dim: var(--p31-dim); --primary: var(--p31-peak); --danger: #ff4466; --warning: #ffb347; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; background: var(--tube-light); border: 1px solid var(--border); }
-        .score-display { text-align: center; padding: 2rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 1.5rem; }
-        .score-circle { width: 150px; height: 150px; border-radius: 50%; border: 8px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 3rem; font-weight: bold; margin-bottom: 1rem; }
-        .score-circle.good { border-color: var(--primary); color: var(--primary); }
-        .score-circle.warning { border-color: var(--warning); color: var(--warning); }
-        .score-circle.danger { border-color: var(--danger); color: var(--danger); }
-        .score-label { font-size: 1.2rem; color: var(--text-dim); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
-        .stat-value.danger { color: var(--danger); }
-        .stat-value.warning { color: var(--warning); }
-        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; }
-        .btn:hover { background: var(--tube-light); }
-        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
-        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-        .recommendation { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid var(--warning); }
-        .recommendation.critical { border-left-color: var(--danger); }
-        .recommendation.info { border-left-color: var(--primary); }
-        .recommendation-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
-        .recommendation-title { font-weight: 600; }
-        .recommendation-category { font-size: 0.75rem; color: var(--text-dim); }
-        .recommendation-actions { margin-top: 0.75rem; }
-        .empty-state { text-align: center; padding: 2rem; color: var(--text-dim); }
-        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:4px 10px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr} .grille .large{grid-column:1/-1}}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:top}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.jaune{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .reco{border:1px solid var(--trait);border-left:4px solid var(--orange);border-radius:10px;padding:9px 12px;margin-bottom:8px;background:rgba(8,18,38,.55);display:grid;gap:5px;min-width:0}
+        .reco.critical{border-left-color:var(--rouge)} .reco.high{border-left-color:var(--orange)} .reco.medium{border-left-color:var(--jaune)} .reco.low,.reco.info{border-left-color:var(--cyan)}
+        .reco .t{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-weight:600;overflow-wrap:anywhere}
+        .reco .d{color:var(--doux);font-size:.8rem;overflow-wrap:anywhere} .reco .f{font-size:.76rem;overflow-wrap:anywhere}
+        .reco .ref{color:var(--faible);font-size:.7rem}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:8px;padding:8px 10px;font-size:.78rem;display:grid;gap:6px}
+        .conf ul{margin:0;padding-left:18px} .conf .bout{display:flex;flex-wrap:wrap;gap:6px}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden;margin-top:3px} .barre b{display:block;height:100%;background:var(--cyan)}
+        .cat{display:grid;grid-template-columns:minmax(70px,130px) 1fr 100px;gap:4px 10px;align-items:center;font-size:.8rem;padding:4px 0}
+        .cat .nom{color:var(--doux)} .cat .val{font-variant-numeric:tabular-nums;color:var(--texte)}
+        .courbe{width:100%;height:auto;display:block;max-height:240px}
+        .courbe text{fill:var(--faible);font-size:10px}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <div class="main">
-        <div class="header">
-            <h1>⚙️ Config Advisor</h1>
-            <span class="badge">v1.0.0</span>
-        </div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 8 7.5 9.5 4.4-1.5 7.5-5.1 7.5-9.5V6z"/><path d="m8.8 12 2.3 2.3 4.2-4.6"/></svg>
+                <div><h1>Conseiller de configuration</h1><small>Audit de durcissement ANSSI / CIS et correctifs guidés</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn prim" id="audit" type="button">▶ Lancer un audit</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="score-display">
-            <div class="score-circle good" id="score-circle">-</div>
-            <div class="score-label">Security Score</div>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-primary" onclick="runAudit()">Run Security Audit</button>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cScore" title="Score de l’audit : contrôles réussis ÷ (réussis + avertissements + échecs) × 100. Les contrôles ignorés ne comptent pas."><span class="l">Score de sécurité</span><span class="v" id="tScore">—</span><span class="s">sur 100</span></div>
+            <div class="tuile ok" title="Contrôles dont le résultat est « réussi »."><span class="l">Contrôles réussis</span><span class="v" id="tPass">—</span><span class="s">conformes</span></div>
+            <div class="tuile att" title="Contrôles en avertissement : écart mineur à corriger."><span class="l">Avertissements</span><span class="v" id="tWarn">—</span><span class="s">écarts mineurs</span></div>
+            <div class="tuile hors" title="Contrôles en échec (tous niveaux de gravité)."><span class="l">Échecs</span><span class="v" id="tFail">—</span><span class="s">non conformes</span></div>
+            <div class="tuile hors" title="Échecs de gravité critique. Calculé par la page à partir du rapport (état « échec » et gravité « critique »)."><span class="l">Échecs critiques</span><span class="v" id="tCrit">—</span><span class="s">à traiter en priorité</span></div>
+            <div class="tuile cy" title="Nombre de contrôles exécutés par l’audit, y compris ceux ignorés (configuration absente ou erreur)."><span class="l">Contrôles exécutés</span><span class="v" id="tTotal">—</span><span class="s" id="sTotal">dont — ignorés</span></div>
+        </section>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">✅</div>
-                <div class="stat-value" id="passed">-</div>
-                <div class="stat-label">Checks Passed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">⚠️</div>
-                <div class="stat-value warning" id="warnings">-</div>
-                <div class="stat-label">Warnings</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🔴</div>
-                <div class="stat-value danger" id="critical">-</div>
-                <div class="stat-label">Critical Issues</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">📋</div>
-                <div class="stat-value" id="total-checks">-</div>
-                <div class="stat-label">Total Checks</div>
-            </div>
+        <div class="grille">
+            <div class="pan large"><h3>Recommandations <i id="nReco"></i></h3>
+                <div id="rReco" class="retour" hidden></div>
+                <div id="reco"></div>
+                <p class="note">Les correctifs sont proposés pour les contrôles que le module sait corriger seul ; chacun demande une confirmation et dit ce qu’il modifie. Les autres se corrigent à la main avec la remédiation indiquée.</p></div>
+            <div class="pan"><h3>Répartition par catégorie <i>contrôles par résultat</i></h3><div id="cats"></div></div>
+            <div class="pan"><h3>Score des derniers audits <i id="nHist"></i></h3>
+                <svg class="courbe" id="courbe" viewBox="0 0 400 170" role="img" aria-label="Score des derniers audits" hidden></svg>
+                <div id="videHist" class="vide">—</div>
+                <p class="note">Une seule échelle, de 0 à 100 ; un point par audit enregistré par le module.</p></div>
+            <div class="pan large"><h3>Tous les contrôles <i id="nTous"></i></h3>
+                <div class="tab"><table><thead><tr><th>Contrôle</th><th>Catégorie</th><th>Gravité</th><th>Résultat</th><th>Référence</th></tr></thead><tbody id="bTous"></tbody></table></div></div>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h2>🔧 Recommendations</h2>
-                <button class="btn btn-sm" onclick="loadRecommendations()">Refresh</button>
-            </div>
-            <div id="recommendations">
-                <div class="empty-state">Run a security audit to get recommendations</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h2>📊 Category Breakdown</h2>
-            </div>
-            <div id="categories">
-                <div class="empty-state">No audit data available</div>
-            </div>
-        </div>
-    </div>
+        <p class="note" style="margin:0">Ce que cette page ne montre pas : l’API ne fournit ni détail par service ni correctif pour les contrôles hors liste ; ils restent en « remédiation à la main ».</p>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/config-advisor';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(path, method = 'GET', data = null) {
-            const token = localStorage.getItem('sbx_token');
-            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+        let RAPPORT = null, HIST = [], SESSION_OK = true, AUCUN_AUDIT = false, CONFIRM = null, EN_COURS = false;
+
+        // Ce que chaque correctif modifie réellement (lu dans api/main.py, apply_fix).
+        const CORRECTIFS = {
+            'ANSSI-R28': ['Fixe « PermitRootLogin no » dans /etc/ssh/sshd_config (ajouté à la fin s’il manque).', 'Recharge le service SSH.'],
+            'ANSSI-R29': ['Fixe « PasswordAuthentication no » dans /etc/ssh/sshd_config (ajouté à la fin s’il manque).', 'Recharge le service SSH.', 'Attention : sans clé SSH installée, la connexion par mot de passe ne sera plus possible.'],
+            'ANSSI-R18': ['Écrit 2 dans /proc/sys/kernel/randomize_va_space (ASLR complet).', 'Crée /etc/sysctl.d/99-secubox-aslr.conf pour le conserver au redémarrage.'],
+            'FS-01': ['Applique chmod 640 sur /etc/shadow.', 'Applique chown root:shadow sur /etc/shadow.'],
+            'FS-02': ['Applique chmod 700 sur /etc/cron.d, cron.daily, cron.hourly, cron.weekly et cron.monthly (ceux qui existent).'],
+            'KERNEL-01': ['Écrit /etc/sysctl.d/99-secubox-hardening.conf (redirections ICMP, routage source, ICMP broadcast, ASLR).', 'Applique ce fichier avec sysctl -p.']
+        };
+        const GRAV = { critical: ['CRITIQUE', 'hors', 0], high: ['HAUTE', 'att', 1], medium: ['MOYENNE', 'jaune', 2], low: ['BASSE', 'cy', 3], info: ['INFO', '', 4] };
+        const STAT = { pass: ['RÉUSSI', 'ok'], fail: ['ÉCHEC', 'hors'], warning: ['AVERTISSEMENT', 'att'], skip: ['IGNORÉ', ''], error: ['ERREUR', ''] };
+        const CATS = { authentication: 'Authentification', network: 'Réseau', services: 'Services', filesystem: 'Système de fichiers', kernel: 'Noyau', encryption: 'Chiffrement', logging: 'Journalisation', access_control: 'Contrôle d’accès' };
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes et mêmes corps que l'ancienne page (POST sans corps). Inerte en démonstration.
+        async function ecrire(chemin) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { method, headers, body: data ? JSON.stringify(data) : null });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch { return null; }
+                const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes() });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(ok, msg) { const r = $('rReco'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut === 401 || res.statut === 403) ? 'session requise' : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function pastille(cls, txt) { return el('span', 'pill ' + (cls || ''), txt); }
+        function quand(ts) {
+            if (!ts) return '—';
+            const d = new Date(ts); if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            const rel = s < 0 ? '' : s < 90 ? 'à l’instant' : s < 5400 ? 'il y a ' + Math.round(s / 60) + ' min' : s < 172800 ? 'il y a ' + Math.round(s / 3600) + ' h' : 'il y a ' + Math.round(s / 86400) + ' j';
+            return d.toLocaleString('fr-FR') + (rel ? ' (' + rel + ')' : '');
         }
 
-        async function loadStatus() {
-            const data = await api('/status');
-            if (!data) return;
-
-            const score = data.security_score || 0;
-            const scoreEl = document.getElementById('score-circle');
-            scoreEl.textContent = score;
-            scoreEl.className = 'score-circle ' + (score >= 80 ? 'good' : score >= 50 ? 'warning' : 'danger');
-
-            document.getElementById('passed').textContent = data.checks_passed || 0;
-            document.getElementById('warnings').textContent = data.warnings || 0;
-            document.getElementById('critical').textContent = data.critical_issues || 0;
-            document.getElementById('total-checks').textContent = data.total_checks || 0;
+        function demoRapport() {
+            const c = (check_id, name, category, severity, status, description, finding, remediation, reference) => ({ check_id, name, category, severity, status, description, finding, remediation, reference });
+            const results = [
+                c('ANSSI-R28', 'SSH root login disabled', 'authentication', 'critical', 'fail', 'Root login via SSH is enabled', 'PermitRootLogin yes', 'Définir PermitRootLogin no', 'ANSSI-BP-028'),
+                c('ANSSI-R29', 'SSH password authentication', 'authentication', 'high', 'warning', 'Password authentication is enabled', null, 'Définir PasswordAuthentication no', 'ANSSI-BP-028'),
+                c('FS-01', '/etc/shadow permissions', 'filesystem', 'critical', 'pass', '/etc/shadow has correct permissions', null, null, 'CIS 6.1.3'),
+                c('FS-02', 'Cron directory permissions', 'filesystem', 'medium', 'warning', 'Cron directories should be restricted', '/etc/cron.d: 0o755', 'chmod 700 /etc/cron.d', 'CIS 5.1.3'),
+                c('KERNEL-01', 'Kernel hardening sysctls', 'kernel', 'medium', 'pass', 'Kernel hardening sysctls are properly configured', null, null, 'CIS 3.2'),
+                c('SUDO-01', 'No NOPASSWD in sudoers', 'access_control', 'high', 'warning', 'NOPASSWD entries found in sudoers', '/etc/sudoers.d/ops: ops ALL=(ALL) NOPASSWD: ALL', 'Retirer les entrées NOPASSWD', 'CIS 5.3'),
+                c('SVC-01', 'No unnecessary services', 'services', 'high', 'pass', 'No dangerous legacy services detected', null, null, 'CIS 2.2'),
+                c('ANSSI-R12', 'Firewall enabled', 'network', 'critical', 'pass', 'nftables is active', null, null, 'ANSSI-BP-028'),
+                c('ANSSI-R30', 'Audit logging', 'logging', 'medium', 'skip', 'auditd not installed', null, null, 'ANSSI-BP-028')
+            ];
+            return { id: 'audit-demo', timestamp: new Date(Date.now() - 600000).toISOString(), duration_ms: 842, total_checks: 9, passed: 5, failed: 1, warnings: 3, skipped: 1, score: 55.6, results };
         }
+        const DEMO_HIST = [41.7, 50, 55.6].map((s, i) => ({ id: 'audit-' + i, timestamp: new Date(Date.now() - (3 - i) * 86400000).toISOString(), score: s, passed: 0, failed: 0 }));
 
-        async function runAudit() {
-            const btn = event.target;
-            btn.disabled = true; btn.textContent = 'Running...';
-            await api('/audit', 'POST');
-            btn.disabled = false; btn.textContent = 'Run Security Audit';
-            loadStatus();
-            loadRecommendations();
-        }
-
-        async function loadRecommendations() {
-            const data = await api('/recommendations');
-            const container = document.getElementById('recommendations');
-            if (!data?.recommendations?.length) {
-                container.innerHTML = '<div class="empty-state">No recommendations. Your configuration looks good!</div>';
-                return;
+        async function charger() {
+            if (DEMO) { RAPPORT = demoRapport(); HIST = DEMO_HIST; SESSION_OK = true; AUCUN_AUDIT = false; rendre(); return; }
+            const [r, h] = await Promise.allSettled([lire('/report'), lire('/history?limit=20')]);
+            SESSION_OK = true; AUCUN_AUDIT = false; $('erreur').hidden = true;
+            const refus = x => x.status === 'rejected' && (x.reason.statut === 401 || x.reason.statut === 403);
+            if (refus(r) || refus(h)) { SESSION_OK = false; RAPPORT = null; HIST = []; }
+            else {
+                if (r.status === 'fulfilled') RAPPORT = r.value;
+                else if (r.reason.statut === 404) { RAPPORT = null; AUCUN_AUDIT = true; }
+                else { RAPPORT = null; $('erreur').hidden = false; $('erreur').textContent = 'Lecture du rapport impossible (' + r.reason.message + ').'; }
+                HIST = h.status === 'fulfilled' && Array.isArray(h.value.history) ? h.value.history.slice().reverse() : [];
             }
-            container.innerHTML = data.recommendations.map(r => `
-                <div class="recommendation ${r.severity?.toLowerCase()}">
-                    <div class="recommendation-header">
-                        <div>
-                            <div class="recommendation-title">${r.title}</div>
-                            <div class="recommendation-category">${r.category} | ${r.severity}</div>
-                        </div>
-                    </div>
-                    <div>${r.description}</div>
-                    ${r.fix_available ? `
-                        <div class="recommendation-actions">
-                            <button class="btn btn-primary btn-sm" onclick="applyFix('${r.id}')">Apply Fix</button>
-                        </div>
-                    ` : ''}
-                </div>
-            `).join('');
+            rendre();
         }
 
-        async function applyFix(id) {
-            if (!confirm('Apply this fix?')) return;
-            await api(`/fix/${id}`, 'POST');
-            loadStatus();
-            loadRecommendations();
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const R = RAPPORT, res = R && Array.isArray(R.results) ? R.results : [];
+            const nb = s => res.filter(x => x.status === s).length;
+            $('tScore').textContent = R && R.score != null ? Math.round(R.score) : '—';
+            $('tPass').textContent = R ? tiret(R.passed) : '—';
+            $('tWarn').textContent = R ? tiret(R.warnings) : '—';
+            $('tFail').textContent = R ? tiret(R.failed) : '—';
+            $('tCrit').textContent = R ? res.filter(x => x.status === 'fail' && x.severity === 'critical').length : '—';
+            $('tTotal').textContent = R ? tiret(R.total_checks) : '—';
+            $('sTotal').textContent = 'dont ' + (R ? tiret(R.skipped) : '—') + ' ignorés';
+            const sc = R && R.score != null ? R.score : null;
+            $('cScore').className = 'tuile ' + (sc === null ? 'cy' : sc >= 80 ? 'ok' : sc >= 50 ? 'att' : 'hors');
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (AUCUN_AUDIT) { etat.className = 'actif att'; etat.textContent = 'AUCUN AUDIT'; }
+            else if (!R) { etat.className = 'actif hors'; etat.textContent = 'INDISPONIBLE'; }
+            else { const bon = sc >= 80; etat.className = 'actif ' + (bon ? '' : sc >= 50 ? 'att' : 'hors'); etat.textContent = bon ? 'CONFIGURATION SAINE' : sc >= 50 ? 'À RENFORCER' : 'À RISQUE'; }
+            $('maj').textContent = R ? 'Audit : ' + quand(R.timestamp) : '—';
+            rendreReco(res); rendreCats(res); rendreCourbe(); rendreTous(res);
         }
 
-        loadStatus();
-        loadRecommendations();
+        function rendreReco(res) {
+            const box = $('reco'); box.replaceChildren();
+            const liste = res.filter(x => x.status === 'fail' || x.status === 'warning')
+                .sort((a, b) => ((GRAV[a.severity] || [0, 0, 9])[2]) - ((GRAV[b.severity] || [0, 0, 9])[2]));
+            $('nReco').textContent = liste.length ? liste.length + ' à traiter' : '';
+            if (!liste.length) { box.appendChild(el('div', 'vide', !SESSION_OK ? '—' : AUCUN_AUDIT ? 'Aucun audit enregistré : lancez un audit pour obtenir des recommandations.' : RAPPORT ? 'Aucune recommandation : la configuration auditée est conforme.' : '—')); return; }
+            liste.forEach(x => {
+                const g = GRAV[x.severity] || [tiret(x.severity).toUpperCase(), '', 9];
+                const d = el('div', 'reco ' + (x.severity || ''));
+                const t = el('div', 't'); t.appendChild(pastille(g[1], g[0])); t.appendChild(pastille(STAT[x.status][1], STAT[x.status][0]));
+                t.appendChild(el('span', '', tiret(x.name))); t.appendChild(el('span', 'mono', tiret(x.check_id))); d.appendChild(t);
+                d.appendChild(el('div', 'd', tiret(x.description)));
+                if (x.finding) d.appendChild(el('div', 'f', 'Constat : ' + x.finding));
+                if (x.remediation) d.appendChild(el('div', 'f', 'Remédiation : ' + x.remediation));
+                if (x.reference) d.appendChild(el('div', 'ref', 'Référence : ' + x.reference + ' · catégorie : ' + (CATS[x.category] || tiret(x.category))));
+                if (CORRECTIFS[x.check_id]) {
+                    if (CONFIRM === x.check_id) {
+                        const c = el('div', 'conf'); c.appendChild(el('div', '', 'Appliquer le correctif « ' + x.name + ' » modifiera cette machine :'));
+                        const ul = el('ul'); CORRECTIFS[x.check_id].forEach(l => ul.appendChild(el('li', '', l))); c.appendChild(ul);
+                        const b = el('div', 'bout'); const ok = el('button', 'btn danger sm', 'Confirmer'); ok.type = 'button'; ok.addEventListener('click', () => appliquer(x.check_id));
+                        const ko = el('button', 'btn sm', 'Annuler'); ko.type = 'button'; ko.addEventListener('click', () => { CONFIRM = null; rendre(); });
+                        b.appendChild(ok); b.appendChild(ko); c.appendChild(b); d.appendChild(c);
+                    } else {
+                        const b = el('div'); const bt = el('button', 'btn prim sm', 'Appliquer le correctif'); bt.type = 'button';
+                        bt.addEventListener('click', () => { CONFIRM = x.check_id; rendre(); }); b.appendChild(bt); d.appendChild(b);
+                    }
+                } else d.appendChild(el('div', 'ref', 'Pas de correctif automatique : à corriger à la main.'));
+                box.appendChild(d);
+            });
+        }
+
+        async function appliquer(id) {
+            const r = await ecrire('/fix/' + encodeURIComponent(id));
+            CONFIRM = null;
+            if (r.ok) { retour(true, 'Correctif appliqué : ' + tiret(r.data && r.data.action) + '. Relancez un audit pour vérifier.'); await charger(); }
+            else { retour(false, 'Correctif impossible : ' + detail(r)); rendre(); }
+        }
+
+        $('audit').addEventListener('click', async () => {
+            if (EN_COURS) return; EN_COURS = true; const b = $('audit'); b.disabled = true; b.textContent = 'Audit en cours…';
+            const r = await ecrire('/audit');
+            EN_COURS = false; b.disabled = false; b.textContent = '▶ Lancer un audit';
+            if (r.ok) { retour(true, 'Audit terminé.'); await charger(); } else retour(false, 'Audit impossible : ' + detail(r));
+        });
+
+        function rendreCats(res) {
+            const box = $('cats'); box.replaceChildren();
+            if (!res.length) { box.appendChild(el('div', 'vide', '—')); return; }
+            const m = {}; res.forEach(x => { const k = x.category || '?'; (m[k] = m[k] || { pass: 0, n: 0 }).n++; if (x.status === 'pass') m[k].pass++; });
+            Object.keys(m).forEach(k => {
+                const l = el('div', 'cat'); l.appendChild(el('span', 'nom', CATS[k] || k));
+                const bar = el('div', 'barre'); const i = el('b'); i.style.width = Math.round(m[k].pass / m[k].n * 100) + '%'; bar.appendChild(i); l.appendChild(bar);
+                l.appendChild(el('span', 'val', m[k].pass + ' / ' + m[k].n + ' réussis')); box.appendChild(l);
+            });
+        }
+
+        function rendreCourbe() {
+            const svg = $('courbe'), NS = 'http://www.w3.org/2000/svg';
+            const pts = HIST.filter(h => typeof h.score === 'number');
+            $('nHist').textContent = pts.length ? pts.length + ' audit' + (pts.length > 1 ? 's' : '') : '';
+            svg.replaceChildren();
+            if (!pts.length) { svg.toggleAttribute('hidden', true); $('videHist').hidden = false; $('videHist').textContent = SESSION_OK ? 'Aucun audit dans l’historique' : '—'; return; }
+            svg.toggleAttribute('hidden', false); $('videHist').hidden = true;
+            const X0 = 30, X1 = 390, Y0 = 10, Y1 = 140, px = i => pts.length === 1 ? (X0 + X1) / 2 : X0 + i * (X1 - X0) / (pts.length - 1), py = v => Y1 - v / 100 * (Y1 - Y0);
+            const mk = (n, a, t) => { const e = document.createElementNS(NS, n); Object.keys(a).forEach(k => e.setAttribute(k, a[k])); if (t != null) e.textContent = t; svg.appendChild(e); return e; };
+            [0, 25, 50, 75, 100].forEach(v => { mk('line', { x1: X0, x2: X1, y1: py(v), y2: py(v), stroke: 'rgba(86,150,255,.18)' }); mk('text', { x: X0 - 4, y: py(v) + 3, 'text-anchor': 'end' }, v); });
+            if (pts.length > 1) {
+                const d = pts.map((h, i) => (i ? 'L' : 'M') + px(i).toFixed(1) + ' ' + py(h.score).toFixed(1)).join(' ');
+                mk('path', { d: d + ' L' + px(pts.length - 1).toFixed(1) + ' ' + Y1 + ' L' + px(0).toFixed(1) + ' ' + Y1 + ' Z', fill: '#29b6f6', 'fill-opacity': '.14' });
+                mk('path', { d, fill: 'none', stroke: '#29b6f6', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' });
+            }
+            pts.forEach((h, i) => { const c = mk('circle', { cx: px(i), cy: py(h.score), r: 3.5, fill: '#29b6f6' }); const t = document.createElementNS(NS, 'title'); t.textContent = quand(h.timestamp) + ' : ' + h.score + ' / 100'; c.appendChild(t); });
+            mk('text', { x: X0, y: 160 }, pts[0].timestamp ? new Date(pts[0].timestamp).toLocaleDateString('fr-FR') : '—');
+            mk('text', { x: X1, y: 160, 'text-anchor': 'end' }, pts[pts.length - 1].timestamp ? new Date(pts[pts.length - 1].timestamp).toLocaleDateString('fr-FR') : '—');
+        }
+
+        function rendreTous(res) {
+            const tb = $('bTous'); tb.replaceChildren(); $('nTous').textContent = res.length ? res.length + ' contrôles' : '';
+            if (!res.length) { const tr = el('tr'); const td = el('td', 'vide', '—'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            res.forEach(x => {
+                const tr = el('tr'); const n = el('td'); n.appendChild(el('div', '', tiret(x.name))); n.appendChild(el('div', 'mono', tiret(x.check_id))); tr.appendChild(n);
+                tr.appendChild(el('td', '', CATS[x.category] || tiret(x.category)));
+                const g = GRAV[x.severity] || [tiret(x.severity).toUpperCase(), '']; const tg = el('td'); tg.appendChild(pastille(g[1], g[0])); tr.appendChild(tg);
+                const s = STAT[x.status] || [tiret(x.status).toUpperCase(), '']; const ts = el('td'); ts.appendChild(pastille(s[1], s[0])); tr.appendChild(ts);
+                tr.appendChild(el('td', '', tiret(x.reference))); tb.appendChild(tr);
+            });
+        }
+
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'config-advisor' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une confirmation ouverte ou un audit.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM || EN_COURS) return; charger(); }, 60000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
