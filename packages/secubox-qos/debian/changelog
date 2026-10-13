@@ -1,3 +1,27 @@
+secubox-qos (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /nettweak/ refaite au profil Aurora (ref #2571) : un seul fichier autonome (plus de police distante, de crt-light,
+    de hybrid-dark ni de crt-engine), tuiles, onglets Apercu / TCP / Reseau / Profils, ?demo=1, ?embed=1, bandeau « session
+    requise », hauteur annoncee a l'hote (sbxVue), aucune boite de dialogue native. Toute application (profil, enregistrement
+    des reglages TCP ou reseau, rechargement sysctl, reinitialisation) se confirme dans la page, avec la liste des valeurs
+    modifiees (ancienne valeur vers nouvelle) et une note de risque permanente : un reglage errone peut couper l'acces, il
+    n'y a pas de retour arriere automatique. Les appels d'ecriture sont inchanges (POST /apply avec {profile, persist:true}
+    ou {settings, persist:true}, POST /reload, POST /reset).
+  * Bogues de l'ancienne page corriges : les applications de profil n'avaient AUCUNE confirmation (un clic sur « Apply
+    Performance » modifiait le noyau et la configuration persistante) ; l'echec d'une application affichait « Failed: 1 »
+    (le champ errors est un nombre) au lieu des cles refusees et du message du noyau, et ne disait pas que des reglages
+    deja ecrits restaient actifs sans etre persistes ; toute reponse non 2xx (422, 500, 403) etait lue comme un succes
+    absent et affichee « Unknown error » ; un 401 redirigeait de force vers la connexion (remplace par le bandeau) ; un 403
+    (lecture seule) etait silencieux ; « IP Forwarding » affichait OFF quand le statut etait absent au lieu de « — » ;
+    donnees d'API injectees dans innerHTML et l'identifiant de profil dans un gestionnaire onclick ; actualisation qui
+    effacait les saisies en cours ; unites affichees dans la description seulement (valeur lue sans unite).
+  * Non repris : aucune route ni action ajoutee ; /set/{key} et /summary n'etaient pas utilises par l'ancienne page et ne le
+    sont pas davantage. L'API ne fournit ni historique de debit ni mesure de latence : la page n'affiche que les valeurs
+    courantes du noyau. « Reinitialiser » supprime le fichier persistant et recharge sysctl --system ; elle ne restaure pas
+    les valeurs actives ecrites a chaud avant le prochain demarrage (dit dans la confirmation).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 11:00:00 +0200
+
 secubox-qos (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /qos/ refaite au profil Aurora (ref #2556) : un seul fichier autonome (plus de police distante ni de crt-engine),
