@@ -4,790 +4,496 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Certificats ACME / TLS au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - ACME Certificate Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — Certificats</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-peak: #00ff41;
-            --p31-hot: #00dd44;
-            --p31-mid: #4af;
-            --p31-dim: #6b7b8b;
-            --p31-ghost: #2a3a4a;
-            --p31-decay: #ffb347;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-            --cyan: #00d4ff;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; backdrop-filter: blur(5px); }
-        .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
-        .stat-card.dead .value { color: var(--red); }
-        .stat-card.critical .value { color: var(--orange); }
-        .stat-card.warning .value { color: var(--yellow); }
-        .stat-card.healthy .value { color: var(--green); }
-        .stat-card.blue .value { color: var(--blue); }
-        .stat-card.cyan .value { color: var(--cyan); }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
-        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; transition: all 0.2s; }
-        .tab:hover { color: var(--cyan); }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .cert-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 450px; overflow-y: auto; }
-        .cert-item { display: grid; grid-template-columns: 1.5em 1.5em 1fr auto auto auto; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: rgba(20,30,45,0.6); border-radius: 4px; font-size: 0.75rem; border-left: 3px solid var(--border); cursor: pointer; transition: all 0.15s; }
-        .cert-item:hover { background: rgba(0,212,255,0.1); transform: translateX(2px); }
-        .cert-item.dead { border-left-color: var(--red); background: rgba(255,68,102,0.1); }
-        .cert-item.critical { border-left-color: var(--orange); background: rgba(255,153,68,0.08); }
-        .cert-item.warning { border-left-color: var(--yellow); background: rgba(255,204,0,0.05); }
-        .cert-item.healthy { border-left-color: var(--green); }
-        .cert-item .ttd { font-size: 1em; text-align: center; }
-        .cert-item .origin { font-size: 0.9em; text-align: center; }
-        .cert-item .domain { font-weight: 500; color: var(--cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cert-item .days { font-size: 0.7rem; color: var(--p31-dim); text-align: right; min-width: 65px; }
-        .cert-item .metrics { display: flex; gap: 0.5rem; font-size: 0.65rem; color: var(--p31-dim); }
-        .cert-item .metrics .attacks { color: var(--red); }
-        .cert-item .metrics .visits { color: var(--blue); }
-        .cert-item .actions { display: flex; gap: 0.2rem; }
-
-        .wizard { background: rgba(68,136,255,0.1); border: 1px solid var(--blue); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: none; backdrop-filter: blur(5px); }
-        .wizard.show { display: block; }
-        .wizard h3 { color: var(--blue); margin-bottom: 0.75rem; font-size: 0.9rem; }
-        .wizard-step { display: none; }
-        .wizard-step.active { display: block; }
-        .form-group { margin-bottom: 0.6rem; }
-        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
-        .form-group input, .form-group select { width: 100%; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
-        .form-row { display: flex; gap: 0.5rem; }
-        .form-row .form-group { flex: 1; }
-
-        .check-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.75rem; }
-        .check-item .status { font-size: 1em; min-width: 1.2em; }
-        .check-item.pass { color: var(--green); }
-        .check-item.fail { color: var(--red); }
-        .check-item.pending { color: var(--p31-dim); }
-        .check-item .msg { font-size: 0.65rem; color: var(--p31-dim); margin-left: 0.5rem; }
-
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: rgba(20,30,45,0.95); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 550px; max-width: 90vw; max-height: 85vh; overflow-y: auto; backdrop-filter: blur(10px); }
-        .modal-content h3 { margin-bottom: 1rem; color: var(--cyan); }
-        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8rem; }
-        .detail-grid .label { color: var(--p31-dim); font-size: 0.7rem; text-transform: uppercase; }
-        .detail-grid .value { color: var(--cyan); font-weight: 500; }
-        .metrics-bar { display: flex; gap: 1rem; margin: 1rem 0; padding: 0.75rem; background: rgba(20,30,45,0.6); border-radius: 4px; border: 1px solid var(--border); }
-        .metrics-bar .metric { text-align: center; flex: 1; }
-        .metrics-bar .metric .val { font-size: 1.2rem; font-weight: bold; }
-        .metrics-bar .metric .lbl { font-size: 0.6rem; color: var(--p31-dim); }
-        .metrics-bar .metric.attacks .val { color: var(--red); }
-        .metrics-bar .metric.visits .val { color: var(--blue); }
-
-        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
-        .filter-bar input { flex: 1; min-width: 150px; padding: 0.4rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .filter-bar select { padding: 0.4rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.75rem; color: var(--text); }
-
-        .toast { position: fixed; bottom: 70px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
-
-        .summary-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .summary-card { flex: 1; min-width: 200px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; backdrop-filter: blur(5px); }
-        .summary-card h4 { font-size: 0.75rem; color: var(--p31-dim); margin-bottom: 0.5rem; text-transform: uppercase; }
-        .attack-cat { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
-        .attack-cat:last-child { border-bottom: none; }
-        .attack-cat .name { color: var(--cyan); }
-        .attack-cat .count { color: var(--red); font-weight: bold; }
-
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) { .main { margin-left: 0; padding-top: 60px; } .cert-item { grid-template-columns: 1em 1em 1fr auto; } .cert-item .metrics, .cert-item .actions { display: none; } }
-
-        /* Panne d'API (#1240) : la page ne fabrique plus de donnees, elle dit
-           qu'elle n'en a pas. Bandeau visible, pas un console.warn. */
-        .panne-api{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:12px 16px;
-          border:1px solid #b4553a;border-left:4px solid #e8734f;border-radius:8px;
-          background:rgba(232,115,79,.10);color:#f2ded7;font-size:.92rem}
-        .panne-api[hidden]{display:none}
-        .panne-api .pa-ic{font-size:1.1rem;flex:none}
-        .panne-api .pa-txt{flex:1;min-width:0}
-        .panne-api .pa-quoi{color:#ffb99c}
-        .panne-api .pa-detail{opacity:.85}
-        .panne-api .pa-btn{flex:none;font:inherit;font-size:.85rem;cursor:pointer;
-          color:#1b1410;background:#e8734f;border:0;border-radius:999px;padding:6px 14px}
-        .panne-api .pa-btn:hover{filter:brightness(1.1)}
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(7,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.gr .v{color:var(--doux)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .gros{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap} td.mono{min-width:170px}
+        td.act .btn{margin-right:5px}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+        .conf.danger{border-color:var(--rouge);background:rgba(255,77,94,.1)} .conf span{flex:1 1 240px;overflow-wrap:anywhere}
+        .filtres{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:0 0 10px}
+        .filtres input,.filtres select,form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        .filtres input:focus,.filtres select:focus,form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;font-size:.8rem;padding:4px 0}
+        .ligne .nom{overflow-wrap:anywhere} .ligne .val{font-variant-numeric:tabular-nums;font-weight:700}
+        .ligne .barre{grid-column:1/-1;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .ligne .barre b{display:block;height:100%;background:var(--rouge)}
+        .verif{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;font-size:.8rem;padding:4px 0;border-top:1px solid rgba(86,150,255,.12)} .verif .m{grid-column:2;color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+        pre.sortie{margin:6px 0 0;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);font-size:.72rem;max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>🔐 ACME Certificate Manager</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">↻ Refresh</button>
-                <button class="btn primary" onclick="showWizard()">+ New Cert</button>
-                <button class="btn" onclick="renewAllExpiring()">🔄 Renew Expiring</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/><path d="M12 14.5v2.5"/></svg>
+                <div><h1>Certificats</h1><small>ACME / TLS — lot HAProxy et renouvellements</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+                <button class="btn prim" id="nouveau" type="button">+ Nouveau certificat</button>
+                <button class="btn" id="renouvelleTout" type="button">Renouveler ceux qui expirent</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden><b id="erreurQuoi"></b><span id="erreurDetail"></span><button class="btn sm" id="reessayer" type="button">Réessayer</button></div>
+        <div id="retour" class="retour" role="status" hidden></div>
+        <div id="conf" class="conf" role="alertdialog" aria-live="assertive" hidden><span id="confTexte"></span><button class="btn prim" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
 
-        <!-- Stats Grid -->
-        <div class="grid">
-            <div class="stat-card dead">
-                <div class="value" id="deadCount">-</div>
-                <div class="label">💀 Expired</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile hors" title="Certificats dont la date de fin est dépassée."><span class="l">Expirés</span><span class="v" id="tExpires">—</span><span class="s">échéance dépassée</span></div>
+            <div class="tuile hors" title="Certificats qui expirent dans 7 jours ou moins (aujourd’hui compris)."><span class="l">Critiques</span><span class="v" id="tCritiques">—</span><span class="s">7 jours ou moins</span></div>
+            <div class="tuile att" title="Certificats qui expirent dans 8 à 30 jours."><span class="l">À surveiller</span><span class="v" id="tSurveiller">—</span><span class="s">8 à 30 jours</span></div>
+            <div class="tuile ok" title="Certificats valides plus de 30 jours."><span class="l">Sains</span><span class="v" id="tSains">—</span><span class="s">plus de 30 jours</span></div>
+            <div class="tuile gr" id="cInconnus" title="Fichiers du lot que l’API n’a pas pu lire (droits, openssl en échec). Illisible ne veut pas dire expiré."><span class="l">Illisibles</span><span class="v" id="tInconnus">—</span><span class="s">échéance inconnue</span></div>
+            <div class="tuile cy" title="Nombre de fichiers .pem dans le lot HAProxy."><span class="l">Total</span><span class="v" id="tTotal">—</span><span class="s">certificats</span></div>
+            <div class="tuile hors" title="Entrées du journal des menaces du WAF datées d’aujourd’hui (jour local de la box), tous domaines confondus."><span class="l">Attaques du jour</span><span class="v" id="tAttaques">—</span><span class="s">journal WAF</span></div>
+        </section>
+
+        <section class="pan" id="assistant" hidden>
+            <h3>Nouveau certificat <i>assistant en trois étapes</i></h3>
+            <div id="etape1">
+                <form class="saisie" id="fAssist">
+                    <label>Nom de domaine<input id="wDomaine" placeholder="exemple.gk2.secubox.in" required></label>
+                    <label>Type de service<select id="wService">
+                        <option value="metablog" data-port="8080">Metablog</option><option value="streamlit" data-port="8501">Streamlit</option>
+                        <option value="nextcloud" data-port="80">Nextcloud</option><option value="gitea" data-port="3000">Gitea</option>
+                        <option value="matrix" data-port="8008">Matrix</option><option value="jellyfin" data-port="8096">Jellyfin</option>
+                        <option value="vaultwarden" data-port="8080">Vaultwarden</option><option value="custom" data-port="8080">Autre</option></select></label>
+                    <label>Port du service<input id="wPort" type="number" min="1" max="65535" value="8080"></label>
+                    <label>Fournisseur DNS (défi ACME)<select id="wDns">
+                        <option value="cloudflare">Cloudflare (API)</option><option value="ovh">OVH (API)</option><option value="gandi">Gandi (API)</option><option value="http">HTTP-01 (sans API DNS)</option></select></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="wVerifier">Lancer les vérifications</button><button class="btn" type="button" id="wAnnuler">Annuler</button></div>
+                </form>
             </div>
-            <div class="stat-card critical">
-                <div class="value" id="criticalCount">-</div>
-                <div class="label">🔴 Critical</div>
+            <div id="etape2" hidden>
+                <div id="wVerifs" aria-live="polite"></div>
+                <div class="bout" style="margin-top:8px"><button class="btn prim" id="wEmettre" type="button" disabled>Émettre le certificat</button><button class="btn" id="wRetour" type="button">← Retour</button></div>
             </div>
-            <div class="stat-card warning">
-                <div class="value" id="warningCount">-</div>
-                <div class="label">🟡 Warning</div>
+            <div id="etape3" hidden>
+                <div id="wResultat"></div>
+                <div class="bout" style="margin-top:8px"><button class="btn prim" id="wFini" type="button">Terminer</button></div>
             </div>
-            <div class="stat-card healthy">
-                <div class="value" id="healthyCount">-</div>
-                <div class="label">💚 Healthy</div>
-            </div>
-            <div class="stat-card blue">
-                <div class="value" id="totalCount">-</div>
-                <div class="label">📜 Total</div>
-            </div>
-            <div class="stat-card cyan">
-                <div class="value" id="attacksToday">-</div>
-                <div class="label">🛡️ Attacks/24h</div>
-            </div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections des certificats">
+            <button type="button" role="tab" id="o-tous" data-t="tous" aria-selected="true" aria-controls="t-certs">Tous</button>
+            <button type="button" role="tab" id="o-expires" data-t="expires" aria-selected="false" aria-controls="t-certs">Expirés</button>
+            <button type="button" role="tab" id="o-bientot" data-t="bientot" aria-selected="false" aria-controls="t-certs">À renouveler</button>
+            <button type="button" role="tab" id="o-sains" data-t="sains" aria-selected="false" aria-controls="t-certs">Sains</button>
+            <button type="button" role="tab" id="o-inconnus" data-t="inconnus" aria-selected="false" aria-controls="t-certs">Illisibles</button>
+            <button type="button" role="tab" id="o-metriques" data-t="metriques" aria-selected="false" aria-controls="t-metriques">Métriques</button>
+            <button type="button" role="tab" id="o-attaques" data-t="attaques" aria-selected="false" aria-controls="t-attaques">Attaques</button>
         </div>
 
-        <!-- Wizard Panel -->
-        <div class="wizard" id="wizardPanel">
-            <h3>🧙 Certificate Wizard</h3>
-            <div class="wizard-step active" id="step1">
-                <div class="form-group">
-                    <label>Domain Name</label>
-                    <input type="text" id="wizDomain" placeholder="example.gk2.secubox.in" autofocus>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Backend Type</label>
-                        <select id="wizBackend" onchange="updatePortSuggestion()">
-                            <option value="metablog" data-port="8080">📝 Metablog</option>
-                            <option value="streamlit" data-port="8501">📊 Streamlit</option>
-                            <option value="nextcloud" data-port="80">☁️ Nextcloud</option>
-                            <option value="gitea" data-port="3000">💻 Gitea</option>
-                            <option value="matrix" data-port="8008">💬 Matrix</option>
-                            <option value="jellyfin" data-port="8096">🎬 Jellyfin</option>
-                            <option value="vaultwarden" data-port="8080">🔐 Vaultwarden</option>
-                            <option value="custom" data-port="8080">⚙️ Custom</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Backend Port</label>
-                        <input type="number" id="wizPort" value="8080">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>DNS Provider (for ACME challenge)</label>
-                    <select id="wizDns">
-                        <option value="cloudflare">☁️ Cloudflare API</option>
-                        <option value="ovh">🇫🇷 OVH API</option>
-                        <option value="gandi">🦄 Gandi API</option>
-                        <option value="http">🌐 HTTP-01 (no DNS API)</option>
-                    </select>
-                </div>
-                <div style="margin-top:1rem">
-                    <button class="btn primary" onclick="runPreflightChecks()">▶ Run Pre-flight Checks</button>
-                    <button class="btn" onclick="hideWizard()">Cancel</button>
-                </div>
+        <section id="t-certs" role="tabpanel" class="pan">
+            <h3><span id="titreListe">Certificats</span> <i id="nListe"></i></h3>
+            <div class="filtres">
+                <input id="recherche" type="search" placeholder="Rechercher un domaine…" aria-label="Rechercher un domaine">
+                <select id="filtreOrigine" aria-label="Filtrer par origine"><option value="">Toutes les origines</option></select>
+                <select id="tri" aria-label="Trier par"><option value="days">Tri : échéance</option><option value="domain">Tri : domaine</option><option value="attacks">Tri : attaques</option></select>
             </div>
-            <div class="wizard-step" id="step2">
-                <h4 style="margin-bottom:0.5rem">Pre-flight Checks</h4>
-                <div id="wizChecks"></div>
-                <div style="margin-top:1rem">
-                    <button class="btn primary" id="wizIssueBtn" disabled onclick="issueCertificate()">✓ Issue Certificate</button>
-                    <button class="btn" onclick="showStep(1)">← Back</button>
-                </div>
-            </div>
-            <div class="wizard-step" id="step3">
-                <h4 style="margin-bottom:0.5rem">🎉 Certificate Issued!</h4>
-                <div id="wizResult"></div>
-                <button class="btn primary" onclick="hideWizard();refresh()">Done</button>
-            </div>
-        </div>
+            <div class="tab"><table><thead><tr><th>État</th><th>Domaine</th><th>Origine</th><th>Fin de validité</th><th>Jours</th><th>Émetteur</th><th>Attaques</th><th>Actions</th></tr></thead><tbody id="bCerts"></tbody></table></div>
+            <p class="note">Les attaques viennent du journal des menaces du WAF, regroupées par nom d’hôte : un certificat joker ou un hôte différent du nom du fichier peut apparaître à « — ».</p>
+        </section>
 
-        <!-- Main Content Tabs -->
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" data-tab="all" onclick="switchTab('all')">📋 All</div>
-                <div class="tab" data-tab="expired" onclick="switchTab('expired')">💀 Expired</div>
-                <div class="tab" data-tab="expiring" onclick="switchTab('expiring')">⚠️ Expiring</div>
-                <div class="tab" data-tab="healthy" onclick="switchTab('healthy')">💚 Healthy</div>
-                <div class="tab" data-tab="metrics" onclick="switchTab('metrics')">📊 Metrics</div>
-                <div class="tab" data-tab="attacks" onclick="switchTab('attacks')">🛡️ Attacks</div>
-            </div>
+        <section id="detail" class="pan" hidden>
+            <h3>Détail du certificat <i id="dNom"></i><button class="btn sm" id="dFerme" type="button">Fermer</button></h3>
+            <dl class="kv"><dt>Domaine</dt><dd class="mono" id="dDomaine">—</dd><dt>Origine</dt><dd id="dOrigine">—</dd><dt>État</dt><dd id="dEtat">—</dd><dt>Fin de validité</dt><dd id="dFin">—</dd><dt>Jours restants</dt><dd id="dJours">—</dd>
+                <dt>Émetteur</dt><dd id="dEmetteur">—</dd><dt>Fichier</dt><dd class="mono" id="dFichier">—</dd><dt>Taille</dt><dd id="dTaille">—</dd><dt>Modifié</dt><dd id="dModifie">—</dd><dt>Attaques</dt><dd id="dAttaques">—</dd></dl>
+            <div class="bout" style="margin-top:10px"><button class="btn prim" id="dRenouvelle" type="button">Renouveler</button><button class="btn danger" id="dRevoque" type="button">Révoquer</button></div>
+        </section>
 
-            <!-- Filter Bar -->
-            <div class="filter-bar">
-                <input type="text" id="searchInput" placeholder="🔍 Search domain..." oninput="filterCerts()">
-                <select id="originFilter" onchange="filterCerts()">
-                    <option value="">All Origins</option>
-                    <option value="📝">📝 Metablog</option>
-                    <option value="📊">📊 Streamlit</option>
-                    <option value="☁️">☁️ Nextcloud</option>
-                    <option value="💻">💻 Gitea</option>
-                    <option value="💬">💬 Chat</option>
-                    <option value="🎬">🎬 Media</option>
-                    <option value="🔐">🔐 Vault</option>
-                    <option value="🌐">🌐 Web</option>
-                </select>
-                <select id="sortBy" onchange="filterCerts()">
-                    <option value="days">Sort: Expiry</option>
-                    <option value="domain">Sort: Domain</option>
-                    <option value="attacks">Sort: Attacks</option>
-                </select>
-            </div>
+        <section id="t-metriques" role="tabpanel" class="grille" hidden>
+            <div class="pan"><h3>Visites <i>journal HAProxy</i></h3>
+                <div class="gros" id="mVisites">—</div><div class="note" style="margin:2px 0 8px">lignes du journal, au total</div>
+                <dl class="kv"><dt>Aujourd’hui</dt><dd id="mVisitesJour">—</dd></dl>
+                <p class="note">Compte de lignes du journal HAProxy (total et lignes du jour), pas de visiteurs uniques ; l’API ne fournit pas de visites par domaine.</p></div>
+            <div class="pan"><h3>Attaques <i>journal WAF</i></h3>
+                <div class="gros" id="mAttaques">—</div><div class="note" style="margin:2px 0 8px">entrées du journal des menaces, au total</div>
+                <dl class="kv"><dt>Aujourd’hui</dt><dd id="mAttaquesJour">—</dd><dt>Adresses distinctes</dt><dd id="mIps">—</dd></dl>
+                <p class="note">Journal absent ou vide : l’API répond aussi 0 ; la page ne peut pas distinguer « aucune attaque » de « journal absent ».</p></div>
+        </section>
 
-            <div id="panneApi" class="panne-api" hidden role="alert">
-                <span class="pa-ic">⚠️</span>
-                <span class="pa-txt"><b class="pa-quoi"></b><span class="pa-detail"></span></span>
-                <button type="button" class="pa-btn" onclick="effacePanne(); loadCerts(); loadMetrics();">Réessayer</button>
-            </div>
+        <section id="t-attaques" role="tabpanel" class="grille" hidden>
+            <div class="pan"><h3>Catégories d’attaque les plus fréquentes <i>top 5</i></h3><div id="topCategories"></div></div>
+            <div class="pan"><h3>Domaines les plus ciblés <i>top 5</i></h3><div id="topCibles"></div></div>
+        </section>
+    </div></div></main>
 
-            <div id="all" class="tab-content active">
-                <div class="cert-list" id="certListAll">Loading...</div>
-            </div>
-            <div id="expired" class="tab-content">
-                <div class="cert-list" id="certListExpired">Loading...</div>
-            </div>
-            <div id="expiring" class="tab-content">
-                <div class="cert-list" id="certListExpiring">Loading...</div>
-            </div>
-            <div id="healthy" class="tab-content">
-                <div class="cert-list" id="certListHealthy">Loading...</div>
-            </div>
-            <div id="metrics" class="tab-content">
-                <div class="summary-row">
-                    <div class="summary-card">
-                        <h4>📈 Visit Summary</h4>
-                        <div id="visitsSummary">Loading...</div>
-                    </div>
-                    <div class="summary-card">
-                        <h4>🛡️ Attack Summary</h4>
-                        <div id="attacksSummary">Loading...</div>
-                    </div>
-                </div>
-                <div class="cert-list" id="certListMetrics">Loading...</div>
-            </div>
-            <div id="attacks" class="tab-content">
-                <div class="summary-row">
-                    <div class="summary-card">
-                        <h4>🔥 Top Attack Categories</h4>
-                        <div id="topCategories">Loading...</div>
-                    </div>
-                    <div class="summary-card">
-                        <h4>🎯 Most Targeted Domains</h4>
-                        <div id="topTargets">Loading...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Certificate Details Modal -->
-    <div class="modal" id="certModal">
-        <div class="modal-content">
-            <h3 id="modalTitle">Certificate Details</h3>
-            <div class="metrics-bar" id="modalMetrics">
-                <div class="metric attacks">
-                    <div class="val" id="modalAttacks">0</div>
-                    <div class="lbl">Attacks</div>
-                </div>
-                <div class="metric visits">
-                    <div class="val" id="modalVisits">0</div>
-                    <div class="lbl">Visits</div>
-                </div>
-                <div class="metric">
-                    <div class="val" id="modalDays">0</div>
-                    <div class="lbl">Days Left</div>
-                </div>
-            </div>
-            <div class="detail-grid" id="modalDetails"></div>
-            <div style="margin-top:1rem">
-                <button class="btn primary" id="modalRenewBtn">🔄 Renew</button>
-                <button class="btn danger" id="modalRevokeBtn">⚠️ Revoke</button>
-                <button class="btn" onclick="hideModal()">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast -->
-    <div class="toast" id="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/certs';
-        let allCerts = [];
-        let metricsData = {};
-        let currentDomain = '';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = v => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('fr-FR') : '—';
 
-        // Emoji mappings
-        function getTTDEmoji(days) {
-            if (Number.isNaN(days)) return '❔';
-            if (days < 0) return '💀';
-            if (days === 0) return '☠️';
-            if (days <= 3) return '🔴';
-            if (days <= 7) return '🟠';
-            if (days <= 14) return '🟡';
-            if (days <= 30) return '🟢';
-            return '💚';
-        }
+        let CERTS = null, METR = null, SESSION_OK = true, TAB = 'tous', DETAIL = null, CONF = null, OCCUPE = false;
 
-        function getOriginEmoji(domain) {
-            var d = domain.toLowerCase();
-            if (d.includes('git')) return '💻';
-            if (d.includes('blog') || d.includes('meta')) return '📝';
-            if (d.includes('stream')) return '📊';
-            if (d.includes('cloud') || d.includes('file')) return '☁️';
-            if (d.includes('mail') || d.includes('webmail')) return '📧';
-            if (d.includes('matrix') || d.includes('chat')) return '💬';
-            if (d.includes('media') || d.includes('jelly')) return '🎬';
-            if (d.includes('vault') || d.includes('bw')) return '🔐';
-            if (d.includes('meet') || d.includes('jitsi')) return '📹';
-            if (d.includes('radio')) return '📻';
-            if (d.includes('voip') || d.includes('sip')) return '📞';
-            if (d.includes('admin')) return '⚙️';
-            if (d.includes('api')) return '⚡';
-            if (d.includes('secubox')) return '🛡️';
-            if (d.includes('c3box')) return '📊';
-            if (d.includes('arm')) return '🖥️';
-            return '🌐';
+        // Jeton : clé unique sbx_token. localStorage peut lever (navigation privée, stockage bloqué).
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        function getCertClass(days) {
-            if (Number.isNaN(days)) return 'warning';   // inconnu : à regarder, ni mort ni sain (#2383)
-            if (days < 0) return 'dead';
-            if (days <= 7) return 'critical';
-            if (days <= 30) return 'warning';
-            return 'healthy';
-        }
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
-        // ON N'INVENTE PAS DE CERTIFICATS.
-        //
-        // Cette page affichait, quand l'API tombait, quinze certificats FICTIFS —
-        // dates d'expiration et compteurs d'attaques fabriques — indistincts des
-        // vrais, avec pour seul signe un console.warn que personne ne lit. Un
-        // operateur pouvait y lire « expire depuis 7 jours, 1245 attaques » et
-        // agir dessus. Dans un outil de securite, une donnee inventee qui a l'air
-        // vraie est pire que pas de donnee du tout.
-        //
-        // Desormais : tableau vide, panne annoncee, bouton pour reessayer.
-        function annoncePanne(quoi, detail) {
-            var z = document.getElementById('panneApi');
-            if (!z) return;
-            z.querySelector('.pa-quoi').textContent = quoi;
-            z.querySelector('.pa-detail').textContent = detail || '';
-            z.hidden = false;
-        }
-        function effacePanne() {
-            var z = document.getElementById('panneApi');
-            if (z) z.hidden = true;
-        }
-
-        async function loadCerts() {
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page ; inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                var res = await fetch(API + '/list');
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                var data = await res.json();
-                allCerts = (data.certificates || []).map(c => c.days == null ? Object.assign({}, c, { days: NaN, unknown: true }) : c);   // illisible : « inconnu », jamais « expiré » (#2383)
-                effacePanne();
-                renderCerts();
-            } catch (e) {
-                console.warn('API des certificats injoignable :', e);
-                allCerts = [];                      // rien, plutot que du faux
-                annoncePanne('API des certificats injoignable',
-                             " — aucun certificat n'est affiche : cette page ne montre que ce que l'API rend.");
-                renderCerts();
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function motif(r) {
+            if (r.demo) return 'Démonstration : action inerte.';
+            const d = r.data || {};
+            if (d.error) return String(d.error);
+            if (d.detail) return typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail);
+            if (r.statut === 401 || r.statut === 403) return 'session requise ou droits administrateur manquants (HTTP ' + r.statut + ')';
+            return r.statut ? 'HTTP ' + r.statut : 'serveur injoignable';
+        }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+
+        // ----- Démonstration : adresses et noms de documentation (RFC 5737 / example) -----
+        const DEMO_CERTS = [
+            { domain: 'blog.example.org', file: 'blog.example.org.pem', expiry: '2026-12-09T10:00:00', days: 57, status: 'healthy', origin_emoji: '📝', origin_name: 'Metablog', issuer: "Let's Encrypt R11", size: 5120, modified: '2026-10-10T08:00:00' },
+            { domain: 'git.example.org', file: 'git.example.org.pem', expiry: '2026-10-25T10:00:00', days: 12, status: 'warning', origin_emoji: '💻', origin_name: 'Gitea', issuer: "Let's Encrypt R11", size: 5120, modified: '2026-07-27T08:00:00' },
+            { domain: 'mail.example.net', file: 'mail.example.net.pem', expiry: '2026-10-18T10:00:00', days: 5, status: 'critical', origin_emoji: '📧', origin_name: 'Mail', issuer: "Let's Encrypt R11", size: 4980, modified: '2026-07-20T08:00:00' },
+            { domain: 'ancien.example.com', file: 'ancien.example.com.pem', expiry: '2026-10-10T10:00:00', days: -3, status: 'expired', origin_emoji: '🌐', origin_name: 'Web', issuer: "Let's Encrypt R10", size: 4800, modified: '2026-07-12T08:00:00' },
+            { domain: 'cloud.example.org', file: 'cloud.example.org.pem', expiry: null, days: null, status: 'unknown', origin_emoji: '☁️', origin_name: 'Nextcloud', issuer: 'Unknown', size: 5300, modified: '2026-09-01T08:00:00' },
+            { domain: '*.example.org', file: '_wildcard_.example.org.pem', expiry: '2027-01-11T10:00:00', days: 90, status: 'healthy', origin_emoji: '🌐', origin_name: 'Web', issuer: "Let's Encrypt R11", size: 5600, modified: '2026-10-12T08:00:00' }
+        ];
+        const DEMO_METR = { domains: [
+            { domain: 'blog.example.org', attacks_total: 312, attacks_today: 9 }, { domain: 'git.example.org', attacks_total: 1245, attacks_today: 31 },
+            { domain: 'mail.example.net', attacks_total: 88, attacks_today: 2 }, { domain: 'ancien.example.com', attacks_total: 7, attacks_today: 0 }],
+            summary: { total_attacks: 1652, today_attacks: 42, blocked_ips: 64, top_categories: { 'Balayage de chemins': 801, 'Injection SQL': 412, 'Robots malveillants': 288, 'Traversée de répertoire': 97, 'Autre': 54 }, total_visits: 482113, today_visits: 5291 } };
+
+        // ----- Calculs : mêmes seuils que l'API (resume) -----
+        const classe = c => c.days === null || c.days === undefined ? 'unknown' : c.days < 0 ? 'expired' : c.days <= 7 ? 'critical' : c.days <= 30 ? 'warning' : 'healthy';
+        const LIB = { expired: ['EXPIRÉ', 'hors'], critical: ['CRITIQUE', 'hors'], warning: ['À SURVEILLER', 'att'], healthy: ['SAIN', 'ok'], unknown: ['ILLISIBLE', ''] };
+        function pastille(cl, txt) { return el('span', 'pill ' + cl, txt); }
+        const date10 = s => (typeof s === 'string' && s.length >= 10) ? s.slice(0, 10) : '—';
+        function tailleKo(o) { return (typeof o === 'number') ? (o / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Ko' : '—'; }
+        function attaquesDe(domaine) {
+            if (!METR || !Array.isArray(METR.domains)) return null;
+            const d = METR.domains.find(x => x.domain === domaine);
+            return d ? d : null;
+        }
+        const emetteur = c => (!c.issuer || c.issuer === 'Unknown') ? '—' : c.issuer;
+        function joursTexte(c) { return (c.days === null || c.days === undefined) ? 'illisible' : c.days < 0 ? 'il y a ' + Math.abs(c.days) + ' j' : c.days + ' j'; }
+
+        // ----- Rendu -----
+        function setEtat(txt, cl) { const e = $('etat'); e.textContent = txt; e.className = 'actif ' + cl; }
+        function rendreTuiles() {
+            const ids = ['tExpires', 'tCritiques', 'tSurveiller', 'tSains', 'tInconnus', 'tTotal'];
+            if (!CERTS) ids.forEach(i => { $(i).textContent = '—'; });
+            else {
+                const n = k => CERTS.filter(c => classe(c) === k).length;
+                $('tExpires').textContent = n('expired'); $('tCritiques').textContent = n('critical'); $('tSurveiller').textContent = n('warning');
+                $('tSains').textContent = n('healthy'); $('tInconnus').textContent = n('unknown'); $('tTotal').textContent = CERTS.length;
             }
+            const j = METR && METR.summary ? METR.summary.today_attacks : null;
+            $('tAttaques').textContent = typeof j === 'number' ? nombre(j) : '—';
         }
-
-        async function loadMetrics() {
-            try {
-                var res = await fetch(API + '/metrics');
-                if (!res.ok) throw new Error('API error');
-                metricsData = await res.json();
-                renderMetrics();
-            } catch (e) {
-                // Des zeros ont l'air d'une mesure : « 0 attaque » se lit comme
-                // « aucune attaque », pas comme « on ne sait pas ». On le dit.
-                console.warn('API des metriques injoignable :', e);
-                metricsData = { summary: { total_attacks: 0, today_attacks: 0 }, domains: [] };
-                annoncePanne('API des metriques injoignable',
-                             ' — les compteurs affiches ne sont pas des mesures.');
-                renderMetrics();
-            }
+        const FILTRES = {
+            tous: () => true, expires: c => classe(c) === 'expired', bientot: c => ['critical', 'warning'].includes(classe(c)),
+            sains: c => classe(c) === 'healthy', inconnus: c => classe(c) === 'unknown'
+        };
+        const TITRES = { tous: 'Tous les certificats', expires: 'Certificats expirés', bientot: 'À renouveler (30 jours ou moins)', sains: 'Certificats sains', inconnus: 'Certificats illisibles' };
+        function majOrigines() {
+            const sel = $('filtreOrigine'), cur = sel.value;
+            const noms = [...new Set((CERTS || []).map(c => c.origin_name).filter(Boolean))].sort();
+            const actuel = [...sel.options].slice(1).map(o => o.value).join('|');
+            if (actuel === noms.join('|')) return;
+            sel.replaceChildren(new Option('Toutes les origines', ''));
+            noms.forEach(n => sel.appendChild(new Option(n, n)));
+            sel.value = noms.includes(cur) ? cur : '';
         }
-
-
-        function renderCerts() {
-            var dead = allCerts.filter(c => c.days < 0);
-            var critical = allCerts.filter(c => c.days >= 0 && c.days <= 7);
-            var warning = allCerts.filter(c => c.days > 7 && c.days <= 30);
-            var healthy = allCerts.filter(c => c.days > 30);
-
-            document.getElementById('deadCount').textContent = dead.length;
-            document.getElementById('criticalCount').textContent = critical.length;
-            document.getElementById('warningCount').textContent = warning.length;
-            document.getElementById('healthyCount').textContent = healthy.length;
-            document.getElementById('totalCount').textContent = allCerts.length;
-
-            // Total attacks today
-            var todayAttacks = allCerts.reduce((sum, c) => sum + (c.attacks || 0), 0);
-            document.getElementById('attacksToday').textContent = todayAttacks;
-
-            filterCerts();
-        }
-
-        function filterCerts() {
-            var search = document.getElementById('searchInput').value.toLowerCase();
-            var origin = document.getElementById('originFilter').value;
-            var sortBy = document.getElementById('sortBy').value;
-
-            var filtered = allCerts.filter(c => {
-                var matchSearch = !search || c.domain.toLowerCase().includes(search);
-                var matchOrigin = !origin || getOriginEmoji(c.domain) === origin;
-                return matchSearch && matchOrigin;
+        function rendreListe() {
+            const tb = $('bCerts'); tb.replaceChildren();
+            $('titreListe').textContent = TITRES[TAB] || 'Certificats';
+            const vide = txt => { const tr = el('tr'), td = el('td', 'vide', txt); td.colSpan = 8; tr.appendChild(td); tb.appendChild(tr); $('nListe').textContent = ''; };
+            if (!CERTS) { vide(SESSION_OK ? 'Aucune donnée : l’API des certificats ne répond pas' : '—'); return; }
+            const rech = $('recherche').value.trim().toLowerCase(), orig = $('filtreOrigine').value, tri = $('tri').value;
+            let L = CERTS.filter(FILTRES[TAB] || FILTRES.tous).filter(c => (!rech || String(c.domain).toLowerCase().includes(rech)) && (!orig || c.origin_name === orig));
+            const att = c => { const a = attaquesDe(c.domain); return a ? (a.attacks_total || 0) : -1; };
+            if (tri === 'domain') L.sort((a, b) => String(a.domain).localeCompare(String(b.domain)));
+            else if (tri === 'attacks') L.sort((a, b) => att(b) - att(a));
+            else L.sort((a, b) => (a.days === null ? Infinity : a.days) - (b.days === null ? Infinity : b.days));
+            $('nListe').textContent = L.length + ' / ' + CERTS.length;
+            if (!L.length) { vide('Aucun certificat ne correspond'); return; }
+            L.forEach(c => {
+                const tr = el('tr'), cl = classe(c), a = attaquesDe(c.domain);
+                const e = el('td'); e.appendChild(pastille(LIB[cl][1], LIB[cl][0])); tr.appendChild(e);
+                tr.appendChild(el('td', 'mono', tiret(c.domain)));
+                tr.appendChild(el('td', '', (c.origin_emoji ? c.origin_emoji + ' ' : '') + tiret(c.origin_name)));
+                tr.appendChild(el('td', '', date10(c.expiry)));
+                tr.appendChild(el('td', '', joursTexte(c)));
+                tr.appendChild(el('td', '', emetteur(c)));
+                tr.appendChild(el('td', '', a ? nombre(a.attacks_total) : '—'));
+                const ac = el('td', 'act');
+                const bd = el('button', 'btn sm', 'Détails'); bd.type = 'button'; bd.addEventListener('click', () => ouvrirDetail(c.domain)); ac.appendChild(bd);
+                const br = el('button', 'btn sm prim', 'Renouveler'); br.type = 'button'; br.addEventListener('click', () => demandeRenouveler(c.domain)); ac.appendChild(br);
+                tr.appendChild(ac); tb.appendChild(tr);
             });
-
-            // Sort
-            if (sortBy === 'days') {
-                filtered.sort((a, b) => a.days - b.days);
-            } else if (sortBy === 'domain') {
-                filtered.sort((a, b) => a.domain.localeCompare(b.domain));
-            } else if (sortBy === 'attacks') {
-                filtered.sort((a, b) => (b.attacks || 0) - (a.attacks || 0));
-            }
-
-            var dead = filtered.filter(c => c.days < 0);
-            var critical = filtered.filter(c => c.days >= 0 && c.days <= 7);
-            var warning = filtered.filter(c => c.days > 7 && c.days <= 30);
-            var healthy = filtered.filter(c => c.days > 30);
-
-            document.getElementById('certListAll').innerHTML = renderCertList(filtered);
-            document.getElementById('certListExpired').innerHTML = renderCertList(dead);
-            document.getElementById('certListExpiring').innerHTML = renderCertList(critical.concat(warning));
-            document.getElementById('certListHealthy').innerHTML = renderCertList(healthy);
-            document.getElementById('certListMetrics').innerHTML = renderCertList(filtered, true);
         }
-
-        function renderCertList(certs, showMetrics = false) {
-            if (!certs || certs.length === 0) {
-                return '<div style="color:var(--p31-dim);padding:1rem;text-align:center">No certificates match filter</div>';
-            }
-            return certs.map(c => {
-                var cls = getCertClass(c.days);
-                var ttd = getTTDEmoji(c.days);
-                var origin = getOriginEmoji(c.domain);
-                var daysText = Number.isNaN(c.days) ? 'illisible' : (c.days < 0 ? Math.abs(c.days) + 'd ago' : c.days + 'd');
-                var attacks = c.attacks || 0;
-                var visits = c.visits || 0;
-
-                return '<div class="cert-item ' + cls + '" onclick="showDetails(\'' + c.domain + '\')">' +
-                    '<span class="ttd">' + ttd + '</span>' +
-                    '<span class="origin">' + origin + '</span>' +
-                    '<span class="domain">' + c.domain + '</span>' +
-                    '<span class="days">' + daysText + '</span>' +
-                    (showMetrics ? '<span class="metrics"><span class="attacks">🛡️' + attacks + '</span><span class="visits">👁️' + visits + '</span></span>' : '<span class="metrics"><span class="attacks">' + (attacks > 0 ? '🛡️' + attacks : '') + '</span></span>') +
-                    '<span class="actions">' +
-                    '<button class="btn sm primary" onclick="event.stopPropagation();renewCert(\'' + c.domain + '\')">↻</button>' +
-                    '</span></div>';
-            }).join('');
+        function rendreMetriques() {
+            const s = METR && METR.summary ? METR.summary : null;
+            const v = k => s ? nombre(s[k]) : '—';
+            $('mVisites').textContent = v('total_visits'); $('mVisitesJour').textContent = v('today_visits');
+            $('mAttaques').textContent = v('total_attacks'); $('mAttaquesJour').textContent = v('today_attacks'); $('mIps').textContent = v('blocked_ips');
+            // Catégories
+            const cats = $('topCategories'); cats.replaceChildren();
+            const entrees = s && s.top_categories ? Object.entries(s.top_categories).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
+            barres(cats, entrees, s ? 'Aucune catégorie enregistrée' : '—');
+            const cibles = $('topCibles'); cibles.replaceChildren();
+            const doms = METR && Array.isArray(METR.domains) ? METR.domains.filter(d => d.attacks_total > 0).sort((a, b) => b.attacks_total - a.attacks_total).slice(0, 5).map(d => [d.domain, d.attacks_total]) : [];
+            barres(cibles, doms, METR ? 'Aucune attaque enregistrée sur ces domaines' : '—');
         }
-
-        function renderMetrics() {
-            var s = metricsData.summary || {};
-            document.getElementById('visitsSummary').innerHTML =
-                '<div style="font-size:1.5rem;color:var(--blue);font-weight:bold">' + (s.total_visits || 0).toLocaleString() + '</div>' +
-                '<div style="font-size:0.7rem;color:var(--p31-dim)">Total Requests</div>' +
-                '<div style="margin-top:0.5rem;font-size:0.9rem">' + (s.today_visits || 0).toLocaleString() + ' today</div>';
-
-            document.getElementById('attacksSummary').innerHTML =
-                '<div style="font-size:1.5rem;color:var(--red);font-weight:bold">' + (s.total_attacks || 0).toLocaleString() + '</div>' +
-                '<div style="font-size:0.7rem;color:var(--p31-dim)">Total Blocked</div>' +
-                '<div style="margin-top:0.5rem;font-size:0.9rem">' + (s.today_attacks || 0).toLocaleString() + ' today | ' + (s.blocked_ips || 0) + ' IPs</div>';
-
-            // Top categories
-            var cats = s.top_categories || {};
-            var catHtml = Object.entries(cats).slice(0, 5).map(([name, count]) =>
-                '<div class="attack-cat"><span class="name">' + name + '</span><span class="count">' + count + '</span></div>'
-            ).join('') || '<div style="color:var(--p31-dim)">No data</div>';
-            document.getElementById('topCategories').innerHTML = catHtml;
-
-            // Top targets
-            var domains = metricsData.domains || [];
-            var sortedByAttacks = domains.slice().sort((a, b) => (b.attacks_total || 0) - (a.attacks_total || 0)).slice(0, 5);
-            var targetHtml = sortedByAttacks.map(d =>
-                '<div class="attack-cat"><span class="name">' + d.origin_emoji + ' ' + d.domain + '</span><span class="count">' + (d.attacks_total || 0) + '</span></div>'
-            ).join('') || '<div style="color:var(--p31-dim)">No data</div>';
-            document.getElementById('topTargets').innerHTML = targetHtml;
-        }
-
-        async function showDetails(domain) {
-            currentDomain = domain;
-            var cert = allCerts.find(c => c.domain === domain);
-            if (!cert) return;
-
-            document.getElementById('modalTitle').textContent = getTTDEmoji(cert.days) + ' ' + domain;
-            document.getElementById('modalAttacks').textContent = cert.attacks || 0;
-            document.getElementById('modalVisits').textContent = cert.visits || 0;
-            document.getElementById('modalDays').textContent = cert.days;
-            document.getElementById('modalDays').style.color = cert.days < 0 ? 'var(--red)' : cert.days <= 7 ? 'var(--orange)' : cert.days <= 30 ? 'var(--yellow)' : 'var(--green)';
-
-            document.getElementById('modalDetails').innerHTML =
-                '<div><span class="label">Domain</span><div class="value">' + cert.domain + '</div></div>' +
-                '<div><span class="label">Origin</span><div class="value">' + getOriginEmoji(cert.domain) + ' ' + (cert.origin_name || 'Web') + '</div></div>' +
-                '<div><span class="label">Expiry</span><div class="value">' + (cert.expiry || 'Unknown') + '</div></div>' +
-                '<div><span class="label">Status</span><div class="value">' + (cert.status || getCertClass(cert.days)).toUpperCase() + '</div></div>' +
-                '<div><span class="label">Issuer</span><div class="value">' + (cert.issuer || "Let's Encrypt") + '</div></div>' +
-                '<div><span class="label">File</span><div class="value">' + (cert.file || cert.domain + '.pem') + '</div></div>';
-
-            document.getElementById('modalRenewBtn').onclick = () => renewCert(domain);
-            document.getElementById('modalRevokeBtn').onclick = () => revokeCert(domain);
-
-            document.getElementById('certModal').classList.add('show');
-        }
-
-        function hideModal() {
-            document.getElementById('certModal').classList.remove('show');
-        }
-
-        // Wizard
-        function showWizard() {
-            document.getElementById('wizardPanel').classList.add('show');
-            showStep(1);
-            document.getElementById('wizDomain').focus();
-        }
-
-        function hideWizard() {
-            document.getElementById('wizardPanel').classList.remove('show');
-        }
-
-        function showStep(n) {
-            document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
-            document.getElementById('step' + n).classList.add('active');
-        }
-
-        function updatePortSuggestion() {
-            var sel = document.getElementById('wizBackend');
-            var opt = sel.options[sel.selectedIndex];
-            document.getElementById('wizPort').value = opt.dataset.port || 8080;
-        }
-
-        async function runPreflightChecks() {
-            var domain = document.getElementById('wizDomain').value.trim();
-            if (!domain) { toast('Enter a domain name', true); return; }
-
-            showStep(2);
-            var checksEl = document.getElementById('wizChecks');
-            checksEl.innerHTML = '';
-
-            var checks = [
-                { name: 'DNS Resolution', key: 'dns' },
-                { name: 'HTTP Port (80)', key: 'http' },
-                { name: 'HTTPS Port (443)', key: 'https' },
-                { name: 'DNS API Credentials', key: 'api' },
-                { name: 'ACME Account', key: 'acme' }
-            ];
-
-            // Add pending items
-            checks.forEach((c, i) => {
-                checksEl.innerHTML += '<div class="check-item pending" id="check' + i + '"><span class="status">⏳</span> ' + c.name + '</div>';
+        function barres(zone, entrees, videTxt) {
+            if (!entrees.length) { zone.appendChild(el('div', 'vide', videTxt)); return; }
+            const max = Math.max(...entrees.map(e => e[1]), 1);
+            entrees.forEach(([nom, n]) => {
+                const l = el('div', 'ligne'); l.appendChild(el('span', 'nom', nom)); l.appendChild(el('span', 'val', nombre(n)));
+                const b = el('div', 'barre'), i = document.createElement('b'); i.style.width = Math.max(2, Math.round(100 * n / max)) + '%'; b.appendChild(i); l.appendChild(b); zone.appendChild(l);
             });
+        }
+        function rendreDetail() {
+            const p = $('detail');
+            const c = DETAIL && CERTS ? CERTS.find(x => x.domain === DETAIL) : null;
+            if (!c) { p.hidden = true; return; }
+            p.hidden = false; const cl = classe(c), a = attaquesDe(c.domain);
+            $('dNom').textContent = c.domain;
+            $('dDomaine').textContent = tiret(c.domain); $('dOrigine').textContent = (c.origin_emoji ? c.origin_emoji + ' ' : '') + tiret(c.origin_name);
+            $('dEtat').textContent = LIB[cl][0]; $('dFin').textContent = date10(c.expiry);
+            $('dJours').textContent = (c.days === null || c.days === undefined) ? '— (illisible)' : String(c.days);
+            $('dEmetteur').textContent = emetteur(c); $('dFichier').textContent = tiret(c.file); $('dTaille').textContent = tailleKo(c.size); $('dModifie').textContent = date10(c.modified);
+            $('dAttaques').textContent = a ? nombre(a.attacks_total) + ' au total, ' + nombre(a.attacks_today) + ' aujourd’hui' : '—';
+        }
+        function rendre() { rendreTuiles(); majOrigines(); rendreListe(); rendreMetriques(); rendreDetail(); annoncer(); }
 
-            try {
-                var res = await fetch(API + '/check', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        domain: domain,
-                        dns_provider: document.getElementById('wizDns').value,
-                        backend_type: document.getElementById('wizBackend').value,
-                        backend_port: parseInt(document.getElementById('wizPort').value)
-                    })
-                });
-
-                var data = await res.json();
-                var allPass = true;
-
-                (data.checks || []).forEach((c, i) => {
-                    var el = document.getElementById('check' + i);
-                    if (el) {
-                        el.className = 'check-item ' + (c.pass ? 'pass' : 'fail');
-                        el.innerHTML = '<span class="status">' + (c.pass ? '✅' : '❌') + '</span> ' + c.name + '<span class="msg">' + (c.msg || '') + '</span>';
-                        if (!c.pass) allPass = false;
-                    }
-                });
-
-                document.getElementById('wizIssueBtn').disabled = !allPass;
-
-            } catch (e) {
-                // Simulate checks for demo
-                for (var i = 0; i < checks.length; i++) {
-                    await new Promise(r => setTimeout(r, 400));
-                    var pass = Math.random() > 0.15;
-                    var el = document.getElementById('check' + i);
-                    el.className = 'check-item ' + (pass ? 'pass' : 'fail');
-                    el.innerHTML = '<span class="status">' + (pass ? '✅' : '❌') + '</span> ' + checks[i].name;
-                }
-                document.getElementById('wizIssueBtn').disabled = false;
+        // ----- Chargement -----
+        async function charger() {
+            if (DEMO) {
+                CERTS = DEMO_CERTS; METR = DEMO_METR; SESSION_OK = true; $('demo').hidden = false; $('session').hidden = true; $('erreur').hidden = true;
+                setEtat('DÉMONSTRATION', 'att'); $('maj').textContent = 'maquette'; rendre(); return;
             }
+            const [l, m] = await Promise.allSettled([lire('/list'), lire('/metrics')]);
+            const refus = [l, m].some(x => x.status === 'rejected' && (x.reason.statut === 401 || x.reason.statut === 403));
+            SESSION_OK = !refus;
+            CERTS = l.status === 'fulfilled' && Array.isArray(l.value.certificates) ? l.value.certificates : null;
+            METR = m.status === 'fulfilled' ? m.value : null;
+            $('session').hidden = SESSION_OK;
+            const pannes = [];
+            if (SESSION_OK && !CERTS) pannes.push('API des certificats injoignable — aucun certificat n’est affiché : la page ne montre que ce que l’API rend.');
+            if (SESSION_OK && CERTS && !METR) pannes.push('API des métriques injoignable — les compteurs d’attaques sont affichés « — », ce ne sont pas des zéros.');
+            $('erreur').hidden = !pannes.length;
+            if (pannes.length) { $('erreurQuoi').textContent = 'Panne : '; $('erreurDetail').textContent = pannes.join(' '); }
+            if (!SESSION_OK) setEtat('SESSION REQUISE', 'att'); else if (!CERTS) setEtat('HORS LIGNE', 'hors'); else setEtat('EN LIGNE', '');
+            $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            rendre();
         }
 
-        async function issueCertificate() {
-            var domain = document.getElementById('wizDomain').value.trim();
-            document.getElementById('wizIssueBtn').disabled = true;
-            document.getElementById('wizIssueBtn').textContent = '⏳ Issuing...';
+        // ----- Confirmation intégrée à la page (jamais de dialogue natif) -----
+        function confirmer(texte, danger, fn) {
+            CONF = fn; $('confTexte').textContent = texte; const c = $('conf'); c.hidden = false; c.className = 'conf' + (danger ? ' danger' : ''); annoncer();
+            $('confOui').focus();
+        }
+        function fermerConf() { CONF = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConf);
+        $('confOui').addEventListener('click', async () => { const fn = CONF; fermerConf(); if (fn) await fn(); });
 
-            try {
-                var res = await fetch(API + '/issue', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        domain: domain,
-                        dns_provider: document.getElementById('wizDns').value,
-                        backend_type: document.getElementById('wizBackend').value,
-                        backend_port: parseInt(document.getElementById('wizPort').value)
-                    })
-                });
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function occupe(fn) { OCCUPE = true; document.querySelectorAll('button').forEach(b => { if (!b.dataset.garde) b.disabled = true; }); try { await fn(); } finally { OCCUPE = false; document.querySelectorAll('button').forEach(b => { if (!b.dataset.garde) b.disabled = false; }); majEmettre(); } }
+        function demandeRenouveler(domaine) {
+            confirmer('Renouveler le certificat de ' + domaine + ' ? (certbot --force-renewal, peut durer jusqu’à deux minutes)', false, () => occupe(async () => {
+                retour(true, 'Renouvellement de ' + domaine + ' en cours…');
+                const r = await ecrire('POST', '/renew/' + encodeURIComponent(domaine));
+                if (r.ok && r.data && r.data.success) { retour(true, 'Renouvelé : ' + domaine + '.'); await charger(); } else retour(false, 'Renouvellement impossible pour ' + domaine + ' : ' + motif(r));
+            }));
+        }
+        function demandeRevoquer(domaine) {
+            confirmer('RÉVOQUER le certificat de ' + domaine + ' ? Le fichier du lot HAProxy est supprimé : action irréversible.', true, () => occupe(async () => {
+                const r = await ecrire('DELETE', '/revoke/' + encodeURIComponent(domaine));
+                if (r.ok && r.data && r.data.success) { retour(true, 'Révoqué : ' + domaine + '.'); DETAIL = null; await charger(); } else retour(false, 'Révocation impossible pour ' + domaine + ' : ' + motif(r));
+            }));
+        }
+        $('renouvelleTout').addEventListener('click', () => {
+            if (!CERTS) { retour(false, 'Aucune donnée : impossible de savoir quels certificats expirent.'); return; }
+            const n = CERTS.filter(c => c.days !== null && c.days !== undefined && c.days <= 30).length;
+            if (!n) { retour(true, 'Aucun certificat à renouveler (les illisibles sont ignorés).'); return; }
+            confirmer('Renouveler ' + n + ' certificat' + (n > 1 ? 's' : '') + ' qui expire' + (n > 1 ? 'nt' : '') + ' dans 30 jours ou moins ?', false, () => occupe(async () => {
+                retour(true, 'Renouvellement groupé en cours…');
+                const r = await ecrire('POST', '/renew-all');
+                if (r.ok && r.data) {
+                    const res = Array.isArray(r.data.results) ? r.data.results : [], ko = res.filter(x => !x.success).length;
+                    retour(ko === 0, (r.data.processed != null ? r.data.processed : res.length) + ' certificat(s) traité(s)' + (ko ? ', dont ' + ko + ' en échec : ' + res.filter(x => !x.success).map(x => x.domain + ' (' + (x.error || 'échec').toString().slice(0, 80) + ')').join(' ; ') : '') + '.');
+                    await charger();
+                } else retour(false, 'Renouvellement groupé impossible : ' + motif(r));
+            }));
+        });
+        function ouvrirDetail(d) { DETAIL = d; rendreDetail(); annoncer(); $('detail').scrollIntoView({ block: 'nearest' }); }
+        $('dFerme').addEventListener('click', () => { DETAIL = null; rendreDetail(); annoncer(); });
+        $('dRenouvelle').addEventListener('click', () => DETAIL && demandeRenouveler(DETAIL));
+        $('dRevoque').addEventListener('click', () => DETAIL && demandeRevoquer(DETAIL));
 
-                var data = await res.json();
-
-                showStep(3);
-                if (data.success) {
-                    document.getElementById('wizResult').innerHTML =
-                        '<p>✅ Certificate issued for <strong>' + domain + '</strong></p>' +
-                        '<p>📁 ' + (data.cert_file || '/data/haproxy/certs/' + domain + '.pem') + '</p>' +
-                        '<p>🔄 HAProxy reloaded</p>';
-                } else {
-                    document.getElementById('wizResult').innerHTML =
-                        '<p style="color:var(--red)">❌ Failed: ' + (data.error || 'Unknown error') + '</p>';
-                }
-            } catch (e) {
-                showStep(3);
-                document.getElementById('wizResult').innerHTML =
-                    '<p>✅ Certificate issued for <strong>' + domain + '</strong> (simulated)</p>' +
-                    '<p>📁 /data/haproxy/certs/' + domain + '.pem</p>';
+        // ----- Assistant : vérifications puis émission -----
+        const NOMS_VERIF = { 'DNS Resolution': 'Résolution DNS', 'HTTP Reachability': 'Joignabilité HTTP (port 80)', 'HTTPS Port': 'Port HTTPS (443)', 'DNS API': 'Accès à l’API DNS', 'ACME Account': 'Compte ACME' };
+        function corpsAssistant() {
+            const port = parseInt($('wPort').value, 10);
+            return { domain: $('wDomaine').value.trim(), dns_provider: $('wDns').value, backend_type: $('wService').value, backend_port: port };
+        }
+        function etape(n) { [1, 2, 3].forEach(i => { $('etape' + i).hidden = i !== n; }); annoncer(); }
+        let VERIFS_OK = false;
+        function majEmettre() { $('wEmettre').disabled = !VERIFS_OK || OCCUPE; }
+        $('nouveau').addEventListener('click', () => { $('assistant').hidden = false; etape(1); $('wDomaine').focus(); });
+        $('wAnnuler').addEventListener('click', () => { $('assistant').hidden = true; annoncer(); });
+        $('wFini').addEventListener('click', () => { $('assistant').hidden = true; charger(); });
+        $('wRetour').addEventListener('click', () => etape(1));
+        $('wService').addEventListener('change', () => { const o = $('wService').selectedOptions[0]; $('wPort').value = o && o.dataset.port ? o.dataset.port : 8080; });
+        $('fAssist').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const corps = corpsAssistant(); if (!corps.domain) return;
+            if (!(corps.backend_port > 0)) corps.backend_port = 8080;
+            etape(2); VERIFS_OK = false; majEmettre();
+            const z = $('wVerifs'); z.replaceChildren(el('div', 'note', 'Vérifications en cours…'));
+            const r = await ecrire('POST', '/check', corps);
+            z.replaceChildren();
+            if (r.demo) { z.appendChild(el('div', 'retour', 'Démonstration : action inerte, aucune vérification lancée.')); return; }
+            const verifs = r.ok && r.data && Array.isArray(r.data.checks) ? r.data.checks : null;
+            if (!verifs || !verifs.length) { z.appendChild(el('div', 'retour ko', 'Vérifications impossibles : ' + motif(r))); return; }
+            verifs.forEach(c => {
+                const d = el('div', 'verif'); d.appendChild(pastille(c.pass ? 'ok' : 'hors', c.pass ? 'OK' : 'ÉCHEC'));
+                d.appendChild(el('span', '', NOMS_VERIF[c.name] || tiret(c.name)));
+                if (c.msg) d.appendChild(el('span', 'm', c.msg));
+                z.appendChild(d);
+            });
+            VERIFS_OK = verifs.every(c => c.pass); majEmettre();
+        });
+        $('wEmettre').addEventListener('click', () => occupe(async () => {
+            const corps = corpsAssistant(); if (!(corps.backend_port > 0)) corps.backend_port = 8080;
+            $('wEmettre').textContent = 'Émission en cours…';
+            const r = await ecrire('POST', '/issue', corps);
+            $('wEmettre').textContent = 'Émettre le certificat';
+            const z = $('wResultat'); z.replaceChildren(); etape(3);
+            if (r.ok && r.data && r.data.success) {
+                z.appendChild(el('div', 'retour ok', 'Certificat émis pour ' + corps.domain + '.'));
+                z.appendChild(el('p', 'note', 'Fichier : ' + tiret(r.data.cert_file) + (r.data.message ? ' — ' + r.data.message : '')));
+            } else {
+                z.appendChild(el('div', 'retour ko', 'Échec de l’émission : ' + motif(r)));
+                if (r.data && r.data.stdout) z.appendChild(el('pre', 'sortie', String(r.data.stdout).slice(0, 1500)));
             }
+        }));
+
+        // ----- Onglets, filtres -----
+        function onglet(nom) {
+            TAB = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            const certs = !['metriques', 'attaques'].includes(nom);
+            $('t-certs').hidden = !certs; $('t-metriques').hidden = nom !== 'metriques'; $('t-attaques').hidden = nom !== 'attaques';
+            if (certs) rendreListe();
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        ['recherche', 'filtreOrigine', 'tri'].forEach(i => $(i).addEventListener('input', rendreListe));
+        $('rafraichir').addEventListener('click', charger);
+        $('reessayer').addEventListener('click', charger);
 
-        async function renewCert(domain) {
-            if (!confirm('Renew certificate for ' + domain + '?')) return;
-            toast('Renewing ' + domain + '...');
-
-            try {
-                var res = await fetch(API + '/renew/' + encodeURIComponent(domain), { method: 'POST' });
-                var data = await res.json();
-                if (data.success) {
-                    toast('✅ Renewed: ' + domain);
-                    refresh();
-                } else {
-                    toast('❌ Failed: ' + (data.error || 'Unknown'), true);
-                }
-            } catch (e) {
-                toast('Renewal initiated (simulated)');
-            }
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'certs' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function revokeCert(domain) {
-            if (!confirm('⚠️ REVOKE certificate for ' + domain + '?\nThis cannot be undone!')) return;
-
-            try {
-                var res = await fetch(API + '/revoke/' + encodeURIComponent(domain), { method: 'DELETE' });
-                var data = await res.json();
-                toast(data.success ? '🗑️ Revoked: ' + domain : '❌ Failed');
-                hideModal();
-                refresh();
-            } catch (e) {
-                toast('Revocation initiated (simulated)');
-                hideModal();
-            }
-        }
-
-        async function renewAllExpiring() {
-            var btn = event.target;
-            var origText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = "⏳ Renewing...";
-            var expiring = allCerts.filter(c => c.days <= 30);
-            if (expiring.length === 0) { btn.disabled = false; btn.innerHTML = origText; toast('No certificates need renewal'); return; }
-            if (!confirm('Renew ' + expiring.length + ' expiring certificates?')) { btn.disabled = false; btn.innerHTML = origText; return; }
-
-            toast('Renewing ' + expiring.length + ' certificates...');
-
-            try {
-                var res = await fetch(API + '/renew-all', { method: 'POST' });
-                var data = await res.json();
-                btn.disabled = false; btn.innerHTML = origText; toast("✅ Processed " + (data.processed || expiring.length) + " certificates");
-                refresh();
-            } catch (e) {
-                btn.disabled = false; btn.innerHTML = origText; toast("Batch renewal initiated (simulated)");
-            }
-        }
-
-        function toast(msg, isError = false) {
-            var t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = 'toast show' + (isError ? ' error' : '');
-            setTimeout(() => t.classList.remove('show'), 3000);
-        }
-
-        function refresh() {
-            loadCerts();
-            loadMetrics();
-        }
-
-        // Init
-        refresh();
-        setInterval(refresh, 60000);
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, une confirmation ou une action en cours.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONF || OCCUPE || !$('assistant').hidden) return;
+            const a = document.activeElement; if (a && ['INPUT', 'SELECT', 'TEXTAREA'].includes(a.tagName)) return;
+            charger();
+        }, 60000);
     </script>
 </body>
 </html>
