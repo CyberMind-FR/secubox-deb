@@ -30,6 +30,20 @@ usage() {
     exit 1
 }
 
+# TRANSPORT DU PARENT (#2536). Un parent LOCAL (RFC 1918, boucle locale, lien local, *.local) se joint en HTTP sur le port du module,
+# comme avant. Un parent DISTANT (la box l'appelle a travers une Freebox : admin.gk2.secubox.in) se joint en HTTPS par le nginx du
+# parent, certificat VERIFIE (jamais -k) : le jeton ne voyage pas en clair sur Internet, et le port du module est filtre depuis l'exterieur.
+es_adresse_locale() {
+    case "$1" in
+        10.*|192.168.*|127.*|169.254.*|localhost|*.local) return 0 ;;
+        172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 0 ;;
+    esac
+    return 1
+}
+api_base_pour() {
+    if es_adresse_locale "$1"; then echo "http://$1:$API_PORT"; else echo "https://$1"; fi
+}
+
 # Parse arguments
 if [ $# -eq 1 ]; then
     # Single argument: URL
@@ -50,6 +64,8 @@ elif [ $# -eq 2 ]; then
 else
     usage
 fi
+
+API_BASE="$(api_base_pour "$MASTER_IP")"
 
 # Detect system
 detect_system() {
@@ -154,11 +170,15 @@ detect_master_type() {
     local ip="$1"
 
     # Try Debian API first
-    local resp=$(http_get "http://$ip:$API_PORT/api/v1/p2p/master-link/status")
+    local base; base="$(api_base_pour "$ip")"
+    local resp=$(http_get "$base/api/v1/p2p/master-link/status")
     if echo "$resp" | grep -q '"role"'; then
         echo "debian"
         return 0
     fi
+
+    # Un parent distant (HTTPS) n'est jamais interroge en clair : pas de routes OpenWRT (#2536).
+    es_adresse_locale "$ip" || { echo "unknown"; return 0; }
 
     # Try OpenWRT CGI
     resp=$(http_get "http://$ip/cgi-bin/masterlink/status")
@@ -179,7 +199,7 @@ detect_master_type() {
 
 # Join via Debian API
 join_debian_api() {
-    http_post "http://$MASTER_IP:$API_PORT/api/v1/p2p/master-link/join" "$JSON_DATA"
+    http_post "$API_BASE/api/v1/p2p/master-link/join" "$JSON_DATA"
 }
 
 # Join via OpenWRT CGI (port 80)

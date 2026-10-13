@@ -131,8 +131,8 @@ def executer(rejoindre, code_path: str = CODE_DEPOSE, etat_path: str = ETAT, mai
         res = rejoindre(adresse, jeton)
     except Exception as e:  # noqa: BLE001 — l'échec est dit, jamais le secret
         echecs += 1
-        detail = getattr(e, "detail", None) or type(e).__name__
-        return fin("echec", echecs >= ECHECS_MAX, parent=adresse, message=str(detail)[:120])
+        detail = getattr(e, "detail", None) or str(e) or type(e).__name__          # le texte de la RuntimeError de rejoindre_par_script (jamais le jeton, #2536)
+        return fin("echec", echecs >= ECHECS_MAX, parent=adresse, message=str(detail).replace(jeton, "***")[:120])   # jamais le jeton, quoi que dise l'exception
     statut = str((res or {}).get("status", ""))
     if statut == "approved":
         return fin("approuve", True, parent=adresse, mesh_ip=(res or {}).get("mesh_ip"))

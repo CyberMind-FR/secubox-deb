@@ -1,3 +1,9 @@
+secubox-p2p (1.13.2-1~bookworm1) bookworm; urgency=medium
+
+  * Jonction automatique vers un parent DISTANT (#2536). Essai reel gk1 -> gk2 : `sbx-mesh-join` ne parlait au parent qu'en HTTP sur le port du module (7331), injoignable d'une box derriere une Freebox (le cas voulu : la box APPELLE son parent) ; la jonction notait « RuntimeError » sans dire pourquoi. Le script choisit maintenant le transport : adresse locale (RFC 1918, 127/8, 169.254/16, *.local, localhost) -> HTTP:7331 comme avant ; autre -> HTTPS par le nginx du parent, certificat verifie (jamais -k), route Debian seulement. Le message d'echec porte le texte de l'exception, jeton masque dans tous les cas. 20 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 16:00:00 +0200
+
 secubox-p2p (1.13.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-relais-maillage synchroniser (#2532) : sortie 1 sur une box sans maillage. `pairs="$(pairs_32)"` : `wg show wg-mesh` echoue (pas d'interface) et, sous set -e/pipefail, tuait le script avant la garde « aucun pair a relayer » qui retourne 0 ; l'unite horaire restait en echec. `pairs_32 || true`. 2 tests (a lancer en root).
