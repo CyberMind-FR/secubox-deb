@@ -1,3 +1,13 @@
+secubox-p2p (1.15.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /meshname/ (Mesh DNS) au profil Aurora (#2584) : page autonome sombre (tuiles nœuds, mappages, domaine, Avahi, dnsmasq ; ce nœud ; service ; nœuds ; mappages ; hôtes mDNS ; test de résolution), `?demo=1` annoncée et inerte, `?embed=1`, aucun dialogue natif. Les appels d'écriture sont ceux de l'ancienne page : POST /enable?enabled=, POST/DELETE /nodes, POST/DELETE /mappings, POST /discover/import (liste de noms d'hôte).
+  * Confirmation intégrée à la page avant toute suppression de nom (retrait d'un nœud ou d'un mappage, désactivation du service, qui supprime la configuration dnsmasq) et avant tout remplacement d'un nom déjà présent (nœud, mappage, import qui ferait un doublon).
+  * Erreurs de l'ancienne page corrigées au passage : les noms et adresses venus de l'API ou d'avahi (réseau local) étaient injectés tels quels dans du HTML et dans des gestionnaires onclick (injection possible par un nom d'hôte mDNS) ; toute erreur d'API était avalée en silence (le formulaire se fermait comme si l'ajout avait réussi, une adresse refusée n'était jamais signalée) ; sans session les tuiles affichaient 0 et « Disabled » au lieu de « — » ; le domaine retombait en silence sur « mesh.local » ; alert() et confirm() étaient ignorés par le navigateur du viewer ; une session expirée redirigeait sans prévenir.
+  * Non repris : l'appel à /stats (redondant avec /service et les listes, route inchangée côté API) ; la page n'appelle pas POST /config (l'ancienne page ne l'appelait pas non plus : le domaine du maillage ne se change pas ici). Le TTL d'un mappage est enregistré mais n'est pas utilisé par la configuration dnsmasq générée : la page le dit.
+  * Tests : 13 tests (statique, vrai navigateur avec API simulée) dans tests/test_meshname_aurora_2584.py.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:00:00 +0200
+
 secubox-p2p (1.14.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /p2p/ au profil Aurora (#2550) : page autonome sombre (aperçu, pairs, services, maillage, menaces), tuiles, onglets au clavier, carte du maillage en SVG (le canvas clair d'avant etait illisible), `?demo=1` annoncee, `?embed=1`, aucun dialogue natif (confirmation dans la ligne). Les appels d'ecriture sont ceux de l'ancienne page : POST/DELETE /peers, POST/DELETE /services, auto-register, request, activate, revoke-access. 10 tests (vrai navigateur).
