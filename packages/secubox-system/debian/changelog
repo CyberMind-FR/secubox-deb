@@ -1,3 +1,24 @@
+secubox-system (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * admin : la page /admin/ passe au profil Aurora (#2556) : fichier autonome, tuiles (processeur, memoire, disque,
+    services, charge, mises a jour), six onglets (apercu, services, journaux, stockage, processus, mises a jour),
+    ?demo=1 (donnees fictives, actions inertes), ?embed=1, bandeau « session requise » et tirets sur 401/403.
+    Plus de police Google ni de CRT/hybrid-dark. Les appels d'ecriture sont inchanges (service start/stop/restart,
+    reboot, shutdown et update : memes routes, memes corps) mais chaque action sensible demande maintenant une
+    confirmation integree a la page (le service start reste direct).
+  * admin : bogues de l'ancienne page corriges : noms de services, descriptions et commandes injectes tels quels dans
+    innerHTML et dans des onclick (XSS) ; une reponse 200 portant « error » (apt, journalctl, psutil) etait lue comme
+    « 0 % », « aucun journal » ou « systeme a jour » ; la selection d'unite du journal etait remise a « toutes » a
+    chaque actualisation ; une 401 redirigeait de force vers /login.html au lieu de l'annoncer ; un service « active/exited »
+    ou « inactive » etait affiche en rouge comme une panne ; actualisation faite meme pendant une saisie.
+  * admin : non repris : le compteur « mises a jour de securite » de l'API (security_updates) n'est pas affiche, car
+    il cherche « security » dans le nom et les versions des paquets et vaut presque toujours 0 ; les compteurs
+    d'E/S disque de /storage ne sont pas affiches (l'ancienne page ne les montrait pas). La liste des services est
+    limitee a 300 lignes (recherche pour affiner). Le journal et la verification des mises a jour ne se rechargent
+    jamais seuls (apt-get update dure jusqu'a une minute).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-system (1.7.1-1~bookworm1) bookworm; urgency=low
 
   * system-hub : Suricata retire des services de base surveilles (#2326).

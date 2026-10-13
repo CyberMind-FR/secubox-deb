@@ -4,875 +4,480 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Administration système au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - System Administration</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Administration système</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1a3320;
-            /* Admin accent - orange/amber */
-            --admin-accent: #ff8c00;
-            --admin-accent-dim: #cc7000;
-            /* Legacy */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--admin-accent);
-            --cyan: #00bcd4;
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--admin-accent);
-            --purple: #a371f7;
-            /* Bloom */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-orange: 0 0 6px var(--admin-accent), 0 0 14px rgba(255,140,0,0.5);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(255,140,0,0.02) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; }
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
-            background: var(--bg-card);
-        }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 {
-            font-size: 1.5rem; font-weight: 600;
-            color: var(--admin-accent);
-            text-shadow: var(--bloom-orange);
-        }
-        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
-        .badge {
-            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-        }
-        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
-        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
-        .badge-orange { background: rgba(255,140,0,0.1); border: 1px solid var(--orange); color: var(--orange); }
-        .badge-cyan { background: rgba(0,188,212,0.1); border: 1px solid var(--cyan); color: var(--cyan); }
-
-        .btn {
-            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
-            background: var(--bg-card); color: var(--text); cursor: pointer;
-            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
-            transition: all 0.2s;
-        }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn.primary { background: rgba(255,140,0,0.1); border-color: var(--orange); color: var(--orange); }
-        .btn.primary:hover { background: rgba(255,140,0,0.2); }
-        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
-        .btn.small { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-
-        .tabs {
-            display: flex; gap: 0; padding: 0 1.5rem;
-            background: var(--bg-card); border-bottom: 1px solid var(--border);
-        }
-        .tab {
-            padding: 0.75rem 1.25rem; cursor: pointer;
-            color: var(--text-dim); font-size: 0.85rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
-        .tab:hover { color: var(--text); }
-        .tab.active {
-            color: var(--orange); border-bottom-color: var(--orange);
-            text-shadow: var(--bloom-orange);
-        }
-
-        .content { padding: 1.5rem; }
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; }
-
-        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1rem; text-align: center;
-        }
-        .stat-card .value { font-size: 1.75rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
-        .stat-card.orange .value { color: var(--orange); text-shadow: var(--bloom-orange); }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.purple .value { color: var(--purple); }
-        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
-        .stat-card.yellow .value { color: var(--yellow); }
-
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
-        }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 {
-            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.1em; color: var(--p31-decay);
-        }
-
-        /* Service list */
-        .service-list { max-height: 500px; overflow-y: auto; }
-        .service-item {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0.75rem; border-bottom: 1px solid var(--border);
-            transition: background 0.2s;
-        }
-        .service-item:hover { background: rgba(255,140,0,0.05); }
-        .service-item.secubox { border-left: 3px solid var(--orange); }
-        .service-info { flex: 1; }
-        .service-name { font-weight: bold; font-size: 0.9rem; }
-        .service-desc { font-size: 0.75rem; color: var(--text-dim); }
-        .service-actions { display: flex; gap: 0.5rem; }
-
-        /* Storage bars */
-        .storage-item { margin-bottom: 1rem; }
-        .storage-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
-        .storage-mount { font-size: 0.85rem; }
-        .storage-usage { font-size: 0.75rem; color: var(--text-dim); }
-        .storage-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-        .storage-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
-        .storage-bar-fill.ok { background: var(--green); }
-        .storage-bar-fill.warn { background: var(--yellow); }
-        .storage-bar-fill.danger { background: var(--red); }
-
-        /* Process table */
-        .scroll-list { max-height: 400px; overflow-y: auto; }
-        .process-table { width: 100%; border-collapse: collapse; }
-        .process-table th {
-            text-align: left; padding: 0.5rem; color: var(--p31-decay);
-            font-size: 0.75rem; text-transform: uppercase;
-            border-bottom: 1px solid var(--border);
-            position: sticky; top: 0; background: var(--bg-card);
-            cursor: pointer;
-        }
-        .process-table th:hover { color: var(--orange); }
-        .process-table td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
-        .process-table tr:hover { background: rgba(255,140,0,0.05); }
-
-        /* Log viewer */
-        .log-viewer {
-            max-height: 500px; overflow-y: auto;
-            background: var(--tube-light); padding: 1rem; border-radius: 6px;
-            font-size: 0.75rem; font-family: monospace; white-space: pre-wrap;
-            line-height: 1.4;
-        }
-        .log-filters { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .log-filters select, .log-filters input {
-            padding: 0.5rem; border: 1px solid var(--border);
-            background: var(--tube-light); border-radius: 4px;
-            font-family: inherit; color: var(--text);
-        }
-
-        /* Updates list */
-        .update-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 0.5rem; border-bottom: 1px solid var(--border);
-        }
-        .update-pkg { font-weight: bold; }
-        .update-version { font-size: 0.75rem; color: var(--text-dim); }
-
-        /* Modal */
-        .modal {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center;
-            z-index: 1000;
-        }
-        .modal.show { display: flex; }
-        .modal-content {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.5rem; max-width: 400px; width: 90%;
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { color: var(--orange); }
-        .modal-close { cursor: pointer; font-size: 1.5rem; color: var(--text-dim); }
-        .modal-body { margin-bottom: 1rem; }
-        .modal-footer { display: flex; gap: 1rem; justify-content: flex-end; }
-
-        /* Toast */
-        .toast {
-            position: fixed; bottom: 2rem; right: 2rem;
-            padding: 1rem 1.5rem; border-radius: 8px;
-            background: var(--bg-card); border: 1px solid var(--border);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1000; display: none;
-        }
-        .toast.show { display: block; animation: slideIn 0.3s ease; }
-        .toast.success { border-color: var(--green); }
-        .toast.error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        @media (max-width: 1400px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .grid-2 { grid-template-columns: 1fr; } }
-        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        td.n{text-align:right} th.n{text-align:right}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .b{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        table{min-width:560px} td.nom{white-space:nowrap} td.desc{min-width:150px}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.08)}
+        .conf p{margin:0 0 8px;font-size:.8rem} .conf strong{display:block;margin-bottom:4px;font-size:.88rem}
+        .conf label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);margin-bottom:8px;max-width:420px}
+        .conf .bout{display:flex;gap:8px;flex-wrap:wrap}
+        input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0}
+        input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .filtres{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 10px;font-size:.78rem;color:var(--doux)}
+        .filtres input[type=search]{width:min(260px,100%)} .filtres label{display:flex;gap:6px;align-items:center}
+        .liste{max-height:300px;overflow:auto}
+        .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:6px 2px;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+        .ligne:first-child{border-top:0} .ligne .nm{overflow-wrap:anywhere}
+        .disque{margin:0 0 10px;font-size:.8rem} .disque .tt{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;margin-bottom:4px} .disque .tt span:last-child{color:var(--doux);font-variant-numeric:tabular-nums}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre b{display:block;height:100%;background:var(--vert)} .barre b.att{background:var(--orange)} .barre b.hors{background:var(--rouge)}
+        pre.journal{margin:0;max-height:480px;overflow:auto;background:rgba(4,10,22,.8);border:1px solid var(--trait);border-radius:10px;padding:10px;font-size:.72rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>System Administration</h1>
-                <span id="hostname" class="badge badge-orange">-</span>
-                <span id="uptime" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>
+                <div><h1>Administration système</h1><small>Services, journaux, stockage, processus et mises à jour</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn danger" onclick="showRebootModal()">Reboot</button>
-                <button class="btn danger" onclick="showShutdownModal()">Shutdown</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <span class="actif att" id="hote" hidden></span>
+            <div class="droite"><span id="uptime">—</span><span id="maj">—</span>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+                <button class="btn danger" id="bReboot" type="button">Redémarrer</button>
+                <button class="btn danger" id="bShutdown" type="button">Éteindre</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="overview">Overview</div>
-            <div class="tab" data-tab="services">Services</div>
-            <div class="tab" data-tab="logs">Logs</div>
-            <div class="tab" data-tab="storage">Storage</div>
-            <div class="tab" data-tab="processes">Processes</div>
-            <div class="tab" data-tab="updates">Updates</div>
+        <div class="pan conf" id="conf" role="alertdialog" aria-labelledby="confTitre" hidden>
+            <strong id="confTitre"></strong>
+            <p id="confTexte"></p>
+            <label id="confMotifL" hidden>Motif (facultatif)<input id="confMotif" maxlength="200" autocomplete="off"></label>
+            <div class="bout"><button class="btn danger" id="confOk" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        </div>
+        <div id="retour" class="retour" role="status" hidden></div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cCpu" title="Utilisation du processeur sur un court relevé (0,5 s) pris par l’API au moment de la requête."><span class="l">Processeur</span><span class="v" id="tCpu">—</span><span class="s">utilisation</span></div>
+            <div class="tuile vi" id="cMem" title="Mémoire vive utilisée, en pourcentage du total."><span class="l">Mémoire</span><span class="v" id="tMem">—</span><span class="s" id="sMem">utilisée</span></div>
+            <div class="tuile ok" id="cDisque" title="Occupation du système de fichiers racine « / »."><span class="l">Disque /</span><span class="v" id="tDisque">—</span><span class="s" id="sDisque">occupé</span></div>
+            <div class="tuile cy" title="Unités systemd de type service en cours d’exécution, sur l’ensemble des services connus (actifs ou non)."><span class="l">Services actifs</span><span class="v" id="tServ">—</span><span class="s" id="sServ">en exécution</span></div>
+            <div class="tuile cy" title="Charge moyenne du système sur 1 minute (les valeurs sur 5 et 15 minutes sont dans l’aperçu)."><span class="l">Charge</span><span class="v" id="tCharge">—</span><span class="s">moyenne sur 1 min</span></div>
+            <div class="tuile ok" id="cMaj" title="Paquets mis à jour disponibles. Connu seulement après une vérification (onglet Mises à jour), car elle lance un apt-get update."><span class="l">Mises à jour</span><span class="v" id="tMaj">—</span><span class="s" id="sMaj">non vérifié</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections de l’administration">
+            <button type="button" role="tab" id="o-apercu" data-t="apercu" aria-selected="true" aria-controls="t-apercu">Aperçu</button>
+            <button type="button" role="tab" id="o-services" data-t="services" aria-selected="false" aria-controls="t-services">Services</button>
+            <button type="button" role="tab" id="o-journaux" data-t="journaux" aria-selected="false" aria-controls="t-journaux">Journaux</button>
+            <button type="button" role="tab" id="o-stockage" data-t="stockage" aria-selected="false" aria-controls="t-stockage">Stockage</button>
+            <button type="button" role="tab" id="o-processus" data-t="processus" aria-selected="false" aria-controls="t-processus">Processus</button>
+            <button type="button" role="tab" id="o-maj" data-t="maj" aria-selected="false" aria-controls="t-maj">Mises à jour</button>
         </div>
 
-        <div class="content">
-            <!-- Overview Tab -->
-            <div id="tab-overview" class="tab-panel active">
-                <div class="stats-row">
-                    <div class="stat-card orange">
-                        <div class="value" id="cpu-value">-</div>
-                        <div class="label">CPU Usage</div>
-                    </div>
-                    <div class="stat-card purple">
-                        <div class="value" id="mem-value">-</div>
-                        <div class="label">Memory</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="disk-value">-</div>
-                        <div class="label">Disk</div>
-                    </div>
-                    <div class="stat-card cyan">
-                        <div class="value" id="services-value">-</div>
-                        <div class="label">Services</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <div class="value" id="updates-value">-</div>
-                        <div class="label">Updates</div>
-                    </div>
+        <section id="t-apercu" role="tabpanel" aria-labelledby="o-apercu" class="grille">
+            <div class="pan"><h3>Système</h3>
+                <dl class="kv"><dt>Nom d’hôte</dt><dd id="kHote">—</dd><dt>Noyau</dt><dd class="mono" id="kNoyau">—</dd><dt>Debian</dt><dd id="kDebian">—</dd><dt>Disponibilité</dt><dd id="kUptime">—</dd><dt>Démarré le</dt><dd id="kBoot">—</dd><dt>Charge 1 / 5 / 15 min</dt><dd id="kCharge">—</dd></dl>
+                <p class="note">L’heure de démarrage est celle du serveur, sans fuseau indiqué par l’API.</p></div>
+            <div class="pan"><h3>Services SecuBox <i id="nSbx"></i></h3>
+                <div class="liste" id="lSbx"></div></div>
+            <div class="pan" style="grid-column:1/-1"><h3>Occupation des disques <i>jusqu’à 4 partitions</i></h3><div id="dApercu"></div></div>
+        </section>
+
+        <section id="t-services" role="tabpanel" aria-labelledby="o-services" hidden>
+            <div class="pan"><h3>Tous les services <i id="nServ"></i></h3>
+                <div class="filtres"><input type="search" id="fRech" placeholder="Rechercher un service…" aria-label="Rechercher un service"><label><input type="checkbox" id="fSbx"> SecuBox seulement</label></div>
+                <div class="tab"><table><thead><tr><th>Service</th><th>Description</th><th>État</th><th>Actions</th></tr></thead><tbody id="bServ"></tbody></table></div>
+                <p class="note" id="nServNote"></p></div>
+        </section>
+
+        <section id="t-journaux" role="tabpanel" aria-labelledby="o-journaux" hidden>
+            <div class="pan"><h3>Journal système <i id="nLog"></i><button class="btn sm" id="bLog" type="button">⟳ Actualiser</button></h3>
+                <div class="filtres">
+                    <select id="lUnite" aria-label="Unité"><option value="">Toutes les unités</option></select>
+                    <select id="lPrio" aria-label="Priorité"><option value="">Toutes les priorités</option><option value="emerg">Urgence</option><option value="alert">Alerte</option><option value="crit">Critique</option><option value="err">Erreur</option><option value="warning">Avertissement</option><option value="notice">Notice</option><option value="info">Information</option><option value="debug">Débogage</option></select>
+                    <select id="lLignes" aria-label="Nombre de lignes"><option value="50">50 lignes</option><option value="100" selected>100 lignes</option><option value="200">200 lignes</option><option value="500">500 lignes</option></select>
                 </div>
+                <pre class="journal" id="journal" tabindex="0">—</pre></div>
+        </section>
 
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>System Info</h2></div>
-                        <div id="system-info" style="font-size: 0.9rem;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <div style="color: var(--text-dim);">Hostname:</div>
-                                <div id="info-hostname">-</div>
-                                <div style="color: var(--text-dim);">Kernel:</div>
-                                <div id="info-kernel">-</div>
-                                <div style="color: var(--text-dim);">Debian:</div>
-                                <div id="info-debian">-</div>
-                                <div style="color: var(--text-dim);">Uptime:</div>
-                                <div id="info-uptime">-</div>
-                                <div style="color: var(--text-dim);">Boot Time:</div>
-                                <div id="info-boot">-</div>
-                                <div style="color: var(--text-dim);">Load Average:</div>
-                                <div id="info-load">-</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>SecuBox Services</h2>
-                            <span id="secubox-status" class="badge badge-green">-</span>
-                        </div>
-                        <div id="secubox-services" class="service-list" style="max-height: 200px;">
-                            <p style="color: var(--text-dim);">Loading...</p>
-                        </div>
-                    </div>
-                </div>
+        <section id="t-stockage" role="tabpanel" aria-labelledby="o-stockage" hidden>
+            <div class="pan"><h3>Partitions <i id="nStock"></i></h3><div id="dStock"></div></div>
+        </section>
 
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Disk Usage</h2>
-                    </div>
-                    <div id="disk-overview">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-            </div>
+        <section id="t-processus" role="tabpanel" aria-labelledby="o-processus" hidden>
+            <div class="pan"><h3>Processus principaux <i id="nProc"></i></h3>
+                <div class="filtres"><select id="pTri" aria-label="Tri"><option value="cpu">Tri par processeur</option><option value="memory">Tri par mémoire</option></select></div>
+                <div class="tab"><table><thead><tr><th>Processus</th><th class="n">CPU %</th><th class="n">Mém. %</th><th class="n">PID</th><th>Utilisateur</th><th class="n">Threads</th><th>État</th></tr></thead><tbody id="bProc"></tbody></table></div>
+                <p class="note">Le pourcentage de processeur est calculé entre deux relevés : le tout premier relevé après le démarrage du service peut afficher 0 pour tous les processus.</p></div>
+        </section>
 
-            <!-- Services Tab -->
-            <div id="tab-services" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>All Services</h2>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <input type="text" id="service-search" placeholder="Search services..."
-                                   style="padding: 0.5rem; border: 1px solid var(--border); background: var(--tube-light); border-radius: 4px;">
-                            <label style="font-size: 0.85rem;">
-                                <input type="checkbox" id="show-secubox-only"> SecuBox only
-                            </label>
-                        </div>
-                    </div>
-                    <div class="service-list" id="service-list">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-            </div>
+        <section id="t-maj" role="tabpanel" aria-labelledby="o-maj" hidden>
+            <div class="pan"><h3>Mises à jour disponibles <i id="nMaj"></i><button class="btn sm" id="bVerif" type="button">Vérifier</button><button class="btn prim sm" id="bMajTout" type="button" style="margin-left:0" disabled>Tout mettre à jour</button></h3>
+                <div class="tab"><table><thead><tr><th>Paquet</th><th>Installée</th><th>Disponible</th></tr></thead><tbody id="bMaj"></tbody></table></div>
+                <p class="note">La vérification lance un <span class="mono">apt-get update</span> côté serveur (jusqu’à une minute) ; elle n’est donc jamais automatique.</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-            <!-- Logs Tab -->
-            <div id="tab-logs" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>System Logs</h2>
-                        <button class="btn" onclick="loadLogs()">Refresh</button>
-                    </div>
-                    <div class="log-filters">
-                        <select id="log-unit">
-                            <option value="">All Units</option>
-                        </select>
-                        <select id="log-priority">
-                            <option value="">All Priorities</option>
-                            <option value="emerg">Emergency</option>
-                            <option value="alert">Alert</option>
-                            <option value="crit">Critical</option>
-                            <option value="err">Error</option>
-                            <option value="warning">Warning</option>
-                            <option value="notice">Notice</option>
-                            <option value="info">Info</option>
-                            <option value="debug">Debug</option>
-                        </select>
-                        <select id="log-lines">
-                            <option value="50">50 lines</option>
-                            <option value="100" selected>100 lines</option>
-                            <option value="200">200 lines</option>
-                            <option value="500">500 lines</option>
-                        </select>
-                    </div>
-                    <div id="log-viewer" class="log-viewer">
-                        Loading...
-                    </div>
-                </div>
-            </div>
-
-            <!-- Storage Tab -->
-            <div id="tab-storage" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Disk Partitions</h2>
-                    </div>
-                    <div id="storage-list">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Processes Tab -->
-            <div id="tab-processes" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Top Processes</h2>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <select id="process-sort" style="padding: 0.5rem; border: 1px solid var(--border); background: var(--tube-light); border-radius: 4px;">
-                                <option value="cpu">Sort by CPU</option>
-                                <option value="memory">Sort by Memory</option>
-                            </select>
-                            <span id="process-count" style="color: var(--text-dim);">-</span>
-                        </div>
-                    </div>
-                    <div class="scroll-list">
-                        <table class="process-table">
-                            <thead>
-                                <tr>
-                                    <th>Process</th>
-                                    <th>CPU %</th>
-                                    <th>MEM %</th>
-                                    <th>PID</th>
-                                    <th>User</th>
-                                    <th>Threads</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="process-list">
-                                <tr><td colspan="7">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Updates Tab -->
-            <div id="tab-updates" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Available Updates</h2>
-                        <div style="display: flex; gap: 1rem;">
-                            <button class="btn" onclick="checkUpdates()">Check Updates</button>
-                            <button class="btn primary" id="btn-update-all" onclick="showUpdateModal()">Update All</button>
-                        </div>
-                    </div>
-                    <div id="update-status" style="margin-bottom: 1rem;">
-                        <span class="badge badge-cyan" id="update-count">Checking...</span>
-                    </div>
-                    <div id="update-list">
-                        <p style="color: var(--text-dim);">Checking for updates...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Reboot Modal -->
-    <div class="modal" id="reboot-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Confirm Reboot</h3>
-                <span class="modal-close" onclick="closeModal('reboot-modal')">&times;</span>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to reboot the system?</p>
-                <p style="color: var(--red); margin-top: 0.5rem;">This will disconnect all users.</p>
-                <div style="margin-top: 1rem;">
-                    <label style="font-size: 0.85rem; color: var(--text-dim);">Reason (optional):</label>
-                    <input type="text" id="reboot-reason" style="width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid var(--border); border-radius: 4px;">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeModal('reboot-modal')">Cancel</button>
-                <button class="btn danger" onclick="confirmReboot()">Reboot Now</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Shutdown Modal -->
-    <div class="modal" id="shutdown-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Confirm Shutdown</h3>
-                <span class="modal-close" onclick="closeModal('shutdown-modal')">&times;</span>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to shutdown the system?</p>
-                <p style="color: var(--red); margin-top: 0.5rem;">Physical access will be required to restart.</p>
-                <div style="margin-top: 1rem;">
-                    <label style="font-size: 0.85rem; color: var(--text-dim);">Reason (optional):</label>
-                    <input type="text" id="shutdown-reason" style="width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid var(--border); border-radius: 4px;">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeModal('shutdown-modal')">Cancel</button>
-                <button class="btn danger" onclick="confirmShutdown()">Shutdown Now</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Update Modal -->
-    <div class="modal" id="update-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Confirm Update</h3>
-                <span class="modal-close" onclick="closeModal('update-modal')">&times;</span>
-            </div>
-            <div class="modal-body">
-                <p>This will upgrade all available packages.</p>
-                <p style="color: var(--yellow); margin-top: 0.5rem;">Some services may restart during update.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeModal('update-modal')">Cancel</button>
-                <button class="btn primary" onclick="confirmUpdate()">Run Update</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="toast" class="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/admin';
-        let allServices = [];
-        let availableUpdates = [];
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const num = v => typeof v === 'number' && isFinite(v);
+        const pct = v => num(v) ? String(v).replace('.', ',') + ' %' : '—';
 
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        let STATUT = null, SERVICES = [], STOCK = null, LOGS = null, PROCS = null, MAJ = null;
+        let SESSION_OK = true, ONGLET = 'apercu', CONFIRM = null, UNITES = '';
+        let KO = {};   // section -> message d'erreur de lecture
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            const d = await r.json();
+            if (d && d.error) { const e = new Error(String(d.error)); e.statut = 200; throw e; }   // l'API répond 200 avec « error » quand une commande système échoue
+            return d;
         }
-
-        function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine), accepte par
-            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
-            // seule une vraie 401 redirige (gere dans les appels fetch).
-            return true;
-        }
-
-        async function api(endpoint, options = {}) {
-            const token = getToken();
-            const headers = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = 'Bearer ' + token;
-
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API +  endpoint, { ...options, headers });
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                    return null;
-                }
-                return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return null;
-            }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; toast(msg); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.statut === 401 || res.statut === 403) return 'session requise (HTTP ' + res.statut + ')';
+            const d = res.data || {};
+            const t = d.stderr || d.error || (typeof d.detail === 'string' ? d.detail : '');
+            return t ? String(t).slice(0, 300) : (res.statut ? 'HTTP ' + res.statut : 'serveur injoignable');
         }
 
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast show ' + type;
-            setTimeout(() => toast.classList.remove('show'), 3000);
+        function duree(s) {
+            if (!num(s)) return '—';
+            const j = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+            return (j ? j + ' j ' : '') + (j || h ? h + ' h ' : '') + String(m).padStart(2, '0') + ' min';
+        }
+        function dateSrv(iso) { return iso ? String(iso).replace('T', ' ').slice(0, 19) : '—'; }
+        function seuil(p) { return !num(p) ? '' : p > 90 ? 'hors' : p > 70 ? 'att' : 'ok'; }
+
+        function demoData() {
+            STATUT = { hostname: 'gk-demo', kernel: '6.1.0-demo-arm64', debian_version: '12.7', cpu_percent: 14.2, memory_percent: 46.8, memory_used: '1.8 GB', memory_total: '3.8 GB',
+                       disk_percent: 38.5, disk_used: '11.6 GB', disk_total: '30.2 GB', load_avg: [0.42, 0.51, 0.47], uptime_seconds: 3 * 86400 + 4 * 3600 + 5 * 60, boot_time: '2026-10-10T07:12:30' };
+            const s = (name, active, sub, desc, sbx) => ({ name, unit: name + '.service', load: 'loaded', active, sub, description: desc, is_running: active === 'active' && sub === 'running', is_secubox: !!sbx });
+            SERVICES = [s('secubox-waf-ng', 'active', 'running', 'SecuBox WAF', 1), s('secubox-haproxy', 'active', 'running', 'SecuBox HAProxy', 1), s('secubox-system', 'active', 'running', 'SecuBox Système', 1),
+                        s('secubox-demo-batch', 'inactive', 'dead', 'Tâche de démonstration', 1), s('nginx', 'active', 'running', 'Serveur web nginx'), s('ssh', 'active', 'running', 'Serveur OpenSSH'),
+                        s('cron', 'active', 'running', 'Tâches planifiées'), s('systemd-journald', 'active', 'running', 'Journal systemd'), s('apparmor', 'active', 'exited', 'Profils AppArmor'), s('exemple-panne', 'failed', 'failed', 'Service en échec (démonstration)')];
+            STOCK = { partitions: [
+                { device: '/dev/mmcblk0p2', mountpoint: '/', fstype: 'ext4', total_human: '30.2 GB', used_human: '11.6 GB', percent: 38.5 },
+                { device: '/dev/mmcblk0p1', mountpoint: '/boot', fstype: 'vfat', total_human: '511.0 MB', used_human: '62.4 MB', percent: 12.2 },
+                { device: '/dev/sda1', mountpoint: '/data', fstype: 'ext4', total_human: '916.8 GB', used_human: '742.0 GB', percent: 80.9 }] };
+            LOGS = { logs: ['2026-10-13T08:00:01+02:00 gk-demo systemd[1]: Started Tâches planifiées.', '2026-10-13T08:00:02+02:00 gk-demo CRON[1234]: (root) CMD (démonstration)', '2026-10-13T08:01:10+02:00 gk-demo sshd[2222]: Connexion de 192.0.2.10 (démonstration)'] };
+            PROCS = { total: 128, processes: [
+                { pid: 812, name: 'sbxwaf', cmd: '/usr/bin/sbxwaf --demo', cpu_percent: 6.4, memory_percent: 1.9, status: 'running', user: 'secubox-waf', threads: 12 },
+                { pid: 1204, name: 'python3', cmd: 'python3 -m uvicorn secubox.demo', cpu_percent: 3.1, memory_percent: 4.2, status: 'sleeping', user: 'secubox', threads: 6 },
+                { pid: 1, name: 'systemd', cmd: '/sbin/init', cpu_percent: 0.2, memory_percent: 0.3, status: 'sleeping', user: 'root', threads: 1 }] };
+            MAJ = { available: 2, packages: [{ name: 'libexemple1', old_version: '1.2.3-1', new_version: '1.2.4-1' }, { name: 'outil-demo', old_version: '0.9-2', new_version: '0.9-3' }] };
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showRebootModal() { showModal('reboot-modal'); }
-        function showShutdownModal() { showModal('shutdown-modal'); }
-        function showUpdateModal() { showModal('update-modal'); }
-
-        async function loadStatus() {
-            const data = await api('/status');
-            if (!data || data.error) return;
-
-            document.getElementById('hostname').textContent = data.hostname || '-';
-            document.getElementById('uptime').textContent = 'Uptime: ' + (data.uptime_human || '-');
-            document.getElementById('cpu-value').textContent = (data.cpu_percent || 0) + '%';
-            document.getElementById('mem-value').textContent = (data.memory_percent || 0) + '%';
-            document.getElementById('disk-value').textContent = (data.disk_percent || 0) + '%';
-
-            // System info
-            document.getElementById('info-hostname').textContent = data.hostname || '-';
-            document.getElementById('info-kernel').textContent = data.kernel || '-';
-            document.getElementById('info-debian').textContent = data.debian_version || '-';
-            document.getElementById('info-uptime').textContent = data.uptime_human || '-';
-            document.getElementById('info-boot').textContent = data.boot_time ? new Date(data.boot_time).toLocaleString() : '-';
-            document.getElementById('info-load').textContent = (data.load_avg || []).join(' / ') || '-';
-        }
-
-        async function loadServices() {
-            const data = await api('/services');
-            if (!data) return;
-
-            allServices = data.services || [];
-            document.getElementById('services-value').textContent = data.running_count + '/' + data.count;
-
-            // SecuBox services for overview
-            const secubox = allServices.filter(s => s.is_secubox);
-            document.getElementById('secubox-status').textContent = secubox.filter(s => s.is_running).length + '/' + secubox.length + ' Running';
-
-            renderSecuboxServices(secubox);
-            renderAllServices();
-            updateLogUnitOptions();
-        }
-
-        function renderSecuboxServices(services) {
-            const container = document.getElementById('secubox-services');
-            if (services.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-dim);">No SecuBox services found</p>';
-                return;
-            }
-
-            container.innerHTML = services.map(s => `
-                <div class="service-item secubox">
-                    <div class="service-info">
-                        <div class="service-name">${s.name}</div>
-                        <span class="badge ${s.is_running ? 'badge-green' : 'badge-red'}">${s.sub}</span>
-                    </div>
-                    <div class="service-actions">
-                        ${s.is_running
-                            ? `<button class="btn small danger" onclick="serviceAction('${s.name}', 'restart')">Restart</button>`
-                            : `<button class="btn small success" onclick="serviceAction('${s.name}', 'start')">Start</button>`
-                        }
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function renderAllServices() {
-            const search = document.getElementById('service-search').value.toLowerCase();
-            const secuboxOnly = document.getElementById('show-secubox-only').checked;
-
-            let filtered = allServices;
-            if (secuboxOnly) filtered = filtered.filter(s => s.is_secubox);
-            if (search) filtered = filtered.filter(s =>
-                s.name.toLowerCase().includes(search) ||
-                (s.description || '').toLowerCase().includes(search)
-            );
-
-            const container = document.getElementById('service-list');
-            container.innerHTML = filtered.map(s => `
-                <div class="service-item ${s.is_secubox ? 'secubox' : ''}">
-                    <div class="service-info">
-                        <div class="service-name">${s.name}</div>
-                        <div class="service-desc">${s.description || ''}</div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <span class="badge ${s.is_running ? 'badge-green' : 'badge-red'}">${s.sub}</span>
-                        <div class="service-actions">
-                            ${s.is_running
-                                ? `<button class="btn small" onclick="serviceAction('${s.name}', 'stop')">Stop</button>
-                                   <button class="btn small" onclick="serviceAction('${s.name}', 'restart')">Restart</button>`
-                                : `<button class="btn small success" onclick="serviceAction('${s.name}', 'start')">Start</button>`
-                            }
-                        </div>
-                    </div>
-                </div>
-            `).join('') || '<p style="padding: 1rem; color: var(--text-dim);">No services found</p>';
-        }
-
-        async function serviceAction(name, action) {
-            const result = await api(`/service/${name}/${action}`, { method: 'POST' });
-            if (result?.success) {
-                showToast(`Service ${name} ${action} successful`);
-                setTimeout(loadServices, 1000);
-            } else {
-                showToast(`Failed: ${result?.stderr || result?.error || 'Unknown error'}`, 'error');
-            }
-        }
-
-        function updateLogUnitOptions() {
-            const select = document.getElementById('log-unit');
-            const units = [...new Set(allServices.map(s => s.unit))].sort();
-            select.innerHTML = '<option value="">All Units</option>' +
-                units.map(u => `<option value="${u}">${u}</option>`).join('');
-        }
-
-        async function loadLogs() {
-            const unit = document.getElementById('log-unit').value;
-            const priority = document.getElementById('log-priority').value;
-            const lines = document.getElementById('log-lines').value;
-
-            const params = new URLSearchParams({ lines });
-            if (unit) params.append('unit', unit);
-            if (priority) params.append('priority', priority);
-
-            const data = await api('/logs?' + params);
-            if (!data) return;
-
-            const viewer = document.getElementById('log-viewer');
-            viewer.textContent = (data.logs || []).join('\n') || 'No logs found';
-        }
-
-        async function loadStorage() {
-            const data = await api('/storage');
-            if (!data) return;
-
-            const partitions = data.partitions || [];
-
-            // Overview disk bars
-            const overviewContainer = document.getElementById('disk-overview');
-            overviewContainer.innerHTML = partitions.slice(0, 4).map(p => {
-                const cls = p.percent > 90 ? 'danger' : p.percent > 70 ? 'warn' : 'ok';
-                return `
-                    <div class="storage-item">
-                        <div class="storage-header">
-                            <span class="storage-mount">${p.mountpoint}</span>
-                            <span class="storage-usage">${p.used_human} / ${p.total_human} (${p.percent}%)</span>
-                        </div>
-                        <div class="storage-bar">
-                            <div class="storage-bar-fill ${cls}" style="width: ${p.percent}%"></div>
-                        </div>
-                    </div>
-                `;
-            }).join('') || '<p style="color: var(--text-dim);">No partitions found</p>';
-
-            // Full storage list
-            const listContainer = document.getElementById('storage-list');
-            listContainer.innerHTML = partitions.map(p => {
-                const cls = p.percent > 90 ? 'danger' : p.percent > 70 ? 'warn' : 'ok';
-                return `
-                    <div class="storage-item">
-                        <div class="storage-header">
-                            <span class="storage-mount"><strong>${p.device}</strong> mounted at ${p.mountpoint}</span>
-                            <span class="storage-usage">${p.fstype} - ${p.used_human} / ${p.total_human} (${p.percent}%)</span>
-                        </div>
-                        <div class="storage-bar">
-                            <div class="storage-bar-fill ${cls}" style="width: ${p.percent}%"></div>
-                        </div>
-                    </div>
-                `;
-            }).join('') || '<p style="color: var(--text-dim);">No partitions found</p>';
-        }
-
-        async function loadProcesses() {
-            const sort = document.getElementById('process-sort').value;
-            const data = await api(`/processes?sort=${sort}&limit=50`);
-            if (!data) return;
-
-            document.getElementById('process-count').textContent = `${data.processes.length} of ${data.total} processes`;
-
-            const list = document.getElementById('process-list');
-            list.innerHTML = data.processes.map(p => `
-                <tr>
-                    <td title="${p.cmd}">${p.name}</td>
-                    <td style="color: var(--orange);">${p.cpu_percent}%</td>
-                    <td style="color: var(--purple);">${p.memory_percent}%</td>
-                    <td style="color: var(--text-dim);">${p.pid}</td>
-                    <td>${p.user || '-'}</td>
-                    <td>${p.threads || '-'}</td>
-                    <td><span class="badge badge-${p.status === 'running' ? 'green' : 'cyan'}">${p.status}</span></td>
-                </tr>
-            `).join('') || '<tr><td colspan="7">No processes</td></tr>';
-        }
-
-        async function checkUpdates() {
-            document.getElementById('update-count').textContent = 'Checking...';
-            document.getElementById('update-list').innerHTML = '<p style="color: var(--text-dim);">Checking for updates...</p>';
-
-            const data = await api('/updates');
-            if (!data) return;
-
-            availableUpdates = data.packages || [];
-            document.getElementById('updates-value').textContent = data.available || 0;
-
-            const countBadge = document.getElementById('update-count');
-            if (data.available > 0) {
-                countBadge.textContent = `${data.available} available`;
-                countBadge.className = 'badge badge-orange';
-            } else {
-                countBadge.textContent = 'Up to date';
-                countBadge.className = 'badge badge-green';
-            }
-
-            const list = document.getElementById('update-list');
-            if (availableUpdates.length === 0) {
-                list.innerHTML = '<p style="color: var(--green);">System is up to date!</p>';
-                document.getElementById('btn-update-all').disabled = true;
-            } else {
-                list.innerHTML = availableUpdates.map(p => `
-                    <div class="update-item">
-                        <div>
-                            <span class="update-pkg">${p.name}</span>
-                        </div>
-                        <div class="update-version">${p.old_version} -> ${p.new_version}</div>
-                    </div>
-                `).join('');
-                document.getElementById('btn-update-all').disabled = false;
-            }
-        }
-
-        async function confirmReboot() {
-            closeModal('reboot-modal');
-            const reason = document.getElementById('reboot-reason').value;
-            const result = await api('/reboot', {
-                method: 'POST',
-                body: JSON.stringify({ confirm: true, reason })
+        async function charger(ciblesTab) {
+            if (DEMO) { demoData(); SESSION_OK = true; KO = {}; rendre(); return; }
+            const taches = { statut: lire('/status'), services: lire('/services'), stock: lire('/storage') };
+            if (ciblesTab && ONGLET === 'processus') taches.procs = lire('/processes?' + new URLSearchParams({ sort: $('pTri').value, limit: 50 }));
+            const cles = Object.keys(taches);
+            const res = await Promise.allSettled(cles.map(k => taches[k]));
+            KO = {}; let refus = false;
+            res.forEach((r, i) => {
+                const k = cles[i];
+                if (r.status === 'rejected') { KO[k] = r.reason && r.reason.message || 'erreur'; if (r.reason && (r.reason.statut === 401 || r.reason.statut === 403)) refus = true; return; }
+                if (k === 'statut') STATUT = r.value;
+                if (k === 'services') SERVICES = r.value.services || [];
+                if (k === 'stock') STOCK = r.value;
+                if (k === 'procs') PROCS = r.value;
             });
-            if (result?.success) {
-                showToast('System is rebooting...');
-            } else {
-                showToast('Reboot failed: ' + (result?.detail || 'Unknown error'), 'error');
-            }
+            ['statut', 'services', 'stock'].forEach(k => { if (KO[k]) { if (k === 'statut') STATUT = null; if (k === 'services') SERVICES = []; if (k === 'stock') STOCK = null; } });
+            SESSION_OK = !refus;
+            rendre();
+        }
+        async function chargerLogs() {
+            if (DEMO) { demoData(); rendreLogs(); return; }
+            const p = new URLSearchParams({ lines: $('lLignes').value });
+            if ($('lUnite').value) p.append('unit', $('lUnite').value);
+            if ($('lPrio').value) p.append('priority', $('lPrio').value);
+            try { LOGS = await lire('/logs?' + p); delete KO.logs; } catch (e) { LOGS = null; KO.logs = e.message; if (e.statut === 401 || e.statut === 403) SESSION_OK = false; }
+            rendre();
+        }
+        async function chargerProcs() {
+            if (DEMO) { demoData(); rendre(); return; }
+            try { PROCS = await lire('/processes?' + new URLSearchParams({ sort: $('pTri').value, limit: 50 })); delete KO.procs; } catch (e) { PROCS = null; KO.procs = e.message; if (e.statut === 401 || e.statut === 403) SESSION_OK = false; }
+            rendre();
+        }
+        async function verifierMaj() {
+            if (DEMO) { demoData(); rendre(); return; }
+            $('bVerif').disabled = true; $('nMaj').textContent = 'vérification en cours…';
+            try { MAJ = await lire('/updates'); delete KO.maj; } catch (e) { MAJ = null; KO.maj = e.message; if (e.statut === 401 || e.statut === 403) SESSION_OK = false; }
+            $('bVerif').disabled = false;
+            rendre();
         }
 
-        async function confirmShutdown() {
-            closeModal('shutdown-modal');
-            const reason = document.getElementById('shutdown-reason').value;
-            const result = await api('/shutdown', {
-                method: 'POST',
-                body: JSON.stringify({ confirm: true, reason })
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            const erreurs = SESSION_OK ? Object.keys(KO).filter(k => ['statut', 'services', 'stock'].includes(k)) : [];
+            $('erreur').hidden = !erreurs.length;
+            if (erreurs.length) $('erreur').textContent = 'Lecture impossible : ' + erreurs.map(k => ({ statut: 'état du système', services: 'services', stock: 'stockage' }[k] + ' (' + KO[k] + ')')).join(' ; ') + '.';
+            $('hote').hidden = !(s && s.hostname); $('hote').textContent = s && s.hostname ? s.hostname : '';
+            $('uptime').textContent = s && num(s.uptime_seconds) ? 'Disponibilité ' + duree(s.uptime_seconds) : '—';
+
+            // Tuiles
+            const cpu = s && s.cpu_percent, mem = s && s.memory_percent, dsk = s && s.disk_percent;
+            $('tCpu').textContent = pct(cpu); $('cCpu').className = 'tuile ' + (seuil(cpu) || 'cy');
+            $('tMem').textContent = pct(mem); $('sMem').textContent = s && s.memory_used ? s.memory_used + ' / ' + s.memory_total : 'utilisée';
+            $('tDisque').textContent = pct(dsk); $('cDisque').className = 'tuile ' + (seuil(dsk) || 'ok'); $('sDisque').textContent = s && s.disk_used ? s.disk_used + ' / ' + s.disk_total : 'occupé';
+            const connus = !KO.services && SESSION_OK && (SERVICES.length > 0 || DEMO);
+            const actifs = SERVICES.filter(x => x.is_running).length, sbx = SERVICES.filter(x => x.is_secubox);
+            $('tServ').textContent = connus ? actifs + ' / ' + SERVICES.length : '—'; $('sServ').textContent = connus ? 'dont ' + sbx.filter(x => x.is_running).length + ' / ' + sbx.length + ' SecuBox' : 'en exécution';
+            const la = s && Array.isArray(s.load_avg) ? s.load_avg : null;
+            $('tCharge').textContent = la && num(la[0]) ? String(la[0]).replace('.', ',') : '—';
+            if (MAJ && num(MAJ.available)) { $('tMaj').textContent = MAJ.available; $('sMaj').textContent = 'paquets à mettre à jour'; $('cMaj').className = 'tuile ' + (MAJ.available ? 'att' : 'ok'); }
+            else { $('tMaj').textContent = '—'; $('sMaj').textContent = 'non vérifié'; $('cMaj').className = 'tuile cy'; }
+
+            // Aperçu
+            $('kHote').textContent = tiret(s && s.hostname); $('kNoyau').textContent = tiret(s && s.kernel); $('kDebian').textContent = tiret(s && s.debian_version);
+            $('kUptime').textContent = s ? duree(s.uptime_seconds) : '—'; $('kBoot').textContent = s ? dateSrv(s.boot_time) : '—';
+            $('kCharge').textContent = la && la.length ? la.map(x => String(x).replace('.', ',')).join(' / ') : '—';
+            rendreSbx(sbx); rendreServices(); rendreDisques(); rendreLogs(); rendreProcs(); rendreMaj();
+            const d = new Date(); $('maj').textContent = 'Relevé ' + d.toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function etatService(x) {
+            if (x.is_running) return ['ok', 'ACTIF'];
+            if (x.active === 'failed' || x.sub === 'failed') return ['hors', 'ÉCHEC'];
+            if (x.active === 'active') return ['cy', String(x.sub || 'ACTIF').toUpperCase()];
+            return ['', 'ARRÊTÉ'];
+        }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function actionsService(x, complet) {
+            const w = el('div', 'b');
+            if (x.is_running) {
+                if (complet) w.appendChild(btn('Arrêter', 'danger', () => demander({ titre: 'Arrêter ' + x.name + ' ?', texte: 'Le service ' + x.unit + ' sera arrêté.', libelle: 'Arrêter', fn: () => actionService(x.name, 'stop') })));
+                w.appendChild(btn('Redémarrer', 'danger', () => demander({ titre: 'Redémarrer ' + x.name + ' ?', texte: 'Le service ' + x.unit + ' sera redémarré ; les connexions en cours peuvent être coupées.', libelle: 'Redémarrer', fn: () => actionService(x.name, 'restart') })));
+            } else w.appendChild(btn('Démarrer', 'prim', () => actionService(x.name, 'start')));
+            return w;
+        }
+        function rendreSbx(sbx) {
+            const c = $('lSbx'); c.replaceChildren();
+            $('nSbx').textContent = sbx.length ? sbx.filter(x => x.is_running).length + ' / ' + sbx.length + ' actifs' : '';
+            if (!sbx.length) { c.appendChild(el('div', 'vide', SESSION_OK && !KO.services ? 'Aucun service SecuBox' : '—')); return; }
+            sbx.forEach(x => {
+                const l = el('div', 'ligne'); const [cl, tx] = etatService(x);
+                l.appendChild(el('span', 'nm', x.name)); l.appendChild(el('span', 'pill ' + cl, tx));
+                const a = el('span'); a.appendChild(actionsService(x, false)); l.appendChild(a); c.appendChild(l);
             });
-            if (result?.success) {
-                showToast('System is shutting down...');
-            } else {
-                showToast('Shutdown failed: ' + (result?.detail || 'Unknown error'), 'error');
-            }
         }
-
-        async function confirmUpdate() {
-            closeModal('update-modal');
-            showToast('Running system update...');
-            const result = await api('/update', {
-                method: 'POST',
-                body: JSON.stringify({ confirm: true, packages: [] })
+        function rendreServices() {
+            const tb = $('bServ'); tb.replaceChildren();
+            const rech = $('fRech').value.trim().toLowerCase(), sbx = $('fSbx').checked;
+            let l = SERVICES;
+            if (sbx) l = l.filter(x => x.is_secubox);
+            if (rech) l = l.filter(x => String(x.name).toLowerCase().includes(rech) || String(x.description || '').toLowerCase().includes(rech));
+            $('nServ').textContent = SERVICES.length ? l.length + ' sur ' + SERVICES.length : '';
+            if (!l.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK && !KO.services ? 'Aucun service' : '—'); td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); $('nServNote').textContent = ''; return; }
+            l.slice(0, 300).forEach(x => {
+                const tr = el('tr'); const [cl, tx] = etatService(x);
+                tr.appendChild(el('td', 'nom', x.name)); tr.appendChild(el('td', 'desc', tiret(x.description)));
+                const e = el('td'); e.appendChild(el('span', 'pill ' + cl, tx)); e.title = 'active=' + x.active + ' / sub=' + x.sub; tr.appendChild(e);
+                const a = el('td', 'act'); a.appendChild(actionsService(x, true)); tr.appendChild(a); tb.appendChild(tr);
             });
-            if (result?.success) {
-                showToast('Update completed successfully');
-                checkUpdates();
-            } else {
-                showToast('Update failed: ' + (result?.stderr || result?.error || 'Unknown error'), 'error');
-            }
+            $('nServNote').textContent = l.length > 300 ? 'Les 300 premiers sur ' + l.length + ' : affinez la recherche.' : '';
+            majUnites();
         }
-
-        function refresh() {
-            loadStatus();
-            loadServices();
-            loadStorage();
+        function majUnites() {
+            const u = [...new Set(SERVICES.map(x => x.unit).filter(Boolean))].sort(), cle = u.join('|');
+            if (cle === UNITES) return;   // ne pas reconstruire la liste : la sélection en cours serait perdue
+            UNITES = cle; const sel = $('lUnite'), cur = sel.value; sel.replaceChildren();
+            const o0 = el('option', '', 'Toutes les unités'); o0.value = ''; sel.appendChild(o0);
+            u.forEach(n => { const o = el('option', '', n); o.value = n; sel.appendChild(o); });
+            sel.value = cur;
         }
-
-        // Event listeners
-        document.getElementById('service-search').addEventListener('input', renderAllServices);
-        document.getElementById('show-secubox-only').addEventListener('change', renderAllServices);
-        document.getElementById('log-unit').addEventListener('change', loadLogs);
-        document.getElementById('log-priority').addEventListener('change', loadLogs);
-        document.getElementById('log-lines').addEventListener('change', loadLogs);
-        document.getElementById('process-sort').addEventListener('change', loadProcesses);
-
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-
-                const t = tab.dataset.tab;
-                if (t === 'logs') loadLogs();
-                if (t === 'storage') loadStorage();
-                if (t === 'processes') loadProcesses();
-                if (t === 'updates') checkUpdates();
+        function disque(p, detaille) {
+            const d = el('div', 'disque'), t = el('div', 'tt');
+            t.appendChild(el('span', '', detaille ? p.device + ' monté sur ' + p.mountpoint : p.mountpoint));
+            t.appendChild(el('span', '', (detaille ? p.fstype + ' · ' : '') + p.used_human + ' / ' + p.total_human + ' (' + pct(p.percent) + ')'));
+            d.appendChild(t); const b = el('div', 'barre'); const i = el('b', seuil(p.percent)); i.style.width = Math.max(0, Math.min(100, num(p.percent) ? p.percent : 0)) + '%'; b.appendChild(i); d.appendChild(b); return d;
+        }
+        function rendreDisques() {
+            const parts = STOCK && Array.isArray(STOCK.partitions) ? STOCK.partitions : [];
+            const a = $('dApercu'), s = $('dStock'); a.replaceChildren(); s.replaceChildren();
+            $('nStock').textContent = parts.length ? parts.length + ' partition' + (parts.length > 1 ? 's' : '') : '';
+            if (!parts.length) { const m = SESSION_OK && !KO.stock ? 'Aucune partition' : '—'; a.appendChild(el('div', 'vide', m)); s.appendChild(el('div', 'vide', m)); return; }
+            parts.slice(0, 4).forEach(p => a.appendChild(disque(p, false)));
+            parts.forEach(p => s.appendChild(disque(p, true)));
+        }
+        function rendreLogs() {
+            const j = $('journal');
+            if (KO.logs || !LOGS) { j.textContent = SESSION_OK ? (KO.logs ? 'Lecture impossible : ' + KO.logs : '—') : '—'; $('nLog').textContent = ''; return; }
+            const l = LOGS.logs || []; j.textContent = l.join('\n') || 'Aucune ligne de journal';
+            $('nLog').textContent = l.length + ' ligne' + (l.length > 1 ? 's' : '');
+        }
+        function rendreProcs() {
+            const tb = $('bProc'); tb.replaceChildren();
+            if (KO.procs || !PROCS) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? (KO.procs ? 'Lecture impossible : ' + KO.procs : '—') : '—'); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); $('nProc').textContent = ''; return; }
+            const l = PROCS.processes || []; $('nProc').textContent = l.length + ' sur ' + tiret(PROCS.total) + ' processus';
+            if (!l.length) { const tr = el('tr'); const td = el('td', 'vide', 'Aucun processus'); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); return; }
+            l.forEach(p => {
+                const tr = el('tr'); const n = el('td', 'nom', tiret(p.name)); n.title = p.cmd || ''; tr.appendChild(n);
+                tr.appendChild(el('td', 'n', pct(p.cpu_percent))); tr.appendChild(el('td', 'n', pct(p.memory_percent)));
+                tr.appendChild(el('td', 'n', tiret(p.pid))); tr.appendChild(el('td', '', tiret(p.user))); tr.appendChild(el('td', 'n', tiret(p.threads)));
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (p.status === 'running' ? 'ok' : 'cy'), tiret(p.status))); tr.appendChild(e); tb.appendChild(tr);
             });
-        });
-
-        // Initial load
-        if (checkAuth()) {
-            refresh();
-            // Auto-refresh every 30 seconds
-            setInterval(() => {
-                loadStatus();
-                const activeTab = document.querySelector('.tab.active');
-                if (activeTab && activeTab.dataset.tab === 'overview') {
-                    loadServices();
-                    loadStorage();
-                }
-            }, 30000);
         }
+        function rendreMaj() {
+            const tb = $('bMaj'); tb.replaceChildren();
+            const tout = $('bMajTout');
+            const ligne = (txt) => { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = 3; tr.appendChild(td); tb.appendChild(tr); };
+            if (KO.maj) { ligne('Vérification impossible : ' + KO.maj); $('nMaj').textContent = ''; tout.disabled = true; return; }
+            if (!MAJ) { ligne(SESSION_OK ? 'Pas encore vérifié : utilisez « Vérifier ».' : '—'); if ($('nMaj').textContent.indexOf('cours') < 0) $('nMaj').textContent = ''; tout.disabled = true; return; }
+            const l = MAJ.packages || [];
+            $('nMaj').textContent = l.length ? l.length + ' disponible' + (l.length > 1 ? 's' : '') : 'à jour';
+            if (!l.length) ligne('Le système est à jour.');
+            l.forEach(p => { const tr = el('tr'); tr.appendChild(el('td', 'nom', tiret(p.name))); tr.appendChild(el('td', 'mono', tiret(p.old_version))); tr.appendChild(el('td', 'mono', tiret(p.new_version))); tb.appendChild(tr); });
+            tout.disabled = !l.length;
+        }
+
+        // Confirmation intégrée à la page (jamais de dialogue natif).
+        function demander(o) {
+            CONFIRM = o; $('confTitre').textContent = o.titre; $('confTexte').textContent = o.texte;
+            $('confMotifL').hidden = !o.motif; $('confMotif').value = ''; $('confOk').textContent = o.libelle || 'Confirmer'; $('conf').hidden = false;
+            $('confOk').focus(); annoncer();
+        }
+        function fermer() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermer);
+        $('confOk').addEventListener('click', () => { const o = CONFIRM; if (!o) return; const motif = $('confMotif').value; fermer(); o.fn(motif); });
+
+        async function actionService(nom, action) {
+            const res = await ecrire('POST', '/service/' + encodeURIComponent(nom) + '/' + action);
+            if (res.ok && res.data && res.data.success) { retour(true, 'Service ' + nom + ' : ' + action + ' réussi.'); setTimeout(() => charger(), 1000); }
+            else retour(false, 'Échec (' + nom + ', ' + action + ') : ' + detail(res));
+        }
+        $('bReboot').addEventListener('click', () => demander({ titre: 'Redémarrer le système ?', texte: 'Tous les utilisateurs seront déconnectés.', motif: true, libelle: 'Redémarrer maintenant', fn: async reason => {
+            const res = await ecrire('POST', '/reboot', { confirm: true, reason });
+            if (res.ok && res.data && res.data.success) retour(true, 'Redémarrage du système lancé.'); else retour(false, 'Échec du redémarrage : ' + detail(res)); } }));
+        $('bShutdown').addEventListener('click', () => demander({ titre: 'Éteindre le système ?', texte: 'Un accès physique sera nécessaire pour le rallumer.', motif: true, libelle: 'Éteindre maintenant', fn: async reason => {
+            const res = await ecrire('POST', '/shutdown', { confirm: true, reason });
+            if (res.ok && res.data && res.data.success) retour(true, 'Extinction du système lancée.'); else retour(false, 'Échec de l’extinction : ' + detail(res)); } }));
+        $('bMajTout').addEventListener('click', () => demander({ titre: 'Mettre à jour tous les paquets ?', texte: 'Tous les paquets disponibles seront mis à jour ; certains services peuvent redémarrer.', libelle: 'Lancer la mise à jour', fn: async () => {
+            retour(true, 'Mise à jour en cours…');
+            const res = await ecrire('POST', '/update', { confirm: true, packages: [] });
+            if (res.ok && res.data && res.data.success) { retour(true, 'Mise à jour terminée.'); verifierMaj(); } else retour(false, 'Échec de la mise à jour : ' + detail(res)); } }));
+
+        // Onglets
+        function ouvrir(t) {
+            ONGLET = t;
+            document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === t)));
+            document.querySelectorAll('section[role=tabpanel]').forEach(p => p.hidden = p.id !== 't-' + t);
+            if (t === 'journaux') chargerLogs();
+            if (t === 'processus') chargerProcs();
+            annoncer();
+        }
+        document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => ouvrir(b.dataset.t)));
+        $('fRech').addEventListener('input', rendreServices); $('fSbx').addEventListener('change', rendreServices);
+        ['lUnite', 'lPrio', 'lLignes'].forEach(i => $(i).addEventListener('change', chargerLogs));
+        $('bLog').addEventListener('click', chargerLogs); $('pTri').addEventListener('change', chargerProcs);
+        $('bVerif').addEventListener('click', verifierMaj); $('rafraichir').addEventListener('click', () => charger(true));
+
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'admin' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, pendant une confirmation ou une saisie. Le journal et les mises à jour ne sont jamais rechargés seuls.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))) return;
+            charger(true);
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
