@@ -1,3 +1,29 @@
+secubox-tor (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /tor/ refaite au profil Aurora (ref #2571) : page autonome (plus de police Google, de crt-light,
+    hybrid-dark ni crt-engine), tuiles (etat, amorcage, circuits, recu, emis, sortie transparente), panneaux
+    controle, reseau Tor, circuits, services caches, pays de sortie, clients Tor-VPN (+ clients NAC), ponts
+    obfs4 ; ?demo=1 (donnees fictives RFC 5737, actions inertes), ?embed=1, bandeau session requise sur 401,
+    hauteur annoncee a l'hote (sbxVue, onglet tor), actualisation 30 s hors saisie et hors confirmation.
+  * Confirmation integree a la page avant toute action qui coupe ou change Tor ou un service onion (modes,
+    desactivation, nouvelle identite, ajout/retrait de service cache, publication .onion, pays de sortie,
+    ponts, retrait d'un client Tor-VPN) ; plus aucun dialogue natif. Appels d'ecriture inchanges (routes,
+    methodes, corps) : /enable {preset}, /disable, /new_identity, /hidden_service/add|remove, toolbox
+    /admin/tor/on|off, /exit_country, /vpn/client, /tor/bridge, exposure /tor/emancipate_webui.
+  * Corrige : le jeton n'etait pas envoye aux appels de l'interrupteur de sortie transparente (on/off/etat) ;
+    l'activation annoncait un succes et armait la sortie meme quand /enable echouait (la sortie n'est plus
+    armee en cas d'echec) ; la desactivation annoncait un succes sans verifier ; amorcage, circuits et octets
+    s'affichaient « 0 » demon arrete au lieu de « — » ; unites en Ko/Mo/Go ; adresse de sortie « unknown »
+    affichee telle quelle ; un 401 redirigeait brutalement vers la connexion au lieu d'un bandeau ; ports
+    non numeriques envoyes en NaN ; polices et feuilles distantes retirees (CSP) ; innerHTML retire (tout en
+    textContent). Les lignes de pont ne sont plus affichees en entier (cert= masque ; la ligne complete reste
+    en memoire pour le retrait).
+  * Non repris : l'historique (/history) et les reglages detailles ne sont pas exposes plus qu'avant ; liste
+    des circuits limitee a 8 ; aucune courbe de trafic (l'API n'en fournit pas) ; le commutateur NAC a
+    cases devient des boutons Router/Retirer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 14:00:00 +0200
+
 secubox-tor (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /proxypac/ refaite au profil Aurora (ref #2556) : page autonome, tuiles (role/niveau, publication
