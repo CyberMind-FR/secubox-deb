@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — Panneaux Aurora, vague 4 : 12 paquets, 12 pages (closes #2597)
+
+`/master-link/admin.html`, `/annuaire/`, `/mesh/`, `/config-advisor/`, `/zia/admin.html`, `/mqtt/`, `/netboot/`, `/ai-gateway/`, `/freebox/`, `/autoload/`, `/sentinelle/`, `/modem/` (PR #2598 à #2609), relues (aucun script externe, dialogue natif, innerHTML ni police distante) et déployées sur gk2, gk1 et gk3, dépôt apt à jour pour gk2. Versions : p2p 1.16.0, annuaire 0.13.0, mesh 2.1.0, config-advisor 1.2.0, zia 0.2.0, mqtt 2.6.0, netboot 0.5.0, ai-gateway 1.4.0, freebox 0.5.0, autoload 0.6.0, sentinelle-gsm 0.5.0, modem 1.3.0. Exclus : vault/coffre (redéployer re-scelle le coffre) et premier-pas (assistant de premier démarrage).
+
+Bogues d'ancienne page corrigés, entre autres : mqtt était une copie de la page Lyrion (aucune donnée MQTT) ; ai-gateway appelait des routes inexistantes et affichait des valeurs inventées ; config-advisor lisait des champs absents (tuiles à 0, bouton Apply Fix jamais affiché) ; modem sans jeton et Chart.js/xterm bloqués par la CSP ; netboot, autoload, freebox : `confirm()` natifs jamais honorés (actions silencieusement inopérantes) ; annuaire : clé privée saisie par `prompt()` ; zia admin : connexion impossible (second facteur exigé).
+
+À noter, non corrigé : modem WebSocket `/at/console` ouverte sans jeton ; mesh routes sans `require_jwt`, version `/health` codée en dur ; mqtt `/access` ne remonte que la première règle de chaque compte ; netboot IP serveur préremplie `192.168.1.200` ; master-link admin « approuver automatiquement » coché par défaut. Restent environ 58 pages hors Aurora (vague 5 ; vault/coffre et premier-pas à part).
+
 ## 2026-10-13 — Panneaux Aurora, vague 3 : 9 paquets, 12 pages (closes #2584)
 
 `/exposure/`, `/dns-provider/`, `/metacatalog/`, `/glances/`, `/reporter/`, `/watchdog/`, `/ksm/`, `/cve-triage/`, `/antirootkit/`, `/ai-insights/`, `/meshname/`, `/master-link/` (PR #2585 à #2596), relues (aucun script externe, dialogue natif, innerHTML ni police distante) et déployées sur gk2, gk1 et gk3, dépôt apt à jour pour gk2. Versions : haproxy 1.12.0, dns 1.5.0, appstore 0.7.0, metrics 1.22.1 (glances 1.22.0 puis reporter 1.22.1), health 1.3.0, system 1.10.0, security-posture 2.3.1 (cve-triage 2.3.0 puis antirootkit 2.3.1), threats 1.6.0, p2p 1.15.1 (meshname 1.15.0 puis master-link 1.15.1).
