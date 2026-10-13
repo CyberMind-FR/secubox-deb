@@ -4,1138 +4,437 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Hub P2P au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P Hub - SecuBox</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Hub P2P</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        /* CRT P31 Phosphor Light Theme */
-        :root {
-            --bg: #e8f5e9;
-            --bg-card: #f1f8f2;
-            --bg-input: #ffffff;
-            --text: #1b4332;
-            --text-dim: #2d6a4f;
-            --text-muted: #52796f;
-            --border: #a7c4a0;
-            --accent: #006622;
-            --accent-light: #40916c;
-            --success: #2d6a4f;
-            --danger: #c1121f;
-            --warning: #e07b00;
-            --glow: rgba(0, 102, 34, 0.15);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-        }
-
-        .main-content {
-            flex: 1;
-            margin-left: 250px;
-            padding: 20px;
-            min-height: 100vh;
-        }
-
-        .page-header {
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-        }
-
-        .page-header h1 {
-            font-size: 24px;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .page-header h1 .icon {
-            font-size: 28px;
-        }
-
-        /* Tab Navigation */
-        .tab-nav {
-            display: flex;
-            gap: 5px;
-            border-bottom: 2px solid var(--border);
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
-        .tab-btn {
-            background: transparent;
-            border: 1px solid var(--border);
-            border-bottom: none;
-            color: var(--text-muted);
-            padding: 10px 20px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 14px;
-            transition: all 0.2s;
-            position: relative;
-            top: 1px;
-            border-radius: 4px 4px 0 0;
-        }
-
-        .tab-btn:hover {
-            color: var(--text);
-            background: var(--bg-card);
-        }
-
-        .tab-btn.active {
-            color: var(--accent);
-            background: var(--bg-card);
-            border-color: var(--accent);
-            font-weight: bold;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        /* Status Cards */
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .status-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 2px 4px var(--glow);
-        }
-
-        .status-card .label {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .status-card .value {
-            font-size: 32px;
-            font-weight: bold;
-            color: var(--accent);
-        }
-
-        .status-card .value.online {
-            color: var(--success);
-        }
-
-        .status-card .value.offline {
-            color: var(--danger);
-        }
-
-        .status-card .value.warning {
-            color: var(--warning);
-        }
-
-        /* Data Tables */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            background: var(--bg-card);
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-        }
-
-        .data-table th,
-        .data-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .data-table th {
-            background: var(--bg);
-            color: var(--text-muted);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .data-table tr:hover {
-            background: var(--glow);
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            font-size: 11px;
-            border-radius: 12px;
-            text-transform: uppercase;
-            font-weight: bold;
-        }
-
-        .status-badge.online {
-            background: rgba(45, 106, 79, 0.15);
-            color: var(--success);
-            border: 1px solid var(--success);
-        }
-
-        .status-badge.offline {
-            background: rgba(193, 18, 31, 0.1);
-            color: var(--danger);
-            border: 1px solid var(--danger);
-        }
-
-        .status-badge.pending {
-            background: rgba(224, 123, 0, 0.1);
-            color: var(--warning);
-            border: 1px solid var(--warning);
-        }
-
-        /* Action Buttons */
-        .btn {
-            background: var(--bg-card);
-            border: 1px solid var(--accent);
-            color: var(--accent);
-            padding: 8px 16px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 13px;
-            transition: all 0.2s;
-            border-radius: 4px;
-        }
-
-        .btn:hover {
-            background: var(--accent);
-            color: #ffffff;
-            box-shadow: 0 2px 4px var(--glow);
-        }
-
-        .btn-danger {
-            border-color: var(--danger);
-            color: var(--danger);
-        }
-
-        .btn-danger:hover {
-            background: var(--danger);
-            color: #ffffff;
-            box-shadow: 0 2px 4px rgba(193, 18, 31, 0.3);
-        }
-
-        .btn-small {
-            padding: 4px 10px;
-            font-size: 11px;
-        }
-
-        /* Form Elements */
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: var(--text-dim);
-            font-size: 12px;
-            text-transform: uppercase;
-        }
-
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 10px;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            color: var(--text);
-            font-family: inherit;
-            font-size: 14px;
-            border-radius: 4px;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 5px var(--glow);
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        /* Section Headers */
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .section-header h2 {
-            font-size: 16px;
-            color: var(--text);
-        }
-
-        /* Mesh Visualization Placeholder */
-        .mesh-container {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            height: 400px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .mesh-placeholder {
-            color: var(--text-dim);
-            font-size: 14px;
-        }
-
-        .mesh-canvas {
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Threat List */
-        .threat-item {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 10px;
-        }
-
-        .threat-item.high {
-            border-left: 3px solid var(--danger);
-        }
-
-        .threat-item.medium {
-            border-left: 3px solid var(--warning);
-        }
-
-        .threat-item.low {
-            border-left: 3px solid var(--success);
-        }
-
-        .threat-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .threat-type {
-            font-weight: bold;
-            color: var(--text);
-        }
-
-        .threat-severity {
-            font-size: 11px;
-            text-transform: uppercase;
-        }
-
-        .threat-details {
-            font-size: 13px;
-            color: var(--text-dim);
-        }
-
-        /* Loading State */
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
-        }
-
-        .loading::after {
-            content: '';
-            animation: dots 1.5s infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-
-        /* Modal */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal {
-            background: var(--bg-card);
-            border: 1px solid var(--accent);
-            border-radius: 8px;
-            padding: 20px;
-            min-width: 400px;
-            max-width: 90%;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .modal-header h3 {
-            font-size: 16px;
-            color: var(--text);
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 20px;
-            cursor: pointer;
-        }
-
-        .modal-close:hover {
-            color: var(--text);
-        }
-
-        .modal-footer {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .main-content {
-                margin-left: 0;
-                padding: 15px;
-            }
-
-            .status-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-
-            .tab-btn {
-                padding: 8px 12px;
-                font-size: 12px;
-            }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .carte{width:100%;height:auto;display:block;max-height:460px}
+        .carte text{fill:var(--texte);font-size:12px;paint-order:stroke;stroke:#0a162e;stroke-width:4px;stroke-linejoin:round} .carte .sub{fill:var(--faible);font-size:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
-    <!-- Sidebar -->
+<body>
     <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.4"/><circle cx="4.5" cy="6" r="1.8"/><circle cx="19.5" cy="6" r="1.8"/><circle cx="4.5" cy="18" r="1.8"/><circle cx="19.5" cy="18" r="1.8"/><path d="M10 10.7 5.9 7.2M14 10.7l4.1-3.5M10 13.3l-4.1 3.5M14 13.3l4.1 3.5"/></svg>
+                <div><h1>Hub P2P</h1><small>Maillage, pairs et services fédérés</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="page-header">
-            <h1><span class="icon">🔗</span> P2P Hub</h1>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Pairs configurés sur le maillage WireGuard (ce nœud exclu)."><span class="l">Pairs</span><span class="v" id="tPairs">—</span><span class="s" id="sPairs">configurés</span></div>
+            <div class="tuile ok" id="cVivants" title="Pairs dont la dernière poignée de main WireGuard est récente. Configuré ne veut pas dire vivant : si la mesure manque, la tuile reste à « — »."><span class="l">Pairs vivants</span><span class="v" id="tVivants">—</span><span class="s" id="sVivants">poignée de main récente</span></div>
+            <div class="tuile cy" title="Services du catalogue de l’annuaire fusionnés avec les services locaux."><span class="l">Services</span><span class="v" id="tServices">—</span><span class="s">dans le catalogue</span></div>
+            <div class="tuile hors" id="cMenaces" title="Adresses signalées et partagées par le maillage."><span class="l">Menaces partagées</span><span class="v" id="tMenaces">—</span><span class="s">adresses signalées</span></div>
+            <div class="tuile cy" title="Rôle de ce nœud dans le lien maître (master-link)."><span class="l">Rôle</span><span class="v" id="tRole">—</span><span class="s" id="sRole">lien maître</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections du hub P2P">
+            <button type="button" role="tab" id="o-apercu" data-t="apercu" aria-selected="true" aria-controls="t-apercu">Aperçu</button>
+            <button type="button" role="tab" id="o-pairs" data-t="pairs" aria-selected="false" aria-controls="t-pairs">Pairs</button>
+            <button type="button" role="tab" id="o-services" data-t="services" aria-selected="false" aria-controls="t-services">Services</button>
+            <button type="button" role="tab" id="o-maillage" data-t="maillage" aria-selected="false" aria-controls="t-maillage">Maillage</button>
+            <button type="button" role="tab" id="o-menaces" data-t="menaces" aria-selected="false" aria-controls="t-menaces">Menaces</button>
         </div>
 
-        <!-- Tab Navigation -->
-        <div class="tab-nav">
-            <button class="tab-btn active" data-tab="overview">Overview</button>
-            <button class="tab-btn" data-tab="peers">Peers</button>
-            <button class="tab-btn" data-tab="services">Services</button>
-            <button class="tab-btn" data-tab="mesh">Mesh</button>
-            <button class="tab-btn" data-tab="threats">Threats</button>
-        </div>
+        <section id="t-apercu" role="tabpanel" aria-labelledby="o-apercu" class="grille">
+            <div class="pan"><h3>Ce nœud</h3>
+                <dl class="kv"><dt>Nom</dt><dd id="kNom">—</dd><dt>Identifiant</dt><dd class="mono" id="kId">—</dd><dt>Adresse LAN</dt><dd id="kLan">—</dd><dt>Adresse WAN</dt><dd id="kWan">—</dd><dt>Version</dt><dd id="kVer">—</dd></dl></div>
+            <div class="pan"><h3>Lien maître <i>master-link</i></h3>
+                <dl class="kv"><dt>Rôle</dt><dd id="kRole">—</dd><dt>Profondeur</dt><dd id="kProf">—</dd><dt>Amont</dt><dd id="kAmont">—</dd><dt>Terme</dt><dd id="kTerme">—</dd><dt>Maître élu</dt><dd class="mono" id="kMaitre">—</dd><dt>Pairs DHT</dt><dd id="kDht">—</dd></dl>
+                <p class="note">Terme et maître élu viennent de l’élection du lien maître ; « — » si elle est désactivée.</p></div>
+            <div class="pan" style="grid-column:1/-1"><h3>Ce que cette page ne montre pas</h3>
+                <p class="note" style="margin:0">L’API P2P ne fournit ni historique d’activité ni latence mesurée : ces colonnes restent à « — » plutôt qu’inventées. Le statut d’un pair vient de la dernière poignée de main WireGuard.</p></div>
+        </section>
 
-        <!-- Overview Tab -->
-        <div id="tab-overview" class="tab-content active">
-            <div class="status-grid">
-                <div class="status-card">
-                    <div class="label">Status</div>
-                    <div class="value online" id="status-value">ONLINE</div>
-                </div>
-                <div class="status-card">
-                    <div class="label">Total Peers</div>
-                    <div class="value" id="peer-count">0</div>
-                </div>
-                <div class="status-card">
-                    <div class="label">Active Peers</div>
-                    <div class="value" id="active-peer-count">0</div>
-                </div>
-                <div class="status-card">
-                    <div class="label">Services</div>
-                    <div class="value" id="service-count">0</div>
-                </div>
-            </div>
+        <section id="t-pairs" role="tabpanel" aria-labelledby="o-pairs" hidden>
+            <div class="pan"><h3>Pairs <i id="nPairs"></i><button class="btn prim sm" id="addPair" type="button">+ Ajouter un pair</button></h3>
+                <div id="rPairs" class="retour" hidden></div>
+                <form class="saisie" id="fPair" hidden>
+                    <label>Adresse du pair<input name="address" placeholder="192.0.2.10:8080" required></label>
+                    <label>Identifiant (facultatif)<input name="peer_id" placeholder="généré si vide"></label>
+                    <label>Description<input name="description" placeholder="Serveur maison"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fPair">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Pair</th><th>Adresse</th><th>État</th><th>Latence</th><th>Dernière poignée de main</th><th>Actions</th></tr></thead><tbody id="bPairs"></tbody></table></div></div>
+        </section>
 
-            <div class="section-header">
-                <h2>Recent Activity</h2>
-            </div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Event</th>
-                        <th>Peer</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody id="activity-table">
-                    <tr>
-                        <td colspan="4" class="loading">Loading activity</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <section id="t-services" role="tabpanel" aria-labelledby="o-services" hidden>
+            <div class="pan"><h3>Registre de services <i id="nServ"></i><button class="btn sm" id="autoReg" type="button">Tout enregistrer</button><button class="btn prim sm" id="addServ" type="button" style="margin-left:0">+ Enregistrer un service</button></h3>
+                <div id="rServ" class="retour" hidden></div>
+                <form class="saisie" id="fServ" hidden>
+                    <label>Nom du service<input name="name" placeholder="mon-service" required></label>
+                    <label>Type<select name="type"><option value="http">HTTP</option><option value="tcp">TCP</option><option value="udp">UDP</option><option value="grpc">gRPC</option></select></label>
+                    <label>Port<input name="port" type="number" min="1" max="65535" placeholder="8080" required></label>
+                    <label>Description<input name="description" placeholder="Description"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Enregistrer</button><button class="btn" type="button" data-ferme="fServ">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Service</th><th>Type</th><th>Fournisseur</th><th>Port</th><th>État</th><th>Actions</th></tr></thead><tbody id="bServ"></tbody></table></div></div>
+        </section>
 
-        <!-- Peers Tab -->
-        <div id="tab-peers" class="tab-content">
-            <div class="section-header">
-                <h2>Peer Management</h2>
-                <button class="btn" onclick="showAddPeerModal()">+ Add Peer</button>
-            </div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Peer ID</th>
-                        <th>Address</th>
-                        <th>Status</th>
-                        <th>Latency</th>
-                        <th>Last Seen</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="peers-table">
-                    <tr>
-                        <td colspan="6" class="loading">Loading peers</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <section id="t-maillage" role="tabpanel" aria-labelledby="o-maillage" hidden>
+            <div class="pan"><h3>Carte du maillage <i id="nMaillage"></i></h3>
+                <svg class="carte" id="carte" viewBox="0 0 640 400" role="img" aria-label="Carte du maillage : ce nœud au centre, ses pairs autour"></svg>
+                <p class="note">Étoile centrée sur ce nœud : les liens sont ceux de ce nœud vers chaque pair (topologie en étoile). Vert = poignée de main récente, rouge = pair sans poignée de main, gris = vivacité inconnue.</p></div>
+        </section>
 
-        <!-- Services Tab -->
-        <div id="tab-services" class="tab-content">
-            <div class="section-header">
-                <h2>Service Registry</h2>
-                <div>
-                    <button class="btn" onclick="autoRegisterAll()">Auto register all</button>
-                    <button class="btn" onclick="showRegisterServiceModal()">+ Register Service</button>
-                </div>
-            </div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Service Name</th>
-                        <th>Type</th>
-                        <th>Provider</th>
-                        <th>Port</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="services-table">
-                    <tr>
-                        <td colspan="6" class="loading">Loading services</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <section id="t-menaces" role="tabpanel" aria-labelledby="o-menaces" hidden>
+            <div class="pan"><h3>Renseignement sur les menaces <i id="nMen"></i></h3>
+                <div class="tab"><table><thead><tr><th>Adresse</th><th>Gravité</th><th>Motif</th><th>Signalé par</th><th>Date</th></tr></thead><tbody id="bMen"></tbody></table></div></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- Mesh Tab -->
-        <div id="tab-mesh" class="tab-content">
-            <div class="section-header">
-                <h2>Network Mesh Visualization</h2>
-                <button class="btn" onclick="refreshMesh()">Refresh</button>
-            </div>
-            <div class="mesh-container">
-                <canvas id="mesh-canvas" class="mesh-canvas"></canvas>
-            </div>
-        </div>
-
-        <!-- Threats Tab -->
-        <div id="tab-threats" class="tab-content">
-            <div class="section-header">
-                <h2>Threat Intelligence</h2>
-                <button class="btn" onclick="refreshThreats()">Refresh</button>
-            </div>
-            <div id="threats-list">
-                <div class="loading">Loading threat intelligence</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Add Peer Modal -->
-    <div class="modal-overlay" id="add-peer-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Add New Peer</h3>
-                <button class="modal-close" onclick="closeModal('add-peer-modal')">&times;</button>
-            </div>
-            <form id="add-peer-form" onsubmit="addPeer(event)">
-                <div class="form-group">
-                    <label>Peer Address</label>
-                    <input type="text" name="address" placeholder="192.168.1.100:8080" required>
-                </div>
-                <div class="form-group">
-                    <label>Peer ID (optional)</label>
-                    <input type="text" name="peer_id" placeholder="Auto-generated if empty">
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" name="description" placeholder="Home server">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn" onclick="closeModal('add-peer-modal')">Cancel</button>
-                    <button type="submit" class="btn">Add Peer</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Register Service Modal -->
-    <div class="modal-overlay" id="register-service-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Register Service</h3>
-                <button class="modal-close" onclick="closeModal('register-service-modal')">&times;</button>
-            </div>
-            <form id="register-service-form" onsubmit="registerService(event)">
-                <div class="form-group">
-                    <label>Service Name</label>
-                    <input type="text" name="name" placeholder="my-service" required>
-                </div>
-                <div class="form-group">
-                    <label>Service Type</label>
-                    <select name="type" required>
-                        <option value="http">HTTP</option>
-                        <option value="tcp">TCP</option>
-                        <option value="udp">UDP</option>
-                        <option value="grpc">gRPC</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Port</label>
-                    <input type="number" name="port" placeholder="8080" min="1" max="65535" required>
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" name="description" placeholder="Service description">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn" onclick="closeModal('register-service-modal')">Cancel</button>
-                    <button type="submit" class="btn">Register</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Scripts -->
     <script src="/shared/sidebar.js"></script>
-    <script src="/shared/crt-engine.js"></script>
     <script>
-        // API Base URL
-        const API_BASE = '/api/v1/p2p';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/p2p';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        // Tab Navigation
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-                // Lazy-load per-tab content on activation. The mesh canvas MUST be
-                // drawn only once its tab is visible — a hidden tab has clientWidth 0,
-                // which previously left the canvas blank ("broken" mesh tab).
-                if (btn.dataset.tab === 'mesh') setTimeout(initMesh, 40);
+        let STATUT = null, PAIRS = [], SERVICES = [], CATALOGUE_KO = false, MESH = null, MEN = {}, TOPO = null, DHT = null, SESSION_OK = true;
+        let CONFIRM = null;   // { genre, cle } : confirmation en cours dans la ligne, jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const d = typeof ts === 'number' ? new Date(ts < 1e12 ? ts * 1000 : ts) : new Date(ts);
+            if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR');
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function etatPair(p) {
+            if (p.status === 'online') return ['ok', 'EN LIGNE'];
+            if (p.status === 'offline') return ['hors', 'HORS LIGNE'];
+            return ['', 'INCONNU'];
+        }
+
+        function demoData() {
+            STATUT = { online: true, node_id: 'gk2-4f9a1c', hostname: 'gk2', lan_ip: '192.0.2.1', wan_ip: '198.51.100.7', total_peers: 4, active_peers: 3, liveness: 'measured', service_count: 3, threat_count: 2, master_link: { role: 'master', depth: 0, upstream: null }, version: '1.3.0' };
+            PAIRS = [
+                { id: 'satellite-a', name: 'satellite-a', address: '10.10.0.2', status: 'online', latency: null, last_seen: Math.floor(Date.now() / 1000) - 18 },
+                { id: 'satellite-b', name: 'satellite-b', address: '10.10.0.3', status: 'online', latency: null, last_seen: Math.floor(Date.now() / 1000) - 41 },
+                { id: 'satellite-c', name: 'satellite-c', address: '10.10.0.4', status: 'online', latency: null, last_seen: Math.floor(Date.now() / 1000) - 75 },
+                { id: 'satellite-d', name: 'satellite-d', address: '10.10.0.5', status: 'offline', latency: null, last_seen: null }];
+            SERVICES = [
+                { name: 'tor-socks', type: 'socks', provider_label: 'local', port: 9050, active: true, subscription_state: 'n/a', source: 'p2p-local' },
+                { name: 'relais-dns', type: 'udp', provider_label: 'did:sbx:7c1e…', port: 53, active: false, subscription_state: 'not-subscribed', source: 'annuaire', service_id: 'svc-dns-1' },
+                { name: 'proxy-http', type: 'http', provider_label: 'did:sbx:90ab…', port: 3128, active: false, subscription_state: 'pending', source: 'annuaire', service_id: 'svc-http-2' }];
+            CATALOGUE_KO = false;
+            MESH = { nodes: [{ id: 'gk2-4f9a1c', name: 'gk2', address: '10.10.0.1', status: 'online', is_local: true }].concat(PAIRS.map(p => Object.assign({ is_local: false }, p))), total_nodes: 5 };
+            MEN = { '203.0.113.9': { ip: '203.0.113.9', reason: 'Balayage de ports', severity: 'high', reported: '2026-10-12T21:40:00', reporter: 'satellite-a' }, '198.51.100.99': { ip: '198.51.100.99', reason: 'Tentatives SSH répétées', severity: 'medium', reported: '2026-10-13T06:02:00', reporter: 'gk2' } };
+            TOPO = { enabled: true, master: 'a1b2c3d4e5f6a7b8', term: 7, self_role: 'master', self_id: 'a1b2c3d4e5f6a7b8', peers: ['c1', 'c2', 'c3'] };
+            DHT = { enabled: true, peers: [{ did: 'x' }, { did: 'y' }], buckets: 2 };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/peers'), lire('/services'), lire('/mesh'), lire('/threats'), lire('/masterlink/topology'), lire('/dht/peers')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0);
+            const p = val(1); PAIRS = p ? (Array.isArray(p) ? p : (p.peers || [])) : [];
+            const s = val(2); SERVICES = s ? (Array.isArray(s) ? s : (s.services || [])) : []; CATALOGUE_KO = !!(s && s.catalog_unavailable);
+            MESH = val(3); const m = val(4); MEN = (m && typeof m.threats === 'object' && m.threats) ? m.threats : {};
+            TOPO = val(5); DHT = val(6);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le hub P2P (service arrêté ou injoignable).';
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (s.online ? '' : ' hors'); etat.textContent = s.online ? 'EN LIGNE' : 'HORS LIGNE'; }
+            const nb = x => (x === null || x === undefined) ? '—' : x;
+            $('tPairs').textContent = s ? nb(s.total_peers) : '—';
+            const mesure = s && s.liveness !== 'unavailable';
+            $('tVivants').textContent = s && mesure ? nb(s.active_peers) : '—';
+            $('sVivants').textContent = s && !mesure ? 'mesure indisponible' : 'poignée de main récente';
+            $('cVivants').className = 'tuile ' + (s && mesure && s.total_peers && s.active_peers < s.total_peers ? 'att' : 'ok');
+            $('tServices').textContent = s ? nb(s.service_count) : '—';
+            $('tMenaces').textContent = s ? nb(s.threat_count) : '—';
+            const role = TOPO && TOPO.enabled ? TOPO.self_role : (s && s.master_link ? s.master_link.role : null);
+            $('tRole').textContent = role ? (role === 'master' ? 'Maître' : role === 'satellite' ? 'Satellite' : role) : '—';
+            $('sRole').textContent = TOPO && TOPO.enabled ? 'élu (master-link)' : 'configuré';
+            // Aperçu
+            $('kNom').textContent = tiret(s && s.hostname); $('kId').textContent = tiret(s && s.node_id); $('kLan').textContent = tiret(s && s.lan_ip);
+            $('kWan').textContent = tiret(s && s.wan_ip); $('kVer').textContent = tiret(s && s.version);
+            const ml = s && s.master_link;
+            $('kRole').textContent = tiret(role); $('kProf').textContent = tiret(ml && ml.depth); $('kAmont').textContent = tiret(ml && ml.upstream);
+            const t = TOPO && TOPO.enabled ? TOPO : null;
+            $('kTerme').textContent = tiret(t && t.term); $('kMaitre').textContent = t && t.master ? String(t.master).slice(0, 16) : '—';
+            $('kDht').textContent = DHT && DHT.enabled ? (DHT.peers || []).length : '—';
+            rendrePairs(); rendreServices(); rendreCarte(); rendreMenaces();
+            const d = new Date(); $('maj').textContent = 'Relevé ' + d.toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function confirmation(cell, genre, cle, libelle, fn) {
+            if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === cle) {
+                cell.appendChild(el('span', 'note', libelle + ' ?'));
+                cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else {
+                cell.appendChild(btn(libelle, 'danger', () => { CONFIRM = { genre, cle }; rendre(); }));
+            }
+        }
+
+        function rendrePairs() {
+            const tb = $('bPairs'); tb.replaceChildren();
+            $('nPairs').textContent = PAIRS.length ? PAIRS.length + ' pair' + (PAIRS.length > 1 ? 's' : '') : '';
+            if (!PAIRS.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucun pair configuré' : '—'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            PAIRS.forEach(p => {
+                const tr = el('tr'); const [c, l] = etatPair(p);
+                tr.appendChild(el('td', '', tiret(p.id || p.name)));
+                const a = el('td', 'mono', tiret(p.address)); tr.appendChild(a);
+                const e = el('td'); e.appendChild(pastille(c, l, p.status ? '' : 'Vivacité non mesurée')); tr.appendChild(e);
+                tr.appendChild(el('td', '', p.latency ? p.latency + ' ms' : '—'));
+                tr.appendChild(el('td', '', quand(p.last_seen)));
+                const act = el('td', 'act');
+                act.appendChild(btn('Sonder', '', () => sonder(p.id)));
+                confirmation(act, 'pair', p.id, 'Retirer', () => retirerPair(p.id));
+                tr.appendChild(act); tb.appendChild(tr);
             });
-        });
-
-        // API Helpers
-        async function apiGet(endpoint) {
-            try {
-                const response = await fetch(API_BASE + endpoint, {
-                    headers: { 'Authorization': 'Bearer ' + getToken() }
-                });
-                if (!response.ok) throw new Error('API error');
-                return await response.json();
-            } catch (error) {
-                console.error('API GET error:', error);
-                return null;
-            }
         }
 
-        async function apiPost(endpoint, data) {
-            try {
-                const response = await fetch(API_BASE + endpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + getToken()
-                    },
-                    body: JSON.stringify(data)
-                });
-                if (!response.ok) throw new Error('API error');
-                return await response.json();
-            } catch (error) {
-                console.error('API POST error:', error);
-                return null;
-            }
-        }
-
-        async function apiDelete(endpoint) {
-            try {
-                const response = await fetch(API_BASE + endpoint, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': 'Bearer ' + getToken() }
-                });
-                if (!response.ok) throw new Error('API error');
-                return await response.json();
-            } catch (error) {
-                console.error('API DELETE error:', error);
-                return null;
-            }
-        }
-
-        function getToken() {
-            return localStorage.getItem('secubox_token') || '';
-        }
-
-        // Load Overview Data
-        async function loadOverview() {
-            const status = await apiGet('/status');
-            if (status) {
-                document.getElementById('status-value').textContent = status.online ? 'ONLINE' : 'OFFLINE';
-                document.getElementById('status-value').className = 'value ' + (status.online ? 'online' : 'offline');
-                document.getElementById('peer-count').textContent = status.total_peers || 0;
-                document.getElementById('active-peer-count').textContent = status.active_peers || 0;
-                document.getElementById('service-count').textContent = status.service_count || status.services || 0;
-            }
-
-            const activity = await apiGet('/activity');
-            const tbody = document.getElementById('activity-table');
-            if (activity && activity.length > 0) {
-                tbody.innerHTML = activity.map(item => `
-                    <tr>
-                        <td>${formatTime(item.timestamp)}</td>
-                        <td>${escapeHtml(item.event)}</td>
-                        <td>${escapeHtml(item.peer || '-')}</td>
-                        <td>${escapeHtml(item.details || '-')}</td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4">No recent activity</td></tr>';
-            }
-        }
-
-        // Load Peers
-        async function loadPeers() {
-            const data = await apiGet('/peers');
-            const peers = Array.isArray(data) ? data : (data && Array.isArray(data.peers) ? data.peers : []);
-            const tbody = document.getElementById('peers-table');
-            if (peers.length > 0) {
-                tbody.innerHTML = peers.map(peer => `
-                    <tr>
-                        <td>${escapeHtml(peer.id)}</td>
-                        <td>${escapeHtml(peer.address)}</td>
-                        <td><span class="status-badge ${peer.status}">${peer.status}</span></td>
-                        <td>${peer.latency ? peer.latency + 'ms' : '-'}</td>
-                        <td>${formatTime(peer.last_seen)}</td>
-                        <td>
-                            <button class="btn btn-small" onclick="pingPeer('${peer.id}')">Ping</button>
-                            <button class="btn btn-small btn-danger" onclick="removePeer('${peer.id}')">Remove</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="6">No peers configured</td></tr>';
-            }
-        }
-
-        // Load Services
-        async function loadServices() {
-            const data = await apiGet('/services');
-            const services = Array.isArray(data) ? data : (data && Array.isArray(data.services) ? data.services : []);
-            const tbody = document.getElementById('services-table');
-            if (services.length > 0) {
-                tbody.innerHTML = services.map(svc => {
-                    const state = svc.subscription_state || 'n/a';
-                    const statusLabel = svc.active ? 'active' : (state === 'n/a' ? 'inactive' : state);
-                    const badge = svc.automatable ? ' <span class="status-badge">automatable</span>' : '';
-                    let actions = '';
-                    if (svc.source === 'p2p-local') {
-                        actions = `<button class="btn btn-small btn-danger" onclick="unregisterService('${encodeURIComponent(svc.name)}')">Unregister</button>`;
-                    } else if (svc.provider_label !== 'local' && state === 'not-subscribed') {
-                        actions = `<button class="btn btn-small" onclick="requestAccess('${encodeURIComponent(svc.service_id)}')">Request access</button>`;
-                    } else if (state === 'pending') {
-                        actions = `<span class="text-muted">awaiting approval</span>`;
-                    } else if (!svc.active) {
-                        actions = `<button class="btn btn-small" onclick="activateService('${encodeURIComponent(svc.service_id)}')">Activate</button>`;
-                    } else if (svc.automatable && svc.active && svc.endpoint) {
-                        actions = `<span style="font-family:monospace;font-size:12px;color:var(--accent-light)">SOCKS ${escapeHtml(svc.endpoint)}</span> ` +
-                                  `<button class="btn btn-small btn-danger" onclick="revokeAccess('${encodeURIComponent(svc.service_id)}')">Revoke access</button>`;
-                    } else {
-                        actions = `<span class="status-badge active">active</span>`;
-                    }
-                    return `
-                    <tr>
-                        <td>${escapeHtml(svc.name)}${badge}</td>
-                        <td>${escapeHtml(svc.type || '')}</td>
-                        <td>${escapeHtml(svc.provider_label || 'local')}</td>
-                        <td>${svc.port != null ? svc.port : '&mdash;'}</td>
-                        <td><span class="status-badge ${svc.active ? 'active' : ''}">${escapeHtml(statusLabel)}</span></td>
-                        <td>${actions}</td>
-                    </tr>`;
-                }).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="6">No services in catalog</td></tr>';
-            }
-            if (data && data.catalog_unavailable) {
-                console.log('[secubox-p2p] Annuaire catalog unavailable — showing local services only');
-                const noticeRow = document.createElement('tr');
-                noticeRow.innerHTML = '<td colspan="6" style="color:var(--cinnabar,#e63946)">⚠ Annuaire catalog unavailable — showing local services only</td>';
-                tbody.prepend(noticeRow);
-            }
-        }
-
-        async function autoRegisterAll() {
-            const res = await apiPost('/services/auto-register', {});
-            if (!res) { console.error('[secubox-p2p] autoRegisterAll: API error'); return; }
-            const msg = `[secubox-p2p] Auto-register: activated ${res.activated||0}, requested ${res.requested||0}` +
-                        (res.pending ? `, ${res.pending} pending approval` : '') +
-                        (res.errors && res.errors.length ? `, ${res.errors.length} error(s)` : '');
-            console.log(msg);
-            loadServices();
-        }
-
-        async function requestAccess(sid) {
-            const res = await apiPost('/services/' + encodeURIComponent(sid) + '/request', {});
-            if (!res) { console.error('[secubox-p2p] requestAccess: API error'); return; }
-            console.log('[secubox-p2p] requestAccess:', res.status === 'ok' ? 'Subscription requested' : (res.error || 'failed'));
-            loadServices();
-        }
-
-        async function activateService(sid) {
-            const res = await apiPost('/services/' + encodeURIComponent(sid) + '/activate', {});
-            if (!res) { console.error('[secubox-p2p] activateService: API error'); return; }
-            console.log('[secubox-p2p] activateService:', res.status === 'ok' ? 'Activated' : (res.error || 'failed'));
-            loadServices();
-        }
-
-        async function revokeAccess(sid) {
-            const res = await apiPost('/services/' + encodeURIComponent(sid) + '/revoke-access', {});
-            if (!res) { console.error('[secubox-p2p] revokeAccess: API error'); return; }
-            console.log('[secubox-p2p] revokeAccess:', res.status === 'ok' ? 'Revoked' : (res.error || 'failed'));
-            loadServices();
-        }
-
-        // Load Threats
-        async function loadThreats() {
-            const data = await apiGet('/threats');
-            let threats = [];
-            if (Array.isArray(data)) threats = data;
-            else if (data && typeof data === 'object') threats = Object.entries(data).map(([ip, t]) => ({
-                type: (t && t.type) || 'threat',
-                severity: (t && t.severity) || 'info',
-                source: (t && t.source) || ip,
-                target: (t && t.target) || ip,
-                description: (t && (t.description || t.reason)) || 'shared via mesh'
-            }));
-            const container = document.getElementById('threats-list');
-            if (threats.length > 0) {
-                container.innerHTML = threats.map(threat => `
-                    <div class="threat-item ${threat.severity}">
-                        <div class="threat-header">
-                            <span class="threat-type">${escapeHtml(threat.type)}</span>
-                            <span class="threat-severity">${threat.severity}</span>
-                        </div>
-                        <div class="threat-details">
-                            <strong>Source:</strong> ${escapeHtml(threat.source || 'Unknown')}<br>
-                            <strong>Target:</strong> ${escapeHtml(threat.target || 'N/A')}<br>
-                            <strong>Description:</strong> ${escapeHtml(threat.description || 'No details')}
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                container.innerHTML = '<div class="threat-item"><div class="threat-details">No threats detected</div></div>';
-            }
-        }
-
-        // Mesh Visualization (wired to /mesh — real nodes from the wg-mesh)
-        async function initMesh() {
-            const canvas = document.getElementById('mesh-canvas');
-            if (!canvas) return;
-            const parent = canvas.parentElement;
-            const w = parent.clientWidth, h = parent.clientHeight;
-            // The tab may not be laid out yet (clientWidth 0) — retry shortly.
-            if (w < 20 || h < 20) { setTimeout(initMesh, 80); return; }
-            const ctx = canvas.getContext('2d');
-            canvas.width = w; canvas.height = h;
-
-            const bgColor = '#f1f8f2';
-            const lineColor = '#a7c4a0';
-            const textColor = '#1b4332';
-            const satColor = '#00838f';       // satellite / online peer (cyan)
-            const masterColor = '#b8860b';    // master (gold)
-            const offlineColor = '#b0b0b0';
-
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, w, h);
-            ctx.font = '13px Courier New';
-            ctx.textAlign = 'center';
-
-            const centerX = w / 2, centerY = h / 2;
-
-            // Pull mesh membership + the live master-link role/DHT state in parallel.
-            const [mesh, topo, dht] = await Promise.all([
-                apiGet('/mesh'), apiGet('/masterlink/topology'), apiGet('/dht/peers')
-            ]);
-            const allNodes = (mesh && Array.isArray(mesh.nodes)) ? mesh.nodes : [];
-            const local = allNodes.find(n => n.is_local) || { name: 'LOCAL' };
-            const peers = allNodes.filter(n => !n.is_local);
-            const selfRole = (topo && topo.self_role) || 'unknown';
-            const isMaster = selfRole === 'master';
-            const term = (topo && topo.term != null) ? topo.term : '—';
-            const masterShort = (topo && topo.master) ? String(topo.master).slice(0, 10) : '—';
-            const dhtPeers = (dht && Array.isArray(dht.peers)) ? dht.peers.length : 0;
-
-            // Header: live master-link + DHT state.
-            ctx.textAlign = 'left';
-            ctx.font = 'bold 13px Courier New';
-            ctx.fillStyle = textColor;
-            ctx.fillText('Master-link: role=' + selfRole + '  term=' + term +
-                '  master=' + masterShort + '   ·   DHT peers=' + dhtPeers, 14, 22);
-            ctx.textAlign = 'center';
-            ctx.font = '13px Courier New';
-
-            const radius = Math.max(70, Math.min(centerX, centerY) - 70);
-            peers.forEach((peer, i) => {
-                const angle = (Math.PI * 2 * i) / Math.max(peers.length, 1) - Math.PI / 2;
-                const px = centerX + radius * Math.cos(angle);
-                const py = centerY + radius * Math.sin(angle);
-                drawConnection(ctx, centerX, centerY, px, py, lineColor);
-                const online = peer.status === 'online';
-                drawMeshNode(ctx, px, py, (peer.name || peer.id || 'peer'), peer.address || '',
-                    false, online ? satColor : offlineColor, textColor);
+        function rendreServices() {
+            const tb = $('bServ'); tb.replaceChildren();
+            $('nServ').textContent = SERVICES.length ? SERVICES.length + ' service' + (SERVICES.length > 1 ? 's' : '') : '';
+            if (CATALOGUE_KO) { const tr = el('tr'); const td = el('td', 'vide', '⚠ Catalogue de l’annuaire indisponible — services locaux uniquement'); td.colSpan = 6; td.style.color = 'var(--orange)'; tr.appendChild(td); tb.appendChild(tr); }
+            if (!SERVICES.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucun service dans le catalogue' : '—'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            SERVICES.forEach(svc => {
+                const tr = el('tr'); const st = svc.subscription_state || 'n/a';
+                const nom = el('td', '', tiret(svc.name)); if (svc.automatable) nom.appendChild(pastille('cy', 'AUTOMATISABLE', 'Activation automatique possible')); tr.appendChild(nom);
+                tr.appendChild(el('td', '', tiret(svc.type)));
+                tr.appendChild(el('td', 'mono', tiret(svc.provider_label || 'local')));
+                tr.appendChild(el('td', '', svc.port != null ? svc.port : '—'));
+                const e = el('td');
+                if (svc.active) e.appendChild(pastille('ok', 'ACTIF')); else if (st === 'pending') e.appendChild(pastille('att', 'EN ATTENTE')); else e.appendChild(pastille('', st === 'n/a' || st === 'not-subscribed' ? 'INACTIF' : String(st).toUpperCase()));
+                tr.appendChild(e);
+                const act = el('td', 'act'); const sid = svc.service_id;
+                if (svc.source === 'p2p-local') confirmation(act, 'service', svc.name, 'Retirer', () => retirerService(svc.name));
+                else if (svc.provider_label !== 'local' && st === 'not-subscribed') act.appendChild(btn('Demander l’accès', '', () => actionService(sid, 'request', 'Demande envoyée')));
+                else if (st === 'pending') act.appendChild(el('span', 'note', 'en attente d’approbation'));
+                else if (!svc.active) act.appendChild(btn('Activer', '', () => actionService(sid, 'activate', 'Service activé')));
+                else if (svc.automatable && svc.endpoint) { act.appendChild(el('span', 'mono', 'SOCKS ' + svc.endpoint)); confirmation(act, 'acces', sid, 'Révoquer l’accès', () => actionService(sid, 'revoke-access', 'Accès révoqué')); }
+                tr.appendChild(act); tb.appendChild(tr);
             });
-
-            // Center = local node, coloured by its master-link role.
-            drawMeshNode(ctx, centerX, centerY, (local.name || 'LOCAL'), (local.address || ''),
-                true, isMaster ? masterColor : satColor, textColor);
-            ctx.fillStyle = isMaster ? masterColor : satColor;
-            ctx.font = 'bold 11px Courier New';
-            ctx.fillText(isMaster ? '★ MASTER' : 'SATELLITE', centerX, centerY - 36);
-            ctx.font = '13px Courier New';
-
-            if (peers.length === 0) {
-                ctx.fillStyle = textColor;
-                ctx.fillText('No mesh peers', centerX, centerY + 80);
-            }
         }
 
-        // Mesh node with a coloured ring + name and address on two lines.
-        function drawMeshNode(ctx, x, y, name, addr, isCenter, ringColor, textColor) {
-            ctx.beginPath();
-            ctx.arc(x, y, isCenter ? 25 : 16, 0, Math.PI * 2);
-            ctx.strokeStyle = ringColor;
-            ctx.lineWidth = isCenter ? 3 : 2;
-            ctx.stroke();
-            ctx.fillStyle = isCenter ? 'rgba(184,134,11,0.12)' : 'rgba(0,131,143,0.10)';
-            ctx.fill();
-            ctx.fillStyle = textColor;
-            ctx.font = (isCenter ? 'bold ' : '') + '13px Courier New';
-            ctx.fillText(name, x, y + (isCenter ? 44 : 32));
-            if (addr) {
-                ctx.font = '11px Courier New';
-                ctx.fillStyle = '#4a6a4a';
-                ctx.fillText(addr, x, y + (isCenter ? 60 : 46));
-            }
-            ctx.font = '13px Courier New';
-            ctx.fillStyle = textColor;
+        function couleurEtat(st) { return st === 'online' ? '#2ecc71' : st === 'offline' ? '#ff4d5e' : '#6f84a8'; }
+        function rendreCarte() {
+            const svg = $('carte'); svg.replaceChildren();
+            const NS = 'http://www.w3.org/2000/svg';
+            const n = (tag, at) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); return e; };
+            const noeuds = MESH && Array.isArray(MESH.nodes) ? MESH.nodes : [];
+            const local = noeuds.find(x => x.is_local); const autres = noeuds.filter(x => !x.is_local);
+            $('nMaillage').textContent = noeuds.length ? noeuds.length + ' nœud' + (noeuds.length > 1 ? 's' : '') : '';
+            if (!local) { const t = n('text', { x: 320, y: 200, 'text-anchor': 'middle', class: 'sub' }); t.textContent = SESSION_OK ? 'Aucune donnée de maillage' : '—'; svg.appendChild(t); return; }
+            const cx = 320, cy = 200, R = 135;
+            const role = TOPO && TOPO.enabled ? TOPO.self_role : null;
+            autres.forEach((p, i) => {
+                const ang = (Math.PI * 2 * i) / Math.max(autres.length, 1) - Math.PI / 2, x = cx + R * 1.35 * Math.cos(ang), y = cy + R * Math.sin(ang);
+                svg.appendChild(n('line', { x1: cx, y1: cy, x2: x, y2: y, stroke: couleurEtat(p.status), 'stroke-opacity': .5, 'stroke-width': 1.5, 'stroke-dasharray': p.status === 'online' ? '' : '4 4' }));
+                const g = n('g', {}); g.appendChild(n('circle', { cx: x, cy: y, r: 15, fill: 'rgba(18,40,78,.9)', stroke: couleurEtat(p.status), 'stroke-width': 2 }));
+                const t = n('text', { x, y: y + 31, 'text-anchor': 'middle' }); t.textContent = p.name || p.id || 'pair'; g.appendChild(t);
+                if (p.address) { const s = n('text', { x, y: y + 44, 'text-anchor': 'middle', class: 'sub' }); s.textContent = p.address; g.appendChild(s); }
+                svg.appendChild(g);
+            });
+            svg.appendChild(n('circle', { cx, cy, r: 26, fill: 'rgba(41,182,246,.18)', stroke: role === 'master' ? '#ffd23f' : '#29b6f6', 'stroke-width': 3 }));
+            const nom = n('text', { x: cx, y: cy + 46, 'text-anchor': 'middle', 'font-weight': 700 }); nom.textContent = local.name || 'ce nœud'; svg.appendChild(nom);
+            const sub = n('text', { x: cx, y: cy + 59, 'text-anchor': 'middle', class: 'sub' }); sub.textContent = (role === 'master' ? '★ maître · ' : role ? role + ' · ' : '') + (local.address || ''); svg.appendChild(sub);
+            if (!autres.length) { const t = n('text', { x: cx, y: cy + 90, 'text-anchor': 'middle', class: 'sub' }); t.textContent = 'Aucun pair sur le maillage'; svg.appendChild(t); }
         }
 
-        function drawNode(ctx, x, y, label, isCenter, nodeColor, textColor) {
-            ctx.beginPath();
-            ctx.arc(x, y, isCenter ? 25 : 15, 0, Math.PI * 2);
-            ctx.strokeStyle = nodeColor;
-            ctx.lineWidth = isCenter ? 2 : 1;
-            ctx.stroke();
-
-            if (isCenter) {
-                ctx.fillStyle = 'rgba(0, 102, 34, 0.15)';
-                ctx.fill();
-            }
-
-            ctx.fillStyle = textColor;
-            ctx.fillText(label, x, y + (isCenter ? 40 : 30));
+        function rendreMenaces() {
+            const tb = $('bMen'); tb.replaceChildren();
+            const lignes = Object.keys(MEN || {}).map(ip => Object.assign({ ip }, MEN[ip]));
+            $('nMen').textContent = lignes.length ? lignes.length + ' adresse' + (lignes.length > 1 ? 's' : '') : '';
+            if (!lignes.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucune menace signalée' : '—'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            const classe = { critical: 'hors', high: 'hors', medium: 'att', low: 'cy' };
+            const lib = { critical: 'CRITIQUE', high: 'HAUTE', medium: 'MOYENNE', low: 'BASSE' };
+            lignes.forEach(m => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', m.ip));
+                const g = el('td'); g.appendChild(pastille(classe[m.severity] || '', lib[m.severity] || tiret(m.severity).toUpperCase())); tr.appendChild(g);
+                tr.appendChild(el('td', '', tiret(m.reason || m.description))); tr.appendChild(el('td', '', tiret(m.reporter)));
+                tr.appendChild(el('td', '', quand(m.reported))); tb.appendChild(tr);
+            });
         }
 
-        function drawConnection(ctx, x1, y1, x2, y2, lineColor) {
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.strokeStyle = lineColor;
-            ctx.lineWidth = 1;
-            ctx.stroke();
+        // ----- Actions (mêmes appels que l'ancienne page ; la sonde utilise la vraie route /probe) -----
+        async function sonder(id) {
+            const r = await ecrire('POST', '/peers/' + encodeURIComponent(id) + '/probe', {});
+            if (r.ok) { const p = r.data && r.data.peer; retour('rPairs', true, 'Sonde de ' + id + ' : ' + (p && p.status === 'online' ? 'répond' : 'sans réponse') + '.'); charger(); }
+            else retour('rPairs', false, 'Sonde impossible : ' + detail(r) + (r.statut === 404 ? ' (ce pair vient du maillage WireGuard : sa vivacité se lit à la poignée de main)' : ''));
         }
-
-        function refreshMesh() {
-            initMesh();
+        async function retirerPair(id) {
+            const r = await ecrire('DELETE', '/peers/' + encodeURIComponent(id));
+            if (r.ok) { retour('rPairs', true, 'Pair ' + id + ' retiré.'); charger(); } else { retour('rPairs', false, 'Retrait impossible : ' + detail(r)); rendre(); }
         }
-
-        // Modal Functions
-        function showAddPeerModal() {
-            document.getElementById('add-peer-modal').classList.add('active');
+        async function retirerService(nom) {
+            const r = await ecrire('DELETE', '/services/' + encodeURIComponent(nom));
+            if (r.ok) { retour('rServ', true, 'Service ' + nom + ' retiré.'); charger(); } else { retour('rServ', false, 'Retrait impossible : ' + detail(r)); rendre(); }
         }
-
-        function showRegisterServiceModal() {
-            document.getElementById('register-service-modal').classList.add('active');
+        async function actionService(sid, verbe, ok) {
+            const r = await ecrire('POST', '/services/' + encodeURIComponent(sid) + '/' + verbe, {});
+            if (r.ok && !(r.data && r.data.error)) { retour('rServ', true, ok + '.'); charger(); } else retour('rServ', false, 'Échec : ' + ((r.data && r.data.error) || detail(r)));
         }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-        }
-
-        // Peer Actions
-        async function addPeer(event) {
-            event.preventDefault();
-            const form = event.target;
-            const data = {
-                address: form.address.value,
-                peer_id: form.peer_id.value || null,
-                description: form.description.value
-            };
-            const result = await apiPost('/peers', data);
-            if (result) {
-                closeModal('add-peer-modal');
-                form.reset();
-                loadPeers();
-                loadOverview();
-            }
-        }
-
-        async function removePeer(peerId) {
-            if (confirm('Remove peer ' + peerId + '?')) {
-                const result = await apiDelete('/peers/' + peerId);
-                if (result) {
-                    loadPeers();
-                    loadOverview();
-                }
-            }
-        }
-
-        async function pingPeer(peerId) {
-            const result = await apiPost('/peers/' + peerId + '/ping', {});
-            if (result) {
-                alert('Ping result: ' + (result.latency ? result.latency + 'ms' : 'timeout'));
-                loadPeers();
-            }
-        }
-
-        // Service Actions
-        async function registerService(event) {
-            event.preventDefault();
-            const form = event.target;
-            const data = {
-                name: form.name.value,
-                type: form.type.value,
-                port: parseInt(form.port.value),
-                description: form.description.value
-            };
-            const result = await apiPost('/services', data);
-            if (result) {
-                closeModal('register-service-modal');
-                form.reset();
-                loadServices();
-                loadOverview();
-            }
-        }
-
-        async function unregisterService(name) {
-            if (confirm('Unregister service ' + name + '?')) {
-                const result = await apiDelete('/services/' + name);
-                if (result) {
-                    loadServices();
-                    loadOverview();
-                }
-            }
-        }
-
-        function refreshThreats() {
-            loadThreats();
-        }
-
-        // Utility Functions
-        function formatTime(timestamp) {
-            if (!timestamp) return '-';
-            const date = new Date(timestamp);
-            return date.toLocaleTimeString();
-        }
-
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadOverview();
-            loadPeers();
-            loadServices();
-            loadThreats();
-            initMesh();
-
-            // Auto-refresh every 30 seconds
-            setInterval(() => {
-                loadOverview();
-                loadPeers();
-            }, 30000);
+        $('autoReg').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/services/auto-register', {});
+            if (r.ok && r.data) { const d = r.data; retour('rServ', true, 'Enregistrement automatique : ' + (d.activated || 0) + ' activé(s), ' + (d.requested || 0) + ' demandé(s)' + (d.pending ? ', ' + d.pending + ' en attente d’approbation' : '') + (d.errors && d.errors.length ? ', ' + d.errors.length + ' erreur(s)' : '') + '.'); charger(); }
+            else retour('rServ', false, 'Échec : ' + detail(r));
         });
+        $('fPair').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/peers', { address: f.address.value, peer_id: f.peer_id.value || null, description: f.description.value });
+            if (r.ok) { f.reset(); f.hidden = true; retour('rPairs', true, 'Pair ajouté.'); charger(); } else retour('rPairs', false, 'Ajout impossible : ' + detail(r));
+        });
+        $('fServ').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/services', { name: f.name.value, type: f.type.value, port: parseInt(f.port.value, 10), description: f.description.value });
+            if (r.ok) { f.reset(); f.hidden = true; retour('rServ', true, 'Service enregistré.'); charger(); } else retour('rServ', false, 'Enregistrement impossible : ' + detail(r));
+        });
+        $('addPair').addEventListener('click', () => { $('fPair').hidden = !$('fPair').hidden; annoncer(); });
+        $('addServ').addEventListener('click', () => { $('fServ').hidden = !$('fServ').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+
+        // ----- Onglets -----
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ['apercu', 'pairs', 'services', 'maillage', 'menaces'].forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'p2p' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || !$('fPair').hidden || !$('fServ').hidden) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>
