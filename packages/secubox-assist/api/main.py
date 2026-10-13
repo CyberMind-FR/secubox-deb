@@ -142,9 +142,27 @@ async def console_revoke(b: SessionRef):
 # writes delegate to secubox-assistctl (signed journal appends).
 # --------------------------------------------------------------------------- #
 
+def _reste_s(created_at: str, ttl_s, now_ts: str):
+    """Secondes avant l'expiration (≥ 0), ou None quand la date ou la durée est illisible : on n'invente pas un compte à rebours (#2542)."""
+    try:
+        debut = assist_match._parse_ts(created_at)
+        fin = debut.timestamp() + int(ttl_s)
+        return max(0, int(fin - assist_match._parse_ts(now_ts).timestamp()))
+    except (ValueError, TypeError, AttributeError, OverflowError):
+        return None
+
+
 @app.get("/offers", dependencies=[Depends(require_jwt)])
 async def offers():
-    return assist_match.active_offers(_entries(), _now())
+    """Offres actives du maillage, avec leur nœud d'origine, « la mienne » et le temps restant (#2542) : une offre d'autrui ne se révoque pas."""
+    entries, now = _entries(), _now()
+    moi, noms = _self_did(), _noeuds(entries)
+    out = []
+    for o in assist_match.active_offers(entries, now):
+        de = o.get("issued_by") or ""
+        out.append({**o, "de_moi": de == moi, "noeud": noms.get(de) or (de.split(":")[-1][:8] if de else "?"),
+                    "reste_s": _reste_s(o.get("created_at", ""), o.get("ttl_s", 0), now)})
+    return out
 
 
 def _fiches(entries) -> dict:
@@ -168,13 +186,14 @@ def _noeuds(entries) -> dict:
 async def requests_open():
     """Demandes ouvertes du maillage, avec leur nœud d'origine et « la mienne »
     (#1711) : on répond aux demandes des autres, pas aux siennes."""
-    entries = _entries()
+    entries, now = _entries(), _now()
     moi, noms = _self_did(), _noeuds(entries)
     out = []
-    for r in assist_match.active_open_requests(entries, _now()):
+    for r in assist_match.active_open_requests(entries, now):
         de = r.get("issued_by") or ""
         out.append({**r, "de_moi": de == moi,
-                    "noeud": noms.get(de) or (de.split(":")[-1][:8] if de else "?")})
+                    "noeud": noms.get(de) or (de.split(":")[-1][:8] if de else "?"),
+                    "reste_s": _reste_s(r.get("created_at", ""), r.get("ttl_s", 0), now)})
     return out
 
 

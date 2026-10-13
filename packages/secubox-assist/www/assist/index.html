@@ -28,6 +28,12 @@
   .item { border:1px solid rgba(100,150,200,.2); border-radius:6px; padding:.5rem; margin-bottom:.5rem; }
   .item .muted { color:#8a94a6; font-size:.8rem; }
   .note { color:#8a94a6; font-style:italic; }
+  .enc{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .enc h3{margin:0 0 6px;font-size:.95rem}
+  .badge{display:inline-block;font-size:.68rem;font-weight:700;border-radius:999px;padding:1px 8px;border:1px solid #00d4ff;color:#00d4ff;margin-left:6px}
+  .badge.moi{border-color:#00dd44;color:#7dffb0}
+  #enc-err{border:1px solid #ff4466;background:#3a1620;color:#ff8199;border-radius:8px;padding:6px 10px;font-size:.85rem;margin-bottom:8px}
+  details.aide{margin-top:8px;font-size:.84rem} details.aide ol{margin:6px 0 0 18px;padding:0}
 </style></head>
 <body class="hybrid-dark">
 <nav class="sidebar" id="sidebar"></nav>
@@ -35,6 +41,19 @@
   <h1 style="color:#00d4ff">🆘 Assistance</h1>
   <!-- #2540 : les demandes et offres voyagent par le journal du maillage (voie rapide, ~20 s) ; ce bouton force un passage tout de suite. -->
   <div style="margin:-6px 0 10px"><button class="btn" id="sync-now" type="button">↻ Synchroniser avec le maillage</button> <span id="sync-etat" style="font-size:.8rem;opacity:.8" role="status"></span></div>
+  <div class="card" id="encours"><h2>En cours <span class="muted" id="enc-maj" style="font-size:.78rem;font-weight:400"></span></h2>
+    <div id="enc-err" role="alert" hidden></div>
+    <div class="enc">
+      <div><h3>🆘 Demandes <span id="enc-nreq"></span></h3><div id="enc-req"><p class="note">Chargement…</p></div></div>
+      <div><h3>🙋 Offres <span id="enc-noff"></span></h3><div id="enc-off"><p class="note">Chargement…</p></div></div>
+      <div><h3>🔗 À accepter <span id="enc-nmat"></span></h3><div id="enc-mat"><p class="note">Chargement…</p></div></div>
+    </div>
+    <details class="aide"><summary>Comment accepter une demande ?</summary><ol>
+      <li>Une box publie une demande (« Demander de l'aide »). Elle apparaît ici chez tous les nœuds, avec le nœud d'origine.</li>
+      <li>Un autre nœud clique <b>Répondre</b> : il publie une offre aux mêmes tags et accepte sa part.</li>
+      <li>Le demandeur voit alors l'aide proposée sous <b>À accepter</b> et clique <b>Accepter l'aide</b> : la session d'assistance s'ouvre.</li>
+    </ol><p class="note">Une demande ou une offre expire à son échéance (« expire dans … ») ; vous ne pouvez retirer que vos propres offres.</p></details>
+  </div>
   <div class="card" id="active-card"><h2>Session active</h2><div id="active">—</div>
     <button class="btn danger" data-act="close">Kill session</button>
     <!-- #1720 : le second consentement. Tant qu'il vaut, le centre de la session
@@ -253,6 +272,59 @@ async function refreshMatches() {
      {label:'Accepter (request)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'request'}}])));
 }
 
+// ── Panneau « En cours » (#2542) : demandes, offres et correspondances, toujours visibles, lues ensemble ───────────────────────────────────────
+function reste(s) {
+  if (s == null) return '';
+  if (s <= 0) return 'expirée';
+  const m = Math.round(s / 60);
+  return 'expire dans ' + (m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : Math.max(m, 1) + ' min');
+}
+async function lireEnCours(url) {
+  const r = await fetch(url, {headers: H()});
+  if (r.status === 401 || r.status === 403) { const e = new Error('session requise'); e.auth = true; throw e; }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+function etiquette(el, nom, moi) {
+  const b = document.createElement('span'); b.className = 'badge' + (moi ? ' moi' : ''); b.textContent = moi ? 'ma demande' : nom;
+  el.appendChild(b);
+}
+async function refreshEnCours() {
+  const err = document.getElementById('enc-err');
+  try {
+    const [reqs, offs, mats] = await Promise.all([lireEnCours('/api/v1/assist/requests/open'), lireEnCours('/api/v1/assist/offers'),
+                                                   lireEnCours('/api/v1/assist/matches').catch(() => [])]);
+    err.hidden = true;
+    const noeudDe = {}; offs.forEach(o => { noeudDe[o.issued_by] = o.noeud; });
+    const aider = new Set(mats.map(m => m.req_id));
+    document.getElementById('enc-nreq').textContent = '(' + reqs.length + ')';
+    document.getElementById('enc-noff').textContent = '(' + offs.length + ')';
+    document.getElementById('enc-nmat').textContent = '(' + mats.length + ')';
+    renderList(document.getElementById('enc-req'), reqs.length ? reqs.map(q => {
+      const it = itemEl([['de', q.noeud || '—'], ['motif', q.reason || '—'], ['tags', fmtTags(q.tags)], ['', reste(q.reste_s)]],
+        q.de_moi ? [] : [{label: 'Répondre (proposer mon aide)', act: 'request-answer', data: {reqId: q.req_id}}]);
+      if (q.de_moi) { it.firstChild.appendChild(document.createTextNode(' ')); etiquette(it.firstChild, '', true);
+        const n = document.createElement('div'); n.className = 'note';
+        n.textContent = aider.has(q.req_id) ? 'Une aide vous est proposée : acceptez-la dans « À accepter ».' : 'En attente qu\'un autre nœud réponde.'; it.appendChild(n); }
+      return it;
+    }) : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune demande en cours.'})]);
+    renderList(document.getElementById('enc-off'), offs.length ? offs.map(o => {
+      const it = itemEl([['de', o.noeud || '—'], ['tags', fmtTags(o.tags)], ['scope', o.scope || '—'], ['', reste(o.reste_s)]],
+        o.de_moi ? [{label: 'Retirer mon offre', act: 'offer-revoke', data: {offerId: o.offer_id}}] : []);
+      if (o.de_moi) { it.firstChild.appendChild(document.createTextNode(' ')); const b = document.createElement('span'); b.className = 'badge moi'; b.textContent = 'mon offre'; it.firstChild.appendChild(b); }
+      return it;
+    }) : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune offre en cours.'})]);
+    renderList(document.getElementById('enc-mat'), mats.length ? mats.map(m => itemEl(
+      [['aide proposée par', noeudDe[m.offerer_did] || (m.offerer_did || '').slice(-8)], ['pour votre demande', (m.req_id || '').slice(-8)]],
+      [{label: 'Accepter l\'aide', act: 'match-accept', data: {offerId: m.offer_id, reqId: m.req_id, side: 'request'}}]))
+      : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Rien à accepter. Quand un nœud répond à votre demande, l\'aide proposée apparaît ici.'})]);
+    document.getElementById('enc-maj').textContent = 'mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = e.auth ? 'Session requise : reconnectez-vous pour voir les demandes et les offres du maillage.' : 'Lecture impossible (' + e.message + ').';
+  }
+}
+
 let activeMarketTab = 'offer';
 const marketRefreshers = { offer: refreshOffers, reqopen: refreshOpenRequests, matches: refreshMatches };
 function refreshActiveMarketTab() {
@@ -273,6 +345,7 @@ async function refreshDelegations() {
 }
 
 async function refresh() {
+  refreshEnCours();
   const r = await fetch('/api/v1/assist/sessions', {headers:H()});
   if (!r.ok) { document.getElementById('active').textContent = 'auth requise'; return; }
   const d = await r.json();
