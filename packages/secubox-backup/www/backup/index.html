@@ -4,590 +4,374 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Sauvegardes au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Backup Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Sauvegardes</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
-        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
-        .badge-purple { background: rgba(163,113,247,0.15); color: var(--purple); }
-        .badge-cyan { background: rgba(0,212,255,0.15); color: var(--cyan); }
-
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
-        .btn-green:hover { background: rgba(63,185,80,0.25); }
-        .btn-blue { background: rgba(88,166,255,0.15); border-color: var(--primary); color: var(--primary); }
-        .btn-blue:hover { background: rgba(88,166,255,0.25); }
-        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
-        .btn-red:hover { background: rgba(248,81,73,0.25); }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
-        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } .grid-2 { grid-template-columns: 1fr; } }
-        @media (max-width: 768px) { .grid-4 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
-
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 2rem; font-weight: bold; }
-        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-
-        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        td { font-size: 0.875rem; }
-        tr:hover { background: rgba(255,255,255,0.02); }
-
-        .status-running { color: var(--green); }
-        .status-stopped { color: var(--text-dim); }
-
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
-        .toast-success { border-color: var(--green); }
-        .toast-error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; max-width: 500px; width: 90%; }
-        .modal-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
-        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
-        .mono { font-family: monospace; font-size: 0.8rem; }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.78rem;padding:6px 13px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:32px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:28px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);white-space:pre-line;overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        .actions label{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--doux);cursor:pointer;min-height:32px}
+        .actions input[type=checkbox]{accent-color:var(--cyan);width:16px;height:16px}
+        .confirm{margin-top:10px;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+        .confirm p{margin:0;flex:1 1 220px;overflow-wrap:anywhere}
+        .etat{margin:10px 0 0;display:grid;gap:4px;font-size:.78rem;color:var(--doux)} .etat div{overflow-wrap:anywhere} .etat .att{color:var(--orange)} .etat .ok{color:var(--vert)}
+        .outils{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+        .outils input,.outils select{font:inherit;font-size:.78rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;flex:1 1 130px}
+        .outils input:focus,.outils select:focus{outline:none;border-color:var(--cyan)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .tourne{display:inline-block;width:12px;height:12px;border:2px solid var(--trait2);border-top-color:var(--cyan);border-radius:50%;animation:t 1s linear infinite;vertical-align:-2px;margin-right:6px}
+        @keyframes t{to{transform:rotate(360deg)}}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>💾 Backup Manager <span class="badge badge-blue" id="backup-count">0 backups</span></h1>
-            <button class="btn" onclick="refresh()">↻ Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+                <div><h1>Sauvegardes</h1><small>Configuration, conteneurs LXC et données de services</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">System backups, container snapshots, and configuration archives</p>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Archives présentes dans /srv/backups (configuration, conteneurs, services)."><span class="l">Sauvegardes</span><span class="v" id="tSauv">—</span><span class="s">archives</span></div>
+            <div class="tuile ok" id="cClair" title="Archives non chiffrées (secrets de /etc/secubox compris). Idéalement zéro."><span class="l">En clair</span><span class="v" id="tClair">—</span><span class="s">archives non chiffrées</span></div>
+            <div class="tuile cy" title="Conteneurs LXC trouvés dans /srv/lxc."><span class="l">Conteneurs</span><span class="v" id="tConteneurs">—</span><span class="s">LXC</span></div>
+            <div class="tuile ok" title="Conteneurs LXC à l’état RUNNING."><span class="l">En marche</span><span class="v" id="tMarche">—</span><span class="s">conteneurs</span></div>
+            <div class="tuile vi" title="Taille du dossier de sauvegardes (du -sh)."><span class="l">Stockage</span><span class="v" id="tStock">—</span><span class="s" id="sStock">utilisé</span></div>
+            <div class="tuile cy" title="Date de l’archive la plus récente, tous types confondus."><span class="l">Dernière</span><span class="v" id="tDerniere" style="font-size:1.05rem">—</span><span class="s">sauvegarde</span></div>
+        </section>
 
-        <!-- Stats -->
-        <div class="grid-4" id="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--primary);" id="stat-backups">0</div>
-                <div class="stat-label">Backups</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--cyan);" id="stat-containers">0</div>
-                <div class="stat-label">Containers</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--green);" id="stat-running">0</div>
-                <div class="stat-label">Running</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--purple);" id="stat-storage">0</div>
-                <div class="stat-label">Storage Used</div>
-            </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="card">
-            <div class="card-title">Quick Actions</div>
+        <section class="pan"><h3>Lancer une sauvegarde <i>chiffrée par défaut</i></h3>
             <div class="actions">
-                <button class="btn btn-green" onclick="createBackup('full')">📦 Full Backup</button>
-                <button class="btn btn-blue" onclick="createBackup('config')">⚙️ Config Only</button>
-                <button class="btn" onclick="createBackup('containers')">🐳 Containers Only</button>
-                <button class="btn btn-red" onclick="cleanupBackups()">🗑️ Cleanup Old</button>
-                <label class="btn" style="cursor:pointer;" title="Chiffré avec la clé publique de la box (recommandé). Décochée : archive en clair, y compris les secrets de /etc/secubox.">
-                    <input type="checkbox" id="chiffrer" checked> 🔒 Chiffrer
-                </label>
+                <button class="btn prim" type="button" id="bFull">Complète</button>
+                <button class="btn" type="button" id="bConfig">Configuration seule</button>
+                <button class="btn" type="button" id="bConteneurs">Conteneurs seuls</button>
+                <button class="btn danger" type="button" id="bNettoyer">Nettoyer les anciennes</button>
+                <label title="Chiffrée avec la clé publique de la box (recommandé). Décochée : archive en clair, y compris les secrets de /etc/secubox."><input type="checkbox" id="chiffrer" checked> Chiffrer</label>
             </div>
-            <div id="encryption-state" style="margin-top:12px; font-size:13px; color: var(--text-dim);"></div>
+            <div class="confirm" id="confirm" role="alertdialog" aria-live="assertive" hidden>
+                <p id="confirmTexte"></p>
+                <button class="btn danger" type="button" id="confirmOui">Confirmer</button>
+                <button class="btn" type="button" id="confirmNon">Annuler</button>
+            </div>
+            <div class="retour" id="retour" hidden></div>
+            <div class="etat" id="chiffrement"></div>
+            <p class="note">« Nettoyer » supprime, sans retour arrière, toutes les archives sauf les 5 plus récentes de chaque type. Sauvegarder un conteneur en marche l’arrête le temps de l’archive, puis le relance.</p>
+        </section>
+
+        <div class="grille">
+            <section class="pan"><h3>Conteneurs LXC <i id="nCont"></i></h3>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>État</th><th>Taille</th><th>Sauvegardes</th><th>Action</th></tr></thead><tbody id="bCont"></tbody></table></div></section>
+            <section class="pan"><h3>Archives <i id="nHist"></i></h3>
+                <div class="outils"><input id="recherche" type="search" placeholder="Rechercher un fichier" aria-label="Rechercher un fichier">
+                    <select id="filtreType" aria-label="Filtrer par type"><option value="">Tous les types</option><option value="config">Configuration</option><option value="containers">Conteneurs</option><option value="services">Services</option></select></div>
+                <div class="tab"><table><thead><tr><th>Fichier</th><th>Type</th><th>Taille</th><th>Date</th><th>Restauration</th></tr></thead><tbody id="bHist"></tbody></table></div>
+                <p><button class="btn sm" type="button" id="tout" hidden></button></p>
+                <div class="retour" id="restaure" hidden></div>
+                <p class="note">La restauration se fait en root, en ligne de commande, avec la clé privée de sauvegarde (jamais lisible par ce panneau) : la page ne fait que fournir la commande.</p></section>
         </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- Two Column Layout -->
-        <div class="grid-2">
-            <!-- Containers -->
-            <div class="card">
-                <div class="card-title">
-                    <span>LXC Containers</span>
-                    <span class="badge badge-cyan" id="container-badge">0 containers</span>
-                </div>
-                <div id="containers-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-
-            <!-- Backup History -->
-            <div class="card">
-                <div class="card-title">
-                    <span>Backup History</span>
-                    <span class="badge badge-purple" id="history-badge">0 files</span>
-                </div>
-                <div id="backups-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <div id="modal" class="modal" style="display: none;"></div>
-    <div id="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/backup';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const LIMITE = 15;
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(path, opts = {}) {
+        let STATUT = null, SAUVEGARDES = null, CONTENEURS = null, CHIFFREMENT = null, SESSION_OK = true;
+        let CONFIRM = null;       // { texte, fn } : confirmation en cours dans la page, jamais de dialogue natif
+        let OCCUPE = false;       // une écriture est en cours
+        let TOUT = false;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch (e) { console.error(e); return null; }
+                const opts = { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && (res.data.detail || res.data.output)) ? String(res.data.detail || res.data.output) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function quand(ts) {
+            if (!ts) return '—';            // 0 = jamais, pas 1970
+            const d = new Date(ts * 1000);
+            return isNaN(d) ? '—' : d.toLocaleString('fr-FR');
+        }
+        function taille(s) { return (s === null || s === undefined || s === '' || s === '0') ? '—' : String(s); }   // l'API rend "0" quand du échoue
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+
+        function demoData() {
+            const n = Math.floor(Date.now() / 1000);
+            STATUT = { storage_path: '/srv/backups', storage_used: '2.4G', last_backup: { config: n - 3600, containers: n - 90000, services: 0 }, container_count: 3 };
+            SAUVEGARDES = { backups: [
+                { file: 'config-20261013-020001.tar.gz.age', type: 'config', size: '1.2M', timestamp: n - 3600, encrypted: true },
+                { file: 'nextcloud-20261012-020000.tar.gz.age', type: 'containers', size: '1.1G', timestamp: n - 90000, encrypted: true },
+                { file: 'gitea-20261012-020000.tar.gz.age', type: 'containers', size: '640M', timestamp: n - 90100, encrypted: true },
+                { file: 'config-20261001-020001.tar.gz', type: 'config', size: '1.1M', timestamp: n - 1000000, encrypted: false }] };
+            CONTENEURS = { containers: [
+                { name: 'nextcloud', state: 'running', size: '3.2G', backups: 2 },
+                { name: 'gitea', state: 'running', size: '910M', backups: 1 },
+                { name: 'courrier-test', state: 'stopped', size: '420M', backups: 0 }] };
+            CHIFFREMENT = { default_encrypt: true, recipient_configured: true, recipient: 'age1qqqqqqqq…zzzzzz', clear_archives: 1, clear_names: ['config-20261001-020001.tar.gz'], key_note: 'La clé privée (root, /etc/secubox/secrets/backup-age.key) doit être copiée HORS de la box.' };
         }
 
-        function showToast(msg, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
-            setTimeout(() => toast.innerHTML = '', 3000);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/list?type=all'), lire('/containers'), lire('/encryption')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0); SAUVEGARDES = val(1); CONTENEURS = val(2); CHIFFREMENT = val(3);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire les sauvegardes (service arrêté ou injoignable).';
+            rendre();
         }
 
-        function showModal(title, content) {
-            document.getElementById('modal').innerHTML = `
-                <div class="modal-content">
-                    <div class="modal-title">${title}</div>
-                    <div>${content}</div>
-                </div>
-            `;
-            document.getElementById('modal').style.display = 'flex';
+        function liste() { return SAUVEGARDES && Array.isArray(SAUVEGARDES.backups) ? SAUVEGARDES.backups : null; }
+        function conteneurs() { return CONTENEURS && Array.isArray(CONTENEURS.containers) ? CONTENEURS.containers : null; }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat'), L = liste(), C = conteneurs(), E = CHIFFREMENT;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUT && !L && !C) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (E && !E.recipient_configured) { etat.className = 'actif att'; etat.textContent = 'AUCUNE CLÉ DE CHIFFREMENT'; }
+            else if (E && E.clear_archives > 0) { etat.className = 'actif att'; etat.textContent = 'ARCHIVES EN CLAIR'; }
+            else { etat.className = 'actif'; etat.textContent = 'OPÉRATIONNEL'; }
+            $('tSauv').textContent = L ? L.length : '—';
+            $('tClair').textContent = E ? E.clear_archives : '—';
+            $('cClair').className = 'tuile ' + (E && E.clear_archives > 0 ? 'att' : 'ok');
+            $('tConteneurs').textContent = STATUT && STATUT.container_count != null ? STATUT.container_count : (C ? C.length : '—');
+            $('tMarche').textContent = C ? C.filter(c => c.state === 'running').length : '—';
+            $('tStock').textContent = STATUT ? taille(STATUT.storage_used) : '—';
+            const dates = STATUT && STATUT.last_backup ? Object.values(STATUT.last_backup).filter(x => x > 0) : [];
+            $('tDerniere').textContent = STATUT ? (dates.length ? quand(Math.max.apply(null, dates)) : 'aucune') : '—';
+            rendreChiffrement(); rendreConteneurs(); rendreArchives();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        function hideModal() {
-            document.getElementById('modal').style.display = 'none';
+        function rendreChiffrement() {
+            const z = $('chiffrement'); z.replaceChildren();
+            const E = CHIFFREMENT; if (!E) return;
+            const ligne = (cls, ...morceaux) => { const d = el('div', cls); morceaux.forEach(m => d.appendChild(typeof m === 'string' ? document.createTextNode(m) : m)); z.appendChild(d); };
+            if (E.recipient_configured) ligne('ok', 'Chiffrement actif — destinataire ', el('span', 'mono', tiret(E.recipient)));
+            else ligne('att', 'Aucun destinataire de chiffrement : les sauvegardes échoueront. En root : ', el('span', 'mono', 'backupctl init-key'));
+            if (E.clear_archives > 0) ligne('att', E.clear_archives + ' archive(s) encore en clair (secrets compris). En root : ', el('span', 'mono', 'backupctl chiffrer-existantes --supprimer-clair'));
+            if (E.key_note) ligne('', String(E.key_note));
         }
 
-        function formatDate(ts) {
-            if (!ts || ts === 0) return '-';
-            return new Date(ts * 1000).toLocaleString();
-        }
-
-        let statusData = {};
-        let backupsData = [];
-        let containersData = [];
-
-        async function loadStatus() {
-            statusData = await api('/status') || {};
-            document.getElementById('stat-storage').textContent = statusData.storage_used || '0';
-            document.getElementById('stat-containers').textContent = statusData.container_count || 0;
-        }
-
-        // État du chiffrement (#1903) : destinataire, archives encore en clair, rappel de la clé privée.
-        async function loadEncryption() {
-            const e = await api('/encryption');
-            const el = document.getElementById('encryption-state');
-            if (!e) { el.textContent = ''; return; }
-            const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-            const lignes = [];
-            lignes.push(e.recipient_configured
-                ? '🔒 Chiffrement actif — destinataire <span class="mono">' + esc(e.recipient) + '</span>'
-                : '⚠️ <b>Aucun destinataire de chiffrement</b> : les sauvegardes échoueront. En root : <span class="mono">backupctl init-key</span>');
-            if (e.clear_archives > 0) {
-                lignes.push('⚠️ ' + e.clear_archives + ' archive(s) encore <b>en clair</b> (secrets compris). En root : <span class="mono">backupctl chiffrer-existantes --supprimer-clair</span>');
-            }
-            lignes.push('🔑 ' + esc(e.key_note));
-            el.innerHTML = lignes.join('<br>');
-        }
-
-        function restaurerInfo(file) {
-            const cmd = 'backupctl restaurer ' + file;
-            showModal('Restaurer ' + file, `
-                <p>Une archive chiffrée se restaure <b>en root</b>, avec la clé privée de sauvegarde (jamais lisible par ce panneau).</p>
-                <p>Contenu, sans rien extraire :<br><span class="mono">backupctl restaurer --liste ${file}</span></p>
-                <p>Restauration :<br><span class="mono">${cmd}</span></p>
-                <p><button class="btn btn-blue" onclick="navigator.clipboard.writeText('${cmd}').then(()=>showToast('Commande copiée'))">Copier la commande</button>
-                   <button class="btn" onclick="hideModal()">Fermer</button></p>`);
-        }
-
-        async function loadBackups() {
-            const data = await api('/list?type=all') || {};
-            backupsData = data.backups || [];
-
-            document.getElementById('stat-backups').textContent = backupsData.length;
-            document.getElementById('backup-count').textContent = backupsData.length + ' backups';
-            document.getElementById('history-badge').textContent = backupsData.length + ' files';
-
-            if (backupsData.length === 0) {
-                document.getElementById('backups-table').innerHTML = '<div class="empty">No backups found</div>';
-                return;
-            }
-
-            const typeColors = { config: 'blue', containers: 'cyan', services: 'purple' };
-            const rows = backupsData.slice(0, 15).map(b => `
-                <tr>
-                    <td class="mono">${b.encrypted ? '🔒' : '⚠️'} ${b.file}</td>
-                    <td><span class="badge badge-${typeColors[b.type] || 'blue'}">${b.type}</span></td>
-                    <td style="color: var(--text-dim);">${b.size}</td>
-                    <td style="color: var(--text-dim);">${formatDate(b.timestamp)}</td>
-                    <td>${b.encrypted ? `<button class="btn btn-sm" onclick="restaurerInfo('${b.file}')">Restaurer</button>` : ''}</td>
-                </tr>
-            `).join('');
-
-            document.getElementById('backups-table').innerHTML = `
-                <table>
-                    <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Date</th><th></th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        async function loadContainers() {
-            const data = await api('/containers') || {};
-            containersData = data.containers || [];
-
-            const running = containersData.filter(c => c.state === 'running').length;
-            document.getElementById('stat-running').textContent = running;
-            document.getElementById('container-badge').textContent = containersData.length + ' containers';
-
-            if (containersData.length === 0) {
-                document.getElementById('containers-table').innerHTML = '<div class="empty">No LXC containers found</div>';
-                return;
-            }
-
-            const rows = containersData.map(c => `
-                <tr>
-                    <td style="font-weight: 600;">${c.name}</td>
-                    <td class="status-${c.state}">${c.state === 'running' ? '● Running' : '○ Stopped'}</td>
-                    <td style="color: var(--text-dim);">${c.size}</td>
-                    <td style="color: var(--text-dim);">${c.backups}</td>
-                    <td><button class="btn btn-blue btn-sm" onclick="backupContainer('${c.name}')">Backup</button></td>
-                </tr>
-            `).join('');
-
-            document.getElementById('containers-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>State</th><th>Size</th><th>Backups</th><th>Actions</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        function veutChiffrer() {
-            const c = document.getElementById('chiffrer');
-            const oui = !c || c.checked;
-            if (!oui && !confirm("Sauvegarde EN CLAIR : elle contiendra /etc/secubox (secrets compris). Continuer ?")) return null;
-            return oui;
-        }
-
-        async function createBackup(type) {
-            const encrypt = veutChiffrer();
-            if (encrypt === null) return;
-            showModal('Creating Backup', `<p><span class="spinner"></span> Creating ${type} backup...</p>`);
-
-            const res = await api('/create', {
-                method: 'POST',
-                body: JSON.stringify({ type, encrypt })
+        function rendreConteneurs() {
+            const tb = $('bCont'); tb.replaceChildren();
+            const C = conteneurs();
+            $('nCont').textContent = C && C.length ? C.length + ' conteneur' + (C.length > 1 ? 's' : '') : '';
+            if (!C || !C.length) { const tr = el('tr'), td = el('td', 'vide', !SESSION_OK || !C ? '—' : 'Aucun conteneur LXC'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            C.forEach(c => {
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(c.name)));
+                const e = el('td'); e.appendChild(c.state === 'running' ? pastille('ok', 'EN MARCHE') : pastille('', 'ARRÊTÉ')); tr.appendChild(e);
+                tr.appendChild(el('td', '', taille(c.size))); tr.appendChild(el('td', '', c.backups != null ? c.backups : '—'));
+                const a = el('td', 'act'); const b = el('button', 'btn sm prim', 'Sauvegarder'); b.type = 'button'; b.disabled = OCCUPE;
+                b.addEventListener('click', () => sauverConteneur(c));
+                a.appendChild(b); tr.appendChild(a); tb.appendChild(tr);
             });
-
-            hideModal();
-
-            if (res && res.code === 0) {
-                showToast('Backup created successfully');
-                refresh();
-            } else {
-                showToast(res?.output || 'Backup failed', 'error');
-            }
         }
 
-        async function backupContainer(name) {
-            const encrypt = veutChiffrer();
-            if (encrypt === null) return;
-            showModal('Backing Up Container', `<p><span class="spinner"></span> Backing up ${name}...</p>`);
-
-            const res = await api('/container/backup', {
-                method: 'POST',
-                body: JSON.stringify({ name, encrypt })
+        function commande(f) { return 'backupctl restaurer ' + (/^[\w.+-]+$/.test(f) ? f : "'" + f.replace(/'/g, "'\\''") + "'"); }
+        function rendreArchives() {
+            const tb = $('bHist'); tb.replaceChildren();
+            const L = liste(); const q = $('recherche').value.trim().toLowerCase(), ft = $('filtreType').value;
+            const vues = (L || []).filter(b => (!ft || b.type === ft) && (!q || String(b.file).toLowerCase().includes(q)));
+            $('nHist').textContent = L ? vues.length + ' / ' + L.length + ' fichier' + (L.length > 1 ? 's' : '') : '';
+            const tout = $('tout'); tout.hidden = vues.length <= LIMITE;
+            tout.textContent = TOUT ? 'Réduire à ' + LIMITE : 'Afficher les ' + vues.length;
+            if (!vues.length) { const tr = el('tr'), td = el('td', 'vide', !L ? '—' : (L.length ? 'Aucune archive ne correspond' : 'Aucune sauvegarde')); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            const couleur = { config: 'cy', containers: 'vi', services: 'att' };
+            const nom = { config: 'config', containers: 'conteneurs', services: 'services' };
+            (TOUT ? vues : vues.slice(0, LIMITE)).forEach(b => {
+                const tr = el('tr');
+                const f = el('td', 'mono'); f.appendChild(pastille(b.encrypted ? 'ok' : 'att', b.encrypted ? 'CHIFFRÉE' : 'EN CLAIR', b.encrypted ? 'Chiffrée avec la clé publique de la box' : 'Archive non chiffrée : secrets lisibles')); f.appendChild(document.createTextNode(' ' + tiret(b.file))); tr.appendChild(f);
+                const t = el('td'); t.appendChild(pastille(couleur[b.type] || '', nom[b.type] || tiret(b.type))); tr.appendChild(t);
+                tr.appendChild(el('td', '', taille(b.size))); tr.appendChild(el('td', '', quand(b.timestamp)));
+                const a = el('td', 'act');
+                if (b.encrypted) { const r = el('button', 'btn sm', 'Commande'); r.type = 'button'; r.addEventListener('click', () => montrerRestauration(b.file)); a.appendChild(r); }
+                tr.appendChild(a); tb.appendChild(tr);
             });
-
-            hideModal();
-
-            if (res && res.code === 0) {
-                showToast('Container backup created');
-                refresh();
-            } else {
-                showToast(res?.output || 'Backup failed', 'error');
-            }
         }
 
-        async function cleanupBackups() {
-            if (!confirm('Remove old backups? (keeps last 5 per type)')) return;
-
-            const res = await api('/cleanup', { method: 'POST' });
-
-            if (res && res.code === 0) {
-                showToast(`Removed ${res.removed?.length || 0} old backups`);
-                refresh();
-            } else {
-                showToast('Cleanup failed', 'error');
-            }
+        // Aucune restauration depuis la page (comme avant) : on fournit la commande à lancer en root.
+        function montrerRestauration(fichier) {
+            const z = $('restaure'); z.replaceChildren(); z.hidden = false; z.className = 'retour';
+            z.appendChild(document.createTextNode('Contenu, sans rien extraire : '));
+            z.appendChild(el('span', 'mono', commande(fichier).replace('restaurer', 'restaurer --liste')));
+            z.appendChild(document.createElement('br'));
+            z.appendChild(document.createTextNode('Restauration : ')); z.appendChild(el('span', 'mono', commande(fichier))); z.appendChild(document.createTextNode(' '));
+            const c = el('button', 'btn sm', 'Copier'); c.type = 'button';
+            c.addEventListener('click', () => {
+                const p = navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(commande(fichier)) : Promise.reject();
+                p.then(() => toast('Commande copiée'), () => toast('Copie impossible : sélectionnez la commande'));
+            });
+            z.appendChild(c); annoncer();
         }
 
-        async function refresh() {
-            await Promise.all([loadStatus(), loadBackups(), loadContainers(), loadEncryption()]);
+        // ----- Confirmation intégrée -----
+        function demander(texte, fn) { CONFIRM = { texte, fn }; $('confirmTexte').textContent = texte; $('confirm').hidden = false; annoncer(); }
+        function fermer() { CONFIRM = null; $('confirm').hidden = true; annoncer(); }
+        $('confirmOui').addEventListener('click', () => { const c = CONFIRM; fermer(); if (c) c.fn(); });
+        $('confirmNon').addEventListener('click', fermer);
+
+        function occupe(oui, msg) {
+            OCCUPE = oui;
+            ['bFull', 'bConfig', 'bConteneurs', 'bNettoyer'].forEach(i => { $(i).disabled = oui; });
+            document.querySelectorAll('#bCont button').forEach(b => { b.disabled = oui; });
+            if (oui) { const r = $('retour'); r.hidden = false; r.className = 'retour'; r.replaceChildren(el('span', 'tourne'), document.createTextNode(msg)); annoncer(); }
         }
+        const CLAIR = 'Sauvegarde EN CLAIR : elle contiendra /etc/secubox (secrets compris). Continuer ?';
+        function veutChiffrer() { return $('chiffrer').checked; }
 
-        // Close modal on click outside
-        document.getElementById('modal').addEventListener('click', (e) => {
-            if (e.target.id === 'modal') hideModal();
-        });
+        function lancer(type) {
+            const encrypt = veutChiffrer();
+            const go = () => creer(type, encrypt);
+            if (!encrypt) demander(CLAIR, go); else go();
+        }
+        async function creer(type, encrypt) {
+            if (DEMO) { retour(false, 'Démonstration : action inerte.'); return; }
+            occupe(true, 'Sauvegarde ' + type + ' en cours…');
+            const res = await ecrire('/create', { type, encrypt });
+            occupe(false);
+            if (res.ok && res.data && res.data.code === 0) { retour(true, res.data.output || 'Sauvegarde créée.'); charger(); }
+            else retour(false, 'Échec : ' + detail(res));
+            rendreConteneurs();
+        }
+        function sauverConteneur(c) {
+            const encrypt = veutChiffrer();
+            const go = () => sauverConteneurOk(c.name, encrypt);
+            if (!encrypt) demander(CLAIR, go);
+            else if (c.state === 'running') demander('Le conteneur « ' + c.name + ' » est en marche : il sera arrêté le temps de l’archive, puis relancé. Continuer ?', go);
+            else go();
+        }
+        async function sauverConteneurOk(name, encrypt) {
+            if (DEMO) { retour(false, 'Démonstration : action inerte.'); return; }
+            occupe(true, 'Sauvegarde du conteneur ' + name + ' en cours…');
+            const res = await ecrire('/container/backup', { name, encrypt });
+            occupe(false);
+            if (res.ok && res.data && res.data.code === 0) { retour(true, res.data.output || 'Sauvegarde du conteneur créée.'); charger(); }
+            else retour(false, 'Échec : ' + detail(res));
+            rendreConteneurs();
+        }
+        async function nettoyer() {
+            if (DEMO) { retour(false, 'Démonstration : action inerte.'); return; }
+            occupe(true, 'Nettoyage en cours…');
+            const res = await ecrire('/cleanup');
+            occupe(false);
+            if (res.ok && res.data && res.data.code === 0) { const n = (res.data.removed || []).length; retour(true, n + ' ancienne(s) sauvegarde(s) supprimée(s).'); charger(); }
+            else retour(false, 'Nettoyage impossible : ' + detail(res));
+            rendreConteneurs();
+        }
+        $('bFull').addEventListener('click', () => lancer('full'));
+        $('bConfig').addEventListener('click', () => lancer('config'));
+        $('bConteneurs').addEventListener('click', () => lancer('containers'));
+        $('bNettoyer').addEventListener('click', () => demander('Supprimer, sans retour arrière, toutes les archives sauf les 5 plus récentes de chaque type (configuration, conteneurs, services) ?', nettoyer));
+        $('recherche').addEventListener('input', rendreArchives);
+        $('filtreType').addEventListener('change', rendreArchives);
+        $('tout').addEventListener('click', () => { TOUT = !TOUT; rendreArchives(); annoncer(); });
+        $('rafraichir').addEventListener('click', charger);
 
-        refresh();
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'backup' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, pendant une écriture, une confirmation ou une saisie.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || OCCUPE || document.activeElement === $('recherche')) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

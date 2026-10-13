@@ -227,6 +227,7 @@ def test_liste_marque_les_archives_chiffrees(tmp_path, monkeypatch):
 def test_interface_a_la_case_et_l_etat_du_chiffrement():
     html = (API.parent / "www" / "backup" / "index.html").read_text()
     assert 'id="chiffrer" checked' in html                       # cochée par défaut
-    assert "JSON.stringify({ type, encrypt })" in html and "JSON.stringify({ name, encrypt })" in html
-    assert "loadEncryption()" in html and "backupctl restaurer" in html
-    assert "SANS" not in html or "EN CLAIR" in html              # l'opt-out demande une confirmation explicite
+    assert "{ type, encrypt }" in html and "{ name, encrypt }" in html
+    assert "lire('/encryption')" in html and "backupctl restaurer" in html
+    assert "EN CLAIR" in html and "demander(CLAIR" in html       # l'opt-out demande une confirmation explicite, dans la page
+    assert "confirm(" not in html
