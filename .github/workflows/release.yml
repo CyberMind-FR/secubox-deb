@@ -68,6 +68,7 @@ jobs:
       # 40 paquets non configures, dpkg incapable d'ecrire son propre fichier
       # d'etat.
       suite: ${{ github.event.inputs.suite || 'trixie' }}
+      publier: 'non'
     secrets: inherit
 
   # Build Live USB images (all platforms) — partial-release resilient.
@@ -78,6 +79,7 @@ jobs:
     with:
       platform: all
       suite: ${{ github.event.inputs.suite || 'trixie' }}
+      publier: 'non'
     secrets: inherit
 
   # Publish to APT repository — partial-release resilient.

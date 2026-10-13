@@ -16,6 +16,11 @@ on:
         description: 'Suite Debian (bookworm = cible actuelle, trixie = portage)'
         type: string
         default: 'trixie'
+      publier:
+        description: "'non' = ne pas publier ici (release.yml publie en un seul job, #2610)"
+        required: false
+        type: string
+        default: 'oui'
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -299,7 +304,8 @@ jobs:
     # PUBLIER CE QUI A RÉUSSI (#1491) : un échec d'une seule plateforme
     # (MOCHAbin, récurrent) sautait la release, et le live amd64 validé n'était
     # jamais publié. Les étapes ignorent déjà les fichiers absents.
-    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.build-live-usb.result != 'cancelled' }}
+    # UN SEUL PUBLIEUR (#2610) : voir build-image.yml.
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.build-live-usb.result != 'cancelled' && inputs.publier != 'non' }}
 
     steps:
       - name: Download all artifacts
