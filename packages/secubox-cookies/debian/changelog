@@ -1,3 +1,28 @@
+secubox-cookies (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /cookies/ refaite au profil Aurora (ref #2571) : fichier autonome (plus de
+    police Google ni de crt-engine), six onglets (Aperçu, Cookies, Traqueurs,
+    Politiques, Violations, Réglages), ?demo=1 (données fictives, actions inertes),
+    ?embed=1, hauteur annoncée à l'hôte, bandeau « session requise ».
+  * Bogues de l'ancienne page corrigés : la colonne « Expire » affichait toujours
+    « Session » (l'ingest ne fournit pas d'expiration : on montre dernière vue et
+    occurrences) ; « Détection des tiers » affichait toujours « Actif » (/status ne
+    porte pas ce réglage : lu dans /stats) ; un 401 redirigeait brutalement vers
+    /login.html ; les noms de cookies, hôtes et motifs (contrôlés par les sites
+    observés) étaient injectés en HTML et dans des onclick, donc injectables ;
+    confirm() natif remplacé par une confirmation dans la page ; mesure absente
+    affichée 0 au lieu de « — » ; identifiant de politique non encodé dans l'URL.
+  * Actions d'écriture inchangées (mêmes routes, méthodes et corps) : POST /config,
+    POST /scan, POST /tracker/add, DELETE /tracker/<nom>, POST /policy,
+    DELETE /policy/<id>.
+  * Non repris : l'API ne fournit ni valeur de cookie, ni expiration, ni domaine
+    du cookie (« tiers » est déduit des traqueurs connus), ni historique ; aucune
+    courbe n'est donc tracée. La liste des cookies est plafonnée à 100 par l'API.
+    L'analyse d'un hôte relit les cookies déjà observés, sans navigation. Aucun
+    bouton ne vide de liste apprise.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:45:00 +0200
+
 secubox-cookies (1.3.3-1~bookworm1) bookworm; urgency=medium
 
   * Identifiants dérivés : les hachages hérités (MD5/SHA-1) passent par
