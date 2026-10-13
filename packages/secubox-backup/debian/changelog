@@ -1,3 +1,28 @@
+secubox-backup (2.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /cloner/ (composant cloner) refaite au profil Aurora (#2571) : fichier autonome, tuiles (sauvegardes,
+    taille cumulee, disque utilise, espace libre, activite, derniere sauvegarde), panneaux etat du service et
+    disque, tableau des sauvegardes, detail avec contenu, ?demo=1 (donnees fictives, actions inertes), ?embed=1,
+    bandeau « session requise » sur 401/403, mesure absente affichee « — ».
+  * Memes appels d'ecriture qu'avant : POST /backups {name, description, compress}, DELETE /backups/<id>,
+    POST /backups/<id>/restore {backup_id}, POST /cleanup?keep=N. Confirmation integree a la page (plus de
+    confirm(), alert() ni prompt()) pour la suppression, la restauration (cible / nommee, fichiers ecrases) et le
+    nettoyage ; une creation sous un nom deja pris (ecrasement de l'archive) demande aussi confirmation.
+  * Bogues corriges : jeton sbx_token jamais envoye (401 sur toute l'API) ; reponses lues sans verifier le
+    statut (session refusee affichee « undefined » ou « Idle ») ; identifiants d'archives injectes dans innerHTML
+    et dans des onclick (injection possible) ; identifiants non encodes dans les URL ; suppression et nettoyage
+    annonces reussis meme en cas d'echec (404/401 ignores) ; nettoyage avec « 0 » ou une valeur non numerique
+    accepte (supprimait toutes les archives) : entier >= 1 exige ; « derniere sauvegarde » affichait un nom de
+    fichier au lieu de l'heure, et la derniere erreur du service n'etait pas montree ; chemins inclus affiches
+    sur une seule ligne ; fenetre de detail fermee avant le resultat d'une suppression.
+  * Nouveau en lecture seulement (donnees deja fournies par l'API) : planification enregistree, contenu des 100
+    premieres entrees d'une archive.
+  * Non repris : fenetres modales (remplacees par des panneaux integres) ; les routes /config, /schedule (PUT),
+    /paths et le mode dry_run de la restauration n'ont jamais eu d'action dans l'ancienne page et n'en ont pas
+    davantage. La sauvegarde est synchrone cote API : la page n'affiche pas de progression, seulement « en cours ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-backup (2.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /backup/ refaite au profil Aurora (#2556) : fichier autonome, tuiles (sauvegardes, archives en clair,
