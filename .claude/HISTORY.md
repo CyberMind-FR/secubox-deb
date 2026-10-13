@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — assist 0.2.13 : panneau « En cours » (demandes, offres, aides à accepter) (ref #2542)
+
+Après la synchro rapide (#2540), « gk1 ne voit pas l'offre de gk2 » : l'API assist rendait les bonnes données des deux côtés (vérifié sur le vrai journal), mais la page les cachait dans des onglets et une carte vide quand l'autorisation manquait. Panneau « En cours » toujours visible, gestes par ligne, parcours expliqué (Répondre → Accepter l'aide), `noeud`/`de_moi`/`reste_s` dans `/offers` et `/requests/open`. Tests `test_en_cours_2542.py` et `test_panneau_en_cours_2542.py`.
+
 ## 2026-10-13 — annuaire 0.11.2 et assist 0.2.12 : demandes et offres synchronisées en ~20 s (ref #2540)
 
 « Demande et offre pas sync » sur `/assist/` : la réplication du journal marchait mais était lente (journal entier de 3 Mo toutes les 300 s pour une cinquantaine d'entrées d'assistance ; premier passage d'une RPi > 7 min) et muette quand elle échouait (`except Exception: pass`). `/log/export?ops=assist_`, voie rapide de 20 s qui ne tire que l'assistance, échecs et ingestions journalisés, `POST /sync/now` et bouton « Synchroniser » dans `/assist/`. Tests `test_assist_sync_2540.py` et `test_bouton_synchro_2540.py`. Le journal entier garde ses 300 s ; une synchro incrémentale (curseur) reste à faire.
