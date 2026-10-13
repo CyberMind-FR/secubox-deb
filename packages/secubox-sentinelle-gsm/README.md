@@ -11,7 +11,7 @@ The dataclass that flows from the GSMTAP parser into the scoring engine has NO f
 
 v0.1.0 ships the privacy framework + 8/8 invariant tests + service plumbing. The GSMTAP listener + the 8 scoring heuristics + gr-gsm orchestration land in v0.2 once an RTL-SDR is connected.
 
-Paquet Debian : version `0.4.5-1~bookworm1`, architecture `arm64`.
+Paquet Debian : version `0.5.0-1~bookworm1`, architecture `arm64`.
 
 ## Contenu
 

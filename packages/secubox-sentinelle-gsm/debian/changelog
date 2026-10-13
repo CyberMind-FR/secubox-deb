@@ -1,3 +1,13 @@
+secubox-sentinelle-gsm (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refonte de la page /sentinelle/ au profil Aurora (ref #2597) : page autonome (CSS et JS en ligne, plus de polices Google ni de fichiers sentinelle.css / sentinelle.js ni du skin hybrid-dark), tuiles (alertes, score maximal, dernière alerte, téléphones de confiance, état du balayage GSM et de la FM), cinq onglets (Alertes, Téléphones de confiance, Balayage GSM, Radio FM / RDS, Référence et score), ?demo=1 (données fictives, actions inertes), ?embed=1 (sans menu), bandeau « session requise » sur 401/403, hauteur annoncée à l'hôte (sbxVue, onglet sentinelle), interface en français.
+  * Corrigé : aucune lecture n'envoyait le jeton (sbx_token) en Authorization, seul le cookie de session passait ; la clé de bip (sgsm.beep.muted) était lue sans garde (localStorage peut lever) ; la suppression d'un téléphone de confiance passait par confirm(), ignoré par le navigateur du viewer (aucune suppression possible) : confirmation intégrée à la page, de même pour l'arrêt du balayage, l'apprentissage de la référence et l'application des scores ; un détail d'erreur non textuel (422) s'affichait « [object Object] » ; les PPM / gain FM non numériques partaient en null ; l'écouteur de la grille des heuristiques était ajouté à chaque rendu ; l'aide donnait 925,4 MHz pour l'ARFCN 975 alors que c'est l'ARFCN 976.
+  * Appels d'écriture inchangés (routes, méthodes, corps) : POST /trusted, DELETE /trusted/{id}, POST /alerts/test, POST /scan/start, POST /scan/stop, POST /baseline/learn, POST /scoring/thresholds, POST /rds/start, /rds/stop, /rds/sweep, /rds/sweep/jobs/{id}/cancel.
+  * Non repris : le flux temps réel des alertes (SSE /alerts/stream) et le journal du service en direct (SSE /journal/stream), un EventSource ne pouvant pas porter le jeton : les alertes sont relues toutes les 15 s ; les notifications de bureau du navigateur ; l'auto-défilement du journal. Le bip sonore à l'arrivée d'une nouvelle alerte est conservé. Les IMSI ne sont jamais affichés (identifiant de téléphone tronqué à 8 caractères, libellé de l'opérateur).
+  * Tests : test statique et tests navigateur de la page (test_sentinelle_aurora_2597.py).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-sentinelle-gsm (0.4.6-1~bookworm1) bookworm; urgency=medium
 
   * Architecture: all. Le module est du Python pur (capteur RTL-SDR passif) : l'avoir limite a arm64 le rendait introuvable pour secubox-full sur x64 et en VM (image vm-x64 full refusee, alpha 9) (ref #1997).
