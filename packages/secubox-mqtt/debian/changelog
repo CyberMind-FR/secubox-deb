@@ -1,3 +1,13 @@
+secubox-mqtt (2.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /mqtt/ refaite au profil Aurora (#2597) : tuiles (etat global, conteneur, courtier, sonde authentifiee, regles d'acces), tableaux des composants et des regles ACL, ?demo=1 (donnees fictives RFC 5737, bandeau orange), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet mqtt).
+  * Corrige l'ancienne page, copie de la page Lyrion : elle appelait /api/v1/lyrion/* (aucune donnee MQTT), encadrait un tableau de bord Lyrion, lisait mal /access (champ url inexistant, l'API renvoie user/mode/topic/scope), construisait du HTML par innerHTML a partir de la reponse et envoyait « Bearer null » sans jeton.
+  * Lecture seule comme avant : aucune action d'ecriture (l'ancienne page n'en avait pas).
+  * Pas repris : le cadre Lyrion et le lien « native UI » ; les noms de comptes ACL ne sont volontairement plus affiches (aucun identifiant de courtier), seuls droit, motif de topic et portee le sont. L'API ne fournit ni clients connectes, ni debit, ni topics actifs : omis, jamais inventes.
+  * Tests statiques et navigateur (packages/secubox-mqtt/tests).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:30:00 +0200
+
 secubox-mqtt (2.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-zigbee (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
