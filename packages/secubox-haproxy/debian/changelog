@@ -1,3 +1,13 @@
+secubox-haproxy (1.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /exposure/ (composant exposure) refaite au profil Aurora (ref #2584) : page autonome, sans police ni script externes (la page chargeait Google Fonts et le moteur CRT), tuiles (services a l'ecoute, sur toutes les interfaces, services caches Tor, backends SSL, services emancipes), panneaux Emancipes / Tor / Ecoute / Backends SSL / Exposition par vhost, ?demo=1 (donnees fictives RFC 5737, actions inertes), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet exposure).
+  * Bogues de l'ancienne page corriges : donnees d'API inserees dans innerHTML et dans des gestionnaires onclick (injection par un nom de service) ; confirm() natif ignore par le navigateur du viewer, remplace par une confirmation integree ; l'interrupteur d'exposition par vhost n'avait aucune confirmation et sa carte etait hors de <main> ; seul le 401 etait gere (403 ignore, redirection au lieu d'un bandeau) ; erreurs 422 affichees « [object Object] » ; port des services emancipes « undefined » pour l'entree webui (champ local_port) ; reponse non JSON avalee en silence ; nom du vhost non valide cote page.
+  * Confirmation integree avant toute action qui expose ou retire une exposition (emanciper, ajouter/retirer un service cache Tor, revoquer, changer la portee d'un vhost). Routes, methodes et corps d'ecriture inchanges ; aucune action de contournement du WAF.
+  * Ajouts en lecture seule, donnees deja fournies par /status : nombre de ports sur toutes les interfaces et liste des backends SSL.
+  * Non repris : aucun appel d'ecriture nouveau (SSL add/remove, webhooks, historique, emancipation de la webui, controles de sante restent sans interface) ; pas de latence ni d'historique, l'API n'en fournit pas pour cette page.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 17:00:00 +0200
+
 secubox-haproxy (1.11.1-1~bookworm1) bookworm; urgency=medium
 
   * Page /vhost/ (composant vhost) refaite au profil Aurora (ref #2556) : page autonome, sans police ni script externes (la page chargeait Google Fonts), tuiles (vhosts, fichiers nginx, etat nginx, certificats, expirent sous 30 j, expires), onglets Apercu / Vhosts / Acces / Certificats, filtre cote client, ?demo=1 (donnees fictives RFC 5737, actions inertes), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet vhost). Version de cette entree distincte de celle de la page /haproxy/, refaite en parallele.

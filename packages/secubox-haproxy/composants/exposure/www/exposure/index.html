@@ -4,695 +4,420 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Gestion de l'exposition au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucune action de contournement du WAF ici : la portée d'un vhost passe par l'API d'exposition, le WAF reste en frontal.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Exposure Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Exposition</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
-        .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
-        .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
-        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
-        .badge-purple { background: rgba(163,113,247,0.15); color: var(--purple); }
-
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn-purple { background: rgba(163,113,247,0.15); border-color: var(--purple); color: var(--purple); }
-        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
-        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
-        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-        @media (max-width: 1200px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 768px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
-
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 2rem; font-weight: bold; }
-        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        td { font-size: 0.875rem; }
-        tr:hover { background: rgba(255,255,255,0.02); }
-
-        .onion { font-family: monospace; font-size: 0.75rem; color: var(--purple); }
-        .external { color: var(--yellow); }
-        .internal { color: var(--green); }
-
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; }
-        .modal-title { font-size: 1.25rem; margin-bottom: 1rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
-        .form-check { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
-        .form-check input { width: auto; }
-
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
-        .toast-success { border-color: var(--green); }
-        .toast-error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .large{grid-column:1/-1}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act,.tab td.mono{white-space:nowrap}
+        td.act .grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;margin:0 3px 2px 0}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie.fixe{margin-bottom:0}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input:not([type=checkbox]),form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .cases{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}
+        form.saisie .cases label{display:flex;gap:6px;align-items:center;font-size:.78rem;color:var(--texte)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        form.saisie .plein{grid-column:1/-1}
+        .conf{grid-column:1/-1;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        .conf span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>Exposure Manager</h1>
-            <div class="actions">
-                <button class="btn btn-purple" onclick="showEmancipateModal()">+ Emancipate Service</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+                <div><h1>Exposition</h1><small>Tor, DNS, maillage et portée des vhosts</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn prim" id="ouvrirEm" type="button">+ Émanciper un service</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Manage service exposure via Tor, SSL, DNS, and Mesh networks</p>
-
-        <!-- Stats -->
-        <div class="grid-3">
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--primary);" id="stat-total">0</div>
-                <div class="stat-label">Services Listening</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--purple);" id="stat-tor">0</div>
-                <div class="stat-label">Tor Hidden Services</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--green);" id="stat-ssl">0</div>
-                <div class="stat-label">SSL Backends</div>
-            </div>
-        </div>
-
-        <div class="grid-2">
-            <!-- Services -->
-            <div class="card">
-                <div class="card-title">
-                    <span>Listening Services</span>
-                    <span class="badge badge-blue" id="services-count">0</span>
-                </div>
-                <div id="services-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-
-            <!-- Tor Hidden Services -->
-            <div class="card">
-                <div class="card-title">
-                    <span>Tor Hidden Services</span>
-                    <button class="btn btn-purple btn-sm" onclick="showTorModal()">+ Add</button>
-                </div>
-                <div id="tor-table">
-                    <div class="empty">Loading...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Emancipated Services -->
-        <div class="card">
-            <div class="card-title">
-                <span>Emancipated Services</span>
-                <span class="badge badge-purple" id="emancipated-count">0</span>
-            </div>
-            <div id="emancipated-table">
-                <div class="empty">Loading...</div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Emancipate Modal -->
-    <div class="modal" id="emancipate-modal">
-        <div class="modal-content">
-            <div class="modal-title">Emancipate Service</div>
-            <form onsubmit="emancipate(event)">
-                <div class="form-group">
-                    <label>Service Name</label>
-                    <input type="text" id="em-service" required placeholder="myapp">
-                </div>
-                <div class="form-group">
-                    <label>Local Port</label>
-                    <input type="number" id="em-port" required placeholder="8080">
-                </div>
-                <div class="form-group">
-                    <label>Domain (optional)</label>
-                    <input type="text" id="em-domain" placeholder="myapp.example.com">
-                </div>
-                <div class="form-group">
-                    <label>Exposure Methods</label>
-                    <div class="form-check">
-                        <input type="checkbox" id="em-tor">
-                        <label for="em-tor">Tor Hidden Service</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="em-dns">
-                        <label for="em-dns">DNS Registration</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="em-mesh">
-                        <label for="em-mesh">Mesh Network</label>
-                    </div>
-                </div>
-                <div class="actions" style="justify-content: flex-end;">
-                    <button type="button" class="btn" onclick="closeModal('emancipate-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-purple">Emancipate</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Tor Modal -->
-    <div class="modal" id="tor-modal">
-        <div class="modal-content">
-            <div class="modal-title">Add Tor Hidden Service</div>
-            <form onsubmit="addTor(event)">
-                <div class="form-group">
-                    <label>Service Name</label>
-                    <input type="text" id="tor-service" required placeholder="myservice">
-                </div>
-                <div class="form-group">
-                    <label>Local Port</label>
-                    <input type="number" id="tor-local-port" required value="80">
-                </div>
-                <div class="form-group">
-                    <label>Onion Port</label>
-                    <input type="number" id="tor-onion-port" required value="80">
-                </div>
-                <div class="actions" style="justify-content: flex-end;">
-                    <button type="button" class="btn" onclick="closeModal('tor-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-purple">Create</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Per-vhost Exposure Switch -->
-    <div class="card">
-        <div class="card-title">
-            <span>Exposition par vhost</span>
-        </div>
-        <section id="exposure-switch">
-            <div class="form-group">
-                <label for="exp-vhost">Vhost</label>
-                <input id="exp-vhost" placeholder="vhost (ex: zigbee.gk2.secubox.in)">
-            </div>
-            <div class="form-group">
-                <label for="exp-reach">Portée</label>
-                <select id="exp-reach">
-                    <option value="localhost">localhost</option>
-                    <option value="lan" selected>LAN</option>
-                    <option value="wan">WAN</option>
-                </select>
-            </div>
-            <div class="form-check">
-                <input type="checkbox" id="exp-mesh">
-                <label for="exp-mesh">mesh</label>
-            </div>
-            <div class="form-check">
-                <input type="checkbox" id="exp-tor">
-                <label for="exp-tor">Tor</label>
-            </div>
-            <div class="actions">
-                <button class="btn btn-green" onclick="applyExposure()">Appliquer</button>
-            </div>
-            <pre id="exp-out"></pre>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Ports TCP en écoute sur ce nœud (commande ss), un seul par numéro de port."><span class="l">Services à l’écoute</span><span class="v" id="tTotal">—</span><span class="s">ports TCP</span></div>
+            <div class="tuile att" title="Ports en écoute sur toutes les interfaces. Ce n’est pas une preuve d’accessibilité depuis l’extérieur : le pare-feu (nftables, politique DROP) et le frontal décident de la portée réelle."><span class="l">Sur toutes les interfaces</span><span class="v" id="tExt">—</span><span class="s">écoute 0.0.0.0 ou ::</span></div>
+            <div class="tuile vi" title="Services cachés Tor (dossiers lisibles par l’API). Si l’API ne peut pas lire le dossier Tor, la liste reste vide."><span class="l">Services cachés Tor</span><span class="v" id="tTor">—</span><span class="s">adresses .onion</span></div>
+            <div class="tuile ok" title="Hôtes nginx qui portent un certificat SSL (fichiers de sites-enabled)."><span class="l">Backends SSL</span><span class="v" id="tSsl">—</span><span class="s">sites avec certificat</span></div>
+            <div class="tuile cy" title="Services émancipés : exposés par Tor, DNS ou maillage depuis cette page."><span class="l">Services émancipés</span><span class="v" id="tEm">—</span><span class="s">dans la configuration</span></div>
         </section>
-    </div>
 
-    <div id="toast"></div>
+        <section class="grille">
+            <div class="pan large" id="pEm"><h3>Services émancipés <i id="nEm"></i></h3>
+                <div id="rEm" class="retour" hidden></div>
+                <form class="saisie" id="fEm" hidden>
+                    <label>Nom du service<input name="service" placeholder="monapp" required></label>
+                    <label>Port local<input name="port" type="number" min="1" max="65535" placeholder="8080" required></label>
+                    <label>Domaine (facultatif)<input name="domain" placeholder="monapp.example.com"></label>
+                    <div class="cases plein" role="group" aria-label="Modes d’exposition">
+                        <label><input type="checkbox" name="tor"> Service caché Tor</label>
+                        <label><input type="checkbox" name="dns"> Enregistrement DNS</label>
+                        <label><input type="checkbox" name="mesh"> Maillage</label>
+                    </div>
+                    <div class="conf" id="cEm" hidden></div>
+                    <div class="bout"><button class="btn prim" type="submit">Émanciper</button><button class="btn" type="button" data-ferme="fEm">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Port</th><th>Domaine</th><th>Modes</th><th>Onion</th><th>Actions</th></tr></thead><tbody id="bEm"></tbody></table></div>
+                <p class="note">Révoquer retire le service de la configuration et, s’il avait un service caché Tor, le supprime. Le DNS et le maillage sont déclaratifs : l’exposition publique se termine côté frontal (HAProxy, sbxwaf), jamais en contournant le WAF.</p>
+            </div>
 
+            <div class="pan"><h3>Services cachés Tor <i id="nTor"></i><button class="btn prim sm" id="ouvrirTor" type="button">+ Ajouter</button></h3>
+                <div id="rTor" class="retour" hidden></div>
+                <form class="saisie" id="fTor" hidden>
+                    <label>Nom du service<input name="service" placeholder="monservice" required></label>
+                    <label>Port local<input name="local_port" type="number" min="1" max="65535" value="80" required></label>
+                    <label>Port onion<input name="onion_port" type="number" min="1" max="65535" value="80" required></label>
+                    <div class="conf" id="cTor" hidden></div>
+                    <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fTor">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Adresse onion</th><th>Port</th><th>Actions</th></tr></thead><tbody id="bTor"></tbody></table></div>
+            </div>
+
+            <div class="pan"><h3>Services à l’écoute <i id="nScan"></i></h3>
+                <div class="tab"><table><thead><tr><th>Service</th><th>Port</th><th>Adresse</th><th>Écoute</th><th>Processus</th></tr></thead><tbody id="bScan"></tbody></table></div>
+                <p class="note">« Toutes interfaces » : l’écoute n’est pas limitée à une adresse. La portée réelle dépend du pare-feu et du frontal.</p>
+            </div>
+
+            <div class="pan"><h3>Backends SSL <i id="nSsl"></i></h3>
+                <div class="tab"><table><thead><tr><th>Site</th><th>Domaine</th><th>Backend</th></tr></thead><tbody id="bSsl"></tbody></table></div>
+            </div>
+
+            <div class="pan"><h3>Exposition par vhost</h3>
+                <div id="rExp" class="retour" hidden></div>
+                <form class="saisie fixe" id="fExp">
+                    <label>Vhost<input name="vhost" id="expVhost" placeholder="zigbee.gk2.secubox.in" autocomplete="off" required></label>
+                    <label>Portée<select name="reach"><option value="localhost">localhost</option><option value="lan" selected>LAN</option><option value="wan">WAN</option></select></label>
+                    <div class="cases plein" role="group" aria-label="Canaux supplémentaires">
+                        <label><input type="checkbox" name="mesh"> Maillage</label>
+                        <label><input type="checkbox" name="tor"> Tor</label>
+                    </div>
+                    <div class="conf" id="cExp" hidden></div>
+                    <div class="bout"><button class="btn prim" type="submit">Appliquer</button></div>
+                </form>
+                <p class="note">La portée est écrite dans un extrait nginx validé (nginx -t) puis rechargé ; en cas d’échec elle est annulée. Tor est refusé pour les domaines exclus (épinglage de certificat, contournement MITM).</p>
+            </div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
-        // The aggregator mounts this module under /api/v1/exposure; the switch
-        // handler is the app route /exposure/{vhost}, so the effective path
-        // repeats the segment (matches the other calls' API base below).
-        const EXP_API = '/api/v1/exposure/exposure/';
-        async function applyExposure() {
-            const vhost = document.getElementById('exp-vhost').value.trim();
-            const body = {
-                reach: document.getElementById('exp-reach').value,
-                mesh: document.getElementById('exp-mesh').checked,
-                tor: document.getElementById('exp-tor').checked
-            };
-            try {
-                const r = await fetch(`${EXP_API}${encodeURIComponent(vhost)}`, {
-                    method: 'POST',
-                    headers: headers(),
-                    body: JSON.stringify(body)
-                });
-                if (!r.ok) {
-                    const errorBody = await r.text();
-                    document.getElementById('exp-out').textContent = `Erreur ${r.status}: ${errorBody}`;
-                    return;
-                }
-                document.getElementById('exp-out').textContent = JSON.stringify(await r.json(), null, 2);
-            } catch (e) {
-                document.getElementById('exp-out').textContent = 'Erreur: ' + e.message;
-            }
-        }
-    </script>
-
-    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        // Le module est monté sous /api/v1/exposure ; l'interrupteur par vhost est la route applicative
+        // /exposure/{vhost}, donc le segment se répète.
         const API = '/api/v1/exposure';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const EXP_API = '/api/v1/exposure/exposure/';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(path, opts = {}) {
+        let STATUT = null, SCAN = null, TOR = null, EMANC = null, SESSION_OK = true;
+        let CONFIRM = null;   // { genre, cle } ou { zone } : confirmation en cours, jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(url, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch (e) { console.error(e); return null; }
+                const r = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide ou non JSON */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (typeof d === 'string') return d;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) ? x.msg : String(x)).join(' ; ');
+            if (res.statut === 401 || res.statut === 403) return 'session requise ou droits insuffisants (HTTP ' + res.statut + ')';
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+
+        function demoData() {
+            STATUT = { services: { total: 5, external: 2 }, tor: { count: 1, services: [] }, ssl: { count: 2, backends: [
+                { service: 'blog.conf', domain: 'blog.example.com', backend: 'nginx' }, { service: 'hub.conf', domain: 'hub.example.net', backend: 'nginx' }] } };
+            SCAN = { services: [
+                { port: 22, address: '192.0.2.1', process: 'sshd', name: 'SSH', external: false },
+                { port: 80, address: '0.0.0.0', process: 'haproxy', name: 'HAProxy', external: true },
+                { port: 443, address: '0.0.0.0', process: 'haproxy', name: 'HAProxy', external: true },
+                { port: 8085, address: '127.0.0.1', process: 'sbxwaf', name: 'sbxwaf', external: false },
+                { port: 9050, address: '127.0.0.1', process: 'tor', name: 'Tor', external: false }] };
+            TOR = { services: [{ service: 'monapp', onion: 'exempleexempleexempleexempleexempleexempleexempleexemple23.onion', port: '80', backend: '127.0.0.1:8080' }] };
+            EMANC = { services: [
+                { name: 'monapp', port: 8080, domain: null, tor: true, dns: false, mesh: true, onion: 'exempleexempleexempleexempleexempleexempleexempleexemple23.onion' },
+                { name: 'webui', local_port: 9080, onion_port: 80, active: true }] };
         }
 
-        function showToast(msg, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
-            setTimeout(() => toast.innerHTML = '', 3000);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/scan'), lire('/tor_list'), lire('/emancipated')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0); SCAN = val(1); TOR = val(2); EMANC = val(3);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire l’état de l’exposition (service arrêté ou injoignable).';
+            rendre();
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('active'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-        function showEmancipateModal() { showModal('emancipate-modal'); }
-        function showTorModal() { showModal('tor-modal'); }
-
-        async function loadStatus() {
-            const data = await api('/status') || {};
-
-            document.getElementById('stat-total').textContent = data.services?.total || 0;
-            document.getElementById('stat-tor').textContent = data.tor?.count || 0;
-            document.getElementById('stat-ssl').textContent = data.ssl?.count || 0;
+        const liste = d => (d && Array.isArray(d.services)) ? d.services : [];
+        function nombre(v) { return (v === null || v === undefined || isNaN(Number(v))) ? '—' : String(v); }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            const aucune = !STATUT && !SCAN && !TOR && !EMANC;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (aucune) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = DEMO ? 'DÉMONSTRATION' : 'EN LIGNE'; }
+            $('tTotal').textContent = STATUT && STATUT.services ? nombre(STATUT.services.total) : (SCAN ? String(liste(SCAN).length) : '—');
+            $('tExt').textContent = STATUT && STATUT.services ? nombre(STATUT.services.external) : '—';
+            $('tTor').textContent = STATUT && STATUT.tor ? nombre(STATUT.tor.count) : (TOR ? String(liste(TOR).length) : '—');
+            $('tSsl').textContent = STATUT && STATUT.ssl ? nombre(STATUT.ssl.count) : '—';
+            $('tEm').textContent = EMANC ? String(liste(EMANC).length) : '—';
+            rendreScan(); rendreTor(); rendreEmanc(); rendreSsl();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadServices() {
-            const data = await api('/scan') || {};
-            const services = data.services || [];
-
-            document.getElementById('services-count').textContent = services.length;
-
-            if (services.length === 0) {
-                document.getElementById('services-table').innerHTML = '<div class="empty">No services detected</div>';
-                return;
-            }
-
-            const rows = services.map(s => `
-                <tr>
-                    <td><strong>${s.name}</strong></td>
-                    <td>${s.port}</td>
-                    <td class="${s.external ? 'external' : 'internal'}">${s.external ? 'External' : 'Internal'}</td>
-                    <td style="color: var(--text-dim);">${s.process}</td>
-                </tr>
-            `).join('');
-
-            document.getElementById('services-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>Port</th><th>Exposure</th><th>Process</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        async function loadTor() {
-            const data = await api('/tor_list') || {};
-            const services = data.services || [];
-
-            if (services.length === 0) {
-                document.getElementById('tor-table').innerHTML = '<div class="empty">No hidden services</div>';
-                return;
-            }
-
-            const rows = services.map(s => `
-                <tr>
-                    <td><strong>${s.service}</strong></td>
-                    <td class="onion">${s.onion}</td>
-                    <td>${s.port}</td>
-                    <td>
-                        <button class="btn btn-red btn-sm" onclick="removeTor('${s.service}')">Remove</button>
-                    </td>
-                </tr>
-            `).join('');
-
-            document.getElementById('tor-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>Onion Address</th><th>Port</th><th>Action</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        async function loadEmancipated() {
-            const data = await api('/emancipated') || {};
-            const services = data.services || [];
-
-            document.getElementById('emancipated-count').textContent = services.length;
-
-            if (services.length === 0) {
-                document.getElementById('emancipated-table').innerHTML = '<div class="empty">No emancipated services</div>';
-                return;
-            }
-
-            const rows = services.map(s => `
-                <tr>
-                    <td><strong>${s.name}</strong></td>
-                    <td>${s.port}</td>
-                    <td>${s.domain || '-'}</td>
-                    <td>
-                        ${s.tor ? '<span class="badge badge-purple">Tor</span>' : ''}
-                        ${s.dns ? '<span class="badge badge-blue">DNS</span>' : ''}
-                        ${s.mesh ? '<span class="badge badge-green">Mesh</span>' : ''}
-                    </td>
-                    <td>${s.onion ? `<span class="onion">${s.onion}</span>` : '-'}</td>
-                    <td>
-                        <button class="btn btn-red btn-sm" onclick="revoke('${s.name}')">Revoke</button>
-                    </td>
-                </tr>
-            `).join('');
-
-            document.getElementById('emancipated-table').innerHTML = `
-                <table>
-                    <thead><tr><th>Name</th><th>Port</th><th>Domain</th><th>Methods</th><th>Onion</th><th>Action</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-        }
-
-        async function emancipate(e) {
-            e.preventDefault();
-            const data = {
-                service: document.getElementById('em-service').value,
-                port: parseInt(document.getElementById('em-port').value),
-                domain: document.getElementById('em-domain').value || null,
-                tor: document.getElementById('em-tor').checked,
-                dns: document.getElementById('em-dns').checked,
-                mesh: document.getElementById('em-mesh').checked
-            };
-
-            const res = await api('/emancipate', { method: 'POST', body: JSON.stringify(data) });
-            if (res && res.success) {
-                showToast('Service emancipated');
-                closeModal('emancipate-modal');
-                refresh();
+        function vide(tb, n, msg) { const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function confirmation(cell, genre, cle, libelle, fn) {
+            const g = el('div', 'grp'); cell.appendChild(g);
+            if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === cle) {
+                g.appendChild(el('span', 'note', libelle + ' ?'));
+                g.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                g.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
             } else {
-                showToast(res?.detail || 'Failed to emancipate', 'error');
+                g.appendChild(btn(libelle, 'danger', () => { CONFIRM = { genre, cle }; rendre(); }));
             }
         }
 
-        async function addTor(e) {
-            e.preventDefault();
-            const data = {
-                service: document.getElementById('tor-service').value,
-                local_port: parseInt(document.getElementById('tor-local-port').value),
-                onion_port: parseInt(document.getElementById('tor-onion-port').value)
-            };
-
-            const res = await api('/tor/add', { method: 'POST', body: JSON.stringify(data) });
-            if (res && res.success) {
-                showToast(res.onion ? `Created: ${res.onion}` : 'Hidden service created');
-                closeModal('tor-modal');
-                refresh();
-            } else {
-                showToast(res?.detail || 'Failed to create', 'error');
-            }
+        function rendreScan() {
+            const tb = $('bScan'); tb.replaceChildren();
+            const l = liste(SCAN);
+            $('nScan').textContent = l.length ? l.length + ' port' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { vide(tb, 5, SESSION_OK ? (SCAN ? 'Aucun service détecté' : '—') : '—'); return; }
+            l.forEach(s => {
+                const tr = el('tr');
+                const nom = el('td'); nom.appendChild(el('strong', '', tiret(s.name))); tr.appendChild(nom);
+                tr.appendChild(el('td', '', tiret(s.port)));
+                tr.appendChild(el('td', 'mono', tiret(s.address)));
+                const e = el('td'); e.appendChild(s.external ? pastille('att', 'TOUTES INTERFACES', 'Écoute sur toutes les adresses') : pastille('ok', 'ADRESSE PRÉCISE', 'Écoute limitée à une adresse')); tr.appendChild(e);
+                tr.appendChild(el('td', 'mono', tiret(s.process)));
+                tb.appendChild(tr);
+            });
         }
 
-        async function removeTor(name) {
-            if (!confirm(`Remove hidden service "${name}"?`)) return;
-            const res = await api('/tor/remove', { method: 'POST', body: JSON.stringify({ service: name }) });
-            if (res && res.success) {
-                showToast('Hidden service removed');
-                refresh();
-            } else {
-                showToast(res?.detail || 'Failed to remove', 'error');
-            }
+        function rendreSsl() {
+            const tb = $('bSsl'); tb.replaceChildren();
+            const l = STATUT && STATUT.ssl && Array.isArray(STATUT.ssl.backends) ? STATUT.ssl.backends : [];
+            $('nSsl').textContent = l.length ? l.length + ' site' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { vide(tb, 3, SESSION_OK ? (STATUT ? 'Aucun backend SSL' : '—') : '—'); return; }
+            l.forEach(b => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(b.service))); tr.appendChild(el('td', 'mono', tiret(b.domain))); tr.appendChild(el('td', '', tiret(b.backend)));
+                tb.appendChild(tr);
+            });
         }
 
-        async function revoke(name) {
-            if (!confirm(`Revoke exposure for "${name}"?`)) return;
-            const res = await api('/revoke', { method: 'POST', body: JSON.stringify({ service: name, tor: true, dns: true, mesh: true }) });
-            if (res && res.success) {
-                showToast('Service revoked');
-                refresh();
-            } else {
-                showToast(res?.detail || 'Failed to revoke', 'error');
-            }
+        function rendreTor() {
+            const tb = $('bTor'); tb.replaceChildren();
+            const l = liste(TOR);
+            $('nTor').textContent = l.length ? l.length + ' service' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { vide(tb, 4, SESSION_OK ? (TOR ? 'Aucun service caché' : '—') : '—'); return; }
+            l.forEach(s => {
+                const tr = el('tr');
+                const nom = el('td'); nom.appendChild(el('strong', '', tiret(s.service))); tr.appendChild(nom);
+                tr.appendChild(el('td', 'mono', tiret(s.onion)));
+                tr.appendChild(el('td', '', tiret(s.port)));
+                const act = el('td', 'act');
+                confirmation(act, 'tor', s.service, 'Retirer', () => retirerTor(s.service));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
         }
 
-        async function refresh() {
-            await Promise.all([loadStatus(), loadServices(), loadTor(), loadEmancipated()]);
+        function rendreEmanc() {
+            const tb = $('bEm'); tb.replaceChildren();
+            const l = liste(EMANC);
+            $('nEm').textContent = l.length ? l.length + ' service' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { vide(tb, 6, SESSION_OK ? (EMANC ? 'Aucun service émancipé' : '—') : '—'); return; }
+            l.forEach(s => {
+                const tr = el('tr');
+                const nom = el('td'); nom.appendChild(el('strong', '', tiret(s.name))); tr.appendChild(nom);
+                // L'entrée « webui » n'a pas de champ port mais local_port : on lit les deux.
+                tr.appendChild(el('td', '', tiret(s.port != null ? s.port : s.local_port)));
+                tr.appendChild(el('td', 'mono', tiret(s.domain)));
+                const m = el('td');
+                if (s.tor || (s.onion && s.tor === undefined)) m.appendChild(pastille('vi', 'TOR'));
+                if (s.dns) m.appendChild(pastille('cy', 'DNS'));
+                if (s.mesh) m.appendChild(pastille('ok', 'MAILLAGE'));
+                if (!m.childNodes.length) m.textContent = '—';
+                tr.appendChild(m);
+                tr.appendChild(el('td', 'mono', tiret(s.onion)));
+                const act = el('td', 'act');
+                confirmation(act, 'em', s.name, 'Révoquer', () => revoquer(s.name));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
         }
 
-        refresh();
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function retirerTor(nom) {
+            const r = await ecrire(API + '/tor/remove', { service: nom });
+            if (r.ok && r.data && r.data.success) { retour('rTor', true, 'Service caché ' + nom + ' retiré.'); toast('Service caché retiré'); charger(); }
+            else { retour('rTor', false, 'Retrait impossible : ' + detail(r)); rendre(); }
+        }
+        async function revoquer(nom) {
+            const r = await ecrire(API + '/revoke', { service: nom, tor: true, dns: true, mesh: true });
+            if (r.ok && r.data && r.data.success) { retour('rEm', true, 'Service ' + nom + ' révoqué.'); toast('Service révoqué'); charger(); }
+            else { retour('rEm', false, 'Révocation impossible : ' + detail(r)); rendre(); }
+        }
+
+        // Confirmation intégrée d'un formulaire : texte récapitulatif, Confirmer / Annuler dans la page.
+        function demander(zone, texte, fn) {
+            const z = $(zone); z.replaceChildren(); z.hidden = false;
+            CONFIRM = { zone };
+            z.appendChild(el('span', '', texte));
+            z.appendChild(btn('Confirmer', 'danger', () => { fermerConf(zone); fn(); }));
+            z.appendChild(btn('Annuler', '', () => fermerConf(zone)));
+            annoncer();
+        }
+        function fermerConf(zone) { const z = $(zone); z.hidden = true; z.replaceChildren(); if (CONFIRM && CONFIRM.zone === zone) CONFIRM = null; annoncer(); }
+
+        $('fEm').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const corps = { service: f.service.value, port: parseInt(f.port.value, 10), domain: f.domain.value || null, tor: f.tor.checked, dns: f.dns.checked, mesh: f.mesh.checked };
+            const modes = [corps.tor && 'Tor', corps.dns && 'DNS', corps.mesh && 'maillage'].filter(Boolean);
+            demander('cEm', 'Émanciper « ' + corps.service + ' » (port ' + corps.port + ') par ' + (modes.length ? modes.join(', ') : 'aucun mode') + ' ? Le service devient joignable par ces canaux.', async () => {
+                const r = await ecrire(API + '/emancipate', corps);
+                if (r.ok && r.data && r.data.success) {
+                    const o = r.data.output || {}; const avert = ['tor_error', 'mesh_error', 'public_error'].filter(k => o[k]).map(k => o[k]);
+                    f.reset(); f.hidden = true;
+                    retour('rEm', true, 'Service émancipé.' + (o.onion ? ' Onion : ' + o.onion + '.' : '') + (avert.length ? ' Avertissement : ' + avert.join(' ; ') : ''));
+                    toast('Service émancipé'); charger();
+                } else retour('rEm', false, 'Émancipation impossible : ' + detail(r));
+            });
+        });
+        $('fTor').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const corps = { service: f.service.value, local_port: parseInt(f.local_port.value, 10), onion_port: parseInt(f.onion_port.value, 10) };
+            demander('cTor', 'Créer le service caché Tor « ' + corps.service + ' » (port local ' + corps.local_port + ' vers port onion ' + corps.onion_port + ') ? Une adresse .onion sera publiée.', async () => {
+                const r = await ecrire(API + '/tor/add', corps);
+                if (r.ok && r.data && r.data.success) {
+                    f.reset(); f.hidden = true;
+                    retour('rTor', true, r.data.onion ? 'Créé : ' + r.data.onion : 'Service caché créé (adresse onion en attente).');
+                    toast('Service caché créé'); charger();
+                } else retour('rTor', false, 'Création impossible : ' + detail(r));
+            });
+        });
+        const VHOST_RE = /^[A-Za-z0-9._-]+$/;
+        $('fExp').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target; const vhost = f.vhost.value.trim();
+            if (!vhost || vhost.length > 253 || vhost.indexOf('..') >= 0 || !VHOST_RE.test(vhost)) { retour('rExp', false, 'Nom de vhost invalide (lettres, chiffres, point, tiret, souligné).'); return; }
+            const corps = { reach: f.reach.value, mesh: f.mesh.checked, tor: f.tor.checked };
+            const plus = [corps.mesh && 'maillage', corps.tor && 'Tor'].filter(Boolean);
+            demander('cExp', 'Appliquer à « ' + vhost + ' » la portée ' + corps.reach.toUpperCase() + (plus.length ? ' avec ' + plus.join(' et ') : '') + ' ? ' + (corps.reach === 'wan' ? 'Le vhost devient public (toujours derrière le WAF). ' : '') + 'Un changement est écrit dans le journal d’audit.', async () => {
+                const r = await ecrire(EXP_API + encodeURIComponent(vhost), corps);
+                if (r.ok && r.data) retour('rExp', true, 'Appliqué à ' + tiret(r.data.vhost) + ' : portée ' + tiret(r.data.reach) + ', maillage ' + (r.data.mesh ? 'oui' : 'non') + ', Tor ' + (r.data.tor ? 'oui' : 'non') + '.');
+                else retour('rExp', false, 'Erreur ' + (r.statut || '') + ' : ' + detail(r));
+            });
+        });
+
+        function bascule(id) { const f = $(id); f.hidden = !f.hidden; if (f.hidden) { const z = f.querySelector('.conf'); if (z) fermerConf(z.id); } annoncer(); }
+        $('ouvrirEm').addEventListener('click', () => { bascule('fEm'); if (!$('fEm').hidden) $('fEm').service.focus(); });
+        $('ouvrirTor').addEventListener('click', () => bascule('fTor'));
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; const z = $(b.dataset.ferme).querySelector('.conf'); if (z) fermerConf(z.id); annoncer(); }));
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'exposure' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || !$('fEm').hidden || !$('fTor').hidden || $('expVhost').value) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
