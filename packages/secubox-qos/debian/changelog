@@ -1,3 +1,20 @@
+secubox-qos (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Page /traffic/ (composant traffic) refaite au profil Aurora (ref #2571) : un seul fichier autonome (plus de police
+    distante, de crt-light, de hybrid-dark ni de crt-engine), tuiles, panneaux, ?demo=1, ?embed=1, bandeau « session
+    requise », hauteur annoncee a l'hote (sbxVue), aucune boite de dialogue native : suppression d'une classe ou d'une regle,
+    prereglages et « Effacer toute la mise en forme » se confirment dans la page. Les sept appels d'ecriture sont inchanges
+    (POST /class/add, /class/delete, /rule/add, /rule/delete, /preset/apply, /apply, /clear).
+  * Bogues de l'ancienne page corriges : sur 401 la page redirigeait vers /login.html (cassait l'affichage encadre) au lieu
+    d'afficher un bandeau ; les erreurs de l'API (champ detail) etaient remplacees par « Failed » ; mesure absente affichee 0
+    au lieu de « — » ; la colonne « Class » des regles montrait l'identifiant de classe (champ class) au lieu du nom ;
+    donnees d'API injectees dans innerHTML et dans des gestionnaires onclick (identifiants de classe et de regle) ;
+    confirm() natifs ; textes en anglais ; statistiques chargees seulement au clic, desormais avec le reste ; octets
+    en unites binaires etiquetees (Kio, Mio, Gio) ; aucune actualisation automatique (30 s, hors saisie et confirmation).
+  * Non repris : le prereglage « balanced » que l'API connait mais que l'ancienne page ne proposait pas ; aucune courbe de
+    debit (l'API ne fournit que des compteurs cumules). Remarque : la colonne « Ecartes » reprend le compteur de /stats ;
+    l'API ne lit « dropped » que sur une ligne tc distincte de « Sent », il peut donc rester a 0 (API non modifiee).
+
 secubox-qos (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /nettweak/ refaite au profil Aurora (ref #2571) : un seul fichier autonome (plus de police distante, de crt-light,
