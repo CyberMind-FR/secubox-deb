@@ -22,6 +22,15 @@ BOOT_DIR="/boot"
 
 log() { echo "[firstboot] $*" | systemd-cat -t secubox-firstboot -p info 2>/dev/null || echo "[firstboot] $*"; }
 ok()  { echo "[firstboot] OK: $*" | systemd-cat -t secubox-firstboot -p info 2>/dev/null || echo "[firstboot] OK: $*"; }
+# warn etait appele 8 fois sans jamais etre defini (#2524) : le premier echec d'une etape non fatale
+# devenait « command not found » (127) et, sous set -e, tuait tout le premier demarrage.
+warn() { echo "[firstboot] WARN: $*" | systemd-cat -t secubox-firstboot -p warning 2>/dev/null || echo "[firstboot] WARN: $*" >&2; }
+
+# parted sur une partition MONTEE pose une question (« Partition is being used. Are you sure ? ») et
+# `-s` la refuse. ---pretend-input-tty lit la reponse sur l'entree standard (#2524).
+parted_etendre() {
+    printf 'Yes\n' | parted ---pretend-input-tty "$1" resizepart "$2" 100% 2>&1
+}
 
 log "=== SecuBox First Boot ==="
 
@@ -136,12 +145,12 @@ expand_filesystem() {
         else
             warn "growpart failed, trying parted..."
             # Fallback to parted
-            parted -s "$root_disk" resizepart "$last_part_num" 100% 2>&1 || \
+            parted_etendre "$root_disk" "$last_part_num" || \
                 warn "Partition expansion failed"
         fi
     else
         log "Using parted to expand partition..."
-        if parted -s "$root_disk" resizepart "$last_part_num" 100% 2>&1; then
+        if parted_etendre "$root_disk" "$last_part_num"; then
             ok "Partition expanded with parted"
         else
             warn "Partition expansion failed"
@@ -200,8 +209,8 @@ expand_filesystem() {
     ok "Filesystem expansion complete"
 }
 
-# Run expansion
-expand_filesystem
+# Run expansion — jamais fatal : une carte qui ne s'etend pas reste utilisable (#2524)
+expand_filesystem || warn "expansion du systeme de fichiers abandonnee (code $?) - premier demarrage poursuivi"
 
 # ── 1. Créer l'utilisateur système secubox ────────────────────────
 if ! id -u secubox >/dev/null 2>&1; then
