@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — premier-pas 0.5.7 : le kiosque ouvre l'administration, pas le Hall (ref #2534)
+
+Sur la RPi400, le kiosque ouvrait `hall.localhost:9078`. Le Hall est une réalisation personnelle de gk2 ; le kiosque d'une box ouvre l'administration : `admin.localhost:9078` (console locale, sans authentification pour le seul kiosque), puis `:9080`, après vérification que la page est le tableau de bord et non le Hall. `KIOSK_START="hall"` (dans `/etc/default/secubox-kiosk`) rend l'ancien comportement. Test `packages/secubox-premier-pas/tests/test_url_kiosque_admin_2534.py`.
+
 ## 2026-10-13 — RPi400 : unités en échec du premier démarrage (ref #2532)
 
 Diagnostic par SSH sur la RPi400 (système « degraded »). `secubox-dpi-resume` (226/NAMESPACE : `ReadWritePaths` sur un dossier absent → `CacheDirectory=`, dpi 1.12.6) ; `secubox-relais-maillage` (sortie 1 sans interface `wg-mesh` : `pairs_32 || true`, p2p 1.13.1) ; `secubox-bootmenu` de l'image RPi (`systemctl set-default` fatal avant sysinit → idempotent, jamais fatal) ; `netplan apply` (5 s → 30 s, netmodes 1.3.2). `systemd-networkd-wait-online` n'est pas un défaut de code (câble Ethernet branché 7 minutes après le boot). Tests dans chaque paquet et `tests/test_image_bootmenu_2532.py`.
