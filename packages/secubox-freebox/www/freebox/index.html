@@ -5,272 +5,541 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — panneau d'administration « Freebox » (secubox-freebox). Charte : .claude/WEBUI-PANEL-GUIDELINES.md (terminal sombre, cyan).
+  Connecteur Freebox au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Le jeton d'application de la Freebox et le secret d'API ne transitent jamais par cette page.
 -->
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — Freebox</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
-<style>
-:root{--p31-dim:#6b7b8b;--bg-dark:#0d1117;--bg-card:rgba(30,40,55,.8);--bg-row:rgba(20,30,45,.6);--border:rgba(100,150,200,.2);--text:#e8e6d9;--cyan:#00d4ff;--red:#ff4466;--orange:#ff9944;--yellow:#ffcc00;--green:#00dd44;--blue:#4488ff;--purple:#a371f7}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg-dark);color:var(--text);font-family:'Courier Prime',monospace;font-size:14px}
-.main{margin-left:220px;padding:1.5rem;padding-top:60px}
-.header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem}
-.header h1{margin:0;font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
-.header .sub{color:var(--p31-dim);font-size:.75rem}
-.btn{font-family:inherit;text-transform:uppercase;letter-spacing:.05em;font-size:.72rem;padding:.5rem .9rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-row);color:var(--text);cursor:pointer}
-.btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.3)}
-.btn.primary{background:var(--cyan);color:#001018;border-color:var(--cyan);font-weight:700}
-.btn.danger{border-color:var(--red);color:var(--red)}
-.btn:disabled{opacity:.5;cursor:default}
-.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
-.card h3{margin:0 0 .6rem;color:var(--cyan);font-size:.95rem}
-.etat{display:flex;gap:.8rem;align-items:flex-start}
-.etat .glyphe{font-size:1.8rem;line-height:1}
-.etat p{margin:.2rem 0;color:var(--p31-dim);font-size:.82rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem}
-.stat-card{background:var(--bg-row);border:1px solid var(--border);border-radius:8px;padding:.7rem}
-.stat-card .value{font-size:1.25rem;text-shadow:0 0 10px currentColor;font-variant-numeric:tabular-nums}
-.stat-card .label{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--p31-dim);margin-top:.25rem}
-.stat-card.cyan .value{color:var(--cyan)}.stat-card.green .value{color:var(--green)}.stat-card.orange .value{color:var(--orange)}.stat-card.red .value{color:var(--red)}
-.tabs{display:flex;gap:.2rem;flex-wrap:wrap;margin-bottom:.8rem;border-bottom:1px solid var(--border)}
-.tab{font-family:inherit;background:none;border:none;border-bottom:2px solid transparent;color:var(--p31-dim);text-transform:uppercase;letter-spacing:.06em;font-size:.7rem;padding:.55rem .8rem;cursor:pointer}
-.tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
-.tab-content{display:none}.tab-content.active{display:block}
-.rows{display:flex;flex-direction:column;gap:.3rem}
-.row{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;background:var(--bg-row);border-left:3px solid var(--border);border-radius:4px;padding:.45rem .7rem}
-.row:hover{background:rgba(0,212,255,.06)}
-.row.on{border-left-color:var(--green)}.row.off{border-left-color:var(--p31-dim);opacity:.8}.row.warn{border-left-color:var(--orange)}
-.row .nom{color:var(--cyan);min-width:9rem}
-.row .meta{color:var(--p31-dim);font-size:.72rem;margin-left:auto;text-align:right}
-.badge{font-size:.62rem;padding:.05rem .4rem;border-radius:999px;border:1px solid var(--border);color:var(--p31-dim)}
-.badge.pub{border-color:var(--orange);color:var(--orange)}.badge.ok{border-color:var(--green);color:var(--green)}.badge.ko{border-color:var(--red);color:var(--red)}
-.note{color:var(--p31-dim);font-size:.75rem}
-.steps{margin:.4rem 0 .8rem;padding-left:1.2rem;color:var(--text);font-size:.8rem;line-height:1.6}
-.toast{position:fixed;right:1rem;bottom:1rem;background:var(--cyan);color:#001018;padding:.6rem .9rem;border-radius:6px;display:none;max-width:28rem;z-index:50}
-.toast.show{display:block}.toast.error{background:var(--red);color:#fff}
-.toast .x{margin-left:.7rem;cursor:pointer;font-weight:700}
-@media (max-width:768px){.main{margin-left:0}.row .meta{margin-left:0;text-align:left}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Freebox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille.deux{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+        .etapes{margin:8px 0 0;padding-left:1.2rem;font-size:.8rem;line-height:1.6}
+        .recherche{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;width:100%;max-width:280px;margin:0 0 8px}
+        .recherche:focus{outline:none;border-color:var(--cyan)}
+        .confirme{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:12px;padding:10px 12px;font-size:.82rem}
+        .confirme.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)}
+        .confirme h3{margin:0 0 6px;font-size:.88rem} .confirme p{margin:4px 0}
+        .confirme ul{margin:4px 0 4px 1.1rem;padding:0}
+        .confirme .actions{margin-top:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-<main class="main">
-  <header class="header">
-    <div><h1>🛰️ Freebox</h1><div class="sub" id="subline">Connecteur de l'API Freebox OS</div></div>
-    <div><button class="btn" id="b-rafraichir">↻ Actualiser</button></div>
-  </header>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="9" width="14" height="9" rx="2"/><path d="M8.5 6.5a5 5 0 0 1 7 0M10.3 8.2a2.4 2.4 0 0 1 3.4 0"/><path d="M9 14h.01M12 14h.01M15 14h.01"/></svg>
+                <div><h1>Freebox</h1><small id="sous">Connecteur de l’API Freebox OS</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-  <section class="card" id="carte-etat">
-    <h3>Connexion à la Freebox</h3>
-    <div class="etat"><span class="glyphe" id="glyphe">⚪</span><div><b id="etat-titre">Lecture…</b><p id="etat-message"></p></div></div>
-    <ol class="steps" id="etapes" hidden>
-      <li>Appuyez sur <b>✓</b> sur l'afficheur de la Freebox pour accepter SecuBox.</li>
-      <li>Sur la Freebox : Paramètres → Gestion des accès → Applications, ouvrez « SecuBox » et réglez ses droits.</li>
-      <li>Revenez ici : l'état se met à jour tout seul.</li>
-    </ol>
-    <div id="actions" style="display:flex;gap:.5rem;flex-wrap:wrap"></div>
-    <div id="droits" class="rows" style="margin-top:.8rem" hidden></div>
-  </section>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cLigne" title="État de la connexion Internet de la Freebox (lecture de /connexion)."><span class="l">Connexion Internet</span><span class="v" id="tLigne">—</span><span class="s" id="sLigne">média</span></div>
+            <div class="tuile cy" title="Appareils actifs parmi ceux que la Freebox connaît (lecture de /appareils)."><span class="l">Appareils actifs</span><span class="v" id="tAppareils">—</span><span class="s" id="sAppareils">sur — connus</span></div>
+            <div class="tuile cy" title="Débit descendant maximal annoncé par la Freebox pour la ligne. Ce n’est pas un débit mesuré."><span class="l">Débit max descendant</span><span class="v" id="tDown">—</span><span class="s">Mb/s, valeur de la ligne</span></div>
+            <div class="tuile cy" title="Débit montant maximal annoncé par la Freebox pour la ligne. Ce n’est pas un débit mesuré."><span class="l">Débit max montant</span><span class="v" id="tUp">—</span><span class="s">Mb/s, valeur de la ligne</span></div>
+            <div class="tuile" id="cPf" title="Pare-feu IPv6 de la Freebox : bloque les connexions entrantes IPv6 vers les appareils du réseau."><span class="l">Pare-feu IPv6</span><span class="v" id="tPf">—</span><span class="s">connexions entrantes</span></div>
+            <div class="tuile" id="cRedir" title="Redirections de ports IPv4 configurées sur la Freebox. Sensible = ouverture d’un service d’accès à distance, de partage ou de base de données."><span class="l">Redirections</span><span class="v" id="tRedir">—</span><span class="s" id="sRedir">ports ouverts</span></div>
+        </section>
 
-  <div class="tabs" id="tabs" role="tablist">
-    <button class="tab active" role="tab" data-tab="appareils">📱 Appareils</button>
-    <button class="tab" role="tab" data-tab="connexion">🌐 Connexion</button>
-    <button class="tab" role="tab" data-tab="pare-feu">🛡️ Pare-feu IPv6</button>
-    <button class="tab" role="tab" data-tab="redirections">🔓 Redirections</button>
-    <button class="tab" role="tab" data-tab="autoconfig">⚙️ Auto-config</button>
-  </div>
-  <div class="tab-content active" id="t-appareils"><div class="card"><div class="note" id="n-appareils"></div><div class="rows" id="l-appareils"></div></div></div>
-  <div class="tab-content" id="t-connexion"><div class="card"><div class="grid" id="g-connexion"></div></div></div>
-  <div class="tab-content" id="t-pare-feu"><div class="card"><div class="grid" id="g-pf"></div><div id="a-pf" style="margin:.6rem 0"></div><p class="note" id="n-pf"></p><div class="rows" id="l-pf"></div></div></div>
-  <div class="tab-content" id="t-redirections"><div class="card"><p class="note">Redirections de ports IPv4 configurées sur la Freebox. ⚠ signale une ouverture vers Internet d'un service sensible (accès à distance, partage de fichiers, base de données).</p><div class="rows" id="l-redir"></div></div>
-    <div class="card"><h3>UPnP</h3><p class="note">L’UPnP laisse les appareils du réseau ouvrir eux-mêmes des ports vers Internet, sans que vous le sachiez.</p><div id="a-upnp" style="margin:.5rem 0"></div><div class="rows" id="l-upnp"></div></div></div>
-  <div class="tab-content" id="t-autoconfig"><div class="card">
-    <p class="note">Ce que SecuBox recommande pour la Freebox, comparé à l’état réel. Chaque réglage s’applique séparément, après confirmation ; l’état est relu avant et après, et l’action est journalisée.</p>
-    <div class="rows" id="l-auto"></div>
-    <div id="a-auto" style="margin-top:.8rem;display:flex;gap:.5rem;flex-wrap:wrap"></div>
-  </div></div>
-</main>
-<div class="toast" id="toast"></div>
-<script>
-(function(){
-  'use strict';
-  var API = '/api/v1/freebox/';
-  var $ = function(id){ return document.getElementById(id); };
-  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
-  var jeton = function(){ try { return localStorage.getItem('sbx_token') || ''; } catch(e){ return ''; } };
-  var minuteur = null, etat = null, onglet = 'appareils';
+        <section class="confirme" id="confirme" role="alertdialog" aria-labelledby="confTitre" hidden>
+            <h3 id="confTitre">Confirmer</h3>
+            <div id="confCorps"></div>
+            <div class="actions"><button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        </section>
 
-  function toast(m){ var t = $('toast'); t.className = 'toast show'; t.textContent = m; clearTimeout(minuteur); minuteur = setTimeout(function(){ t.className = 'toast'; }, 3000); }
-  function erreur(m){ var t = $('toast'); t.className = 'toast show error'; t.textContent = m + ' '; var x = document.createElement('span'); x.className = 'x'; x.textContent = '✕'; x.onclick = function(){ t.className = 'toast'; }; t.appendChild(x); clearTimeout(minuteur); }
+        <div id="retour" class="retour" hidden role="status"></div>
 
-  function api(chemin, opts){
-    opts = opts || {}; opts.headers = Object.assign({'Accept':'application/json'}, opts.headers || {}); opts.credentials = 'same-origin';
-    if (opts.method && opts.method !== 'GET'){ var j = jeton(); if (j) opts.headers['Authorization'] = 'Bearer ' + j; }
-    return fetch(API + chemin, opts).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {st:r.status, d:d}; }); });
-  }
-  function enregistre(x){
-    if (x.st === 401 || x.st === 403 && !(x.d && x.d.droit_manquant)){ erreur('🔒 Connexion administrateur requise'); return false; }
-    if (x.st >= 400){ erreur((x.d && x.d.erreur) || ('Erreur ' + x.st)); return false; }
-    return true;
-  }
+        <div class="onglets" role="tablist" aria-label="Sections de la Freebox">
+            <button type="button" role="tab" id="o-appareils" data-tab="appareils" aria-selected="true" aria-controls="t-appareils">Appareils</button>
+            <button type="button" role="tab" id="o-connexion" data-tab="connexion" aria-selected="false" aria-controls="t-connexion">Connexion</button>
+            <button type="button" role="tab" id="o-pare-feu" data-tab="pare-feu" aria-selected="false" aria-controls="t-pare-feu">Pare-feu IPv6</button>
+            <button type="button" role="tab" id="o-redirections" data-tab="redirections" aria-selected="false" aria-controls="t-redirections">Redirections</button>
+            <button type="button" role="tab" id="o-autoconfig" data-tab="autoconfig" aria-selected="false" aria-controls="t-autoconfig">Auto-config</button>
+        </div>
 
-  // ── état de la connexion ───────────────────────────────────────────────────
-  var GLYPHES = { autorise:'🟢', attente_validation:'🟠', non_configure:'⚪', refusee:'🔴', expiree:'🟠', retiree:'🔴', injoignable:'🔴', erreur:'🔴' };
-  var TITRES = { autorise:'Connecté', attente_validation:'En attente de validation sur la Freebox', non_configure:'Pas encore connecté', refusee:'Demande refusée',
-                 expiree:'Demande expirée', retiree:'Autorisation retirée', injoignable:'Freebox injoignable', erreur:'Erreur' };
-  function actions(e){
-    var z = $('actions'); z.textContent = '';
-    function bouton(texte, cls, f){ var b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = texte; b.onclick = f; z.appendChild(b); }
-    if (['non_configure','refusee','expiree','retiree'].indexOf(e) >= 0) bouton('🔗 Connecter la Freebox', 'primary', autoriser);
-    if (e === 'attente_validation') bouton('↻ Vérifier maintenant', '', charger);
-    if (e === 'autorise' || e === 'attente_validation') bouton('🗑️ Oublier l’autorisation', 'danger', revoquer);
-  }
-  function droits(s){
-    var z = $('droits'); z.textContent = ''; z.hidden = s.etat !== 'autorise';
-    if (s.etat !== 'autorise') return;
-    Object.keys(s.aide_droits || {}).forEach(function(k){
-      var ok = !!(s.droits || {})[k];
-      var r = document.createElement('div'); r.className = 'row ' + (ok ? 'on' : 'warn');
-      r.innerHTML = '<span class="badge ' + (ok ? 'ok' : 'ko') + '">' + (ok ? 'accordé' : 'manquant') + '</span><span class="nom">' + esc(k) + '</span><span class="note">' + esc(s.aide_droits[k]) + '</span>';
-      z.appendChild(r);
-    });
-  }
-  function rendEtat(s){
-    etat = s.etat;
-    $('glyphe').textContent = GLYPHES[s.etat] || '⚪';
-    $('etat-titre').textContent = TITRES[s.etat] || s.etat;
-    $('etat-message').textContent = s.message || '';
-    var f = s.freebox || {}; $('subline').textContent = f.modele ? (f.modele + ' · API ' + f.version) : 'Connecteur de l’API Freebox OS';
-    $('etapes').hidden = ['attente_validation','autorise'].indexOf(s.etat) < 0;
-    actions(s.etat); droits(s);
-    if (s.etat === 'attente_validation'){ clearTimeout(rendEtat.t); rendEtat.t = setTimeout(charger, 3000); }
-    if (s.etat === 'autorise') chargeOnglet(onglet);
-  }
-  function autoriser(){
-    api('autoriser', {method:'POST', body:'{}', headers:{'Content-Type':'application/json'}}).then(function(x){ if (enregistre(x)){ toast('Demande envoyée : validez-la sur la Freebox'); charger(); } });
-  }
-  function revoquer(){
-    if (!confirm('Oublier l’autorisation de SecuBox ?\nIl faudra revalider sur la Freebox pour se reconnecter.')) return;
-    api('revoquer', {method:'POST'}).then(function(x){ if (enregistre(x)){ toast(x.d.message || 'Autorisation oubliée'); charger(); } });
-  }
-  function reglage(quoi, actif, question){
-    if (!confirm(question)) return;
-    api(quoi, {method:'POST', body:JSON.stringify({actif:actif, confirme:true}), headers:{'Content-Type':'application/json'}}).then(function(x){
-      if (x.st === 403 && x.d && x.d.droit_manquant){ erreur(x.d.erreur); return; }
-      if (enregistre(x)){ toast('Réglage appliqué'); chargeOnglet('redirections'); }
-    });
-  }
-  function appliqueAuto(cible){
-    var liste = Array.isArray(cible) ? cible : [cible], sensible = liste.some(function(i){ return i.sensible; });
-    var q = 'Appliquer à la Freebox :\n\n' + liste.map(function(i){ return '• ' + i.titre; }).join('\n') + '\n\nL\u2019état est relu avant et après, et l\u2019action est journalisée.';
-    if (sensible) q += '\n\n⚠ La DMZ envoie à la box TOUT le trafic entrant sans redirection : toute la machine est exposée à Internet. Confirmer encore ?';
-    if (!confirm(q)) return;
-    var corps = { ids: liste.map(function(i){ return i.id; }), confirme: true };
-    if (sensible) corps.confirme_dmz = true;
-    api('autoconfig', {method:'POST', body:JSON.stringify(corps), headers:{'Content-Type':'application/json'}}).then(function(x){
-      if (x.st === 403 && x.d && x.d.droit_manquant){ erreur(x.d.erreur); return; }
-      if (enregistre(x)){ toast((x.d.appliques || []).length ? 'Appliqué : ' + x.d.appliques.join(', ') : 'Rien à changer'); chargeOnglet('autoconfig'); }
-    });
-  }
-  function reglePareFeu(actif){
-    var q = actif ? 'Activer le pare-feu IPv6 de la Freebox ?\n\nLes connexions qui arrivent d\u2019Internet vers vos appareils en IPv6 seront bloquées. Un service que vous exposez volontairement en IPv6 (serveur, jeu, visio) devra être autorisé à part.'
-                  : 'Désactiver le pare-feu IPv6 de la Freebox ?\n\nTous vos appareils ayant une adresse IPv6 publique redeviennent joignables depuis Internet.';
-    if (!confirm(q)) return;
-    api('pare-feu/ipv6', {method:'POST', body:JSON.stringify({actif:actif, confirme:true}), headers:{'Content-Type':'application/json'}}).then(function(x){
-      if (x.st === 403 && x.d && x.d.droit_manquant){ erreur(x.d.erreur); return; }
-      if (enregistre(x)){ toast(actif ? 'Pare-feu IPv6 activé' : 'Pare-feu IPv6 désactivé'); chargeOnglet('pare-feu'); chargeOnglet('connexion'); }
-    });
-  }
-  function charger(){ api('status').then(function(x){ if (x.st === 200) rendEtat(x.d); else if (x.st === 401 || x.st === 403) erreur('🔒 Connexion requise'); else erreur('Freebox : erreur ' + x.st); }); }
+        <section id="t-appareils" role="tabpanel" aria-labelledby="o-appareils" class="grille">
+            <div class="pan"><h3>Appareils <i id="nApp"></i></h3>
+                <input class="recherche" id="rechApp" type="search" placeholder="Filtrer (nom, fabricant, adresse)" aria-label="Filtrer les appareils">
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Type</th><th>Fabricant</th><th>IPv4</th><th>IPv6 public</th><th>MAC (fin)</th><th>État</th></tr></thead><tbody id="bApp"></tbody></table></div>
+                <p class="note">Adresse MAC tronquée à ses trois derniers octets. L’état est l’activité signalée par la Freebox.</p></div>
+        </section>
 
-  // ── onglets ────────────────────────────────────────────────────────────────
-  function liste(id, items, fabrique){ var z = $(id); z.textContent = ''; items.forEach(function(it){ var r = document.createElement('div'); fabrique(r, it); z.appendChild(r); }); }
-  function chargeOnglet(nom){
-    if (etat !== 'autorise') return;
-    if (nom === 'appareils') api('appareils').then(function(x){
-      if (!enregistre(x)) return;
-      var a = x.d.appareils || [];
-      $('n-appareils').textContent = a.filter(function(i){ return i.actif; }).length + ' actifs sur ' + a.length + ' appareils connus de la Freebox.';
-      liste('l-appareils', a, function(r, i){
-        r.className = 'row ' + (i.actif ? 'on' : 'off');
-        r.innerHTML = '<span class="nom">' + esc(i.nom) + '</span><span class="badge">' + esc(i.type || 'appareil') + '</span>'
-          + (i.ipv6_publiques.length ? '<span class="badge pub">IPv6 public</span>' : '')
-          + '<span class="meta">' + esc(i.fabricant) + ' · ' + esc(i.ipv4.join(', ') || '—') + ' · …' + esc(i.mac_fin) + '</span>';
-      });
-    });
-    if (nom === 'connexion') api('connexion').then(function(x){
-      if (!enregistre(x)) return; var c = x.d, g = $('g-connexion'); g.textContent = '';
-      [[c.en_ligne ? 'En ligne' : 'Hors ligne', 'État', c.en_ligne ? 'green' : 'red'], [c.media || '—', 'Média', 'cyan'], [c.ipv4_publique || '—', 'IP publique', 'cyan'],
-       [(c.debit_max_descendant_mbit == null ? '—' : c.debit_max_descendant_mbit + ' Mb/s'), '⬇️ Débit max', 'cyan'], [(c.debit_max_montant_mbit == null ? '—' : c.debit_max_montant_mbit + ' Mb/s'), '⬆️ Débit max', 'cyan'],
-       [c.ipv6_actif == null ? '—' : (c.ipv6_actif ? 'Actif' : 'Inactif'), 'IPv6', 'cyan'], [c.pare_feu_ipv6 == null ? '—' : (c.pare_feu_ipv6 ? 'Actif' : 'Désactivé'), 'Pare-feu IPv6', c.pare_feu_ipv6 === false ? 'red' : 'green']]
-        .forEach(function(t){ var d = document.createElement('div'); d.className = 'stat-card ' + t[2]; d.innerHTML = '<div class="value">' + esc(t[0]) + '</div><div class="label">' + esc(t[1]) + '</div>'; g.appendChild(d); });
-    });
-    if (nom === 'pare-feu') api('pare-feu').then(function(x){
-      if (!enregistre(x)) return; var p = x.d, g = $('g-pf'); g.textContent = '';
-      var d = document.createElement('div'); d.className = 'stat-card ' + (p.pare_feu_actif === false ? 'red' : 'green');
-      d.innerHTML = '<div class="value">' + (p.pare_feu_actif == null ? '—' : (p.pare_feu_actif ? 'Actif' : 'Désactivé')) + '</div><div class="label">Pare-feu IPv6</div>'; g.appendChild(d);
-      var az = $('a-pf'); az.textContent = '';
-      if (p.pare_feu_actif !== null && p.pare_feu_actif !== undefined){
-        var b = document.createElement('button'); b.className = 'btn ' + (p.pare_feu_actif ? 'danger' : 'primary');
-        b.textContent = p.pare_feu_actif ? 'Désactiver le pare-feu IPv6' : '🛡️ Activer le pare-feu IPv6';
-        b.onclick = function(){ reglePareFeu(!p.pare_feu_actif); }; az.appendChild(b);
-      }
-      $('n-pf').textContent = p.exceptions_lues ? (p.exceptions.length + ' exception(s) autorisée(s).') : 'Les exceptions IPv6 ne sont pas lisibles avec cette version de la Freebox ou ces droits.';
-      liste('l-pf', p.exceptions || [], function(r, e){ r.className = 'row ' + (e.sensible ? 'warn' : 'on'); r.innerHTML = '<span class="nom">' + esc(e.appareil) + '</span><span class="badge">' + esc(e.protocole) + '</span><span class="meta">ports ' + esc(e.port_debut) + (e.port_fin !== e.port_debut ? '–' + esc(e.port_fin) : '') + (e.sensible ? ' ⚠' : '') + ' · ' + esc(e.commentaire) + '</span>'; });
-    });
-    if (nom === 'autoconfig') api('autoconfig').then(function(x){
-      if (!enregistre(x)) return;
-      var d = x.d, z = $('l-auto'), az = $('a-auto'); z.textContent = ''; az.textContent = '';
-      function txt(v){ if (v === true) return 'activé'; if (v === false) return 'désactivé'; if (v === null || v === undefined) return '—';
-        if (Array.isArray(v)) return v.length ? v.join(', ') : 'aucun'; if (typeof v === 'object' && v.mac !== undefined) return (v.mac || 'MAC inconnue') + (v.ip ? ' → ' + v.ip : ' (pas de bail)'); if (typeof v === 'object') return (v.enabled ? 'activée' : 'désactivée') + (v.ip ? ' → ' + v.ip : ''); return String(v); }
-      (d.items || []).forEach(function(i){
-        var r = document.createElement('div'); r.className = 'row ' + (i.conforme ? 'on' : (i.sensible ? 'warn' : 'off'));
-        r.innerHTML = '<span class="nom">' + esc(i.titre) + '</span><span class="badge ' + (i.conforme ? 'ok' : 'pub') + '">' + (i.conforme ? 'conforme' : 'écart') + '</span>'
-          + '<span class="meta">actuel : ' + esc(txt(i.actuel)) + ' · cible : ' + esc(txt(i.cible)) + '<br>' + esc(i.pourquoi) + '</span>';
-        if (!i.conforme){
-          var b = document.createElement('button'); b.className = 'btn ' + (i.sensible ? 'danger' : 'primary'); b.textContent = i.sensible ? 'Appliquer (sensible)' : 'Appliquer';
-          b.onclick = function(){ appliqueAuto(i); }; r.appendChild(b);
+        <section id="t-connexion" role="tabpanel" aria-labelledby="o-connexion" class="grille deux" hidden>
+            <div class="pan"><h3>Ligne Internet</h3>
+                <dl class="kv"><dt>État</dt><dd id="cEtat">—</dd><dt>Média</dt><dd id="cMedia">—</dd><dt>IPv4 publique</dt><dd class="mono" id="cV4">—</dd><dt>IPv6</dt><dd class="mono" id="cV6">—</dd>
+                <dt>Débit max ↓</dt><dd id="cDown">—</dd><dt>Débit max ↑</dt><dd id="cUp">—</dd></dl></div>
+            <div class="pan"><h3>IPv6</h3>
+                <dl class="kv"><dt>IPv6</dt><dd id="cV6Actif">—</dd><dt>Pare-feu IPv6</dt><dd id="cPfActif">—</dd><dt>Préfixes délégués</dt><dd class="mono" id="cPrefixes">—</dd></dl>
+                <p class="note">Les débits sont les valeurs maximales annoncées par la Freebox, pas des mesures de trafic.</p></div>
+        </section>
+
+        <section id="t-pare-feu" role="tabpanel" aria-labelledby="o-pare-feu" class="grille" hidden>
+            <div class="pan"><h3>Pare-feu IPv6 <i id="nExc"></i></h3>
+                <div id="pfEtat" style="font-size:.9rem">—</div>
+                <div class="actions" id="pfAct"></div>
+                <p class="note" id="pfNote"></p>
+                <div class="tab"><table><thead><tr><th>Appareil</th><th>Protocole</th><th>Ports</th><th>Commentaire</th><th>État</th></tr></thead><tbody id="bExc"></tbody></table></div></div>
+        </section>
+
+        <section id="t-redirections" role="tabpanel" aria-labelledby="o-redirections" class="grille" hidden>
+            <div class="pan"><h3>Redirections de ports IPv4 <i id="nRed"></i></h3>
+                <p class="note" style="margin:0 0 8px">Configurées sur la Freebox. « Sensible » signale l’ouverture vers Internet d’un service d’accès à distance, de partage de fichiers ou de base de données.</p>
+                <div class="tab"><table><thead><tr><th>Redirection</th><th>Protocole</th><th>Port externe</th><th>Destination</th><th>Source</th><th>État</th></tr></thead><tbody id="bRed"></tbody></table></div></div>
+            <div class="pan"><h3>UPnP <i id="nUpnp"></i></h3>
+                <p class="note" style="margin:0 0 8px">L’UPnP laisse les appareils du réseau ouvrir eux-mêmes des ports vers Internet, sans que vous le sachiez.</p>
+                <div id="upEtat" style="font-size:.9rem">—</div>
+                <div class="actions" id="upAct"></div>
+                <div class="tab" style="margin-top:8px"><table><thead><tr><th>Description</th><th>Protocole</th><th>Port externe</th><th>Destination</th></tr></thead><tbody id="bUpnp"></tbody></table></div></div>
+        </section>
+
+        <section id="t-autoconfig" role="tabpanel" aria-labelledby="o-autoconfig" class="grille" hidden>
+            <div class="pan"><h3>Configuration recommandée <i id="nAuto"></i></h3>
+                <p class="note" style="margin:0 0 8px">Ce que SecuBox recommande pour la Freebox, comparé à l’état réel. Chaque réglage s’applique séparément, après confirmation ; l’état est relu avant et après, et l’action est journalisée.</p>
+                <div class="tab"><table><thead><tr><th>Réglage</th><th>État</th><th>Actuel</th><th>Cible</th><th>Pourquoi</th><th></th></tr></thead><tbody id="bAuto"></tbody></table></div>
+                <div class="actions" id="autoAct"></div></div>
+        </section>
+
+        <section class="grille deux" id="connexionFb">
+            <div class="pan"><h3>Connexion à la Freebox</h3>
+                <dl class="kv"><dt>État</dt><dd id="fbEtat">—</dd><dt>Message</dt><dd id="fbMsg">—</dd></dl>
+                <ol class="etapes" id="etapes" hidden>
+                    <li>Appuyez sur ✓ sur l’afficheur de la Freebox pour accepter SecuBox.</li>
+                    <li>Sur la Freebox : Paramètres → Gestion des accès → Applications, ouvrez « SecuBox » et réglez ses droits.</li>
+                    <li>Revenez ici : l’état se met à jour tout seul.</li>
+                </ol>
+                <div class="actions" id="fbAct"></div>
+                <p class="note">Le jeton d’application reste sur la box : il n’est jamais affiché ni transmis à cette page.</p></div>
+            <div class="pan"><h3>Droits de l’application <i id="nDroits"></i></h3>
+                <div class="tab"><table><thead><tr><th>Droit</th><th>État</th><th>Utilité</th></tr></thead><tbody id="bDroits"></tbody></table></div></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/freebox';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+
+        let STATUT = null, APP = null, CNX = null, PF = null, RED = null, UP = null, AUTO = null;
+        let SESSION_OK = true, ERREURS = {}, ONGLET = 'appareils', CONF = null, RETOUR = null;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        const refus = r => r.st === 401 || (r.st === 403 && !(r.d && r.d.droit_manquant));
+        async function lire(chemin) {
+            try {
+                const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                let d = null; try { d = await r.json(); } catch (e) { /* corps vide */ }
+                return { st: r.status, d };
+            } catch (e) { return { st: 0, d: null }; }
         }
-        z.appendChild(r);
-      });
-      var libres = (d.items || []).filter(function(i){ return !i.conforme && !i.sensible; });
-      if (libres.length > 1){
-        var b = document.createElement('button'); b.className = 'btn primary'; b.textContent = 'Appliquer les écarts non sensibles (' + libres.length + ')';
-        b.onclick = function(){ appliqueAuto(libres); }; az.appendChild(b);
-      }
-      if (!d.ecarts){ var n = document.createElement('div'); n.className = 'note'; n.textContent = 'Tout est conforme à la configuration recommandée.'; az.appendChild(n); }
-    });
-    if (nom === 'redirections') api('upnp').then(function(x){
-      if (!enregistre(x)) return; var u = x.d, az = $('a-upnp'); az.textContent = '';
-      var b = document.createElement('button'); b.className = 'btn ' + (u.actif ? 'danger' : 'primary'); b.textContent = u.actif ? 'Désactiver l\u2019UPnP' : 'Activer l\u2019UPnP';
-      b.onclick = function(){ reglage('upnp', !u.actif, u.actif ? 'Désactiver l\u2019UPnP ?\n\nLes appareils (consoles, visio, partage) ne pourront plus ouvrir de ports tout seuls ; ceux qui en dépendent pourront perdre des fonctions.' : 'Activer l\u2019UPnP ?\n\nLes appareils du réseau pourront ouvrir des ports vers Internet sans demander.', 'chargeUpnp'); };
-      az.appendChild(b); var s = document.createElement('span'); s.className = 'note'; s.style.marginLeft = '.6rem'; s.textContent = u.actif ? 'UPnP actif' : 'UPnP désactivé'; az.appendChild(s);
-      liste('l-upnp', u.redirections || [], function(r, i){ r.className = 'row warn'; r.innerHTML = '<span class="nom">' + esc(i.description || i.appareil_ip) + '</span><span class="badge">' + esc(i.protocole) + '</span><span class="meta">:' + esc(i.port_externe) + ' → ' + esc(i.appareil_ip) + ':' + esc(i.port_local) + '</span>'; });
-      if (!(u.redirections || []).length){ var n = document.createElement('div'); n.className = 'note'; n.textContent = 'Aucun port ouvert par UPnP en ce moment.'; $('l-upnp').appendChild(n); }
-    });
-    if (nom === 'redirections') api('redirections').then(function(x){
-      if (!enregistre(x)) return;
-      liste('l-redir', x.d.redirections || [], function(r, i){ r.className = 'row ' + (i.sensible ? 'warn' : (i.actif ? 'on' : 'off'));
-        r.innerHTML = '<span class="nom">' + esc(i.commentaire || i.nom_appareil || i.appareil_ip) + '</span><span class="badge">' + esc(i.protocole) + '</span>'
-          + '<span class="meta">:' + esc(i.port_externe_debut) + (i.port_externe_fin !== i.port_externe_debut ? '–' + esc(i.port_externe_fin) : '') + ' → ' + esc(i.appareil_ip) + ':' + esc(i.port_local) + ' · depuis ' + esc(i.source) + (i.sensible ? ' ⚠' : '') + (i.actif ? '' : ' · désactivée') + '</span>'; });
-    });
-  }
-  $('tabs').addEventListener('click', function(e){
-    var b = e.target.closest('.tab'); if (!b) return; onglet = b.dataset.tab;
-    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(t){ t.classList.toggle('active', t === b); });
-    Array.prototype.forEach.call(document.querySelectorAll('.tab-content'), function(c){ c.classList.toggle('active', c.id === 't-' + onglet); });
-    chargeOnglet(onglet);
-  });
-  $('b-rafraichir').onclick = charger;
-  charger(); setInterval(function(){ if (etat !== 'attente_validation') charger(); }, 60000);
-})();
-</script>
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { demo: true, st: 0, d: null };
+            try {
+                const opts = { method: 'POST', credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let d = null; try { d = await r.json(); } catch (e) { /* corps vide */ }
+                return { st: r.status, d };
+            } catch (e) { return { st: 0, d: null }; }
+        }
+        const reussi = r => !r.demo && r.st >= 200 && r.st < 300;
+        function motif(r) {
+            if (r.demo) return 'Démonstration : action inerte.';
+            if (refus(r)) return 'Connexion administrateur requise.';
+            if (r.d && r.d.erreur) return String(r.d.erreur);
+            return r.st ? 'Erreur HTTP ' + r.st : 'Serveur injoignable';
+        }
+        function retour(ok, msg) { RETOUR = { ok, msg }; const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function ligneVide(tb, n, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function cellule(tr, contenu, cls) { const td = el('td', cls || ''); if (contenu instanceof Node) td.appendChild(contenu); else td.textContent = contenu; tr.appendChild(td); return td; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        const vide = () => SESSION_OK ? (STATUT && STATUT.etat === 'autorise' ? 'Aucune donnée' : 'Connectez la Freebox pour lire ces données') : '—';
+
+        // ----- Démonstration : adresses RFC 5737, noms fictifs -----
+        function demoData() {
+            STATUT = { etat: 'autorise', message: 'Connecté à la Freebox.', freebox: { modele: 'Freebox Delta (démo)', version: '10.0', nom: 'freebox-demo' },
+                       droits: { settings: false }, droits_manquants: ['settings'], aide_droits: { settings: 'Modification des réglages de la Freebox : nécessaire pour créer ou supprimer des redirections de ports.' } };
+            APP = { appareils: [
+                { id: 'a1', mac_fin: '5e:aa:10', nom: 'Salon-TV', type: 'television', fabricant: 'Exemple SA', actif: true, joignable: true, ipv4: ['192.0.2.20'], ipv6_publiques: [] },
+                { id: 'a2', mac_fin: '7c:01:9b', nom: 'Portable-Alice', type: 'laptop', fabricant: 'Exemple SA', actif: true, joignable: true, ipv4: ['192.0.2.21'], ipv6_publiques: ['2001:db8::21'] },
+                { id: 'a3', mac_fin: 'c2:44:07', nom: 'Imprimante', type: 'printer', fabricant: 'Fictif SARL', actif: false, joignable: false, ipv4: ['192.0.2.30'], ipv6_publiques: [] }] };
+            CNX = { en_ligne: true, media: 'ftth', ipv4_publique: '198.51.100.7', ipv6: '2001:db8:10::1', debit_max_descendant_mbit: 2000, debit_max_montant_mbit: 600, ipv6_actif: true, pare_feu_ipv6: true, prefixes_ipv6: ['2001:db8:10::/64'] };
+            PF = { pare_feu_actif: true, exceptions_lues: true, exceptions: [{ id: 1, actif: true, protocole: 'tcp', appareil: '2001:db8::21', port_debut: 443, port_fin: 443, commentaire: 'Serveur web', sensible: false }] };
+            RED = { redirections: [
+                { id: 1, actif: true, protocole: 'tcp', port_externe_debut: 443, port_externe_fin: 443, appareil_ip: '192.0.2.10', port_local: 443, source: 'tout Internet', commentaire: 'SecuBox HTTPS', nom_appareil: 'secubox', sensible: false },
+                { id: 2, actif: true, protocole: 'tcp', port_externe_debut: 2222, port_externe_fin: 2222, appareil_ip: '192.0.2.22', port_local: 22, source: 'tout Internet', commentaire: 'SSH', nom_appareil: '', sensible: true }] };
+            UP = { actif: true, version: 2, redirections: [{ protocole: 'udp', port_externe: 51820, port_local: 51820, appareil_ip: '192.0.2.21', description: 'Tunnel VPN' }] };
+            AUTO = { ecarts: 2, ip_box: '192.0.2.10', items: [
+                { id: 'pare_feu_ipv6', titre: 'Pare-feu IPv6', actuel: true, cible: true, sensible: false, conforme: true, pourquoi: 'Bloque les connexions entrantes IPv6 vers les appareils du réseau.' },
+                { id: 'dns', titre: 'DNS distribué par la Freebox (DHCP)', actuel: ['203.0.113.53'], cible: ['192.0.2.10'], sensible: false, conforme: false, pourquoi: 'Les appareils du réseau interrogent la box (filtrage, journal) au lieu d’un résolveur extérieur.' },
+                { id: 'dmz', titre: 'DMZ', actuel: { enabled: false, ip: '' }, cible: { enabled: true, ip: '192.0.2.10' }, sensible: true, conforme: false, pourquoi: 'Envoie à la box tout le trafic IPv4 entrant qui n’a pas de redirection. Nécessaire si la box publie des services ; expose toute la machine.' }] };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; ERREURS = {}; rendre(); return; }
+            const s = await lire('/status');
+            SESSION_OK = !refus(s); ERREURS = {};
+            STATUT = s.st === 200 ? s.d : null;
+            if (s.st && s.st !== 200 && SESSION_OK) ERREURS.statut = 'Freebox : erreur ' + s.st;
+            if (!s.st) ERREURS.statut = 'Impossible de lire le connecteur Freebox (service arrêté ou injoignable).';
+            APP = CNX = PF = RED = UP = null;
+            if (STATUT && STATUT.etat === 'autorise') {
+                const [a, c, p, r, u] = await Promise.all([lire('/appareils'), lire('/connexion'), lire('/pare-feu'), lire('/redirections'), lire('/upnp')]);
+                const prendre = (nom, x) => { if (refus(x)) { SESSION_OK = false; return null; } if (x.st === 200) return x.d; ERREURS[nom] = (x.d && x.d.erreur) || (x.st ? 'Erreur ' + x.st : 'Injoignable'); return null; };
+                APP = prendre('appareils', a); CNX = prendre('connexion', c); PF = prendre('pare-feu', p); RED = prendre('redirections', r); UP = prendre('upnp', u);
+                if (ONGLET === 'autoconfig') await chargerAuto();
+            }
+            rendre();
+        }
+        async function chargerAuto() {
+            const x = await lire('/autoconfig');
+            if (refus(x)) { SESSION_OK = false; AUTO = null; return; }
+            if (x.st === 200) { AUTO = x.d; delete ERREURS.autoconfig; } else { AUTO = null; ERREURS.autoconfig = (x.d && x.d.erreur) || (x.st ? 'Erreur ' + x.st : 'Injoignable'); }
+        }
+
+        // ----- Rendu -----
+        const ETATS = { autorise: ['ok', 'CONNECTÉE'], attente_validation: ['att', 'EN ATTENTE DE VALIDATION'], non_configure: ['neutre', 'NON CONNECTÉE'], refusee: ['hors', 'DEMANDE REFUSÉE'],
+                        expiree: ['att', 'DEMANDE EXPIRÉE'], retiree: ['hors', 'AUTORISATION RETIRÉE'], injoignable: ['hors', 'INJOIGNABLE'], erreur: ['hors', 'ERREUR'] };
+        const TITRES = { autorise: 'Connectée', attente_validation: 'En attente de validation sur la Freebox', non_configure: 'Pas encore connectée', refusee: 'Demande refusée',
+                         expiree: 'Demande expirée', retiree: 'Autorisation retirée', injoignable: 'Freebox injoignable', erreur: 'Erreur' };
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const er = $('erreur'); er.hidden = !(ERREURS.statut && SESSION_OK); er.textContent = ERREURS.statut || '';
+            const s = SESSION_OK ? STATUT : null;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { const e = ETATS[s.etat] || ['neutre', String(s.etat).toUpperCase()]; etat.className = 'actif ' + (e[0] === 'ok' ? '' : e[0]); etat.textContent = e[1]; }
+            const f = s && s.freebox;
+            $('sous').textContent = f && f.modele ? f.modele + ' · API ' + tiret(f.version) : 'Connecteur de l’API Freebox OS';
+            const ok = SESSION_OK;
+            const app = ok ? APP : null, cnx = ok ? CNX : null, pf = ok ? PF : null, red = ok ? RED : null, up = ok ? UP : null;
+            // Tuiles
+            const ligne = cnx ? (cnx.en_ligne ? 'En ligne' : 'Hors ligne') : '—';
+            $('tLigne').textContent = ligne; $('cLigne').className = 'tuile ' + (cnx ? (cnx.en_ligne ? 'ok' : 'hors') : 'cy');
+            $('sLigne').textContent = cnx && cnx.media ? 'média : ' + cnx.media : 'média';
+            const liste = app && Array.isArray(app.appareils) ? app.appareils : null;
+            $('tAppareils').textContent = liste ? liste.filter(i => i.actif).length : '—';
+            $('sAppareils').textContent = 'sur ' + (liste ? liste.length : '—') + ' connus';
+            const mb = v => (v === null || v === undefined) ? '—' : v;
+            $('tDown').textContent = cnx ? mb(cnx.debit_max_descendant_mbit) : '—';
+            $('tUp').textContent = cnx ? mb(cnx.debit_max_montant_mbit) : '—';
+            const pfa = pf ? pf.pare_feu_actif : (cnx ? cnx.pare_feu_ipv6 : null);
+            const pfv = (pfa === null || pfa === undefined) ? null : pfa;
+            $('tPf').textContent = pfv === null ? '—' : (pfv ? 'Actif' : 'Désactivé'); $('cPf').className = 'tuile ' + (pfv === null ? 'cy' : (pfv ? 'ok' : 'hors'));
+            const lr = red && Array.isArray(red.redirections) ? red.redirections : null;
+            const sens = lr ? lr.filter(r => r.sensible).length : 0;
+            $('tRedir').textContent = lr ? lr.length : '—';
+            $('sRedir').textContent = lr ? (sens ? sens + ' sensible' + (sens > 1 ? 's' : '') : 'aucune sensible') : 'ports ouverts';
+            $('cRedir').className = 'tuile ' + (lr ? (sens ? 'att' : 'cy') : 'cy');
+            rendreFb(s); rendreAppareils(liste); rendreConnexion(cnx); rendrePf(pf); rendreRedirections(lr, up); rendreAuto();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreFb(s) {
+            const e = s ? s.etat : null;
+            $('fbEtat').textContent = s ? (TITRES[e] || tiret(e)) : '—';
+            $('fbMsg').textContent = s ? tiret(s.message) : '—';
+            $('etapes').hidden = e !== 'attente_validation';
+            const z = $('fbAct'); z.replaceChildren();
+            if (s) {
+                if (['non_configure', 'refusee', 'expiree', 'retiree'].includes(e)) { const b = el('button', 'btn prim', 'Connecter la Freebox'); b.type = 'button'; b.addEventListener('click', autoriser); z.appendChild(b); }
+                if (e === 'attente_validation') { const b = el('button', 'btn', 'Vérifier maintenant'); b.type = 'button'; b.addEventListener('click', charger); z.appendChild(b); }
+                if (e === 'autorise' || e === 'attente_validation') { const b = el('button', 'btn danger', 'Oublier l’autorisation'); b.type = 'button'; b.addEventListener('click', revoquer); z.appendChild(b); }
+            }
+            const tb = $('bDroits'); tb.replaceChildren();
+            const aide = (s && s.aide_droits) || {};
+            const cles = Object.keys(aide);
+            if (!s || e !== 'autorise' || !cles.length) { ligneVide(tb, 3, s && e === 'autorise' ? 'Aucun droit à signaler' : '—'); $('nDroits').textContent = ''; return; }
+            $('nDroits').textContent = cles.length + ' droit' + (cles.length > 1 ? 's' : '');
+            cles.forEach(k => {
+                const tr = el('tr'); const accorde = !!(s.droits || {})[k];
+                cellule(tr, k, 'mono'); cellule(tr, pastille(accorde ? 'ok' : 'hors', accorde ? 'ACCORDÉ' : 'MANQUANT')); cellule(tr, tiret(aide[k]));
+                tb.appendChild(tr);
+            });
+        }
+
+        let FILTRE = '';
+        function rendreAppareils(liste) {
+            const tb = $('bApp'); tb.replaceChildren();
+            if (!liste) { $('nApp').textContent = ''; ligneVide(tb, 7, ERREURS.appareils || vide()); return; }
+            $('nApp').textContent = liste.length + ' appareil' + (liste.length > 1 ? 's' : '');
+            const q = FILTRE.trim().toLowerCase();
+            const vus = liste.filter(i => !q || [i.nom, i.fabricant, i.type, (i.ipv4 || []).join(' '), i.mac_fin].join(' ').toLowerCase().includes(q));
+            if (!vus.length) { ligneVide(tb, 7, liste.length ? 'Aucun appareil ne correspond au filtre' : 'Aucun appareil connu de la Freebox'); return; }
+            vus.forEach(i => {
+                const tr = el('tr');
+                cellule(tr, tiret(i.nom)); cellule(tr, tiret(i.type)); cellule(tr, tiret(i.fabricant));
+                cellule(tr, (i.ipv4 || []).length ? i.ipv4.join(', ') : '—', 'mono');
+                cellule(tr, (i.ipv6_publiques || []).length ? pastille('att', 'IPv6 PUBLIC', 'Adresse IPv6 joignable depuis Internet : ' + i.ipv6_publiques.join(', ')) : '—');
+                cellule(tr, tiret(i.mac_fin), 'mono');
+                cellule(tr, pastille(i.actif ? 'ok' : '', i.actif ? 'ACTIF' : 'INACTIF'));
+                tb.appendChild(tr);
+            });
+        }
+
+        function rendreConnexion(c) {
+            const t = (id, v) => { $(id).textContent = tiret(v); };
+            const mb = v => (v === null || v === undefined) ? '—' : v + ' Mb/s';
+            const oui = (v, a, b) => (v === null || v === undefined) ? '—' : (v ? a : b);
+            if (!c) { ['cEtat', 'cMedia', 'cV4', 'cV6', 'cDown', 'cUp', 'cV6Actif', 'cPfActif', 'cPrefixes'].forEach(i => { $(i).textContent = '—'; }); return; }
+            t('cEtat', c.en_ligne ? 'En ligne' : 'Hors ligne'); t('cMedia', c.media); t('cV4', c.ipv4_publique); t('cV6', c.ipv6);
+            $('cDown').textContent = mb(c.debit_max_descendant_mbit); $('cUp').textContent = mb(c.debit_max_montant_mbit);
+            $('cV6Actif').textContent = oui(c.ipv6_actif, 'Actif', 'Inactif'); $('cPfActif').textContent = oui(c.pare_feu_ipv6, 'Actif', 'Désactivé');
+            $('cPrefixes').textContent = (c.prefixes_ipv6 || []).length ? c.prefixes_ipv6.join(', ') : '—';
+        }
+
+        function rendrePf(p) {
+            const tb = $('bExc'); tb.replaceChildren(); const az = $('pfAct'); az.replaceChildren();
+            if (!p) { $('pfEtat').textContent = '—'; $('pfNote').textContent = ERREURS['pare-feu'] || ''; $('nExc').textContent = ''; ligneVide(tb, 5, ERREURS['pare-feu'] || vide()); return; }
+            const a = p.pare_feu_actif;
+            $('pfEtat').textContent = (a === null || a === undefined) ? 'Pare-feu IPv6 : état inconnu' : 'Pare-feu IPv6 : ' + (a ? 'actif' : 'désactivé');
+            if (a !== null && a !== undefined) {
+                const b = el('button', 'btn ' + (a ? 'danger' : 'prim'), a ? 'Désactiver le pare-feu IPv6' : 'Activer le pare-feu IPv6'); b.type = 'button';
+                b.addEventListener('click', () => reglePareFeu(!a)); az.appendChild(b);
+            }
+            const ex = p.exceptions || [];
+            $('nExc').textContent = p.exceptions_lues ? ex.length + ' exception' + (ex.length > 1 ? 's' : '') : '';
+            $('pfNote').textContent = p.exceptions_lues ? '' : 'Les exceptions IPv6 ne sont pas lisibles avec cette version de la Freebox ou ces droits.';
+            if (!ex.length) { ligneVide(tb, 5, p.exceptions_lues ? 'Aucune exception autorisée' : '—'); return; }
+            ex.forEach(e => {
+                const tr = el('tr');
+                cellule(tr, tiret(e.appareil), 'mono'); cellule(tr, tiret(e.protocole));
+                cellule(tr, tiret(e.port_debut) + (e.port_fin !== e.port_debut && e.port_fin != null ? '–' + e.port_fin : '') + (e.sensible ? ' ⚠' : ''), 'mono');
+                cellule(tr, tiret(e.commentaire));
+                cellule(tr, e.sensible ? pastille('att', 'SENSIBLE', 'Port d’un service sensible (accès à distance, partage, base de données)') : pastille(e.actif ? 'ok' : '', e.actif ? 'ACTIVE' : 'INACTIVE'));
+                tb.appendChild(tr);
+            });
+        }
+
+        function rendreRedirections(lr, up) {
+            const tb = $('bRed'); tb.replaceChildren();
+            if (!lr) { $('nRed').textContent = ''; ligneVide(tb, 6, ERREURS.redirections || vide()); }
+            else {
+                $('nRed').textContent = lr.length + ' redirection' + (lr.length > 1 ? 's' : '');
+                if (!lr.length) ligneVide(tb, 6, 'Aucune redirection de port');
+                lr.forEach(i => {
+                    const tr = el('tr');
+                    cellule(tr, tiret(i.commentaire || i.nom_appareil || i.appareil_ip)); cellule(tr, tiret(i.protocole));
+                    cellule(tr, tiret(i.port_externe_debut) + (i.port_externe_fin !== i.port_externe_debut && i.port_externe_fin != null ? '–' + i.port_externe_fin : ''), 'mono');
+                    cellule(tr, tiret(i.appareil_ip) + ':' + tiret(i.port_local), 'mono'); cellule(tr, tiret(i.source));
+                    const e = el('td'); if (i.sensible) e.appendChild(pastille('att', 'SENSIBLE', 'Ouvre un service d’accès à distance, de partage ou de base de données')); e.appendChild(pastille(i.actif ? 'ok' : '', i.actif ? 'ACTIVE' : 'DÉSACTIVÉE')); tr.appendChild(e);
+                    tb.appendChild(tr);
+                });
+            }
+            const tu = $('bUpnp'); tu.replaceChildren(); const az = $('upAct'); az.replaceChildren();
+            if (!up) { $('upEtat').textContent = '—'; $('nUpnp').textContent = ''; ligneVide(tu, 4, ERREURS.upnp || vide()); return; }
+            $('upEtat').textContent = up.actif ? 'UPnP actif' : 'UPnP désactivé';
+            const b = el('button', 'btn ' + (up.actif ? 'danger' : 'prim'), up.actif ? 'Désactiver l’UPnP' : 'Activer l’UPnP'); b.type = 'button';
+            b.addEventListener('click', () => reglageUpnp(!up.actif)); az.appendChild(b);
+            const rr = up.redirections || [];
+            $('nUpnp').textContent = rr.length + ' port' + (rr.length > 1 ? 's' : '') + ' ouvert' + (rr.length > 1 ? 's' : '');
+            if (!rr.length) { ligneVide(tu, 4, 'Aucun port ouvert par UPnP en ce moment'); return; }
+            rr.forEach(i => {
+                const tr = el('tr'); cellule(tr, tiret(i.description || i.appareil_ip)); cellule(tr, tiret(i.protocole)); cellule(tr, tiret(i.port_externe), 'mono');
+                cellule(tr, tiret(i.appareil_ip) + ':' + tiret(i.port_local), 'mono'); tu.appendChild(tr);
+            });
+        }
+
+        function texteValeur(v) {
+            if (v === true) return 'activé'; if (v === false) return 'désactivé'; if (v === null || v === undefined) return '—';
+            if (Array.isArray(v)) return v.length ? v.join(', ') : 'aucun';
+            if (typeof v === 'object' && v.mac !== undefined) return (v.mac ? '…' + String(v.mac).slice(-8) : 'MAC inconnue') + (v.ip ? ' → ' + v.ip : ' (pas de bail)');
+            if (typeof v === 'object') return (v.enabled ? 'activée' : 'désactivée') + (v.ip ? ' → ' + v.ip : '');
+            return String(v);
+        }
+        function rendreAuto() {
+            const tb = $('bAuto'); tb.replaceChildren(); const az = $('autoAct'); az.replaceChildren();
+            const d = SESSION_OK ? AUTO : null;
+            if (!d) { $('nAuto').textContent = ''; ligneVide(tb, 6, ERREURS.autoconfig || (SESSION_OK && STATUT && STATUT.etat === 'autorise' ? 'Lecture en cours…' : vide())); return; }
+            const items = d.items || [];
+            $('nAuto').textContent = d.ecarts ? d.ecarts + ' écart' + (d.ecarts > 1 ? 's' : '') : 'tout est conforme';
+            items.forEach(i => {
+                const tr = el('tr');
+                cellule(tr, tiret(i.titre)); cellule(tr, pastille(i.conforme ? 'ok' : (i.sensible ? 'att' : 'cy'), i.conforme ? 'CONFORME' : 'ÉCART'));
+                cellule(tr, texteValeur(i.actuel)); cellule(tr, texteValeur(i.cible)); cellule(tr, tiret(i.pourquoi));
+                const a = el('td', 'act');
+                if (!i.conforme) a.appendChild(btn(i.sensible ? 'Appliquer (sensible)' : 'Appliquer', i.sensible ? 'danger' : 'prim', () => appliqueAuto(i)));
+                tr.appendChild(a); tb.appendChild(tr);
+            });
+            if (!items.length) ligneVide(tb, 6, 'Aucun réglage recommandé');
+            const libres = items.filter(i => !i.conforme && !i.sensible);
+            if (libres.length > 1) { const b = el('button', 'btn prim', 'Appliquer les écarts non sensibles (' + libres.length + ')'); b.type = 'button'; b.addEventListener('click', () => appliqueAuto(libres)); az.appendChild(b); }
+            if (!d.ecarts) az.appendChild(el('span', 'note', 'Tout est conforme à la configuration recommandée.'));
+        }
+
+        // ----- Confirmation intégrée : jamais de dialogue natif -----
+        function demanderConfirmation(titre, paragraphes, liste, grave, oui, action) {
+            CONF = { action };
+            $('confTitre').textContent = titre;
+            const c = $('confCorps'); c.replaceChildren();
+            paragraphes.forEach(p => c.appendChild(el('p', '', p)));
+            if (liste && liste.length) { const ul = el('ul'); liste.forEach(t => ul.appendChild(el('li', '', t))); c.appendChild(ul); }
+            $('confirme').className = 'confirme' + (grave ? ' grave' : '');
+            $('confOui').textContent = oui; $('confirme').hidden = false; annoncer();
+            $('confOui').focus();
+            try { $('confirme').scrollIntoView({ block: 'nearest' }); } catch (e) { /* ancien navigateur */ }
+        }
+        function fermerConfirmation() { CONF = null; $('confirme').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConfirmation);
+        $('confOui').addEventListener('click', () => { const a = CONF && CONF.action; fermerConfirmation(); if (a) a(); });
+        document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && CONF) fermerConfirmation(); });
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function autoriser() {
+            const r = await ecrire('/autoriser', {});
+            if (reussi(r)) { toast('Demande envoyée : validez-la sur la Freebox'); retour(true, 'Demande envoyée : validez-la sur la Freebox.'); charger(); }
+            else retour(false, 'Connexion impossible : ' + motif(r));
+        }
+        function revoquer() {
+            demanderConfirmation('Oublier l’autorisation de SecuBox ?', ['Il faudra revalider sur la Freebox pour se reconnecter.'], null, true, 'Oublier l’autorisation', async () => {
+                const r = await ecrire('/revoquer');
+                if (reussi(r)) { retour(true, (r.d && r.d.message) || 'Autorisation oubliée.'); charger(); } else retour(false, 'Échec : ' + motif(r));
+            });
+        }
+        async function envoyerReglage(chemin, corps, ok, suite) {
+            const r = await ecrire(chemin, corps);
+            if (reussi(r)) { retour(true, typeof ok === 'function' ? ok(r) : ok); charger(); }
+            else if (r.st === 403 && r.d && r.d.droit_manquant) retour(false, String(r.d.erreur));
+            else retour(false, 'Échec : ' + motif(r));
+        }
+        function reglageUpnp(actif) {
+            demanderConfirmation(actif ? 'Activer l’UPnP ?' : 'Désactiver l’UPnP ?',
+                [actif ? 'Les appareils du réseau pourront ouvrir des ports vers Internet sans demander.' : 'Les appareils (consoles, visio, partage) ne pourront plus ouvrir de ports tout seuls ; ceux qui en dépendent pourront perdre des fonctions.'],
+                null, actif, actif ? 'Activer l’UPnP' : 'Désactiver l’UPnP',
+                () => envoyerReglage('/upnp', { actif, confirme: true }, 'Réglage appliqué : UPnP ' + (actif ? 'activé' : 'désactivé') + '.'));
+        }
+        function reglePareFeu(actif) {
+            demanderConfirmation(actif ? 'Activer le pare-feu IPv6 de la Freebox ?' : 'Désactiver le pare-feu IPv6 de la Freebox ?',
+                [actif ? 'Les connexions qui arrivent d’Internet vers vos appareils en IPv6 seront bloquées. Un service que vous exposez volontairement en IPv6 (serveur, jeu, visio) devra être autorisé à part.'
+                       : 'Tous vos appareils ayant une adresse IPv6 publique redeviennent joignables depuis Internet.'],
+                null, !actif, actif ? 'Activer le pare-feu' : 'Désactiver le pare-feu',
+                () => envoyerReglage('/pare-feu/ipv6', { actif, confirme: true }, actif ? 'Pare-feu IPv6 activé.' : 'Pare-feu IPv6 désactivé.'));
+        }
+        function appliqueAuto(cible) {
+            const liste = Array.isArray(cible) ? cible : [cible], sensible = liste.some(i => i.sensible);
+            const para = ['L’état est relu avant et après, et l’action est journalisée.'];
+            if (sensible) para.push('⚠ La DMZ envoie à la box TOUT le trafic entrant sans redirection : toute la machine est exposée à Internet. Confirmer encore ?');
+            demanderConfirmation('Appliquer à la Freebox', para, liste.map(i => i.titre), sensible, sensible ? 'Appliquer, DMZ comprise' : 'Appliquer', () => {
+                const corps = { ids: liste.map(i => i.id), confirme: true };
+                if (sensible) corps.confirme_dmz = true;
+                return envoyerReglage('/autoconfig', corps, r => ((r.d && r.d.appliques) || []).length ? 'Appliqué : ' + r.d.appliques.join(', ') + '.' : 'Rien à changer.');
+            });
+        }
+
+        // ----- Onglets, filtre -----
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === nom)));
+            ['appareils', 'connexion', 'pare-feu', 'redirections', 'autoconfig'].forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'autoconfig' && !DEMO && STATUT && STATUT.etat === 'autorise') chargerAuto().then(rendre); else annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.tab)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.tab); ev.preventDefault();
+        });
+        $('rechApp').addEventListener('input', ev => { FILTRE = ev.target.value; rendreAppareils(SESSION_OK && APP ? APP.appareils || [] : null); annoncer(); });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'freebox' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, pendant une confirmation ou une saisie ; 15 s en attente de validation, sinon 30 s.
+        (function boucle() {
+            const delai = STATUT && STATUT.etat === 'attente_validation' ? 15000 : 30000;
+            setTimeout(() => {
+                if (!(document.hidden || DEMO || CONF || document.activeElement === $('rechApp'))) charger();
+                boucle();
+            }, delai);
+        })();
+    </script>
 </body>
 </html>
