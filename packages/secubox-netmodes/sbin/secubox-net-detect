@@ -437,7 +437,7 @@ main() {
             generate_netplan "$board" "$wan_iface" "$lan_ifaces" "$sfp_ifaces" "$mode"
             log "Applying netplan..."
             # Use timeout to prevent hanging
-            timeout 5 netplan apply 2>/dev/null || log "netplan apply skipped or failed"
+            timeout 30 netplan apply 2>/dev/null || log "netplan apply skipped or failed (code $?; 124 = delai de 30 s depasse)"
             ok "Network configuration applied (mode: $mode)"
             ;;
         test)

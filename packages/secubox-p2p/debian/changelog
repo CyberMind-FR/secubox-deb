@@ -1,3 +1,9 @@
+secubox-p2p (1.13.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-relais-maillage synchroniser (#2532) : sortie 1 sur une box sans maillage. `pairs="$(pairs_32)"` : `wg show wg-mesh` echoue (pas d'interface) et, sous set -e/pipefail, tuait le script avant la garde « aucun pair a relayer » qui retourne 0 ; l'unite horaire restait en echec. `pairs_32 || true`. 2 tests (a lancer en root).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 14:00:00 +0200
+
 secubox-p2p (1.13.0-1~bookworm1) bookworm; urgency=medium
 
   * Automesh (#2475) : code d'invitation unique `sbxmesh1.…` (adresse du parent + jeton +

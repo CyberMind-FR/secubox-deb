@@ -445,27 +445,33 @@ LOGO
 apply_mode() {
     local mode="$1"
     mkdir -p /var/lib/secubox
+    # Idempotent (#2532) : ce service tourne Before=sysinit.target a CHAQUE boot ; un mode deja applique (meme fichier, meme cible par defaut)
+    # n'a rien a refaire. Il echouait en sortie 1 quand systemctl n'etait pas encore joignable.
+    local cible="multi-user.target"; [ "$mode" = "kiosk" ] && cible="graphical.target"
+    if [ "$(cat "$MODE_FILE" 2>/dev/null)" = "$mode" ] && [ "$(systemctl get-default 2>/dev/null)" = "$cible" ]; then
+        return 0
+    fi
     echo "$mode" > "$MODE_FILE"
 
     case "$mode" in
         normal)
-            systemctl set-default multi-user.target
+            systemctl set-default multi-user.target 2>/dev/null || true
             systemctl disable secubox-kiosk.service 2>/dev/null || true
             ;;
         kiosk)
-            systemctl set-default graphical.target
+            systemctl set-default graphical.target 2>/dev/null || true
             systemctl enable secubox-kiosk.service 2>/dev/null || true
             ;;
         console)
-            systemctl set-default multi-user.target
+            systemctl set-default multi-user.target 2>/dev/null || true
             systemctl enable secubox-console.service 2>/dev/null || true
             ;;
         bridge)
-            systemctl set-default multi-user.target
+            systemctl set-default multi-user.target 2>/dev/null || true
             systemctl enable secubox-bridge.service 2>/dev/null || true
             ;;
         minimal)
-            systemctl set-default multi-user.target
+            systemctl set-default multi-user.target 2>/dev/null || true
             systemctl disable nginx secubox-hub secubox-portal 2>/dev/null || true
             ;;
     esac
@@ -505,6 +511,9 @@ else
     # Silent apply current mode
     apply_mode "$DEFAULT_MODE"
 fi
+
+# Un selecteur de mode ne doit jamais faire echouer le boot (#2532).
+exit 0
 BOOTMENU
 chmod +x "${ROOTFS}/usr/local/bin/secubox-bootmenu"
 
