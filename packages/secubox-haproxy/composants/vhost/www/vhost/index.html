@@ -4,630 +4,496 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Hôtes virtuels au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes (#2556).
+  Les écritures gardent les routes et les corps de l'ancienne page ; aucune donnée d'API n'est injectée comme balisage (textContent seul).
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - VHost Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — Hôtes virtuels</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --cyan: #00d4ff;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --dim: #6b7b8b;
-            /* compat aliases used by inline styles / JS */
-            --primary: var(--cyan);
-            --text-dim: var(--dim);
-            --p31-dim: var(--dim);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        @media (max-width: 768px) { .main { margin-left: 0; padding-top: 60px; } }
-
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.success { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .btn.success:hover { border-color: var(--green); color: var(--green); box-shadow: 0 0 8px rgba(0,221,68,0.3); }
-        .btn.warning { background: rgba(255,204,0,0.15); border-color: var(--yellow); color: var(--yellow); }
-        .btn.warning:hover { border-color: var(--yellow); color: var(--yellow); box-shadow: 0 0 8px rgba(255,204,0,0.3); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.danger:hover { border-color: var(--red); color: var(--red); box-shadow: 0 0 8px rgba(255,68,102,0.3); }
-        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h2 { font-size: 0.95rem; margin-bottom: 0.9rem; color: var(--cyan); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; backdrop-filter: blur(5px); }
-        .stat-card .value { font-size: 1.4rem; font-weight: bold; color: var(--cyan); text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.6rem; color: var(--dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
-        .stat-card.dead .value { color: var(--red); }
-        .stat-card.critical .value { color: var(--orange); }
-        .stat-card.warning .value { color: var(--yellow); }
-        .stat-card.healthy .value { color: var(--green); }
-        .stat-card.blue .value { color: var(--blue); }
-        .stat-card.cyan .value { color: var(--cyan); }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
-        .tab { padding: 0.5rem 0.9rem; cursor: pointer; color: var(--dim); border-bottom: 2px solid transparent; font-size: 0.72rem; text-transform: uppercase; transition: all 0.2s; }
-        .tab:hover { color: var(--cyan); }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .components-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-        .component-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; backdrop-filter: blur(5px); }
-        .component-card h3 { font-size: 0.95rem; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; color: var(--cyan); }
-        .component-card .meta { font-size: 0.75rem; color: var(--dim); margin-bottom: 0.4rem; }
-
-        .status-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; text-transform: uppercase; border: 1px solid var(--border); color: var(--dim); }
-        .status-badge.running { background: rgba(0,221,68,0.15); color: var(--green); border-color: var(--green); }
-        .status-badge.stopped { background: rgba(255,68,102,0.15); color: var(--red); border-color: var(--red); }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.55rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
-        th { color: var(--dim); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; }
-        tr:hover td { background: rgba(0,212,255,0.04); }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; border: 1px solid var(--border); }
-        .badge.enabled { background: rgba(0,221,68,0.15); color: var(--green); border-color: var(--green); }
-        .badge.disabled { background: rgba(107,123,139,0.15); color: var(--dim); }
-        .badge.ssl { background: rgba(0,212,255,0.15); color: var(--cyan); border-color: var(--cyan); }
-
-        /* Certificate list — certs-style status rows */
-        .cert-list { display: flex; flex-direction: column; gap: 0.25rem; }
-        .cert-item { display: grid; grid-template-columns: 1.5em 1fr auto auto auto; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem; background: rgba(20,30,45,0.6); border-radius: 4px; font-size: 0.78rem; border-left: 3px solid var(--border); transition: all 0.15s; }
-        .cert-item:hover { background: rgba(0,212,255,0.08); transform: translateX(2px); }
-        .cert-item.dead { border-left-color: var(--red); background: rgba(255,68,102,0.1); }
-        .cert-item.critical { border-left-color: var(--orange); background: rgba(255,153,68,0.08); }
-        .cert-item.warning { border-left-color: var(--yellow); background: rgba(255,204,0,0.05); }
-        .cert-item.healthy { border-left-color: var(--green); }
-        .cert-item .dot { text-align: center; }
-        .cert-item .domain { font-weight: 500; color: var(--cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cert-item .issuer { font-size: 0.68rem; color: var(--dim); text-align: right; }
-        .cert-item .days { font-size: 0.72rem; text-align: right; min-width: 70px; font-weight: bold; }
-        .cert-item .days.dead { color: var(--red); }
-        .cert-item .days.critical { color: var(--orange); }
-        .cert-item .days.warning { color: var(--yellow); }
-        .cert-item .days.healthy { color: var(--green); }
-        .cert-item .exp { font-size: 0.68rem; color: var(--dim); text-align: right; min-width: 95px; }
-        @media (max-width: 768px) { .cert-item { grid-template-columns: 1.2em 1fr auto; } .cert-item .issuer, .cert-item .exp { display: none; } }
-
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.6rem; }
-        .form-group { margin-bottom: 0.6rem; }
-        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.7rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
-        .form-group input, .form-group select { width: 100%; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-
-        .url-box { background: rgba(20,30,45,0.6); padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); font-family: 'Courier Prime', monospace; font-size: 0.8rem; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-        .url-label { font-size: 0.65rem; color: var(--dim); text-transform: uppercase; margin-bottom: 0.2rem; }
-        .url-box a { color: var(--cyan); text-decoration: none; }
-        .url-box a:hover { text-shadow: 0 0 6px var(--cyan); }
-
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: rgba(20,30,45,0.95); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 480px; max-width: 90vw; max-height: 85vh; overflow-y: auto; backdrop-filter: blur(10px); }
-        .modal-content h3 { margin-bottom: 1rem; color: var(--cyan); }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        td.dom{white-space:nowrap} td.dom a{color:var(--cyan);text-decoration:none} td.dom a:hover{text-decoration:underline}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .btn{margin-right:5px}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.jaune{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie,.conf{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        .conf{border-color:var(--rouge);grid-template-columns:1fr}
+        .conf.neutre{border-color:var(--cyan)}
+        .conf p{margin:0;font-size:.82rem;overflow-wrap:anywhere}
+        form.saisie label,.conf label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select,.conf input,.filtre{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus,.conf input:focus,.filtre:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout,.conf .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .filtre{max-width:260px;margin-left:auto}
+        input[type=checkbox]{width:18px;height:18px;accent-color:var(--cyan);cursor:pointer}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>🌐 VHost Manager</h1>
-            <div class="btn-group">
-                <span class="status-badge" id="status-badge">Loading...</span>
-                <button class="btn" onclick="reloadNginx()">↻ Reload Nginx</button>
-                <button class="btn" onclick="refresh()">🔄 Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+                <div><h1>Hôtes virtuels</h1><small>Vhosts nginx, routes HAProxy et certificats</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn" id="recharge" type="button" title="Teste puis recharge la configuration nginx (POST /reload)">↻ Recharger nginx</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="retour" class="retour" role="status" hidden></div>
+        <div id="conf" class="conf" role="alertdialog" aria-labelledby="confTitre" hidden></div>
 
-        <!-- Three-fold navigation -->
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('components')">📦 Components</div>
-            <div class="tab" onclick="showTab('status')">📊 Status</div>
-            <div class="tab" onclick="showTab('access')">🔗 Access</div>
-            <div class="tab" onclick="showTab('vhosts')">🌐 VHosts</div>
-            <div class="tab" onclick="showTab('certs')">🔐 Certificates</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Hôtes virtuels joignables : fichiers nginx plus routes HAProxy sans fichier nginx (liste /vhosts)."><span class="l">Vhosts</span><span class="v" id="tVhosts">—</span><span class="s">nginx + HAProxy</span></div>
+            <div class="tuile cy" title="Fichiers .conf de sites-available ; entre parenthèses, ceux activés dans sites-enabled. Les routes HAProxy seules n'y figurent pas."><span class="l">Fichiers nginx</span><span class="v" id="tFichiers">—</span><span class="s" id="sFichiers">activés : —</span></div>
+            <div class="tuile" id="cNginx" title="Le service nginx tourne-t-il ?"><span class="l">Nginx</span><span class="v" id="tNginx">—</span><span class="s" id="sNginx">version —</span></div>
+            <div class="tuile cy" title="Certificats lus dans le magasin PEM combiné de HAProxy."><span class="l">Certificats</span><span class="v" id="tCerts">—</span><span class="s">magasin HAProxy</span></div>
+            <div class="tuile" id="cBientot" title="Certificats qui expirent dans moins de 30 jours (hors déjà expirés)."><span class="l">Expirent &lt; 30 j</span><span class="v" id="tBientot">—</span><span class="s">à renouveler</span></div>
+            <div class="tuile" id="cExpires" title="Certificats dont la date de fin est dépassée."><span class="l">Expirés</span><span class="v" id="tExpires">—</span><span class="s">à renouveler</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections des hôtes virtuels">
+            <button type="button" role="tab" id="o-apercu" data-t="apercu" aria-selected="true" aria-controls="t-apercu">Aperçu</button>
+            <button type="button" role="tab" id="o-vhosts" data-t="vhosts" aria-selected="false" aria-controls="t-vhosts">Vhosts</button>
+            <button type="button" role="tab" id="o-acces" data-t="acces" aria-selected="false" aria-controls="t-acces">Accès</button>
+            <button type="button" role="tab" id="o-certs" data-t="certs" aria-selected="false" aria-controls="t-certs">Certificats</button>
         </div>
 
-        <!-- COMPONENTS TAB -->
-        <div class="tab-content active" id="tab-components">
-            <div class="components-grid">
-                <div class="component-card">
-                    <h3>Nginx <span class="status-badge" id="nginx-badge">-</span></h3>
-                    <div class="meta">High-performance HTTP server and reverse proxy</div>
-                    <div class="meta" id="nginx-version">Version: -</div>
-                </div>
-                <div class="component-card">
-                    <h3>ACME <span class="status-badge" id="acme-badge">-</span></h3>
-                    <div class="meta">Let's Encrypt certificate automation</div>
-                    <div class="meta" id="acme-status">acme.sh client</div>
-                </div>
-            </div>
+        <section id="t-apercu" role="tabpanel" aria-labelledby="o-apercu" class="grille">
+            <div class="pan"><h3>Nginx</h3>
+                <dl class="kv"><dt>État</dt><dd id="kNginx">—</dd><dt>Version</dt><dd id="kVer">—</dd><dt>Fichiers de site</dt><dd id="kFich">—</dd><dt>Sites activés</dt><dd id="kAct">—</dd></dl></div>
+            <div class="pan"><h3>ACME <i>acme.sh</i></h3>
+                <dl class="kv"><dt>Client</dt><dd id="kAcme">—</dd><dt>Certificats</dt><dd id="kCerts">—</dd></dl>
+                <p class="note">Émission Let’s Encrypt par webroot ; un certificat générique (*.domaine) ne peut pas être émis par ce mode.</p></div>
+            <div class="pan" style="grid-column:1/-1"><h3>WAF et exposition</h3>
+                <p class="note" style="margin:0">Tout le trafic public passe par le WAF (sbxwaf). Cette page ne crée aucun contournement : un contournement se déclare dans <span class="mono">haproxy.toml</span> (<span class="mono">waf_bypass</span> par vhost). La case « Anti-robots » demande au WAF de refuser les robots d’indexation (403) sur le vhost.</p></div>
+            <div class="pan" style="grid-column:1/-1"><h3>Ce que cette page ne montre pas</h3>
+                <p class="note" style="margin:0">L’API ne fournit ni les dossiers de configuration, ni la version du module, ni l’historique des rechargements : rien n’est affiché à leur place. Les journaux par vhost, le test de configuration et la migration OpenWrt existent côté API mais n’ont jamais eu de bouton ici.</p></div>
+        </section>
 
-            <div class="card">
-                <h2>Quick Stats</h2>
-                <div class="grid">
-                    <div class="stat-card cyan"><div class="value" id="vhost-count">-</div><div class="label">Total VHosts</div></div>
-                    <div class="stat-card healthy"><div class="value" id="enabled-count">-</div><div class="label">Enabled</div></div>
-                    <div class="stat-card blue"><div class="value" id="cert-count">-</div><div class="label">Certificates</div></div>
-                    <div class="stat-card"><div class="value" id="nginx-status">-</div><div class="label">Nginx Status</div></div>
-                </div>
-            </div>
-        </div>
+        <section id="t-vhosts" role="tabpanel" aria-labelledby="o-vhosts" hidden>
+            <div class="pan"><h3>Hôtes virtuels <i id="nVhosts"></i><input class="filtre" id="filtre" type="search" placeholder="Filtrer (domaine, module, backend)" aria-label="Filtrer les vhosts"><button class="btn prim sm" id="addVhost" type="button" style="margin-left:0">+ Nouveau vhost</button></h3>
+                <form class="saisie" id="fVhost" hidden>
+                    <label>Domaine<input name="domain" placeholder="app.example.net" required></label>
+                    <label>URL du backend<input name="backend" placeholder="http://192.0.2.10:3000" required></label>
+                    <label>Mode TLS<select name="tls_mode"><option value="off">Désactivé</option><option value="acme">ACME (Let’s Encrypt)</option><option value="manual">Manuel</option></select></label>
+                    <label>WebSocket<select name="websocket"><option value="false">Non</option><option value="true">Oui</option></select></label>
+                    <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fVhost">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Domaine</th><th>Module</th><th>Backend</th><th>TLS</th><th>Exposition</th><th title="Cochée : les robots d’indexation reçoivent 403 sur ce vhost. Décochée : ils passent.">Anti-robots</th><th>État</th><th>Actions</th></tr></thead><tbody id="bVhosts"></tbody></table></div></div>
+        </section>
 
-        <!-- STATUS TAB -->
-        <div class="tab-content" id="tab-status">
-            <div class="card">
-                <h2>Service Health</h2>
-                <table>
-                    <thead><tr><th>Component</th><th>Status</th><th>Details</th></tr></thead>
-                    <tbody>
-                        <tr>
-                            <td>Nginx</td>
-                            <td id="health-nginx">-</td>
-                            <td id="health-nginx-detail">-</td>
-                        </tr>
-                        <tr>
-                            <td>ACME</td>
-                            <td id="health-acme">-</td>
-                            <td id="health-acme-detail">acme.sh certificate client</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+        <section id="t-acces" role="tabpanel" aria-labelledby="o-acces" hidden>
+            <div class="pan"><h3>Domaines configurés <i id="nAcces"></i></h3>
+                <div class="tab"><table><thead><tr><th>Domaine</th><th>Adresse publique</th><th>Backend</th><th>État</th></tr></thead><tbody id="bAcces"></tbody></table></div></div>
+        </section>
 
-            <div class="card">
-                <h2>Configuration</h2>
-                <table>
-                    <tbody>
-                        <tr><td>VHost Config Dir</td><td>/etc/nginx/sites-available</td></tr>
-                        <tr><td>Enabled Dir</td><td>/etc/nginx/sites-enabled</td></tr>
-                        <tr><td>ACME Dir</td><td>/etc/acme</td></tr>
-                        <tr><td>Webroot</td><td>/var/www/acme</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <section id="t-certs" role="tabpanel" aria-labelledby="o-certs" hidden>
+            <div class="pan"><h3>Certificats <i id="nCerts"></i><button class="btn prim sm" id="addCert" type="button">+ Demander un certificat</button></h3>
+                <form class="saisie" id="fCert" hidden>
+                    <label>Domaine<input name="domain" placeholder="app.example.net" required></label>
+                    <label>Courriel du compte ACME<input name="email" type="email" placeholder="admin@example.net" required></label>
+                    <div class="bout"><button class="btn prim" type="submit">Demander</button><button class="btn" type="button" data-ferme="fCert">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Domaine</th><th>Émetteur</th><th>État</th><th>Jours</th><th>Expiration</th><th>Actions</th></tr></thead><tbody id="bCerts"></tbody></table></div>
+                <p class="note">Jours restants et état sont calculés par la page à partir de la date de fin du certificat.</p></div>
+        </section>
+    </div></div></main>
 
-        <!-- ACCESS TAB -->
-        <div class="tab-content" id="tab-access">
-            <div class="card">
-                <h2>Configured Domains</h2>
-                <div id="access-domains">Loading...</div>
-            </div>
-        </div>
-
-        <!-- VHOSTS TAB -->
-        <div class="tab-content" id="tab-vhosts">
-            <div class="card">
-                <h2>Virtual Hosts <button class="btn success sm" onclick="showAddVhost()">+ New</button></h2>
-                <table>
-                    <thead><tr><th>Domain</th><th>Module</th><th>Backend</th><th>TLS</th><th>Exposition</th><th title="Cochée = les robots d'indexation reçoivent 403 sur ce vhost. Décochée = ils passent.">Anti-robots</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="vhost-list"><tr><td colspan="8">Loading...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- CERTS TAB -->
-        <div class="tab-content" id="tab-certs">
-            <div class="grid">
-                <div class="stat-card dead"><div class="value" id="cert-expired">-</div><div class="label">💀 Expired</div></div>
-                <div class="stat-card warning"><div class="value" id="cert-expiring">-</div><div class="label">⚠️ Expiring &lt;30d</div></div>
-                <div class="stat-card healthy"><div class="value" id="cert-valid">-</div><div class="label">💚 Valid</div></div>
-                <div class="stat-card blue"><div class="value" id="cert-total">-</div><div class="label">📜 Total</div></div>
-            </div>
-            <div class="card">
-                <h2>Certificates <button class="btn success sm" onclick="showRequestCert()">+ Request</button></h2>
-                <div class="cert-list" id="cert-list">Loading...</div>
-            </div>
-        </div>
-
-        <!-- ACTIONS TAB -->
-    </main>
-
-    <!-- Add VHost Modal -->
-    <div class="modal" id="vhost-modal">
-        <div class="modal-content">
-            <h3>Add VHost</h3>
-            <div class="form-group"><label>Domain</label><input type="text" id="new-domain" placeholder="example.com"></div>
-            <div class="form-group"><label>Backend URL</label><input type="text" id="new-backend" placeholder="http://localhost:3000"></div>
-            <div class="form-row">
-                <div class="form-group"><label>TLS Mode</label>
-                    <select id="new-tls">
-                        <option value="off">Off</option>
-                        <option value="acme">ACME (Let's Encrypt)</option>
-                        <option value="manual">Manual</option>
-                    </select>
-                </div>
-                <div class="form-group"><label>WebSocket</label>
-                    <select id="new-websocket">
-                        <option value="false">No</option>
-                        <option value="true">Yes</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('vhost-modal')">Cancel</button>
-                <button class="btn success" onclick="addVhost()">Create</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Request Cert Modal -->
-    <div class="modal" id="cert-modal">
-        <div class="modal-content">
-            <h3>Request Certificate</h3>
-            <div class="form-group"><label>Domain</label><input type="text" id="cert-domain" placeholder="example.com"></div>
-            <div class="form-group"><label>Email</label><input type="email" id="cert-email" placeholder="admin@example.com"></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('cert-modal')">Cancel</button>
-                <button class="btn success" onclick="requestCert()">Request</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/vhost';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function esc(s) {
-            return String(s == null ? '' : s)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        let STATUT = null, VHOSTS = null, CERTS = null, ACCES = null, SESSION_OK = true, ONGLET = 'apercu';
+        let CONFIRM = null;   // { titre, texte, champ, bouton, fn } : confirmation intégrée, jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        async function api(path, opts = {}) {
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && (res.data.detail !== undefined ? res.data.detail : res.data.message);
+            if (d !== undefined && d !== null && d !== '') return typeof d === 'string' ? d : JSON.stringify(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+
+        // ---------- données de démonstration (adresses RFC 5737) ----------
+        function demoData() {
+            STATUT = { running: true, vhost_count: 4, enabled_count: 3, cert_count: 4, components: { nginx: { installed: true, running: true, version: '1.22.1' }, acme: { installed: true, running: true } } };
+            const j = n => new Date(Date.now() + n * 86400000).toUTCString().replace('GMT', 'GMT');
+            VHOSTS = { vhosts: [
+                { domain: 'wiki.example.net', backend: 'http://192.0.2.10:3000', tls_mode: 'haproxy', ssl: true, websocket: false, enabled: true, nginx_enabled: true, haproxy_routed: true, url: 'https://wiki.example.net', source: 'nginx', exposure: { reach: 'wan', mesh: false }, anti_robots: true, module: { id: 'wiki', category: 'apps', runtime: 'lxc', certain: true } },
+                { domain: 'nas.example.net', backend: 'http://192.0.2.20:5000', tls_mode: 'haproxy', ssl: true, websocket: true, enabled: true, nginx_enabled: true, haproxy_routed: false, url: 'https://nas.example.net', source: 'nginx', exposure: { reach: 'lan', mesh: true }, anti_robots: false, module: { id: 'nas', category: 'stockage', runtime: 'native', certain: false } },
+                { domain: 'chess.example.net', backend: '192.0.2.30:8081', tls_mode: 'haproxy', ssl: true, websocket: false, enabled: true, nginx_enabled: false, haproxy_routed: true, url: 'https://chess.example.net', source: 'haproxy', exposure: { reach: 'wan', mesh: false }, anti_robots: false, module: null },
+                { domain: 'interne.lan', backend: 'http://127.0.0.1:9000', tls_mode: 'off', ssl: false, websocket: false, enabled: false, nginx_enabled: false, haproxy_routed: false, url: null, source: 'nginx', exposure: { reach: 'localhost', mesh: false }, anti_robots: false, module: null }], count: 4 };
+            CERTS = { certificates: [
+                { domain: 'wiki.example.net', expires: j(62), issuer: 'CN=R11,O=Let\'s Encrypt,C=US' },
+                { domain: 'nas.example.net', expires: j(9), issuer: 'CN=R11,O=Let\'s Encrypt,C=US' },
+                { domain: '*.example.net', expires: j(-3), issuer: 'CN=R11,O=Let\'s Encrypt,C=US' },
+                { domain: 'chess.example.net', expires: '', issuer: '' }], count: 4 };
+            ACCES = { vhosts: VHOSTS.vhosts.map(v => ({ domain: v.domain, url: v.url || ('http://' + v.domain), backend: v.backend, ssl: v.ssl, enabled: v.enabled })) };
         }
 
-        let status = {};
-
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
-            document.getElementById('tab-' + name).classList.add('active');
-            if (name === 'vhosts') loadVhosts();
-            if (name === 'certs') loadCerts();
-            if (name === 'access') loadAccess();
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/vhosts'), lire('/certificates'), lire('/access')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0); VHOSTS = val(1); CERTS = val(2); ACCES = val(3);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire les hôtes virtuels (service arrêté ou injoignable).';
+            rendre();
         }
 
-        async function loadStatus() {
-            status = await api('/status');
-            const badge = document.getElementById('status-badge');
-            const comp = status.components || {};
-
-            if (status.running) {
-                badge.textContent = 'Running';
-                badge.className = 'status-badge running';
-                document.getElementById('nginx-badge').textContent = 'Running';
-                document.getElementById('nginx-badge').className = 'status-badge running';
-            } else {
-                badge.textContent = 'Stopped';
-                badge.className = 'status-badge stopped';
-                document.getElementById('nginx-badge').textContent = 'Stopped';
-                document.getElementById('nginx-badge').className = 'status-badge stopped';
-            }
-
-            document.getElementById('vhost-count').textContent = status.vhost_count || 0;
-            document.getElementById('enabled-count').textContent = status.enabled_count || 0;
-            document.getElementById('cert-count').textContent = status.cert_count || 0;
-            document.getElementById('nginx-status').textContent = status.running ? 'Running' : 'Stopped';
-            document.getElementById('nginx-status').style.color = status.running ? 'var(--green)' : 'var(--red)';
-
-            const nginx = comp.nginx || {};
-            document.getElementById('nginx-version').textContent = 'Version: ' + (nginx.version || '-');
-            document.getElementById('health-nginx').innerHTML = status.running
-                ? '<span style="color:var(--green)">OK</span>'
-                : '<span style="color:var(--red)">DOWN</span>';
-            document.getElementById('health-nginx-detail').textContent = status.running
-                ? 'Nginx is running, version ' + (nginx.version || 'unknown')
-                : 'Nginx is not running';
-
-            const acme = comp.acme || {};
-            document.getElementById('acme-badge').textContent = acme.installed ? 'Ready' : 'Not Installed';
-            document.getElementById('acme-badge').className = acme.installed ? 'status-badge running' : 'status-badge stopped';
-            document.getElementById('health-acme').innerHTML = acme.installed
-                ? '<span style="color:var(--green)">OK</span>'
-                : '<span style="color:var(--yellow)">N/A</span>';
-        }
-
-        async function loadVhosts() {
-            const d = await api('/vhosts');
-            const list = document.getElementById('vhost-list');
-            const vhosts = d.vhosts || [];
-            if (!vhosts.length) {
-                list.innerHTML = '<tr><td colspan="8" style="color:var(--dim)">No vhosts configured</td></tr>';
-                return;
-            }
-            list.innerHTML = vhosts.map(v => {
-                const exp = v.exposure || { reach: '?', mesh: false };
-                const reachLabel = exp.reach === 'localhost' ? 'localhost' : esc((exp.reach || '?').toUpperCase());
-                const reachClass = exp.reach === 'wan' ? 'ssl' : (exp.reach === 'lan' ? 'enabled' : 'disabled');
-                const dom = esc(v.domain);
-                return `<tr>
-                <td><a href="${v.ssl ? 'https' : 'http'}://${encodeURIComponent(v.domain)}" target="_blank" style="color:var(--cyan)">${dom}</a></td>
-                <td>${moduleBadge(v.module)}</td>
-                <td style="color:var(--dim);font-family:monospace;font-size:0.75rem">${esc(v.backend || '-')}</td>
-                <td>${v.ssl ? '<span class="badge ssl">' + esc(v.tls_mode || 'SSL') + '</span>' : '-'}</td>
-                <td><span class="badge ${reachClass}">${reachLabel}${exp.mesh ? ' 🕸️' : ''}</span></td>
-                <td style="text-align:center">
-                    <input type="checkbox" class="ar-box" data-domain="${dom}" ${v.anti_robots ? 'checked' : ''}
-                           title="Cochée : les robots d'indexation sont REFUSÉS (403) sur ce vhost. robots.txt reste servi. Décochée : ils passent normalement.">
-                </td>
-                <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}" title="${voieTitre(v)}">${v.enabled ? '✅ ' + voie(v) : '⏸️ Disabled'}</span></td>
-                <td>
-                    <button class="btn sm" onclick="toggleVhost('${dom}', ${!v.enabled})">${v.enabled ? 'Disable' : 'Enable'}</button>
-                    <button class="btn danger sm" onclick="deleteVhost('${dom}')">Delete</button>
-                </td>
-            </tr>`;
-            }).join('');
-            list.querySelectorAll('.ar-box').forEach(b => b.addEventListener('change', onAntiRobots));
-        }
-
-        // Case « refuser les robots » (#1216). Le WAF redémarre à chaque
-        // bascule : on désarme la case pendant l'appel pour qu'un double clic
-        // ne lance pas deux redémarrages. En cas d'échec la case revient à son
-        // état RÉEL — celui du serveur — jamais à l'état souhaité : une case
-        // cochée qui ne filtre rien serait pire que pas de case du tout.
-        //
-        // Pas d'alerte quand ça marche : la case elle-même est le retour.
-        async function onAntiRobots(ev) {
-            const box = ev.target;
-            const domain = box.dataset.domain;
-            const voulu = box.checked;
-            box.disabled = true;
-            const r = await api('/vhost/' + encodeURIComponent(domain) + '/anti-robots', {
-                method: 'POST',
-                body: JSON.stringify({ enabled: voulu })
-            });
-            box.disabled = false;
-            if (!r || r.anti_robots !== voulu) {
-                box.checked = !voulu;
-                alert('Anti-robots non appliqué sur ' + domain + '\n' +
-                      ((r && r.detail) || 'le WAF n\'a pas confirmé le changement'));
-            }
-        }
-
-        // La plupart des noms de gk2 sont la façade d'un MODULE SecuBox, pas un
-        // site : gitea et peertube dans leur conteneur, ytsas, podcaster… Le
-        // tableau ne le disait pas. On distingue le lien DÉCLARÉ par le module
-        // (portal.domain de son manifeste) de la simple déduction sur le nom,
-        // signalée par « ? » : une supposition ne s'affiche pas comme un fait.
-        const RUNTIME_ICONE = { lxc: '📦', native: '⚙️', docker: '🐳' };
-        function moduleBadge(m) {
-            if (!m) return '<span style="color:var(--dim)">—</span>';
-            const ico = RUNTIME_ICONE[m.runtime] || '🧩';
-            const titre = 'Module ' + m.id
-                + (m.category ? ' · ' + m.category : '')
-                + (m.runtime ? ' · ' + m.runtime : '')
-                + (m.certain ? ' · déclaré par le module'
-                             : ' · DÉDUIT du nom, non déclaré');
-            const style = m.certain ? '' : 'opacity:.65;font-style:italic';
-            return `<span class="badge ${m.certain ? 'ssl' : 'disabled'}" style="${style}" title="${esc(titre)}">`
-                 + ico + ' ' + esc(m.id) + (m.certain ? '' : ' ?') + '</span>';
-        }
-
-        // Par où le vhost est joignable. Un site peut répondre sans être activé
-        // côté nginx : HAProxy le route alors directement. Le tableau affichait
-        // « Disabled » pour des sites qui fonctionnent — on nomme la voie réelle.
-        function voie(v) {
-            if (v.nginx_enabled && v.haproxy_routed) return 'Enabled';
-            if (v.haproxy_routed) return 'HAProxy';
-            return 'Enabled';
-        }
-        function voieTitre(v) {
-            if (!v.enabled) return 'Ni activé dans nginx, ni routé par HAProxy';
-            const voies = [];
-            if (v.nginx_enabled) voies.push('activé dans nginx');
-            if (v.haproxy_routed) voies.push('routé par HAProxy');
-            return 'Joignable : ' + voies.join(' + ');
-        }
-
-        function certStatus(days) {
-            if (days === null) return { cls: '', dot: '❔', txt: '—' };
-            if (days < 0) return { cls: 'dead', dot: '💀', txt: 'EXPIRED' };
-            if (days <= 13) return { cls: 'critical', dot: '🔴', txt: days + 'd' };
-            if (days <= 29) return { cls: 'warning', dot: '🟡', txt: days + 'd' };
-            return { cls: 'healthy', dot: '💚', txt: days + 'd' };
-        }
-
-        function shortenIssuer(s) {
-            if (!s) return '—';
-            const m = s.match(/CN\s*=\s*([^,\/]+)/i) || s.match(/O\s*=\s*([^,\/]+)/i);
-            return esc((m ? m[1] : s).trim());
-        }
-
-        function certDays(expires) {
+        // ---------- calculs sur les certificats ----------
+        function jours(expires) {
             if (!expires) return null;
             const d = new Date(expires);
             if (isNaN(d.getTime())) return null;
             return Math.floor((d.getTime() - Date.now()) / 86400000);
         }
+        function etatCert(j) {
+            if (j === null) return ['', 'INCONNU'];
+            if (j < 0) return ['hors', 'EXPIRÉ'];
+            if (j <= 13) return ['hors', 'CRITIQUE'];
+            if (j <= 29) return ['att', 'BIENTÔT'];
+            return ['ok', 'VALIDE'];
+        }
+        function emetteur(s) {
+            if (!s) return '—';
+            const m = String(s).match(/CN\s*=\s*([^,\/]+)/i) || String(s).match(/O\s*=\s*([^,\/]+)/i);
+            return (m ? m[1] : String(s)).trim();
+        }
+        function listeCerts() { return CERTS && Array.isArray(CERTS.certificates) ? CERTS.certificates : null; }
+        function listeVhosts() { return VHOSTS && Array.isArray(VHOSTS.vhosts) ? VHOSTS.vhosts : null; }
 
-        async function loadCerts() {
-            const d = await api('/certificates');
-            const list = document.getElementById('cert-list');
-            const certs = d.certificates || [];
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (s.running ? '' : ' hors'); etat.textContent = s.running ? 'NGINX ACTIF' : 'NGINX ARRÊTÉ'; }
+            const nb = x => (x === null || x === undefined) ? '—' : x;
+            const vh = listeVhosts(), ce = listeCerts();
+            $('tVhosts').textContent = vh ? vh.length : '—';
+            $('tFichiers').textContent = s ? nb(s.vhost_count) : '—';
+            $('sFichiers').textContent = 'activés : ' + (s ? nb(s.enabled_count) : '—');
+            const nginx = s && s.components && s.components.nginx;
+            $('tNginx').textContent = s ? (s.running ? 'Actif' : 'Arrêté') : '—';
+            $('cNginx').className = 'tuile ' + (s ? (s.running ? 'ok' : 'hors') : '');
+            $('sNginx').textContent = 'version ' + tiret(nginx && nginx.version);
+            $('tCerts').textContent = ce ? ce.length : (s ? nb(s.cert_count) : '—');
+            let bientot = 0, expires = 0;
+            if (ce) ce.forEach(c => { const j = jours(c.expires); if (j === null) return; if (j < 0) expires++; else if (j < 30) bientot++; });
+            $('tBientot').textContent = ce ? bientot : '—'; $('cBientot').className = 'tuile ' + (ce ? (bientot ? 'att' : 'ok') : '');
+            $('tExpires').textContent = ce ? expires : '—'; $('cExpires').className = 'tuile ' + (ce ? (expires ? 'hors' : 'ok') : '');
+            // Aperçu
+            $('kNginx').textContent = s ? (s.running ? 'actif' : 'arrêté') : '—';
+            $('kVer').textContent = tiret(nginx && nginx.version);
+            $('kFich').textContent = s ? nb(s.vhost_count) : '—'; $('kAct').textContent = s ? nb(s.enabled_count) : '—';
+            const acme = s && s.components && s.components.acme;
+            $('kAcme').textContent = acme ? (acme.installed ? 'installé' : 'non installé') : '—';
+            $('kCerts').textContent = ce ? ce.length : '—';
+            rendreVhosts(); rendreAcces(); rendreCerts(); rendreConfirmation();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-            let expired = 0, expiring = 0, valid = 0;
-            certs.forEach(c => {
-                const days = certDays(c.expires);
-                if (days === null) return;
-                if (days < 0) expired++;
-                else if (days < 30) expiring++;
-                else valid++;
-            });
-            document.getElementById('cert-expired').textContent = expired;
-            document.getElementById('cert-expiring').textContent = expiring;
-            document.getElementById('cert-valid').textContent = valid;
-            document.getElementById('cert-total').textContent = certs.length;
-            document.getElementById('cert-count').textContent = certs.length;
-
-            if (!certs.length) {
-                list.innerHTML = '<div style="color:var(--dim);padding:1rem;text-align:center">No certificates</div>';
-                return;
+        // ---------- confirmation intégrée à la page ----------
+        function demander(c) { CONFIRM = c; rendreConfirmation(); const z = $('conf'); if (z.scrollIntoView) z.scrollIntoView({ block: 'nearest' }); }
+        function rendreConfirmation() {
+            const z = $('conf'); z.replaceChildren();
+            if (!CONFIRM) { z.hidden = true; return; }
+            z.hidden = false; z.className = 'conf' + (CONFIRM.neutre ? ' neutre' : '');
+            const t = el('strong', '', CONFIRM.titre); t.id = 'confTitre'; z.appendChild(t);
+            z.appendChild(el('p', '', CONFIRM.texte));
+            let champ = null;
+            if (CONFIRM.champ) {
+                const lab = el('label', '', CONFIRM.champ.label); champ = el('input'); champ.type = 'email'; champ.value = CONFIRM.champ.valeur; champ.id = 'confChamp';
+                lab.appendChild(champ); z.appendChild(lab);
             }
+            const b = el('div', 'bout');
+            const ok = el('button', 'btn ' + (CONFIRM.neutre ? 'prim' : 'danger'), 'Confirmer'); ok.type = 'button';
+            ok.addEventListener('click', () => { const c = CONFIRM; CONFIRM = null; rendreConfirmation(); annoncer(); c.fn(champ ? champ.value.trim() : undefined); });
+            const ko = el('button', 'btn', 'Annuler'); ko.type = 'button';
+            ko.addEventListener('click', () => { CONFIRM = null; rendreConfirmation(); annoncer(); });
+            b.appendChild(ok); b.appendChild(ko); z.appendChild(b);
+        }
 
-            const rows = certs.slice().map(c => {
-                const days = certDays(c.expires);
-                return { c, days };
-            }).sort((a, b) => {
-                if (a.days === null) return 1;
-                if (b.days === null) return -1;
-                return a.days - b.days;
+        // ---------- vhosts ----------
+        function voie(v) {
+            if (!v.enabled) return ['', 'DÉSACTIVÉ', 'Ni activé dans nginx, ni routé par HAProxy'];
+            const voies = []; if (v.nginx_enabled) voies.push('activé dans nginx'); if (v.haproxy_routed) voies.push('routé par HAProxy');
+            const lib = (v.haproxy_routed && !v.nginx_enabled) ? 'HAPROXY' : 'ACTIF';
+            return ['ok', lib, 'Joignable : ' + voies.join(' + ')];
+        }
+        function badgeModule(m) {
+            if (!m) return el('span', 'note', '—');
+            const icone = { lxc: 'LXC', native: 'natif' }[m.runtime] || m.runtime || '';
+            const p = pastille(m.certain ? 'cy' : '', m.id + (m.certain ? '' : ' ?'),
+                'Module ' + m.id + (m.category ? ' · ' + m.category : '') + (icone ? ' · ' + icone : '') + (m.certain ? ' · déclaré par le module' : ' · DÉDUIT du nom, non déclaré'));
+            return p;
+        }
+        function lienSur(domaine, url) {
+            const td = el('td', 'dom');
+            if (typeof url === 'string' && /^https?:\/\//.test(url)) { const a = el('a', '', domaine); a.href = url; a.target = '_blank'; a.rel = 'noopener'; td.appendChild(a); }
+            else td.textContent = domaine;
+            return td;
+        }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+
+        function rendreVhosts() {
+            const tb = $('bVhosts'); tb.replaceChildren();
+            const tous = listeVhosts() || [];
+            const f = $('filtre').value.trim().toLowerCase();
+            const lignes = tous.filter(v => !f || [v.domain, v.backend, v.module && v.module.id].some(x => String(x || '').toLowerCase().includes(f)));
+            $('nVhosts').textContent = tous.length ? (f ? lignes.length + ' / ' : '') + tous.length + ' vhost' + (tous.length > 1 ? 's' : '') : '';
+            if (!lignes.length) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : (tous.length ? 'Aucun vhost ne correspond' : 'Aucun vhost configuré')); td.colSpan = 8; tr.appendChild(td); tb.appendChild(tr); return; }
+            lignes.forEach(v => {
+                const tr = el('tr');
+                tr.appendChild(lienSur(v.domain, v.url));
+                const tm = el('td'); tm.appendChild(badgeModule(v.module)); tr.appendChild(tm);
+                tr.appendChild(el('td', 'mono', tiret(v.backend)));
+                const tt = el('td'); if (v.ssl) tt.appendChild(pastille('cy', String(v.tls_mode || 'SSL').toUpperCase())); else tt.textContent = '—'; tr.appendChild(tt);
+                const te = el('td'); const ex = v.exposure || {};
+                const reach = ex.reach === 'localhost' ? 'LOCALHOST' : (ex.reach ? String(ex.reach).toUpperCase() : '?');
+                te.appendChild(pastille(ex.reach === 'wan' ? 'cy' : (ex.reach === 'lan' ? 'ok' : ''), reach + (ex.mesh ? ' + MAILLAGE' : ''), 'Portée d’accès déclarée dans le snippet d’exposition')); tr.appendChild(te);
+                const ta = el('td'); ta.style.textAlign = 'center';
+                const box = el('input'); box.type = 'checkbox'; box.checked = !!v.anti_robots; box.dataset.domain = v.domain;
+                box.title = 'Cochée : les robots d’indexation sont REFUSÉS (403) sur ce vhost. robots.txt reste servi. Décochée : ils passent normalement.';
+                box.setAttribute('aria-label', 'Refuser les robots sur ' + v.domain);
+                box.addEventListener('change', () => antiRobots(box));
+                ta.appendChild(box); tr.appendChild(ta);
+                const ts = el('td'); const [c, l, t] = voie(v); ts.appendChild(pastille(c, l, t)); tr.appendChild(ts);
+                const act = el('td', 'act');
+                if (v.source === 'haproxy') act.appendChild(el('span', 'note', 'route HAProxy sans fichier nginx'));
+                else {
+                    act.appendChild(btn(v.nginx_enabled ? 'Désactiver' : 'Activer', '', () => demander({
+                        neutre: true, titre: (v.nginx_enabled ? 'Désactiver ' : 'Activer ') + v.domain + ' ?',
+                        texte: 'Le fichier nginx de ce vhost est régénéré à partir du backend et du TLS actuels (une configuration écrite à la main serait remplacée), puis nginx est rechargé.',
+                        fn: () => basculer(v.domain, !v.nginx_enabled) })));
+                    act.appendChild(btn('Supprimer', 'danger', () => demander({
+                        titre: 'Supprimer le vhost ' + v.domain + ' ?',
+                        texte: 'Le fichier nginx et son activation sont supprimés, puis nginx est rechargé. Cette action est sans retour arrière.',
+                        fn: () => supprimer(v.domain) })));
+                }
+                tr.appendChild(act); tb.appendChild(tr);
             });
-
-            list.innerHTML = rows.map(({ c, days }) => {
-                const st = certStatus(days);
-                const dom = esc(c.domain);
-                const parsed = c.expires ? new Date(c.expires) : null;
-                const expText = parsed && !isNaN(parsed.getTime())
-                    ? parsed.toISOString().slice(0, 10)
-                    : (c.expires ? esc(c.expires) : '—');
-                return `<div class="cert-item ${st.cls}">
-                    <span class="dot">${st.dot}</span>
-                    <span class="domain" title="${dom}">${dom}</span>
-                    <span class="issuer" title="${esc(c.issuer || '')}">${shortenIssuer(c.issuer)}</span>
-                    <span class="days ${st.cls}">${st.txt}</span>
-                    <span class="exp">${expText}</span>
-                    <button class="btn sm" onclick="renewCert('${dom}')">↻ Renew</button>
-                </div>`;
-            }).join('');
         }
 
-        async function loadAccess() {
-            const d = await api('/access');
-            const container = document.getElementById('access-domains');
-            const vhosts = d.vhosts || [];
-            if (!vhosts.length) {
-                container.innerHTML = '<p style="color:var(--dim)">No domains configured</p>';
-                return;
-            }
-            container.innerHTML = vhosts.map(v => `
-                <div class="url-label">${esc(v.domain)}</div>
-                <div class="url-box">
-                    <a href="${esc(v.url)}" target="_blank">${esc(v.url)}</a>
-                    <span style="color:var(--dim);font-size:0.75rem">${esc(v.backend)}</span>
-                </div>
-            `).join('');
+        // Le WAF redémarre à chaque bascule : la case est désarmée pendant l'appel ; en cas d'échec elle revient à l'état RÉEL.
+        async function antiRobots(box) {
+            const domaine = box.dataset.domain, voulu = box.checked;
+            box.disabled = true;
+            const r = await ecrire('POST', '/vhost/' + encodeURIComponent(domaine) + '/anti-robots', { enabled: voulu });
+            box.disabled = false;
+            if (r.ok && r.data && r.data.anti_robots === voulu) retour(true, 'Anti-robots ' + (voulu ? 'activé' : 'désactivé') + ' sur ' + domaine + '.');
+            else { box.checked = !voulu; retour(false, 'Anti-robots non appliqué sur ' + domaine + ' : ' + (r.demo ? detail(r) : (r.data && r.data.detail) || 'le WAF n’a pas confirmé le changement')); }
+        }
+        async function recharger() {
+            const r = await ecrire('POST', '/reload');
+            return r.ok && r.data && r.data.success ? 'Nginx rechargé.' : 'Rechargement nginx refusé : ' + detail(r);
+        }
+        async function suite(r, ok, echec) {
+            if (r.ok && r.data && r.data.success) {
+                let msg = ok + '.';
+                if (r.data.reload_required) msg += ' ' + await recharger();
+                retour(true, msg); charger();
+            } else retour(false, echec + ' : ' + detail(r));
+        }
+        async function basculer(domaine, activer) {
+            const r = await ecrire('PUT', '/vhost/' + encodeURIComponent(domaine), { enabled: activer });
+            await suite(r, 'Vhost ' + domaine + (activer ? ' activé' : ' désactivé'), 'Bascule impossible');
+        }
+        async function supprimer(domaine) {
+            const r = await ecrire('DELETE', '/vhost/' + encodeURIComponent(domaine));
+            await suite(r, 'Vhost ' + domaine + ' supprimé', 'Suppression impossible');
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showAddVhost() { showModal('vhost-modal'); }
-        function showRequestCert() { showModal('cert-modal'); }
-
-        async function addVhost() {
-            const domain = document.getElementById('new-domain').value.trim();
-            const backend = document.getElementById('new-backend').value.trim();
-            const tls_mode = document.getElementById('new-tls').value;
-            const websocket = document.getElementById('new-websocket').value === 'true';
-
-            if (!domain || !backend) { alert('Domain and backend required'); return; }
-
-            const r = await api('/vhost', {
-                method: 'POST',
-                body: JSON.stringify({ domain, backend, tls_mode, websocket })
+        // ---------- accès ----------
+        function rendreAcces() {
+            const tb = $('bAcces'); tb.replaceChildren();
+            const l = ACCES && Array.isArray(ACCES.vhosts) ? ACCES.vhosts : [];
+            $('nAcces').textContent = l.length ? l.length + ' domaine' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucun domaine configuré' : '—'); td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); return; }
+            l.forEach(v => {
+                const tr = el('tr'); tr.appendChild(el('td', 'dom', tiret(v.domain)));
+                tr.appendChild(lienSur(tiret(v.url), v.url));
+                tr.appendChild(el('td', 'mono', tiret(v.backend)));
+                const te = el('td'); te.appendChild(v.enabled ? pastille('ok', 'ACTIF') : pastille('', 'DÉSACTIVÉ')); tr.appendChild(te);
+                tb.appendChild(tr);
             });
-            if (r.success) {
-                hideModal('vhost-modal');
-                refresh();
-                if (r.reload_required) reloadNginx();
-            } else {
-                alert('Failed: ' + (r.detail || JSON.stringify(r)));
-            }
         }
 
-        async function toggleVhost(domain, enable) {
-            const r = await api('/vhost/' + domain, {
-                method: 'PUT',
-                body: JSON.stringify({ enabled: enable })
+        // ---------- certificats ----------
+        function rendreCerts() {
+            const tb = $('bCerts'); tb.replaceChildren();
+            const l = (listeCerts() || []).map(c => ({ c, j: jours(c.expires) }))
+                .sort((a, b) => a.j === null ? 1 : b.j === null ? -1 : a.j - b.j);
+            $('nCerts').textContent = l.length ? l.length + ' certificat' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucun certificat' : '—'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            l.forEach(({ c, j }) => {
+                const tr = el('tr'); const [cl, lib] = etatCert(j);
+                tr.appendChild(el('td', 'dom', tiret(c.domain)));
+                const ti = el('td', '', emetteur(c.issuer)); if (c.issuer) ti.title = c.issuer; tr.appendChild(ti);
+                const te = el('td'); te.appendChild(pastille(cl, lib)); tr.appendChild(te);
+                tr.appendChild(el('td', '', j === null ? '—' : j + ' j'));
+                const d = c.expires ? new Date(c.expires) : null;
+                tr.appendChild(el('td', '', d && !isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : '—'));
+                const act = el('td', 'act');
+                act.appendChild(btn('↻ Renouveler', '', () => demander({
+                    neutre: true, titre: 'Renouveler le certificat de ' + c.domain + ' ?',
+                    texte: 'Une émission Let’s Encrypt est lancée en arrière-plan (acme.sh, webroot). Le courriel ci-dessous est celui du compte ACME.',
+                    champ: { label: 'Courriel du compte ACME', valeur: 'admin@' + String(c.domain).replace(/^\*\./, '') },
+                    fn: email => emettre(c.domain, email, 'Renouvellement lancé') })));
+                tr.appendChild(act); tb.appendChild(tr);
             });
-            if (r.success) {
-                loadVhosts();
-                if (r.reload_required) reloadNginx();
-            }
+        }
+        async function emettre(domaine, email, ok) {
+            if (!domaine || !email) { retour(false, 'Domaine et courriel requis.'); return; }
+            const r = await ecrire('POST', '/certificate/issue', { domain: domaine, email });
+            if (r.ok && r.data && r.data.success) retour(true, ok + ' pour ' + domaine + ' (en arrière-plan).');
+            else retour(false, 'Échec de la demande : ' + detail(r));
         }
 
-        async function deleteVhost(domain) {
-            if (!confirm('Delete vhost ' + domain + '?')) return;
-            const r = await api('/vhost/' + domain, { method: 'DELETE' });
-            if (r.success) {
-                refresh();
-                if (r.reload_required) reloadNginx();
-            }
-        }
+        // ---------- formulaires ----------
+        $('fVhost').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const domain = f.domain.value.trim(), backend = f.backend.value.trim();
+            if (!domain || !backend) { retour(false, 'Domaine et backend requis.'); return; }
+            const r = await ecrire('POST', '/vhost', { domain, backend, tls_mode: f.tls_mode.value, websocket: f.websocket.value === 'true' });
+            if (r.ok && r.data && r.data.success) f.hidden = true, f.reset();
+            await suite(r, 'Vhost ' + domain + ' créé', 'Création impossible');
+        });
+        $('fCert').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const domaine = f.domain.value.trim(), email = f.email.value.trim();
+            await emettre(domaine, email, 'Demande de certificat lancée');
+            if (!DEMO) { f.hidden = true; f.reset(); }
+        });
+        $('addVhost').addEventListener('click', () => { $('fVhost').hidden = !$('fVhost').hidden; annoncer(); });
+        $('addCert').addEventListener('click', () => { $('fCert').hidden = !$('fCert').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+        $('filtre').addEventListener('input', rendreVhosts);
+        $('recharge').addEventListener('click', async () => { retour(true, 'Rechargement de nginx…'); const m = await recharger(); retour(m === 'Nginx rechargé.', m); });
+        $('rafraichir').addEventListener('click', charger);
 
-        async function requestCert() {
-            const domain = document.getElementById('cert-domain').value.trim();
-            const email = document.getElementById('cert-email').value.trim();
-            if (!domain || !email) { alert('Domain and email required'); return; }
-            const r = await api('/certificate/issue', {
-                method: 'POST',
-                body: JSON.stringify({ domain, email })
-            });
-            hideModal('cert-modal');
-            alert(r.success ? 'Certificate request started' : 'Failed');
+        // ---------- onglets ----------
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ['apercu', 'vhosts', 'acces', 'certs'].forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
 
-        async function renewCert(domain) {
-            const r = await api('/certificate/issue', {
-                method: 'POST',
-                body: JSON.stringify({ domain, email: 'admin@' + domain })
-            });
-            alert(r.success ? 'Certificate renewal started' : 'Failed');
+        // ---------- hauteur annoncée à l'hôte (iframes) ----------
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'vhost' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function reloadNginx() {
-            const r = await api('/reload', { method: 'POST' });
-            if (r.success) {
-                alert('Nginx reloaded');
-            } else {
-                alert('Reload failed: ' + (r.message || ''));
-            }
-        }
-
-        async function testConfig() {
-            const r = await api('/test', { method: 'POST' });
-            alert(r.valid ? 'Configuration is valid' : 'Invalid: ' + r.message);
-        }
-
-        function refresh() { loadStatus(); loadVhosts(); loadCerts(); }
-        refresh();
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une confirmation, un formulaire ou une saisie ouverts.
+        setInterval(() => {
+            const a = document.activeElement, saisie = a && (a.tagName === 'INPUT' || a.tagName === 'SELECT') && a.type !== 'checkbox';
+            if (document.hidden || DEMO || CONFIRM || saisie || !$('fVhost').hidden || !$('fCert').hidden) return;
+            charger();
+        }, 60000);
     </script>
 </body>
 </html>
