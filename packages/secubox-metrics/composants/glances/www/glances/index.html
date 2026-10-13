@@ -4,862 +4,539 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Supervision Glances au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Glances Monitoring</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Glances</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1a3320;
-            /* Glances accent */
-            --glances-accent: #00bcd4;
-            --glances-accent-dim: #0097a7;
-            /* Legacy */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--glances-accent);
-            --cyan: var(--glances-accent);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-cyan: 0 0 6px var(--glances-accent), 0 0 14px rgba(0,188,212,0.5);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(0,188,212,0.02) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; }
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
-            background: var(--bg-card);
-        }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 {
-            font-size: 1.5rem; font-weight: 600;
-            color: var(--glances-accent);
-            text-shadow: var(--bloom-cyan);
-        }
-        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
-        .badge {
-            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-        }
-        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
-        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
-        .badge-cyan { background: rgba(0,188,212,0.1); border: 1px solid var(--cyan); color: var(--cyan); }
-
-        .btn {
-            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
-            background: var(--bg-card); color: var(--text); cursor: pointer;
-            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
-            transition: all 0.2s;
-        }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
-        .btn.primary { background: rgba(0,188,212,0.1); border-color: var(--cyan); color: var(--cyan); }
-        .btn.primary:hover { background: rgba(0,188,212,0.2); }
-        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
-
-        .tabs {
-            display: flex; gap: 0; padding: 0 1.5rem;
-            background: var(--bg-card); border-bottom: 1px solid var(--border);
-        }
-        .tab {
-            padding: 0.75rem 1.25rem; cursor: pointer;
-            color: var(--text-dim); font-size: 0.85rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
-        .tab:hover { color: var(--text); }
-        .tab.active {
-            color: var(--cyan); border-bottom-color: var(--cyan);
-            text-shadow: var(--bloom-cyan);
-        }
-
-        .content { padding: 1.5rem; }
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; }
-
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.25rem; text-align: center;
-        }
-        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
-        .stat-card.cyan .value { color: var(--cyan); text-shadow: var(--bloom-cyan); }
-        .stat-card.purple .value { color: var(--purple); }
-        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
-        .stat-card.yellow .value { color: var(--yellow); }
-
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
-        }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 {
-            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.1em; color: var(--p31-decay);
-        }
-
-        .chart-container {
-            height: 180px; position: relative;
-            background: var(--tube-light); border-radius: 6px; padding: 0.5rem;
-        }
-        .chart { width: 100%; height: 100%; }
-
-        .gauge-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-        .gauge { text-align: center; }
-        .gauge-ring { width: 100px; height: 100px; margin: 0 auto; position: relative; }
-        .gauge-ring svg { transform: rotate(-90deg); }
-        .gauge-ring circle { fill: none; stroke-width: 8; }
-        .gauge-ring .bg { stroke: var(--border); }
-        .gauge-ring .value { stroke-linecap: round; transition: stroke-dasharray 0.5s; }
-        .gauge-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.25rem; font-weight: bold; }
-        .gauge-label { margin-top: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
-
-        .load-box {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
-            text-align: center; padding: 1rem;
-            background: var(--tube-light); border-radius: 6px;
-        }
-        .load-box .value { font-size: 1.75rem; font-weight: bold; color: var(--cyan); }
-        .load-box .label { font-size: 0.75rem; color: var(--text-dim); }
-
-        /* Process table */
-        .scroll-list { max-height: 400px; overflow-y: auto; }
-        .process-table { width: 100%; border-collapse: collapse; }
-        .process-table th {
-            text-align: left; padding: 0.5rem; color: var(--p31-decay);
-            font-size: 0.75rem; text-transform: uppercase;
-            border-bottom: 1px solid var(--border);
-            position: sticky; top: 0; background: var(--bg-card);
-            cursor: pointer;
-        }
-        .process-table th:hover { color: var(--cyan); }
-        .process-table td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-        .process-table tr:hover { background: rgba(0,188,212,0.05); }
-
-        /* Sensors */
-        .sensor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
-        .sensor-card {
-            background: var(--tube-light); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1rem; text-align: center;
-        }
-        .sensor-card .name { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; }
-        .sensor-card .value { font-size: 1.5rem; font-weight: bold; color: var(--cyan); }
-        .sensor-card .unit { font-size: 0.85rem; color: var(--text-dim); }
-        .sensor-card.warning .value { color: var(--yellow); }
-        .sensor-card.critical .value { color: var(--red); }
-
-        /* Config form */
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
-        .form-group input, .form-group select {
-            width: 100%; padding: 0.5rem; border: 1px solid var(--border);
-            background: var(--tube-light); border-radius: 4px;
-            font-family: inherit; color: var(--text);
-        }
-        .form-group input:focus, .form-group select:focus {
-            outline: none; border-color: var(--cyan);
-        }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .checkbox-label {
-            display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
-        }
-        .checkbox-label input[type="checkbox"] { width: auto; }
-
-        /* Toast */
-        .toast {
-            position: fixed; bottom: 2rem; right: 2rem;
-            padding: 1rem 1.5rem; border-radius: 8px;
-            background: var(--bg-card); border: 1px solid var(--border);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1000; display: none;
-        }
-        .toast.show { display: block; animation: slideIn 0.3s ease; }
-        .toast.success { border-color: var(--green); }
-        .toast.error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.ok:hover{background:rgba(46,204,113,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn[aria-pressed=true]{border-color:var(--cyan);background:rgba(41,182,246,.22);color:#d9f2ff}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)} .tuile.ja .v{color:var(--jaune)}
+        .barre{height:6px;border-radius:99px;background:rgba(159,179,214,.16);overflow:hidden}
+        .barre b{display:block;height:100%;border-radius:99px;background:var(--cyan);width:0}
+        .barre.vi b{background:var(--violet)} .barre.ok b{background:var(--vert)} .barre.att b{background:var(--orange)} .barre.hors b{background:var(--rouge)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn,.pan h3 .groupe{margin-left:auto}
+        .groupe{display:flex;gap:5px}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr} .grille .large{grid-column:1/-1}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        th button{font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer} th button:hover{color:var(--texte)} th button:focus-visible{outline:2px solid var(--cyan)}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.nom{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)} .retour.conf{border-color:var(--orange)}
+        .retour span{min-width:0;overflow-wrap:anywhere}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie label.coche{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--texte)}
+        form.saisie input[type=number],form.saisie input[type=text],.filtre{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,.filtre:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap;grid-column:1/-1}
+        .filtre{max-width:260px}
+        .graphe{display:grid;grid-template-columns:auto 1fr;gap:0 6px}
+        .graphe .axe{display:flex;flex-direction:column;justify-content:space-between;text-align:right;font-size:.62rem;color:var(--faible);font-variant-numeric:tabular-nums;height:120px}
+        .graphe svg{width:100%;height:120px;display:block;overflow:visible}
+        .graphe .temps{grid-column:2;display:flex;justify-content:space-between;font-size:.62rem;color:var(--faible);margin-top:3px}
+        .graphe .vide-g{grid-column:1/-1;height:120px;display:flex;align-items:center;justify-content:center;color:var(--faible);font-size:.8rem}
+        .legende{display:flex;gap:12px;font-size:.7rem;color:var(--doux);margin-top:4px} .legende i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+        .capteurs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+        .capteur{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.6);min-width:0}
+        .capteur.att{border-color:var(--orange)} .capteur.hors{border-color:var(--rouge)}
+        .capteur .n{color:var(--doux);font-size:.7rem;overflow-wrap:anywhere} .capteur .v{font-size:1.2rem;font-weight:700;font-variant-numeric:tabular-nums} .capteur .s{color:var(--faible);font-size:.66rem}
+        pre.journal{margin:0;max-height:300px;overflow:auto;background:rgba(4,10,22,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;font-size:.72rem;white-space:pre-wrap;overflow-wrap:anywhere}
+        .coeurs{display:grid;gap:5px 12px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));font-size:.72rem;color:var(--doux)}
+        .coeurs div{display:grid;gap:3px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>Glances Monitoring</h1>
-                <span id="service-badge" class="badge badge-red">CHECKING</span>
-                <span id="last-update" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3,17 8,11 12,14 17,6 21,9"/><line x1="3" y1="21" x2="21" y2="21"/></svg>
+                <div><h1>Glances</h1><small>Supervision du système : processeur, mémoire, disque, réseau</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn success" id="btn-start" onclick="serviceAction('start')">Start</button>
-                <button class="btn danger" id="btn-stop" onclick="serviceAction('stop')">Stop</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite" title="État du démon Glances, d’après la recherche d’un processus nommé « glances » côté API.">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn ok" id="bDemarrer" type="button">▶ Démarrer</button>
+                <button class="btn danger" id="bArreter" type="button">■ Arrêter</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="rSvc" class="retour" role="status" hidden></div>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="dashboard">Dashboard</div>
-            <div class="tab" data-tab="processes">Processes</div>
-            <div class="tab" data-tab="sensors">Sensors</div>
-            <div class="tab" data-tab="config">Config</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Charge du processeur, tous cœurs confondus, mesurée par l’API au moment de la requête."><span class="l">Processeur</span><span class="v" id="tCpu">—</span><span class="s" id="sCpu">—</span><div class="barre"><b id="bCpu"></b></div></div>
+            <div class="tuile vi" title="Mémoire vive utilisée (hors mémoire disponible rendue par le noyau)."><span class="l">Mémoire</span><span class="v" id="tMem">—</span><span class="s" id="sMem">—</span><div class="barre vi"><b id="bMem"></b></div></div>
+            <div class="tuile ok" title="Occupation du système de fichiers racine (/)."><span class="l">Disque /</span><span class="v" id="tDisk">—</span><span class="s" id="sDisk">—</span><div class="barre ok"><b id="bDisk"></b></div></div>
+            <div class="tuile cy" title="Débit entrant, calculé par l’API entre deux appels successifs : la toute première mesure d’un démarrage est à 0 faute de point de comparaison."><span class="l">Réseau entrant</span><span class="v" id="tRx">—</span><span class="s" id="sRx">toutes interfaces</span></div>
+            <div class="tuile ja" title="Débit sortant, calculé comme le débit entrant."><span class="l">Réseau sortant</span><span class="v" id="tTx">—</span><span class="s">toutes interfaces</span></div>
+            <div class="tuile" id="cLoad" title="Charge moyenne du système sur 1 minute (processus prêts à s’exécuter). Elle se lit par rapport au nombre de cœurs."><span class="l">Charge 1 min</span><span class="v" id="tLoad">—</span><span class="s" id="sLoad">—</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections de la supervision">
+            <button type="button" role="tab" id="o-tableau" data-t="tableau" aria-selected="true" aria-controls="t-tableau">Tableau de bord</button>
+            <button type="button" role="tab" id="o-processus" data-t="processus" aria-selected="false" aria-controls="t-processus">Processus</button>
+            <button type="button" role="tab" id="o-capteurs" data-t="capteurs" aria-selected="false" aria-controls="t-capteurs">Capteurs</button>
+            <button type="button" role="tab" id="o-config" data-t="config" aria-selected="false" aria-controls="t-config">Configuration</button>
         </div>
 
-        <div class="content">
-            <!-- Dashboard Tab -->
-            <div id="tab-dashboard" class="tab-panel active">
-                <div class="stats-row">
-                    <div class="stat-card cyan">
-                        <div class="value" id="cpu-value">-</div>
-                        <div class="label">CPU Usage</div>
-                    </div>
-                    <div class="stat-card purple">
-                        <div class="value" id="mem-value">-</div>
-                        <div class="label">Memory</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="disk-value">-</div>
-                        <div class="label">Disk</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <div class="value" id="net-value">-</div>
-                        <div class="label">Network I/O</div>
-                    </div>
-                </div>
+        <section id="t-tableau" role="tabpanel" aria-labelledby="o-tableau" class="grille">
+            <div class="pan large"><h3>Historique <i id="nHist"></i>
+                <span class="groupe" role="group" aria-label="Durée de l’historique"><button class="btn sm" type="button" data-h="1" aria-pressed="true">1 h</button><button class="btn sm" type="button" data-h="6" aria-pressed="false">6 h</button><button class="btn sm" type="button" data-h="24" aria-pressed="false">24 h</button></span></h3>
+                <p class="note" style="margin:0">Un point par minute, relevé par le collecteur de l’API (conservé sur environ 24 h).</p></div>
+            <div class="pan"><h3>Processeur <i>% d’occupation</i></h3><div class="graphe" id="gCpu"></div></div>
+            <div class="pan"><h3>Mémoire <i>% utilisé</i></h3><div class="graphe" id="gMem"></div></div>
+            <div class="pan large"><h3>Trafic réseau <i>octets par seconde, une seule échelle</i></h3><div class="graphe" id="gNet"></div>
+                <div class="legende"><span><i style="background:var(--cyan)"></i>Entrant</span><span><i style="background:var(--jaune)"></i>Sortant</span></div></div>
+            <div class="pan"><h3>Système</h3>
+                <dl class="kv"><dt>Démon Glances</dt><dd id="kVer">—</dd><dt>En marche depuis</dt><dd id="kUp">—</dd><dt>Charge 1 / 5 / 15 min</dt><dd id="kLoad">—</dd><dt>Cœurs</dt><dd id="kCoeurs">—</dd><dt>Fréquence</dt><dd id="kFreq">—</dd><dt>Swap</dt><dd id="kSwap">—</dd><dt>Cache + tampons</dt><dd id="kCache">—</dd></dl></div>
+            <div class="pan"><h3>Occupation par cœur <i>% instantané</i></h3><div class="coeurs" id="coeurs"><span class="note">—</span></div></div>
+        </section>
 
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>CPU History</h2></div>
-                        <div class="chart-container">
-                            <canvas id="cpu-chart" class="chart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h2>Memory History</h2></div>
-                        <div class="chart-container">
-                            <canvas id="mem-chart" class="chart"></canvas>
-                        </div>
-                    </div>
-                </div>
+        <section id="t-processus" role="tabpanel" aria-labelledby="o-processus" hidden>
+            <div class="pan"><h3>Processus les plus gourmands <i id="nProc"></i><input class="filtre" id="fProc" type="search" placeholder="Filtrer par nom ou utilisateur" aria-label="Filtrer les processus" style="margin-left:auto"></h3>
+                <div class="tab"><table><thead><tr>
+                    <th aria-sort="none"><button type="button" data-k="name">Processus</button></th><th aria-sort="descending"><button type="button" data-k="cpu_percent">CPU %</button></th><th aria-sort="none"><button type="button" data-k="memory_percent">Mém. %</button></th>
+                    <th aria-sort="none"><button type="button" data-k="pid">PID</button></th><th aria-sort="none"><button type="button" data-k="user">Utilisateur</button></th><th aria-sort="none"><button type="button" data-k="threads">Fils</button></th><th aria-sort="none"><button type="button" data-k="status">État</button></th>
+                </tr></thead><tbody id="bProc"></tbody></table></div>
+                <p class="note">Les 20 premiers processus par CPU puis mémoire ; le tri et le filtre s’appliquent à ces 20 lignes. Le CPU d’un processus est relevé entre deux appels de l’API.</p></div>
+        </section>
 
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>System Gauges</h2></div>
-                        <div class="gauge-container">
-                            <div class="gauge">
-                                <div class="gauge-ring">
-                                    <svg viewBox="0 0 100 100">
-                                        <circle class="bg" cx="50" cy="50" r="40"/>
-                                        <circle class="value" id="cpu-gauge" cx="50" cy="50" r="40" stroke="var(--cyan)" stroke-dasharray="0 251"/>
-                                    </svg>
-                                    <div class="gauge-text" id="cpu-gauge-text">-</div>
-                                </div>
-                                <div class="gauge-label">CPU</div>
-                            </div>
-                            <div class="gauge">
-                                <div class="gauge-ring">
-                                    <svg viewBox="0 0 100 100">
-                                        <circle class="bg" cx="50" cy="50" r="40"/>
-                                        <circle class="value" id="mem-gauge" cx="50" cy="50" r="40" stroke="var(--purple)" stroke-dasharray="0 251"/>
-                                    </svg>
-                                    <div class="gauge-text" id="mem-gauge-text">-</div>
-                                </div>
-                                <div class="gauge-label">Memory</div>
-                            </div>
-                            <div class="gauge">
-                                <div class="gauge-ring">
-                                    <svg viewBox="0 0 100 100">
-                                        <circle class="bg" cx="50" cy="50" r="40"/>
-                                        <circle class="value" id="disk-gauge" cx="50" cy="50" r="40" stroke="var(--green)" stroke-dasharray="0 251"/>
-                                    </svg>
-                                    <div class="gauge-text" id="disk-gauge-text">-</div>
-                                </div>
-                                <div class="gauge-label">Disk</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h2>Load Average</h2></div>
-                        <div class="load-box">
-                            <div><div class="value" id="load1">-</div><div class="label">1 min</div></div>
-                            <div><div class="value" id="load5">-</div><div class="label">5 min</div></div>
-                            <div><div class="value" id="load15">-</div><div class="label">15 min</div></div>
-                        </div>
-                        <div style="margin-top: 1rem; padding: 1rem; background: var(--tube-light); border-radius: 6px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <span style="color: var(--text-dim);">Uptime</span>
-                                <span id="uptime">-</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <span style="color: var(--text-dim);">CPU Cores</span>
-                                <span id="cpu-cores">-</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="color: var(--text-dim);">CPU Freq</span>
-                                <span id="cpu-freq">-</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Network Traffic</h2>
-                        <span id="net-total" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="net-chart" class="chart"></canvas>
-                    </div>
-                </div>
+        <section id="t-capteurs" role="tabpanel" aria-labelledby="o-capteurs" hidden>
+            <div class="grille">
+                <div class="pan large"><h3>Températures</h3><div class="capteurs" id="temps"></div></div>
+                <div class="pan"><h3>Ventilateurs</h3><div class="capteurs" id="fans"></div></div>
+                <div class="pan" id="pBat" hidden><h3>Batterie</h3><div class="capteurs" id="bat"></div></div>
             </div>
+        </section>
 
-            <!-- Processes Tab -->
-            <div id="tab-processes" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Top Processes</h2>
-                        <span id="process-count" style="color: var(--text-dim);">-</span>
-                    </div>
-                    <div class="scroll-list">
-                        <table class="process-table">
-                            <thead>
-                                <tr>
-                                    <th onclick="sortProcesses('name')">Process</th>
-                                    <th onclick="sortProcesses('cpu_percent')">CPU %</th>
-                                    <th onclick="sortProcesses('memory_percent')">MEM %</th>
-                                    <th onclick="sortProcesses('pid')">PID</th>
-                                    <th onclick="sortProcesses('user')">User</th>
-                                    <th onclick="sortProcesses('threads')">Threads</th>
-                                    <th onclick="sortProcesses('status')">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="process-list">
-                                <tr><td colspan="7">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sensors Tab -->
-            <div id="tab-sensors" class="tab-panel">
-                <div class="card">
-                    <div class="card-header"><h2>Temperature Sensors</h2></div>
-                    <div class="sensor-grid" id="temp-sensors">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>Fan Sensors</h2></div>
-                    <div class="sensor-grid" id="fan-sensors">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="card" id="battery-card" style="display: none;">
-                    <div class="card-header"><h2>Battery</h2></div>
-                    <div id="battery-info"></div>
-                </div>
-            </div>
-
-            <!-- Config Tab -->
-            <div id="tab-config" class="tab-panel">
-                <div class="card">
-                    <div class="card-header"><h2>Glances Configuration</h2></div>
-                    <form id="config-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Refresh Interval (seconds)</label>
-                                <input type="number" id="cfg-refresh" min="1" max="60" value="3">
-                            </div>
-                            <div class="form-group">
-                                <label>History Size (entries)</label>
-                                <input type="number" id="cfg-history-size" min="60" max="10080" value="1440">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Top N Processes</label>
-                                <input type="number" id="cfg-process-n" min="5" max="50" value="15">
-                            </div>
-                            <div class="form-group">
-                                <label>Disk Paths (comma-separated)</label>
-                                <input type="text" id="cfg-disk-paths" value="/">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="cfg-history" checked>
-                                    Enable History Collection
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="cfg-sensors" checked>
-                                    Enable Sensors
-                                </label>
-                            </div>
-                        </div>
-                        <div style="margin-top: 1rem;">
-                            <button type="submit" class="btn primary">Save Configuration</button>
-                            <button type="button" class="btn" onclick="loadConfig()">Reset</button>
-                        </div>
+        <section id="t-config" role="tabpanel" aria-labelledby="o-config" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Réglages de Glances <i>/etc/secubox/glances.toml</i></h3>
+                    <div id="rCfg" class="retour" role="status" hidden></div>
+                    <form class="saisie" id="fCfg" style="margin-top:8px">
+                        <label>Intervalle de rafraîchissement (s)<input type="number" id="cfgRefresh" min="1" max="60" value="3" required></label>
+                        <label>Taille de l’historique (entrées)<input type="number" id="cfgHist" min="60" max="10080" value="1440" required></label>
+                        <label>Nombre de processus affichés<input type="number" id="cfgProc" min="5" max="50" value="15" required></label>
+                        <label>Chemins de disque (séparés par des virgules)<input type="text" id="cfgDisks" value="/"></label>
+                        <label class="coche"><input type="checkbox" id="cfgHistOn" checked>Collecter l’historique</label>
+                        <label class="coche"><input type="checkbox" id="cfgSens" checked>Activer les capteurs</label>
+                        <div class="bout"><button class="btn prim" type="submit">Enregistrer</button><button class="btn" type="button" id="cfgReset">Recharger</button></div>
                     </form>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Service Logs</h2>
-                        <button class="btn" onclick="loadLogs()">Refresh Logs</button>
-                    </div>
-                    <div id="logs-container" style="max-height: 300px; overflow-y: auto; background: var(--tube-light); padding: 1rem; border-radius: 6px; font-size: 0.8rem; font-family: monospace; white-space: pre-wrap;">
-                        Loading...
-                    </div>
-                </div>
+                    <p class="note">Cette page n’édite pas la liste des interfaces réseau : elle est envoyée vide à l’enregistrement, comme avant.</p></div>
+                <div class="pan"><h3>Journal du service <i>100 dernières lignes</i><button class="btn sm" id="bJournal" type="button">⟳ Recharger</button></h3>
+                    <pre class="journal" id="journal">—</pre></div>
             </div>
-        </div>
-    </main>
-
-    <div id="toast" class="toast"></div>
-
+        </section>
+    </div></div></main>
+    <div id="toast" class="toast" role="status"></div>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/glances';
-        let cpuHistory = [], memHistory = [], netRxHistory = [], netTxHistory = [];
-        let processData = [];
-        let sortColumn = 'cpu_percent';
-        let sortAsc = false;
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+        const dec = (v, d) => v.toFixed(d).replace('.', ',');
+        const pct = v => num(v) === null ? '—' : dec(v, 1) + ' %';
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        let STATUT = null, STATS = null, PROCS = null, CAPT = null, HIST = null, HEURES = 1, SESSION_OK = true, ERREUR = '';
+        let ONGLET = 'tableau', TRI = 'cpu_percent', TRI_ASC = false, CONFIRM = null;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine), accepte par
-            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
-            // seule une vraie 401 redirige (gere dans les appels fetch).
-            return true;
-        }
-
-        async function api(endpoint, options = {}) {
-            const token = getToken();
-            const headers = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = 'Bearer ' + token;
-
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API +  endpoint, { ...options, headers });
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                    return null;
-                }
-                return res.json();
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.replaceChildren(el('span', null, msg)); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && (res.data.error || res.data.detail)) ? String(res.data.error || res.data.detail) : (res.statut && !res.ok ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function taille(o) {
+            if (num(o) === null) return '—';
+            const u = ['o', 'Kio', 'Mio', 'Gio', 'Tio']; let i = 0;
+            while (o >= 1024 && i < u.length - 1) { o /= 1024; i++; }
+            return (i === 0 ? String(Math.round(o)) : dec(o, 1)) + ' ' + u[i];
+        }
+        const debit = o => num(o) === null ? '—' : taille(o) + '/s';
+        function duree(s) {
+            if (num(s) === null) return '—';
+            const j = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+            return (j ? j + ' j ' : '') + h + ' h ' + m + ' min';
+        }
+
+        // ----- Données de démonstration (adresses de documentation, noms fictifs) -----
+        function demoData() {
+            STATUT = { running: true, version: 'Glances v4.2.1 (démonstration)' };
+            STATS = { cpu: { percent: 23.4, per_core: [31.0, 18.5, 22.2, 21.9], count: 4, count_logical: 4, freq_current: 1800, freq_max: 2000 },
+                memory: { percent: 41.7, used: 1717986918, total: 4118908928, available: 2400000000, cached: 600000000, buffers: 90000000 },
+                swap: { percent: 3.2, used: 69000000, total: 2147483648 },
+                disk: { percent: 58.3, used: 17900000000, total: 30700000000, free: 12800000000 },
+                network: { rx_rate: 184320, tx_rate: 61440 }, load: { avg_1: 0.84, avg_5: 0.72, avg_15: 0.65 }, uptime: { seconds: 1234567 } };
+            PROCS = { total: 143, processes: [
+                { pid: 812, name: 'sbxwaf', cpu_percent: 6.8, memory_percent: 1.2, status: 'sleeping', user: 'secubox-waf', threads: 11 },
+                { pid: 1204, name: 'haproxy', cpu_percent: 3.1, memory_percent: 0.8, status: 'running', user: 'haproxy', threads: 4 },
+                { pid: 2290, name: 'uvicorn', cpu_percent: 2.4, memory_percent: 3.9, status: 'sleeping', user: 'secubox', threads: 6 },
+                { pid: 311, name: 'nginx', cpu_percent: 0.9, memory_percent: 0.5, status: 'sleeping', user: 'www-data', threads: 1 },
+                { pid: 4410, name: 'unbound', cpu_percent: 0.4, memory_percent: 0.6, status: 'sleeping', user: 'unbound', threads: 3 },
+                { pid: 1, name: 'systemd', cpu_percent: 0.1, memory_percent: 0.3, status: 'sleeping', user: 'root', threads: 1 }] };
+            CAPT = { temperatures: [{ name: 'cpu_thermal', current: 52.0, high: 85, critical: 95 }, { name: 'sfp_phy', current: 61.5, high: 60, critical: 90 }], fans: [], battery: null };
+            const pts = [], t0 = Date.now() - 3600 * 1000;
+            for (let i = 0; i < 60; i++) {
+                const d = new Date(t0 + i * 60000), p2 = n => String(n).padStart(2, '0');
+                pts.push({ cpu: 20 + 10 * Math.sin(i / 7), memory: 40 + 3 * Math.sin(i / 11), net_rx: 150000 + 90000 * Math.sin(i / 5), net_tx: 50000 + 30000 * Math.sin(i / 6),
+                    timestamp: d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':00' });
+            }
+            HIST = { history: pts, count: pts.length, hours: 1 };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; ERREUR = ''; rendre(); majOnglet(); return; }
+            const [st, sa] = await Promise.allSettled([lire('/status'), lire('/stats')]);
+            const extra = await chargerOnglet(true);
+            const tous = [st, sa].concat(extra);
+            SESSION_OK = !tous.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            STATUT = st.status === 'fulfilled' ? st.value : null;
+            STATS = sa.status === 'fulfilled' && sa.value && !sa.value.error ? sa.value : null;
+            ERREUR = '';
+            if (sa.status === 'fulfilled' && sa.value && sa.value.error) ERREUR = 'Mesures indisponibles : ' + sa.value.error;
+            else if (tous.every(e => e.status === 'rejected') && SESSION_OK) ERREUR = 'Impossible de lire Glances (service arrêté ou injoignable).';
+            rendre(); majOnglet();
+        }
+        // Charge les données propres à l'onglet visible. Retourne les promesses réglées (pour détecter 401/403).
+        async function chargerOnglet(silencieux) {
+            if (DEMO) return [];
+            const demandes = [];
+            const chemin = { tableau: ['/history?hours=' + HEURES, v => { HIST = v; }], processus: ['/processes', v => { PROCS = v; }], capteurs: ['/sensors', v => { CAPT = v; }] }[ONGLET];
+            let res = [];
+            if (chemin) {
+                const r = await Promise.allSettled([lire(chemin[0])]);
+                if (r[0].status === 'fulfilled') chemin[1](r[0].value); else { chemin[1](null); }
+                res = r;
+            }
+            if (!silencieux) { SESSION_OK = !res.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403)); rendre(); majOnglet(); }
+            return res;
+        }
+
+        // ----- Rendu : tuiles -----
+        function setBarre(id, v, seuils) {
+            const b = $(id); const x = num(v);
+            b.style.width = x === null ? '0%' : Math.max(0, Math.min(100, x)) + '%';
+            const p = b.parentNode; p.classList.remove('att', 'hors');
+            if (seuils && x !== null) { if (x >= seuils[1]) p.classList.add('hors'); else if (x >= seuils[0]) p.classList.add('att'); }
+        }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !ERREUR; $('erreur').textContent = ERREUR;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUT) { etat.className = 'actif neutre'; etat.textContent = '—'; }
+            else if (STATUT.running) { etat.className = 'actif'; etat.textContent = 'EN MARCHE'; }
+            else { etat.className = 'actif hors'; etat.textContent = 'ARRÊTÉ'; }
+            $('maj').textContent = STATS || STATUT ? 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR') : '—';
+            const s = STATS || {};
+            const cpu = s.cpu || {}, mem = s.memory || {}, dsk = s.disk || {}, net = s.network || {}, ld = s.load || {}, sw = s.swap || {};
+            $('tCpu').textContent = pct(cpu.percent);
+            $('sCpu').textContent = num(cpu.count_logical) === null ? '—' : cpu.count_logical + ' cœur' + (cpu.count_logical > 1 ? 's' : '') + (cpu.freq_current ? ' · ' + Math.round(cpu.freq_current) + ' MHz' : '');
+            setBarre('bCpu', cpu.percent, [70, 90]);
+            $('tMem').textContent = pct(mem.percent);
+            $('sMem').textContent = num(mem.used) === null ? '—' : taille(mem.used) + ' / ' + taille(mem.total);
+            setBarre('bMem', mem.percent, [80, 92]);
+            $('tDisk').textContent = pct(dsk.percent);
+            $('sDisk').textContent = num(dsk.used) === null ? '—' : taille(dsk.used) + ' / ' + taille(dsk.total);
+            setBarre('bDisk', dsk.percent, [80, 92]);
+            $('tRx').textContent = debit(net.rx_rate); $('tTx').textContent = debit(net.tx_rate);
+            $('tLoad').textContent = num(ld.avg_1) === null ? '—' : dec(ld.avg_1, 2);
+            $('sLoad').textContent = num(ld.avg_5) === null ? '—' : '5 min ' + dec(ld.avg_5, 2) + ' · 15 min ' + dec(ld.avg_15, 2);
+            const nc = num(cpu.count_logical);
+            $('cLoad').className = 'tuile' + (num(ld.avg_1) !== null && nc ? (ld.avg_1 >= nc ? ' hors' : ld.avg_1 >= nc * 0.7 ? ' att' : ' ok') : '');
+            // Système
+            $('kVer').textContent = tiret(STATUT && STATUT.version);
+            $('kUp').textContent = s.uptime ? duree(s.uptime.seconds) : '—';
+            $('kLoad').textContent = num(ld.avg_1) === null ? '—' : [ld.avg_1, ld.avg_5, ld.avg_15].map(x => dec(x, 2)).join(' / ');
+            $('kCoeurs').textContent = num(cpu.count) === null ? '—' : cpu.count + ' physiques · ' + tiret(cpu.count_logical) + ' logiques';
+            $('kFreq').textContent = cpu.freq_current ? Math.round(cpu.freq_current) + ' MHz' + (cpu.freq_max ? ' (max ' + Math.round(cpu.freq_max) + ')' : '') : '—';
+            $('kSwap').textContent = num(sw.total) === null ? '—' : (sw.total === 0 ? 'aucun swap' : taille(sw.used) + ' / ' + taille(sw.total) + ' (' + pct(sw.percent) + ')');
+            $('kCache').textContent = num(mem.cached) === null ? '—' : taille(mem.cached) + ' + ' + taille(mem.buffers);
+            const cz = $('coeurs'); cz.replaceChildren();
+            if (Array.isArray(cpu.per_core) && cpu.per_core.length) {
+                cpu.per_core.forEach((v, i) => {
+                    const d = el('div'); d.appendChild(el('span', null, 'Cœur ' + i + ' · ' + pct(v)));
+                    const b = el('div', 'barre'); const bb = el('b'); bb.style.width = Math.max(0, Math.min(100, v)) + '%'; b.appendChild(bb); d.appendChild(b); cz.appendChild(d);
+                });
+            } else cz.appendChild(el('span', 'note', '—'));
+        }
+
+        // ----- Courbes SVG : une échelle, graduations réelles, jamais de série inventée -----
+        const NS = 'http://www.w3.org/2000/svg';
+        function courbe(hote, temps, series, max, fmt, libelles) {
+            hote.replaceChildren();
+            if (temps.length < 2) { hote.appendChild(el('div', 'vide-g', 'Historique insuffisant : moins de deux relevés sur la période.')); return; }
+            const axe = el('div', 'axe');
+            [max, max / 2, 0].forEach(v => axe.appendChild(el('span', null, fmt(v))));
+            const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 100 100'); svg.setAttribute('preserveAspectRatio', 'none');
+            [0, 50, 100].forEach(y => {
+                const l = document.createElementNS(NS, 'line'); l.setAttribute('x1', 0); l.setAttribute('x2', 100); l.setAttribute('y1', y); l.setAttribute('y2', y);
+                l.setAttribute('stroke', 'rgba(159,179,214,.18)'); l.setAttribute('vector-effect', 'non-scaling-stroke'); svg.appendChild(l);
+            });
+            const t0 = temps[0], dt = (temps[temps.length - 1] - t0) || 1;
+            series.forEach(se => {
+                const pts = se.vals.map((v, i) => [(temps[i] - t0) / dt * 100, 100 - Math.max(0, Math.min(1, v / max)) * 100]);
+                const aire = document.createElementNS(NS, 'polygon');
+                aire.setAttribute('points', '0,100 ' + pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ') + ' 100,100');
+                aire.setAttribute('fill', se.couleur); aire.setAttribute('fill-opacity', '.14'); svg.appendChild(aire);
+                const li = document.createElementNS(NS, 'polyline');
+                li.setAttribute('points', pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ')); li.setAttribute('fill', 'none');
+                li.setAttribute('stroke', se.couleur); li.setAttribute('stroke-width', '1.8'); li.setAttribute('vector-effect', 'non-scaling-stroke'); svg.appendChild(li);
+            });
+            const ti = document.createElementNS(NS, 'title'); ti.textContent = series.map(se => se.nom + ' : dernière valeur ' + fmt(se.vals[se.vals.length - 1])).join(' ; '); svg.appendChild(ti);
+            const bas = el('div', 'temps'); bas.appendChild(el('span', null, libelles[0])); bas.appendChild(el('span', null, libelles[1]));
+            hote.append(axe, svg, bas);
+        }
+        function rendreHistorique() {
+            const h = HIST && Array.isArray(HIST.history) ? HIST.history : [];
+            const pts = h.map(e => ({ t: Date.parse(e.timestamp), e })).filter(p => !isNaN(p.t));
+            const temps = pts.map(p => p.t);
+            const col = k => pts.map(p => num(p.e[k]) === null ? 0 : p.e[k]);
+            const lib = pts.length ? [String(pts[0].e.timestamp).slice(11, 16), String(pts[pts.length - 1].e.timestamp).slice(11, 16)] : ['', ''];
+            $('nHist').textContent = HIST ? pts.length + ' relevé' + (pts.length > 1 ? 's' : '') + ' sur ' + HEURES + ' h' : '';
+            const p100 = v => Math.round(v) + ' %';
+            courbe($('gCpu'), temps, [{ nom: 'Processeur', vals: col('cpu'), couleur: '#29b6f6' }], 100, p100, lib);
+            courbe($('gMem'), temps, [{ nom: 'Mémoire', vals: col('memory'), couleur: '#a78bfa' }], 100, p100, lib);
+            const rx = col('net_rx'), tx = col('net_tx');
+            const m = Math.max(1024, ...rx, ...tx);
+            courbe($('gNet'), temps, [{ nom: 'Entrant', vals: rx, couleur: '#29b6f6' }, { nom: 'Sortant', vals: tx, couleur: '#ffd23f' }], m, v => debit(v), lib);
+            if (!HIST) ['gCpu', 'gMem', 'gNet'].forEach(i => { $(i).replaceChildren(el('div', 'vide-g', '—')); });
+        }
+
+        // ----- Processus -----
+        function rendreProcessus() {
+            const liste = PROCS && Array.isArray(PROCS.processes) ? PROCS.processes : [];
+            const f = $('fProc').value.trim().toLowerCase();
+            const lignes = liste.filter(p => !f || String(p.name).toLowerCase().includes(f) || String(p.user).toLowerCase().includes(f));
+            lignes.sort((a, b) => {
+                let x = a[TRI], y = b[TRI];
+                if (typeof x === 'string' || typeof y === 'string') { x = String(x == null ? '' : x).toLowerCase(); y = String(y == null ? '' : y).toLowerCase(); }
+                else { x = num(x) === null ? -Infinity : x; y = num(y) === null ? -Infinity : y; }
+                const c = x < y ? -1 : x > y ? 1 : 0;
+                return TRI_ASC ? c : -c;
+            });
+            $('nProc').textContent = PROCS ? lignes.length + ' sur ' + liste.length + ' affichés · ' + tiret(PROCS.total) + ' processus au total' : '';
+            document.querySelectorAll('#t-processus th').forEach(th => { const b = th.querySelector('button'); th.setAttribute('aria-sort', b.dataset.k === TRI ? (TRI_ASC ? 'ascending' : 'descending') : 'none'); });
+            const tb = $('bProc'); tb.replaceChildren();
+            if (!lignes.length) { const tr = el('tr'); const td = el('td', 'vide', PROCS ? 'Aucun processus.' : '—'); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); return; }
+            lignes.forEach(p => {
+                const tr = el('tr');
+                const nom = el('td', 'nom', tiret(p.name)); nom.title = tiret(p.name); tr.appendChild(nom);
+                const c = el('td', null, num(p.cpu_percent) === null ? '—' : dec(p.cpu_percent, 1) + ' %'); c.style.color = 'var(--cyan)'; tr.appendChild(c);
+                const m = el('td', null, num(p.memory_percent) === null ? '—' : dec(p.memory_percent, 1) + ' %'); m.style.color = 'var(--violet)'; tr.appendChild(m);
+                tr.appendChild(el('td', 'mono', tiret(p.pid))); tr.appendChild(el('td', null, tiret(p.user))); tr.appendChild(el('td', null, tiret(p.threads)));
+                const st = el('td'); st.appendChild(el('span', 'pill ' + (p.status === 'running' ? 'ok' : 'cy'), tiret(p.status))); tr.appendChild(st);
+                tb.appendChild(tr);
+            });
+        }
+        document.querySelectorAll('#t-processus th button').forEach(b => b.addEventListener('click', () => {
+            if (TRI === b.dataset.k) TRI_ASC = !TRI_ASC; else { TRI = b.dataset.k; TRI_ASC = false; }
+            rendreProcessus();
+        }));
+        $('fProc').addEventListener('input', rendreProcessus);
+
+        // ----- Capteurs -----
+        function carte(nom, valeur, sous, cls) {
+            const c = el('div', 'capteur' + (cls ? ' ' + cls : '')); c.appendChild(el('div', 'n', nom)); c.appendChild(el('div', 'v', valeur)); if (sous) c.appendChild(el('div', 's', sous)); return c;
+        }
+        function rendreCapteurs() {
+            const t = $('temps'), f = $('fans'), b = $('bat'); t.replaceChildren(); f.replaceChildren(); b.replaceChildren();
+            if (!CAPT) { [t, f].forEach(x => x.appendChild(el('span', 'note', '—'))); $('pBat').hidden = true; return; }
+            const temps = Array.isArray(CAPT.temperatures) ? CAPT.temperatures : [], fans = Array.isArray(CAPT.fans) ? CAPT.fans : [];
+            if (!temps.length) t.appendChild(el('span', 'note', 'Aucun capteur de température détecté.'));
+            temps.forEach(s => {
+                let cls = '';
+                if (num(s.critical) !== null && s.current >= s.critical) cls = 'hors'; else if (num(s.high) !== null && s.current >= s.high) cls = 'att';
+                const sous = [num(s.high) !== null ? 'seuil haut ' + s.high + ' °C' : null, num(s.critical) !== null ? 'critique ' + s.critical + ' °C' : null].filter(Boolean).join(' · ');
+                t.appendChild(carte(tiret(s.name), num(s.current) === null ? '—' : dec(s.current, 1) + ' °C', sous, cls));
+            });
+            if (!fans.length) f.appendChild(el('span', 'note', 'Aucun ventilateur détecté.'));
+            fans.forEach(s => f.appendChild(carte(tiret(s.name), num(s.current) === null ? '—' : Math.round(s.current) + ' tr/min', '', '')));
+            const bt = CAPT.battery; $('pBat').hidden = !bt;
+            if (bt) {
+                b.appendChild(carte('Charge', pct(bt.percent), '', '')); b.appendChild(carte('Alimentation', bt.plugged ? 'Sur secteur' : 'Sur batterie', '', bt.plugged ? '' : 'att'));
+            }
+        }
+
+        // ----- Configuration et journal (lus à l'ouverture de l'onglet, jamais actualisés tout seuls) -----
+        async function chargerConfig() {
+            if (DEMO) { $('cfgDisks').value = '/'; return; }
+            try {
+                const d = await lire('/config');
+                $('cfgRefresh').value = d.refresh_interval || 3; $('cfgHist').value = d.history_size || 1440; $('cfgProc').value = d.process_top_n || 15;
+                $('cfgDisks').value = (d.disk_paths || ['/']).join(', '); $('cfgHistOn').checked = d.enable_history !== false; $('cfgSens').checked = d.sensors_enabled !== false;
+                $('rCfg').hidden = true;
             } catch (e) {
-                console.error('API error:', e);
-                return null;
+                if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; rendre(); } else retour('rCfg', false, 'Lecture de la configuration impossible : ' + (e.message || ''));
             }
         }
-
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast show ' + type;
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        }
-
-        function formatBytes(b) {
-            if (!b) return '0';
-            const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(b) / Math.log(k));
-            return (b / Math.pow(k, i)).toFixed(1) + s[i];
-        }
-
-        function setGauge(id, percent) {
-            const circumference = 251;
-            const offset = (percent / 100) * circumference;
-            document.getElementById(id).setAttribute('stroke-dasharray', `${offset} ${circumference}`);
-            document.getElementById(id + '-text').textContent = percent.toFixed(0) + '%';
-        }
-
-        function drawChart(canvasId, data, color, fill = true) {
-            const canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            const w = canvas.width = canvas.offsetWidth;
-            const h = canvas.height = canvas.offsetHeight;
-
-            ctx.clearRect(0, 0, w, h);
-
-            // Grid lines
-            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-            ctx.lineWidth = 1;
-            for (let i = 0; i <= 4; i++) {
-                const y = (i / 4) * h;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(w, y);
-                ctx.stroke();
-            }
-
-            // Data line
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-
-            const maxVal = Math.max(...data, 100);
-            const step = w / (data.length - 1 || 1);
-            data.forEach((v, i) => {
-                const x = i * step;
-                const y = h - (v / maxVal) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-
-            if (fill) {
-                ctx.lineTo(w, h);
-                ctx.lineTo(0, h);
-                ctx.closePath();
-                ctx.fillStyle = color.replace(')', ', 0.1)').replace('rgb', 'rgba');
-                ctx.fill();
+        async function chargerJournal() {
+            if (DEMO) { $('journal').textContent = 'oct. 13 09:00:01 gk2 systemd[1]: Started Glances (démonstration).'; return; }
+            try {
+                const d = await lire('/logs?lines=100');
+                $('journal').textContent = d.error ? 'Erreur : ' + d.error : ((d.lines || []).join('\n') || 'Aucune ligne de journal.');
+            } catch (e) {
+                if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; rendre(); }
+                $('journal').textContent = '—';
             }
         }
-
-        function drawNetChart(canvasId, rxData, txData) {
-            const canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            const w = canvas.width = canvas.offsetWidth;
-            const h = canvas.height = canvas.offsetHeight;
-
-            ctx.clearRect(0, 0, w, h);
-
-            const maxVal = Math.max(...rxData, ...txData, 1024);
-            const step = w / (rxData.length - 1 || 1);
-
-            // RX line
-            ctx.strokeStyle = 'rgb(0, 188, 212)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            rxData.forEach((v, i) => {
-                const x = i * step;
-                const y = h - (v / maxVal) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-
-            // TX line
-            ctx.strokeStyle = 'rgb(163, 113, 247)';
-            ctx.beginPath();
-            txData.forEach((v, i) => {
-                const x = i * step;
-                const y = h - (v / maxVal) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-        }
-
-        async function loadStatus() {
-            const data = await api('/status');
-            if (!data) return;
-
-            const badge = document.getElementById('service-badge');
-            if (data.running) {
-                badge.textContent = 'RUNNING';
-                badge.className = 'badge badge-green';
-            } else {
-                badge.textContent = 'STOPPED';
-                badge.className = 'badge badge-red';
-            }
-        }
-
-        async function loadStats() {
-            const data = await api('/stats');
-            if (!data || data.error) return;
-
-            const cpu = data.cpu?.percent || 0;
-            const mem = data.memory?.percent || 0;
-            const disk = data.disk?.percent || 0;
-            const netRx = data.network?.rx_rate || 0;
-            const netTx = data.network?.tx_rate || 0;
-
-            document.getElementById('cpu-value').textContent = cpu.toFixed(1) + '%';
-            document.getElementById('mem-value').textContent = mem.toFixed(1) + '%';
-            document.getElementById('disk-value').textContent = disk.toFixed(1) + '%';
-            document.getElementById('net-value').textContent = formatBytes(netRx + netTx) + '/s';
-
-            setGauge('cpu-gauge', cpu);
-            setGauge('mem-gauge', mem);
-            setGauge('disk-gauge', disk);
-
-            const load = data.load || {};
-            document.getElementById('load1').textContent = load.avg_1?.toFixed(2) || '-';
-            document.getElementById('load5').textContent = load.avg_5?.toFixed(2) || '-';
-            document.getElementById('load15').textContent = load.avg_15?.toFixed(2) || '-';
-
-            document.getElementById('uptime').textContent = data.uptime?.human || '-';
-            document.getElementById('cpu-cores').textContent = data.cpu?.count_logical || '-';
-            document.getElementById('cpu-freq').textContent = (data.cpu?.freq_current || 0) + ' MHz';
-
-            document.getElementById('net-total').textContent = `RX: ${formatBytes(netRx)}/s | TX: ${formatBytes(netTx)}/s`;
-
-            cpuHistory.push(cpu);
-            memHistory.push(mem);
-            netRxHistory.push(netRx);
-            netTxHistory.push(netTx);
-            if (cpuHistory.length > 60) cpuHistory.shift();
-            if (memHistory.length > 60) memHistory.shift();
-            if (netRxHistory.length > 60) netRxHistory.shift();
-            if (netTxHistory.length > 60) netTxHistory.shift();
-
-            drawChart('cpu-chart', cpuHistory, 'rgb(0, 188, 212)');
-            drawChart('mem-chart', memHistory, 'rgb(163, 113, 247)');
-            drawNetChart('net-chart', netRxHistory, netTxHistory);
-
-            document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
-        }
-
-        async function loadProcesses() {
-            const data = await api('/processes');
-            if (!data) return;
-
-            processData = data.processes || [];
-            document.getElementById('process-count').textContent = `${processData.length} of ${data.total || 0} processes`;
-            renderProcesses();
-        }
-
-        function sortProcesses(column) {
-            if (sortColumn === column) {
-                sortAsc = !sortAsc;
-            } else {
-                sortColumn = column;
-                sortAsc = false;
-            }
-            renderProcesses();
-        }
-
-        function renderProcesses() {
-            const sorted = [...processData].sort((a, b) => {
-                let va = a[sortColumn], vb = b[sortColumn];
-                if (typeof va === 'string') va = va.toLowerCase();
-                if (typeof vb === 'string') vb = vb.toLowerCase();
-                if (sortAsc) return va > vb ? 1 : -1;
-                return va < vb ? 1 : -1;
-            });
-
-            const list = document.getElementById('process-list');
-            list.innerHTML = sorted.map(p => `
-                <tr>
-                    <td>${p.name}</td>
-                    <td style="color: var(--cyan);">${p.cpu_percent?.toFixed(1) || 0}%</td>
-                    <td style="color: var(--purple);">${p.memory_percent?.toFixed(1) || 0}%</td>
-                    <td style="color: var(--text-dim);">${p.pid}</td>
-                    <td>${p.user || '-'}</td>
-                    <td>${p.threads || '-'}</td>
-                    <td><span class="badge badge-${p.status === 'running' ? 'green' : 'cyan'}">${p.status}</span></td>
-                </tr>
-            `).join('') || '<tr><td colspan="7">No processes</td></tr>';
-        }
-
-        async function loadSensors() {
-            const data = await api('/sensors');
-            if (!data) return;
-
-            const temps = data.temperatures || [];
-            const fans = data.fans || [];
-            const battery = data.battery;
-
-            const tempContainer = document.getElementById('temp-sensors');
-            if (temps.length === 0) {
-                tempContainer.innerHTML = '<p style="color: var(--text-dim);">No temperature sensors found</p>';
-            } else {
-                tempContainer.innerHTML = temps.map(s => {
-                    let cls = '';
-                    if (s.critical && s.current >= s.critical) cls = 'critical';
-                    else if (s.high && s.current >= s.high) cls = 'warning';
-                    return `
-                        <div class="sensor-card ${cls}">
-                            <div class="name">${s.name}</div>
-                            <div class="value">${s.current}${s.unit ? '°' + s.unit : ''}</div>
-                            ${s.high ? `<div class="unit">High: ${s.high}°C</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
-            }
-
-            const fanContainer = document.getElementById('fan-sensors');
-            if (fans.length === 0) {
-                fanContainer.innerHTML = '<p style="color: var(--text-dim);">No fan sensors found</p>';
-            } else {
-                fanContainer.innerHTML = fans.map(s => `
-                    <div class="sensor-card">
-                        <div class="name">${s.name}</div>
-                        <div class="value">${s.current} <span class="unit">${s.unit}</span></div>
-                    </div>
-                `).join('');
-            }
-
-            const batteryCard = document.getElementById('battery-card');
-            if (battery) {
-                batteryCard.style.display = 'block';
-                document.getElementById('battery-info').innerHTML = `
-                    <div style="display: flex; justify-content: space-around; text-align: center;">
-                        <div>
-                            <div style="font-size: 2rem; color: var(--cyan);">${battery.percent}%</div>
-                            <div style="color: var(--text-dim);">Charge</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 1.5rem; color: ${battery.plugged ? 'var(--green)' : 'var(--yellow)'};">
-                                ${battery.plugged ? 'Plugged In' : 'On Battery'}
-                            </div>
-                            <div style="color: var(--text-dim);">Status</div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                batteryCard.style.display = 'none';
-            }
-        }
-
-        async function loadConfig() {
-            const data = await api('/config');
-            if (!data) return;
-
-            document.getElementById('cfg-refresh').value = data.refresh_interval || 3;
-            document.getElementById('cfg-history-size').value = data.history_size || 1440;
-            document.getElementById('cfg-process-n').value = data.process_top_n || 15;
-            document.getElementById('cfg-disk-paths').value = (data.disk_paths || ['/']).join(', ');
-            document.getElementById('cfg-history').checked = data.enable_history !== false;
-            document.getElementById('cfg-sensors').checked = data.sensors_enabled !== false;
-        }
-
-        async function saveConfig(e) {
-            e.preventDefault();
-            const config = {
-                refresh_interval: parseInt(document.getElementById('cfg-refresh').value),
-                history_size: parseInt(document.getElementById('cfg-history-size').value),
-                process_top_n: parseInt(document.getElementById('cfg-process-n').value),
-                disk_paths: document.getElementById('cfg-disk-paths').value.split(',').map(s => s.trim()),
-                enable_history: document.getElementById('cfg-history').checked,
-                sensors_enabled: document.getElementById('cfg-sensors').checked,
+        $('fCfg').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const corps = {
+                refresh_interval: parseInt($('cfgRefresh').value, 10),
+                history_size: parseInt($('cfgHist').value, 10),
+                process_top_n: parseInt($('cfgProc').value, 10),
+                disk_paths: $('cfgDisks').value.split(',').map(s => s.trim()).filter(Boolean),
+                enable_history: $('cfgHistOn').checked,
+                sensors_enabled: $('cfgSens').checked,
                 network_interfaces: []
             };
-
-            const result = await api('/config', {
-                method: 'POST',
-                body: JSON.stringify(config)
-            });
-
-            if (result?.success) {
-                showToast('Configuration saved');
-            } else {
-                showToast('Failed to save: ' + (result?.error || 'Unknown error'), 'error');
-            }
-        }
-
-        async function loadLogs() {
-            const data = await api('/logs?lines=100');
-            if (!data) return;
-
-            const container = document.getElementById('logs-container');
-            container.textContent = (data.lines || []).join('\n') || 'No logs available';
-        }
-
-        async function serviceAction(action) {
-            const result = await api('/' + action, { method: 'POST' });
-            if (result?.success) {
-                showToast('Service ' + action + ' successful');
-                setTimeout(loadStatus, 1000);
-            } else {
-                showToast('Failed: ' + (result?.error || result?.output || 'Unknown error'), 'error');
-            }
-        }
-
-        function refresh() {
-            loadStatus();
-            loadStats();
-            loadProcesses();
-            loadSensors();
-        }
-
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-
-                if (tab.dataset.tab === 'processes') loadProcesses();
-                if (tab.dataset.tab === 'sensors') loadSensors();
-                if (tab.dataset.tab === 'config') { loadConfig(); loadLogs(); }
-            });
+            const r = await ecrire('POST', '/config', corps);
+            if (r.ok && r.data && r.data.success) { retour('rCfg', true, 'Configuration enregistrée.'); toast('Configuration enregistrée'); }
+            else retour('rCfg', false, 'Échec de l’enregistrement : ' + detail(r));
         });
+        $('cfgReset').addEventListener('click', chargerConfig);
+        $('bJournal').addEventListener('click', chargerJournal);
 
-        // Config form submit
-        document.getElementById('config-form').addEventListener('submit', saveConfig);
-
-        // Initial load - check auth first
-        if (checkAuth()) {
-            refresh();
-            // Auto-refresh every 10 seconds
-            setInterval(() => {
-                loadStats();
-                const activeTab = document.querySelector('.tab.active');
-                if (activeTab) {
-                    const tab = activeTab.dataset.tab;
-                    if (tab === 'processes') loadProcesses();
-                    else if (tab === 'sensors') loadSensors();
-                }
-            }, 10000);
+        // ----- Service : démarrer / arrêter (confirmation intégrée pour l'arrêt) -----
+        async function actionService(action, libelle) {
+            const r = await ecrire('POST', '/' + action, undefined);
+            if (r.ok && r.data && r.data.success) { retour('rSvc', true, 'Service ' + libelle + '.'); setTimeout(charger, 1000); }
+            else retour('rSvc', false, 'Échec : ' + detail(r));
         }
+        function demanderArret() {
+            if (DEMO) { retour('rSvc', false, 'Démonstration : action inerte.'); return; }
+            CONFIRM = 'arret';
+            const r = $('rSvc'); r.hidden = false; r.className = 'retour conf';
+            const ok = el('button', 'btn danger sm', 'Confirmer l’arrêt'); ok.type = 'button';
+            const non = el('button', 'btn sm', 'Annuler'); non.type = 'button';
+            ok.addEventListener('click', async () => { CONFIRM = null; await actionService('stop', 'arrêté'); });
+            non.addEventListener('click', () => { CONFIRM = null; r.hidden = true; });
+            r.replaceChildren(el('span', null, 'Arrêter Glances ? La supervision s’interrompt jusqu’au prochain démarrage.'), ok, non);
+        }
+        $('bArreter').addEventListener('click', demanderArret);
+        $('bDemarrer').addEventListener('click', () => { if (DEMO) { retour('rSvc', false, 'Démonstration : action inerte.'); return; } CONFIRM = null; actionService('start', 'démarré'); });
+
+        // ----- Onglets et période -----
+        function majOnglet() {
+            if (ONGLET === 'tableau') rendreHistorique();
+            else if (ONGLET === 'processus') rendreProcessus();
+            else if (ONGLET === 'capteurs') rendreCapteurs();
+            annoncer();
+        }
+        const NOMS = ['tableau', 'processus', 'capteurs', 'config'];
+        async function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'config') { chargerConfig(); chargerJournal(); }
+            if (DEMO) majOnglet(); else if (nom !== 'config') chargerOnglet(false); else annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        document.querySelectorAll('[data-h]').forEach(b => b.addEventListener('click', () => {
+            HEURES = parseInt(b.dataset.h, 10);
+            document.querySelectorAll('[data-h]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+            chargerOnglet(false);
+        }));
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'glances' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))) return;
+            charger();
+        }, 15000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

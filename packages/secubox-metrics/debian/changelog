@@ -1,3 +1,16 @@
+secubox-metrics (1.22.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: la page /glances/ passe au profil Aurora (page autonome, sans police ni script externe hors menu ; onglets Tableau de bord, Processus, Capteurs, Configuration ; ?demo=1 et ?embed=1 ; hauteur annoncée à l hôte) (ref #2584)
+  * fix: les noms de processus et de capteurs étaient insérés en HTML brut (innerHTML) : un nom de processus piégé s exécutait dans la page ; tout est désormais construit en texte
+  * fix: une réponse 401 renvoyait brutalement vers /login.html (même dans un cadre) ; elle affiche maintenant le bandeau « session requise » et des tirets. Un refus 403, une erreur HTTP ou un champ error de l API n étaient lus comme des données : ils sont traités comme des erreurs
+  * fix: une mesure absente affichait 0 (fréquence « 0 MHz », CPU à 0 %) ; elle s affiche « — »
+  * fix: les courbes CPU, mémoire et réseau se construisaient avec les seuls relevés faits depuis l ouverture de la page (60 points, perdus au rechargement) ; elles lisent maintenant /history (un point par minute, 1 h, 6 h ou 24 h au choix), une seule échelle, graduations réelles ; sans deux relevés, aucune courbe n est inventée
+  * fix: le tri des processus renvoyait -1 sur égalité (ordre instable) ; le filtre par nom ou utilisateur est ajouté, côté client ; confirmation intégrée à la page pour l arrêt du service (aucun confirm, alert ni prompt) ; actualisation toutes les 15 s seulement si l onglet est visible et sans saisie ni confirmation ouverte
+  * même contrat d écriture : POST /start, POST /stop (sans corps) et POST /config avec le même corps qu avant (refresh_interval, history_size, process_top_n, disk_paths, enable_history, sensors_enabled, network_interfaces vide) ; les chemins de disque vides issus d une virgule en trop ne sont plus envoyés
+  * non repris : les jauges circulaires (remplacées par les barres des tuiles) ; la route /restart, /disk_io et /network_interfaces que l ancienne page n appelait pas ; la page n édite toujours pas network_interfaces (envoyé vide, comme avant). Limites de l API signalées dans la page : l état « en marche » vient d un pgrep sur le nom glances côté API ; le débit réseau de la toute première mesure est à 0 faute de point de comparaison
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 17:10:00 +0200
+
 secubox-metrics (1.21.2-1~bookworm1) bookworm; urgency=medium
 
   * fix: la carte « Origine des attaques » lit les pays sur /api/v1/waf/stats (comme la vue d ensemble du WAF) : la route /waf_stats de metrics ne donne que des compteurs, la carte restait vide (ref #2404)
