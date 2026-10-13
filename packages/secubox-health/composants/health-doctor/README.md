@@ -5,7 +5,7 @@ SecuBox vital-services health monitor.
 
 Daemon + CLI (healthctl) + FastAPI that runs periodic checks against the vital services on a SecuBox board (haproxy, sbxwaf, gitea LXC, nginx, mail LXC, metrics socket, cookie-audit ledger freshness, filesystems, act-runner). State transitions emit CSPN-compatible journal events. Read-only API consumed by the portal banner.
 
-Paquet Debian : version `1.2.0-1~bookworm1`, architecture `all`.
+Paquet Debian : version `1.3.0-1~bookworm1`, architecture `all`.
 
 ## Contenu
 
