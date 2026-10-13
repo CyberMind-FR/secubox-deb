@@ -4,1032 +4,439 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Diagnostic réseau au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, outils inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Network Diagnostics</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Diagnostic réseau</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1b3d1c;
-            /* Module accent - cyan for network */
-            --netdiag-accent: #00bcd4;
-            --netdiag-accent-dim: #0097a7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(0,188,212,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-
-        .main { flex: 1; margin-left: 220px; }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-        }
-
-        .header h1 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--netdiag-accent);
-            text-shadow: 0 0 8px rgba(0,188,212,0.3);
-        }
-
-        .header-actions { display: flex; gap: 0.75rem; }
-
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            background: rgba(0,188,212,0.1);
-            border: 1px solid var(--netdiag-accent);
-            color: var(--netdiag-accent);
-        }
-
-        .content { padding: 1.5rem; }
-
-        /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 0;
-            border-bottom: 1px solid var(--tube-soft);
-            margin-bottom: 1.5rem;
-            background: var(--tube-pale);
-            border-radius: 8px 8px 0 0;
-            overflow: hidden;
-        }
-
-        .tab {
-            padding: 0.75rem 1.5rem;
-            cursor: pointer;
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
-
-        .tab:hover { color: var(--p31-mid); background: rgba(0,221,68,0.05); }
-
-        .tab.active {
-            color: var(--netdiag-accent);
-            border-bottom-color: var(--netdiag-accent);
-            background: rgba(0,188,212,0.1);
-        }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Cards */
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        /* Form elements */
-        .form-group { margin-bottom: 1rem; }
-
-        .form-group label {
-            display: block;
-            font-size: 0.75rem;
-            color: var(--p31-dim);
-            margin-bottom: 0.25rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        input, select, textarea {
-            width: 100%;
-            padding: 0.6rem;
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            border-radius: 4px;
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--netdiag-accent);
-            box-shadow: 0 0 8px rgba(0,188,212,0.2);
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 3fr 1fr;
-            gap: 0.75rem;
-            align-items: end;
-        }
-
-        .btn {
-            padding: 0.6rem 1.25rem;
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            cursor: pointer;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-
-        .btn:hover {
-            border-color: var(--netdiag-accent);
-            color: var(--netdiag-accent);
-            box-shadow: 0 0 12px rgba(0,188,212,0.15);
-        }
-
-        .btn.primary {
-            border-color: var(--netdiag-accent);
-            color: var(--netdiag-accent);
-            background: rgba(0,188,212,0.1);
-        }
-
-        .btn.primary:hover {
-            background: rgba(0,188,212,0.2);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Terminal output */
-        .terminal {
-            background: #1a1a1a;
-            color: #00ff41;
-            font-family: 'JetBrains Mono', 'Courier Prime', monospace;
-            font-size: 0.85rem;
-            padding: 1rem;
-            border-radius: 4px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #333;
-        }
-
-        .terminal:empty::before {
-            content: 'Output will appear here...';
-            color: #666;
-        }
-
-        /* Tools grid */
-        .tools-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1rem;
-        }
-
-        .tool-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 8px;
-            padding: 1.25rem;
-        }
-
-        .tool-card h3 {
-            color: var(--netdiag-accent);
-            font-size: 1rem;
-            margin-bottom: 0.75rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .tool-card h3 .icon { font-size: 1.25rem; }
-
-        /* Interface cards */
-        .iface-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 1rem;
-        }
-
-        .iface-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
-        .iface-card.up { border-left: 3px solid var(--p31-peak); }
-        .iface-card.down { border-left: 3px solid #ff4466; }
-
-        .iface-name {
-            font-weight: bold;
-            color: var(--netdiag-accent);
-            font-size: 1rem;
-        }
-
-        .iface-mac {
-            font-family: monospace;
-            font-size: 0.75rem;
-            color: var(--p31-dim);
-        }
-
-        .iface-addr {
-            margin-top: 0.5rem;
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: var(--p31-mid);
-        }
-
-        .iface-state {
-            display: inline-block;
-            padding: 0.15rem 0.5rem;
-            border-radius: 3px;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-        }
-
-        .iface-state.up { background: rgba(0,221,68,0.2); color: var(--p31-peak); }
-        .iface-state.down { background: rgba(255,68,102,0.2); color: #ff4466; }
-
-        /* Table */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-family: 'Courier Prime', monospace;
-        }
-
-        th {
-            text-align: left;
-            padding: 0.75rem;
-            color: var(--p31-decay);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-
-        td {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            font-size: 0.85rem;
-        }
-
-        tr:hover { background: rgba(0,188,212,0.05); }
-
-        /* Stats */
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .stat-card {
-            text-align: center;
-            padding: 1rem;
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 8px;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--netdiag-accent);
-        }
-
-        .stat-label {
-            font-size: 0.7rem;
-            color: var(--p31-dim);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        /* Loading indicator */
-        .loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--tube-soft);
-            border-radius: 50%;
-            border-top-color: var(--netdiag-accent);
-            animation: spin 1s linear infinite;
-            margin-right: 0.5rem;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Filter */
-        .filter-bar {
-            display: flex;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-
-        .filter-bar input { max-width: 300px; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            .form-row { grid-template-columns: 1fr; }
-            .tools-grid { grid-template-columns: 1fr; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(7,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .outils{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:700px){.outils{grid-template-columns:1fr 1fr}}
+        @container a (min-width:1100px){.outils{grid-template-columns:repeat(3,1fr)}}
+        .ifaces{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:700px){.ifaces{grid-template-columns:1fr 1fr}}
+        @container a (min-width:1100px){.ifaces{grid-template-columns:repeat(3,1fr)}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        td.mono{overflow-wrap:normal;white-space:nowrap}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        form.outil{display:grid;gap:8px;margin:0}
+        form.outil label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.outil input,form.outil select,.filtre input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.outil input:focus,form.outil select:focus,.filtre input:focus{outline:none;border-color:var(--cyan)}
+        form.outil .ligne{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+        .filtre{display:flex;gap:8px;margin-bottom:8px}
+        .ifc{border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:rgba(8,18,38,.55);display:grid;gap:4px;min-width:0}
+        .ifc .nom{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700}
+        .ifc .sub{color:var(--faible);font-size:.72rem}
+        pre.terminal{margin:0;background:rgba(3,8,18,.85);border:1px solid var(--trait);border-radius:10px;padding:10px 12px;min-height:120px;max-height:360px;overflow:auto;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.74rem;line-height:1.4;color:#cfe3ff;white-space:pre-wrap;overflow-wrap:anywhere}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-
-    <main class="main">
-        <header class="header">
-            <div style="display: flex; align-items: center; gap: 1rem;">
-                <h1>Network Diagnostics</h1>
-                <span class="badge" id="tools-count">-- Tools</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
+                <div><h1>Diagnostic réseau</h1><small>Outils, interfaces, routes et connexions de ce nœud</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refreshAll()">Refresh</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, outils inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="content">
-            <div class="tabs">
-                <div class="tab active" data-tab="tools">Tools</div>
-                <div class="tab" data-tab="interfaces">Interfaces</div>
-                <div class="tab" data-tab="routes">Routes</div>
-                <div class="tab" data-tab="connections">Connections</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cOutils" title="Outils système installés sur ce nœud et utilisables par la page (ping, traceroute, dig, whois, mtr, nmap, ss, ip, iperf3)."><span class="l">Outils disponibles</span><span class="v" id="tOutils">—</span><span class="s" id="sOutils">installés</span></div>
+            <div class="tuile ok" id="cIf" title="Interfaces réseau dont l’état opérationnel est UP, sur le total des interfaces. L’interface de bouclage (lo) est le plus souvent en état UNKNOWN."><span class="l">Interfaces UP</span><span class="v" id="tIf">—</span><span class="s" id="sIf">sur le total</span></div>
+            <div class="tuile cy" title="Routes IPv4 et IPv6 de la table de routage du noyau."><span class="l">Routes</span><span class="v" id="tRoutes">—</span><span class="s" id="sRoutes">IPv4 + IPv6</span></div>
+            <div class="tuile cy" title="Entrées de la table des voisins (ARP / NDP) vues par le noyau."><span class="l">Voisins</span><span class="v" id="tArp">—</span><span class="s">table ARP / NDP</span></div>
+            <div class="tuile cy" title="Sockets TCP et UDP listées par ss -tunap, tous états confondus."><span class="l">Connexions</span><span class="v" id="tConn">—</span><span class="s">sockets TCP + UDP</span></div>
+            <div class="tuile ok" title="Connexions TCP à l’état ESTAB."><span class="l">Établies</span><span class="v" id="tEstab">—</span><span class="s">état ESTAB</span></div>
+            <div class="tuile cy" title="Ports en écoute (ss -tulnp)."><span class="l">Ports en écoute</span><span class="v" id="tListen">—</span><span class="s">TCP + UDP</span></div>
+        </section>
 
-            <!-- Tools Tab -->
-            <div id="tools-tab" class="tab-content active">
-                <div class="tools-grid">
-                    <!-- Ping -->
-                    <div class="tool-card">
-                        <h3><span class="icon">&#128225;</span> Ping</h3>
-                        <div class="form-group">
-                            <label>Host / IP</label>
-                            <input type="text" id="ping-host" placeholder="8.8.8.8 or google.com">
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Count</label>
-                                <input type="number" id="ping-count" value="4" min="1" max="20">
-                            </div>
-                            <button class="btn primary" onclick="runPing()">Run</button>
-                        </div>
-                    </div>
-
-                    <!-- Traceroute -->
-                    <div class="tool-card">
-                        <h3><span class="icon">&#128268;</span> Traceroute</h3>
-                        <div class="form-group">
-                            <label>Host / IP</label>
-                            <input type="text" id="trace-host" placeholder="google.com">
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Max Hops</label>
-                                <input type="number" id="trace-hops" value="30" min="1" max="64">
-                            </div>
-                            <button class="btn primary" onclick="runTraceroute()">Run</button>
-                        </div>
-                    </div>
-
-                    <!-- DNS Lookup -->
-                    <div class="tool-card">
-                        <h3><span class="icon">&#127760;</span> DNS Lookup</h3>
-                        <div class="form-group">
-                            <label>Domain</label>
-                            <input type="text" id="dns-domain" placeholder="example.com">
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Record Type</label>
-                                <select id="dns-type">
-                                    <option value="A">A</option>
-                                    <option value="AAAA">AAAA</option>
-                                    <option value="MX">MX</option>
-                                    <option value="NS">NS</option>
-                                    <option value="TXT">TXT</option>
-                                    <option value="CNAME">CNAME</option>
-                                    <option value="SOA">SOA</option>
-                                </select>
-                            </div>
-                            <button class="btn primary" onclick="runDNS()">Run</button>
-                        </div>
-                    </div>
-
-                    <!-- WHOIS -->
-                    <div class="tool-card">
-                        <h3><span class="icon">&#128269;</span> WHOIS</h3>
-                        <div class="form-group">
-                            <label>Domain / IP</label>
-                            <input type="text" id="whois-target" placeholder="example.com">
-                        </div>
-                        <button class="btn primary" onclick="runWhois()" style="width: 100%;">Run</button>
-                    </div>
-
-                    <!-- MTR -->
-                    <div class="tool-card">
-                        <h3><span class="icon">&#128202;</span> MTR</h3>
-                        <div class="form-group">
-                            <label>Host / IP</label>
-                            <input type="text" id="mtr-host" placeholder="8.8.8.8">
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Count</label>
-                                <input type="number" id="mtr-count" value="10" min="1" max="30">
-                            </div>
-                            <button class="btn primary" onclick="runMTR()">Run</button>
-                        </div>
-                    </div>
-
-                    <!-- Port Scan -->
-                    <div class="tool-card">
-                        <h3><span class="icon">&#128272;</span> Port Scan</h3>
-                        <div class="form-group">
-                            <label>Host (Local Only)</label>
-                            <input type="text" id="scan-host" placeholder="192.168.1.1">
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Ports</label>
-                                <input type="text" id="scan-ports" value="1-1024" placeholder="1-1024 or 80,443">
-                            </div>
-                            <button class="btn primary" onclick="runPortScan()">Scan</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Results Terminal -->
-                <div class="card" style="margin-top: 1.5rem;">
-                    <div class="card-header">
-                        <h2>Output</h2>
-                        <button class="btn" onclick="clearOutput()">Clear</button>
-                    </div>
-                    <div class="terminal" id="output"></div>
-                </div>
-            </div>
-
-            <!-- Interfaces Tab -->
-            <div id="interfaces-tab" class="tab-content">
-                <div class="stats-row" id="iface-stats">
-                    <div class="stat-card">
-                        <div class="stat-value" id="iface-count">--</div>
-                        <div class="stat-label">Interfaces</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="iface-up">--</div>
-                        <div class="stat-label">Up</div>
-                    </div>
-                </div>
-
-                <div class="iface-grid" id="interfaces-list">
-                    <p style="color: var(--p31-dim);">Loading...</p>
-                </div>
-            </div>
-
-            <!-- Routes Tab -->
-            <div id="routes-tab" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>IPv4 Routes</h2>
-                        <button class="btn" onclick="loadRoutes()">Refresh</button>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Destination</th>
-                                <th>Gateway</th>
-                                <th>Device</th>
-                                <th>Metric</th>
-                                <th>Scope</th>
-                            </tr>
-                        </thead>
-                        <tbody id="routes-table">
-                            <tr><td colspan="5">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>ARP Table</h2>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>IP Address</th>
-                                <th>MAC Address</th>
-                                <th>Interface</th>
-                                <th>State</th>
-                            </tr>
-                        </thead>
-                        <tbody id="arp-table">
-                            <tr><td colspan="4">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Connections Tab -->
-            <div id="connections-tab" class="tab-content">
-                <div class="filter-bar">
-                    <input type="text" id="conn-filter" placeholder="Filter by IP, port, or process..." oninput="filterConnections()">
-                    <button class="btn" onclick="loadConnections()">Refresh</button>
-                </div>
-
-                <div class="stats-row" id="conn-stats">
-                    <div class="stat-card">
-                        <div class="stat-value" id="conn-total">--</div>
-                        <div class="stat-label">Total</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="conn-estab">--</div>
-                        <div class="stat-label">Established</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="conn-listen">--</div>
-                        <div class="stat-label">Listening</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Active Connections</h2>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Proto</th>
-                                <th>State</th>
-                                <th>Local</th>
-                                <th>Remote</th>
-                                <th>Process</th>
-                            </tr>
-                        </thead>
-                        <tbody id="connections-table">
-                            <tr><td colspan="5">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="card" style="margin-top: 1.5rem;">
-                    <div class="card-header">
-                        <h2>Listening Ports</h2>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Proto</th>
-                                <th>Port</th>
-                                <th>Address</th>
-                                <th>Process</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ports-table">
-                            <tr><td colspan="4">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <div class="onglets" role="tablist" aria-label="Sections du diagnostic">
+            <button type="button" role="tab" id="o-outils" data-t="outils" aria-selected="true" aria-controls="t-outils">Outils</button>
+            <button type="button" role="tab" id="o-interfaces" data-t="interfaces" aria-selected="false" aria-controls="t-interfaces">Interfaces</button>
+            <button type="button" role="tab" id="o-routes" data-t="routes" aria-selected="false" aria-controls="t-routes">Routes</button>
+            <button type="button" role="tab" id="o-connexions" data-t="connexions" aria-selected="false" aria-controls="t-connexions">Connexions</button>
         </div>
-    </main>
 
-    <script>
-        const API = '/api/v1/netdiag';
-        let allConnections = [];
+        <section id="t-outils" role="tabpanel" aria-labelledby="o-outils">
+            <div class="outils">
+                <div class="pan"><h3>Ping</h3>
+                    <form class="outil" id="fPing"><label>Hôte ou IP<input name="host" placeholder="192.0.2.1 ou example.com" autocomplete="off"></label>
+                        <div class="ligne"><label>Paquets<input name="count" type="number" value="4" min="1" max="20"></label><button class="btn prim" type="submit">Lancer</button></div></form></div>
+                <div class="pan"><h3>Traceroute</h3>
+                    <form class="outil" id="fTrace"><label>Hôte ou IP<input name="host" placeholder="example.com" autocomplete="off"></label>
+                        <div class="ligne"><label>Sauts max<input name="max_hops" type="number" value="30" min="1" max="64"></label><button class="btn prim" type="submit">Lancer</button></div></form></div>
+                <div class="pan"><h3>Résolution DNS</h3>
+                    <form class="outil" id="fDns"><label>Domaine<input name="domain" placeholder="example.com" autocomplete="off"></label>
+                        <div class="ligne"><label>Type d’enregistrement<select name="record_type"><option>A</option><option>AAAA</option><option>MX</option><option>NS</option><option>TXT</option><option>CNAME</option><option>SOA</option></select></label><button class="btn prim" type="submit">Lancer</button></div></form></div>
+                <div class="pan"><h3>WHOIS</h3>
+                    <form class="outil" id="fWhois"><label>Domaine ou IP<input name="target" placeholder="example.com" autocomplete="off"></label>
+                        <div class="ligne"><span></span><button class="btn prim" type="submit">Lancer</button></div></form></div>
+                <div class="pan"><h3>MTR</h3>
+                    <form class="outil" id="fMtr"><label>Hôte ou IP<input name="host" placeholder="192.0.2.1" autocomplete="off"></label>
+                        <div class="ligne"><label>Sondes par saut<input name="count" type="number" value="10" min="1" max="30"></label><button class="btn prim" type="submit">Lancer</button></div></form></div>
+                <div class="pan"><h3>Scan de ports <i>réseau local seulement</i></h3>
+                    <form class="outil" id="fScan"><label>Hôte (adresse privée)<input name="host" placeholder="192.168.1.1" autocomplete="off"></label>
+                        <div class="ligne"><label>Ports<input name="ports" value="1-1024" placeholder="1-1024 ou 80,443" autocomplete="off"></label><button class="btn prim" type="submit">Scanner</button></div></form></div>
+            </div>
+            <div class="pan" style="margin-top:10px"><h3>Résultat <i id="nSortie"></i><button class="btn sm" id="effacer" type="button" style="margin-left:auto">Effacer</button></h3>
+                <pre class="terminal" id="sortie" aria-live="polite"></pre>
+                <p class="note" id="outilsDispo"></p></div>
+        </section>
 
-        // Auth helper
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
-        }
+        <section id="t-interfaces" role="tabpanel" aria-labelledby="o-interfaces" hidden>
+            <div class="pan"><h3>Interfaces réseau <i id="nIf"></i></h3>
+                <div class="ifaces" id="lIf"></div></div>
+        </section>
 
-        function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine), accepte par
-            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
-            // seule une vraie 401 redirige (gere dans les appels fetch).
-            return true;
-        }
+        <section id="t-routes" role="tabpanel" aria-labelledby="o-routes" hidden>
+            <div class="grille">
+                <div class="pan" style="grid-column:1/-1"><h3>Routes IPv4 <i id="nR4"></i></h3>
+                    <div class="tab"><table><thead><tr><th>Destination</th><th>Passerelle</th><th>Interface</th><th>Métrique</th><th>Portée</th></tr></thead><tbody id="bR4"></tbody></table></div></div>
+                <div class="pan" style="grid-column:1/-1"><h3>Routes IPv6 <i id="nR6"></i></h3>
+                    <div class="tab"><table><thead><tr><th>Destination</th><th>Passerelle</th><th>Interface</th><th>Métrique</th><th>Protocole</th></tr></thead><tbody id="bR6"></tbody></table></div></div>
+                <div class="pan" style="grid-column:1/-1"><h3>Voisins (ARP / NDP) <i id="nArp"></i></h3>
+                    <div class="tab"><table><thead><tr><th>Adresse IP</th><th>Adresse MAC</th><th>Interface</th><th>État</th></tr></thead><tbody id="bArp"></tbody></table></div></div>
+            </div>
+        </section>
 
-        async function api(endpoint, method = 'GET', data = null) {
-            const token = getToken();
-            const opts = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-                }
-            };
-            if (data) opts.body = JSON.stringify(data);
+        <section id="t-connexions" role="tabpanel" aria-labelledby="o-connexions" hidden>
+            <div class="grille">
+                <div class="pan" style="grid-column:1/-1"><h3>Connexions actives <i id="nConn"></i></h3>
+                    <div class="filtre"><input id="filtre" type="search" placeholder="Filtrer par IP, port, processus, état…" aria-label="Filtrer les connexions" autocomplete="off"></div>
+                    <div class="tab"><table><thead><tr><th>Proto</th><th>État</th><th>Local</th><th>Distant</th><th>Processus</th></tr></thead><tbody id="bConn"></tbody></table></div>
+                    <p class="note" id="noteConn"></p></div>
+                <div class="pan" style="grid-column:1/-1"><h3>Ports en écoute <i id="nPorts"></i></h3>
+                    <div class="tab"><table><thead><tr><th>Proto</th><th>Port</th><th>Adresse</th><th>Processus</th></tr></thead><tbody id="bPorts"></tbody></table></div></div>
+            </div>
+        </section>
+    </div></div></main>
 
-            try {
-                const res = await fetch(API +  endpoint, opts);
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
-                    return { success: false, error: 'Unauthorized' };
-                }
-                return res.json();
-            } catch (e) {
-                return { success: false, error: e.message };
-            }
-        }
-
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
-
-                // Load data for the tab
-                if (tab.dataset.tab === 'interfaces') loadInterfaces();
-                if (tab.dataset.tab === 'routes') { loadRoutes(); loadArp(); }
-                if (tab.dataset.tab === 'connections') { loadConnections(); loadPorts(); }
-            });
-        });
-
-        // Output helpers
-        function output(text, append = true) {
-            const el = document.getElementById('output');
-            if (append) {
-                el.textContent += text + '\n';
-            } else {
-                el.textContent = text;
-            }
-            el.scrollTop = el.scrollHeight;
-        }
-
-        function clearOutput() {
-            document.getElementById('output').textContent = '';
-        }
-
-        function setLoading(btn, loading) {
-            btn.disabled = loading;
-            if (loading) {
-                btn.dataset.text = btn.textContent;
-                btn.innerHTML = '<span class="loading"></span>Running...';
-            } else {
-                btn.textContent = btn.dataset.text || 'Run';
-            }
-        }
-
-        // Tool functions
-        async function runPing() {
-            const host = document.getElementById('ping-host').value.trim();
-            const count = parseInt(document.getElementById('ping-count').value) || 4;
-
-            if (!host) { alert('Please enter a host'); return; }
-
-            output(`\n=== PING ${host} ===\n`, false);
-            const btn = event.target;
-            setLoading(btn, true);
-
-            const data = await api('/ping', 'POST', { host, count });
-            setLoading(btn, false);
-
-            if (data.success) {
-                output(data.output);
-                if (data.stats) {
-                    output(`\n--- Statistics ---`);
-                    output(`Packets: ${data.stats.packets_received}/${data.stats.packets_transmitted}`);
-                    output(`Loss: ${data.stats.packet_loss}%`);
-                    if (data.stats.rtt_avg) {
-                        output(`RTT: min=${data.stats.rtt_min}ms avg=${data.stats.rtt_avg}ms max=${data.stats.rtt_max}ms`);
-                    }
-                }
-            } else {
-                output('Error: ' + (data.error || 'Failed'));
-            }
-        }
-
-        async function runTraceroute() {
-            const host = document.getElementById('trace-host').value.trim();
-            const max_hops = parseInt(document.getElementById('trace-hops').value) || 30;
-
-            if (!host) { alert('Please enter a host'); return; }
-
-            output(`\n=== TRACEROUTE ${host} ===\n`, false);
-            const btn = event.target;
-            setLoading(btn, true);
-
-            const data = await api('/traceroute', 'POST', { host, max_hops });
-            setLoading(btn, false);
-
-            if (data.success !== false) {
-                output(data.output || 'No output');
-            } else {
-                output('Error: ' + (data.error || 'Failed'));
-            }
-        }
-
-        async function runDNS() {
-            const domain = document.getElementById('dns-domain').value.trim();
-            const record_type = document.getElementById('dns-type').value;
-
-            if (!domain) { alert('Please enter a domain'); return; }
-
-            output(`\n=== DNS LOOKUP ${domain} (${record_type}) ===\n`, false);
-            const btn = event.target;
-            setLoading(btn, true);
-
-            const data = await api('/dns', 'POST', { domain, record_type });
-            setLoading(btn, false);
-
-            if (data.success) {
-                output(`Records found: ${data.records.length}`);
-                data.records.forEach(r => output(`  ${r}`));
-                output(`\n--- Verbose ---`);
-                output(data.verbose || '');
-            } else {
-                output('Error: ' + (data.error || 'Failed'));
-            }
-        }
-
-        async function runWhois() {
-            const target = document.getElementById('whois-target').value.trim();
-
-            if (!target) { alert('Please enter a domain or IP'); return; }
-
-            output(`\n=== WHOIS ${target} ===\n`, false);
-            const btn = event.target;
-            setLoading(btn, true);
-
-            const data = await api('/whois', 'POST', { target });
-            setLoading(btn, false);
-
-            if (data.success !== false) {
-                if (data.parsed) {
-                    output('--- Parsed Info ---');
-                    for (const [k, v] of Object.entries(data.parsed)) {
-                        output(`${k}: ${Array.isArray(v) ? v.join(', ') : v}`);
-                    }
-                    output('\n--- Full Output ---');
-                }
-                output(data.output || 'No output');
-            } else {
-                output('Error: ' + (data.error || 'Failed'));
-            }
-        }
-
-        async function runMTR() {
-            const host = document.getElementById('mtr-host').value.trim();
-            const count = parseInt(document.getElementById('mtr-count').value) || 10;
-
-            if (!host) { alert('Please enter a host'); return; }
-
-            output(`\n=== MTR ${host} (${count} probes) ===\n`, false);
-            const btn = event.target;
-            setLoading(btn, true);
-
-            const data = await api('/mtr', 'POST', { host, count });
-            setLoading(btn, false);
-
-            if (data.success !== false) {
-                output(data.output || 'No output');
-            } else {
-                output('Error: ' + (data.error || 'Failed'));
-            }
-        }
-
-        async function runPortScan() {
-            const host = document.getElementById('scan-host').value.trim();
-            const ports = document.getElementById('scan-ports').value.trim() || '1-1024';
-
-            if (!host) { alert('Please enter a host'); return; }
-
-            output(`\n=== PORT SCAN ${host} (${ports}) ===\n`, false);
-            output('Note: Only local network addresses are allowed.\n');
-            const btn = event.target;
-            setLoading(btn, true);
-
-            const data = await api('/portscan', 'POST', { host, ports });
-            setLoading(btn, false);
-
-            if (data.success) {
-                output(`Open ports found: ${data.open_ports.length}`);
-                data.open_ports.forEach(p => {
-                    output(`  ${p.port}/${p.proto} - ${p.service || 'unknown'}`);
-                });
-                if (data.output) {
-                    output('\n--- Full Output ---');
-                    output(data.output);
-                }
-            } else {
-                output('Error: ' + (data.error || 'Failed'));
-            }
-        }
-
-        // Interfaces
-        async function loadInterfaces() {
-            const data = await api('/interfaces');
-            const container = document.getElementById('interfaces-list');
-
-            if (data.success && data.interfaces) {
-                const up = data.interfaces.filter(i => i.state === 'UP').length;
-                document.getElementById('iface-count').textContent = data.count;
-                document.getElementById('iface-up').textContent = up;
-
-                container.innerHTML = data.interfaces.map(iface => `
-                    <div class="iface-card ${iface.state === 'UP' ? 'up' : 'down'}">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span class="iface-name">${iface.name}</span>
-                            <span class="iface-state ${iface.state === 'UP' ? 'up' : 'down'}">${iface.state}</span>
-                        </div>
-                        <div class="iface-mac">${iface.mac || 'N/A'}</div>
-                        <div style="font-size: 0.75rem; color: var(--p31-dim);">
-                            MTU: ${iface.mtu} | Type: ${iface.type}
-                        </div>
-                        <div class="iface-addr">
-                            ${iface.addresses.map(a => `${a.address}/${a.prefix}`).join('<br>') || 'No address'}
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                container.innerHTML = '<p style="color: #ff4466;">Failed to load interfaces</p>';
-            }
-        }
-
-        // Routes
-        async function loadRoutes() {
-            const data = await api('/routes');
-            const tbody = document.getElementById('routes-table');
-
-            if (data.success && data.ipv4) {
-                tbody.innerHTML = data.ipv4.map(r => `
-                    <tr>
-                        <td>${r.dst || 'default'}</td>
-                        <td>${r.gateway || '-'}</td>
-                        <td>${r.dev || '-'}</td>
-                        <td>${r.metric || '-'}</td>
-                        <td>${r.scope || '-'}</td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="5">Failed to load routes</td></tr>';
-            }
-        }
-
-        // ARP
-        async function loadArp() {
-            const data = await api('/arp');
-            const tbody = document.getElementById('arp-table');
-
-            if (data.success && data.entries) {
-                tbody.innerHTML = data.entries.map(e => `
-                    <tr>
-                        <td>${e.ip}</td>
-                        <td style="font-family: monospace;">${e.mac || '-'}</td>
-                        <td>${e.interface}</td>
-                        <td>${Array.isArray(e.state) ? e.state.join(', ') : e.state}</td>
-                    </tr>
-                `).join('') || '<tr><td colspan="4">No entries</td></tr>';
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4">Failed to load ARP table</td></tr>';
-            }
-        }
-
-        // Connections
-        async function loadConnections() {
-            const data = await api('/connections');
-
-            if (data.success && data.connections) {
-                allConnections = data.connections;
-                document.getElementById('conn-total').textContent = data.count;
-                document.getElementById('conn-estab').textContent = data.connections.filter(c => c.state === 'ESTAB').length;
-                document.getElementById('conn-listen').textContent = data.connections.filter(c => c.state === 'LISTEN').length;
-                renderConnections(data.connections);
-            }
-        }
-
-        function renderConnections(conns) {
-            const tbody = document.getElementById('connections-table');
-            tbody.innerHTML = conns.slice(0, 100).map(c => `
-                <tr>
-                    <td>${c.proto}</td>
-                    <td>${c.state}</td>
-                    <td style="font-family: monospace;">${c.local}</td>
-                    <td style="font-family: monospace;">${c.remote || '-'}</td>
-                    <td style="font-size: 0.75rem;">${c.process || '-'}</td>
-                </tr>
-            `).join('') || '<tr><td colspan="5">No connections</td></tr>';
-        }
-
-        function filterConnections() {
-            const filter = document.getElementById('conn-filter').value.toLowerCase();
-            const filtered = allConnections.filter(c =>
-                c.local?.toLowerCase().includes(filter) ||
-                c.remote?.toLowerCase().includes(filter) ||
-                c.process?.toLowerCase().includes(filter) ||
-                c.state?.toLowerCase().includes(filter)
-            );
-            renderConnections(filtered);
-        }
-
-        // Ports
-        async function loadPorts() {
-            const data = await api('/ports');
-            const tbody = document.getElementById('ports-table');
-
-            if (data.success && data.ports) {
-                tbody.innerHTML = data.ports.map(p => `
-                    <tr>
-                        <td>${p.proto}</td>
-                        <td style="font-weight: bold; color: var(--netdiag-accent);">${p.local_port}</td>
-                        <td style="font-family: monospace;">${p.local_addr}</td>
-                        <td style="font-size: 0.75rem;">${p.process || '-'}</td>
-                    </tr>
-                `).join('') || '<tr><td colspan="4">No listening ports</td></tr>';
-            }
-        }
-
-        // Status
-        async function loadStatus() {
-            const data = await api('/status');
-            if (data.tools_count !== undefined) {
-                document.getElementById('tools-count').textContent = data.tools_count + ' Tools';
-            }
-        }
-
-        // Refresh all
-        function refreshAll() {
-            loadStatus();
-            const activeTab = document.querySelector('.tab.active').dataset.tab;
-            if (activeTab === 'interfaces') loadInterfaces();
-            if (activeTab === 'routes') { loadRoutes(); loadArp(); }
-            if (activeTab === 'connections') { loadConnections(); loadPorts(); }
-        }
-
-        // Init - check auth first
-        if (checkAuth()) {
-            loadStatus();
-            // Auto-refresh network data every 30 seconds
-            setInterval(() => {
-                const activeTab = document.querySelector('.tab.active');
-                if (activeTab) {
-                    const tab = activeTab.dataset.tab;
-                    if (tab === 'interfaces') loadInterfaces();
-                    if (tab === 'routes') { loadRoutes(); loadArp(); }
-                    if (tab === 'connections') { loadConnections(); loadPorts(); }
-                }
-            }, 30000);
-        }
-    </script>
     <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/netdiag';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const MAX_CONN = 100;
+
+        let STATUT = null, IFACES = null, ROUTES = null, ARP = null, CONNS = null, PORTS = null, SESSION_OK = true, OCCUPE = 0;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        // Lecture et envoi : la page ne redirige plus sur 401 (elle affiche le bandeau « session requise »).
+        async function appel(methode, chemin, corps) {
+            try {
+                const opts = { method: methode, credentials: 'same-origin', cache: 'no-store', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        // Une lecture est valable si HTTP 200 et success !== false ; sinon null.
+        async function lire(chemin) {
+            const r = await appel('GET', chemin);
+            if (r.statut === 401 || r.statut === 403) SESSION_OK = false;
+            if (!r.ok || !r.data || r.data.success === false) return null;
+            return r.data;
+        }
+        function messageErreur(r) {
+            const d = r.data && (r.data.error || r.data.detail);
+            if (d) return typeof d === 'string' ? d : JSON.stringify(d);
+            if (r.statut === 401 || r.statut === 403) return 'session requise (HTTP ' + r.statut + ')';
+            return r.statut ? 'HTTP ' + r.statut : 'serveur injoignable';
+        }
+
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function ligneVide(tb, nb, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = nb; tr.appendChild(td); tb.appendChild(tr); }
+        function manque(tb, nb, donnees, vide) { if (donnees) return false; ligneVide(tb, nb, SESSION_OK ? 'Lecture impossible' : '—'); return true; }
+
+        function demoData() {
+            STATUT = { module: 'netdiag', version: '1.0.0', tools_count: 8, tools_available: { ping: true, traceroute: true, dig: true, whois: true, mtr: false, nmap: true, ss: true, ip: true, iperf3: true } };
+            IFACES = { success: true, count: 3, interfaces: [
+                { name: 'lo', mac: '00:00:00:00:00:00', mtu: 65536, state: 'UNKNOWN', type: 'loopback', addresses: [{ address: '127.0.0.1', prefix: 8 }, { address: '::1', prefix: 128 }] },
+                { name: 'eth0', mac: '02:00:5e:00:53:01', mtu: 1500, state: 'UP', type: 'ether', addresses: [{ address: '192.0.2.10', prefix: 24 }, { address: '2001:db8::10', prefix: 64 }] },
+                { name: 'wg0', mac: '', mtu: 1420, state: 'DOWN', type: 'none', addresses: [] }] };
+            ROUTES = { success: true, ipv4: [
+                { dst: 'default', gateway: '192.0.2.1', dev: 'eth0', metric: 100, scope: 'global' },
+                { dst: '192.0.2.0/24', dev: 'eth0', metric: 0, scope: 'link' }],
+                ipv6: [{ dst: '2001:db8::/64', dev: 'eth0', metric: 256, protocol: 'kernel' }], count: 3 };
+            ARP = { success: true, count: 2, entries: [{ ip: '192.0.2.1', mac: '02:00:5e:00:53:fe', interface: 'eth0', state: ['REACHABLE'] }, { ip: '192.0.2.20', mac: '02:00:5e:00:53:14', interface: 'eth0', state: ['STALE'] }] };
+            CONNS = { success: true, count: 3, connections: [
+                { proto: 'tcp', state: 'ESTAB', local: '192.0.2.10:22', remote: '198.51.100.7:51514', process: 'users:(("sshd",pid=812,fd=4))' },
+                { proto: 'tcp', state: 'LISTEN', local: '0.0.0.0:22', remote: '0.0.0.0:*', process: 'users:(("sshd",pid=701,fd=3))' },
+                { proto: 'udp', state: 'UNCONN', local: '192.0.2.10:123', remote: '0.0.0.0:*', process: '' }] };
+            PORTS = { success: true, count: 2, ports: [
+                { proto: 'tcp', state: 'LISTEN', local_addr: '0.0.0.0', local_port: 22, process: 'users:(("sshd",pid=701,fd=3))' },
+                { proto: 'udp', state: 'UNCONN', local_addr: '192.0.2.10', local_port: 123, process: null }] };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            SESSION_OK = true;
+            const [s, i, r, a, c, p] = await Promise.all([lire('/status'), lire('/interfaces'), lire('/routes'), lire('/arp'), lire('/connections'), lire('/ports')]);
+            STATUT = s; IFACES = i; ROUTES = r; ARP = a; CONNS = c; PORTS = p;
+            const tous = ![s, i, r, a, c, p].some(x => x);
+            $('erreur').hidden = !(tous && SESSION_OK);
+            if (tous && SESSION_OK) $('erreur').textContent = 'Impossible de lire le diagnostic réseau (service arrêté ou injoignable).';
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUT && !IFACES) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            // Tuiles
+            const outils = STATUT && STATUT.tools_available ? Object.keys(STATUT.tools_available) : null;
+            $('tOutils').textContent = outils ? outils.filter(k => STATUT.tools_available[k]).length + '/' + outils.length : '—';
+            const manquants = outils ? outils.filter(k => !STATUT.tools_available[k]) : [];
+            $('cOutils').className = 'tuile ' + (outils && manquants.length ? 'att' : 'cy');
+            $('sOutils').textContent = manquants.length ? 'manque : ' + manquants.join(', ') : 'installés';
+            const ifs = IFACES && Array.isArray(IFACES.interfaces) ? IFACES.interfaces : null;
+            const up = ifs ? ifs.filter(x => x.state === 'UP').length : null;
+            $('tIf').textContent = ifs ? up + '/' + ifs.length : '—';
+            const r4 = ROUTES && Array.isArray(ROUTES.ipv4) ? ROUTES.ipv4 : null, r6 = ROUTES && Array.isArray(ROUTES.ipv6) ? ROUTES.ipv6 : [];
+            $('tRoutes').textContent = r4 ? r4.length + r6.length : '—';
+            $('sRoutes').textContent = r4 ? r4.length + ' IPv4 + ' + r6.length + ' IPv6' : 'IPv4 + IPv6';
+            const ent = ARP && Array.isArray(ARP.entries) ? ARP.entries : null;
+            $('tArp').textContent = ent ? ent.length : '—';
+            const cn = CONNS && Array.isArray(CONNS.connections) ? CONNS.connections : null;
+            $('tConn').textContent = cn ? cn.length : '—';
+            $('tEstab').textContent = cn ? cn.filter(c => c.state === 'ESTAB').length : '—';
+            const pt = PORTS && Array.isArray(PORTS.ports) ? PORTS.ports : null;
+            $('tListen').textContent = pt ? pt.length : '—';
+            rendreOutilsDispo(); rendreInterfaces(ifs); rendreRoutes(r4, r6, ent); rendreConnexions(cn); rendrePorts(pt);
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreOutilsDispo() {
+            const n = $('outilsDispo');
+            if (!STATUT || !STATUT.tools_available) { n.textContent = ''; return; }
+            const t = STATUT.tools_available, ko = Object.keys(t).filter(k => !t[k]);
+            n.textContent = ko.length ? 'Outils absents de ce nœud : ' + ko.join(', ') + ' — les fonctions correspondantes répondront par une erreur.' : 'Tous les outils sont installés sur ce nœud.';
+        }
+
+        function rendreInterfaces(ifs) {
+            const box = $('lIf'); box.replaceChildren();
+            $('nIf').textContent = ifs ? ifs.length + ' interface' + (ifs.length > 1 ? 's' : '') : '';
+            if (!ifs) { box.appendChild(el('div', 'vide', SESSION_OK ? 'Lecture impossible' : '—')); return; }
+            if (!ifs.length) { box.appendChild(el('div', 'vide', 'Aucune interface')); return; }
+            ifs.forEach(f => {
+                const c = el('div', 'ifc'); const t = el('div', 'nom'); t.appendChild(el('span', 'mono', tiret(f.name)));
+                t.appendChild(pastille(f.state === 'UP' ? 'ok' : f.state === 'DOWN' ? 'hors' : '', tiret(f.state)));
+                c.appendChild(t);
+                c.appendChild(el('div', 'mono', f.mac ? f.mac : '—'));
+                c.appendChild(el('div', 'sub', 'MTU ' + tiret(f.mtu || null) + ' · type ' + tiret(f.type)));
+                const ad = (f.addresses || []);
+                if (ad.length) ad.forEach(a => c.appendChild(el('div', 'mono', a.address + '/' + a.prefix)));
+                else c.appendChild(el('div', 'sub', 'Aucune adresse'));
+                box.appendChild(c);
+            });
+        }
+
+        function rendreRoutes(r4, r6, ent) {
+            const b4 = $('bR4'); b4.replaceChildren();
+            $('nR4').textContent = r4 ? r4.length + ' route' + (r4.length > 1 ? 's' : '') : '';
+            if (!manque(b4, 5, r4)) {
+                if (!r4.length) ligneVide(b4, 5, 'Aucune route IPv4');
+                r4.forEach(r => { const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(r.dst || 'default'))); tr.appendChild(el('td', 'mono', tiret(r.gateway)));
+                    tr.appendChild(el('td', '', tiret(r.dev))); tr.appendChild(el('td', '', tiret(r.metric))); tr.appendChild(el('td', '', tiret(r.scope))); b4.appendChild(tr); });
+            }
+            const b6 = $('bR6'); b6.replaceChildren();
+            $('nR6').textContent = r4 ? r6.length + ' route' + (r6.length > 1 ? 's' : '') : '';
+            if (!manque(b6, 5, r4 ? r6 : null)) {
+                if (!r6.length) ligneVide(b6, 5, 'Aucune route IPv6');
+                r6.forEach(r => { const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(r.dst || 'default'))); tr.appendChild(el('td', 'mono', tiret(r.gateway)));
+                    tr.appendChild(el('td', '', tiret(r.dev))); tr.appendChild(el('td', '', tiret(r.metric))); tr.appendChild(el('td', '', tiret(r.protocol))); b6.appendChild(tr); });
+            }
+            const ba = $('bArp'); ba.replaceChildren();
+            $('nArp').textContent = ent ? ent.length + ' voisin' + (ent.length > 1 ? 's' : '') : '';
+            if (!manque(ba, 4, ent)) {
+                if (!ent.length) ligneVide(ba, 4, 'Aucune entrée');
+                ent.forEach(e => { const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(e.ip))); tr.appendChild(el('td', 'mono', tiret(e.mac))); tr.appendChild(el('td', '', tiret(e.interface)));
+                    const s = el('td'); (Array.isArray(e.state) ? e.state : [e.state]).filter(Boolean).forEach(x => s.appendChild(pastille(x === 'REACHABLE' ? 'ok' : x === 'FAILED' ? 'hors' : '', x))); if (!s.firstChild) s.textContent = '—'; tr.appendChild(s); ba.appendChild(tr); });
+            }
+        }
+
+        function rendreConnexions(cn) {
+            const tb = $('bConn'); tb.replaceChildren();
+            if (!cn) { $('nConn').textContent = ''; $('noteConn').textContent = ''; manque(tb, 5, null); return; }
+            const f = $('filtre').value.trim().toLowerCase();
+            const liste = f ? cn.filter(c => [c.proto, c.state, c.local, c.remote, c.process].some(v => String(v || '').toLowerCase().includes(f))) : cn;
+            $('nConn').textContent = liste.length + (f ? ' sur ' + cn.length : '') + ' connexion' + (liste.length > 1 ? 's' : '');
+            $('noteConn').textContent = liste.length > MAX_CONN ? 'Les ' + MAX_CONN + ' premières connexions sur ' + liste.length + ' sont affichées : affinez le filtre.' : '';
+            if (!liste.length) { ligneVide(tb, 5, f ? 'Aucune connexion ne correspond au filtre' : 'Aucune connexion'); return; }
+            liste.slice(0, MAX_CONN).forEach(c => { const tr = el('tr'); tr.appendChild(el('td', '', tiret(c.proto)));
+                const s = el('td'); s.appendChild(pastille(c.state === 'ESTAB' ? 'ok' : c.state === 'LISTEN' ? 'cy' : '', tiret(c.state))); tr.appendChild(s);
+                tr.appendChild(el('td', 'mono', tiret(c.local))); tr.appendChild(el('td', 'mono', tiret(c.remote))); tr.appendChild(el('td', 'mono', tiret(c.process))); tb.appendChild(tr); });
+        }
+
+        function rendrePorts(pt) {
+            const tb = $('bPorts'); tb.replaceChildren();
+            $('nPorts').textContent = pt ? pt.length + ' port' + (pt.length > 1 ? 's' : '') : '';
+            if (manque(tb, 4, pt)) return;
+            if (!pt.length) { ligneVide(tb, 4, 'Aucun port en écoute'); return; }
+            pt.forEach(p => { const tr = el('tr'); tr.appendChild(el('td', '', tiret(p.proto))); const n = el('td', '', tiret(p.local_port)); n.style.fontWeight = '700'; n.style.color = 'var(--cyan)'; tr.appendChild(n);
+                tr.appendChild(el('td', 'mono', tiret(p.local_addr))); tr.appendChild(el('td', 'mono', tiret(p.process))); tb.appendChild(tr); });
+        }
+        $('filtre').addEventListener('input', () => { rendreConnexions(CONNS && Array.isArray(CONNS.connections) ? CONNS.connections : null); annoncer(); });
+
+        // ----- Outils (mêmes appels POST que l'ancienne page) -----
+        const sortie = $('sortie');
+        function ecrireSortie(texte, ajout) { sortie.textContent = ajout ? sortie.textContent + texte + '\n' : texte + '\n'; sortie.scrollTop = sortie.scrollHeight; }
+        function efface() { sortie.textContent = ''; }
+        async function lancer(form, titre, chemin, corps, rendu) {
+            const bouton = form.querySelector('button[type=submit]');
+            ecrireSortie('=== ' + titre + ' ===\n', false);
+            if (DEMO) { ecrireSortie('Démonstration : outil inerte, aucune requête envoyée.', true); annoncer(); return; }
+            bouton.disabled = true; const txt = bouton.textContent; bouton.textContent = 'En cours…'; OCCUPE++;
+            const r = await appel('POST', chemin, corps);
+            OCCUPE--; bouton.disabled = false; bouton.textContent = txt;
+            const d = r.data;
+            // 403 avec un « detail » est un refus métier (ex. scan hors réseau local), pas une session absente.
+            if (r.statut === 401 || (r.statut === 403 && !(d && (d.detail || d.error)))) { SESSION_OK = false; $('session').hidden = false; }
+            if (r.ok && d && d.success !== false) rendu(d);
+            else {
+                // Les outils renvoient success=false quand la commande sort en erreur : la sortie brute reste utile.
+                if (d && d.output) ecrireSortie(d.output, true);
+                ecrireSortie('Erreur : ' + messageErreur(r), true);
+            }
+            annoncer();
+        }
+        function exigeHote(form, nom) {
+            const v = form[nom].value.trim();
+            if (!v) { ecrireSortie('Saisie manquante : renseignez le champ « ' + form[nom].closest('label').firstChild.textContent + ' ».', false); annoncer(); }
+            return v;
+        }
+        $('fPing').addEventListener('submit', ev => { ev.preventDefault(); const f = ev.target, host = exigeHote(f, 'host'); if (!host) return;
+            const count = parseInt(f.count.value, 10) || 4;
+            lancer(f, 'PING ' + host, '/ping', { host, count }, d => {
+                ecrireSortie(d.output || '', true);
+                if (d.stats) { const s = d.stats; ecrireSortie('--- Statistiques ---', true); ecrireSortie('Paquets : ' + s.packets_received + '/' + s.packets_transmitted, true); ecrireSortie('Perte : ' + s.packet_loss + ' %', true);
+                    if (s.rtt_avg !== null && s.rtt_avg !== undefined) ecrireSortie('RTT : min=' + s.rtt_min + ' ms moy=' + s.rtt_avg + ' ms max=' + s.rtt_max + ' ms', true); }
+            }); });
+        $('fTrace').addEventListener('submit', ev => { ev.preventDefault(); const f = ev.target, host = exigeHote(f, 'host'); if (!host) return;
+            const max_hops = parseInt(f.max_hops.value, 10) || 30;
+            lancer(f, 'TRACEROUTE ' + host, '/traceroute', { host, max_hops }, d => ecrireSortie(d.output || 'Aucune sortie', true)); });
+        $('fDns').addEventListener('submit', ev => { ev.preventDefault(); const f = ev.target, domain = exigeHote(f, 'domain'); if (!domain) return;
+            const record_type = f.record_type.value;
+            lancer(f, 'DNS ' + domain + ' (' + record_type + ')', '/dns', { domain, record_type }, d => {
+                const recs = Array.isArray(d.records) ? d.records : [];
+                ecrireSortie('Enregistrements trouvés : ' + recs.length, true); recs.forEach(x => ecrireSortie('  ' + x, true));
+                ecrireSortie('\n--- Détail ---', true); ecrireSortie(d.verbose || '', true);
+            }); });
+        $('fWhois').addEventListener('submit', ev => { ev.preventDefault(); const f = ev.target, target = exigeHote(f, 'target'); if (!target) return;
+            lancer(f, 'WHOIS ' + target, '/whois', { target }, d => {
+                if (d.parsed && Object.keys(d.parsed).length) { ecrireSortie('--- Résumé ---', true); Object.keys(d.parsed).forEach(k => ecrireSortie(k + ' : ' + (Array.isArray(d.parsed[k]) ? d.parsed[k].join(', ') : d.parsed[k]), true)); ecrireSortie('\n--- Sortie complète ---', true); }
+                ecrireSortie(d.output || 'Aucune sortie', true);
+            }); });
+        $('fMtr').addEventListener('submit', ev => { ev.preventDefault(); const f = ev.target, host = exigeHote(f, 'host'); if (!host) return;
+            const count = parseInt(f.count.value, 10) || 10;
+            lancer(f, 'MTR ' + host + ' (' + count + ' sondes)', '/mtr', { host, count }, d => ecrireSortie(d.output || 'Aucune sortie', true)); });
+        $('fScan').addEventListener('submit', ev => { ev.preventDefault(); const f = ev.target, host = exigeHote(f, 'host'); if (!host) return;
+            const ports = f.ports.value.trim() || '1-1024';
+            lancer(f, 'SCAN DE PORTS ' + host + ' (' + ports + ')', '/portscan', { host, ports }, d => {
+                const o = Array.isArray(d.open_ports) ? d.open_ports : [];
+                ecrireSortie('Ports ouverts : ' + o.length, true); o.forEach(p => ecrireSortie('  ' + p.port + '/' + p.proto + ' - ' + (p.service || 'inconnu'), true));
+                if (d.output) { ecrireSortie('\n--- Sortie complète ---', true); ecrireSortie(d.output, true); }
+            }); });
+        $('effacer').addEventListener('click', efface);
+
+        // ----- Onglets -----
+        const NOMS = ['outils', 'interfaces', 'routes', 'connexions'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'netdiag' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, pendant une saisie, ni pendant qu'un outil tourne.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || OCCUPE || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA'))) return;
+            charger();
+        }, 30000);
+    </script>
 </body>
 </html>
