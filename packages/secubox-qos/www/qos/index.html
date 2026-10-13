@@ -4,636 +4,425 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Gestionnaire de bande passante (QoS) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Bandwidth Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Bande passante (QoS)</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; color: var(--cyan); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .progress { background: var(--bg-dark); border-radius: 4px; height: 8px; overflow: hidden; }
-        .progress-bar { height: 100%; background: var(--cyan); transition: width 0.3s; }
-        .progress-bar.warning { background: var(--yellow); }
-        .progress-bar.danger { background: var(--red); }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
-        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        .bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}
+        .fixe{font-weight:400;color:var(--doux)}
+        .case{display:flex;gap:8px;align-items:center;font-size:.8rem;margin:0 0 8px}
+        .case input{width:auto;accent-color:var(--cyan)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>📶 Bandwidth Manager (QoS)</h1>
-            <div>
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="showAddRule()">Add Rule</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18a9 9 0 0 1 18 0"/><path d="M12 18l4-6"/><circle cx="12" cy="18" r="1.3"/><path d="M5.5 18h1M17.5 18h1M12 9.5v1"/></svg>
+                <div><h1>Bande passante</h1><small>QoS : classes, règles, politiques VLAN et marquage 802.1p</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="grid">
-            <div class="stat-card">
-                <div class="value" id="download">-</div>
-                <div class="label">Download (Mbps)</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="upload">-</div>
-                <div class="label">Upload (Mbps)</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="rules">-</div>
-                <div class="label">Active Rules</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="shaped">-</div>
-                <div class="label">Shaped Clients</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cEtat" title="Le QoS est-il activé dans la configuration, et une file HTB est-elle réellement posée sur l’interface principale ?"><span class="l">QoS</span><span class="v" id="tEtat">—</span><span class="s" id="sEtat">interface principale</span></div>
+            <div class="tuile cy" title="Débit descendant CONFIGURÉ pour l’interface principale (plafond du réglage, pas une mesure du trafic en cours)."><span class="l">Descendant configuré</span><span class="v" id="tDown">—</span><span class="s">Mbit/s, plafond réglé</span></div>
+            <div class="tuile cy" title="Débit montant CONFIGURÉ pour l’interface principale (plafond du réglage, pas une mesure du trafic en cours)."><span class="l">Montant configuré</span><span class="v" id="tUp">—</span><span class="s">Mbit/s, plafond réglé</span></div>
+            <div class="tuile ok" title="Règles activées, comptées par cette page parmi la liste renvoyée par l’API (l’API ne fournit pas ce total)."><span class="l">Règles actives</span><span class="v" id="tRegles">—</span><span class="s" id="sRegles">sur —</span></div>
+            <div class="tuile cy" title="Interfaces VLAN détectées sur la machine."><span class="l">VLAN détectés</span><span class="v" id="tVlan">—</span><span class="s" id="sVlan">interfaces</span></div>
+        </section>
+
+        <div id="rGlobal" class="retour" hidden></div>
+
+        <div class="grille">
+            <div class="pan"><h3>Classes de trafic <i id="nClasses"></i></h3>
+                <div class="tab"><table><thead><tr><th>Classe</th><th>Nom</th><th>Priorité</th><th>Débit garanti</th><th>Plafond</th></tr></thead><tbody id="bClasses"></tbody></table></div>
+                <p class="note">Débits tels que configurés. L’API ne fournit pas le taux d’utilisation par classe : aucune jauge n’est tracée.</p></div>
+            <div class="pan"><h3>Règles de classement <i id="nRegles"></i></h3>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Critère</th><th>Classe</th><th>Priorité</th><th>État</th></tr></thead><tbody id="bRegles"></tbody></table></div>
+                <p class="note">Lecture seule : l’ajout et l’activation de règles ne sont pas offerts par cette page.</p></div>
         </div>
 
-        <div class="card">
-            <h2>Traffic Classes</h2>
-            <table>
-                <thead><tr><th>Class</th><th>Priority</th><th>Rate</th><th>Ceil</th><th>Usage</th></tr></thead>
-                <tbody id="classesTable"><tr><td colspan="5">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <div class="pan"><h3>Politiques VLAN <i id="nVlan"></i></h3>
+            <div class="bar" id="barreVlan"></div>
+            <div id="rVlan" class="retour" hidden></div>
+            <form class="saisie" id="fVlan" hidden>
+                <label>Interface parente<input name="parent" value="eth0" list="lstIf" required></label>
+                <label>Identifiant VLAN (1–4094)<input name="vlan_id" type="number" min="1" max="4094" required></label>
+                <label>Montant (Mbit/s)<input name="upload_mbps" type="number" min="1" value="100"></label>
+                <label>Descendant (Mbit/s)<input name="download_mbps" type="number" min="1" value="200"></label>
+                <label>Priorité 802.1p (0–7)<input name="priority" type="number" min="0" max="7" value="0"></label>
+                <label>Description<input name="description" placeholder="Réseau de gestion"></label>
+                <div class="bout"><button class="btn prim" type="submit">Créer le VLAN</button><button class="btn" type="button" data-ferme="fVlan">Annuler</button></div>
+            </form>
+            <datalist id="lstIf"></datalist>
+            <form class="saisie" id="fEdit" hidden>
+                <label>Interface<input name="interface" readonly></label>
+                <label>Montant (Mbit/s)<input name="upload_mbps" type="number" min="1" required></label>
+                <label>Descendant (Mbit/s)<input name="download_mbps" type="number" min="1" required></label>
+                <label>Priorité 802.1p (0–7)<input name="priority" type="number" min="0" max="7" required></label>
+                <div class="bout"><button class="btn prim" type="submit">Enregistrer la politique</button><button class="btn" type="button" data-ferme="fEdit">Annuler</button></div>
+            </form>
+            <div class="tab"><table><thead><tr><th>Interface</th><th>VLAN</th><th>Montant</th><th>Descendant</th><th>PCP</th><th>État</th><th>Actions</th></tr></thead><tbody id="bVlan"></tbody></table></div></div>
 
-        <div class="card">
-            <h2>QoS Rules</h2>
-            <table>
-                <thead><tr><th>Name</th><th>Match</th><th>Class</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="rulesTable"><tr><td colspan="5">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <div class="pan"><h3>Interfaces gérées <i id="nIf"></i></h3>
+            <div class="tab"><table><thead><tr><th>Interface</th><th>Type</th><th>Reçu</th><th>Émis</th><th>File HTB</th></tr></thead><tbody id="bIf"></tbody></table></div>
+            <p class="note">Octets cumulés depuis le démarrage de l’interface (compteurs du noyau), pas un débit instantané.</p></div>
 
-        <!-- VLAN QoS Section -->
-        <div class="card">
-            <h2>🏷️ VLAN QoS Policies</h2>
-            <div style="margin-bottom: 1rem;">
-                <button class="btn primary" onclick="showAddVlan()">Add VLAN Policy</button>
-                <button class="btn" onclick="applyAllVlans()">Apply All</button>
-                <button class="btn" onclick="refreshVlans()">Refresh</button>
-            </div>
-            <table>
-                <thead><tr><th>Interface</th><th>VLAN ID</th><th>Upload</th><th>Download</th><th>PCP</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="vlansTable"><tr><td colspan="7">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <div class="pan"><h3>Marquage 802.1p (PCP)</h3>
+            <label class="case"><input type="checkbox" id="pcpOn"> Activer le marquage 802.1p PCP</label>
+            <div id="rPcp" class="retour" hidden></div>
+            <div class="tab"><table><thead><tr><th>Classe de trafic</th><th>Valeur PCP</th><th>Usage</th></tr></thead><tbody id="bPcp"></tbody></table></div>
+            <p class="note" id="nPcp"></p></div>
+    </div></div></main>
 
-        <div class="card">
-            <h2>📊 Per-Interface Statistics</h2>
-            <table>
-                <thead><tr><th>Interface</th><th>Type</th><th>RX Bytes</th><th>TX Bytes</th><th>QoS Active</th></tr></thead>
-                <tbody id="interfacesTable"><tr><td colspan="5">Loading...</td></tr></tbody>
-            </table>
-        </div>
-
-        <div class="card">
-            <h2>🔢 802.1p PCP Mappings</h2>
-            <div style="margin-bottom: 1rem;">
-                <label style="margin-right: 1rem;">
-                    <input type="checkbox" id="pcpEnabled" onchange="togglePcp()"> Enable 802.1p PCP Marking
-                </label>
-            </div>
-            <table>
-                <thead><tr><th>Traffic Type</th><th>PCP Value</th><th>Description</th></tr></thead>
-                <tbody id="pcpTable">
-                    <tr><td>Network Control</td><td>7</td><td>Highest priority, routing protocols</td></tr>
-                    <tr><td>Voice (VoIP)</td><td>6</td><td>Real-time voice traffic</td></tr>
-                    <tr><td>Video</td><td>5</td><td>Real-time video streaming</td></tr>
-                    <tr><td>Controlled Load</td><td>4</td><td>Important business traffic</td></tr>
-                    <tr><td>Excellent Effort</td><td>3</td><td>Business critical applications</td></tr>
-                    <tr><td>Spare/Bulk</td><td>2</td><td>Bulk data transfers</td></tr>
-                    <tr><td>Background</td><td>1</td><td>Background traffic</td></tr>
-                    <tr><td>Best Effort</td><td>0</td><td>Default traffic (no priority)</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Add VLAN Modal -->
-        <div id="vlanModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000;">
-            <div class="modal-content" style="background:var(--tube-pale); border:1px solid var(--p31-dim); max-width:500px; margin:10% auto; padding:1.5rem; border-radius:8px;">
-                <h3 class="modal-title" style="color:var(--p31-decay); margin-bottom:1rem;">Add VLAN QoS Policy</h3>
-                <form id="vlanForm">
-                    <div style="margin-bottom:1rem;">
-                        <label>Parent Interface:</label>
-                        <select id="vlanParent" style="width:100%;">
-                            <option value="eth0">eth0</option>
-                            <option value="eth1">eth1</option>
-                            <option value="br0">br0</option>
-                        </select>
-                    </div>
-                    <div style="margin-bottom:1rem;">
-                        <label>VLAN ID (1-4094):</label>
-                        <input type="number" id="vlanId" min="1" max="4094" style="width:100%;" required>
-                    </div>
-                    <div style="margin-bottom:1rem;">
-                        <label>Upload (Mbps):</label>
-                        <input type="number" id="vlanUpload" value="100" style="width:100%;">
-                    </div>
-                    <div style="margin-bottom:1rem;">
-                        <label>Download (Mbps):</label>
-                        <input type="number" id="vlanDownload" value="200" style="width:100%;">
-                    </div>
-                    <div style="margin-bottom:1rem;">
-                        <label>802.1p Priority (0-7):</label>
-                        <input type="number" id="vlanPriority" min="0" max="7" value="0" style="width:100%;">
-                    </div>
-                    <div style="margin-bottom:1rem;">
-                        <label>Description:</label>
-                        <input type="text" id="vlanDesc" placeholder="e.g., Management VLAN" style="width:100%;">
-                    </div>
-                    <div style="display:flex; gap:1rem; justify-content:flex-end;">
-                        <button type="button" class="btn" onclick="hideVlanModal()">Cancel</button>
-                        <button type="submit" class="btn primary">Create VLAN</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/qos';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(path) {
+        let STATUT = null, CLASSES = null, REGLES = null, VLANS = null, IFACES = null, PCP = null, SESSION_OK = true;
+        let CONFIRM = null;   // { genre, cle } : confirmation en cours dans la page, jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { credentials: 'include' });
-                return res.json();
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && (res.data.detail || res.data.error)) ? String(res.data.detail || res.data.error) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        const liste = (v, cle) => Array.isArray(v) ? v : (v && Array.isArray(v[cle]) ? v[cle] : []);
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function nombre(v) { return (typeof v === 'number' && isFinite(v)) ? v : null; }
+        function octets(n) {
+            n = nombre(n); if (n === null) return '—'; if (n === 0) return '0 o';
+            const u = ['o', 'Kio', 'Mio', 'Gio', 'Tio']; const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), u.length - 1);
+            return (n / Math.pow(1024, i)).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' ' + u[i];
+        }
+        // rate_kbps / ceil_kbps sont en kbit/s ; 0 pour un plafond = non défini.
+        function debit(k, zeroVide) {
+            k = nombre(k); if (k === null || (zeroVide && k === 0)) return '—';
+            return k >= 1000 ? (k / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' Mbit/s' : k + ' kbit/s';
+        }
+        const mbps = v => { v = nombre(v); return v === null ? '—' : v + ' Mbit/s'; };
+
+        function demoData() {
+            STATUT = { enabled: true, qos_active: true, interface: 'eth0', upload_mbps: 100, download_mbps: 200, stats: { rx_bytes: 48213377024, tx_bytes: 9120553984, rx_packets: 41200113, tx_packets: 18800422 } };
+            CLASSES = [
+                { classid: '1:10', name: 'Temps réel', rate_kbps: 20000, ceil_kbps: 100000, priority: 0, parent: '1:1' },
+                { classid: '1:20', name: 'Interactif', rate_kbps: 40000, ceil_kbps: 100000, priority: 1, parent: '1:1' },
+                { classid: '1:30', name: 'Par défaut', rate_kbps: 30000, ceil_kbps: 0, priority: 2, parent: '1:1' },
+                { classid: '1:40', name: 'Masse', rate_kbps: 800, ceil_kbps: 50000, priority: 3, parent: '1:1' }];
+            REGLES = [
+                { name: 'visio-bureau', match_type: 'ip', match_value: '192.0.2.40', class_id: '1:10', priority: 10, enabled: true },
+                { name: 'sauvegardes', match_type: 'port', match_value: '873', class_id: '1:40', priority: 20, enabled: true },
+                { name: 'invités', match_type: 'ip', match_value: '198.51.100.0/24', class_id: '1:40', priority: 30, enabled: false }];
+            VLANS = { vlans: [
+                { interface: 'eth0.100', vlan_id: 100, parent: 'eth0', state: 'UP', mtu: 1500, policy: { upload_mbps: 50, download_mbps: 100, priority: 5, description: 'Téléphonie', enabled: true }, qos_enabled: true },
+                { interface: 'eth0.200', vlan_id: 200, parent: 'eth0', state: 'UP', mtu: 1500, policy: null, qos_enabled: false }], count: 2 };
+            IFACES = { interfaces: [
+                { interface: 'eth0', is_vlan: false, vlan_id: null, stats: { rx_bytes: 48213377024, tx_bytes: 9120553984 }, qos_active: true },
+                { interface: 'eth0.100', is_vlan: true, vlan_id: 100, stats: { rx_bytes: 1203441664, tx_bytes: 884120576 }, qos_active: true }], count: 2 };
+            PCP = { default_mappings: { realtime: 7, voice: 6, video: 5, controlled: 4, excellent: 3, bulk: 2, background: 1, best_effort: 0 }, custom_mappings: {}, pcp_enabled: true };
         }
 
-        async function refresh() {
-            const status = await api('/status');
-            document.getElementById('download').textContent = status.download_mbps || 0;
-            document.getElementById('upload').textContent = status.upload_mbps || 0;
-            document.getElementById('rules').textContent = status.active_rules || 0;
-            document.getElementById('shaped').textContent = status.shaped_clients || 0;
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const chemins = ['/status', '/classes', '/rules', '/vlans', '/interfaces', '/pcp/mappings'];
+            const essais = await Promise.allSettled(chemins.map(lire));
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0); CLASSES = val(1); REGLES = val(2); VLANS = val(3); IFACES = val(4); PCP = val(5);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le gestionnaire QoS (service arrêté ou injoignable).';
+            rendre();
+        }
 
-            const classes = await api('/classes');
-            const classBody = document.getElementById('classesTable');
-            if (classes.classes && classes.classes.length > 0) {
-                classBody.innerHTML = classes.classes.map(c => {
-                    const usage = c.usage || 0;
-                    const barClass = usage > 90 ? 'danger' : usage > 70 ? 'warning' : '';
-                    return `
-                        <tr>
-                            <td>${c.name}</td>
-                            <td>${c.priority}</td>
-                            <td>${c.rate}</td>
-                            <td>${c.ceil}</td>
-                            <td style="width:120px">
-                                <div class="progress"><div class="progress-bar ${barClass}" style="width:${usage}%"></div></div>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            const actif = s && s.enabled && s.qos_active;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (actif) { etat.className = 'actif'; etat.textContent = 'QOS ACTIF'; }
+            else if (s.enabled) { etat.className = 'actif att'; etat.textContent = 'ACTIVÉ, AUCUNE FILE HTB'; }
+            else { etat.className = 'actif neutre'; etat.textContent = 'QOS DÉSACTIVÉ'; }
+            $('tEtat').textContent = !s ? '—' : actif ? 'Actif' : s.enabled ? 'Sans file' : 'Désactivé';
+            $('cEtat').className = 'tuile ' + (!s ? 'cy' : actif ? 'ok' : s.enabled ? 'att' : 'cy');
+            $('sEtat').textContent = s && s.interface ? s.interface : 'interface principale';
+            $('tDown').textContent = s ? tiret(nombre(s.download_mbps)) : '—';
+            $('tUp').textContent = s ? tiret(nombre(s.upload_mbps)) : '—';
+            const regles = REGLES ? liste(REGLES, 'rules') : null;
+            $('tRegles').textContent = regles ? regles.filter(r => r.enabled).length : '—';
+            $('sRegles').textContent = regles ? 'sur ' + regles.length : 'sur —';
+            const vl = VLANS ? liste(VLANS, 'vlans') : null;
+            $('tVlan').textContent = vl ? vl.length : '—';
+            $('sVlan').textContent = vl ? vl.filter(v => v.policy).length + ' avec politique' : 'interfaces';
+            rendreClasses(); rendreRegles(); rendreVlans(); rendreInterfaces(); rendrePcp();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function ligneVide(tb, n, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function vide(donnee, quoi) { return SESSION_OK ? (donnee === null ? 'Lecture impossible' : quoi) : '—'; }
+
+        function rendreClasses() {
+            const tb = $('bClasses'); tb.replaceChildren();
+            const l = CLASSES ? liste(CLASSES, 'classes') : [];
+            $('nClasses').textContent = l.length ? l.length + ' classe' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { ligneVide(tb, 5, vide(CLASSES, 'Aucune classe de trafic configurée')); return; }
+            l.forEach(c => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(c.classid))); tr.appendChild(el('td', '', tiret(c.name)));
+                tr.appendChild(el('td', '', tiret(c.priority))); tr.appendChild(el('td', '', debit(c.rate_kbps)));
+                const p = el('td', '', debit(c.ceil_kbps, true)); if (nombre(c.ceil_kbps) === 0) p.title = 'Aucun plafond défini'; tr.appendChild(p);
+                tb.appendChild(tr);
+            });
+        }
+
+        function rendreRegles() {
+            const tb = $('bRegles'); tb.replaceChildren();
+            const l = REGLES ? liste(REGLES, 'rules') : [];
+            $('nRegles').textContent = l.length ? l.length + ' règle' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { ligneVide(tb, 5, vide(REGLES, 'Aucune règle QoS configurée')); return; }
+            l.forEach(r => {
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(r.name)));
+                tr.appendChild(el('td', 'mono', tiret(r.match_type) + (r.match_value ? ' = ' + r.match_value : '')));
+                tr.appendChild(el('td', 'mono', tiret(r.class_id))); tr.appendChild(el('td', '', tiret(r.priority)));
+                const e = el('td'); e.appendChild(r.enabled ? pastille('ok', 'ACTIVE') : pastille('', 'INACTIVE')); tr.appendChild(e);
+                tb.appendChild(tr);
+            });
+        }
+
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function confirmation(cell, genre, cle, libelle, fn) {
+            if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === cle) {
+                cell.appendChild(el('span', 'note', libelle + ' ?'));
+                cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
             } else {
-                classBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No traffic classes configured</td></tr>';
-            }
-
-            const rules = await api('/rules');
-            const rulesBody = document.getElementById('rulesTable');
-            if (rules.rules && rules.rules.length > 0) {
-                rulesBody.innerHTML = rules.rules.map(r => `
-                    <tr>
-                        <td>${r.name}</td>
-                        <td style="font-family:monospace;font-size:0.8rem">${r.match}</td>
-                        <td>${r.class}</td>
-                        <td><span class="badge ${r.enabled ? 'enabled' : 'disabled'}">${r.enabled ? 'Enabled' : 'Disabled'}</span></td>
-                        <td><button class="btn" onclick="toggleRule('${r.id}')">Toggle</button></td>
-                    </tr>
-                `).join('');
-            } else {
-                rulesBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No QoS rules configured</td></tr>';
+                cell.appendChild(btn(libelle, 'danger', () => { CONFIRM = { genre, cle }; rendre(); }));
             }
         }
 
-        function showAddRule() { alert('Rule configuration coming soon'); }
-        function toggleRule(id) { alert('Toggle rule: ' + id); }
+        function rendreVlans() {
+            const barre = $('barreVlan'); barre.replaceChildren();
+            const ajout = btn('+ Ajouter une politique VLAN', 'prim', () => { $('fEdit').hidden = true; $('fVlan').hidden = !$('fVlan').hidden; annoncer(); });
+            ajout.id = 'addVlan'; barre.appendChild(ajout);
+            const tout = el('span', 'bar'); tout.style.margin = '0';
+            if (CONFIRM && CONFIRM.genre === 'tout') {
+                tout.appendChild(el('span', 'note', 'Appliquer le QoS à toutes les interfaces ?'));
+                tout.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; appliquerTout(); }));
+                tout.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else tout.appendChild(btn('Tout appliquer', '', () => { CONFIRM = { genre: 'tout', cle: '' }; rendre(); }));
+            tout.firstChild.id = 'toutAppliquer'; barre.appendChild(tout);
 
-        // VLAN QoS Functions
-        async function refreshVlans() {
-            // Load VLANs
-            const vlans = await api('/vlans');
-            const vlansBody = document.getElementById('vlansTable');
-            if (vlans.vlans && vlans.vlans.length > 0) {
-                vlansBody.innerHTML = vlans.vlans.map(v => `
-                    <tr>
-                        <td><code>${v.interface}</code></td>
-                        <td>${v.vlan_id || '-'}</td>
-                        <td>${v.policy?.upload_mbps || '-'} Mbps</td>
-                        <td>${v.policy?.download_mbps || '-'} Mbps</td>
-                        <td><span class="badge badge-cyan">PCP ${v.policy?.priority || 0}</span></td>
-                        <td><span class="badge ${v.qos_enabled ? 'badge-green' : 'badge-yellow'}">${v.qos_enabled ? 'Active' : 'Inactive'}</span></td>
-                        <td>
-                            <button class="btn btn-blue" onclick="editVlan('${v.interface}')">Edit</button>
-                            <button class="btn btn-red" onclick="deleteVlan('${v.interface}')">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } else {
-                vlansBody.innerHTML = '<tr><td colspan="7" class="empty">No VLAN interfaces detected. Create one to enable per-VLAN QoS.</td></tr>';
-            }
-
-            // Load managed interfaces
-            const ifaces = await api('/interfaces');
-            const ifaceBody = document.getElementById('interfacesTable');
-            if (ifaces.interfaces && ifaces.interfaces.length > 0) {
-                ifaceBody.innerHTML = ifaces.interfaces.map(i => `
-                    <tr>
-                        <td><code>${i.interface}</code></td>
-                        <td><span class="badge ${i.is_vlan ? 'badge-purple' : 'badge-cyan'}">${i.is_vlan ? 'VLAN' : 'Physical'}</span></td>
-                        <td>${formatBytes(i.stats?.rx_bytes || 0)}</td>
-                        <td>${formatBytes(i.stats?.tx_bytes || 0)}</td>
-                        <td><span class="badge ${i.qos_active ? 'badge-green' : 'badge-yellow'}">${i.qos_active ? 'HTB Active' : 'No QoS'}</span></td>
-                    </tr>
-                `).join('');
-            } else {
-                ifaceBody.innerHTML = '<tr><td colspan="5" class="empty">No managed interfaces</td></tr>';
-            }
-
-            // Load PCP status
-            const pcp = await api('/pcp/mappings');
-            document.getElementById('pcpEnabled').checked = pcp.pcp_enabled || false;
+            const tb = $('bVlan'); tb.replaceChildren();
+            const l = VLANS ? liste(VLANS, 'vlans') : [];
+            $('nVlan').textContent = l.length ? l.length + ' VLAN' : '';
+            const dl = $('lstIf'); dl.replaceChildren();
+            const connues = new Set(['eth0']);
+            l.forEach(v => { if (v.parent) connues.add(v.parent); });
+            liste(IFACES, 'interfaces').forEach(i => { if (i.interface && !i.is_vlan) connues.add(i.interface); });
+            connues.forEach(n => { const o = el('option'); o.value = n; dl.appendChild(o); });
+            if (!l.length) { ligneVide(tb, 7, vide(VLANS, 'Aucune interface VLAN détectée. Créez-en une pour activer la QoS par VLAN.')); return; }
+            l.forEach(v => {
+                const p = v.policy; const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(v.interface))); tr.appendChild(el('td', '', tiret(v.vlan_id)));
+                tr.appendChild(el('td', '', p ? mbps(p.upload_mbps) : '—')); tr.appendChild(el('td', '', p ? mbps(p.download_mbps) : '—'));
+                const pc = el('td'); if (p && nombre(p.priority) !== null) pc.appendChild(pastille('cy', 'PCP ' + p.priority)); else pc.textContent = '—'; tr.appendChild(pc);
+                const e = el('td'); e.appendChild(v.qos_enabled ? pastille('ok', 'ACTIVE') : pastille('att', 'INACTIVE', p ? 'Politique présente mais non appliquée' : 'Aucune politique')); tr.appendChild(e);
+                const act = el('td', 'act');
+                act.appendChild(btn('Modifier', '', () => modifier(v)));
+                confirmation(act, 'vlan', v.interface, 'Supprimer', () => supprimerVlan(v.interface));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
         }
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        function rendreInterfaces() {
+            const tb = $('bIf'); tb.replaceChildren();
+            const l = IFACES ? liste(IFACES, 'interfaces') : [];
+            $('nIf').textContent = l.length ? l.length + ' interface' + (l.length > 1 ? 's' : '') : '';
+            if (!l.length) { ligneVide(tb, 5, vide(IFACES, 'Aucune interface gérée')); return; }
+            l.forEach(i => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(i.interface)));
+                const t = el('td'); t.appendChild(i.is_vlan ? pastille('cy', 'VLAN') : pastille('', 'PHYSIQUE')); tr.appendChild(t);
+                tr.appendChild(el('td', '', octets(i.stats && i.stats.rx_bytes))); tr.appendChild(el('td', '', octets(i.stats && i.stats.tx_bytes)));
+                const q = el('td'); q.appendChild(i.qos_active ? pastille('ok', 'HTB ACTIF') : pastille('att', 'SANS QOS')); tr.appendChild(q);
+                tb.appendChild(tr);
+            });
         }
 
-        function showAddVlan() {
-            document.getElementById('vlanModal').style.display = 'block';
+        const LIBELLES_PCP = { realtime: 'Contrôle réseau, protocoles de routage', voice: 'Voix (VoIP), temps réel', video: 'Vidéo en flux', controlled: 'Charge contrôlée, trafic métier important',
+            excellent: 'Applications critiques', bulk: 'Transferts de masse', background: 'Trafic de fond', best_effort: 'Au mieux, trafic par défaut (sans priorité)' };
+        function rendrePcp() {
+            const tb = $('bPcp'); tb.replaceChildren();
+            const m = PCP && PCP.default_mappings && typeof PCP.default_mappings === 'object' ? PCP.default_mappings : null;
+            $('pcpOn').checked = !!(PCP && PCP.pcp_enabled);
+            $('pcpOn').disabled = !PCP;
+            const lignes = m ? Object.keys(m).map(k => [k, m[k]]).sort((a, b) => b[1] - a[1]) : [];
+            if (!lignes.length) ligneVide(tb, 3, vide(PCP, 'Aucune correspondance PCP'));
+            lignes.forEach(([k, v]) => { const tr = el('tr'); tr.appendChild(el('td', 'mono', k)); tr.appendChild(el('td', '', tiret(v))); tr.appendChild(el('td', '', LIBELLES_PCP[k] || '—')); tb.appendChild(tr); });
+            const cu = PCP && PCP.custom_mappings && typeof PCP.custom_mappings === 'object' ? Object.keys(PCP.custom_mappings) : [];
+            $('nPcp').textContent = cu.length ? 'Correspondances personnalisées : ' + cu.map(k => k + ' → ' + PCP.custom_mappings[k]).join(', ') + '.' : 'Correspondances par défaut du module ; aucune personnalisation.';
         }
 
-        function hideVlanModal() {
-            document.getElementById('vlanModal').style.display = 'none';
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function supprimerVlan(iface) {
+            const r = await ecrire('DELETE', '/vlan/' + encodeURIComponent(iface));
+            if (r.ok && !(r.data && r.data.success === false)) { retour('rVlan', true, 'VLAN ' + iface + ' supprimé.'); charger(); } else { retour('rVlan', false, 'Suppression impossible : ' + detail(r)); rendre(); }
         }
-
-        document.getElementById('vlanForm').onsubmit = async function(e) {
-            e.preventDefault();
-            const data = {
-                parent: document.getElementById('vlanParent').value,
-                vlan_id: parseInt(document.getElementById('vlanId').value),
-                upload_mbps: parseInt(document.getElementById('vlanUpload').value),
-                download_mbps: parseInt(document.getElementById('vlanDownload').value),
-                priority: parseInt(document.getElementById('vlanPriority').value),
-                description: document.getElementById('vlanDesc').value
-            };
-            try {
-                const res = await fetch(API + '/vlan/create', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify(data)
-                });
-                const result = await res.json();
-                if (result.success) {
-                    hideVlanModal();
-                    refreshVlans();
-                    alert('VLAN ' + data.vlan_id + ' created successfully!');
-                } else {
-                    alert('Error: ' + (result.detail || result.error || 'Unknown error'));
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            }
-        };
-
-        async function deleteVlan(iface) {
-            if (!confirm('Delete VLAN interface ' + iface + '?')) return;
-            try {
-                const res = await fetch(API + '/vlan/' + iface, {
-                    method: 'DELETE',
-                    credentials: 'include'
-                });
-                const result = await res.json();
-                if (result.success) {
-                    refreshVlans();
-                } else {
-                    alert('Error: ' + (result.detail || 'Failed to delete'));
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            }
+        async function appliquerTout() {
+            const r = await ecrire('POST', '/vlan/apply_all');
+            if (r.ok && r.data && r.data.success) { retour('rVlan', true, 'QoS appliqué à ' + (r.data.count != null ? r.data.count : '—') + ' interface(s).'); charger(); }
+            else { retour('rVlan', false, 'Application impossible : ' + detail(r)); rendre(); }
         }
-
-        async function editVlan(iface) {
-            const policy = await api('/vlan/' + iface);
-            if (policy.policy) {
-                const p = policy.policy;
-                const newUp = prompt('Upload (Mbps):', p.upload_mbps);
-                const newDown = prompt('Download (Mbps):', p.download_mbps);
-                const newPrio = prompt('802.1p Priority (0-7):', p.priority);
-                if (newUp && newDown && newPrio !== null) {
-                    const res = await fetch(API + '/vlan/' + iface + '/policy', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            upload_mbps: parseInt(newUp),
-                            download_mbps: parseInt(newDown),
-                            priority: parseInt(newPrio),
-                            enabled: true,
-                            description: p.description || ''
-                        })
-                    });
-                    refreshVlans();
-                }
-            } else {
-                alert('No policy found for ' + iface);
-            }
+        function modifier(v) {
+            const p = v.policy;
+            if (!p) { retour('rVlan', false, 'Aucune politique à modifier pour ' + v.interface + '.'); return; }
+            const f = $('fEdit'); $('fVlan').hidden = true; f.hidden = false;
+            f.interface.value = v.interface; f.upload_mbps.value = p.upload_mbps; f.download_mbps.value = p.download_mbps; f.priority.value = p.priority;
+            f.dataset.desc = p.description || ''; annoncer();
         }
-
-        async function applyAllVlans() {
-            try {
-                const res = await fetch(API + '/vlan/apply_all', {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                const result = await res.json();
-                if (result.success) {
-                    alert('QoS applied to ' + result.count + ' interfaces');
-                    refreshVlans();
-                } else {
-                    alert('Error: ' + (result.error || 'Failed to apply'));
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            }
+        function entier(champ, min, max, nom) {
+            const n = parseInt(champ.value, 10);
+            if (!isFinite(n) || n < min || n > max) throw new Error(nom + ' : un entier entre ' + min + ' et ' + max + ' est attendu.');
+            return n;
         }
+        $('fEdit').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            let corps;
+            try { corps = { upload_mbps: entier(f.upload_mbps, 1, 1e6, 'Montant'), download_mbps: entier(f.download_mbps, 1, 1e6, 'Descendant'), priority: entier(f.priority, 0, 7, 'Priorité'), enabled: true, description: f.dataset.desc || '' }; }
+            catch (e) { retour('rVlan', false, e.message); return; }
+            const r = await ecrire('POST', '/vlan/' + encodeURIComponent(f.interface.value) + '/policy', corps);
+            if (r.ok) { f.hidden = true; retour('rVlan', true, 'Politique de ' + f.interface.value + ' enregistrée.'); charger(); } else retour('rVlan', false, 'Enregistrement impossible : ' + detail(r));
+        });
+        $('fVlan').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            let corps;
+            try { corps = { parent: f.parent.value, vlan_id: entier(f.vlan_id, 1, 4094, 'Identifiant VLAN'), upload_mbps: entier(f.upload_mbps, 1, 1e6, 'Montant'), download_mbps: entier(f.download_mbps, 1, 1e6, 'Descendant'), priority: entier(f.priority, 0, 7, 'Priorité'), description: f.description.value }; }
+            catch (e) { retour('rVlan', false, e.message); return; }
+            const r = await ecrire('POST', '/vlan/create', corps);
+            if (r.ok && r.data && r.data.success) { f.reset(); f.hidden = true; retour('rVlan', true, 'VLAN ' + corps.vlan_id + ' créé.'); charger(); } else retour('rVlan', false, 'Création impossible : ' + detail(r));
+        });
+        $('pcpOn').addEventListener('change', async ev => {
+            const voulu = ev.target.checked;
+            const r = await ecrire('POST', '/pcp/enable?enabled=' + voulu);
+            if (r.ok) { retour('rPcp', true, 'Marquage 802.1p ' + (voulu ? 'activé' : 'désactivé') + '.'); if (PCP) PCP.pcp_enabled = voulu; }
+            else { ev.target.checked = !voulu; retour('rPcp', false, 'Changement impossible : ' + detail(r)); }
+        });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+        $('rafraichir').addEventListener('click', charger);
 
-        async function togglePcp() {
-            const enabled = document.getElementById('pcpEnabled').checked;
-            try {
-                await fetch(API + '/pcp/enable?enabled=' + enabled, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-            } catch (err) {
-                console.error('PCP toggle error:', err);
-            }
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'qos' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        refresh();
-        refreshVlans();
-        setInterval(refresh, 10000);
-        setInterval(refreshVlans, 15000);
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || !$('fVlan').hidden || !$('fEdit').hidden) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

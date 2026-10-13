@@ -1,3 +1,24 @@
+secubox-qos (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /qos/ refaite au profil Aurora (ref #2556) : un seul fichier autonome (plus de police distante ni de crt-engine),
+    tuiles, panneaux, ?demo=1, ?embed=1, bandeau « session requise », hauteur annoncee a l'hote (sbxVue), aucune boite de
+    dialogue native : suppression d'un VLAN et « Tout appliquer » se confirment dans la page, la modification d'une politique
+    passe par un formulaire integre (plus de prompt()). Les cinq appels d'ecriture sont inchanges (POST /vlan/create,
+    DELETE /vlan/{interface}, POST /vlan/{interface}/policy, POST /vlan/apply_all, POST /pcp/enable?enabled=).
+  * Bogues de l'ancienne page corriges : /classes et /rules renvoient une liste nue, la page lisait .classes/.rules (tableaux
+    toujours vides) ; champs lus inexistants (c.rate, c.ceil, c.usage, r.match, r.class, r.id : l'API fournit rate_kbps,
+    ceil_kbps, match_type/match_value, class_id) ; « Active Rules » et « Shaped Clients » lisaient active_rules et
+    shaped_clients que /status ne renvoie pas (affichait toujours 0) ; mesure absente affichee 0 au lieu de « — » ;
+    debits en kbit/s affiches sans unite ; jeton sbx_token jamais envoye (401 en acces par jeton, echec silencieux de la
+    bascule PCP) ; bascule PCP sans controle de la reponse (case laissee cochee en cas d'echec) ; donnees d'API injectees
+    dans innerHTML et dans des gestionnaires onclick (nom d'interface) ; noms d'interface non encodes dans l'URL ;
+    actualisation toutes les 10 s meme pendant une saisie ; tableau PCP code en dur remplace par /pcp/mappings.
+  * Non repris : « Add Rule » et « Toggle » (simples alert() « bientot disponible », sans appel), la colonne d'utilisation
+    par classe (l'API ne la fournit pas), la tuile « Shaped Clients » (aucune source). « Regles actives » est comptee par la
+    page sur la liste renvoyee. Debits affiches = plafonds configures, pas du trafic mesure ; octets = compteurs cumules.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:00:00 +0200
+
 secubox-qos (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-nettweak (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
