@@ -1,3 +1,28 @@
+secubox-ipblock (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /vortex-firewall/ refaite au profil Aurora (#2571) : page autonome sans bibliotheque (plus de crt-light ni
+    hybrid-dark), tuiles, listes de blocage, regles personnalisees, flux disponibles, ?demo=1 (donnees fictives RFC 5737,
+    aucune ecriture), ?embed=1, hauteur annoncee a l'hote (sbxVue, onglet vortex-firewall), jeton sbx_token. Textes en francais.
+  * Appels d'ecriture inchanges (memes routes, methodes et corps) : POST /enable?enabled=, POST /blocklists, DELETE
+    /blocklists/{nom}, POST /blocklists/update, POST /blocklists/apply, POST /rules, DELETE /rules/{ip}.
+  * Corrige : plus aucun confirm()/alert() (le navigateur du viewer les ignore) ; confirmation integree a la page avant
+    activation/desactivation, application des listes (les ensembles nftables sont vides puis recharges), retrait d'une liste
+    ou d'une regle ; resultat ou detail d'erreur de l'API affiches dans la page (ajout refuse, doublon, telechargement en
+    echec, bascule impossible etaient silencieux : toute reponse non 2xx etait avalee en objet vide).
+  * Corrige : un 401 redirigeait brutalement vers /login.html ; il affiche maintenant le bandeau « session requise ».
+    Une lecture en erreur affichait « Disabled » et des tuiles a 0 ; elle affiche maintenant « — » et un etat inconnu.
+  * Corrige : noms, URL, adresses et commentaires venus de l'API etaient injectes en innerHTML et dans des gestionnaires
+    onclick (injection possible via le nom d'une liste) ; tout est desormais construit en texte.
+  * Corrige : les compteurs de paquets valaient 0 quand le pare-feu est desactive ou nft absent ; affiches « — ». Une liste
+    jamais telechargee affiche « — » adresses au lieu de 0. Un flux deja configure n'a plus de bouton Ajouter (l'API refuse
+    le doublon).
+  * Non repris : le curseur d'activation est remplace par un bouton avec confirmation ; /geoip, /info et /status n'etaient
+    pas utilises par l'ancienne page et ne le sont pas davantage. L'API n'applique que les regles « abandon », dans les deux
+    sens (sens, « rejet » et « journaliser » sont enregistres sans effet) : la page le dit. Aucune serie temporelle des
+    paquets ecartes n'existe cote API, aucune courbe n'est donc inventee.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-ipblock (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /ipblock/ refaite au profil Aurora (#2556) : page autonome sans bibliotheque, tuiles, six onglets (Apercu, Listes,
