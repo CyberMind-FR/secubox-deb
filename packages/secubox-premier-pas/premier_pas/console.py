@@ -86,7 +86,7 @@ def pages(profil: Dict[str, Any]) -> List[Page]:
              lambda v: {"mot_de_passe": v["mot_de_passe"], "confirmation": v["confirmation"]}),
         Page("reseau", "Comment la box se branche, et sous quel nom on la joint.",
              [Champ("mode", "Mode", "choix", [("routeur", "Routeur"), ("pont", "Pont"), ("lan", "LAN seul")], r.get("mode", "routeur")),
-              Champ("domaine", "Domaine", valeur=r.get("domaine", ""), visible=lambda v: v.get("mode") != "lan")],
+              Champ("domaine", "Domaine", valeur=r.get("domaine") or P.domaine_propose(b.get("nom")), visible=lambda v: v.get("mode") != "lan")],
              lambda v: {"mode": v["mode"], **({"domaine": v["domaine"]} if v["mode"] != "lan" else {})}),
         Page("services", "Ce que la box fera (modifiable plus tard).",
              [Champ("profil", "Profil", "choix", _profils(), (profil.get("services") or {}).get("profil", ""))],

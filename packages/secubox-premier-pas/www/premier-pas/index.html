@@ -96,6 +96,13 @@ async function api(chemin, opts = {}) {
   return j;
 }
 
+// Le DNS de secubox.in est géré par gk2 : on propose <nom>.secubox.in (#2530). Même suffixe que premier_pas.profil.DOMAINE_PAR_DEFAUT.
+const DOMAINE_PAR_DEFAUT = "secubox.in";
+function domainePropose(nom) {
+  const e = String(nom || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/^-+|-+$/g, "");
+  return e ? e + "." + DOMAINE_PAR_DEFAUT : "";
+}
+
 const PAGES = {
   bienvenue: {
     aide: "Une box SecuBox neuve. En quelques minutes, elle aura un nom, un administrateur, ses services et sa place dans votre maillage.",
@@ -128,7 +135,7 @@ const PAGES = {
     aide: "Comment la box se branche, et sous quel nom on la joint. Sans domaine, elle reste joignable sur le réseau local seulement.",
     opts: [["routeur","Routeur","la box est la passerelle"],["pont","Pont","derrière votre box internet"],["lan","LAN seul","pas de domaine public"]],
     cle: "mode", section: "reseau",
-    extra: p => `<label id="l-domaine">Domaine<input id="c-domaine" spellcheck="false" value="${esc((p.reseau||{}).domaine || "")}" placeholder="gk3.exemple.fr"></label>`,
+    extra: p => `<label id="l-domaine">Domaine<input id="c-domaine" spellcheck="false" value="${esc((p.reseau||{}).domaine || domainePropose((p.box||{}).nom))}" placeholder="gk3.secubox.in"></label>`,
     valeurs: () => ({mode: brouillon.mode, domaine: brouillon.mode === "lan" ? "" : $("#c-domaine").value}),
   },
   services: {
