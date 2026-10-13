@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — secubox-core 1.7.4 : le premier démarrage ne meurt plus sur l'extension de la carte (ref #2524)
+
+Sur la RPi400, `secubox-firstboot` s'arrêtait à l'étape 0 : `parted -s … resizepart` sur la partition montée demande une confirmation et échoue, puis `warn` (appelé 8 fois, jamais défini) répondait « command not found » (127) et, sous `set -e`, tuait le script — pas de frontal HAProxy, pas de nginx 80/443, pas de kiosque. `warn` défini, parted répond « Yes » (`---pretend-input-tty`), l'extension n'est plus fatale. Test `tests/test_firstboot_expansion_2524.py`. Diagnostiqué sur le journal affiché par la carte (photo).
+
 ## 2026-10-13 — image RPi400 : le kiosque démarre au premier boot (ref #2522)
 
 Sur l'image alpha.14 lite, le kiosque ne démarrait pas : `secubox-console` livre un drop-in qui conditionne `secubox-kiosk.service` à `/var/lib/secubox/.kiosk-enabled` (#2332), et `build-rpi-usb.sh` écrivait l'unité et `boot-mode=kiosk` sans poser cette sentinelle. Elle est posée dans le bloc `--kiosk` et vérifiée par l'assertion de build. Test `tests/test_image_rpi_sentinelle_kiosque_2522.py`. Le « pas de web » du même démarrage est un autre défaut (`secubox-firstboot` en échec, pas de frontal HAProxy ni de nginx sur 80/443), à diagnostiquer avec son journal.

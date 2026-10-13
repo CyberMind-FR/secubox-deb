@@ -1,3 +1,9 @@
+secubox-core (1.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * Premier demarrage (#2524) : secubox-firstboot mourait des l'etape 0 sur une carte SD (RPi400) : `parted -s … resizepart` sur la partition montee demande une confirmation et echoue, puis `warn` — appele 8 fois, jamais defini — repondait « command not found » (127) et, sous `set -e`, tuait tout le script (ni HAProxy, ni nginx 80/443, ni kiosque). `warn` est defini ; parted recoit sa reponse (---pretend-input-tty) ; une extension qui echoue n'arrete plus le premier demarrage.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 10:00:00 +0200
+
 secubox-core (1.7.3-1~bookworm1) bookworm; urgency=low
 
   * Le service ne cree plus /var/log/suricata (#2326) : plus aucune unite ne le reference.
