@@ -4,791 +4,496 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Profils de modules au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Module Profiles</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — Profils de modules</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-            --cyan: #00d4ff;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,0.18); }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.25rem; text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.red .value { color: var(--red); }
-        .stat-card.blue .value { color: var(--blue); }
-        .stat-card.purple .value { color: var(--purple); }
-        .stat-card.orange .value { color: var(--orange); }
-        .stat-card.dim .value { color: var(--p31-dim); }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h3 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
-        .card h3 .note { font-size: 0.62rem; color: var(--p31-dim); text-transform: none; font-weight: normal; letter-spacing: 0; }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.2rem; }
-        .tab { padding: 0.4rem 0.7rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.68rem; text-transform: uppercase; transition: all 0.2s; }
-        .tab:hover { color: var(--cyan); }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .agg-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
-        .agg-table th { text-align: left; color: var(--p31-dim); text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.06em; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); }
-        .agg-table td { padding: 0.3rem 0.4rem; border-bottom: 1px solid rgba(100,150,200,0.08); }
-        .agg-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-        .agg-table .on { color: var(--green); }
-        .agg-table .off { color: var(--p31-dim); }
-        .agg-table .unknown { color: var(--orange); }
-
-        select, .profile-select { padding: 0.4rem 0.6rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.75rem; color: var(--text); }
-        select:focus { outline: none; border-color: var(--cyan); }
-        .life-set { display: inline-flex; gap: 0.2rem; margin-left: 0.35rem; align-items: center; }
-        select.life-sel { padding: 0.1rem 0.2rem; font-size: 0.62rem; border-radius: 3px; }
-
-        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
-        .filter-bar input { flex: 1; min-width: 150px; padding: 0.4rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-
-        .mod-list { display: flex; flex-direction: column; gap: 0.28rem; max-height: 560px; overflow-y: auto; }
-        .mod-row { display: grid; grid-template-columns: 1.4em 1fr auto auto auto auto auto auto auto; align-items: center; gap: 0.55rem; padding: 0.45rem 0.6rem; background: var(--bg-row); border-radius: 4px; font-size: 0.73rem; border-left: 3px solid var(--border); transition: background 0.15s; }
-        .mod-row:hover { background: rgba(0,212,255,0.06); }
-        .mod-row.on { border-left-color: var(--green); }
-        .mod-row.off { border-left-color: var(--p31-dim); }
-        .mod-row.unknown { border-left-color: var(--orange); }
-        .mod-row .glyph { text-align: center; font-size: 0.95em; }
-        .mod-row .id { color: var(--cyan); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .mod-row .id .lock { margin-left: 0.3em; }
-        .mod-row .meta { font-size: 0.62rem; color: var(--p31-dim); white-space: nowrap; }
-        .mod-row .prio { font-size: 0.65rem; color: var(--p31-dim); text-align: right; white-space: nowrap; }
-        .mod-row .rss { font-size: 0.65rem; color: var(--blue); text-align: right; white-space: nowrap; min-width: 3.5em; }
-        .mod-row .member { display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
-        .mod-row .member input { accent-color: var(--cyan); cursor: pointer; }
-        .mod-row .pins { display: flex; gap: 0.15rem; }
-        .mod-row .pins .btn.sm { padding: 0.15rem 0.4rem; font-size: 0.62rem; }
-        .exposure-badge { font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border: 1px solid var(--border); }
-        .exposure-badge.public { color: var(--red); border-color: var(--red); }
-        .exposure-badge.lan { color: var(--blue); border-color: var(--blue); }
-        .exposure-badge.internal { color: var(--p31-dim); }
-
-        .mod-row .life-state { display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
-        .life-pill { font-size: 0.58rem; padding: 0.1rem 0.4rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; border: 1px solid var(--border); }
-        .life-pill.up { color: var(--green); border-color: var(--green); }
-        .life-pill.asleep { color: var(--p31-dim); border-color: var(--p31-dim); }
-        .life-pill.na { color: var(--purple); border-color: var(--purple); }
-        .btn.sm.wake { color: var(--yellow); border-color: var(--yellow); }
-        .btn.sm.sleep { color: var(--blue); border-color: var(--blue); }
-
-        .diff-banner { background: rgba(255,153,68,0.08); border: 1px dashed var(--orange); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.7rem; color: var(--orange); margin-bottom: 0.75rem; }
-        .diff-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 340px; overflow-y: auto; }
-        .diff-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 0.6rem; padding: 0.4rem 0.55rem; background: var(--bg-row); border-radius: 4px; font-size: 0.72rem; border-left: 3px solid var(--border); }
-        .diff-row.start { border-left-color: var(--green); }
-        .diff-row.stop { border-left-color: var(--red); }
-        .diff-row .action { font-size: 0.62rem; text-transform: uppercase; padding: 0.12rem 0.45rem; border-radius: 999px; white-space: nowrap; }
-        .diff-row .action.start { color: var(--green); border: 1px solid var(--green); }
-        .diff-row .action.stop { color: var(--red); border: 1px solid var(--red); }
-        .diff-row .id { color: var(--cyan); font-weight: bold; }
-        .diff-row .reason { color: var(--p31-dim); font-size: 0.65rem; }
-        .diff-row .prio { color: var(--p31-dim); font-size: 0.65rem; text-align: right; }
-        .empty-note { padding: 1rem; text-align: center; color: var(--p31-dim); font-size: 0.75rem; }
-
-        .report-banner { border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.7rem; margin-top: 0.6rem; border: 1px dashed var(--border); }
-        .report-banner.ok { border-color: var(--green); color: var(--green); }
-        .report-banner.fail { border-color: var(--red); color: var(--red); }
-        .report-banner .id-list { color: var(--text); }
-
-        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 360px; }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
-        .toast .close { float: right; margin-left: 0.6rem; cursor: pointer; font-weight: bold; }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            .mod-row { grid-template-columns: 1.2em 1fr auto; }
-            .mod-row .meta, .mod-row .prio, .mod-row .rss, .mod-row .member, .mod-row .life-state { display: none; }
-            .diff-row { grid-template-columns: auto 1fr; }
-            .diff-row .reason, .diff-row .prio { display: none; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;max-width:100%;overflow-wrap:anywhere}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.bon{border-color:var(--vert);color:var(--vert)} .btn.bon:hover{background:rgba(46,204,113,.14)}
+        .btn.sel{border-color:var(--cyan);background:rgba(41,182,246,.22);color:#d9f2ff;font-weight:700}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.bl .v{color:var(--bleu)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .barre-outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+        .onglets button{font:inherit;font-size:.78rem;padding:6px 12px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        th.n,td.n{text-align:right}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act>*{margin-right:5px;vertical-align:middle}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.jn{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{margin:8px 0 0;padding:10px 12px;border-radius:10px;border:1px solid var(--orange);background:rgba(255,159,28,.1);display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:.8rem}
+        .conf .btn{margin-left:0}
+        .simu{border:1px solid var(--cyan);background:rgba(41,182,246,.08);border-radius:10px;padding:7px 11px;font-size:.76rem;margin:0 0 8px}
+        input[type=search],select{font:inherit;font-size:.78rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;max-width:100%}
+        input[type=search]{flex:1 1 180px} select{min-height:28px}
+        input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        input[type=checkbox]{width:16px;height:16px;accent-color:var(--cyan);vertical-align:middle}
+        .statut{font-size:.74rem;color:var(--doux);margin:6px 0 0;min-height:1em}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)} .toast.ko{border-color:var(--rouge)}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div>
-                <h1>🧩 Module Profiles</h1>
-                <div class="sub" id="subline">Inventory &amp; desired state · preview then apply via Bascule</div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><path d="M13.5 17.25h7.5M17.25 13.5V21"/></svg>
+                <div><h1>Profils de modules</h1><small>Inventaire, état voulu et bascule</small></div>
             </div>
-            <div class="btn-group">
-                <button class="btn" id="refreshBtn">↻ Refresh</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="grid" id="statGrid">
-            <div class="stat-card cyan"><div class="value" id="sTotal">–</div><div class="label">📦 Modules</div></div>
-            <div class="stat-card green"><div class="value" id="sOn">–</div><div class="label">🟢 On</div></div>
-            <div class="stat-card dim"><div class="value" id="sOff">–</div><div class="label">⚫ Off</div></div>
-            <div class="stat-card orange"><div class="value" id="sUnknown">–</div><div class="label">❓ Unknown</div></div>
-            <div class="stat-card blue"><div class="value" id="sRam">–</div><div class="label">💾 RAM (known)</div></div>
-            <div class="stat-card red"><div class="value" id="sExposed">–</div><div class="label">🌐 Exposed Public</div></div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Modules recensés par les manifestes (un manifeste = un module)."><span class="l">Modules</span><span class="v" id="tTotal">—</span><span class="s">dans l’inventaire</span></div>
+            <div class="tuile ok" title="Modules observés démarrés."><span class="l">Actifs</span><span class="v" id="tOn">—</span><span class="s">observés en marche</span></div>
+            <div class="tuile" title="Modules observés arrêtés."><span class="l">Arrêtés</span><span class="v" id="tOff">—</span><span class="s">observés à l’arrêt</span></div>
+            <div class="tuile att" title="Modules dont l’état n’a pas pu être observé (sonde en échec). Ils ne sont ni comptés actifs ni arrêtés."><span class="l">Inconnus</span><span class="v" id="tUnknown">—</span><span class="s">sonde sans réponse</span></div>
+            <div class="tuile bl" title="Somme de la mémoire résidente des seuls modules dont elle a pu être mesurée. Un module non mesuré n’est pas compté : le total est partiel. « — » si aucune mesure."><span class="l">RAM connue</span><span class="v" id="tRam">—</span><span class="s">somme des mesures</span></div>
+            <div class="tuile hors" title="Modules dont l’exposition déclarée au manifeste est « public »."><span class="l">Exposés publics</span><span class="v" id="tExp">—</span><span class="s">exposition déclarée</span></div>
+        </section>
 
-        <div class="card">
-            <h3>📊 Cost &amp; state by taxonomy</h3>
-            <div class="tabs">
-                <div class="tab active" data-tab="agg-category">Category</div>
-                <div class="tab" data-tab="agg-runtime">Runtime</div>
-                <div class="tab" data-tab="agg-exposure">Exposure</div>
+        <div class="pan"><h3>Coût et état par taxonomie <i>RAM = modules mesurés seulement</i></h3>
+            <div class="onglets" role="tablist" aria-label="Taxonomie">
+                <button type="button" role="tab" data-agg="by_category" aria-selected="true">Catégorie</button>
+                <button type="button" role="tab" data-agg="by_runtime" aria-selected="false">Exécution</button>
+                <button type="button" role="tab" data-agg="by_exposure" aria-selected="false">Exposition</button>
             </div>
-            <div id="agg-category" class="tab-content active"><table class="agg-table" id="aggCategoryTable"></table></div>
-            <div id="agg-runtime" class="tab-content"><table class="agg-table" id="aggRuntimeTable"></table></div>
-            <div id="agg-exposure" class="tab-content"><table class="agg-table" id="aggExposureTable"></table></div>
+            <div class="tab"><table><thead><tr><th>Clé</th><th class="n">Total</th><th class="n">Actifs</th><th class="n">Arrêtés</th><th class="n">Inconnus</th><th class="n">RAM</th></tr></thead><tbody id="bAgg"></tbody></table></div>
         </div>
 
-        <div class="card">
-            <h3>🗂 Profile
-                <span class="note">membership checkbox &amp; diff below apply to the selected profile</span>
-            </h3>
-            <div class="btn-group">
-                <select id="profileSelect"></select>
-                <span id="profileLabel" style="font-size:0.72rem;color:var(--p31-dim)"></span>
+        <div class="pan"><h3>Profil <i>le diff et la case « dans le profil » portent sur le profil choisi</i></h3>
+            <div class="barre-outils"><select id="profil" aria-label="Profil"></select><span class="note" id="profilNote" style="margin:0"></span></div>
+        </div>
+
+        <div class="pan"><h3>Bascule <i>aperçu, puis application ou retour arrière sur la box</i></h3>
+            <p class="simu"><b>Aperçu = simulation</b> : « Prévisualiser » ne démarre ni n’arrête rien (il retient seulement ce profil comme profil actif). <b>Appliquer</b> et <b>Rollback</b> agissent réellement sur la box, après confirmation.</p>
+            <div class="barre-outils">
+                <button class="btn prim" id="bApercu" type="button">👁 Prévisualiser (simulation)</button>
+                <button class="btn bon" id="bAppliquer" type="button" hidden>✔ Appliquer</button>
+                <button class="btn danger" id="bRollback" type="button">⏪ Rollback</button>
             </div>
+            <div class="conf" id="conf" role="alertdialog" aria-live="assertive" hidden></div>
+            <div class="statut" id="statut" aria-live="polite"></div>
+            <div class="tab"><table id="tApercu" hidden><thead><tr><th>Action</th><th>Module</th><th>Raison</th><th class="n">Prio</th></tr></thead><tbody id="bApercuL"></tbody></table></div>
+            <div id="rapport" class="retour" hidden></div>
         </div>
 
-        <div class="card">
-            <h3>🔀 Bascule
-                <span class="note">preview the plan for the selected profile, then apply/rollback on the box (webui→ctl)</span>
-            </h3>
-            <div class="btn-group">
-                <button class="btn primary" id="previewBtn">👁 Prévisualiser</button>
-                <button class="btn good" id="applyBtn" style="display:none">✅ Appliquer</button>
-                <button class="btn danger" id="rollbackBtn">⏪ Rollback</button>
+        <div class="pan"><h3>Modules <i id="nMod"></i></h3>
+            <div class="barre-outils">
+                <input type="search" id="recherche" placeholder="Filtrer (module, catégorie)…" aria-label="Filtrer les modules">
+                <select id="filtreEtat" aria-label="Filtrer par état"><option value="">Tous les états</option><option value="on">Actifs</option><option value="off">Arrêtés</option><option value="unknown">Inconnus</option></select>
             </div>
-            <div id="basculeStatus" style="font-size:0.72rem;color:var(--p31-dim);margin-top:0.5rem"></div>
-            <div class="diff-list" id="basculeDiffList" style="margin-top:0.5rem"></div>
-            <div id="applyReport"></div>
+            <div id="rMod" class="retour" hidden></div>
+            <div class="tab"><table><thead><tr><th>Module</th><th>Catégorie · exécution</th><th>Exposition</th><th class="n">Prio</th><th class="n">RAM</th><th>Dans le profil</th><th>Épingle</th><th>Éveil</th></tr></thead><tbody id="bMod"></tbody></table></div>
         </div>
 
-        <div class="card">
-            <h3>📦 Modules <span class="note" id="modCount"></span></h3>
-            <div class="filter-bar">
-                <input type="text" id="searchInput" placeholder="🔍 Filter by id / category…">
-                <select id="stateFilter">
-                    <option value="">All states</option>
-                    <option value="on">🟢 On</option>
-                    <option value="off">⚫ Off</option>
-                    <option value="unknown">❓ Unknown</option>
-                </select>
-            </div>
-            <div class="mod-list" id="modList">Loading…</div>
+        <div class="pan"><h3>Diff — <span id="diffNom">—</span> <i>lecture seule, rien n’est démarré ni arrêté ici</i></h3>
+            <div class="tab"><table><thead><tr><th>Action</th><th>Module</th><th>Raison</th><th class="n">Prio</th></tr></thead><tbody id="bDiff"></tbody></table></div>
         </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <div class="card">
-            <h3>🧮 Diff — <span id="diffProfileName">–</span></h3>
-            <div class="diff-banner">🔍 PREVIEW ONLY — this is what the selected profile would change; nothing
-                here starts or stops anything by itself. Use the <strong>Bascule</strong> card above to preview and,
-                after confirmation, actually apply (or roll back) on the box.</div>
-            <div class="diff-list" id="diffList">Loading…</div>
-        </div>
-    </main>
-
-    <div class="toast" id="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo') && Q.get('demo') !== '0';
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/profiles';
-        let statusData = null;
-        let profilesData = null;
-        let pinsData = {};
-        let selectedProfile = null;
-        let searchTerm = '';
-        let stateFilterVal = '';
-        let basculePreviewedFor = null;   // profile name for which a preview was just shown (gates Apply)
-        let basculeLastChanges = [];      // last previewed change list (for the confirm() count)
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function token() {
-            try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
-        }
-        function authHeaders(extra) {
-            const h = Object.assign({}, extra || {});
-            const t = token();
-            if (t) h['Authorization'] = 'Bearer ' + t;
-            return h;
-        }
-        function esc(s) {
-            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
-        function fmtKb(kb) {
-            if (kb == null) return '—';
-            const mb = kb / 1024;
-            return (mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)) + ' MB';
-        }
+        let STATUT = null, PROFILS = null, PINS = {}, DIFF = null, SEL = null, SESSION_OK = true, AGG = 'by_category';
+        let RECH = '', FILTRE = '';
+        let PREVU = null, PREVU_CHG = [];     // profil pour lequel un aperçu vient d'être affiché (conditionne « Appliquer »)
+        let CONFIRM = null;                   // confirmation ouverte (ligne ou panneau) : jamais de dialogue natif
+        let OCCUPE = false;                   // action d'écriture en cours : pas d'actualisation
 
-        function toast(msg) {
-            const t = document.getElementById('toast');
-            t.innerHTML = esc(msg);
-            t.className = 'toast show';
-            clearTimeout(t._hideTimer);
-            t._hideTimer = setTimeout(() => { t.className = 'toast'; }, 3000);
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { let d = null; try { d = await r.json(); } catch (e) { /* corps vide */ } const e = new Error(texteDetail(d, 'HTTP ' + r.status)); e.statut = r.status; throw e; }
+            return r.json();
         }
-        function errorToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerHTML = esc(msg) + '<span class="close" data-act="dismiss-toast">✕</span>';
-            t.className = 'toast show error';
-            clearTimeout(t._hideTimer);
+        function texteDetail(d, repli) {
+            if (!d || d.detail === undefined || d.detail === null) return repli;
+            return typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail);
         }
-        document.getElementById('toast').addEventListener('click', e => {
-            if (e.target.closest('[data-act="dismiss-toast"]')) {
-                const t = document.getElementById('toast');
-                t.className = 'toast';
-            }
-        });
-
-        async function api(path, opts) {
-            const res = await fetch(API + path, Object.assign({}, opts, { headers: authHeaders((opts && opts.headers) || {}) }));
-            if (res.status === 401) { errorToast('🔒 Login required'); throw new Error('401'); }
-            let data = null;
-            try { data = await res.json(); } catch (e) { /* no body */ }
-            if (!res.ok) {
-                const detail = (data && data.detail) ? data.detail : ('HTTP ' + res.status);
-                throw new Error(detail);
-            }
-            return data;
-        }
-
-        async function refresh() {
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const [status, profiles, pins] = await Promise.all([
-                    api('/status'),
-                    api('/profiles'),
-                    api('/pins'),
-                ]);
-                statusData = status;
-                profilesData = profiles;
-                pinsData = (pins && pins.pins) || {};
-                if (!selectedProfile) selectedProfile = profiles.active || (profiles.profiles[0] && profiles.profiles[0].name) || null;
-                renderStats();
-                renderAggregates();
-                renderProfileSelect();
-                renderModules();
-                await loadDiff();
-            } catch (e) {
-                if (e.message !== '401') errorToast('⚠️ Failed to load: ' + e.message);
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                if (r.status === 401 || r.status === 403) { SESSION_OK = false; $('session').hidden = false; }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? (typeof res.data.detail === 'string' ? res.data.detail : JSON.stringify(res.data.detail)) : (res.statut === 401 || res.statut === 403) ? 'session requise' : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function toast(msg, ko) { const t = $('toast'); t.textContent = msg; t.className = 'toast show' + (ko ? ' ko' : ''); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ko ? 6000 : 2800); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function statut(msg) { $('statut').textContent = msg || ''; }
+        const ko = (m) => toast(m, true);
+
+        function mem(kb) {
+            if (kb === null || kb === undefined || kb === 0) return '—';
+            const mo = kb / 1024; return (mo >= 10 ? mo.toFixed(0) : mo.toFixed(1)) + ' Mo';
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function btn(txt, cls, fn, titre) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; if (titre) b.title = titre; b.addEventListener('click', fn); return b; }
+
+        // ---------- Données de démonstration (fictives) ----------
+        function demoModules() {
+            const m = (id, categorie, runtime, expo, prio, prot, on, rss, lc, wc, ss, bud) => ({ id, category: categorie, runtime, exposure: expo, priority: prio, protected: prot, on, rss_kb: rss, lifecycle: lc, wake_class: wc, sleep_state: ss, wake_budget_s: bud, portal_domain: null });
+            return [
+                m('auth', 'noyau', 'systemd', 'interne', 90, true, 'on', 61440, 'always-on', 'normal', 'n/a', null),
+                m('haproxy', 'réseau', 'systemd', 'public', 80, true, 'on', 38912, 'always-on', 'normal', 'n/a', null),
+                m('waf', 'sécurité', 'systemd', 'public', 70, true, 'on', 53248, 'always-on', 'normal', 'n/a', null),
+                m('exemple-medias', 'média', 'lxc', 'lan', 40, false, 'off', null, 'on-demand', 'normal', 'asleep', 45),
+                m('exemple-notes', 'collaboratif', 'lxc', 'lan', 30, false, 'on', 204800, 'on-demand', 'urgent', 'up', 30),
+                m('exemple-sonde', 'supervision', 'systemd', 'interne', 20, false, 'unknown', null, 'manual', 'normal', 'n/a', null)];
+        }
+        function demoDonnees() {
+            const mods = demoModules();
+            const bucket = (cle) => { const o = {}; mods.forEach(x => { const k = x[cle]; const b = o[k] = o[k] || { count: 0, on: 0, off: 0, unknown: 0, rss_kb: 0 }; b.count++; b[x.on]++; b.rss_kb += x.rss_kb || 0; }); return o; };
+            const tot = { count: mods.length, on: 0, off: 0, unknown: 0, rss_kb: 0, exposed_public: 0 };
+            mods.forEach(x => { tot[x.on]++; tot.rss_kb += x.rss_kb || 0; if (x.exposure === 'public') tot.exposed_public++; });
+            STATUT = { modules: mods, totals: tot, by_category: bucket('category'), by_runtime: bucket('runtime'), by_exposure: bucket('exposure') };
+            PROFILS = { active: 'lite', profiles: [{ name: 'lite', label: 'Léger', on: ['auth', 'haproxy', 'waf', 'exemple-notes'] }, { name: 'full', label: 'Complet', on: ['auth', 'haproxy', 'waf', 'exemple-notes', 'exemple-medias', 'exemple-sonde'] }] };
+            PINS = { 'exemple-sonde': 'on' };
+        }
+        function demoDiff(profil) {
+            return profil === 'full'
+                ? [{ id: 'exemple-medias', action: 'start', reason: 'membre du profil, observé arrêté', priority: 40 }, { id: 'exemple-sonde', action: 'start', reason: 'épinglé actif', priority: 20 }]
+                : [{ id: 'exemple-sonde', action: 'stop', reason: 'hors profil, observé inconnu', priority: 20 }];
+        }
+
+        // ---------- Chargement ----------
+        async function charger() {
+            if (DEMO) {
+                demoDonnees(); SESSION_OK = true; if (!SEL) SEL = PROFILS.active; DIFF = { profile: SEL, changes: demoDiff(SEL) };
+                $('erreur').hidden = true; rendre(); return;
             }
+            const essais = await Promise.allSettled([lire('/status'), lire('/profiles'), lire('/pins')]);
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            SESSION_OK = !refus;
+            STATUT = val(0); PROFILS = val(1); PINS = (val(2) && val(2).pins) || {};
+            if (PROFILS && !SEL) SEL = PROFILS.active || (PROFILS.profiles && PROFILS.profiles[0] && PROFILS.profiles[0].name) || null;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire les profils (service arrêté ou injoignable).';
+            DIFF = null;
+            if (SEL && PROFILS) { try { DIFF = await lire('/diff?profile=' + encodeURIComponent(SEL)); } catch (e) { DIFF = { erreur: e.message }; } }
+            rendre();
         }
 
-        function renderStats() {
-            const t = (statusData && statusData.totals) || {};
-            document.getElementById('sTotal').textContent = t.count != null ? t.count : '–';
-            document.getElementById('sOn').textContent = t.on != null ? t.on : '–';
-            document.getElementById('sOff').textContent = t.off != null ? t.off : '–';
-            document.getElementById('sUnknown').textContent = t.unknown != null ? t.unknown : '–';
-            document.getElementById('sRam').textContent = fmtKb(t.rss_kb);
-            document.getElementById('sExposed').textContent = t.exposed_public != null ? t.exposed_public : '–';
-            document.getElementById('subline').textContent =
-                (t.count || 0) + ' modules · ' + (t.on || 0) + ' on · ' + (t.unknown || 0) + ' unknown · preview then apply via Bascule';
+        // ---------- Rendu ----------
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUT && !PROFILS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { const a = PROFILS && PROFILS.active; etat.className = 'actif ' + (a ? 'cy' : 'neutre'); etat.textContent = a ? 'PROFIL ACTIF : ' + a : 'AUCUN PROFIL ACTIF'; }
+            const t = (STATUT && STATUT.totals) || null;
+            const n = k => (t && t[k] !== null && t[k] !== undefined) ? t[k] : '—';
+            $('tTotal').textContent = n('count'); $('tOn').textContent = n('on'); $('tOff').textContent = n('off'); $('tUnknown').textContent = n('unknown');
+            $('tRam').textContent = t ? mem(t.rss_kb) : '—'; $('tExp').textContent = n('exposed_public');
+            rendreAgg(); rendreProfil(); rendreModules(); rendreDiff();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        function renderAggTable(elId, bucket) {
-            const el = document.getElementById(elId);
-            const keys = Object.keys(bucket || {}).sort();
-            if (!keys.length) { el.innerHTML = '<tr><td class="empty-note">No data</td></tr>'; return; }
-            let html = '<tr><th>Key</th><th class="num">Count</th><th class="num">On</th><th class="num">Off</th><th class="num">Unknown</th><th class="num">RAM</th></tr>';
-            keys.forEach(k => {
-                const b = bucket[k];
-                html += '<tr><td>' + esc(k) + '</td>' +
-                    '<td class="num">' + b.count + '</td>' +
-                    '<td class="num on">' + b.on + '</td>' +
-                    '<td class="num off">' + b.off + '</td>' +
-                    '<td class="num unknown">' + b.unknown + '</td>' +
-                    '<td class="num">' + fmtKb(b.rss_kb) + '</td></tr>';
+        function rendreAgg() {
+            const tb = $('bAgg'); tb.replaceChildren();
+            document.querySelectorAll('[data-agg]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.agg === AGG)));
+            const bucket = STATUT && STATUT[AGG];
+            const cles = Object.keys(bucket || {}).sort();
+            if (!cles.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucune donnée' : '—'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            cles.forEach(k => {
+                const b = bucket[k], tr = el('tr');
+                tr.appendChild(el('td', '', k));
+                [b.count, b.on, b.off, b.unknown].forEach(v => tr.appendChild(el('td', 'n', tiret(v))));
+                tr.appendChild(el('td', 'n', mem(b.rss_kb)));
+                tb.appendChild(tr);
             });
-            el.innerHTML = html;
         }
 
-        function renderAggregates() {
-            if (!statusData) return;
-            renderAggTable('aggCategoryTable', statusData.by_category);
-            renderAggTable('aggRuntimeTable', statusData.by_runtime);
-            renderAggTable('aggExposureTable', statusData.by_exposure);
+        function rendreProfil() {
+            const sel = $('profil'); sel.replaceChildren();
+            const liste = (PROFILS && PROFILS.profiles) || [];
+            liste.forEach(p => { const o = el('option', '', (p.label || p.name) + (p.name === PROFILS.active ? ' (actif)' : '')); o.value = p.name; if (p.name === SEL) o.selected = true; sel.appendChild(o); });
+            if (!liste.length) { const o = el('option', '', 'Aucun profil'); o.value = ''; sel.appendChild(o); }
+            const cur = liste.find(p => p.name === SEL);
+            $('profilNote').textContent = cur ? cur.on.length + ' module(s) listé(s)' : '';
+            $('diffNom').textContent = SEL || '—';
         }
 
-        function renderProfileSelect() {
-            const sel = document.getElementById('profileSelect');
-            const list = (profilesData && profilesData.profiles) || [];
-            sel.innerHTML = list.map(p =>
-                '<option value="' + esc(p.name) + '"' + (p.name === selectedProfile ? ' selected' : '') + '>' +
-                esc(p.label) + (p.name === profilesData.active ? ' (active)' : '') + '</option>'
-            ).join('') || '<option value="">No profile</option>';
-            const cur = list.find(p => p.name === selectedProfile);
-            document.getElementById('profileLabel').textContent = cur ? cur.on.length + ' module(s) listed' : '';
-            document.getElementById('diffProfileName').textContent = selectedProfile || '(none active)';
-        }
-
-        function pinGlyph(id) {
-            const p = pinsData[id];
-            if (p === 'on') return { cls: 'on', label: '📌 ON' };
-            if (p === 'off') return { cls: 'off', label: '📌 OFF' };
-            return { cls: 'follow', label: '⟳ follows profile' };
-        }
-
-        // The per-module "awake level" selector (#896 follow-up): two <select>s
-        // (lifecycle + wake_class) POSTing /lifecycle, which delegates to the
-        // root ctl (webui->ctl). Protected modules are forced always-on, so we
-        // show a 🔒 instead of an editable control. m.lifecycle from /status is
-        // the EFFECTIVE lifecycle; for a non-protected module that equals the
-        // manifest value, so it is the correct current selection.
-        function lifeSelect(m) {
-            if (m.protected) {
-                return '<span class="life-set" title="protected — always on, not settable">🔒</span>';
-            }
-            const lcOpts = ['always-on', 'eager', 'on-demand', 'manual'].map(v =>
-                '<option value="' + v + '"' + (m.lifecycle === v ? ' selected' : '') + '>' + v + '</option>').join('');
-            const wcOpts = ['normal', 'urgent'].map(v =>
-                '<option value="' + v + '"' + (m.wake_class === v ? ' selected' : '') + '>' + v + '</option>').join('');
-            return '<span class="life-set">' +
-                '<select class="life-sel" data-act="lifecycle" data-kind="lifecycle" data-id="' + esc(m.id) + '" title="awake level">' + lcOpts + '</select>' +
-                '<select class="life-sel" data-act="lifecycle" data-kind="wake_class" data-id="' + esc(m.id) + '" title="wake class (urgent = longer idle grace)">' + wcOpts + '</select>' +
-                '</span>';
-        }
-
-        // sleep_state ('up'/'asleep'/'n/a') + lifecycle/wake_class/wake_budget_s
-        // come straight from GET /status (Task 10, #896) — this renders the
-        // pill + the one manual action (Sleep when up, Wake when asleep, no
-        // button at all for n/a always-on/manual modules) + the awake-level
-        // selector (always, so an always-on/manual module can be made on-demand).
-        function lifeStateCell(m) {
+        function etatEveil(m) {
+            const cell = el('td', 'act');
             const st = m.sleep_state;
-            let inner;
-            if (st === 'n/a') {
-                inner = '<span class="life-pill na" title="lifecycle: ' + esc(m.lifecycle) + '">' + esc(m.lifecycle) + '</span>';
-            } else {
-                const pill = st === 'up'
-                    ? '<span class="life-pill up" title="lifecycle: ' + esc(m.lifecycle) + '">🟢 up</span>'
-                    : '<span class="life-pill asleep" title="lifecycle: ' + esc(m.lifecycle) + '">🌙 asleep</span>';
-                const budget = m.wake_budget_s != null ? Math.round(m.wake_budget_s) + 's' : '?';
-                const btn = st === 'up'
-                    ? '<button class="btn sm sleep" data-act="sleep" data-id="' + esc(m.id) + '" title="put ' + esc(m.id) + ' to sleep now">💤 Sleep</button>'
-                    : '<button class="btn sm wake" data-act="wake" data-id="' + esc(m.id) + '" title="wake ' + esc(m.id) + ' now (~' + budget + ')">⚡ Wake</button>';
-                inner = pill + btn;
+            if (st === 'n/a') cell.appendChild(pastille('', tiret(m.lifecycle), 'niveau d’éveil : ' + tiret(m.lifecycle)));
+            else {
+                cell.appendChild(st === 'up' ? pastille('ok', 'EN MARCHE', 'niveau d’éveil : ' + tiret(m.lifecycle)) : pastille('jn', 'ENDORMI', 'niveau d’éveil : ' + tiret(m.lifecycle)));
+                const bud = m.wake_budget_s != null ? Math.round(m.wake_budget_s) + ' s' : '?';
+                if (st === 'up') {
+                    if (CONFIRM && CONFIRM.genre === 'sommeil' && CONFIRM.cle === m.id) {
+                        cell.appendChild(el('span', 'note', 'Endormir ' + m.id + ' ?'));
+                        cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; reveilOuSommeil(m.id, 'sleep'); }));
+                        cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                    } else cell.appendChild(btn('💤 Endormir', '', () => { CONFIRM = { genre: 'sommeil', cle: m.id }; rendre(); }, 'endormir ' + m.id + ' maintenant'));
+                } else cell.appendChild(btn('⚡ Réveiller', '', () => reveilOuSommeil(m.id, 'wake'), 'réveiller ' + m.id + ' (~' + bud + ')'));
             }
-            return '<span class="life-state">' + inner + lifeSelect(m) + '</span>';
+            if (m.protected) { cell.appendChild(el('span', '', '🔒')).title = 'protégé — toujours actif, niveau d’éveil non modifiable'; }
+            else {
+                const mk = (valeurs, courante, kind, titre) => { const s = el('select'); s.title = titre; s.setAttribute('aria-label', titre + ' de ' + m.id);
+                    valeurs.forEach(v => { const o = el('option', '', v); o.value = v; if (courante === v) o.selected = true; s.appendChild(o); });
+                    s.dataset.kind = kind; return s; };
+                const s1 = mk(['always-on', 'eager', 'on-demand', 'manual'], m.lifecycle, 'lifecycle', 'niveau d’éveil');
+                const s2 = mk(['normal', 'urgent'], m.wake_class, 'wake_class', 'classe de réveil (urgent = grâce d’inactivité plus longue)');
+                const envoyer = () => definirEveil(m.id, s1.value, s2.value);
+                s1.addEventListener('change', envoyer); s2.addEventListener('change', envoyer);
+                cell.appendChild(s1); cell.appendChild(s2);
+            }
+            return cell;
         }
 
-        function renderModules() {
-            const el = document.getElementById('modList');
-            let mods = (statusData && statusData.modules) || [];
-            const cur = (profilesData && profilesData.profiles || []).find(p => p.name === selectedProfile);
-            const memberSet = new Set(cur ? cur.on : []);
-
-            if (searchTerm) {
-                const s = searchTerm.toLowerCase();
-                mods = mods.filter(m => m.id.toLowerCase().includes(s) || m.category.toLowerCase().includes(s));
-            }
-            if (stateFilterVal) {
-                mods = mods.filter(m => m.on === stateFilterVal);
-            }
-            mods = mods.slice().sort((a, b) => (b.priority - a.priority) || a.id.localeCompare(b.id));
-
-            document.getElementById('modCount').textContent = '(' + mods.length + ' shown)';
-
-            if (!mods.length) {
-                el.innerHTML = '<div class="empty-note">No modules match the current filter.</div>';
-                return;
-            }
-
-            el.innerHTML = mods.map(m => {
-                const glyph = m.on === 'on' ? '🟢' : m.on === 'unknown' ? '❓' : '⚫';
-                const isMember = memberSet.has(m.id);
-                const pin = pinGlyph(m.id);
-                const pinOffDisabled = m.protected;
-                return '<div class="mod-row ' + m.on + '">' +
-                    '<span class="glyph">' + glyph + '</span>' +
-                    '<span class="id">' + esc(m.id) + (m.protected ? '<span class="lock" title="protected — always on">🔒</span>' : '') + '</span>' +
-                    '<span class="meta">' + esc(m.category) + ' · ' + esc(m.runtime) + '</span>' +
-                    '<span class="exposure-badge ' + esc(m.exposure) + '">' + esc(m.exposure) + '</span>' +
-                    '<span class="prio">prio ' + m.priority + '</span>' +
-                    '<span class="rss">' + fmtKb(m.rss_kb) + '</span>' +
-                    '<label class="member" title="add/remove from ' + esc(selectedProfile || '') + '">' +
-                    '<input type="checkbox" data-act="member" data-id="' + esc(m.id) + '"' + (isMember ? ' checked' : '') +
-                    (selectedProfile ? '' : ' disabled') + '> in profile</label>' +
-                    '<span class="pins">' +
-                    '<button class="btn sm' + (pin.cls === 'follow' ? ' active' : '') + '" data-act="pin" data-id="' + esc(m.id) + '" data-pin="clear" title="follow profile">⟳</button>' +
-                    '<button class="btn sm' + (pin.cls === 'on' ? ' active' : '') + '" data-act="pin" data-id="' + esc(m.id) + '" data-pin="on" title="pin on">📌ON</button>' +
-                    '<button class="btn sm' + (pin.cls === 'off' ? ' active' : '') + '" data-act="pin" data-id="' + esc(m.id) + '" data-pin="off"' + (pinOffDisabled ? ' disabled' : '') + ' title="' + (pinOffDisabled ? 'protected — cannot pin off' : 'pin off') + '">📌OFF</button>' +
-                    '</span>' +
-                    lifeStateCell(m) +
-                    '</div>';
-            }).join('');
+        function rendreModules() {
+            const tb = $('bMod'); tb.replaceChildren();
+            let mods = ((STATUT && STATUT.modules) || []).slice();
+            const cur = ((PROFILS && PROFILS.profiles) || []).find(p => p.name === SEL);
+            const membres = new Set(cur ? cur.on : []);
+            if (RECH) { const s = RECH.toLowerCase(); mods = mods.filter(m => String(m.id).toLowerCase().includes(s) || String(m.category || '').toLowerCase().includes(s)); }
+            if (FILTRE) mods = mods.filter(m => m.on === FILTRE);
+            mods.sort((a, b) => ((b.priority || 0) - (a.priority || 0)) || String(a.id).localeCompare(String(b.id)));
+            $('nMod').textContent = STATUT ? '(' + mods.length + ' affiché' + (mods.length > 1 ? 's' : '') + ')' : '';
+            if (!mods.length) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : STATUT ? 'Aucun module ne correspond au filtre' : '—'); td.colSpan = 8; tr.appendChild(td); tb.appendChild(tr); return; }
+            mods.forEach(m => {
+                const tr = el('tr');
+                const nom = el('td', 'mono', m.id); if (m.protected) { const l = el('span', '', ' 🔒'); l.title = 'protégé — toujours actif'; nom.appendChild(l); } tr.appendChild(nom);
+                const etat = m.on === 'on' ? pastille('ok', 'ACTIF') : m.on === 'off' ? pastille('', 'ARRÊTÉ') : pastille('att', 'INCONNU', 'sonde sans réponse');
+                const c1 = el('td'); c1.appendChild(etat); c1.appendChild(el('span', 'note', ' ' + tiret(m.category) + ' · ' + tiret(m.runtime))); tr.appendChild(c1);
+                const ex = el('td'); ex.appendChild(pastille(m.exposure === 'public' ? 'hors' : m.exposure === 'lan' ? 'cy' : '', tiret(m.exposure))); tr.appendChild(ex);
+                tr.appendChild(el('td', 'n', tiret(m.priority))); tr.appendChild(el('td', 'n', mem(m.rss_kb)));
+                const cm = el('td'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = membres.has(m.id); cb.disabled = !SEL; cb.setAttribute('aria-label', m.id + ' dans le profil ' + (SEL || ''));
+                cb.addEventListener('change', () => basculerMembre(m.id, cb.checked)); cm.appendChild(cb); tr.appendChild(cm);
+                const cp = el('td', 'act'); const pin = PINS[m.id];
+                cp.appendChild(btn('⟳', pin ? '' : 'sel', () => poserEpingle(m.id, null), 'suit le profil'));
+                cp.appendChild(btn('📌 ON', pin === 'on' ? 'sel' : '', () => poserEpingle(m.id, 'on'), 'épingler actif'));
+                const off = btn('📌 OFF', pin === 'off' ? 'sel' : '', () => poserEpingle(m.id, 'off'), m.protected ? 'protégé — ne peut pas être épinglé arrêté' : 'épingler arrêté'); off.disabled = !!m.protected; cp.appendChild(off);
+                tr.appendChild(cp);
+                tr.appendChild(etatEveil(m));
+                tb.appendChild(tr);
+            });
         }
 
-        // Shared diff-list markup — reused by the read-only diff card and by
-        // the Bascule preview (both render the same {id,action,reason,priority}
-        // change shape returned by GET /diff). Every field is esc()'d.
-        function renderDiffRows(changes) {
-            if (!changes.length) {
-                return '<div class="empty-note">✅ Nothing to change — reality already matches this profile.</div>';
-            }
-            return changes.map(c =>
-                '<div class="diff-row ' + esc(c.action) + '">' +
-                '<span class="action ' + esc(c.action) + '">' + (c.action === 'start' ? '▶ start' : '⛔ stop') + '</span>' +
-                '<span class="id">' + esc(c.id) + '</span>' +
-                '<span class="reason">' + esc(c.reason) + '</span>' +
-                '<span class="prio">prio ' + esc(c.priority) + '</span>' +
-                '</div>'
-            ).join('');
+        function lignesDiff(tb, changes, vide) {
+            tb.replaceChildren();
+            if (!changes.length) { const tr = el('tr'); const td = el('td', 'vide', vide); td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); return; }
+            changes.forEach(c => {
+                const tr = el('tr'); const a = el('td'); a.appendChild(c.action === 'start' ? pastille('ok', '▶ DÉMARRER') : pastille('hors', '⛔ ARRÊTER')); tr.appendChild(a);
+                tr.appendChild(el('td', 'mono', tiret(c.id))); tr.appendChild(el('td', '', tiret(c.reason))); tr.appendChild(el('td', 'n', tiret(c.priority))); tb.appendChild(tr);
+            });
+        }
+        function rendreDiff() {
+            const vide = !SESSION_OK ? '—' : !SEL ? 'Aucun profil sélectionné' : (DIFF && DIFF.erreur) ? 'Diff indisponible : ' + DIFF.erreur : !DIFF ? '—' : '✔ Rien à changer : la réalité correspond déjà à ce profil';
+            lignesDiff($('bDiff'), (DIFF && DIFF.changes) || [], vide);
         }
 
-        async function loadDiff() {
-            const el = document.getElementById('diffList');
-            if (!selectedProfile) { el.innerHTML = '<div class="empty-note">No active/selected profile.</div>'; return; }
-            el.innerHTML = 'Loading…';
+        // ---------- Bascule ----------
+        function remiseAZeroApercu() {
+            PREVU = null; PREVU_CHG = []; $('bAppliquer').hidden = true; statut(''); $('tApercu').hidden = true; $('bApercuL').replaceChildren(); fermerConf();
+        }
+        function ouvrirConf(texte, libelle, fn) {
+            const c = $('conf'); c.replaceChildren(); c.hidden = false;
+            c.appendChild(el('span', '', texte));
+            const ok = el('button', 'btn danger', libelle); ok.type = 'button'; ok.addEventListener('click', () => { fermerConf(); fn(); }); c.appendChild(ok);
+            const no = el('button', 'btn', 'Annuler'); no.type = 'button'; no.addEventListener('click', () => { fermerConf(); statut(''); $('bAppliquer').disabled = false; $('bRollback').disabled = false; }); c.appendChild(no);
+            annoncer();
+        }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; $('conf').replaceChildren(); }
+
+        async function previsualiser() {
+            if (!SEL) { ko('Choisissez d’abord un profil'); return; }
+            const b = $('bApercu'); b.disabled = true; OCCUPE = true; remiseAZeroApercu(); statut('⏳ Prévisualisation…');
             try {
-                const data = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
-                el.innerHTML = renderDiffRows(data.changes || []);
+                if (DEMO) { PREVU_CHG = demoDiff(SEL); statut('Démonstration : aucune écriture, plan fictif.'); }
+                else {
+                    const r = await ecrire('POST', '/active', { name: SEL });
+                    if (!r.ok) { statut(''); ko('Prévisualisation échouée : ' + detail(r)); return; }
+                    const d = await lire('/diff?profile=' + encodeURIComponent(SEL));
+                    PREVU_CHG = d.changes || [];
+                    statut(PREVU_CHG.length + ' changement(s) prévu(s) pour « ' + SEL + ' ». Simulation : rien n’est encore appliqué.');
+                    if (PROFILS) PROFILS.active = SEL;
+                }
+                lignesDiff($('bApercuL'), PREVU_CHG, '✔ Rien à changer : la réalité correspond déjà à ce profil'); $('tApercu').hidden = false;
+                PREVU = SEL; $('bAppliquer').hidden = false; rendreProfil();
             } catch (e) {
-                el.innerHTML = '<div class="empty-note">⚠️ ' + esc(e.message) + '</div>';
-            }
+                statut(''); if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; rendre(); } else ko('Prévisualisation échouée : ' + e.message);
+            } finally { b.disabled = false; OCCUPE = false; annoncer(); }
         }
 
-        function showApplyButton(show) {
-            document.getElementById('applyBtn').style.display = show ? '' : 'none';
-        }
-
-        function setBasculeStatus(msg) {
-            document.getElementById('basculeStatus').textContent = msg || '';
-        }
-
-        function resetBasculePreview() {
-            basculePreviewedFor = null;
-            basculeLastChanges = [];
-            showApplyButton(false);
-            setBasculeStatus('');
-            document.getElementById('basculeDiffList').innerHTML = '';
-        }
-
-        function renderApplyReport(label, report) {
-            const el = document.getElementById('applyReport');
-            const failed = report.failed || [];
-            const cls = failed.length ? 'fail' : 'ok';
-            const fmt = ids => ids.length ? ids.map(esc).join(', ') : '—';
-            el.innerHTML =
-                '<div class="report-banner ' + cls + '">' +
-                '<strong>' + esc(label) + ':</strong> ' + esc(report.status) + '<br>' +
-                'changed: <span class="id-list">' + fmt(report.changed || []) + '</span><br>' +
-                'failed: <span class="id-list">' + fmt(failed) + '</span><br>' +
-                'rolled back: <span class="id-list">' + fmt(report.rolled_back || []) + '</span>' +
-                '</div>';
-        }
-
-        // Successful terminal status per verb — anything else (rolled_back,
-        // an unexpected status, or a non-empty `failed` list) is a failure
-        // that must stay on screen via the PERSISTENT errorToast, never the
-        // transient ✅ toast (see renderApplyReport for the full banner).
-        function isReportFailure(report, kind) {
-            if ((report.failed || []).length) return true;
-            if (kind === 'rollback') return report.status !== 'applied' && report.status !== 'planned';
-            return report.status !== 'applied';
-        }
-
-        // "Prévisualiser" commits the dropdown's selection as the active
-        // profile (POST /active), then fetches its plan (GET /diff) and
-        // renders it into the Bascule card's OWN container (#basculeDiffList)
-        // — deliberately NOT the read-only card's #diffList, which the 45s
-        // background refresh() repaints independently. Sharing one element
-        // let a background poll silently replace the previewed plan while an
-        // operator was still reading it, before confirm(). Only after this
-        // succeeds is Apply revealed — the operator must see the plan before
-        // actuating anything.
-        async function previewBascule() {
-            if (!selectedProfile) { errorToast('⚠️ Select a profile first'); return; }
-            const btn = document.getElementById('previewBtn');
-            btn.disabled = true;
-            resetBasculePreview();
-            setBasculeStatus('⏳ Prévisualisation…');
-            try {
-                await api('/active', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: selectedProfile }),
-                });
-                const data = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
-                basculeLastChanges = data.changes || [];
-                document.getElementById('basculeDiffList').innerHTML = renderDiffRows(basculeLastChanges);
-                basculePreviewedFor = selectedProfile;
-                setBasculeStatus(basculeLastChanges.length + ' changement(s) prévu(s) pour « ' + selectedProfile + ' ».');
-                showApplyButton(true);
-                if (profilesData) profilesData.active = selectedProfile;
-                renderProfileSelect();
-            } catch (e) {
-                setBasculeStatus('');
-                if (e.message !== '401') errorToast('❌ Prévisualisation échouée : ' + e.message);
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        // Apply is gated behind a preview shown for the CURRENTLY selected
-        // profile (basculePreviewedFor === selectedProfile). Before asking
-        // for confirmation we re-fetch the diff for that exact profile so N
-        // reflects current reality (not a possibly-stale count from whenever
-        // "Prévisualiser" was clicked) — the apply itself now re-asserts this
-        // profile as active under a server-side lock (see POST /apply), so
-        // the actuated plan is guaranteed to match what's confirmed here.
-        async function applyBascule() {
-            if (!selectedProfile || basculePreviewedFor !== selectedProfile) {
-                errorToast('⚠️ Prévisualisez le plan avant d’appliquer');
-                return;
-            }
-            const btn = document.getElementById('applyBtn');
-            btn.disabled = true;
-            setBasculeStatus('⏳ Vérification du plan…');
+        // Appliquer : le plan est relu pour ce profil précis avant la confirmation, pour que N reflète la réalité du moment.
+        async function demanderApplication() {
+            if (!SEL || PREVU !== SEL) { ko('Prévisualisez le plan avant d’appliquer'); return; }
+            const b = $('bAppliquer'); b.disabled = true; $('bRollback').disabled = true; statut('⏳ Vérification du plan…');
             let n;
             try {
-                const fresh = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
-                basculeLastChanges = fresh.changes || [];
-                document.getElementById('basculeDiffList').innerHTML = renderDiffRows(basculeLastChanges);
-                n = basculeLastChanges.length;
+                if (DEMO) PREVU_CHG = demoDiff(SEL); else PREVU_CHG = (await lire('/diff?profile=' + encodeURIComponent(SEL))).changes || [];
+                lignesDiff($('bApercuL'), PREVU_CHG, '✔ Rien à changer : la réalité correspond déjà à ce profil'); n = PREVU_CHG.length;
             } catch (e) {
-                setBasculeStatus('');
-                btn.disabled = false;
-                if (e.message !== '401') errorToast('❌ Impossible de rafraîchir le plan avant application : ' + e.message);
+                statut(''); b.disabled = false; $('bRollback').disabled = false;
+                if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; rendre(); } else ko('Impossible de rafraîchir le plan avant application : ' + e.message);
                 return;
             }
-            setBasculeStatus('');
-            if (!confirm('Ceci va démarrer/arrêter ' + n + ' module(s) sur la box. Continuer ?')) {
-                btn.disabled = false;
-                return;
-            }
-            setBasculeStatus('⏳ Application en cours sur la box… (peut prendre plusieurs minutes)');
+            statut('');
+            CONFIRM = { genre: 'apply', cle: SEL };
+            ouvrirConf('Ceci va démarrer/arrêter ' + n + ' module(s) sur la box (profil « ' + SEL + ' »). Continuer ?', 'Confirmer l’application', appliquer);
+        }
+        function echecRapport(rep, genre) {
+            if ((rep.failed || []).length) return true;
+            if (genre === 'rollback') return rep.status !== 'applied' && rep.status !== 'planned';
+            return rep.status !== 'applied';
+        }
+        function afficherRapport(libelle, rep) {
+            const r = $('rapport'); r.hidden = false; const echec = (rep.failed || []).length > 0; r.className = 'retour ' + (echec ? 'ko' : 'ok'); r.replaceChildren();
+            const liste = ids => ids && ids.length ? ids.join(', ') : '—';
+            const l = (nom, v) => { r.appendChild(el('div', '', nom + ' : ' + v)); };
+            const t = el('div'); t.appendChild(el('b', '', libelle + ' : ')); t.appendChild(document.createTextNode(tiret(rep.status))); r.appendChild(t);
+            l('modifiés', liste(rep.changed)); l('en échec', liste(rep.failed)); l('annulés (rollback)', liste(rep.rolled_back));
+        }
+        async function actionBascule(genre, libelle, chemin, corps, enCours) {
+            OCCUPE = true; statut('⏳ ' + enCours); $('bAppliquer').disabled = true; $('bRollback').disabled = true;
             try {
-                const report = await api('/apply', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ profile: selectedProfile }),
-                });
-                renderApplyReport('Apply', report);
-                setBasculeStatus('');
-                if (isReportFailure(report, 'apply')) {
-                    errorToast('⚠️ Apply: ' + report.status);
-                } else {
-                    toast('✅ Apply: ' + report.status);
-                }
-                resetBasculePreview();
-                await refresh();
-            } catch (e) {
-                setBasculeStatus('');
-                if (e.message !== '401') errorToast('❌ Apply échoué : ' + e.message);
-            } finally {
-                btn.disabled = false;
-            }
+                const r = await ecrire('POST', chemin, corps);
+                if (!r.ok) { statut(''); ko(libelle + ' échoué : ' + detail(r)); return; }
+                const rep = r.data || {};
+                afficherRapport(libelle, rep); statut('');
+                if (echecRapport(rep, genre)) ko(libelle + ' : ' + tiret(rep.status)); else toast(libelle + ' : ' + tiret(rep.status));
+                remiseAZeroApercu(); OCCUPE = false; await charger();
+            } finally { OCCUPE = false; $('bAppliquer').disabled = false; $('bRollback').disabled = false; annoncer(); }
+        }
+        function appliquer() { return actionBascule('apply', 'Apply', '/apply', { profile: SEL }, 'Application en cours sur la box… (peut prendre plusieurs minutes)'); }
+        function demanderRollback() {
+            if (DEMO) { toast('Démonstration : action inerte.'); return; }
+            CONFIRM = { genre: 'rollback' };
+            ouvrirConf('Ceci va restaurer le dernier instantané (rollback) sur la box. Continuer ?', 'Confirmer le rollback', () => actionBascule('rollback', 'Rollback', '/rollback', undefined, 'Rollback en cours sur la box…'));
         }
 
-        async function rollbackBascule() {
-            if (!confirm('Ceci va restaurer le dernier snapshot (rollback) sur la box. Continuer ?')) return;
-            const btn = document.getElementById('rollbackBtn');
-            btn.disabled = true;
-            setBasculeStatus('⏳ Rollback en cours sur la box…');
+        // ---------- Actions par module (mêmes appels que l'ancienne page) ----------
+        async function basculerMembre(id, on) {
+            if (!SEL) return;
+            const r = await ecrire('POST', '/profiles/' + encodeURIComponent(SEL) + '/members', { id: id, on: on });
+            if (r.ok) { toast((on ? 'Ajouté : ' : 'Retiré : ') + id + (on ? ' à ' : ' de ') + SEL); await charger(); }
+            else { ko(detail(r)); rendreModules(); }
+        }
+        async function poserEpingle(id, pin) {
+            const r = await ecrire('POST', '/pins', { id: id, pin: pin });
+            if (r.ok) { toast(pin === null ? id + ' suit de nouveau le profil' : id + ' épinglé ' + pin); await charger(); } else ko(detail(r));
+        }
+        async function reveilOuSommeil(id, action) {
+            OCCUPE = true;
             try {
-                const report = await api('/rollback', { method: 'POST' });
-                renderApplyReport('Rollback', report);
-                setBasculeStatus('');
-                if (isReportFailure(report, 'rollback')) {
-                    errorToast('⚠️ Rollback: ' + report.status);
-                } else {
-                    toast('✅ Rollback: ' + report.status);
-                }
-                resetBasculePreview();
-                await refresh();
-            } catch (e) {
-                setBasculeStatus('');
-                if (e.message !== '401') errorToast('❌ Rollback échoué : ' + e.message);
-            } finally {
-                btn.disabled = false;
-            }
+                const r = await ecrire('POST', '/' + action, { module: id });
+                if (!r.ok) { ko(id + ' ' + action + ' échoué : ' + detail(r)); return; }
+                const rep = r.data || {};
+                if (rep.status === 'refused') ko(id + ' : refusé (' + (rep.reason || '?') + ')');
+                else if (rep.failed && rep.failed.length) ko(id + ' : ' + tiret(rep.status));
+                else toast((action === 'wake' ? '⚡ ' : '💤 ') + id + ' : ' + tiret(rep.status));
+                OCCUPE = false; await charger();
+            } finally { OCCUPE = false; rendre(); }
+        }
+        async function definirEveil(id, lifecycle, wakeClass) {
+            const r = await ecrire('POST', '/lifecycle', { module: id, lifecycle: lifecycle, wake_class: wakeClass });
+            if (!r.ok) { ko(id + ' : ' + detail(r)); rendreModules(); return; }
+            const rep = r.data || {};
+            if (rep.status === 'set') toast(id + ' : ' + rep.lifecycle + '/' + rep.wake_class);
+            else if (rep.status === 'refused') ko(id + ' : refusé (' + (rep.reason || '?') + ')');
+            await charger();
         }
 
-        async function toggleMember(id, on) {
-            if (!selectedProfile) return;
-            try {
-                await api('/profiles/' + encodeURIComponent(selectedProfile) + '/members', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, on: on }),
-                });
-                toast((on ? '✅ Added ' : '🗑️ Removed ') + id + (on ? ' to ' : ' from ') + selectedProfile);
-                await refresh();
-            } catch (e) {
-                errorToast('❌ ' + e.message);
-                renderModules(); // revert the optimistic checkbox state
-            }
+        // ---------- Écouteurs ----------
+        $('profil').addEventListener('change', async e => { SEL = e.target.value || null; remiseAZeroApercu(); rendreProfil(); rendreModules(); if (DEMO) { DIFF = { profile: SEL, changes: demoDiff(SEL) }; } else if (SEL) { try { DIFF = await lire('/diff?profile=' + encodeURIComponent(SEL)); } catch (x) { DIFF = { erreur: x.message }; } } rendreDiff(); annoncer(); });
+        $('bApercu').addEventListener('click', previsualiser);
+        $('bAppliquer').addEventListener('click', demanderApplication);
+        $('bRollback').addEventListener('click', demanderRollback);
+        $('recherche').addEventListener('input', e => { RECH = e.target.value; rendreModules(); });
+        $('filtreEtat').addEventListener('change', e => { FILTRE = e.target.value; rendreModules(); });
+        $('rafraichir').addEventListener('click', charger);
+        document.querySelectorAll('[data-agg]').forEach(b => b.addEventListener('click', () => { AGG = b.dataset.agg; rendreAgg(); annoncer(); }));
+
+        // ---------- Hauteur annoncée à l'hôte (iframes) ----------
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'profiles' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function setPin(id, pin) {
-            try {
-                await api('/pins', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, pin: pin }),
-                });
-                toast(pin === null ? ('⟳ ' + id + ' now follows the profile') : ('📌 ' + id + ' pinned ' + pin));
-                await refresh();
-            } catch (e) {
-                errorToast('❌ ' + e.message);
-            }
-        }
-
-        // Manual sleep/wake (Task 10, #896) — same webui->ctl posture as
-        // Bascule's apply/rollback: POST, await the ctl's JSON report, then
-        // refresh() so the row's sleep_state/pill reflects reality rather
-        // than an optimistic guess. Sleep asks for confirmation (it stops a
-        // running module); wake does not (idempotent no-op if already up).
-        async function wakeOrSleep(id, action) {
-            try {
-                const report = await api('/' + action, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ module: id }),
-                });
-                const st = report && report.status;
-                if (st === 'refused') {
-                    errorToast('⚠️ ' + id + ': refused (' + (report.reason || '?') + ')');
-                } else if ((report && report.failed && report.failed.length)) {
-                    errorToast('⚠️ ' + id + ': ' + st);
-                } else {
-                    toast((action === 'wake' ? '⚡ ' : '💤 ') + id + ': ' + st);
-                }
-                await refresh();
-            } catch (e) {
-                if (e.message !== '401') errorToast('❌ ' + id + ' ' + action + ' échoué : ' + e.message);
-            }
-        }
-
-        document.getElementById('modList').addEventListener('click', e => {
-            const wakeSleep = e.target.closest('[data-act="wake"], [data-act="sleep"]');
-            if (wakeSleep) {
-                const id = wakeSleep.getAttribute('data-id');
-                const action = wakeSleep.getAttribute('data-act');
-                if (action === 'sleep' && !confirm('Endormir ' + id + ' maintenant ?')) return;
-                wakeSleep.disabled = true;
-                wakeOrSleep(id, action).finally(() => { wakeSleep.disabled = false; });
-                return;
-            }
-            const t = e.target.closest('[data-act="pin"]');
-            if (!t || t.disabled) return;
-            const id = t.getAttribute('data-id');
-            const pinVal = t.getAttribute('data-pin');
-            setPin(id, pinVal === 'clear' ? null : pinVal);
-        });
-        // Awake-level change (#896 follow-up) — same webui->ctl posture: POST
-        // /lifecycle, await the ctl's JSON report, refresh() so the pill and the
-        // Sleep/Wake button reflect the new lifecycle. Reads BOTH selects of the
-        // row so lifecycle + wake_class are always sent together (one fixed argv,
-        // one sudoers grant).
-        async function setLifecycle(id, lifecycle, wake_class) {
-            try {
-                const report = await api('/lifecycle', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ module: id, lifecycle: lifecycle, wake_class: wake_class }),
-                });
-                if (report && report.status === 'set') {
-                    toast('🎚️ ' + id + ': ' + report.lifecycle + '/' + report.wake_class);
-                } else if (report && report.status === 'refused') {
-                    errorToast('⚠️ ' + id + ': refused (' + (report.reason || '?') + ')');
-                }
-                await refresh();
-            } catch (e) {
-                if (e.message !== '401') errorToast('❌ ' + id + ' lifecycle échoué : ' + e.message);
-            }
-        }
-
-        document.getElementById('modList').addEventListener('change', e => {
-            const lc = e.target.closest('[data-act="lifecycle"]');
-            if (lc) {
-                const row = lc.closest('.mod-row');
-                const lifecycle = row.querySelector('[data-kind="lifecycle"]').value;
-                const wake_class = row.querySelector('[data-kind="wake_class"]').value;
-                setLifecycle(lc.getAttribute('data-id'), lifecycle, wake_class);
-                return;
-            }
-            const t = e.target.closest('[data-act="member"]');
-            if (!t) return;
-            toggleMember(t.getAttribute('data-id'), t.checked);
-        });
-
-        document.querySelectorAll('.tabs .tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                const scope = tab.closest('.card');
-                scope.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-                scope.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
-            });
-        });
-
-        document.getElementById('profileSelect').addEventListener('change', e => {
-            selectedProfile = e.target.value || null;
-            resetBasculePreview(); // a stale preview must not gate Apply for a different profile
-            renderProfileSelect();
-            renderModules();
-            loadDiff();
-        });
-        document.getElementById('previewBtn').addEventListener('click', previewBascule);
-        document.getElementById('applyBtn').addEventListener('click', applyBascule);
-        document.getElementById('rollbackBtn').addEventListener('click', rollbackBascule);
-        document.getElementById('searchInput').addEventListener('input', e => {
-            searchTerm = e.target.value;
-            renderModules();
-        });
-        document.getElementById('stateFilter').addEventListener('change', e => {
-            stateFilterVal = e.target.value;
-            renderModules();
-        });
-        document.getElementById('refreshBtn').addEventListener('click', refresh);
-
-        refresh();
-        setInterval(refresh, 45000);
+        charger();
+        // Pas d'actualisation onglet masqué, action en cours, confirmation ouverte ni saisie/menu actif.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || OCCUPE || CONFIRM || (a && (a.tagName === 'SELECT' || a.tagName === 'INPUT'))) return;
+            charger();
+        }, 45000);
     </script>
 </body>
 </html>
