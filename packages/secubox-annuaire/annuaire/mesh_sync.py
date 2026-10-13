@@ -46,6 +46,56 @@ def read_mesh_peers(path: str = DEFAULT_PEERS_PATH) -> List[Dict[str, str]]:
     return peers
 
 
+DEFAULT_MESH_NETWORK = "10.10.0.0/24"
+
+
+def reseau_maillage(path: str = DEFAULT_PEERS_PATH) -> str:
+    """Réseau du maillage (champ « network » de wg_mesh.json), 10.10.0.0/24 à défaut. Jamais d'exception."""
+    try:
+        return str(json.loads(Path(path).read_text()).get("network") or DEFAULT_MESH_NETWORK)
+    except (OSError, ValueError, AttributeError):
+        return DEFAULT_MESH_NETWORK
+
+
+def noeuds_du_repertoire(journal: Any) -> List[Dict[str, Any]]:
+    """Fiches de nœud du répertoire (dernière fiche auto-signée par did) ; [] si le journal ne se lit pas."""
+    try:
+        from .verbs import _get_nodes  # noqa: PLC0415
+        return _get_nodes(journal)
+    except Exception:  # noqa: BLE001 — la découverte est un plus, jamais une cause d'échec
+        return []
+
+
+def completer_pairs(
+    wg_peers: List[Dict[str, str]],
+    noeuds: List[Dict[str, Any]],
+    soi: str = "",
+    reseau: str = DEFAULT_MESH_NETWORK,
+) -> List[Dict[str, str]]:
+    """Pairs de synchro = pairs WireGuard + nœuds du répertoire (#2569), sans doublon et sans soi-même.
+
+    Sur une étoile, un satellite n'a que le maître comme pair WireGuard ; les autres satellites sont joignables par le maître (qui transfère le
+    réseau du maillage), et leur adresse est signée dans leur fiche de nœud. Une fiche est auto-déclarée : seule une adresse INTERNE au réseau
+    du maillage est suivie, une autre (ou invalide) est ignorée."""
+    import ipaddress  # noqa: PLC0415
+    try:
+        net = ipaddress.ip_network(reseau, strict=False)
+    except ValueError:
+        net = ipaddress.ip_network(DEFAULT_MESH_NETWORK)
+    pairs = list(wg_peers)
+    connus = {p.get("mesh_ip") for p in pairs} | ({soi} if soi else set())
+    for n in noeuds:
+        ip = str(n.get("mesh_ip") or "")
+        try:
+            ok = bool(ip) and ipaddress.ip_address(ip) in net
+        except ValueError:
+            ok = False
+        if ok and ip not in connus:
+            pairs.append({"mesh_ip": ip, "name": str(n.get("boxname") or "")})
+            connus.add(ip)
+    return pairs
+
+
 def read_self_meta(
     wg_path: str = DEFAULT_PEERS_PATH,
     node_id_path: str = "/var/lib/secubox/p2p/node.id",
