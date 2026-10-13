@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — Panneaux Aurora, vague 1 : 10 paquets, 12 pages (closes #2556)
+
+Refonte Aurora de `/hardening/`, `/dns/`, `/backup/`, `/admin/`, `/system/`, `/proxypac/`, `/qos/`, `/certs/`, `/ipblock/`, `/auth/`, `/haproxy/`, `/vhost/` (PR #2557 à #2568), une page par agent en parallèle, relue (aucun script externe, aucun dialogue natif, aucun innerHTML, aucune police distante) et déployée sur gk2, gk1 et gk3. Versions : hardening 1.6.0, dns 1.4.0, backup 2.3.0, tor 1.5.0 (proxypac), qos 1.5.0, certs 1.3.0, auth 1.5.0, ipblock 1.4.0, system 1.9.0 (admin 1.8.0 puis system 1.9.0), haproxy 1.11.1 (haproxy 1.11.0 puis vhost 1.11.1).
+
+Bogues d'ancienne page corrigés, entre autres : routes inexistantes (certificats haproxy, `/providers` auth, `/ping`), formes de réponse mal lues (qos : tableaux toujours vides ; auth : `[object Object]`), champs obligatoires manquants (vhost `name`, backend `servers` : 422 à chaque envoi), succès simulés (certs), données d'API dans `innerHTML`/`onclick`. Écritures inchangées, sauf `POST /revoke_session` ajouté sur `/auth/` (route existante, administrateur).
+
+À noter, non corrigé (API) : haproxy `POST/PUT/DELETE` vhost et backend et `/waf/toggle` ne journalisent que ; `POST /generate` écrit `haproxy.cfg` sans double-buffer ; certs joker (`*.` ≠ `_wildcard_.`), contrôle « HTTPS Port » toujours OK ; qos modifier une politique la réactive. Restent environ 95 pages hors Aurora (vague 2).
+
 ## 2026-10-13 — core 1.7.6 : jwt_secret relu une fois si vide (ref #2554)
 
 « WAF KO sur gk1, OK sur gk3 » : `/waf/alerts` et `/waf/bans` en 500. Le service waf de gk1 datait d'avant l'arrivée de `api.jwt_secret` dans secubox.conf (07:25) ; la config étant en cache par processus, chaque requête avec jeton levait « jwt_secret is not configured ». Même défaut sur system, users et nac. Corrigé côté box (relance de ces 4 unités, une par une) et à la source (`_secret()` relit le fichier une fois avant de refuser). Autres unités de gk1 antérieures à 07:25 : non touchées, pas d'erreur relevée.
