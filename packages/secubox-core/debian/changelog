@@ -1,3 +1,9 @@
+secubox-core (1.7.6-1~bookworm1) bookworm; urgency=medium
+
+  * jwt_secret ajoute apres le demarrage d'un service (#2554). La config est en cache par processus : un service lance avant que `api.jwt_secret` n'entre dans secubox.conf levait « not configured » a chaque requete avec jeton, jusqu'au redemarrage (gk1 : waf, system, users, nac en 500, 485 erreurs en 40 min). `_secret()` relit le fichier une fois quand le secret est vide avant de refuser. Aucun secret par defaut, aucun changement si le secret est present. 1 test.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 08:55:58 +0200
+
 secubox-core (1.7.5-1~bookworm1) bookworm; urgency=medium
 
   * SSH (#2528) : sur trixie OpenSSH refuse root par mot de passe par defaut (PermitRootLogin prohibit-password) ; une box neuve (RPi400) n'etait joignable que par cle ou a la console, meme avec le bon mot de passe, et rien ne le corrigeait par `apt upgrade`. Le paquet livre le drop-in /etc/ssh/sshd_config.d/20-secubox-root-lan.conf (fichier de configuration) : root + mot de passe UNIQUEMENT depuis les reseaux prives (Match Address 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16) ; hors reseau local le defaut Debian (cle seulement) reste. Verifie avec sshd -T : 192.168.1.9 => yes, 203.0.113.5 => without-password. Le postinst ne recharge ssh qu'apres `sshd -t`. Pour durcir : supprimer le fichier.

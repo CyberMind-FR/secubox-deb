@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — core 1.7.6 : jwt_secret relu une fois si vide (ref #2554)
+
+« WAF KO sur gk1, OK sur gk3 » : `/waf/alerts` et `/waf/bans` en 500. Le service waf de gk1 datait d'avant l'arrivée de `api.jwt_secret` dans secubox.conf (07:25) ; la config étant en cache par processus, chaque requête avec jeton levait « jwt_secret is not configured ». Même défaut sur system, users et nac. Corrigé côté box (relance de ces 4 unités, une par une) et à la source (`_secret()` relit le fichier une fois avant de refuser). Autres unités de gk1 antérieures à 07:25 : non touchées, pas d'erreur relevée.
+
 ## 2026-10-13 — toolbox 2.13.2 : /rlevel/ au profil Aurora (ref #2552)
 
 Page autonome (tuiles, Mon niveau, vue admin, légende des modes), appels inchangés, garde XSS conservée, 44 tests rlevel verts, captures 1400/420 lues.

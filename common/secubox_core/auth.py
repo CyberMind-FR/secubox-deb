@@ -42,7 +42,7 @@ from pydantic import BaseModel
 from . import sessions as _sessions
 from . import appareils, user_store
 from . import origine as _origine
-from .config import get_config
+from .config import get_config, reload_config
 from .logger import get_logger
 
 log = get_logger("auth")
@@ -136,6 +136,15 @@ def _secret() -> str:
         log.warning("config unreadable while reading jwt_secret: %s", exc)
         cfg = {}
     s = cfg.get("jwt_secret", "") or os.environ.get("SECUBOX_JWT_SECRET", "")
+    if not s:
+        # La config est en cache par processus : un service lance avant que le
+        # secret n'entre dans secubox.conf le croirait absent jusqu'au
+        # redemarrage (#2554). On relit le fichier une fois avant de refuser.
+        try:
+            reload_config()
+            s = get_config("api").get("jwt_secret", "")
+        except OSError as exc:
+            log.warning("config unreadable while re-reading jwt_secret: %s", exc)
     if not s:
         raise RuntimeError(
             "jwt_secret is not configured: set api.jwt_secret in "
