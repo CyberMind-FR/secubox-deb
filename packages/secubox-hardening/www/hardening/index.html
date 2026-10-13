@@ -4,379 +4,303 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Durcissement au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hardening - SecuBox</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Durcissement</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .carte{width:100%;height:auto;display:block;max-height:460px}
+        .carte text{fill:var(--texte);font-size:12px;paint-order:stroke;stroke:#0a162e;stroke-width:4px;stroke-linejoin:round} .carte .sub{fill:var(--faible);font-size:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    
+        .grille.checks{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+        @container a (min-width:900px){.grille.checks{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}}
+        .chk{display:flex;gap:10px;align-items:center;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.5);min-width:0}
+        .chk .ic{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+        .chk.ko .ic{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .chk b{display:block;font-size:.82rem;overflow-wrap:anywhere} .chk span{color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        pre.sortie{margin:8px 0 0;padding:8px 10px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);font-size:.72rem;max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--doux)}
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-
-        .main {
-            margin-left: 220px;
-            padding: 2rem;
-            flex: 1;
-        }
-
-        .header {
-            margin-bottom: 2rem;
-        }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .header .subtitle {
-            color: var(--p31-dim);
-            font-size: 0.85rem;
-            letter-spacing: 0.05em;
-        }
-
-        .score-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 4px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 2rem;
-            box-shadow: inset 0 0 30px rgba(0,0,0,0.3);
-        }
-
-        .score-value {
-            font-size: 4rem;
-            font-weight: bold;
-            text-shadow: 0 0 20px currentColor;
-        }
-
-        .score-value.good { color: var(--p31-peak); }
-        .score-value.medium { color: var(--p31-decay); }
-        .score-value.bad { color: #ff4466; }
-
-        .score-label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            margin-top: 0.5rem;
-        }
-
-        .section-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-
-        .checks-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .check-item {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 4px;
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            transition: all 0.2s;
-        }
-
-        .check-item:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 10px rgba(51,255,102,0.05);
-        }
-
-        .check-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 1rem;
-        }
-
-        .check-icon.pass {
-            background: rgba(51,255,102,0.2);
-            color: var(--p31-peak);
-            border: 1px solid var(--p31-peak);
-            box-shadow: 0 0 10px rgba(51,255,102,0.3);
-        }
-
-        .check-icon.fail {
-            background: rgba(255,68,102,0.2);
-            color: #ff4466;
-            border: 1px solid #ff4466;
-            box-shadow: 0 0 10px rgba(255,68,102,0.3);
-        }
-
-        .check-details {
-            flex: 1;
-        }
-
-        .check-details h4 {
-            margin: 0 0 0.25rem 0;
-            color: var(--p31-mid);
-            font-size: 0.9rem;
-        }
-
-        .check-details .status {
-            font-size: 0.75rem;
-            color: var(--p31-dim);
-            letter-spacing: 0.05em;
-        }
-
-        .action-section {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            padding: 0.75rem 1.5rem;
-            border: 1px solid var(--tube-soft);
-            border-radius: 4px;
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            cursor: pointer;
-            font-size: 0.8rem;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            transition: all 0.2s;
-        }
-
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-
-        .btn-primary {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-
-        .btn-primary:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 15px rgba(51,255,102,0.2);
-        }
-
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            color: var(--p31-dim);
-        }
-
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s steps(4, end) infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: ''; }
-            40% { content: '.'; }
-            60% { content: '..'; }
-            80%, 100% { content: '...'; }
-        }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; padding: 1rem; }
-            .checks-grid { grid-template-columns: 1fr; }
-        }
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-
-    <main class="main">
-        <header class="header">
-            <h1>System Hardening</h1>
-            <p class="subtitle">Kernel and network security configuration</p>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.3 2.3 4.2-4.6"/></svg>
+                <div><h1>Durcissement</h1><small>Noyau, réseau et garde des ports de backend</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="score-card">
-            <div class="score-value" id="score">--</div>
-            <div class="score-label">Security Score</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cScore" title="Part des contrôles sysctl du noyau conformes (aléa d’adressage, restriction des pointeurs et de dmesg, SYN cookies, filtre de chemin inverse, redirections ICMP, routage source)."><span class="l">Score de durcissement</span><span class="v" id="tScore">—</span><span class="s" id="sScore">contrôles conformes</span></div>
+            <div class="tuile cy" title="Nombre de contrôles réussis sur le nombre de contrôles réalisés."><span class="l">Contrôles réussis</span><span class="v" id="tPasses">—</span><span class="s">sur le total</span></div>
+            <div class="tuile" id="cSysctl" title="Le fichier de paramètres noyau du paquet est-il en place dans /etc/sysctl.d ?"><span class="l">Paramètres noyau</span><span class="v" id="tSysctl">—</span><span class="s">sysctl</span></div>
+            <div class="tuile" id="cModprobe" title="La liste noire de modules noyau est-elle en place ? Elle ne joue qu’au prochain démarrage."><span class="l">Modules bloqués</span><span class="v" id="tModprobe">—</span><span class="s">liste noire modprobe</span></div>
+            <div class="tuile" id="cGarde" title="Ports d’écoute joignables depuis le LAN, hors frontaux 22, 80, 443 et 9443, que la règle de garde ne coupe pas."><span class="l">Ports non gardés</span><span class="v" id="tGarde">—</span><span class="s" id="sGarde">garde des ports de backend</span></div>
+        </section>
+
+        <section class="pan"><h3>Contrôles du noyau <i id="nChk"></i></h3>
+            <div class="grille checks" id="checks"></div>
+            <p class="note" id="vChk">Version de l’outil : —</p></section>
+
+        <div class="grille">
+            <section class="pan"><h3>Garde des ports de backend <i id="iGarde"></i></h3>
+                <dl class="kv"><dt>Règle livrée</dt><dd id="kLivree">—</dd><dt>Interface</dt><dd id="kIface">—</dd><dt>Ports coupés</dt><dd class="mono" id="kGardes">—</dd><dt>Coupés et en écoute</dt><dd class="mono" id="kEcoute">—</dd><dt>Non gardés</dt><dd class="mono" id="kNon">—</dd></dl>
+                <p class="note">Lecture de la règle livrée et des écoutes TCP. Elle ne prouve pas que la table soit chargée dans le noyau (réservé à root : hardeningctl wan-guard).</p></section>
+            <section class="pan"><h3>Composants <i id="nComp"></i></h3>
+                <div class="tab"><table><thead><tr><th>Composant</th><th>Rôle</th><th>État</th><th>Fichier</th></tr></thead><tbody id="bComp"></tbody></table></div></section>
         </div>
 
-        <h2 class="section-title">Security Checks</h2>
-        <div class="checks-grid" id="checks">
-            <div class="loading">Loading security checks</div>
-        </div>
-
-        <div class="check-list" id="wan-guard"></div>
-
-        <div class="action-section">
-            <button class="btn btn-primary" onclick="applyHardening()">Apply Hardening</button>
-            <button class="btn" onclick="runBenchmark()">Run Benchmark</button>
-            <button class="btn" onclick="refreshStatus()">Refresh Status</button>
-        </div>
-    </main>
+        <section class="pan"><h3>Actions</h3>
+            <div class="actions" id="actions"></div>
+            <div id="rAct" class="retour" hidden style="margin-top:8px"></div>
+            <pre class="sortie" id="sortie" hidden></pre>
+            <p class="note">« Appliquer » recharge les paramètres sysctl du paquet sur la box en marche. « Lancer le test » relit six valeurs du noyau et rend un score ; il ne modifie rien.</p></section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script src="/shared/sidebar.js"></script>
-    <script src="/shared/crt-engine.js"></script>
     <script>
-        const API_BASE = '/api/v1/hardening';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/hardening';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function fetchAPI(endpoint, options = {}) {
-            const token = localStorage.getItem('sbx_token');
-            const headers = {
-                'Content-Type': 'application/json',
-                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                ...options.headers
-            };
-            const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-            return response.json();
+        let ST = null, COMP = null, GARDE = null, SESSION_OK = true, CONFIRM = false, OCCUPE = false;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, même absence de corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(ok, msg) { const r = $('rAct'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        // Les sorties de hardeningctl portent des codes ANSI de couleur : on les retire.
+        const sansAnsi = s => String(s || '').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').trim();
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+
+        function demoData() {
+            ST = { version: '2.0.0', sysctl_applied: true, modprobe_applied: true, passed: 6, total: 7, score: 85, checks: [
+                { id: 'aslr', name: 'ASLR', status: 'pass' }, { id: 'kptr', name: 'Kernel Pointer Restrict', status: 'pass' },
+                { id: 'dmesg', name: 'Dmesg Restrict', status: 'pass' }, { id: 'syncookies', name: 'SYN Cookies', status: 'pass' },
+                { id: 'rp_filter', name: 'Reverse Path Filter', status: 'fail', current: '2' }, { id: 'icmp_redirects', name: 'ICMP Redirects Disabled', status: 'pass' },
+                { id: 'source_routing', name: 'Source Routing Disabled', status: 'pass' }] };
+            COMP = { components: [{ name: 'sysctl', description: 'Kernel parameter hardening', installed: true, path: '/etc/sysctl.d/99-secubox-hardening.conf' },
+                { name: 'modprobe', description: 'Module blacklist', installed: true, path: '/etc/modprobe.d/secubox-blacklist.conf' }] };
+            GARDE = { livree: true, interface: 'eth2', ports_gardes: [8080, 8443, 9000], ports_gardes_en_ecoute: [8080, 9000], ports_non_gardes: [{ port: 8888, adresse: '192.0.2.10' }] };
         }
 
-        async function loadStatus() {
-            try {
-                const data = await fetchAPI('/status');
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/components'), lire('/wan-guard')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            ST = val(0); COMP = val(1); GARDE = val(2);
+            // L'API rend 200 {success:false, error} quand hardeningctl échoue : ce n'est pas un relevé.
+            if (ST && !Array.isArray(ST.checks)) { $('erreur').textContent = 'hardeningctl n’a pas rendu d’état' + (ST.error ? ' : ' + ST.error : '') + '.'; $('erreur').hidden = false; ST = null; }
+            else $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le durcissement (service arrêté ou injoignable).';
+            if (COMP && !Array.isArray(COMP.components)) COMP = null;
+            rendre();
+        }
 
-                // Update score
-                const scoreEl = document.getElementById('score');
-                const score = data.score || 0;
-                scoreEl.textContent = score + '%';
-                scoreEl.className = 'score-value ' + (score >= 80 ? 'good' : score >= 50 ? 'medium' : 'bad');
+        function classeTuile(id, cls) { $(id).className = 'tuile ' + cls; }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!ST) { etat.className = 'actif hors'; etat.textContent = 'ÉTAT INCONNU'; }
+            else if (ST.score >= 80) { etat.className = 'actif'; etat.textContent = 'DURCI'; }
+            else { etat.className = 'actif att'; etat.textContent = ST.score >= 50 ? 'PARTIEL' : 'FAIBLE'; }
+            const s = ST;
+            $('tScore').textContent = s && s.score != null ? s.score + ' %' : '—';
+            classeTuile('cScore', !s ? 'cy' : s.score >= 80 ? 'ok' : s.score >= 50 ? 'att' : 'hors');
+            $('tPasses').textContent = s && s.passed != null ? s.passed + ' / ' + s.total : '—';
+            const oui = (id, c, v, ok, non) => { $(id).textContent = v == null ? '—' : (v ? ok : non); classeTuile(c, v == null ? '' : v ? 'ok' : 'att'); };
+            oui('tSysctl', 'cSysctl', s ? s.sysctl_applied : null, 'Appliqué', 'Absent');
+            oui('tModprobe', 'cModprobe', s ? s.modprobe_applied : null, 'En place', 'Absente');
+            const g = GARDE;
+            const nonG = g && Array.isArray(g.ports_non_gardes) ? g.ports_non_gardes : null;
+            $('tGarde').textContent = nonG ? nonG.length : '—';
+            classeTuile('cGarde', !nonG ? '' : nonG.length ? 'att' : 'ok');
+            $('sGarde').textContent = g && !g.livree ? 'règle non livrée' : 'garde des ports de backend';
+            rendreControles(); rendreGarde(); rendreComposants(); rendreActions();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-                // Update checks
-                const checksEl = document.getElementById('checks');
-                if (data.checks && data.checks.length > 0) {
-                    checksEl.innerHTML = data.checks.map(check => `
-                        <div class="check-item">
-                            <div class="check-icon ${check.status}">${check.status === 'pass' ? '✓' : '✗'}</div>
-                            <div class="check-details">
-                                <h4>${check.name}</h4>
-                                <div class="status">
-                                    ${check.status === 'pass' ? 'Configured correctly' :
-                                      'Current: ' + (check.current || 'Not set')}
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
-                } else {
-                    checksEl.innerHTML = '<div class="check-item"><div class="check-details"><h4>No checks available</h4><div class="status">Run benchmark to scan system</div></div></div>';
-                }
-            } catch (e) {
-                console.error('Failed to load status:', e);
-                document.getElementById('score').textContent = 'N/A';
-                document.getElementById('score').className = 'score-value';
-                document.getElementById('checks').innerHTML = '<div class="check-item"><div class="check-details"><h4>Unable to load status</h4><div class="status">Check API connection</div></div></div>';
+        function rendreControles() {
+            const z = $('checks'); z.replaceChildren();
+            const cs = ST ? ST.checks : [];
+            $('nChk').textContent = cs.length ? cs.length + ' contrôle' + (cs.length > 1 ? 's' : '') : '';
+            $('vChk').textContent = 'Version de l’outil : ' + tiret(ST && ST.version);
+            if (!cs.length) { z.appendChild(el('div', 'vide', SESSION_OK ? 'Aucun contrôle disponible' : '—')); return; }
+            cs.forEach(c => {
+                const ok = c.status === 'pass';
+                const d = el('div', 'chk' + (ok ? '' : ' ko')); d.appendChild(el('div', 'ic', ok ? '✓' : '✗'));
+                const t = el('div'); t.style.minWidth = 0; t.appendChild(el('b', '', tiret(c.name)));
+                t.appendChild(el('span', '', ok ? 'Conforme' : 'Valeur actuelle : ' + tiret(c.current)));
+                d.appendChild(t); z.appendChild(d);
+            });
+        }
+
+        function rendreGarde() {
+            const g = GARDE;
+            const liste = a => Array.isArray(a) && a.length ? a.join(', ') : (Array.isArray(a) ? 'aucun' : '—');
+            $('kLivree').textContent = g ? (g.livree ? 'Oui' : 'Non') : '—';
+            $('kIface').textContent = g ? tiret(g.interface) : '—';
+            $('kGardes').textContent = g ? liste(g.ports_gardes) : '—';
+            $('kEcoute').textContent = g ? liste(g.ports_gardes_en_ecoute) : '—';
+            $('kNon').textContent = g && Array.isArray(g.ports_non_gardes) ? (g.ports_non_gardes.length ? g.ports_non_gardes.map(x => x.port + ' (' + x.adresse + ')').join(', ') : 'aucun') : '—';
+            $('iGarde').textContent = g && g.livree ? 'règle en place' : '';
+        }
+
+        function rendreComposants() {
+            const tb = $('bComp'); tb.replaceChildren();
+            const cs = COMP ? COMP.components : [];
+            $('nComp').textContent = cs.length ? String(cs.length) : '';
+            if (!cs.length) { const tr = el('tr'); const td = el('td', 'vide', SESSION_OK ? 'Aucun composant' : '—'); td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); return; }
+            cs.forEach(c => {
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(c.name))); tr.appendChild(el('td', '', tiret(c.description)));
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (c.installed ? 'ok' : 'att'), c.installed ? 'INSTALLÉ' : 'ABSENT')); tr.appendChild(e);
+                tr.appendChild(el('td', 'mono', tiret(c.path))); tb.appendChild(tr);
+            });
+        }
+
+        function btn(txt, cls, fn) { const b = el('button', 'btn ' + (cls || ''), txt); b.type = 'button'; b.disabled = OCCUPE; b.addEventListener('click', fn); return b; }
+        function rendreActions() {
+            const z = $('actions'); z.replaceChildren();
+            if (CONFIRM) {
+                z.appendChild(el('span', 'note', 'Appliquer les paramètres de durcissement sur cette box ?'));
+                z.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = false; appliquer(); }));
+                z.appendChild(btn('Annuler', '', () => { CONFIRM = false; rendreActions(); annoncer(); }));
+            } else {
+                z.appendChild(btn('Appliquer le durcissement', 'prim', () => { CONFIRM = true; rendreActions(); annoncer(); }));
+                z.appendChild(btn('Lancer le test', '', lancerTest));
             }
         }
 
-        function ligne(titre, detail, ok) {
-            const item = document.createElement('div');
-            item.className = 'check-item';
-            const ic = document.createElement('div');
-            ic.className = 'check-icon ' + (ok ? 'pass' : 'fail');
-            ic.textContent = ok ? '✓' : '✗';
-            const d = document.createElement('div');
-            d.className = 'check-details';
-            const h = document.createElement('h4');
-            h.textContent = titre;
-            const st = document.createElement('div');
-            st.className = 'status';
-            st.textContent = detail;
-            d.append(h, st);
-            item.append(ic, d);
-            return item;
+        function montre(res, ok, succes) {
+            const d = res.data || {};
+            // 200 avec success:false = hardeningctl a échoué : ce n'est pas un succès.
+            if (res.ok && d.success !== false) { retour(true, succes); } else retour(false, 'Échec : ' + (d.error ? sansAnsi(d.error) : detail(res)));
+            const sortie = sansAnsi(d.output);
+            $('sortie').hidden = !sortie; $('sortie').textContent = sortie;
         }
-
-        async function loadWanGuard() {
-            const el = document.getElementById('wan-guard');
-            el.replaceChildren();
-            try {
-                const g = await fetchAPI('/wan-guard');
-                el.append(ligne('Garde des ports de backend (' + (g.interface || '—') + ')',
-                    g.livree ? 'Ports coupés : ' + g.ports_gardes.join(', ') : 'Règle non livrée', g.livree));
-                const n = g.ports_non_gardes.length;
-                el.append(ligne('Ports en écoute non gardés',
-                    n ? g.ports_non_gardes.map(x => x.port + ' (' + x.adresse + ')').join(', ')
-                      : 'Aucun hors frontaux 22, 80, 443, 9443', n === 0));
-            } catch (e) {
-                el.append(ligne('Garde des ports de backend', 'Indisponible', false));
-            }
+        async function appliquer() {
+            OCCUPE = true; rendreActions();
+            const r = await ecrire('/apply');
+            OCCUPE = false; montre(r, r.ok, 'Durcissement appliqué.'); charger();
         }
-
-        async function applyHardening() {
-            try {
-                await fetchAPI('/apply', { method: 'POST' });
-                CRT.toast('Hardening applied successfully', 'success');
-                loadStatus();
-            } catch (e) {
-                CRT.toast('Failed to apply: ' + e.message, 'error');
-            }
+        async function lancerTest() {
+            OCCUPE = true; rendreActions();
+            const r = await ecrire('/benchmark');
+            OCCUPE = false; montre(r, r.ok, 'Test terminé.'); charger();
         }
+        $('rafraichir').addEventListener('click', charger);
 
-        async function runBenchmark() {
-            try {
-                CRT.toast('Running benchmark...', 'info');
-                const result = await fetchAPI('/benchmark', { method: 'POST' });
-                CRT.toast('Benchmark completed', 'success');
-                loadStatus();
-            } catch (e) {
-                CRT.toast('Benchmark failed: ' + e.message, 'error');
-            }
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'hardening' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        function refreshStatus() {
-            CRT.toast('Refreshing...', 'info');
-            loadStatus();
-        }
-
-        document.addEventListener('DOMContentLoaded', () => { loadStatus(); loadWanGuard(); });
+        charger();
+        // Pas d'actualisation pendant une confirmation ouverte ou une action en cours, ni onglet masqué.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM || OCCUPE) return; charger(); }, 30000);
     </script>
 </body>
 </html>
