@@ -4,287 +4,248 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Rejoindre le maillage (master-link) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Le jeton d'invitation vient de l'adresse (?token=) et n'est jamais affiché ni stocké.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Join Mesh</title>
+    <title>SecuBox — Rejoindre le maillage</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --bg: #fafaf9; --card: #ffffff; --text: #1c1917; --muted: #78716c;
-            --accent: #059669; --success: #22c55e; --warn: #f59e0b; --danger: #ef4444;
-            --border: #e7e5e4; --header: #0a0a0a;
-            --phosphor: #00ff41; --phosphor-dim: rgba(0, 255, 65, 0.1);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem; }
-
-        .container { max-width: 520px; width: 100%; }
-
-        header { text-align: center; margin-bottom: 2rem; }
-        .logo { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; color: var(--header); }
-        .logo svg { width: 28px; height: 28px; color: var(--accent); }
-        .subtitle { color: var(--muted); font-size: 0.9rem; }
-
-        .card { background: var(--card); padding: 1.5rem; border-radius: 0.75rem; margin-bottom: 1rem; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; color: var(--header); }
-
-        .master-info { display: grid; gap: 0.5rem; }
-        .info-row { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
-        .info-row:last-child { border-bottom: none; }
-        .info-label { color: var(--muted); font-size: 0.8rem; }
-        .info-value { font-family: ui-monospace, monospace; font-size: 0.85rem; }
-        .fingerprint { color: var(--accent); font-weight: 500; letter-spacing: 0.05em; }
-
-        .steps { counter-reset: step; }
-        .step { display: flex; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
-        .step:last-child { border-bottom: none; }
-        .step-num { counter-increment: step; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
-        .step-num::before { content: counter(step); }
-        .step-content { flex: 1; }
-        .step-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem; }
-        .step-desc { color: var(--muted); font-size: 0.8rem; }
-
-        .step.done .step-num { background: var(--success); }
-        .step.active .step-num { background: var(--accent); box-shadow: 0 0 0 3px var(--phosphor-dim); }
-        .step.pending .step-num { background: var(--border); color: var(--muted); }
-
-        button { padding: 0.75rem 1.5rem; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; width: 100%; justify-content: center; }
-        button.primary { background: var(--accent); color: white; }
-        button.primary:hover { background: #047857; }
-        button.success { background: var(--success); color: white; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .status-badge { padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 500; color: white; }
-        .status-ok { background: var(--success); }
-        .status-pending { background: var(--warn); color: #000; }
-        .status-error { background: var(--danger); }
-
-        .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .error { color: var(--danger); font-size: 0.85rem; padding: 0.75rem; background: rgba(239, 68, 68, 0.1); border-radius: 0.375rem; margin-top: 0.5rem; border: 1px solid rgba(239, 68, 68, 0.2); }
-        .success-msg { color: var(--success); font-size: 0.85rem; padding: 0.75rem; background: rgba(34, 197, 94, 0.1); border-radius: 0.375rem; margin-top: 0.5rem; border: 1px solid rgba(34, 197, 94, 0.2); }
-
-        .hidden { display: none; }
-
-        .cmd-box { background: var(--bg); padding: 0.5rem 0.8rem; border-radius: 0.375rem; font-family: ui-monospace, monospace; font-size: 0.75rem; word-break: break-all; cursor: pointer; position: relative; border: 1px solid var(--border); transition: border-color 0.2s; }
-        .cmd-box:hover { border-color: var(--accent); }
-        .cmd-box .copy-hint { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 0.65rem; font-family: system-ui, sans-serif; }
-
-        .btn-row { display: flex; gap: 0.5rem; }
-        .btn-row button { flex: 1; }
-        button.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
-        button.secondary:hover { background: var(--border); }
-
-        input[type="text"] { width: 100%; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 0.375rem; color: var(--text); font-size: 0.85rem; }
-        input[type="text"]:focus { outline: none; border-color: var(--accent); }
-
-        .role-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-        .role-master { background: var(--phosphor-dim); color: var(--accent); border: 1px solid var(--accent); }
-        .role-sub-master { background: rgba(99, 102, 241, 0.1); color: #6366f1; border: 1px solid #6366f1; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .etapes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+        .etapes li{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(86,150,255,.12)} .etapes li:first-child{border-top:0}
+        .etapes .n{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;border:1px solid var(--faible);color:var(--faible)}
+        .etapes li.fait .n{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .etapes li.cours .n{border-color:var(--cyan);color:#d9f2ff;background:rgba(41,182,246,.22)}
+        .etapes b{display:block;font-size:.84rem} .etapes span{color:var(--faible);font-size:.74rem}
+        .empreinte{color:var(--cyan);letter-spacing:.04em}
     </style>
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
 </head>
-<body class="hybrid-dark">
-    <div class="container">
-        <header>
-            <div class="logo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                SecuBox Mesh
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                <div><h1>Rejoindre le maillage</h1><small>Intégration sécurisée d’un nœud</small></div>
             </div>
-            <div class="subtitle">Secure Node Onboarding</div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="card" id="master-card">
-            <div class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
-                Master Node Identity
-            </div>
-            <div class="master-info" id="master-info">
-                <div style="text-align:center;padding:1rem;"><span class="spinner"></span> Loading...</div>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Rôle du nœud maître dans le lien maître (master-link)."><span class="l">Rôle du maître</span><span class="v" id="tRole">—</span><span class="s">lien maître</span></div>
+            <div class="tuile cy" title="Profondeur du maître dans la hiérarchie ; un nœud qui rejoint se place à la profondeur suivante."><span class="l">Profondeur</span><span class="v" id="tProf">—</span><span class="s" id="sProf">sur —</span></div>
+            <div class="tuile ok" title="Demandes de jonction déjà approuvées par ce maître."><span class="l">Nœuds approuvés</span><span class="v" id="tAppr">—</span><span class="s">demandes approuvées</span></div>
+            <div class="tuile att" title="Demandes de jonction en attente de validation par l’administrateur."><span class="l">En attente</span><span class="v" id="tAtt">—</span><span class="s">demandes à valider</span></div>
+            <div class="tuile cy" title="Jetons d’invitation encore valides. Leur valeur n’est jamais affichée."><span class="l">Invitations actives</span><span class="v" id="tTok">—</span><span class="s">jetons valides</span></div>
+        </section>
 
-        <div class="card">
-            <div class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-                Join Steps
-            </div>
-            <div class="steps" id="steps">
-                <div class="step active" id="step-1">
-                    <div class="step-num"></div>
-                    <div class="step-content">
-                        <div class="step-title">Review Master Identity</div>
-                        <div class="step-desc">Verify the master fingerprint matches what you expect</div>
-                    </div>
-                </div>
-                <div class="step pending" id="step-2">
-                    <div class="step-num"></div>
-                    <div class="step-content">
-                        <div class="step-title">Enter Your Details</div>
-                        <div class="step-desc">Provide your node information</div>
-                    </div>
-                </div>
-                <div class="step pending" id="step-3">
-                    <div class="step-num"></div>
-                    <div class="step-content">
-                        <div class="step-title">Join the Mesh</div>
-                        <div class="step-desc">Send join request and wait for approval</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <section class="grille">
+            <div class="pan"><h3>Identité du maître <i>à vérifier avant de rejoindre</i></h3>
+                <dl class="kv"><dt>Nom d’hôte</dt><dd id="kNom">—</dd><dt>Empreinte</dt><dd class="mono empreinte" id="kFp">—</dd><dt>Rôle</dt><dd id="kRole">—</dd><dt>Profondeur</dt><dd id="kProf">—</dd><dt>Amont</dt><dd id="kAmont">—</dd><dt>Approbation</dt><dd id="kAuto">—</dd></dl>
+                <p class="note">Comparez l’empreinte avec celle que votre administrateur vous a communiquée avant d’envoyer la demande.</p></div>
+            <div class="pan"><h3>Étapes</h3>
+                <ol class="etapes" id="etapes">
+                    <li class="cours" id="e1"><span class="n">1</span><div><b>Vérifier l’identité du maître</b><span>L’empreinte doit correspondre à celle attendue.</span></div></li>
+                    <li id="e2"><span class="n">2</span><div><b>Indiquer votre nœud</b><span>Renseigner le nom d’hôte de votre SecuBox.</span></div></li>
+                    <li id="e3"><span class="n">3</span><div><b>Envoyer la demande</b><span>La demande est transmise, puis approuvée (automatiquement ou par l’administrateur).</span></div></li>
+                </ol></div>
+            <div class="pan" id="pJoin" style="grid-column:1/-1" hidden><h3>Rejoindre le maillage</h3>
+                <div id="rJoin" class="retour" hidden></div>
+                <form class="saisie" id="fJoin">
+                    <label>Votre nom d’hôte<input name="hostname" id="hote" placeholder="mon-secubox" autocomplete="off"></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="btnJoin">Envoyer la demande de jonction</button></div>
+                </form>
+                <p class="note">Une empreinte propre à ce navigateur est générée pour la demande ; elle n’est pas conservée.</p></div>
+            <div class="pan" id="pFait" style="grid-column:1/-1" hidden><h3 id="hFait">Demande envoyée</h3>
+                <div id="rFait" class="retour ok"></div>
+                <span class="pill att" id="pEtat">EN ATTENTE D’APPROBATION</span></div>
+        </section>
+    </div></div></main>
 
-        <div id="action-join" class="card hidden">
-            <div class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                Join Mesh
-            </div>
-            <div style="margin-bottom:0.75rem;">
-                <label style="display:block;color:var(--muted);font-size:0.8rem;margin-bottom:0.25rem;">Your Hostname</label>
-                <input type="text" id="my-hostname" placeholder="my-secubox">
-            </div>
-            <button class="primary" id="btn-join" onclick="sendJoinRequest()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-7-7l7 7-7 7"/></svg>
-                Join SecuBox Mesh
-            </button>
-            <div id="join-status"></div>
-        </div>
-
-        <div id="action-done" class="card hidden">
-            <div class="card-title" style="color:var(--success);">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                Join Request Sent
-            </div>
-            <div class="success-msg">Your join request has been submitted. The master node administrator will review and approve your request.</div>
-            <div id="approval-status" style="margin-top:0.75rem;text-align:center;">
-                <span class="status-badge status-pending">Awaiting Approval</span>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
-    var token = '';
-    var masterInfo = {};
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/p2p/master-link';
+        const JETON_INVITATION = Q.get('token') || '';   // jamais affiché, jamais stocké
+        const $ = id => document.getElementById(id);
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        let ST = null, DEJA_ENVOYE = false, EMPREINTE = '', ENVOI = false;
 
-    // Parse token from URL
-    (function() {
-        var params = new URLSearchParams(window.location.search);
-        token = params.get('token') || '';
-        if (!token) {
-            document.getElementById('master-info').innerHTML =
-                '<div class="error">No join token provided. Please use the link from your mesh administrator.</div>';
-            return;
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function etapes(actif) { ['e1', 'e2', 'e3'].forEach((id, i) => { $(id).className = i < actif ? 'fait' : (i === actif ? 'cours' : ''); }); }
+
+        const DEMO_ST = { enabled: true, role: 'master', depth: 0, max_depth: 3, upstream: null, fingerprint: '4f9a1c7be2d08a35', hostname: 'maitre-demo',
+                          auto_approve: false, peers: { pending: 1, approved: 3, rejected: 0, total: 4 }, active_tokens: 2 };
+
+        function rendre() {
+            const s = ST || {}, p = s.peers || {};
+            const ok = !!ST;
+            $('tRole').textContent = ok ? (s.role === 'master' ? 'Maître' : s.role === 'sub-master' ? 'Sous-maître' : tiret(s.role)) : '—';
+            $('tProf').textContent = ok ? tiret(s.depth) : '—';
+            $('sProf').textContent = 'sur ' + (ok ? tiret(s.max_depth) : '—');
+            $('tAppr').textContent = ok ? tiret(p.approved) : '—';
+            $('tAtt').textContent = ok ? tiret(p.pending) : '—';
+            $('tTok').textContent = ok ? tiret(s.active_tokens) : '—';
+            $('kNom').textContent = ok ? tiret(s.hostname) : '—';
+            $('kFp').textContent = ok ? tiret(s.fingerprint) : '—';
+            $('kRole').textContent = ok ? tiret(s.role) : '—';
+            $('kProf').textContent = ok ? tiret(s.depth) : '—';
+            $('kAmont').textContent = ok ? tiret(s.upstream) : '—';
+            $('kAuto').textContent = ok ? (s.auto_approve ? 'automatique' : 'par l’administrateur') : '—';
+            const e = $('etat');
+            if (!ok) return;
+            e.className = 'actif' + (s.enabled === false ? ' hors' : ''); e.textContent = s.enabled === false ? 'MAÎTRE DÉSACTIVÉ' : 'MAÎTRE PRÊT';
+            annoncer();
         }
-        loadMasterStatus();
-    })();
 
-    function apiBase() {
-        return '/api/v1/p2p/master-link/';
-    }
-
-    async function loadMasterStatus() {
-        try {
-            var r = await fetch(apiBase() + 'status');
-            masterInfo = await r.json();
-
-            var roleClass = masterInfo.role === 'master' ? 'role-master' : 'role-sub-master';
-
-            document.getElementById('master-info').innerHTML =
-                '<div class="info-row"><span class="info-label">Hostname</span><span class="info-value">' + (masterInfo.hostname || '-') + '</span></div>' +
-                '<div class="info-row"><span class="info-label">Fingerprint</span><span class="info-value fingerprint">' + (masterInfo.fingerprint || '-') + '</span></div>' +
-                '<div class="info-row"><span class="info-label">Role</span><span class="role-badge ' + roleClass + '">' + (masterInfo.role || 'master') + '</span></div>' +
-                '<div class="info-row"><span class="info-label">Depth</span><span class="info-value">' + (masterInfo.depth || 0) + '</span></div>' +
-                '<div class="info-row"><span class="info-label">Status</span><span class="status-badge status-ok">Ready</span></div>';
-
-            // Move to step 2
-            setStep(1);
-            document.getElementById('action-join').classList.remove('hidden');
-
-            // Pre-fill hostname from current location
-            var hostnameInput = document.getElementById('my-hostname');
-            hostnameInput.value = location.hostname || '';
-
-        } catch (e) {
-            document.getElementById('master-info').innerHTML =
-                '<div class="error">Could not reach master node: ' + e.message + '</div>';
-        }
-    }
-
-    async function sendJoinRequest() {
-        var btn = document.getElementById('btn-join');
-        var statusEl = document.getElementById('join-status');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Sending join request...';
-        statusEl.innerHTML = '';
-
-        var myHostname = document.getElementById('my-hostname').value || 'unknown';
-
-        // Generate a simple fingerprint for this node
-        var myFp = await generateFingerprint();
-
-        try {
-            var r = await fetch(apiBase() + 'join', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token: token,
-                    fingerprint: myFp,
-                    hostname: myHostname
-                })
-            });
-
-            var result = await r.json();
-
-            if (result.error || result.detail) {
-                throw new Error(result.error || result.detail);
+        async function charger() {
+            $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            $('erreur').hidden = true;
+            if (DEMO) { ST = DEMO_ST; $('demo').hidden = false; $('pJoin').hidden = DEJA_ENVOYE; if (!$('hote').value) $('hote').value = 'mon-secubox'; etapes(DEJA_ENVOYE ? 3 : 1); rendre(); return; }
+            if (!JETON_INVITATION) {
+                ST = null; rendre(); $('etat').className = 'actif att'; $('etat').textContent = 'JETON ABSENT';
+                const r = $('erreur'); r.hidden = false; r.textContent = 'Aucun jeton d’invitation fourni. Utilisez le lien transmis par l’administrateur du maillage.';
+                return;
             }
-
-            // Success
-            setStep(2);
-            document.getElementById('action-join').classList.add('hidden');
-            document.getElementById('action-done').classList.remove('hidden');
-
-            if (result.status === 'approved') {
-                document.getElementById('approval-status').innerHTML =
-                    '<span class="status-badge status-ok">Approved</span>' +
-                    '<p style="color:var(--success);margin-top:0.5rem;">Your node has been auto-approved at depth ' + (result.depth || 1) + '. Welcome to the mesh!</p>';
+            try {
+                const r = await fetch(API + '/status', { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                if (r.status === 401 || r.status === 403) {
+                    ST = null; $('session').hidden = false; rendre(); $('etat').className = 'actif att'; $('etat').textContent = 'SESSION REQUISE'; return;
+                }
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                ST = await r.json(); $('session').hidden = true;
+            } catch (e) {
+                ST = null; rendre(); $('etat').className = 'actif hors'; $('etat').textContent = 'MAÎTRE INJOIGNABLE';
+                const r2 = $('erreur'); r2.hidden = false; r2.textContent = 'Impossible de joindre le nœud maître (' + e.message + ').'; return;
             }
-        } catch (e) {
-            btn.disabled = false;
-            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-7-7l7 7-7 7"/></svg> Join SecuBox Mesh';
-            statusEl.innerHTML = '<div class="error">' + e.message + '</div>';
+            rendre();
+            if (!DEJA_ENVOYE) { $('pJoin').hidden = false; etapes(1); }
         }
-    }
 
-    function setStep(activeIndex) {
-        var steps = document.querySelectorAll('.step');
-        steps.forEach(function(step, i) {
-            step.className = 'step ' + (i < activeIndex ? 'done' : (i === activeIndex ? 'active' : 'pending'));
+        // Empreinte propre à ce navigateur, calculée une fois par chargement (l'ancienne page en refabriquait une à chaque clic).
+        async function empreinte() {
+            if (EMPREINTE) return EMPREINTE;
+            const donnees = navigator.userAgent + Date.now() + Math.random();
+            if (window.crypto && window.crypto.subtle) {
+                const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(donnees));
+                EMPREINTE = Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
+            } else {
+                let x = 0; for (let i = 0; i < donnees.length; i++) { x = ((x << 5) - x) + donnees.charCodeAt(i); x |= 0; }
+                EMPREINTE = Math.abs(x).toString(16).padStart(16, '0').substring(0, 16);
+            }
+            return EMPREINTE;
+        }
+
+        $('fJoin').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            if (ENVOI) return;
+            if (DEMO) { retour('rJoin', false, 'Démonstration : action inerte.'); return; }
+            ENVOI = true; const btn = $('btnJoin'); btn.disabled = true; btn.textContent = 'Envoi en cours…';
+            try {
+                const corps = { token: JETON_INVITATION, fingerprint: await empreinte(), hostname: $('hote').value || 'unknown' };
+                const r = await fetch(API + '/join', { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let d = null; try { d = await r.json(); } catch (e) { /* corps vide */ }
+                if (!r.ok || !d || d.error || d.detail) throw new Error((d && (d.error || (typeof d.detail === 'string' ? d.detail : ''))) || 'HTTP ' + r.status);
+                DEJA_ENVOYE = true; etapes(3);
+                $('pJoin').hidden = true; $('pFait').hidden = false;
+                if (d.status === 'approved') {
+                    $('hFait').textContent = 'Nœud approuvé'; $('pEtat').className = 'pill ok'; $('pEtat').textContent = 'APPROUVÉ';
+                    $('rFait').textContent = 'Votre nœud a été approuvé' + (d.depth != null ? ' à la profondeur ' + d.depth : '') + '. Bienvenue dans le maillage.';
+                } else {
+                    $('rFait').textContent = 'Votre demande a été transmise. L’administrateur du nœud maître doit l’approuver.';
+                }
+                annoncer();
+            } catch (e) {
+                btn.disabled = false; btn.textContent = 'Envoyer la demande de jonction';
+                retour('rJoin', false, 'Échec : ' + e.message);
+            }
+            ENVOI = false;
         });
-    }
+        $('rafraichir').addEventListener('click', charger);
 
-    async function generateFingerprint() {
-        // Generate a browser-side fingerprint (temporary; real one comes from installed SecuBox)
-        var data = navigator.userAgent + Date.now() + Math.random();
-        if (window.crypto && window.crypto.subtle) {
-            var encoded = new TextEncoder().encode(data);
-            var hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-            var hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('').substring(0, 16);
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'master-link' }, location.origin); } catch (e) { /* hors iframe */ }
         }
-        // Fallback
-        var hash = 0;
-        for (var i = 0; i < data.length; i++) {
-            var c = data.charCodeAt(i);
-            hash = ((hash << 5) - hash) + c;
-            hash |= 0;
-        }
-        return Math.abs(hash).toString(16).padStart(16, '0').substring(0, 16);
-    }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, en démonstration, pendant une saisie ou un envoi, ni une fois la demande envoyée.
+        setInterval(() => { if (document.hidden || DEMO || DEJA_ENVOYE || ENVOI || document.activeElement === $('hote')) return; charger(); }, 30000);
     </script>
 </body>
 </html>
