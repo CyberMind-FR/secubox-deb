@@ -1,3 +1,12 @@
+secubox-netboot (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /netboot/ refaite au profil Aurora (#2597) : page autonome (aucun script ni police externes hors menu commun), tuiles (carte, environnement U-Boot, overlay, serveur TFTP, cartes publiées, profils), panneaux carte / overlay / tampon d'ombre / serveur de boot / profils / audit, modes ?demo=1 (données fictives, actions inertes) et ?embed=1, hauteur annoncée à l'hôte (sbxVue, onglet netboot).
+  * Actions : mêmes routes, méthodes et corps qu'avant (overlay apply/revert/persist/confirm-healthy, server/up, publish, profiles POST/DELETE). Chaque action qui change l'amorce, l'image servie ou le serveur de boot demande maintenant une confirmation intégrée à la page (appliquer en réel, retirer, rendre permanent, confirmer sain, activer le serveur, publier, supprimer un profil).
+  * Correctifs de l'ancienne page : les confirm()/alert() natifs étaient ignorés par le navigateur du viewer (retrait, verrouillage et suppression n'agissaient jamais, résultats invisibles) ; une session absente (401/403) n'était pas signalée ; une erreur 422 s'affichait « [object Object] » ; les identifiants de profil passaient dans des gestionnaires onclick en ligne (injection possible) ; actualisation toutes les 10 s même pendant la saisie. Tout est maintenant construit en textContent.
+  * Non repris : le bouton « Auto-flash A/B » (désactivé, phase 3), le bouton « Probe » séparé (devenu « Sonder », simple relecture), le pied de page health-banner. Le serveur par défaut du formulaire de profil reste 192.168.1.200 comme avant. Aucune série ni mesure inventée : « — » quand l'API ne fournit rien.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:10:00 +0200
+
 secubox-netboot (0.4.4-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

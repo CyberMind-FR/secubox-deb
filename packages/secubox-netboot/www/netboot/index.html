@@ -1,212 +1,396 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 — SecuBox-Deb :: netboot (#737) -->
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  NetBoot au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Toute action qui change l'amorce, l'image servie ou le serveur de boot demande une confirmation dans la page.
+-->
 <html lang="fr">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>SecuBox · NetBoot</title>
-<link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
-<style>
-  .main.main-content{margin-left:220px}
-  @media (max-width:900px){.sidebar{display:none}.main.main-content{margin-left:0}}
-  :root{--cosmos:#0a0a0f;--gold:#c9a84c;--cinnabar:#e63946;--matrix:#00ff41;
-        --cyan:#00d4ff;--void:#6e40c9;--text:#e8e6d9;--muted:#6b6b7a;}
-  *{box-sizing:border-box} body{margin:0;background:var(--cosmos);color:var(--text);
-    font:14px/1.5 system-ui,-apple-system,sans-serif}
-  .main{padding:18px 22px;max-width:1100px;margin:0 auto}
-  h1{font-size:1.3rem;color:var(--gold);margin:.2em 0}
-  h2{font-size:1rem;color:var(--cyan);margin:.4em 0;border-bottom:1px solid #1c1c28;padding-bottom:4px}
-  .card{background:#11111a;border:1px solid #1c1c28;border-radius:8px;padding:14px;margin:12px 0}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-  .kv{font-family:JetBrains Mono,monospace;font-size:.82rem}
-  .kv b{color:var(--muted);font-weight:400;display:inline-block;min-width:130px}
-  .badge{padding:1px 7px;border-radius:4px;font-size:.72rem;border:1px solid}
-  .ok{color:var(--matrix);border-color:var(--matrix)} .no{color:var(--cinnabar);border-color:var(--cinnabar)}
-  .warn{color:var(--gold);border-color:var(--gold)}
-  button{background:transparent;color:var(--cyan);border:1px solid var(--cyan);border-radius:5px;
-    padding:5px 12px;font:inherit;cursor:pointer;margin:3px}
-  button.danger{color:var(--cinnabar);border-color:var(--cinnabar)}
-  button.go{color:var(--matrix);border-color:var(--matrix)}
-  button:disabled{opacity:.4;cursor:not-allowed}
-  pre{background:#0c0c14;border:1px solid #1c1c28;border-radius:6px;padding:10px;overflow:auto;
-    font-size:.78rem;color:var(--muted);max-height:240px}
-  .pill{font-size:.7rem;color:var(--muted)}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — NetBoot</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.45;cursor:not-allowed}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.go{border-color:var(--vert);color:var(--vert)} .btn.go:hover{background:rgba(46,204,113,.12)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:10px 12px;font-size:.82rem;display:grid;gap:8px}
+        #conf .bout{display:flex;flex-wrap:wrap;gap:6px}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}.grille .large{grid-column:1/-1}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+        pre{margin:0;background:rgba(6,13,27,.7);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;overflow:auto;font-size:.74rem;color:var(--doux);max-height:240px;white-space:pre-wrap;overflow-wrap:anywhere}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:10px 0 0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+    </style>
 </head>
 <body>
-<nav class="sidebar" id="sidebar"></nav>
-<main class="main main-content">
-  <h1>🛰️ NetBoot <span class="pill" id="ver"></span></h1>
-  <p class="pill">Provisioning réseau · overlay U-Boot chainloadé (#737, Phase 2).
-     Aucune action destructive sans confirmation. Flash A/B = Phase 3 (désactivé).</p>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="11" rx="2"/><path d="M8 20h8M12 15v5"/><path d="M8 9.5l2.5 2.5L16 7"/></svg>
+                <div><h1>NetBoot</h1><small>Installation et amorçage des machines par le réseau (DHCP / TFTP / HTTP)</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="conf" role="alertdialog" aria-live="assertive" hidden>
+            <div id="confTexte"></div>
+            <div class="bout"><button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        </div>
 
-  <div class="card">
-    <h2>Board</h2>
-    <div class="grid" id="board"><div class="kv">Chargement…</div></div>
-  </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Modèle de la carte sur laquelle tourne ce service, d’après la sonde matérielle."><span class="l">Carte</span><span class="v" id="tModele">—</span><span class="s" id="sModele">modèle détecté</span></div>
+            <div class="tuile" id="cEnv" title="Environnement U-Boot calibré : condition pour poser l’overlay. Sans lui, l’application réelle est désactivée."><span class="l">Environnement U-Boot</span><span class="v" id="tEnv">—</span><span class="s">calibré</span></div>
+            <div class="tuile" id="cOverlay" title="L’amorce de la carte passe par l’overlay U-Boot chaîné (bootcmd détourné)."><span class="l">Overlay actif</span><span class="v" id="tOverlay">—</span><span class="s" id="sOverlay">bootcmd détourné</span></div>
+            <div class="tuile" id="cSrv" title="État du démon TFTP (tftpd-hpa) de ce serveur de boot."><span class="l">Serveur TFTP</span><span class="v" id="tSrv">—</span><span class="s" id="sSrv">tftpd-hpa</span></div>
+            <div class="tuile cy" title="Nombre de cartes dont les artefacts de boot sont publiés (un dossier par carte sous la racine HTTP)."><span class="l">Cartes publiées</span><span class="v" id="tPub">—</span><span class="s">artefacts servis</span></div>
+            <div class="tuile cy" title="Profils de cartes enregistrés : MAC, modèle, image, niveau de boot."><span class="l">Profils</span><span class="v" id="tProf">—</span><span class="s">enregistrés</span></div>
+        </section>
 
-  <div class="card">
-    <h2>Overlay U-Boot</h2>
-    <div class="grid" id="overlay"></div>
-    <div style="margin-top:10px">
-      <button onclick="act('probe')">Probe</button>
-      <button onclick="apply(false)">Apply (dry-run)</button>
-      <button class="go" id="btnApply" onclick="apply(true)" disabled title="env non calibré">Apply (commit)</button>
-      <button onclick="confirmHealthy()">Confirmer sain</button>
-      <button class="go" onclick="persist()" title="Verrouiller en amorce permanente (après validation)">Persist</button>
-      <button class="danger" onclick="revert()">Revert overlay</button>
-      <button disabled title="Phase 3">Auto-flash A/B</button>
-    </div>
-  </div>
+        <div class="grille">
+            <div class="pan"><h3>Carte <i>sonde matérielle</i></h3>
+                <dl class="kv" id="kBoard"></dl></div>
+            <div class="pan"><h3>Overlay U-Boot <i>amorce chaînée</i></h3>
+                <dl class="kv" id="kOverlay"></dl>
+                <div class="actions">
+                    <button class="btn" id="bSonde" type="button" title="Relit la sonde et l’état de l’overlay (lecture seule)">Sonder</button>
+                    <button class="btn" id="bDry" type="button" title="Simulation : n’écrit rien">Appliquer (simulation)</button>
+                    <button class="btn go" id="bApply" type="button" disabled>Appliquer (réel)</button>
+                    <button class="btn" id="bSain" type="button">Confirmer sain</button>
+                    <button class="btn go" id="bPersist" type="button" title="Verrouiller en amorce permanente (après validation)">Rendre permanent</button>
+                    <button class="btn danger" id="bRevert" type="button">Retirer l’overlay</button>
+                </div>
+                <div id="rOverlay" class="retour" hidden></div>
+                <p class="note">Le flash A/B automatique relève de la phase 3 : il n’est pas proposé ici.</p></div>
+            <div class="pan"><h3>Tampon d’ombre <i>artefacts prêts à poser</i></h3>
+                <pre id="shadow">—</pre></div>
+            <div class="pan"><h3>Serveur de boot <i>TFTP + HTTP</i> <span class="pill neutre" id="srvEtat">—</span></h3>
+                <dl class="kv" id="kServeur"></dl>
+                <div class="actions"><button class="btn go" id="bUp" type="button">Activer le serveur</button></div>
+                <div id="rServeur" class="retour" hidden></div>
+                <p class="note">Ce serveur ne fait que servir : aucun overlay ni flash n’est posé sur lui.</p></div>
 
-  <div class="card">
-    <h2>Shadow buffer (artefacts prêts)</h2>
-    <pre id="shadow">—</pre>
-  </div>
+            <div class="pan large"><h3>Profils de cartes <i id="nProf"></i></h3>
+                <div class="tab"><table><thead><tr><th>Carte (MAC)</th><th>Modèle</th><th>Image</th><th>Niveau</th><th>Serveur</th><th>Actions</th></tr></thead><tbody id="bProf"></tbody></table></div>
+                <div id="rProf" class="retour" hidden></div>
+                <form class="saisie" id="fProf" autocomplete="off">
+                    <label>MAC<input name="id" placeholder="02:00:5e:00:53:01" required></label>
+                    <label>Modèle<input name="model" id="pModel" list="modeles" placeholder="mochabin"></label>
+                    <datalist id="modeles"></datalist>
+                    <label>Image<input name="image" placeholder="secubox-2.39.0"></label>
+                    <label>Niveau de boot<select name="boot_level"><option value="B0">B0 local</option><option value="B1">B1 TFTP brut</option><option value="B2" selected>B2 HTTP signé</option><option value="B3">B3 installation signée</option></select></label>
+                    <label>Serveur (IP)<input name="srv" value="192.168.1.200" placeholder="vide : serveur DHCP"></label>
+                    <div><button class="btn prim" type="submit">Enregistrer le profil</button></div>
+                </form>
+                <p class="note">B0 local (intact) · B1 TFTP brut (test) · B2 HTTP signé FIT (production) · B3 installation signée. « Serveur » vide : l’adresse vient du DHCP.</p></div>
 
-  <div class="card">
-    <h2>🌐 Serveur de boot (TFTP + HTTP) <span class="pill" id="srvState"></span></h2>
-    <div class="grid" id="server"></div>
-    <div style="margin-top:8px">
-      <button class="go" onclick="serverUp()">Activer le serveur (up)</button>
-      <span class="pill">gk2 reste untouched : ce host ne fait QUE servir (aucun overlay/flash local).</span>
-    </div>
-  </div>
+            <div class="pan large"><h3>Audit <i>derniers événements</i></h3>
+                <pre id="audit">—</pre></div>
+        </div>
+    </div></div></main>
 
-  <div class="card">
-    <h2>🗂️ Profils board (remote config)</h2>
-    <table style="width:100%;border-collapse:collapse;font-size:.82rem">
-      <thead><tr style="color:var(--muted);text-align:left">
-        <th>Board (MAC)</th><th>Modèle</th><th>Image</th><th>Niveau</th><th>Serveur</th><th></th></tr></thead>
-      <tbody id="profiles"></tbody>
-    </table>
-    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-      <input id="pId" placeholder="MAC (aa:bb:..)" style="width:130px">
-      <input id="pModel" placeholder="modèle" list="models" style="width:140px">
-      <datalist id="models"></datalist>
-      <input id="pImage" placeholder="image (ex: secubox-2.39.0)" style="width:170px">
-      <select id="pLevel" title="niveau de boot">
-        <option value="B0">B0 local</option><option value="B1">B1 tftp-brut</option>
-        <option value="B2" selected>B2 http-signé</option><option value="B3">B3 install-signé</option>
-      </select>
-      <input id="pSrv" placeholder="serveur (IP)" value="192.168.1.200" style="width:120px">
-      <button onclick="saveProfile()">Enregistrer le profil</button>
-    </div>
-    <p class="pill">B0 local (untouched) · B1 TFTP brut (test) · B2 HTTP signé FIT (prod) · B3 install signé. Voir docs/BOOT-LEVELS.md.</p>
-  </div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/netboot';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-  <div class="card">
-    <h2>Audit</h2>
-    <pre id="audit">—</pre>
-  </div>
-</main>
-<style>input,select{background:#0c0c14;color:var(--text);border:1px solid #1c1c28;border-radius:4px;padding:4px 6px;font:inherit}
-td,th{padding:4px 6px;border-bottom:1px solid #15151f}</style>
+        let INV = null, SHADOW = null, AUDIT = null, SERVEUR = null, PROFILS = null, SESSION_OK = true;
+        let CONF = null;        // { texte, fn } : confirmation en cours, jamais de dialogue natif
+        let SAISIE = false;     // formulaire de profil modifié : pas d'actualisation tant qu'il est ouvert
 
-<script>
-const API='/api/v1/netboot';
-const sbxToken=()=>localStorage.getItem('sbx_token');
-async function api(p,opt){try{opt=opt||{};const t=sbxToken();opt.headers=Object.assign({},opt.headers,t?{'Authorization':'Bearer '+t}:{});const r=await fetch(API+p,Object.assign({credentials:'include'},opt));return await r.json();}catch(e){return {error:String(e)};}}
-function b(v,good){const c=v===good?'ok':(v==='unknown'||v==='likely'?'warn':'no');return `<span class="badge ${c}">${v}</span>`;}
-function kv(k,v){return `<div class="kv"><b>${k}</b>${v}</div>`;}
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes méthodes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) ? x.msg : String(x)).join(' ; ');
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function resultat(res) {
+            const d = res.data || {};
+            const morceaux = [d.result, d.server && JSON.stringify(d.server, null, 1), d.error].filter(x => x);
+            return morceaux.join('\n').slice(0, 800);
+        }
 
-async function refresh(){
-  const inv=await api('/inventory');
-  const bo=(inv.board||{}); const ov=(inv.overlay||{});
-  const bd=bo.board||{}, fw=bo.firmware||{}, md=bo.media||{}, cap=bo.capabilities||{};
-  document.getElementById('board').innerHTML=[
-    kv('Modèle', bd.model||'?'), kv('SoC', bd.soc||'?'),
-    kv('TF-A', fw.tfa||'?'), kv('U-Boot', fw.uboot_version||'<i>inconnu (série requis)</i>'),
-    kv('Média', (md.spi_firmware_mtd||'?')+' / eMMC '+(md.emmc||'?')),
-    kv('Slots A/B', b(md.emmc_ab_slots||'no','yes')),
-    kv('wget', b(cap.wget||'unknown')), kv('bootm FIT', b(cap.bootm_fit||'unknown')),
-    kv('overlay_ready', b(String(bo.overlay_ready),'true')),
-  ].join('');
-  document.getElementById('overlay').innerHTML=[
-    kv('env calibré', b(ov.env_ok||'no','yes')),
-    kv('overlay actif', b(ov.overlay_active||'no','yes')),
-    kv('persisté', b(ov.persisted||'no','yes')),
-    kv('FIT déployé', b(ov.fit_deployed||'no','yes')),
-    kv('bootcount', ov.bootcount||'—'),
-    kv('backup usine', b(ov.has_factory_backup||'no','yes')),
-  ].join('');
-  document.getElementById('btnApply').disabled = (ov.env_ok!=='yes');
-  document.getElementById('btnApply').title = (ov.env_ok!=='yes')?'env non calibré (banc série requis)':'';
-  const sh=await api('/shadow');
-  document.getElementById('shadow').textContent=(sh.items&&sh.items.length)
-    ? sh.items.map(i=>`${i.name}  (${i.size} o)`).join('\n') : 'vide — builder l\'overlay (build-uboot-overlay.sh) puis déposer en shadow';
-  const au=await api('/audit?limit=40');
-  document.getElementById('audit').textContent=(au.audit&&au.audit.length)?au.audit.join('\n'):'—';
-  await renderServer(); await renderProfiles();
-}
+        function demoData() {
+            INV = { board: { board: { model: 'mochabin', soc: 'Armada 7040', compatible: 'globalscale,mochabin' }, firmware: { tfa: 'v2.8(release)', uboot_version: '2023.04' },
+                             media: { spi_firmware_mtd: 'mtd0', emmc: 'yes', emmc_ab_slots: 'yes' }, capabilities: { wget: 'likely', bootm_fit: 'likely', bootcount: 'likely' }, overlay_ready: true },
+                    overlay: { env_ok: 'yes', overlay_active: 'no', persisted: 'no', fit_deployed: 'yes', bootcount: '0', has_factory_backup: 'yes', staged: 'present' } };
+            SHADOW = { items: [{ name: 'overlay.fit', size: 1843200 }, { name: 'overlay.sig', size: 512 }] };
+            AUDIT = { audit: ['2026-10-13T08:12:03 publish board=02005e005301 image=secubox-2.39.0 ok', '2026-10-12T17:40:51 overlay apply (simulation)'] };
+            SERVEUR = { server: { tftp_root: '/srv/secubox/netboot/tftp', http_root: '/srv/secubox/netboot/http', tftpd: 'active', nginx_sbxboot: 'yes', published_boards: 2 } };
+            PROFILS = { profiles: [
+                { id: '02005e005301', model: 'mochabin', image: 'secubox-2.39.0', boot_level: 'B2', srv: '192.0.2.10' },
+                { id: '02005e005302', model: 'espressobin-v7', image: null, boot_level: 'B0', srv: null }] };
+            $('modeles').replaceChildren(...['mochabin', 'espressobin-v7'].map(m => { const o = el('option'); o.value = m; return o; }));
+        }
 
-async function renderServer(){
-  const s=(await api('/server')).server||{};
-  document.getElementById('srvState').textContent=
-    'tftpd:'+(s.tftpd||'?')+' · nginx:'+(s.nginx_sbxboot||'?')+' · boards:'+(s.published_boards??'?');
-  document.getElementById('server').innerHTML=[
-    kv('TFTP root', s.tftp_root||'—'), kv('HTTP root', s.http_root||'—'),
-    kv('tftpd', b(s.tftpd||'absent','active')), kv('nginx /sbxboot', b(s.nginx_sbxboot||'no','yes')),
-    kv('boards publiées', s.published_boards??'—'),
-  ].join('');
-}
-async function serverUp(){ const r=await api('/server/up',{method:'POST'}); alert('SERVER UP\n'+JSON.stringify(r.server||r.error||r,null,1).slice(0,500)); renderServer(); }
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/inventory'), lire('/shadow'), lire('/audit?limit=40'), lire('/server'), lire('/profiles')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            INV = val(0); SHADOW = val(1); AUDIT = val(2); SERVEUR = val(3); PROFILS = val(4);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire NetBoot (service arrêté ou injoignable).';
+            rendre();
+        }
+        async function chargerModeles() {
+            if (DEMO) return;
+            try {
+                const d = await lire('/boards');
+                $('modeles').replaceChildren(...(d.boards || []).map(b => { const o = el('option'); o.value = b.model; return o; }));
+                $('pModel').title = 'Modèles pris en charge : ' + (d.boards || []).map(b => b.model).join(', ');
+            } catch (e) { /* liste facultative */ }
+        }
 
-const LVL={B0:'B0 local',B1:'B1 tftp',B2:'B2 http-signé',B3:'B3 install'};
-async function renderProfiles(){
-  const ps=(await api('/profiles')).profiles||[];
-  const tb=document.getElementById('profiles');
-  if(!ps.length){ tb.innerHTML='<tr><td colspan="6" class="pill">aucun profil — ajouter ci-dessous</td></tr>'; return; }
-  tb.innerHTML=ps.map(p=>`<tr>
-    <td style="font-family:monospace">${esc(p.id)}</td><td>${esc(p.model||'')}</td>
-    <td>${esc(p.image||'—')}</td><td>${b(p.boot_level||'B0', 'B2')}</td><td>${esc(p.srv||'DHCP')}</td>
-    <td style="white-space:nowrap">
-      <button onclick="publish('${esc(p.id)}')" ${p.boot_level==='B0'?'disabled title=B0':''}>Publish</button>
-      <button class="danger" onclick="delProfile('${esc(p.id)}')">✕</button>
-    </td></tr>`).join('');
-}
-async function saveProfile(){
-  const body={id:val('pId'),model:val('pModel')||null,image:val('pImage')||null,boot_level:val('pLevel'),srv:val('pSrv')||null};
-  if(!body.id){alert('MAC requis');return;}
-  const r=await api('/profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(r.error||r.detail) alert('Erreur: '+(r.detail||r.error)); renderProfiles();
-}
-async function delProfile(id){ if(!confirm('Supprimer le profil '+id+' ?'))return; await api('/profiles/'+encodeURIComponent(id),{method:'DELETE'}); renderProfiles(); }
-async function publish(id){
-  const r=await api('/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({board_id:id})});
-  alert('PUBLISH '+id+'\n'+JSON.stringify(r.result||r.detail||r,null,1).slice(0,600)); renderServer();
-}
-function val(i){return (document.getElementById(i).value||'').trim();}
-function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-async function act(){ await refresh(); }
-async function apply(commit){
-  if(commit && !confirm('Poser l\'overlay et détourner bootcmd ?\nRollback auto vers l\'usine si échec ×3.')) return;
-  const r=await api('/overlay/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:!!commit})});
-  alert((commit?'APPLY':'DRY-RUN')+'\n'+JSON.stringify(r.result||r.error||r,null,1).slice(0,600)); refresh();
-}
-async function revert(){
-  if(!confirm('Restaurer l\'amorce USINE (retirer l\'overlay) ?')) return;
-  const r=await api('/overlay/revert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})});
-  alert('REVERT\n'+JSON.stringify(r.result||r.error||r,null,1).slice(0,600)); refresh();
-}
-async function confirmHealthy(){ await api('/overlay/confirm-healthy',{method:'POST'}); refresh(); }
-async function persist(){
-  if(!confirm('Verrouiller l\'overlay en amorce PERMANENTE ?\n(à faire seulement après l\'avoir prouvé au banc — retire le compteur de révocation, garde le repli usine runtime)')) return;
-  const r=await api('/overlay/persist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})});
-  alert('PERSIST\n'+JSON.stringify(r.result||r.error||r,null,1).slice(0,500)); refresh();
-}
-async function loadBoards(){
-  const d=await api('/boards'); const dl=document.getElementById('models');
-  const boards=(d.boards||[]);
-  dl.innerHTML=boards.map(b=>`<option value="${esc(b.model)}">`).join('');
-  // info-bulle modèles supportés
-  document.getElementById('pModel').title='modèles: '+boards.map(b=>b.model).join(', ');
-}
-loadBoards();
-refresh(); setInterval(refresh, 10000);
-</script>
-<script src="/shared/sidebar.js"></script>
-<script src="/shared/health-banner.js"></script>
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        // Valeur d'un drapeau « yes/no/likely… » → pastille. bon = la valeur attendue.
+        function drapeau(v, bon) {
+            if (v === null || v === undefined || v === '') return el('span', '', '—');
+            const s = String(v);
+            const c = s === bon ? 'ok' : (s === 'unknown' || s === 'likely') ? 'att' : 'hors';
+            return pastille(c, s);
+        }
+        function ligne(dl, k, noeud) { dl.appendChild(el('dt', '', k)); const dd = el('dd'); if (typeof noeud === 'string') dd.textContent = noeud; else dd.appendChild(noeud); dl.appendChild(dd); }
+        function tuile(idTuile, idVal, classe, texte) { $(idVal).textContent = texte; if (idTuile) $(idTuile).className = 'tuile ' + classe; }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const inv = INV || {}, bo = inv.board || {}, ov = inv.overlay || {};
+            const bd = bo.board || {}, fw = bo.firmware || {}, md = bo.media || {}, cap = bo.capabilities || {};
+            const srv = (SERVEUR && SERVEUR.server) || {};
+            const profs = PROFILS && Array.isArray(PROFILS.profiles) ? PROFILS.profiles : null;
+
+            // État d'en-tête
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!INV && !SERVEUR) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (srv.tftpd === 'active') { etat.className = 'actif'; etat.textContent = 'SERVEUR ACTIF'; }
+            else { etat.className = 'actif att'; etat.textContent = 'SERVEUR INACTIF'; }
+
+            // Tuiles
+            tuile(null, 'tModele', 'cy', tiret(bd.model));
+            $('sModele').textContent = bd.soc ? bd.soc : 'modèle détecté';
+            const oui = v => v === 'yes' ? 'Oui' : v === 'no' ? 'Non' : '—';
+            tuile('cEnv', 'tEnv', ov.env_ok === 'yes' ? 'ok' : ov.env_ok === 'no' ? 'att' : 'cy', oui(ov.env_ok));
+            tuile('cOverlay', 'tOverlay', ov.overlay_active === 'yes' ? 'ok' : 'cy', oui(ov.overlay_active));
+            const t = srv.tftpd;
+            tuile('cSrv', 'tSrv', t === 'active' ? 'ok' : t ? 'hors' : 'cy', t === 'active' ? 'Actif' : t ? String(t) : '—');
+            $('tPub').textContent = tiret(srv.published_boards);
+            $('tProf').textContent = profs ? profs.length : '—';
+
+            // Carte
+            const kb = $('kBoard'); kb.replaceChildren();
+            ligne(kb, 'Modèle', tiret(bd.model)); ligne(kb, 'SoC', tiret(bd.soc));
+            ligne(kb, 'TF-A', tiret(fw.tfa)); ligne(kb, 'U-Boot', tiret(fw.uboot_version));
+            ligne(kb, 'Mémoire firmware', tiret(md.spi_firmware_mtd)); ligne(kb, 'eMMC', tiret(md.emmc));
+            ligne(kb, 'Slots A/B', drapeau(md.emmc_ab_slots, 'yes'));
+            ligne(kb, 'wget', drapeau(cap.wget, 'yes')); ligne(kb, 'bootm FIT', drapeau(cap.bootm_fit, 'yes'));
+            ligne(kb, 'Prête pour l’overlay', bo.overlay_ready === undefined ? '—' : pastille(bo.overlay_ready === true ? 'ok' : 'hors', bo.overlay_ready === true ? 'oui' : 'non'));
+
+            // Overlay
+            const ko = $('kOverlay'); ko.replaceChildren();
+            ligne(ko, 'Environnement calibré', drapeau(ov.env_ok, 'yes')); ligne(ko, 'Overlay actif', drapeau(ov.overlay_active, 'yes'));
+            ligne(ko, 'Persisté', drapeau(ov.persisted, 'yes')); ligne(ko, 'FIT déployé', drapeau(ov.fit_deployed, 'yes'));
+            ligne(ko, 'Compteur de boot', tiret(ov.bootcount)); ligne(ko, 'Sauvegarde usine', drapeau(ov.has_factory_backup, 'yes'));
+            const ap = $('bApply'); const calibre = ov.env_ok === 'yes';
+            ap.disabled = !calibre; ap.title = calibre ? 'Pose l’overlay et détourne bootcmd (repli usine automatique après 3 échecs)' : 'Environnement non calibré (banc série requis)';
+
+            // Tampon d'ombre
+            $('shadow').textContent = SHADOW ? ((SHADOW.items && SHADOW.items.length) ? SHADOW.items.map(i => i.name + '  (' + i.size + ' o)').join('\n')
+                : 'Vide — construire l’overlay (build-uboot-overlay.sh) puis le déposer en tampon d’ombre.') : '—';
+
+            // Serveur
+            const ks = $('kServeur'); ks.replaceChildren();
+            ligne(ks, 'Racine TFTP', tiret(srv.tftp_root)); ligne(ks, 'Racine HTTP', tiret(srv.http_root));
+            ligne(ks, 'tftpd', srv.tftpd ? drapeau(srv.tftpd, 'active') : '—'); ligne(ks, 'nginx /sbxboot', drapeau(srv.nginx_sbxboot, 'yes'));
+            ligne(ks, 'Cartes publiées', tiret(srv.published_boards));
+            const se = $('srvEtat'); se.className = 'pill ' + (srv.tftpd === 'active' ? 'ok' : srv.tftpd ? 'hors' : ''); se.textContent = srv.tftpd === 'active' ? 'ACTIF' : srv.tftpd ? String(srv.tftpd).toUpperCase() : '—';
+
+            // Audit
+            $('audit').textContent = AUDIT ? ((AUDIT.audit && AUDIT.audit.length) ? AUDIT.audit.join('\n') : 'Aucun événement') : '—';
+
+            rendreProfils(profs);
+            $('conf').hidden = !CONF; if (CONF) $('confTexte').textContent = CONF.texte;
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        const NIVEAUX = { B0: 'B0 local', B1: 'B1 TFTP', B2: 'B2 HTTP signé', B3: 'B3 installation' };
+        function rendreProfils(profs) {
+            const tb = $('bProf'); tb.replaceChildren();
+            $('nProf').textContent = profs && profs.length ? profs.length + ' profil' + (profs.length > 1 ? 's' : '') : '';
+            if (!profs || !profs.length) { const tr = el('tr'); const td = el('td', 'vide', profs && SESSION_OK ? 'Aucun profil — en ajouter ci-dessous' : '—'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            profs.forEach(p => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(p.id))); tr.appendChild(el('td', '', tiret(p.model))); tr.appendChild(el('td', '', tiret(p.image)));
+                const n = el('td'); const niv = p.boot_level || 'B0'; n.appendChild(pastille(niv === 'B2' ? 'ok' : niv === 'B0' ? '' : 'att', NIVEAUX[niv] || niv)); tr.appendChild(n);
+                tr.appendChild(el('td', 'mono', p.srv || 'DHCP'));
+                const act = el('td', 'act');
+                const pub = el('button', 'btn sm', 'Publier'); pub.type = 'button';
+                if (niv === 'B0') { pub.disabled = true; pub.title = 'B0 : boot local, rien à publier'; }
+                pub.addEventListener('click', () => demander('Publier les artefacts de boot de la carte ' + p.id + ' ? L’image servie par TFTP/HTTP sera remplacée.', () => publier(p.id)));
+                const sup = el('button', 'btn sm danger', '✕'); sup.type = 'button'; sup.title = 'Supprimer le profil'; sup.setAttribute('aria-label', 'Supprimer le profil ' + p.id);
+                sup.addEventListener('click', () => demander('Supprimer le profil ' + p.id + ' ?', () => supprimer(p.id)));
+                act.appendChild(pub); act.appendChild(document.createTextNode(' ')); act.appendChild(sup);
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+
+        // ----- Confirmation intégrée -----
+        function demander(texte, fn) { CONF = { texte, fn }; rendre(); $('confNon').focus(); }
+        $('confOui').addEventListener('click', () => { const c = CONF; CONF = null; rendre(); if (c) c.fn(); });
+        $('confNon').addEventListener('click', () => { CONF = null; rendre(); });
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function appliquer(commit) {
+            const r = await ecrire('POST', '/overlay/apply', { confirm: !!commit });
+            const titre = commit ? 'APPLICATION' : 'SIMULATION';
+            if (r.ok) { retour('rOverlay', true, titre + '\n' + (resultat(r) || 'terminé')); charger(); } else retour('rOverlay', false, titre + ' impossible : ' + detail(r));
+        }
+        async function retirer() {
+            const r = await ecrire('POST', '/overlay/revert', { confirm: true });
+            if (r.ok) { retour('rOverlay', true, 'RETRAIT\n' + (resultat(r) || 'terminé')); charger(); } else retour('rOverlay', false, 'Retrait impossible : ' + detail(r));
+        }
+        async function persister() {
+            const r = await ecrire('POST', '/overlay/persist', { confirm: true });
+            if (r.ok) { retour('rOverlay', true, 'PERMANENT\n' + (resultat(r) || 'terminé')); charger(); } else retour('rOverlay', false, 'Verrouillage impossible : ' + detail(r));
+        }
+        async function sain() {
+            const r = await ecrire('POST', '/overlay/confirm-healthy');
+            if (r.ok && !(r.data && r.data.ok === false)) { retour('rOverlay', true, 'Boot courant marqué sain.'); charger(); }
+            else retour('rOverlay', false, 'Échec : ' + ((r.data && r.data.error) || detail(r)));
+        }
+        async function serveurUp() {
+            const r = await ecrire('POST', '/server/up');
+            if (r.ok) { retour('rServeur', true, 'SERVEUR ACTIVÉ\n' + (resultat(r) || 'terminé')); charger(); } else retour('rServeur', false, 'Activation impossible : ' + detail(r));
+        }
+        async function publier(id) {
+            const r = await ecrire('POST', '/publish', { board_id: id });
+            if (r.ok) { retour('rProf', true, 'PUBLICATION ' + id + '\n' + (resultat(r) || 'terminée')); charger(); } else retour('rProf', false, 'Publication impossible : ' + detail(r));
+        }
+        async function supprimer(id) {
+            const r = await ecrire('DELETE', '/profiles/' + encodeURIComponent(id));
+            if (r.ok) { retour('rProf', true, 'Profil ' + id + ' supprimé.'); charger(); } else retour('rProf', false, 'Suppression impossible : ' + detail(r));
+        }
+        $('fProf').addEventListener('input', () => { SAISIE = true; });
+        $('fProf').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const v = n => (f.elements[n].value || '').trim();
+            const corps = { id: v('id'), model: v('model') || null, image: v('image') || null, boot_level: v('boot_level'), srv: v('srv') || null };
+            if (!corps.id) { retour('rProf', false, 'MAC requise.'); return; }
+            const r = await ecrire('POST', '/profiles', corps);
+            if (r.ok) { SAISIE = false; f.reset(); retour('rProf', true, 'Profil enregistré.'); charger(); } else retour('rProf', false, 'Enregistrement impossible : ' + detail(r));
+        });
+        $('bSonde').addEventListener('click', charger);
+        $('bDry').addEventListener('click', () => appliquer(false));
+        $('bApply').addEventListener('click', () => demander('Poser l’overlay et détourner bootcmd ? Repli automatique vers l’amorce usine après 3 échecs.', () => appliquer(true)));
+        $('bRevert').addEventListener('click', () => demander('Restaurer l’amorce USINE (retirer l’overlay) ?', retirer));
+        $('bPersist').addEventListener('click', () => demander('Verrouiller l’overlay en amorce PERMANENTE ? À ne faire qu’après l’avoir prouvé au banc : le compteur de révocation est retiré, le repli usine à l’exécution reste.', persister));
+        $('bSain').addEventListener('click', () => demander('Marquer le boot courant comme sain (compteur de boot remis à 0) ?', sain));
+        $('bUp').addEventListener('click', () => demander('Activer ce serveur comme source de boot (racines TFTP/HTTP et tftpd-hpa) ?', serveurUp));
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'netboot' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        chargerModeles();
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONF || SAISIE) return;
+            const a = document.activeElement; if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;
+            charger();
+        }, 20000);
+    </script>
 </body>
 </html>
