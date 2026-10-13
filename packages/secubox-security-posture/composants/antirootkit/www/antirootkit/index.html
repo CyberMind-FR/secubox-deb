@@ -4,395 +4,317 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Anti-rootkit (IDS hôte, alerte seulement) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, action inerte.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Anti-Rootkit</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — Anti-rootkit</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --cyan: #00d4ff;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .header .sub { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.2rem; }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; backdrop-filter: blur(5px); }
-        .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.red .value { color: var(--red); }
-        .stat-card.green .value { color: var(--green); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h3 { color: var(--cyan); font-size: 0.9rem; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .form-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
-        .form-group { flex: 1; min-width: 160px; }
-        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
-        .form-group input { width: 100%; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .form-group input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
-        .list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 420px; overflow-y: auto; }
-        .row-item { display: grid; grid-template-columns: 1.4em 1fr auto; align-items: center; gap: 0.6rem; padding: 0.4rem 0.5rem; background: var(--bg-row); border-radius: 4px; font-size: 0.75rem; border-left: 3px solid var(--border); }
-        .row-item.legit { border-left-color: var(--green); }
-        .row-item.suspect { border-left-color: var(--red); background: rgba(255,68,102,0.08); }
-        .row-item .glyph { text-align: center; font-size: 1em; }
-        .row-item .main-col { min-width: 0; }
-        .row-item .exe { color: var(--cyan); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .row-item .meta { font-size: 0.65rem; color: var(--p31-dim); }
-        .row-item .time { font-size: 0.65rem; color: var(--p31-dim); text-align: right; white-space: nowrap; }
-        .alert-item { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem 0.6rem; background: var(--bg-row); border-radius: 4px; border-left: 3px solid var(--orange); font-size: 0.75rem; }
-        .alert-item .top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-        .alert-item .exe { color: var(--cyan); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
-        .alert-item .score { color: var(--orange); font-weight: bold; }
-        .alert-item .reasons { color: var(--p31-dim); font-size: 0.65rem; }
-        .alert-item .dest { color: var(--red); font-size: 0.65rem; }
-        .empty-note { color: var(--p31-dim); font-size: 0.75rem; padding: 0.5rem; }
-        .plan-box { background: rgba(20,30,45,0.9); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; }
-        .plan-box .plan-row { display: flex; gap: 0.5rem; padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
-        .plan-box .plan-row:last-child { border-bottom: none; }
-        .plan-box .plan-key { color: var(--p31-dim); min-width: 100px; text-transform: uppercase; font-size: 0.65rem; }
-        .plan-box .plan-val { color: var(--cyan); word-break: break-all; }
-        .plan-box .plan-val.empty { color: var(--p31-dim); }
-        .plan-note { color: var(--orange); font-size: 0.65rem; margin-top: 0.5rem; }
-        .toast { position: fixed; bottom: 70px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) {
-            .main { margin-left: 0; padding-top: 60px; }
-            .row-item { grid-template-columns: 1em 1fr; }
-            .row-item .time { display: none; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow:auto;max-height:420px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap;position:sticky;top:0;background:#0b1830}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.exe{max-width:340px;overflow-wrap:anywhere}
+        td.act{white-space:nowrap}
+        @container a (max-width:600px){td.exe{max-width:120px} th,td{padding-left:5px;padding-right:5px}}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input[type=text],form.saisie input[type=search]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .filtres{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 0 8px;font-size:.76rem;color:var(--doux)}
+        .filtres input[type=search]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;width:220px;max-width:100%}
+        .filtres input:focus{outline:none;border-color:var(--cyan)}
+        .plan{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:6px 14px;margin:10px 0 0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6);font-size:.8rem}
+        .plan dt{color:var(--doux)} .plan dd{margin:0;min-width:0;overflow-wrap:anywhere}
+        .conf{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div>
-                <h1>🧟 Anti-Rootkit</h1>
-                <div class="sub" id="subline">loading…</div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><circle cx="12" cy="11" r="2.2"/><path d="M12 13.2V16"/></svg>
+                <div><h1>Anti-rootkit</h1><small>IDS hôte : journal d’exécution et alertes (alerte seulement)</small></div>
             </div>
-            <div class="btn-group">
-                <button class="btn" id="refreshBtn">↻ Refresh</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, action inerte</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="grid">
-            <div class="stat-card cyan"><div class="value" id="statRows">–</div><div class="label">Exec Rows</div></div>
-            <div class="stat-card red"><div class="value" id="statAlerts">–</div><div class="label">Alerts</div></div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre total de lignes du journal d’exécution (execve) tenu par le démon, vraie taille de la table."><span class="l">Événements journalisés</span><span class="v" id="tEvt">—</span><span class="s">journal d’exécution</span></div>
+            <div class="tuile hors" id="cAlertes" title="Alertes de la file : un processus non rattaché à un paquet a été mis en cage. L’API en renvoie au plus 100 ; au-delà, le chiffre est un plancher."><span class="l">Alertes</span><span class="v" id="tAlertes">—</span><span class="s" id="sAlertes">dans la file</span></div>
+            <div class="tuile att" id="cCage" title="Lignes du journal marquées « jail » parmi les 100 dernières lues : un échantillon récent, pas le total du journal."><span class="l">Mises en cage</span><span class="v" id="tCage">—</span><span class="s">sur les 100 dernières</span></div>
+            <div class="tuile att" id="cOrph" title="Exécutions sans paquet dpkg propriétaire parmi les 100 dernières lues : un échantillon récent, pas le total du journal."><span class="l">Sans paquet</span><span class="v" id="tOrph">—</span><span class="s">sur les 100 dernières</span></div>
+            <div class="tuile cy" title="Horodatage de la ligne la plus récente du journal. Un journal ancien peut signaler un démon arrêté ; la page ne peut pas le savoir seule."><span class="l">Dernier événement</span><span class="v" id="tDernier">—</span><span class="s">journal d’exécution</span></div>
+        </section>
 
-        <div class="card">
-            <h3>🔒 Manual Quarantine-Prep</h3>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="qpPath">Binary path</label>
-                    <input type="text" id="qpPath" placeholder="/usr/local/bin/notwork-monitoring">
-                </div>
-                <div class="form-group">
-                    <label for="qpC2">C2 IP (optional)</label>
-                    <input type="text" id="qpC2" placeholder="5.182.207.11">
-                </div>
-                <div class="form-group">
-                    <label for="qpUnit">systemd unit (optional)</label>
-                    <input type="text" id="qpUnit" placeholder="notwork-monitoring.service">
-                </div>
+        <div class="grille">
+            <div class="pan"><h3>Préparer un plan de mise en quarantaine <i>aucune exécution</i></h3>
+                <form class="saisie" id="fQp" autocomplete="off">
+                    <label>Chemin du binaire<input type="text" name="path" id="qpPath" placeholder="/usr/local/bin/exemple" required></label>
+                    <label>IP C2 (facultatif)<input type="text" name="c2_ip" id="qpC2" placeholder="203.0.113.10"></label>
+                    <label>Unité systemd (facultatif)<input type="text" name="unit" id="qpUnit" placeholder="exemple.service"></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="qpBtn">Préparer le plan</button></div>
+                </form>
+                <p class="note">Ceci calcule seulement un PLAN : rien n’est exécuté, aucun état de la détection ne change. Relisez et lancez les commandes à la main.</p>
+                <div id="rPlan" class="retour" hidden></div>
+                <dl class="plan" id="plan" hidden></dl>
             </div>
-            <div class="btn-group">
-                <button class="btn primary" id="qpBtn">🔒 Prepare Quarantine Plan</button>
+
+            <div class="pan"><h3>File d’alertes <i id="nAlertes">—</i></h3>
+                <div class="tab"><table><thead><tr><th>Action</th><th>Exécutable</th><th>PID</th><th>Score</th><th>Raisons</th><th>Destination</th></tr></thead><tbody id="bAlertes"></tbody></table></div>
+                <p class="note">Le bouton « Plan » préremplit le formulaire avec l’exécutable et la destination de l’alerte, puis calcule le plan (aucune exécution).</p>
             </div>
-            <div class="plan-note">This only computes a PLAN — nothing is executed. Review and run the commands manually.</div>
-            <div id="planBox"></div>
-        </div>
 
-        <div class="card">
-            <h3>⚠️ Alert Queue</h3>
-            <div class="list" id="alertList"></div>
+            <div class="pan"><h3>Chronologie d’exécution <i id="nExec">—</i></h3>
+                <div class="filtres">
+                    <input type="search" id="fRech" placeholder="Filtrer (exécutable, paquet)" aria-label="Filtrer la chronologie">
+                    <label><input type="checkbox" id="fOrph"> Sans paquet seulement</label>
+                </div>
+                <div class="tab"><table><thead><tr><th>Heure</th><th>Exécutable</th><th>PID</th><th>PPID</th><th>UID</th><th>Paquet</th><th>Verdict</th><th>Exec</th></tr></thead><tbody id="bExec"></tbody></table></div>
+                <p class="note">Les 100 lignes les plus récentes. Le paquet vient de la vérification dpkg du démon ; « — » = aucun paquet propriétaire.</p>
+            </div>
         </div>
-
-        <div class="card">
-            <h3>📜 Exec Timeline</h3>
-            <div class="list" id="execList"></div>
-        </div>
-    </main>
-    <div class="toast" id="toast"></div>
-
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/antirootkit';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function authHeaders() {
-            const tok = localStorage.getItem('sbx_token');
-            return tok ? { 'Authorization': 'Bearer ' + tok } : {};
+        let STATUT = null, EXEC = null, ALERTES = null, SESSION_OK = true, REQUETE_PLAN = false;
+
+        // Jeton : sbx_token, repli sur l'ancienne clé d'autres pages ; localStorage peut lever.
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const d = typeof ts === 'number' ? new Date(ts < 1e12 ? ts * 1000 : ts) : new Date(ts);
+            if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR');
+        }
+        const pastille = (classe, texte, titre) => { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; };
+        const vide = (tbody, n, msg) => { const tr = el('tr'), td = el('td', 'vide', msg); td.colSpan = n; tr.appendChild(td); tbody.appendChild(tr); };
+
+        function demoData() {
+            const t = Math.floor(Date.now() / 1000);
+            STATUT = { execlog_rows: 18432 };
+            EXEC = [
+                { ts: t - 12, pid: 4210, ppid: 1, uid: 0, exe: '/usr/bin/apt-get', argv: '["apt-get","update"]', success: 1, verdict: 'allow', pkg: 'apt' },
+                { ts: t - 95, pid: 4188, ppid: 4170, uid: 33, exe: '/tmp/.cache/kworker-x', argv: '["kworker-x"]', success: 1, verdict: 'jail', pkg: null },
+                { ts: t - 240, pid: 4102, ppid: 1, uid: 0, exe: '/usr/sbin/nginx', argv: '["nginx"]', success: 1, verdict: 'allow', pkg: 'nginx' },
+                { ts: t - 600, pid: 3977, ppid: 3970, uid: 1000, exe: '/home/demo/outil-inconnu', argv: '["outil-inconnu"]', success: 0, verdict: 'jail', pkg: null },
+                { ts: t - 1800, pid: 3501, ppid: 1, uid: 0, exe: '/usr/bin/python3.11', argv: '["python3"]', success: 1, verdict: 'allow', pkg: 'python3.11-minimal' }];
+            ALERTES = [
+                { exe: '/tmp/.cache/kworker-x', pid: 4188, score: 90, reasons: ['non rattaché à un paquet', 'exécuté depuis /tmp'], dest: '203.0.113.50', ioc: true },
+                { exe: '/home/demo/outil-inconnu', pid: 3977, score: 55, reasons: ['non rattaché à un paquet'], dest: null, ioc: false }];
         }
 
-        function toast(msg, isError) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = 'toast show' + (isError ? ' error' : '');
-            if (!isError) {
-                setTimeout(() => { t.className = 'toast'; }, 3000);
-            }
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/execlog?limit=100'), lire('/alerts')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0); EXEC = Array.isArray(val(1)) ? val(1) : null; ALERTES = Array.isArray(val(2)) ? val(2) : null;
+            const e = $('erreur');
+            e.hidden = !(tous && !refus);
+            if (!e.hidden) e.textContent = 'API injoignable : aucune lecture n’a abouti.';
+            rendre();
         }
 
-        function clearChildren(el) {
-            while (el.firstChild) el.removeChild(el.firstChild);
+        function rendre() {
+            const etat = $('etat');
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const aucune = !STATUT && !EXEC && !ALERTES;
+            if (DEMO) { etat.className = 'actif att'; etat.textContent = 'DÉMONSTRATION'; }
+            else if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (aucune) { etat.className = 'actif hors'; etat.textContent = 'INJOIGNABLE'; }
+            else { etat.className = 'actif'; etat.textContent = 'API EN LIGNE'; }
+            $('maj').textContent = (aucune && !DEMO) ? '—' : 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR');
+
+            $('tEvt').textContent = STATUT && STATUT.execlog_rows != null ? String(STATUT.execlog_rows) : '—';
+            const nA = ALERTES ? ALERTES.length : null;
+            $('tAlertes').textContent = nA === null ? '—' : (nA >= 100 ? '100+' : String(nA));
+            $('cAlertes').className = 'tuile ' + (nA ? 'hors' : 'ok');
+            $('sAlertes').textContent = nA === null ? 'dans la file' : (ALERTES.filter(a => a.ioc).length + ' avec IOC');
+            const cage = EXEC ? EXEC.filter(r => r.verdict === 'jail').length : null;
+            const orph = EXEC ? EXEC.filter(r => !r.pkg).length : null;
+            $('tCage').textContent = cage === null ? '—' : String(cage);
+            $('tOrph').textContent = orph === null ? '—' : String(orph);
+            $('cCage').className = 'tuile ' + (cage ? 'att' : 'ok'); $('cOrph').className = 'tuile ' + (orph ? 'att' : 'ok');
+            $('tDernier').textContent = EXEC && EXEC.length ? quand(EXEC[0].ts) : '—';
+            rendreAlertes(); rendreExec();
+            annoncer();
         }
 
-        function fmtTime(ts) {
-            if (!ts) return '';
-            try {
-                return new Date(ts * 1000).toLocaleString();
-            } catch (e) {
-                return String(ts);
-            }
-        }
-
-        function renderExecList(rows) {
-            const el = document.getElementById('execList');
-            clearChildren(el);
-            if (!rows || !rows.length) {
-                const note = document.createElement('div');
-                note.className = 'empty-note';
-                note.textContent = 'No exec events recorded yet.';
-                el.appendChild(note);
-                return;
-            }
-            rows.forEach(row => {
-                const legit = row.pkg != null && row.pkg !== '';
-                const item = document.createElement('div');
-                item.className = 'row-item ' + (legit ? 'legit' : 'suspect');
-
-                const glyph = document.createElement('div');
-                glyph.className = 'glyph';
-                glyph.textContent = legit ? '✓' : '✗';
-                item.appendChild(glyph);
-
-                const mainCol = document.createElement('div');
-                mainCol.className = 'main-col';
-                const exeEl = document.createElement('div');
-                exeEl.className = 'exe';
-                exeEl.textContent = row.exe || '(unknown)';
-                mainCol.appendChild(exeEl);
-                const meta = document.createElement('div');
-                meta.className = 'meta';
-                meta.textContent = 'pid ' + (row.pid != null ? row.pid : '?') +
-                    ' · parent ' + (row.ppid != null ? row.ppid : '?') +
-                    ' · ' + (legit ? ('pkg: ' + row.pkg) : 'unbacked') +
-                    ' · verdict: ' + (row.verdict || '?');
-                mainCol.appendChild(meta);
-                item.appendChild(mainCol);
-
-                const time = document.createElement('div');
-                time.className = 'time';
-                time.textContent = fmtTime(row.ts);
-                item.appendChild(time);
-
-                el.appendChild(item);
+        function rendreAlertes() {
+            const b = $('bAlertes'); b.textContent = '';
+            if (!ALERTES) { $('nAlertes').textContent = '—'; vide(b, 6, '—  (lecture indisponible)'); return; }
+            $('nAlertes').textContent = ALERTES.length + (ALERTES.length >= 100 ? ' (plafond de l’API)' : '') + ' alerte(s)';
+            if (!ALERTES.length) { vide(b, 6, 'Aucune alerte active.'); return; }
+            ALERTES.forEach(a => {
+                const tr = el('tr');
+                const act = el('td', 'act'); tr.appendChild(act);
+                tr.appendChild(el('td', 'exe mono', tiret(a.exe)));
+                tr.appendChild(el('td', '', tiret(a.pid)));
+                const ts = el('td'); ts.appendChild(pastille('att', a.score != null ? String(a.score) : '—', 'Score de suspicion calculé par le démon')); tr.appendChild(ts);
+                tr.appendChild(el('td', '', Array.isArray(a.reasons) && a.reasons.length ? a.reasons.join(', ') : '—'));
+                const d = el('td', 'mono'); d.textContent = tiret(a.dest);
+                if (a.dest && a.ioc) { d.appendChild(document.createTextNode(' ')); d.appendChild(pastille('hors', 'IOC', 'Destination présente dans la liste d’IOC configurée')); }
+                tr.appendChild(d);
+                const bt = el('button', 'btn sm danger', 'Plan'); bt.type = 'button'; bt.title = 'Préremplir le formulaire et calculer le plan de mise en quarantaine (rien n’est exécuté)';
+                bt.addEventListener('click', () => { $('qpPath').value = a.exe || ''; $('qpC2').value = a.dest || ''; $('qpUnit').value = ''; demanderPlan(a.exe, a.dest, ''); });
+                act.appendChild(bt);
+                b.appendChild(tr);
             });
         }
 
-        function renderAlertList(alerts) {
-            const el = document.getElementById('alertList');
-            clearChildren(el);
-            if (!alerts || !alerts.length) {
-                const note = document.createElement('div');
-                note.className = 'empty-note';
-                note.textContent = 'No active alerts.';
-                el.appendChild(note);
-                return;
-            }
-            alerts.forEach(a => {
-                const item = document.createElement('div');
-                item.className = 'alert-item';
-
-                const top = document.createElement('div');
-                top.className = 'top';
-                const exeEl = document.createElement('span');
-                exeEl.className = 'exe';
-                exeEl.textContent = a.exe || '(unknown)';
-                top.appendChild(exeEl);
-                const scoreEl = document.createElement('span');
-                scoreEl.className = 'score';
-                scoreEl.textContent = 'score ' + (a.score != null ? a.score : '?');
-                top.appendChild(scoreEl);
-                item.appendChild(top);
-
-                if (a.reasons && a.reasons.length) {
-                    const reasons = document.createElement('div');
-                    reasons.className = 'reasons';
-                    reasons.textContent = a.reasons.join(', ');
-                    item.appendChild(reasons);
-                }
-
-                if (a.dest) {
-                    const dest = document.createElement('div');
-                    dest.className = 'dest';
-                    dest.textContent = '→ ' + a.dest + (a.ioc ? ' (IOC match)' : '');
-                    item.appendChild(dest);
-                }
-
-                const btnRow = document.createElement('div');
-                btnRow.className = 'btn-group';
-                const btn = document.createElement('button');
-                btn.className = 'btn danger sm';
-                btn.textContent = '🔒 Quarantine';
-                btn.setAttribute('data-act', 'quarantine-from-alert');
-                btn.setAttribute('data-exe', a.exe || '');
-                btn.setAttribute('data-dest', a.dest || '');
-                btnRow.appendChild(btn);
-                item.appendChild(btnRow);
-
-                el.appendChild(item);
+        function rendreExec() {
+            const b = $('bExec'); b.textContent = '';
+            if (!EXEC) { $('nExec').textContent = '—'; vide(b, 8, '—  (lecture indisponible)'); return; }
+            const rech = $('fRech').value.trim().toLowerCase(), seul = $('fOrph').checked;
+            const lignes = EXEC.filter(r => (!seul || !r.pkg) && (!rech || ((r.exe || '') + ' ' + (r.pkg || '')).toLowerCase().includes(rech)));
+            $('nExec').textContent = lignes.length + ' / ' + EXEC.length + ' ligne(s)';
+            if (!EXEC.length) { vide(b, 8, 'Aucun événement d’exécution enregistré.'); return; }
+            if (!lignes.length) { vide(b, 8, 'Aucune ligne ne correspond au filtre.'); return; }
+            lignes.forEach(r => {
+                const tr = el('tr');
+                const h = el('td', '', quand(r.ts)); h.style.whiteSpace = 'nowrap'; if (r.ts) h.title = new Date(r.ts * 1000).toLocaleString('fr-FR'); tr.appendChild(h);
+                tr.appendChild(el('td', 'exe mono', tiret(r.exe)));
+                tr.appendChild(el('td', '', tiret(r.pid))); tr.appendChild(el('td', '', tiret(r.ppid))); tr.appendChild(el('td', '', tiret(r.uid)));
+                tr.appendChild(el('td', '', tiret(r.pkg)));
+                const v = el('td'); v.appendChild(r.verdict === 'jail' ? pastille('hors', 'MIS EN CAGE', 'Processus non rattaché à un paquet, jugé par le démon') : r.verdict === 'allow' ? pastille('ok', 'AUTORISÉ') : pastille('', tiret(r.verdict).toUpperCase())); tr.appendChild(v);
+                const s = el('td'); s.appendChild(r.success === 0 ? pastille('att', 'ÉCHEC', 'L’appel execve a échoué') : r.success === 1 ? pastille('', 'OK') : pastille('', '—')); tr.appendChild(s);
+                b.appendChild(tr);
             });
         }
 
-        function renderPlan(plan) {
-            const box = document.getElementById('planBox');
-            clearChildren(box);
-            const wrap = document.createElement('div');
-            wrap.className = 'plan-box';
-            Object.keys(plan).forEach(key => {
-                const row = document.createElement('div');
-                row.className = 'plan-row';
-                const k = document.createElement('div');
-                k.className = 'plan-key';
-                k.textContent = key;
-                row.appendChild(k);
-                const v = document.createElement('div');
-                const val = plan[key];
-                v.className = 'plan-val' + (val == null ? ' empty' : '');
-                v.textContent = val == null ? '(none)' : String(val);
-                row.appendChild(v);
-                wrap.appendChild(row);
-            });
-            box.appendChild(wrap);
-        }
-
-        async function loadStatus() {
+        // ----- Plan de quarantaine : même route, même corps que l'ancienne page. Rien n'est exécuté côté serveur. -----
+        async function demanderPlan(chemin, c2, unite) {
+            if (REQUETE_PLAN) return;
+            const path = (chemin || '').trim();
+            $('plan').hidden = true;
+            if (!path) { retour('rPlan', false, 'Le chemin du binaire est obligatoire.'); return; }
+            if (DEMO) { retour('rPlan', false, 'Démonstration : action inerte, aucun appel envoyé.'); return; }
+            REQUETE_PLAN = true;
             try {
-                const res = await fetch(API + '/status');
-                if (!res.ok) throw new Error('status ' + res.status);
-                const data = await res.json();
-                document.getElementById('statRows').textContent = data.execlog_rows != null ? data.execlog_rows : '–';
-                return data;
-            } catch (e) {
-                document.getElementById('subline').textContent = '⚠️ status unavailable';
-                return null;
-            }
-        }
-
-        async function loadExecLog() {
-            try {
-                const res = await fetch(API + '/execlog?limit=100');
-                if (!res.ok) throw new Error('execlog ' + res.status);
-                const rows = await res.json();
-                renderExecList(rows);
-                return rows;
-            } catch (e) {
-                renderExecList([]);
-                return [];
-            }
-        }
-
-        async function loadAlerts() {
-            try {
-                const res = await fetch(API + '/alerts');
-                if (!res.ok) throw new Error('alerts ' + res.status);
-                const alerts = await res.json();
-                document.getElementById('statAlerts').textContent = alerts.length;
-                renderAlertList(alerts);
-                return alerts;
-            } catch (e) {
-                document.getElementById('statAlerts').textContent = '–';
-                renderAlertList([]);
-                return [];
-            }
-        }
-
-        async function requestQuarantinePrep(path, c2Ip, unit) {
-            if (!path) {
-                toast('⚠️ Binary path is required', true);
-                return;
-            }
-            try {
-                const res = await fetch(API + '/quarantine-prep', {
-                    method: 'POST',
-                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                    body: JSON.stringify({ path: path, c2_ip: c2Ip || null, unit: unit || null }),
+                const r = await fetch(API + '/quarantine-prep', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: entetes({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ path: path, c2_ip: c2 || null, unit: unite || null })
                 });
-                if (!res.ok) {
-                    toast('🔒 Request failed (' + res.status + ')', true);
+                if (!r.ok) {
+                    let det = ''; try { const d = await r.json(); if (d && d.detail) det = ' — ' + (typeof d.detail === 'string' ? d.detail : 'requête invalide'); } catch (e) { /* corps vide */ }
+                    retour('rPlan', false, (r.status === 401 || r.status === 403 ? 'Session requise (administrateur) : ' : 'Échec : ') + 'HTTP ' + r.status + det);
                     return;
                 }
-                const plan = await res.json();
-                renderPlan(plan);
-                toast('Plan ready — review before running anything');
-            } catch (e) {
-                toast('🔒 Network error preparing plan', true);
-            }
+                const plan = await r.json();
+                afficherPlan(plan);
+                retour('rPlan', true, 'Plan prêt — relisez avant de lancer quoi que ce soit.');
+            } catch (e) { retour('rPlan', false, 'Serveur injoignable.'); }
+            finally { REQUETE_PLAN = false; annoncer(); }
         }
-
-        async function refresh() {
-            const sub = document.getElementById('subline');
-            sub.textContent = 'refreshing…';
-            await Promise.all([loadStatus(), loadExecLog(), loadAlerts()]);
-            sub.textContent = 'live · manual quarantine-prep never executes';
+        const LIBELLES = { chmod: 'Retirer les droits', copy: 'Copie de preuve', sha256: 'Empreinte SHA-256', nft_block: 'Blocage réseau (nft)', disable_unit: 'Désactiver l’unité' };
+        function afficherPlan(plan) {
+            const dl = $('plan'); dl.textContent = '';
+            Object.keys(plan || {}).forEach(k => {
+                const dt = el('dt', '', LIBELLES[k] || k); dt.title = k; dl.appendChild(dt);
+                const dd = el('dd', 'mono', plan[k] == null ? '—' : String(plan[k])); dl.appendChild(dd);
+            });
+            dl.hidden = false;
         }
+        $('fQp').addEventListener('submit', ev => { ev.preventDefault(); demanderPlan($('qpPath').value, $('qpC2').value.trim(), $('qpUnit').value.trim()); });
+        $('fRech').addEventListener('input', rendreExec); $('fOrph').addEventListener('change', rendreExec);
+        $('rafraichir').addEventListener('click', charger);
 
-        document.getElementById('refreshBtn').addEventListener('click', refresh);
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'antirootkit' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        document.getElementById('qpBtn').addEventListener('click', () => {
-            const path = document.getElementById('qpPath').value.trim();
-            const c2 = document.getElementById('qpC2').value.trim();
-            const unit = document.getElementById('qpUnit').value.trim();
-            requestQuarantinePrep(path, c2, unit);
-        });
-
-        // Event delegation: alert-row "Quarantine" buttons are generated
-        // dynamically and never carry inline onclick handlers.
-        document.getElementById('alertList').addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-act="quarantine-from-alert"]');
-            if (!btn) return;
-            const exe = btn.getAttribute('data-exe');
-            const dest = btn.getAttribute('data-dest');
-            document.getElementById('qpPath').value = exe || '';
-            document.getElementById('qpC2').value = dest || '';
-            requestQuarantinePrep(exe, dest, '');
-        });
-
-        refresh();
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie ou une requête de plan en cours.
+        setInterval(() => {
+            const saisie = ['qpPath', 'qpC2', 'qpUnit', 'fRech'].some(i => $(i).value) || document.activeElement && document.activeElement.tagName === 'INPUT';
+            if (document.hidden || DEMO || REQUETE_PLAN || saisie) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>
