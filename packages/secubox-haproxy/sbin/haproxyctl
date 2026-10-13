@@ -18,6 +18,16 @@ DATA_PATH="${HAPROXY_DATA_PATH:-/data/haproxy}"
 # Surchargeables : indispensable pour verifier une configuration hors de la
 # board (tests, mise au point) sans jamais toucher au frontal en production.
 CONF_PATH="${SECUBOX_HAPROXY_CONF:-/etc/secubox/haproxy.toml}"
+
+# Valeur d'une cle de haproxy.toml, ou la valeur par defaut ($2) quand la cle est ABSENTE ou VIDE (#2526).
+# L'ancienne forme `$(grep … | cut … | tr -d ' ' || echo "80")` ne l'appliquait jamais : le `||` porte sur
+# le dernier maillon du tube (tr), qui reussit toujours. Sur une box neuve (haproxy.toml sans ports) le cfg
+# sortait avec `bind *:` et HAProxy le refusait (« missing port specification »).
+cle_conf() {
+    local v
+    v=$(grep -E "^$1[[:space:]]*=" "$CONF_PATH" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' ')
+    echo "${v:-$2}"
+}
 # Qui a le droit d'encadrer un vhost marque `cadrable = true` (#1257).
 # EXPLICITE et surchargeable : `*` accepterait n'importe quel site, ce qui est
 # l'attaque meme que frame-ancestors existe pour empecher.
@@ -460,9 +470,9 @@ EOF
 # ─────────────────────────────────────────────────────────────────────
 
 cmd_access() {
-    local http_port=$(grep -E '^http_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "80")
-    local https_port=$(grep -E '^https_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "443")
-    local stats_port=$(grep -E '^stats_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8404")
+    local http_port=$(cle_conf http_port 80)
+    local https_port=$(cle_conf https_port 443)
+    local stats_port=$(cle_conf stats_port 8404)
 
     # Get vhosts as JSON array
     local vhosts_json="["
@@ -933,12 +943,13 @@ cmd_cert_sync() {
 cmd_generate() {
     log "Generating HAProxy configuration..."
 
-    local http_port=$(grep -E '^http_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "80")
-    local https_port=$(grep -E '^https_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "443")
-    local stats_port=$(grep -E '^stats_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8404")
+    local http_port=$(cle_conf http_port 80)
+    local https_port=$(cle_conf https_port 443)
+    local stats_port=$(cle_conf stats_port 8404)
     local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "1" || echo "0")
-    local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8080")
-    local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | cut -d'"' -f2 || echo "10.100.0.60")
+    local waf_port=$(cle_conf waf_backend_port 8080)
+    local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | head -1 | cut -d'"' -f2)
+    waf_ip="${waf_ip:-10.100.0.60}"
     # Port du serveur nginx dédié aux défis ACME HTTP-01 (#986). Surchargeable
     # par `acme_port` dans haproxy.toml ; 8880 est la valeur qui était câblée à
     # la main sur la board avant que ce routage ne soit généré.
@@ -1724,8 +1735,9 @@ EOF
 
 cmd_waf_status() {
     local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "true" || echo "false")
-    local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | cut -d'"' -f2 || echo "10.100.0.60")
-    local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8080")
+    local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | head -1 | cut -d'"' -f2)
+    waf_ip="${waf_ip:-10.100.0.60}"
+    local waf_port=$(cle_conf waf_backend_port 8080)
     local waf_running="false"
     local waf_container="false"
 
