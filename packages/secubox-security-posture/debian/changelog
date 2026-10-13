@@ -1,3 +1,30 @@
+secubox-security-posture (2.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /cve-triage/ au profil Aurora (#2584, #2571) : un seul fichier autonome, sans script ni police externes
+    (hors menu commun), tuiles (CVE connues, par gravite, critiques non triees), repartition par gravite, flux,
+    huit onglets (CISA KEV, toutes les CVE, tendances EPSS, recentes, mon triage, recherche, sondes WAF, paquets),
+    tri et filtre cote page, detail d'une CVE dans la page, ?demo=1 (donnees fictives, actions inertes), ?embed=1,
+    hauteur annoncee a l'hote (sbxVue, onglet cve-triage), bandeau « session requise » sur 401/403.
+  * Les huit appels d'ecriture sont inchanges (memes routes, methodes et corps : /feeds/sync-all, /feeds/recent,
+    /triage/{id} en POST et PUT {status}, /query, /scan/packages, /scan/vulnerabilities, /waf-rules/generate) ;
+    chacun demande desormais une confirmation integree a la page, plus aucun alert()/confirm().
+  * Bogues de l'ancienne page corriges : la recherche appelait /cves/search, masquee cote API par /cves/{cve_id}
+    (404 avale, « aucun resultat » a tort) -> repli sur /cves, filtre identifiant/description, dit dans la page ;
+    l'onglet « Recent (7d) » ignorait le choix 14/30 jours ; les echecs d'ecriture (404, 409, 500) etaient
+    avalees et annoncees comme reussies (« Created triage entry ») -> erreur de l'API affichee ; la tuile
+    « Untriaged » etait en fait le compteur des seules critiques non triees (renommee) et affichait 0 quand la
+    mesure manquait (desormais « — ») ; descriptions, identifiants et references injectes sans echappement dans
+    innerHTML et des gestionnaires onclick (XSS) et references javascript: cliquables -> tout en textContent,
+    seuls les liens http(s) sont rendus ; EPSS a 0 traite comme absent ; pourcentile NaN ; 401 qui redirigeait
+    vers la page de connexion ; troncatures « ... » ajoutees meme aux descriptions courtes.
+  * Non repris : colonne « Vendor/Product » du KEV renommee « Paquets affectes » (c'est affected_packages) et
+    « Added » renommee « Publiee » (l'API ne fournit pas la date d'ajout au catalogue) ; « Last sync » ne vaut
+    que pour la session (l'API ne conserve pas la date des flux) ; compteur de paquets initial « 0 packages »
+    remplace par « — » ; pas d'actualisation automatique des onglets Tendances et Sondes WAF (appel externe, sudo).
+    Aucune action nouvelle, aucune route d'API modifiee (l'ordre des routes /cves/search reste a corriger cote API).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:00:00 +0200
+
 secubox-security-posture (2.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-antirootkit (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
