@@ -1,3 +1,9 @@
+secubox-assist (0.2.12-1~bookworm1) bookworm; urgency=medium
+
+  * Page /assist/ : bouton « Synchroniser avec le maillage » (#2540) : POST /api/v1/annuaire/sync/now puis relecture, avec le retour (« 2 entree(s) recue(s) », « Deja a jour », « Aucun pair », « session requise »), sans boite native. 3 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:00:00 +0200
+
 secubox-assist (0.2.11-1~bookworm1) bookworm; urgency=low
 
   * Page Assistance : la carte « Demandes en attente » liste aussi les demandes ouvertes reçues des autres box (de, motif, tags, bouton Répondre) ; elle ne montrait que les demandes émises par la box (#1891).

@@ -98,6 +98,7 @@ def sync_once(
     peers: List[Dict[str, str]],
     fetch: Callable[[str], List[Dict[str, Any]]] = http_fetch,
     port: int = DEFAULT_MESH_PORT,
+    ops: Optional[str] = None,
 ) -> Dict[str, int]:
     """Pull /log/export from each peer and merge. Never raises — an unreachable
     or malformed peer is counted in `errors` and skipped. `fetch` is injectable
@@ -110,7 +111,7 @@ def sync_once(
         ip = peer.get("mesh_ip")
         if not ip:
             continue
-        url = f"http://{ip}:{port}/api/v1/annuaire/log/export"
+        url = f"http://{ip}:{port}/api/v1/annuaire/log/export" + (f"?ops={ops}" if ops else "")
         try:
             entries = fetch(url)
         except Exception:

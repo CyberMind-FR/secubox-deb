@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — annuaire 0.11.2 et assist 0.2.12 : demandes et offres synchronisées en ~20 s (ref #2540)
+
+« Demande et offre pas sync » sur `/assist/` : la réplication du journal marchait mais était lente (journal entier de 3 Mo toutes les 300 s pour une cinquantaine d'entrées d'assistance ; premier passage d'une RPi > 7 min) et muette quand elle échouait (`except Exception: pass`). `/log/export?ops=assist_`, voie rapide de 20 s qui ne tire que l'assistance, échecs et ingestions journalisés, `POST /sync/now` et bouton « Synchroniser » dans `/assist/`. Tests `test_assist_sync_2540.py` et `test_bouton_synchro_2540.py`. Le journal entier garde ses 300 s ; une synchro incrémentale (curseur) reste à faire.
+
 ## 2026-10-13 — hub 1.11.0 : /espace/, /health/ et /appareil/ au profil Aurora (ref #2538)
 
 « Les onglets sont pétés » sur `/espace/#protection` : la Vue d'ensemble Aurora (#2485) avait supprimé `apercu.css`/`apercu.js` que `/espace/` et `/appareil/` liaient encore. Pages refaites sur données réelles : `/espace/` (onglets réactifs, état tiré de `health-batch`, filtres, clavier), `/health/` (tuiles-filtres, lignes dépliables et sélectionnables, WAF rejouable), `/appareil/` (feuille intégrée). Garde-fou : aucune ressource locale manquante dans une page du hub. Tests `test_espace_aurora_2538.py`, `test_health_aurora_2538.py`, `test_pages_sans_ressource_manquante_2538.py`.
