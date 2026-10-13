@@ -2,293 +2,332 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1245 — panneau admin ZIA (webmin).
-  Règle le MOTEUR (llama-server / heuristique), l'ACCÈS (rôle par défaut, bus) et
-  le NIVEAU 3 remote. Écritures protégées par JWT (secubox_core.auth : Bearer OU
-  cookie de session SSO-lite). Charte WEBUI-PANEL-GUIDELINES : hybrid-dark, cyan,
-  Courier Prime, emoji fonctionnels.
+  Administration de ZIA au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Règle le MOTEUR (llama-server / heuristique), l'ACCÈS (rôle par défaut, bus) et le NIVEAU 3 remote.
+  Lectures : GET /config et GET /metrics ; écritures (mêmes routes et corps que l'ancienne page) :
+  POST /config (un sous-ensemble par carte) et POST /llm/test. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZIA — Admin</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<style>
-  :root{
-    --bg:#0a0f16; --panel:#0f1826; --panel-2:#0c1420; --line:#1c2a3d; --line-soft:#152131;
-    --ink:#d7e6f2; --muted:#6f8199; --faint:#4d6076;
-    --cyan:#28d6ff; --cyan-dim:#0e9dc4; --gold:#f0b429; --up:#35d07f; --down:#ff5d6c; --purple:#a371f7;
-    --glow:rgba(40,214,255,.14);
-  }
-  *{box-sizing:border-box}
-  body{margin:0; background:var(--bg); color:var(--ink);
-    font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:15px; line-height:1.5;
-    background-image:radial-gradient(900px 500px at 85% -8%,var(--glow),transparent 70%);}
-  .mono,.k{font-family:"Courier Prime",ui-monospace,monospace}
-  .wrap{max-width:760px; margin:0 auto; padding:28px 20px 60px}
-  h1{font-family:"Courier Prime"; font-weight:700; font-size:1.4rem; margin:0; letter-spacing:-.01em; text-shadow:0 0 10px var(--glow)}
-  h1 .c{color:var(--cyan)}
-  .sub{color:var(--muted); font-size:.85rem; margin:4px 0 22px}
-  .head{display:flex; align-items:center; gap:12px; margin-bottom:6px}
-  .sat{width:40px; height:40px; border-radius:11px; display:grid; place-items:center; font-size:1.2rem;
-    background:linear-gradient(150deg,color-mix(in srgb,var(--cyan) 24%,var(--panel)),var(--panel)); border:1px solid var(--line)}
-  .spacer{flex:1}
-  a.back{color:var(--muted); font-size:.8rem; text-decoration:none; font-family:"Courier Prime"}
-  a.back:hover{color:var(--cyan)}
-  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:18px;
-    box-shadow:0 2px 6px rgba(0,0,0,.4)}
-  .card h2{font-family:"Courier Prime"; font-size:.78rem; letter-spacing:.16em; text-transform:uppercase; color:var(--cyan);
-    margin:0 0 4px}
-  .card .hint{font-size:.78rem; color:var(--muted); margin:0 0 16px}
-  .card .hint b{color:var(--gold)}
-  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
-  .f{display:flex; flex-direction:column; gap:5px}
-  .f.full{grid-column:1 / -1}
-  .f label{font-size:.72rem; color:var(--muted); font-weight:600; display:flex; align-items:center; gap:6px}
-  .f label .u{color:var(--faint); font-weight:400; font-family:"Courier Prime"; font-size:.7rem}
-  .f label .tag{margin-left:auto; font-size:.56rem; letter-spacing:.1em; text-transform:uppercase; color:var(--cyan);
-    border:1px solid color-mix(in srgb,var(--cyan) 40%,var(--line)); border-radius:5px; padding:1px 6px}
-  input,select,textarea{background:var(--panel-2); border:1px solid var(--line); border-radius:9px; color:var(--ink);
-    font-family:"Courier Prime",monospace; font-size:.92rem; padding:10px 12px; width:100%; transition:border-color .12s}
-  input:focus,select:focus,textarea:focus{outline:none; border-color:var(--cyan); box-shadow:0 0 0 3px var(--glow)}
-  select{cursor:pointer}
-  .switch{display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--panel-2); border:1px solid var(--line);
-    border-radius:9px; cursor:pointer; user-select:none}
-  .switch input{width:auto}
-  .switch .lab{font-family:"Courier Prime"; font-size:.82rem}
-  .row-btn{display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap}
-  button.save{font-family:"Courier Prime"; font-weight:700; letter-spacing:.03em; background:var(--cyan); color:#04121a;
-    border:0; border-radius:10px; padding:11px 20px; cursor:pointer; font-size:.86rem; transition:transform .12s, box-shadow .12s}
-  button.save:hover{transform:translateY(-1px); box-shadow:0 6px 20px var(--glow)}
-  button.ghost{background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:10px;
-    padding:11px 16px; cursor:pointer; font-family:"Courier Prime"; font-size:.82rem}
-  button.ghost:hover{color:var(--cyan); border-color:var(--cyan)}
-  .msg{font-family:"Courier Prime"; font-size:.8rem; min-height:1.2em}
-  .msg.ok{color:var(--up)} .msg.err{color:var(--down)}
-  .preview{display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; font-family:"Courier Prime"; font-size:.82rem;
-    color:var(--muted); padding:12px 14px; background:var(--panel-2); border:1px solid var(--line-soft); border-radius:10px}
-  .preview b{color:var(--gold); font-size:1.05rem}
-  .preview .pc{color:var(--cyan)}
-  .pill{font-family:"Courier Prime"; font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; padding:2px 9px;
-    border-radius:20px; border:1px solid var(--line)}
-  .pill.llm{color:#04121a; background:var(--cyan); border-color:var(--cyan)}
-  .pill.heur{color:var(--gold); border-color:color-mix(in srgb,var(--gold) 40%,var(--line))}
-  .warn{border-left:3px solid var(--gold); padding-left:12px; margin:0 0 14px; color:var(--muted); font-size:.78rem}
-  .adv-toggle{background:none;border:0;color:var(--faint);font-family:"Courier Prime";font-size:.72rem;cursor:pointer;padding:0;margin-top:6px}
-  .adv-toggle:hover{color:var(--cyan)}
-  #adv{display:none; margin-top:12px}
-  #gate{max-width:380px; margin:8vh auto 0}
-  #app{display:none}
-  .whoami{font-family:"Courier Prime"; font-size:.72rem; color:var(--up); display:flex; align-items:center; gap:6px}
-  .dot{width:7px; height:7px; border-radius:50%; background:var(--up)}
-  @media (max-width:560px){ .grid{grid-template-columns:1fr} }
-</style>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZIA — Administration</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.78rem;padding:6px 13px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block;min-height:32px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 6px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}.grille .large{grid-column:1/-1}}
+        .note{color:var(--faible);font-size:.72rem;margin:4px 0 8px;line-height:1.4}
+        .note b{color:var(--doux)}
+        .alerte{border-left:3px solid var(--orange);padding:2px 0 2px 10px;margin:4px 0 10px;color:var(--doux);font-size:.76rem;line-height:1.4}
+        .champs{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:0 0 8px}
+        .champs .plein{grid-column:1/-1}
+        .champs label,.interrupteur{display:grid;gap:3px;font-size:.72rem;color:var(--doux);min-width:0}
+        .champs label small{color:var(--faible);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.66rem}
+        .champs input,.champs select{font:inherit;font-size:.82rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 9px;min-width:0;width:100%;min-height:34px}
+        .champs input:focus,.champs select:focus{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan)}
+        .champs input:disabled,.champs select:disabled{opacity:.55}
+        .interrupteur{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--trait2);border-radius:8px;background:rgba(8,18,38,.6);margin:0 0 8px;color:var(--texte);font-size:.82rem;cursor:pointer}
+        .interrupteur input{width:18px;height:18px;margin:0;accent-color:var(--cyan)}
+        details.avance{margin:0 0 8px} details.avance summary{cursor:pointer;color:var(--doux);font-size:.74rem;padding:4px 0} details.avance summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        .retour{font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .confirme{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.08);border-radius:8px;padding:8px 10px;font-size:.78rem;margin-top:8px}
+        .confirme span{flex:1 1 220px}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 6 9l4 3 2-7 2 7 4-3 2 11z"/><circle cx="9.5" cy="15" r=".6"/><circle cx="14.5" cy="15" r=".6"/></svg>
+                <div><h1>ZIA · Administration</h1><small id="sous">Moteur, accès et niveau 3 (remote)</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><a class="btn" href="index.html">← ZIA</a></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise (administrateur de la box). <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-<div class="wrap">
-  <div class="head">
-    <div class="sat">🦊</div>
-    <div><h1>ZI<span class="c">A</span> · <span class="k">admin</span></h1>
-      <div class="sub" id="sub">moteur, accès &amp; remote — écritures protégées (JWT)</div></div>
-    <span class="spacer"></span>
-    <a class="back" href="index.html">← cardlet</a>
-  </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cMoteur" title="Moteur de formulation actif : un llama-server local, ou le répondeur heuristique (sans génération)."><span class="l">Moteur</span><span class="v" id="tMoteur">—</span><span class="s" id="sMoteur">formulation des réponses</span></div>
+            <div class="tuile cy" title="Nom du modèle affiché dans la carte ZIA (réglage « Nom du modèle »)."><span class="l">Modèle</span><span class="v" id="tModele" style="font-size:1.05rem;line-height:1.2">—</span><span class="s">nom affiché</span></div>
+            <div class="tuile cy" title="Objets que le bus renvoie au rôle de la session (MetaNews, Billets, PeerTube, registre). Le modèle n’en invente aucun."><span class="l">Objets au bus</span><span class="v" id="tObjets">—</span><span class="s">visibles à ce rôle</span></div>
+            <div class="tuile cy" title="Échanges de chat traités depuis le démarrage du service (compteur en mémoire, remis à zéro au redémarrage)."><span class="l">Échanges</span><span class="v" id="tEchanges">—</span><span class="s">depuis le démarrage</span></div>
+            <div class="tuile cy" title="Durée moyenne d’un échange, depuis le démarrage du service. « — » tant qu’aucun échange n’a eu lieu."><span class="l">Latence moyenne</span><span class="v" id="tLatence">—</span><span class="s" id="sLatence">par échange</span></div>
+            <div class="tuile" id="cRemote" title="Niveau 3 : escalade vers un endpoint distant. Désactivé par défaut."><span class="l">Remote (niveau 3)</span><span class="v" id="tRemote">—</span><span class="s" id="sRemote">escalade distante</span></div>
+        </section>
 
-  <!-- LOGIN -->
-  <div id="gate" class="card">
-    <h2>🔒 Authentification</h2>
-    <p class="hint">Connexion SecuBox requise pour régler ZIA.</p>
-    <div class="grid">
-      <div class="f full"><label>Utilisateur</label><input id="u" autocomplete="username"></div>
-      <div class="f full"><label>Mot de passe</label><input id="p" type="password" autocomplete="current-password"></div>
-    </div>
-    <div class="row-btn"><button class="save" id="login">Se connecter</button>
-      <span class="msg" id="login-msg"></span></div>
-  </div>
+        <section class="grille">
+            <div class="pan">
+                <h3>Moteur <i>llm_url, modèle, génération</i></h3>
+                <p class="note">Vide = répondeur <b>heuristique</b> (honnête, sans génération). Renseigner l’URL d’un <b>llama-server</b> local (ex. <span class="mono">http://127.0.0.1:8091</span>) pour la formulation. Les objets viennent <b>toujours</b> du bus : le modèle n’invente rien.</p>
+                <div class="champs">
+                    <label class="plein" for="llm_url">URL llama-server <small>llm_url</small><input id="llm_url" placeholder="http://127.0.0.1:8091 — vide = heuristique" autocomplete="off"></label>
+                    <label for="model_name">Nom du modèle <small>affiché</small><input id="model_name" autocomplete="off"></label>
+                    <label for="n_predict">Tokens générés <small>n_predict (entier)</small><input id="n_predict" inputmode="numeric" autocomplete="off"></label>
+                    <label for="llm_timeout_s">Délai d’attente <small>llm_timeout_s (secondes)</small><input id="llm_timeout_s" inputmode="decimal" autocomplete="off"></label>
+                </div>
+                <div class="actions"><button class="btn prim" type="button" data-save="moteur">Enregistrer le moteur</button><button class="btn" type="button" id="test">Tester le modèle</button></div>
+                <div class="retour" id="moteur-msg" role="status" hidden></div>
+            </div>
 
-  <!-- APP -->
-  <div id="app">
-    <div class="card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-        <span class="whoami"><span class="dot"></span><span id="who">connecté</span></span>
-        <span class="spacer" style="flex:1"></span>
-        <button class="ghost" id="logout">Se déconnecter</button>
-      </div>
-      <div class="preview" id="preview">…</div>
-    </div>
+            <div class="pan">
+                <h3>Accès et bus <i>rôle, cache, adapters</i></h3>
+                <p class="note">Le <b>rôle par défaut</b> borne ce qui est visible tant que l’authentification du Hall n’est pas branchée. Le <b>cache du bus</b> lisse les appels aux adapters (MetaNews, Billets, PeerTube, registre).</p>
+                <div class="champs">
+                    <label for="default_role">Rôle par défaut <small>default_role</small>
+                        <select id="default_role"><option value="guest">guest — public</option><option value="registered">registered — inscrit</option><option value="member">member — membre</option><option value="admin">admin — tout</option></select></label>
+                    <label for="bus_cache_s">Cache du bus <small>bus_cache_s (secondes)</small><input id="bus_cache_s" inputmode="decimal" autocomplete="off"></label>
+                    <label class="plein" for="peertube_url">PeerTube <small>peertube_url — adapter vidéo</small><input id="peertube_url" placeholder="https://peertube.example" autocomplete="off"></label>
+                </div>
+                <details class="avance"><summary>Sockets du bus (avancé)</summary>
+                    <div class="champs">
+                        <label for="metanews_sock">MetaNews <small>metanews_sock</small><input id="metanews_sock" autocomplete="off"></label>
+                        <label for="webos_sock">WebOS <small>webos_sock</small><input id="webos_sock" autocomplete="off"></label>
+                        <label class="plein" for="billets_sock">Billets <small>billets_sock</small><input id="billets_sock" autocomplete="off"></label>
+                    </div></details>
+                <div class="actions"><button class="btn prim" type="button" data-save="bus">Enregistrer l’accès</button></div>
+                <div class="retour" id="bus-msg" role="status" hidden></div>
+            </div>
 
-    <!-- MOTEUR -->
-    <div class="card">
-      <h2>🧠 Moteur</h2>
-      <p class="hint">Vide = répondeur <b>heuristique</b> (honnête, sans génération). Renseigne l'URL d'un
-        <b>llama-server</b> local (ex. <span class="k">http://127.0.0.1:8091</span>) pour la formulation.
-        Les objets viennent <b>toujours</b> du bus — le modèle n'invente rien.</p>
-      <div class="grid">
-        <div class="f full"><label>URL llama-server <span class="u">llm_url</span><span class="tag">moteur</span></label>
-          <input id="llm_url" placeholder="http://127.0.0.1:8091 — vide = heuristique"></div>
-        <div class="f"><label>Nom du modèle <span class="u">affiché</span></label><input id="model_name"></div>
-        <div class="f"><label>Tokens générés <span class="u">n_predict</span></label><input id="n_predict" inputmode="numeric"></div>
-        <div class="f"><label>Timeout <span class="u">s</span></label><input id="llm_timeout_s" inputmode="decimal"></div>
-      </div>
-      <div class="row-btn"><button class="save" data-save="moteur">💾 Enregistrer le moteur</button>
-        <button class="ghost" id="test">🔌 Tester le modèle</button>
-        <span class="msg" id="moteur-msg"></span></div>
-    </div>
+            <div class="pan large">
+                <h3>Niveau 3 · Remote <i>remote_*</i></h3>
+                <p class="alerte">Dernier recours, <b>désactivé par défaut</b>. Tenté seulement si le rôle l’autorise ET qu’un endpoint est réglé : contexte minimal, secrets rédigés, budget horaire, délai d’attente et coupe-circuit, repli local systématique. Ce n’est jamais une dépendance.</p>
+                <label class="interrupteur" for="remote_enabled"><input type="checkbox" id="remote_enabled"><span>Autoriser l’escalade remote</span></label>
+                <div class="champs">
+                    <label class="plein" for="remote_url">Endpoint <small>remote_url</small><input id="remote_url" placeholder="https://zia-remote.example — vide = jamais" autocomplete="off"></label>
+                    <label for="remote_role_min">Rôle minimum <small>remote_role_min</small>
+                        <select id="remote_role_min"><option value="registered">registered</option><option value="member">member</option><option value="admin">admin</option></select></label>
+                    <label for="remote_timeout_s">Délai d’attente <small>remote_timeout_s (secondes)</small><input id="remote_timeout_s" inputmode="decimal" autocomplete="off"></label>
+                    <label for="remote_budget">Budget <small>remote_budget (escalades par heure, entier)</small><input id="remote_budget" inputmode="numeric" autocomplete="off"></label>
+                </div>
+                <div class="actions"><button class="btn prim" type="button" data-save="remote">Enregistrer le remote</button></div>
+                <div id="confirme" class="confirme" hidden><span>Armer l’escalade remote ? Des requêtes pourront quitter la box vers l’endpoint réglé (contexte minimal, secrets rédigés).</span><button class="btn danger" type="button" id="oui">Confirmer</button><button class="btn" type="button" id="non">Annuler</button></div>
+                <div class="retour" id="remote-msg" role="status" hidden></div>
+            </div>
 
-    <!-- ACCÈS & BUS -->
-    <div class="card">
-      <h2>🔑 Accès &amp; bus</h2>
-      <p class="hint">Le <b>rôle par défaut</b> borne ce qui est visible tant que l'auth du Hall n'est pas
-        branchée. Le <b>cache du bus</b> lisse les appels aux adapters (MetaNews, Billets, PeerTube, registre).</p>
-      <div class="grid">
-        <div class="f"><label>Rôle par défaut <span class="u">visibilité</span></label>
-          <select id="default_role">
-            <option value="guest">guest — public</option>
-            <option value="registered">registered — inscrit</option>
-            <option value="member">member — membre</option>
-            <option value="admin">admin — tout</option>
-          </select></div>
-        <div class="f"><label>Cache du bus <span class="u">s</span></label><input id="bus_cache_s" inputmode="decimal"></div>
-        <div class="f full"><label>PeerTube <span class="u">adapter vidéo</span></label><input id="peertube_url" placeholder="https://peertube.gk2.secubox.in"></div>
-      </div>
-      <button class="adv-toggle" id="adv-btn">▸ sockets du bus (avancé)</button>
-      <div id="adv">
-        <div class="grid">
-          <div class="f"><label>MetaNews <span class="u">sock</span></label><input id="metanews_sock"></div>
-          <div class="f"><label>WebOS <span class="u">sock</span></label><input id="webos_sock"></div>
-          <div class="f full"><label>Billets <span class="u">sock</span></label><input id="billets_sock"></div>
-        </div>
-      </div>
-      <div class="row-btn"><button class="save" data-save="bus">💾 Enregistrer l'accès</button>
-        <span class="msg" id="bus-msg"></span></div>
-    </div>
+            <div class="pan large"><h3>Ce que cette page ne montre pas</h3>
+                <p class="note" style="margin:0">L’API n’expose pas de journal des échanges ni de compteur d’escalades remote : seuls les compteurs en mémoire du service sont affichés, et « — » tient lieu de mesure absente. Aucun secret n’est géré ici (ZIA n’en stocke pas). La connexion se fait par la page de connexion de la box ; le jeton de la session est lu sous <span class="mono">sbx_token</span>.</p></div>
+        </section>
+    </div></div></main>
 
-    <!-- NIVEAU 3 · REMOTE -->
-    <div class="card">
-      <h2>🛰️ Niveau 3 · Remote</h2>
-      <p class="warn">Dernier recours, <b>désactivé par défaut</b>. Tenté seulement si le rôle l'autorise ET
-        qu'un endpoint est réglé : contexte minimal, secrets rédigés, budget horaire + timeout + coupe-circuit,
-        repli local systématique. Ce n'est jamais une dépendance.</p>
-      <label class="switch" style="margin-bottom:14px"><input type="checkbox" id="remote_enabled">
-        <span class="lab">Autoriser l'escalade remote</span></label>
-      <div class="grid">
-        <div class="f full"><label>Endpoint <span class="u">remote_url</span></label>
-          <input id="remote_url" placeholder="https://zia-remote.example (endpoint /v1/chat) — vide = jamais"></div>
-        <div class="f"><label>Rôle minimum</label>
-          <select id="remote_role_min">
-            <option value="registered">registered</option>
-            <option value="member">member</option>
-            <option value="admin">admin</option>
-          </select></div>
-        <div class="f"><label>Timeout <span class="u">s</span></label><input id="remote_timeout_s" inputmode="decimal"></div>
-        <div class="f"><label>Budget <span class="u">escalades/h</span></label><input id="remote_budget" inputmode="numeric"></div>
-      </div>
-      <div class="row-btn"><button class="save" data-save="remote">💾 Enregistrer le remote</button>
-        <span class="msg" id="remote-msg"></span></div>
-    </div>
-  </div>
-</div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/zia';
+        const $ = id => document.getElementById(id);
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-<script>
-(function(){
-  "use strict";
-  var API='/api/v1/zia', nf=new Intl.NumberFormat('fr-FR');
-  var el=function(id){return document.getElementById(id);};
-  var TOKEN='';
-  function hdr(json){ var h={}; if(json) h['Content-Type']='application/json'; if(TOKEN) h['Authorization']='Bearer '+TOKEN; return h; }
-  function num(id){ var v=parseFloat(String(el(id).value).replace(',','.')); return isNaN(v)?null:v; }
-  function str(id){ var v=el(id).value.trim(); return v===''?'':v; }
-  function msg(id,txt,ok){ var m=el(id); m.textContent=txt; m.className='msg '+(ok?'ok':'err'); if(ok) setTimeout(function(){ if(m.textContent===txt){m.textContent='';m.className='msg';} },3800); }
+        let CFG = null, MET = null, SESSION_OK = true, SERVEUR_KO = false, ENVOI = false;
 
-  function renderPreview(m){
-    if(!m){ el('preview').textContent='métriques indisponibles'; return; }
-    var eng = m.engine==='llm'
-      ? '<span class="pill llm">llm</span> '+ (m.model||'modèle')
-      : '<span class="pill heur">heuristique</span>';
-    el('preview').innerHTML = eng
-      + ' · <b>'+nf.format(m.objets_bus||0)+'</b> objets au bus'
-      + ' · '+nf.format(m.chats||0)+' échanges'
-      + ' · <span class="pc">'+ (m.latence_ms_moy!=null?m.latence_ms_moy+' ms':'—') +'</span> moyen'
-      + (m.remote_enabled?' · <span style="color:var(--gold)">remote armé</span>':'');
-  }
-  function loadMetrics(){
-    fetch(API+'/metrics',{headers:{'Accept':'application/json'}})
-      .then(function(r){return r.ok?r.json():null;}).then(renderPreview).catch(function(){});
-  }
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: 'POST', credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.statut === 401) return 'session requise ou expirée (reconnectez-vous)';
+            if (res.statut === 403) return 'réservé aux administrateurs de la box';
+            if (res.statut === 422) return 'valeur refusée par le service';
+            if (res.data && typeof res.data.detail === 'string') return res.data.detail;
+            return res.statut ? 'HTTP ' + res.statut : 'service injoignable';
+        }
 
-  var STR=['llm_url','model_name','peertube_url','default_role','metanews_sock','webos_sock','billets_sock','remote_url','remote_role_min'];
-  var NUM=['n_predict','llm_timeout_s','bus_cache_s','remote_timeout_s','remote_budget'];
-  function fill(cfg){
-    if(!cfg) return;
-    STR.forEach(function(k){ if(cfg[k]!=null) el(k).value=cfg[k]; });
-    NUM.forEach(function(k){ if(cfg[k]!=null) el(k).value=cfg[k]; });
-    el('remote_enabled').checked = !!cfg.remote_enabled;
-    el('who').textContent='connecté · moteur '+(cfg.llm_url?('llm ('+(cfg.model_name||'?')+')'):'heuristique');
-    el('sub').textContent = cfg.llm_url ? ('llama-server '+cfg.llm_url) : 'moteur heuristique — pas de génération';
-  }
+        const TEXTES = ['llm_url', 'model_name', 'peertube_url', 'default_role', 'metanews_sock', 'webos_sock', 'billets_sock', 'remote_url', 'remote_role_min'];
+        const NOMBRES = ['n_predict', 'llm_timeout_s', 'bus_cache_s', 'remote_timeout_s', 'remote_budget'];
+        const ENTIERS = ['n_predict', 'remote_budget'];
+        const GROUPES = {
+            moteur: { s: ['llm_url', 'model_name'], n: ['n_predict', 'llm_timeout_s'] },
+            bus: { s: ['peertube_url', 'default_role', 'metanews_sock', 'webos_sock', 'billets_sock'], n: ['bus_cache_s'] },
+            remote: { s: ['remote_url', 'remote_role_min'], n: ['remote_timeout_s', 'remote_budget'], b: ['remote_enabled'] }
+        };
 
-  function loadAll(){
-    Promise.all([
-      fetch(API+'/config',{headers:hdr(false),credentials:'include'}).then(function(r){return r.ok?r.json():null;})
-    ]).then(function(res){
-      fill(res[0]); el('gate').style.display='none'; el('app').style.display='block'; loadMetrics();
-    });
-  }
+        function demoData() {
+            CFG = { model_name: 'TinyLlama · Q4', llm_url: 'http://127.0.0.1:8091', n_predict: 120, llm_timeout_s: 20, metanews_sock: '/run/secubox/metanews.sock', webos_sock: '/run/secubox/webos.sock',
+                    billets_sock: '/run/secubox/billets.sock', peertube_url: 'https://peertube.example.test', bus_cache_s: 45, default_role: 'guest',
+                    remote_enabled: false, remote_role_min: 'admin', remote_url: '', remote_timeout_s: 15, remote_budget: 20 };
+            MET = { chats: 128, latence_ms_moy: 842.5, objets_bus: 37, engine: 'llm', model: 'TinyLlama · Q4', tools: ['objets', 'recherche'], remote_enabled: false };
+        }
 
-  // Déjà authentifié via cookie SSO ? On tente /config directement.
-  fetch(API+'/config',{credentials:'include'}).then(function(r){ if(r.ok) loadAll(); }).catch(function(){});
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; SERVEUR_KO = false; remplir(CFG, null); rendre(); return; }
+            const essais = await Promise.allSettled([lire('/config'), lire('/metrics')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            SESSION_OK = !refus;
+            SERVEUR_KO = !refus && essais.every(e => e.status === 'rejected');
+            CFG = val(0); MET = val(1);
+            if (CFG) remplir(CFG, null);
+            rendre();
+        }
+        // Métriques seules : l'actualisation automatique ne touche jamais aux champs en cours de saisie.
+        async function chargerMetriques() {
+            try { MET = await lire('/metrics'); } catch (e) { if (e.statut === 401 || e.statut === 403) { MET = null; SESSION_OK = false; } }
+            rendre();
+        }
 
-  el('login').addEventListener('click', function(){
-    var u=el('u').value.trim(), p=el('p').value;
-    if(!u||!p){ msg('login-msg','identifiants requis',false); return; }
-    fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
-      body:JSON.stringify({username:u,password:p})})
-      .then(function(r){ if(!r.ok) throw new Error('401'); return r.json(); })
-      .then(function(j){ TOKEN=j.access_token||''; msg('login-msg','',true); loadAll(); })
-      .catch(function(){ msg('login-msg','identifiants incorrects',false); });
-  });
-  el('p').addEventListener('keydown',function(e){ if(e.key==='Enter') el('login').click(); });
+        // Remplit les champs ; `cles` limite aux champs d'un groupe (après une sauvegarde).
+        function remplir(cfg, groupe) {
+            if (!cfg) return;
+            const g = groupe ? GROUPES[groupe] : null;
+            const dans = (k, liste) => !g || (g[liste] || []).indexOf(k) >= 0;
+            TEXTES.forEach(k => { if (cfg[k] != null && dans(k, 's')) $(k).value = cfg[k]; });
+            NOMBRES.forEach(k => { if (cfg[k] != null && dans(k, 'n')) $(k).value = cfg[k]; });
+            if (!g || (g.b || []).indexOf('remote_enabled') >= 0) $('remote_enabled').checked = !!cfg.remote_enabled;
+        }
 
-  el('logout').addEventListener('click', function(){
-    fetch(API+'/auth/logout',{method:'POST',headers:hdr(false),credentials:'include'}).catch(function(){});
-    TOKEN=''; el('app').style.display='none'; el('gate').style.display='block';
-  });
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !SERVEUR_KO;
+            if (SERVEUR_KO) $('erreur').textContent = 'Impossible de lire la configuration de ZIA (service arrêté ou injoignable).';
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (SERVEUR_KO) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!CFG && !MET) { etat.className = 'actif neutre'; etat.textContent = 'CHARGEMENT…'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            // Champs et boutons d'écriture : désactivés sans session (la route exige l'administrateur réel).
+            const verrou = !SESSION_OK || (!DEMO && !CFG);
+            document.querySelectorAll('.champs input,.champs select,#remote_enabled,[data-save],#test').forEach(e => { e.disabled = verrou; });
 
-  el('adv-btn').addEventListener('click', function(){
-    var a=el('adv'), open=a.style.display==='block';
-    a.style.display=open?'none':'block'; this.textContent=(open?'▸':'▾')+' sockets du bus (avancé)';
-  });
+            // Tuiles : les métriques d'abord, la config (vraie donnée aussi) en repli pour le moteur et le modèle.
+            const m = MET, moteur = m && m.engine ? m.engine : (CFG ? (CFG.llm_url ? 'llm' : 'heuristique') : null);
+            $('tMoteur').textContent = moteur === 'llm' ? 'LLM' : moteur === 'heuristique' ? 'Heuristique' : '—';
+            $('sMoteur').textContent = moteur === 'llm' ? 'llama-server local' : moteur === 'heuristique' ? 'sans génération' : 'formulation des réponses';
+            $('cMoteur').className = 'tuile ' + (moteur === 'heuristique' ? 'att' : 'cy');
+            $('tModele').textContent = tiret((m && m.model) || (CFG && CFG.model_name));
+            $('tObjets').textContent = m && m.objets_bus != null ? m.objets_bus : '—';
+            $('tEchanges').textContent = m && m.chats != null ? m.chats : '—';
+            // latence_ms_moy vaut 0 tant qu'aucun échange n'a eu lieu : ce n'est pas une mesure.
+            const lat = m && m.chats > 0 && m.latence_ms_moy != null ? m.latence_ms_moy : null;
+            $('tLatence').textContent = lat != null ? Math.round(lat) + ' ms' : '—';
+            $('sLatence').textContent = m && m.chats === 0 ? 'aucun échange encore' : 'par échange';
+            const rem = m ? !!m.remote_enabled : (CFG ? !!CFG.remote_enabled : null);
+            $('tRemote').textContent = rem === null ? '—' : rem ? 'Armé' : 'Désarmé';
+            $('cRemote').className = 'tuile ' + (rem === null ? '' : rem ? 'att' : 'ok');
+            $('sRemote').textContent = rem ? 'escalade distante permise' : 'repli local seulement';
+            $('sous').textContent = CFG ? (CFG.llm_url ? 'llama-server ' + CFG.llm_url : 'Moteur heuristique — pas de génération') : 'Moteur, accès et niveau 3 (remote)';
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-  // Chaque carte pousse SON sous-ensemble (une écriture partielle est valide côté API).
-  var GROUPS={
-    moteur:{s:['llm_url','model_name'], n:['n_predict','llm_timeout_s']},
-    bus:{s:['peertube_url','default_role','metanews_sock','webos_sock','billets_sock'], n:['bus_cache_s']},
-    remote:{s:['remote_url','remote_role_min'], n:['remote_timeout_s','remote_budget'], b:['remote_enabled']}
-  };
-  function save(which){
-    var g=GROUPS[which], body={};
-    (g.s||[]).forEach(function(k){ body[k]=str(k); });
-    (g.n||[]).forEach(function(k){ var v=num(k); if(v!=null) body[k]=v; });
-    (g.b||[]).forEach(function(k){ body[k]=el(k).checked; });
-    fetch(API+'/config',{method:'POST',headers:hdr(true),credentials:'include',body:JSON.stringify(body)})
-      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-      .then(function(j){ fill(j.config); msg(which+'-msg','✓ enregistré — appliqué à chaud',true); loadMetrics(); })
-      .catch(function(){ msg(which+'-msg','échec (session expirée ?)',false); });
-  }
-  document.addEventListener('click', function(e){
-    var b=e.target.closest('[data-save]'); if(!b) return; save(b.dataset.save);
-  });
+        // Une carte pousse SON sous-ensemble (une écriture partielle est valide côté API).
+        function corps(groupe) {
+            const g = GROUPES[groupe], b = {};
+            (g.s || []).forEach(k => { b[k] = $(k).value.trim(); });
+            for (const k of (g.n || [])) {
+                const brut = $(k).value.trim().replace(',', '.');
+                if (brut === '') continue;
+                if (ENTIERS.indexOf(k) >= 0 ? !/^-?\d+$/.test(brut) : !/^-?\d+(\.\d+)?$/.test(brut)) return { erreur: 'Valeur numérique invalide pour « ' + k + ' »' + (ENTIERS.indexOf(k) >= 0 ? ' (entier attendu)' : '') + '.' };
+                b[k] = ENTIERS.indexOf(k) >= 0 ? parseInt(brut, 10) : parseFloat(brut);
+            }
+            (g.b || []).forEach(k => { b[k] = $(k).checked; });
+            return { corps: b };
+        }
+        async function enregistrer(groupe) {
+            const c = corps(groupe), msg = groupe + '-msg';
+            if (c.erreur) { retour(msg, false, c.erreur); return; }
+            if (ENVOI) return;
+            ENVOI = true;
+            const r = await ecrire('/config', c.corps);
+            ENVOI = false;
+            if (r.ok && r.data && r.data.config) {
+                CFG = r.data.config; remplir(CFG, groupe);
+                retour(msg, true, 'Enregistré — appliqué à chaud.'); chargerMetriques();
+            } else retour(msg, false, 'Échec : ' + detail(r));
+        }
+        document.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', () => {
+            const g = b.dataset.save;
+            // Armer l'escalade remote (de désarmé à armé) : confirmation intégrée à la page.
+            if (g === 'remote' && $('remote_enabled').checked && !(CFG && CFG.remote_enabled)) { $('confirme').hidden = false; annoncer(); return; }
+            enregistrer(g);
+        }));
+        $('oui').addEventListener('click', () => { $('confirme').hidden = true; enregistrer('remote'); });
+        $('non').addEventListener('click', () => { $('confirme').hidden = true; annoncer(); });
 
-  el('test').addEventListener('click', function(){
-    msg('moteur-msg','🔌 test en cours…',true);
-    fetch(API+'/llm/test',{method:'POST',headers:hdr(false),credentials:'include'})
-      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-      .then(function(j){
-        if(j.ok){ msg('moteur-msg','✓ modèle joignable'+(j.model?(' · '+String(j.model).split('/').pop()):''), true); }
-        else { msg('moteur-msg','✗ '+(j.reason||'injoignable'), false); }
-      })
-      .catch(function(){ msg('moteur-msg','échec du test (session expirée ?)',false); });
-  });
-})();
-</script>
+        $('test').addEventListener('click', async () => {
+            retour('moteur-msg', true, 'Test en cours…');
+            const r = await ecrire('/llm/test');
+            if (!r.ok) { retour('moteur-msg', false, 'Échec du test : ' + detail(r)); return; }
+            const j = r.data || {};
+            if (j.ok) retour('moteur-msg', true, 'Modèle joignable' + (j.model ? ' · ' + String(j.model).split('/').pop() : '') + '.');
+            else retour('moteur-msg', false, 'Injoignable : ' + (j.reason || 'pas de réponse') + '.');
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'zia-admin' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Actualisation des seules mesures : jamais onglet masqué, démonstration, saisie ou confirmation ouverte.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || ENVOI || !$('confirme').hidden || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))) return;
+            chargerMetriques();
+        }, 30000);
+    </script>
+</body>
+</html>
