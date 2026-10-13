@@ -88,9 +88,9 @@ def test_le_lien_webmail_mene_ou_il_dit():
     NAVIGUAIT vers `local_url`. On lit une adresse, on en visite une autre —
     et rien ne signale l'écart, puisque le texte est correct."""
     html = PANNEAU.read_text()
-    assert "document.getElementById('webmail-url').href = webmailUrl;" in html, \
+    assert "a.href = webmailUrl;" in html and "a.textContent = webmailUrl || '—';" in html, \
         "le lien webmail ne pointe pas sur l'adresse qu'il affiche"
-    assert "webmail-url').href = d.webmail?.local_url" not in html, \
+    assert "local_url" not in html, \
         "le lien webmail navigue encore vers l'adresse locale"
 
 

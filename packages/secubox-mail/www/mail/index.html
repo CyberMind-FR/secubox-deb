@@ -4,788 +4,645 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Messagerie au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun mot de passe ni secret affiché ; confirmation intégrée avant toute action destructive.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Mail Server</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — Messagerie</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-            --cyan: #00d4ff;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
-        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
-        .live-dot.stale { background: var(--red); box-shadow: 0 0 8px var(--red); }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.success { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .btn.warning { background: rgba(255,204,0,0.15); border-color: var(--yellow); color: var(--yellow); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h2 { font-size: 0.9rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; backdrop-filter: blur(5px); }
-        .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor; color: var(--cyan); }
-        .stat-card .value.sm { font-size: 0.95rem; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
-        .stat-card.dead .value { color: var(--red); }
-        .stat-card.warning .value { color: var(--yellow); }
-        .stat-card.healthy .value { color: var(--green); }
-        .stat-card.blue .value { color: var(--blue); }
-
-        .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border); }
-        .status-badge.running { background: rgba(0,221,68,0.12); color: var(--green); border-color: var(--green); }
-        .status-badge.stopped { background: rgba(255,68,102,0.12); color: var(--red); border-color: var(--red); }
-        .status-badge.installing { background: rgba(0,212,255,0.12); color: var(--cyan); border-color: var(--cyan); }
-
-        .component { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.7rem; background: var(--bg-row); border-radius: 6px; margin-bottom: 0.5rem; border-left: 3px solid var(--border); }
-        .component.up { border-left-color: var(--green); }
-        .component.down { border-left-color: var(--red); }
-        .component-icon { font-size: 1.4rem; }
-        .component-info { flex: 1; }
-        .component-name { font-weight: bold; font-size: 0.85rem; color: var(--text); }
-        .component-detail { font-size: 0.7rem; color: var(--p31-dim); }
-        .component-actions { display: flex; gap: 0.25rem; }
-
-        .port-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 0.5rem; }
-        .port-item { background: var(--bg-row); padding: 0.5rem; border-radius: 6px; text-align: center; border: 1px solid var(--border); }
-        .port-item .icon { font-size: 0.9rem; }
-        .port-item .num { font-weight: bold; font-size: 0.95rem; }
-        .port-item .name { font-size: 0.6rem; color: var(--p31-dim); text-transform: uppercase; }
-        .port-item.active { border-color: rgba(0,221,68,0.4); }
-        .port-item.active .num { color: var(--green); text-shadow: 0 0 8px rgba(0,221,68,0.5); }
-        .port-item.inactive .num { color: var(--red); }
-
-        .security-card { background: var(--bg-row); border-radius: 6px; padding: 0.75rem; border: 1px solid var(--border); }
-        .security-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .security-title { font-weight: bold; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; color: var(--text); }
-        .security-desc { font-size: 0.68rem; color: var(--p31-dim); margin-bottom: 0.5rem; }
-        .security-status { display: flex; gap: 0.4rem; flex-wrap: wrap; font-size: 0.68rem; }
-        .security-status span { padding: 2px 7px; border-radius: 4px; background: var(--bg-card); }
-        .security-status .ok { color: var(--green); }
-        .security-status .warn { color: var(--yellow); }
-        .security-status .err { color: var(--red); }
-        .toggle { position: relative; width: 42px; height: 22px; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 22px; cursor: pointer; transition: 0.3s; }
-        .toggle-slider:before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .toggle-slider { background: var(--green); }
-        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
-
-        .url-label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; margin: 0.5rem 0 0.2rem; letter-spacing: 0.05em; }
-        .url-box { background: var(--bg-row); padding: 0.55rem; border-radius: 6px; font-size: 0.78rem; border: 1px solid var(--border); word-break: break-all; }
-        .url-box a { color: var(--cyan); }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
-        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.72rem; text-transform: uppercase; transition: all 0.2s; }
-        .tab:hover { color: var(--cyan); }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
-        th { color: var(--p31-dim); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        tbody tr:hover { background: rgba(0,212,255,0.05); }
-        .mono { font-family: 'Courier Prime', monospace; }
-
-        .form-group { margin-bottom: 0.7rem; }
-        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; }
-        .form-group input, .form-group select { width: 100%; padding: 0.45rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-
-        .alert { padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.78rem; }
-        .alert.info { background: rgba(0,212,255,0.08); border: 1px solid var(--cyan); color: var(--cyan); }
-        .alert.warning { background: rgba(255,204,0,0.08); border: 1px solid var(--yellow); color: var(--yellow); }
-
-        .install-banner { background: rgba(0,212,255,0.08); border: 1px solid var(--cyan); border-radius: 8px; padding: 2rem; text-align: center; margin-bottom: 1rem; }
-        .install-banner h2 { color: var(--cyan); margin-bottom: 0.5rem; }
-        .install-banner p { color: var(--p31-dim); margin-bottom: 1rem; }
-        .install-progress { background: var(--bg-row); border-radius: 4px; height: 8px; overflow: hidden; margin: 1rem 0; }
-        .install-progress-bar { height: 100%; background: var(--cyan); transition: width 0.3s; }
-
-        .provider-card { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.7rem; background: var(--bg-row); border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid var(--border); }
-        .provider-card .pico { font-size: 1.4rem; }
-        .provider-card .pinfo { flex: 1; }
-        .provider-card .pname { font-weight: bold; font-size: 0.85rem; }
-        .provider-card .pdetail { font-size: 0.68rem; color: var(--p31-dim); }
-
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: rgba(20,30,45,0.97); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 480px; max-width: 90vw; max-height: 88vh; overflow-y: auto; backdrop-filter: blur(10px); }
-        .modal-content h3 { margin-bottom: 1rem; color: var(--cyan); }
-
-        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.7rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; box-shadow: 0 0 20px rgba(0,212,255,0.4); animation: slideIn 0.3s; }
-        .toast.error { background: var(--red); color: #fff; }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) { .main { margin-left: 0; } .grid-2, .settings-grid { grid-template-columns: 1fr; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.att{border-color:var(--orange);color:var(--orange)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.84rem;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+        .conf span{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .v.pt{font-size:1rem;line-height:1.25} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .large{grid-column:1/-1}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        td.mono{overflow-wrap:anywhere}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.8rem;padding:7px 11px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)} .retour.att{border-color:var(--orange)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select,select.sel{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        select.sel{width:auto}
+        form.saisie input:focus,form.saisie select:focus,select.sel:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .lignes{display:grid;gap:7px}
+        .ligne{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 10px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.45)}
+        .ligne .nom{flex:1 1 150px;min-width:0} .ligne .nom b{font-size:.84rem;display:block} .ligne .nom small{color:var(--faible);font-size:.7rem}
+        .ligne .grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .ports{display:grid;gap:7px;grid-template-columns:repeat(auto-fit,minmax(78px,1fr))}
+        .port{border:1px solid var(--trait);border-radius:10px;padding:7px 4px;text-align:center;background:rgba(8,18,38,.45)}
+        .port b{display:block;font-size:.95rem;font-variant-numeric:tabular-nums} .port small{color:var(--faible);font-size:.64rem;text-transform:uppercase}
+        .port.ok{border-color:rgba(46,204,113,.5)} .port.ok b{color:var(--vert)} .port.hors{border-color:rgba(255,77,94,.5)} .port.hors b{color:var(--rouge)}
+        .url{background:rgba(8,18,38,.6);border:1px solid var(--trait);border-radius:8px;padding:6px 9px;font-size:.78rem;overflow-wrap:anywhere;margin:2px 0 8px}
+        .url a{color:var(--cyan)}
+        .lbl{font-size:.68rem;color:var(--faible);text-transform:uppercase;letter-spacing:.05em}
+        pre.journal{margin:0;background:rgba(8,18,38,.7);border:1px solid var(--trait);border-radius:8px;padding:10px;font-size:.72rem;max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--doux)}
+        .barre-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+        .tuiles3{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:10px}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1><span class="live-dot" id="live-dot"></span>📧 Mail Server</h1>
-            <div class="btn-group">
-                <span class="status-badge" id="status-badge">Loading…</span>
-                <button class="btn primary" id="btn-install" onclick="showModal('install-modal')" style="display:none">⬇ Install</button>
-                <button class="btn success" id="btn-start" onclick="startServices()" style="display:none">▶ Start</button>
-                <button class="btn danger" id="btn-stop" onclick="stopServices()" style="display:none">■ Stop</button>
-                <button class="btn" onclick="refresh()">↻ Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+                <div><h1>Messagerie</h1><small>Postfix, Dovecot et webmail dans leurs conteneurs LXC</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn ok" id="bDemarrer" type="button" hidden>▶ Démarrer</button>
+                <button class="btn danger" id="bArreter" type="button" hidden>■ Arrêter</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
-
-        <div class="install-banner" id="install-banner" style="display:none">
-            <h2>📭 Mail Server Not Installed</h2>
-            <p>Install Postfix + Dovecot and Roundcube webmail in an LXC container.</p>
-            <button class="btn primary" onclick="showModal('install-modal')" style="font-size:1rem;padding:0.7rem 2rem">Install Mail Server</button>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Session requise : certaines mesures ne sont pas lisibles. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="retour" id="retour" role="status" hidden></div>
+        <div class="conf" id="conf" role="alertdialog" aria-live="assertive" hidden>
+            <span id="confTexte"></span>
+            <button class="btn danger" id="confOui" type="button">Confirmer</button>
+            <button class="btn" id="confNon" type="button">Annuler</button>
         </div>
 
-        <div id="main-content">
-            <!-- Stat grid -->
-            <div class="grid">
-                <div class="stat-card blue"><div class="value" id="user-count">-</div><div class="label">📮 Users</div></div>
-                <div class="stat-card"><div class="value" id="storage">-</div><div class="label">💾 Storage</div></div>
-                <div class="stat-card"><div class="value sm" id="domain">-</div><div class="label">🌐 Domain</div></div>
-                <div class="stat-card"><div class="value" id="ssl-status">-</div><div class="label">🔒 SSL</div></div>
-                <div class="stat-card"><div class="value" id="security-score">-</div><div class="label">🛡️ Security</div></div>
-                <div class="stat-card healthy"><div class="value" id="ports-up">-</div><div class="label">🔌 Ports</div></div>
-            </div>
+        <section class="pan" id="installPan" hidden>
+            <h3>Serveur mail non installé</h3>
+            <p class="note" style="margin:0 0 8px">Installe Postfix et Dovecot dans un conteneur LXC, puis, si coché, le webmail Roundcube. L’installation tourne en arrière-plan ; le domaine se règle dans l’onglet Réglages.</p>
+            <form class="saisie" id="fInstall" style="margin:0">
+                <label style="grid-template-columns:auto 1fr;align-items:center;gap:8px"><input type="checkbox" name="webmail" checked style="width:auto"> Installer aussi le webmail (Roundcube)</label>
+                <div class="bout"><button class="btn prim" type="submit">Installer</button></div>
+            </form>
+        </section>
 
-            <!-- Components + Ports -->
-            <div class="grid-2">
-                <div class="card">
-                    <h2>🧩 Components</h2>
-                    <div class="component" id="comp-mail">
-                        <span class="component-icon">📬</span>
-                        <div class="component-info">
-                            <div class="component-name">Mail Server</div>
-                            <div class="component-detail">Postfix + Dovecot (LXC)</div>
-                        </div>
-                        <div class="component-actions">
-                            <button class="btn sm success" id="mail-start" onclick="startMail()" style="display:none">▶</button>
-                            <button class="btn sm danger" id="mail-stop" onclick="stopMail()" style="display:none">■</button>
-                            <button class="btn sm primary" id="mail-install" onclick="installMail()" style="display:none">⬇</button>
-                        </div>
-                        <span class="status-badge stopped" id="mail-badge">…</span>
-                    </div>
-                    <div class="component" id="comp-webmail">
-                        <span class="component-icon">🌐</span>
-                        <div class="component-info">
-                            <div class="component-name">Webmail</div>
-                            <div class="component-detail">Roundcube (LXC)</div>
-                        </div>
-                        <div class="component-actions">
-                            <button class="btn sm success" id="webmail-start" onclick="startWebmail()" style="display:none">▶</button>
-                            <button class="btn sm danger" id="webmail-stop" onclick="stopWebmail()" style="display:none">■</button>
-                            <button class="btn sm primary" id="webmail-install" onclick="installWebmail()" style="display:none">⬇</button>
-                        </div>
-                        <span class="status-badge stopped" id="webmail-badge">…</span>
-                    </div>
-                </div>
-                <div class="card">
-                    <h2>🔌 Ports</h2>
-                    <div class="port-grid" id="port-grid">Loading…</div>
-                </div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Boîtes de messagerie : lignes du fichier d’utilisateurs Dovecot."><span class="l">Boîtes</span><span class="v" id="tBoites">—</span><span class="s">comptes</span></div>
+            <div class="tuile cy" title="Espace disque occupé par les boîtes (du -sh du dossier vmail)."><span class="l">Stockage</span><span class="v" id="tStock">—</span><span class="s">dossier vmail</span></div>
+            <div class="tuile cy" title="Domaine déclaré du serveur mail."><span class="l">Domaine</span><span class="v pt" id="tDomaine">—</span><span class="s">déclaré</span></div>
+            <div class="tuile" id="cCert" title="Certificat TLS du serveur mail : jours restants avant expiration."><span class="l">Certificat</span><span class="v" id="tCert">—</span><span class="s" id="sCert">TLS</span></div>
+            <div class="tuile" id="cProt" title="Protections mesurées parmi DKIM (clé publiée), antispam (Rspamd répond) et ClamAV (activé). Le greylisting n’est pas mesurable par l’API."><span class="l">Protections</span><span class="v" id="tProt">—</span><span class="s" id="sProt">mesurées</span></div>
+            <div class="tuile" id="cPorts" title="Ports de messagerie qui répondent à une sonde TCP."><span class="l">Ports</span><span class="v" id="tPorts">—</span><span class="s">en écoute</span></div>
+        </section>
 
-            <!-- Security -->
-            <div class="card">
-                <h2>🛡️ Security Features</h2>
-                <div class="grid-4" id="security-grid">
-                    <div class="security-card" id="sec-dkim">
-                        <div class="security-header">
-                            <span class="security-title">🔐 DKIM</span>
-                            <label class="toggle"><input type="checkbox" id="toggle-dkim" onchange="toggleDKIM(this)"><span class="toggle-slider"></span></label>
-                        </div>
-                        <div class="security-desc">Email signing for authenticity</div>
-                        <div class="security-status" id="dkim-status">…</div>
-                    </div>
-                    <div class="security-card" id="sec-spam">
-                        <div class="security-header">
-                            <span class="security-title">🚫 SpamAssassin</span>
-                            <label class="toggle"><input type="checkbox" id="toggle-spam" onchange="toggleSpam(this)"><span class="toggle-slider"></span></label>
-                        </div>
-                        <div class="security-desc">Spam filtering</div>
-                        <div class="security-status" id="spam-status">…</div>
-                    </div>
-                    <div class="security-card" id="sec-grey">
-                        <div class="security-header">
-                            <span class="security-title">⏳ Greylisting</span>
-                            <label class="toggle"><input type="checkbox" id="toggle-grey" onchange="toggleGrey(this)"><span class="toggle-slider"></span></label>
-                        </div>
-                        <div class="security-desc">Delay unknown senders</div>
-                        <div class="security-status" id="grey-status">…</div>
-                    </div>
-                    <div class="security-card" id="sec-av">
-                        <div class="security-header">
-                            <span class="security-title">🦠 ClamAV</span>
-                            <label class="toggle"><input type="checkbox" id="toggle-av" onchange="toggleAV(this)"><span class="toggle-slider"></span></label>
-                        </div>
-                        <div class="security-desc">Virus scanning</div>
-                        <div class="security-status" id="av-status">…</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Access -->
-            <div class="card">
-                <h2>🔗 Access</h2>
-                <div class="grid-2">
-                    <div>
-                        <div class="url-label">📬 Webmail</div>
-                        <div class="url-box"><a id="webmail-url" href="#" target="_blank">-</a></div>
-                        <div class="url-label">📥 IMAP Server</div>
-                        <div class="url-box" id="imap-url">-</div>
-                        <div class="url-label">📤 SMTP Server</div>
-                        <div class="url-box" id="smtp-url">-</div>
-                    </div>
-                    <div>
-                        <div class="url-label">🐦 Thunderbird Autoconfig</div>
-                        <div class="url-box" id="autoconfig-url">-</div>
-                        <div class="url-label">📧 Outlook Autodiscover</div>
-                        <div class="url-box" id="autodiscover-url">-</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tabs -->
-            <div class="card">
-                <div class="tabs">
-                    <div class="tab active" onclick="showTab('users')">👤 Users</div>
-                    <div class="tab" onclick="showTab('aliases')">🔀 Aliases</div>
-                    <div class="tab" onclick="showTab('external')">📥 External</div>
-                    <div class="tab" onclick="showTab('logs')">📜 Logs</div>
-                    <div class="tab" onclick="showTab('settings')">⚙️ Settings</div>
-                    <div class="tab" onclick="showTab('actions')">🛠️ Actions</div>
-                    <div class="tab" onclick="showTab('socle')">🔴 Socle</div>
-                </div>
-
-                <div class="tab-content active" id="tab-users">
-                    <div style="margin-bottom:1rem"><button class="btn success" onclick="showModal('user-modal')">➕ Add User</button></div>
-                    <table>
-                        <thead><tr><th>📧 Email</th><th>💾 Size</th><th>Actions</th></tr></thead>
-                        <tbody id="user-list"><tr><td colspan="3">Loading…</td></tr></tbody>
-                    </table>
-                </div>
-
-                <div class="tab-content" id="tab-aliases">
-                    <div style="margin-bottom:1rem"><button class="btn success" onclick="showModal('alias-modal')">➕ Add Alias</button></div>
-                    <table>
-                        <thead><tr><th>🔀 Alias</th><th>🎯 Target</th><th></th></tr></thead>
-                        <tbody id="alias-list"><tr><td colspan="3">Loading…</td></tr></tbody>
-                    </table>
-                </div>
-
-                <div class="tab-content" id="tab-external">
-                    <div class="alert info" id="external-status">📥 External mailboxes let each user pull their Gmail / Outlook / IMAP account into SecuBox Webmail.</div>
-                    <div id="external-providers"></div>
-                    <div style="margin-top:1rem">
-                        <a class="btn primary" id="external-open" href="#" target="_blank">🌐 Open Webmail → add account</a>
-                    </div>
-                    <p style="font-size:0.72rem;color:var(--p31-dim);margin-top:0.75rem">
-                        Users add external mailboxes from <strong>Webmail → Settings → Accounts → Add</strong>. Credentials are stored per-user (encrypted) inside Roundcube; the box never holds them.
-                    </p>
-                </div>
-
-                <div class="tab-content" id="tab-logs">
-                    <div style="margin-bottom:1rem">
-                        <button class="btn" onclick="loadLogs()">↻ Refresh Logs</button>
-                        <select id="log-lines" onchange="loadLogs()" style="padding:0.4rem;background:var(--bg-row);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:'Courier Prime',monospace">
-                            <option value="50">50 lines</option>
-                            <option value="100" selected>100 lines</option>
-                            <option value="200">200 lines</option>
-                        </select>
-                    </div>
-                    <pre id="log-content" style="background:var(--bg-row);padding:1rem;border-radius:6px;font-size:0.72rem;max-height:400px;overflow:auto;white-space:pre-wrap;color:var(--green)">Loading…</pre>
-                </div>
-
-                <div class="tab-content" id="tab-settings">
-                    <div class="settings-grid">
-                        <div class="form-group"><label>Mail Domain</label><input type="text" id="cfg-domain" placeholder="example.com"></div>
-                        <div class="form-group"><label>Hostname</label><input type="text" id="cfg-hostname" placeholder="mail"></div>
-                        <div class="form-group"><label>Mail Server IP</label><input type="text" id="cfg-mail-ip" placeholder="10.100.0.10"></div>
-                        <div class="form-group"><label>Webmail Port</label><input type="number" id="cfg-webmail-port" placeholder="80"></div>
-                    </div>
-                    <div style="margin-top:1rem"><button class="btn primary" onclick="saveSettings()">💾 Save Settings</button></div>
-                </div>
-
-                <div class="tab-content" id="tab-actions">
-                    <div class="alert info">Configure DNS records for delivery. Generate DKIM keys and add them to DNS.</div>
-                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-                        <button class="btn primary" onclick="showDNSSetup()">🌐 DNS Setup</button>
-                        <button class="btn primary" onclick="setupACME()">🔒 Get SSL (Let's Encrypt)</button>
-                        <button class="btn" onclick="setupSelfSignedSSL()">🔏 Self-Signed SSL</button>
-                        <button class="btn" onclick="setupDKIM()">🔐 Generate DKIM</button>
-                        <button class="btn" onclick="setupSpam()">🚫 Setup SpamAssassin</button>
-                        <button class="btn" onclick="setupGrey()">⏳ Setup Greylisting</button>
-                        <button class="btn" onclick="setupAV()">🦠 Setup ClamAV</button>
-                        <button class="btn" onclick="createBackup()">💾 Backup</button>
-                        <button class="btn warning" onclick="restartServices()">🔄 Restart</button>
-                    </div>
-                </div>
-                <div class="tab-content" id="tab-socle">
-                    <div class="alert info">Socle mail (#1169) — bascule Maildir, filtrage Sieve/ManageSieve, ClamAV optionnel, renouvellement SSL. Gestes délégués à <code>mailctl</code> confiné.</div>
-                    <div class="grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.7rem;margin-bottom:1rem">
-                        <div class="stat-card"><div class="value sm" id="socle-maildir">…</div><div class="label">📦 Stockage</div></div>
-                        <div class="stat-card"><div class="value sm" id="socle-sieve">…</div><div class="label">🧹 Sieve :4190</div></div>
-                        <div class="stat-card"><div class="value sm" id="socle-av">…</div><div class="label">🦠 ClamAV</div></div>
-                    </div>
-                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-                        <button class="btn warning" onclick="reconcileMaildir()">📦 Bascule Maildir…</button>
-                        <button class="btn primary" onclick="enableSieve()">🧹 Activer Sieve</button>
-                        <button class="btn" onclick="toggleAntivirus('on')">🦠 ClamAV ON</button>
-                        <button class="btn" onclick="toggleAntivirus('off')">🦠 ClamAV OFF</button>
-                        <button class="btn primary" onclick="renewSsl()">🔒 Renouveler SSL</button>
-                    </div>
-                    <div id="socle-log" style="margin-top:0.8rem;color:var(--p31-dim);font-size:0.8rem"></div>
-                </div>
-            </div>
+        <div class="onglets" role="tablist" aria-label="Sections de la messagerie">
+            <button type="button" role="tab" id="o-apercu" data-t="apercu" aria-selected="true" aria-controls="t-apercu">Aperçu</button>
+            <button type="button" role="tab" id="o-boites" data-t="boites" aria-selected="false" aria-controls="t-boites">Boîtes</button>
+            <button type="button" role="tab" id="o-alias" data-t="alias" aria-selected="false" aria-controls="t-alias">Alias</button>
+            <button type="button" role="tab" id="o-externe" data-t="externe" aria-selected="false" aria-controls="t-externe">Externes</button>
+            <button type="button" role="tab" id="o-journaux" data-t="journaux" aria-selected="false" aria-controls="t-journaux">Journaux</button>
+            <button type="button" role="tab" id="o-reglages" data-t="reglages" aria-selected="false" aria-controls="t-reglages">Réglages</button>
+            <button type="button" role="tab" id="o-actions" data-t="actions" aria-selected="false" aria-controls="t-actions">Actions</button>
+            <button type="button" role="tab" id="o-socle" data-t="socle" aria-selected="false" aria-controls="t-socle">Socle</button>
         </div>
-    </main>
 
-    <!-- Modals -->
-    <div class="modal" id="install-modal">
-        <div class="modal-content">
-            <h3>⬇ Install Mail Server</h3>
-            <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.8rem">Postfix + Dovecot and Roundcube webmail in an LXC container.</p>
-            <div class="form-group"><label>Mail Domain</label><input type="text" id="install-domain" placeholder="example.com"></div>
-            <div class="form-group"><label>Hostname</label><input type="text" id="install-hostname" value="mail"></div>
-            <div class="form-group"><label><input type="checkbox" id="install-webmail" checked style="width:auto"> Install Webmail (Roundcube)</label></div>
-            <div id="install-status" style="display:none">
-                <div class="install-progress"><div class="install-progress-bar" id="install-progress" style="width:0%"></div></div>
-                <p id="install-message" style="font-size:0.8rem;color:var(--p31-dim);text-align:center">Installing…</p>
-            </div>
-            <div class="form-actions" id="install-actions">
-                <button class="btn" onclick="hideModal('install-modal')">Cancel</button>
-                <button class="btn success" onclick="doInstall()">Install</button>
-            </div>
-        </div>
-    </div>
+        <section id="t-apercu" role="tabpanel" aria-labelledby="o-apercu" class="grille">
+            <div class="pan"><h3>Composants</h3><div class="lignes" id="comp"></div></div>
+            <div class="pan"><h3>Ports <i>sonde TCP</i></h3><div class="ports" id="ports"></div></div>
+            <div class="pan large"><h3>Protections</h3><div class="lignes" id="prot"></div>
+                <p class="note">L’état vient des routes d’état de l’API : clé DKIM publiée, Rspamd qui répond, ClamAV activé. Le greylisting n’a pas d’état distinct côté API : il reste à « — ». Les voyants ne sont pas des interrupteurs : chaque bouton envoie l’action correspondante.</p></div>
+            <div class="pan large"><h3>Accès</h3>
+                <div class="grille" style="gap:0 14px">
+                    <div><div class="lbl">Webmail</div><div class="url"><a id="webmailUrl" href="#" target="_blank" rel="noopener noreferrer">—</a></div>
+                        <div class="lbl">Serveur IMAP</div><div class="url mono" id="imapUrl">—</div>
+                        <div class="lbl">Serveur SMTP</div><div class="url mono" id="smtpUrl">—</div></div>
+                    <div><div class="lbl">Autoconfiguration Thunderbird</div><div class="url mono" id="acUrl">—</div>
+                        <div class="lbl">Autodécouverte Outlook</div><div class="url mono" id="adUrl">—</div></div>
+                </div></div>
+        </section>
 
-    <div class="modal" id="user-modal">
-        <div class="modal-content">
-            <h3>➕ Add Mail User</h3>
-            <div class="form-group"><label>Email Address</label><input type="email" id="user-email" placeholder="user@example.com"></div>
-            <div class="form-group"><label>Password</label><input type="password" id="user-password" placeholder="Password"></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('user-modal')">Cancel</button>
-                <button class="btn success" onclick="addUser()">Create</button>
-            </div>
-        </div>
-    </div>
+        <section id="t-boites" role="tabpanel" aria-labelledby="o-boites" hidden>
+            <div class="pan"><h3>Boîtes <i id="nBoites"></i><button class="btn prim sm" id="addUser" type="button">+ Ajouter une boîte</button></h3>
+                <form class="saisie" id="fUser" hidden>
+                    <label>Adresse<input name="email" type="email" placeholder="alice@exemple.test" required autocomplete="off"></label>
+                    <label>Mot de passe<input name="password" type="password" required autocomplete="new-password"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fUser">Annuler</button></div>
+                </form>
+                <form class="saisie" id="fPwd" hidden>
+                    <label>Adresse<input name="email" type="email" readonly></label>
+                    <label>Nouveau mot de passe<input name="password" type="password" required autocomplete="new-password"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Changer</button><button class="btn" type="button" data-ferme="fPwd">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Adresse</th><th>Taille</th><th>Actions</th></tr></thead><tbody id="bUsers"></tbody></table></div></div>
+        </section>
 
-    <div class="modal" id="alias-modal">
-        <div class="modal-content">
-            <h3>➕ Add Email Alias</h3>
-            <div class="form-group"><label>Alias Address</label><input type="email" id="alias-from" placeholder="alias@example.com"></div>
-            <div class="form-group"><label>Target Address</label><input type="email" id="alias-to" placeholder="user@example.com"></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('alias-modal')">Cancel</button>
-                <button class="btn success" onclick="addAlias()">Create</button>
-            </div>
-        </div>
-    </div>
+        <section id="t-alias" role="tabpanel" aria-labelledby="o-alias" hidden>
+            <div class="pan"><h3>Alias <i id="nAlias"></i><button class="btn prim sm" id="addAlias" type="button">+ Ajouter un alias</button></h3>
+                <form class="saisie" id="fAlias" hidden>
+                    <label>Alias<input name="alias" type="email" placeholder="contact@exemple.test" required autocomplete="off"></label>
+                    <label>Destination<input name="target" type="email" placeholder="alice@exemple.test" required autocomplete="off"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fAlias">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Alias</th><th>Destination</th><th>Actions</th></tr></thead><tbody id="bAlias"></tbody></table></div></div>
+        </section>
 
-    <div class="modal" id="dns-modal">
-        <div class="modal-content" style="width:650px">
-            <h3>🌐 DNS Records Setup</h3>
-            <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.8rem">Add these records to your DNS provider:</p>
-            <table>
-                <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
-                <tbody id="dns-records"></tbody>
-            </table>
-            <div id="dkim-record" style="margin-top:1rem;display:none">
-                <h4 style="margin-bottom:0.5rem;color:var(--cyan)">DKIM Record</h4>
-                <pre style="background:var(--bg-row);padding:0.75rem;border-radius:4px;font-size:0.72rem;word-break:break-all" id="dkim-txt"></pre>
-            </div>
-            <div class="form-actions"><button class="btn" onclick="hideModal('dns-modal')">Close</button></div>
-        </div>
-    </div>
+        <section id="t-externe" role="tabpanel" aria-labelledby="o-externe" hidden>
+            <div class="pan"><h3>Boîtes externes</h3>
+                <p style="margin:0 0 8px;font-size:.84rem">Chaque utilisateur peut rapatrier son compte Gmail, Outlook ou IMAP dans le webmail SecuBox : Webmail → Paramètres → Comptes → Ajouter. Les identifiants sont chiffrés par utilisateur dans Roundcube ; la box ne les détient pas.</p>
+                <div class="barre-actions"><a class="btn prim" id="externeOuvrir" href="#" target="_blank" rel="noopener noreferrer">Ouvrir le webmail</a></div>
+                <p class="note">L’état du greffon de comptes externes n’est pas affiché : l’API ne le fournit pas (l’ancienne page interrogeait une route inexistante).</p></div>
+        </section>
 
+        <section id="t-journaux" role="tabpanel" aria-labelledby="o-journaux" hidden>
+            <div class="pan"><h3>Journal du serveur mail <i id="nLog"></i></h3>
+                <div class="barre-actions" style="margin-bottom:8px"><button class="btn" id="logRaf" type="button">⟳ Recharger</button>
+                    <select class="sel" id="logLignes" aria-label="Nombre de lignes"><option value="50">50 lignes</option><option value="100" selected>100 lignes</option><option value="200">200 lignes</option></select></div>
+                <pre class="journal" id="logTexte">—</pre></div>
+        </section>
+
+        <section id="t-reglages" role="tabpanel" aria-labelledby="o-reglages" hidden>
+            <div class="pan"><h3>Réglages du serveur</h3>
+                <form class="saisie" id="fReglages">
+                    <label>Domaine<input name="domain" placeholder="exemple.test" autocomplete="off"></label>
+                    <label>Nom d’hôte<input name="hostname" placeholder="mail" autocomplete="off"></label>
+                    <label>Adresse du serveur mail<input name="mail_ip" placeholder="192.0.2.10" autocomplete="off"></label>
+                    <label>Port du webmail<input name="webmail_port" type="number" min="1" max="65535" placeholder="80"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Enregistrer</button></div>
+                </form>
+                <p class="note">Les champs sont lus depuis l’API à l’ouverture de l’onglet. Un changement de domaine ou d’adresse s’applique au prochain redémarrage des services.</p></div>
+        </section>
+
+        <section id="t-actions" role="tabpanel" aria-labelledby="o-actions" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Livraison et certificats</h3>
+                    <p class="note" style="margin:0 0 8px">Les enregistrements DNS sont nécessaires à la livraison ; la clé DKIM se génère puis se publie dans le DNS.</p>
+                    <div class="barre-actions">
+                        <button class="btn prim" id="aDns" type="button">Enregistrements DNS</button>
+                        <button class="btn" id="aSelf" type="button">SSL auto-signé</button>
+                        <button class="btn" id="aDkim" type="button">Générer la clé DKIM</button>
+                    </div>
+                    <form class="saisie" id="fAcme" style="margin:10px 0 0">
+                        <label>Courriel Let’s Encrypt (facultatif)<input name="email" type="email" placeholder="admin@exemple.test" autocomplete="off"></label>
+                        <div class="bout"><button class="btn prim" type="submit">Obtenir un certificat</button></div>
+                    </form></div>
+                <div class="pan"><h3>Installer et entretenir</h3>
+                    <div class="barre-actions">
+                        <button class="btn" id="aSpam" type="button">Installer l’antispam</button>
+                        <button class="btn" id="aGrey" type="button">Installer le greylisting</button>
+                        <button class="btn" id="aAv" type="button">Installer ClamAV</button>
+                        <button class="btn" id="aBackup" type="button">Sauvegarde</button>
+                        <button class="btn att" id="aRestart" type="button">Redémarrer</button>
+                    </div></div>
+                <div class="pan large" id="dnsPan" hidden><h3>Enregistrements DNS à publier</h3>
+                    <div class="tab"><table><thead><tr><th>Type</th><th>Nom</th><th>Valeur</th></tr></thead><tbody id="bDns"></tbody></table></div>
+                    <div id="dkimBloc" hidden><div class="lbl" style="margin-top:10px">Enregistrement DKIM</div><pre class="journal" id="dkimTxt"></pre></div>
+                    <p class="note" id="dnsNote"></p></div>
+            </div>
+        </section>
+
+        <section id="t-socle" role="tabpanel" aria-labelledby="o-socle" hidden>
+            <div class="pan"><h3>Socle de messagerie <i>Maildir, Sieve, ClamAV, renouvellement SSL</i></h3>
+                <div class="tuiles3">
+                    <div class="tuile" title="Format de stockage des boîtes (mail_location de Dovecot)."><span class="l">Stockage</span><span class="v pt" id="sMaildir">—</span><span class="s">format des boîtes</span></div>
+                    <div class="tuile" title="ManageSieve sur le port 4190."><span class="l">Sieve</span><span class="v pt" id="sSieve">—</span><span class="s">port 4190</span></div>
+                    <div class="tuile" title="État rapporté par mailctl antivirus status."><span class="l">ClamAV</span><span class="v pt" id="sAv">—</span><span class="s">état rapporté</span></div>
+                </div>
+                <div class="barre-actions">
+                    <button class="btn att" id="sReconcile" type="button">Bascule Maildir</button>
+                    <button class="btn prim" id="sSieveOn" type="button">Activer Sieve</button>
+                    <button class="btn" id="sAvOn" type="button">ClamAV activé</button>
+                    <button class="btn" id="sAvOff" type="button">ClamAV désactivé</button>
+                    <button class="btn prim" id="sSsl" type="button">Renouveler le SSL</button>
+                </div>
+                <p class="note">Gestes délégués à mailctl confiné. La bascule Maildir est destructive : une sauvegarde est prise avant, et la bascule est annulée si elle échoue.</p></div>
+        </section>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = Q.get('demo') === '1';
+        if (Q.get('embed') === '1') document.body.classList.add('emb');
         const API = '/api/v1/mail';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const PORTS = [[25, 'SMTP'], [587, 'Soumission'], [465, 'SMTPS'], [143, 'IMAP'], [993, 'IMAPS'], [110, 'POP3'], [995, 'POP3S']];
+        const ONGLETS = ['apercu', 'boites', 'alias', 'externe', 'journaux', 'reglages', 'actions', 'socle'];
 
-        function toast(msg, type = 'success') {
-            const t = document.createElement('div');
-            t.className = `toast ${type === 'error' ? 'error' : ''}`;
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
+        // Données lues (null = non lisible ; « — » à l'affichage).
+        let S = null, ACC = null, SSL = null, USERS = null, ALIAS = null, DKIMREC = null, SPAM = null, AV = null, SOCLE = null, SETT = null, LOGS = null, DNS = null;
+        let SESSION_OK = true, CONFIRM = null, ONGLET = 'apercu';
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        async function api(path, opts = {}) {
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
-                return await res.json();
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        const reussi = r => r.ok && !(r.data && (r.data.error || r.data.success === false));
+        function detail(r) {
+            if (r.demo) return 'Démonstration : action inerte.';
+            const d = r.data;
+            if (d && typeof d.detail === 'string') return d.detail;
+            if (d && typeof d.error === 'string') return d.error;
+            return r.statut ? 'HTTP ' + r.statut : 'serveur injoignable';
+        }
+        function retour(msg, type) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (type || 'ok'); r.textContent = msg; annoncer(); }
+        // Envoie une action et affiche le résultat dans la page.
+        async function agir(libelle, methode, chemin, corps, apres) {
+            const r = await ecrire(methode, chemin, corps);
+            if (r.demo) { retour(detail(r), 'att'); return r; }
+            if (reussi(r)) { retour(libelle + ' : fait.', 'ok'); setTimeout(charger, apres || 800); }
+            else retour(libelle + ' : échec — ' + detail(r), 'ko');
+            return r;
+        }
+        // Confirmation intégrée : jamais de dialogue natif.
+        function demander(texte, fn) { CONFIRM = { fn }; $('confTexte').textContent = texte; $('conf').hidden = false; $('conf').scrollIntoView({ block: 'nearest' }); annoncer(); }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confOui').addEventListener('click', () => { const c = CONFIRM; fermerConf(); if (c) c.fn(); });
+        $('confNon').addEventListener('click', fermerConf);
+
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        // Une URL d'API n'est liée que si elle est en http(s).
+        function urlSure(u) { try { const x = new URL(u); return (x.protocol === 'https:' || x.protocol === 'http:') ? x.href : ''; } catch (e) { return ''; } }
+
+        function demoData() {
+            S = { module: 'mail', domain: 'exemple.test', hostname: 'mail.exemple.test', user_count: 3, storage: '412M',
+                  ports: { 25: true, 587: true, 465: true, 143: true, 993: true, 110: false, 995: false }, running: true, installed: true,
+                  components: { mail_server: { name: 'mail', installed: true, running: true, ip: '192.0.2.10' }, webmail: { name: 'webmail', installed: true, running: true, port: 80 } } };
+            ACC = { domain: 'exemple.test', mail_server: 'mail.exemple.test', webmail: { url: 'https://webmail.exemple.test' },
+                    apps: { thunderbird: 'https://autoconfig.exemple.test/mail/config-v1.1.xml', outlook: 'https://autodiscover.exemple.test/autodiscover/autodiscover.xml' } };
+            SSL = { installed: true, type: 'acme', status: 'valid', days_remaining: 71, auto_renew: true };
+            USERS = [{ email: 'alice@exemple.test', size: '210M' }, { email: 'bob@exemple.test', size: '154M' }, { email: 'contact@exemple.test', size: '48M' }];
+            ALIAS = [{ alias: 'info@exemple.test', target: 'alice@exemple.test' }, { alias: 'abuse@exemple.test', target: 'bob@exemple.test' }];
+            DKIMREC = { record: 'default._domainkey IN TXT ( "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A…" )' };
+            SPAM = { enabled: true, installed: true, via: 'rspamd' };
+            AV = { installed: true, configured: true, enabled: false, running: false, milter_running: false };
+            SOCLE = { maildir: true, mail_location: 'maildir:~/Maildir', sieve: true, antivirus: 'ClamAV inactif' };
+            SETT = { domain: 'exemple.test', hostname: 'mail', mail_ip: '192.0.2.10', webmail_port: 80 };
+            LOGS = ['Oct 13 08:01:12 mail postfix/smtpd[412]: connect from unknown[203.0.113.9]', 'Oct 13 08:01:13 mail postfix/smtpd[412]: NOQUEUE: reject: RCPT from unknown[203.0.113.9]: 554 5.7.1 Relay access denied'];
         }
 
-        let status = {};
-        const PORT_META = { 25: ['📨','SMTP'], 587: ['✉️','Submit'], 465: ['🔐','SMTPS'], 143: ['📥','IMAP'], 993: ['📬','IMAPS'], 110: ['📪','POP3'], 995: ['🔒','POP3S'] };
-
-        function setLive(ok) {
-            document.getElementById('live-dot').className = 'live-dot' + (ok ? '' : ' stale');
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/access'), lire('/ssl'), lire('/users'), lire('/aliases'), lire('/dkim/record'), lire('/spam/status'), lire('/av/status')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            S = val(0); ACC = val(1); SSL = val(2);
+            const u = val(3); USERS = u ? (u.users || []) : null;
+            const a = val(4); ALIAS = a ? (a.aliases || []) : null;
+            DKIMREC = val(5); SPAM = val(6); AV = val(7);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le serveur mail (service arrêté ou injoignable).';
+            if (ONGLET === 'socle') await chargerSocle();
+            rendre();
+        }
+        async function chargerSocle() { if (DEMO) { rendreSocle(); return; } try { SOCLE = await lire('/socle/status'); } catch (e) { SOCLE = null; } rendreSocle(); }
+        async function chargerReglages() {
+            if (DEMO) { rendreReglages(); return; }
+            try { SETT = await lire('/settings'); } catch (e) { SETT = null; } rendreReglages();
+        }
+        async function chargerJournal() {
+            if (DEMO) { rendreJournal(); return; }
+            try { const d = await lire('/logs?lines=' + encodeURIComponent($('logLignes').value)); LOGS = d.logs || []; if (d.error) LOGS = null; } catch (e) { LOGS = null; }
+            rendreJournal();
         }
 
-        async function loadStatus() {
-            status = await api('/status');
-            if (!status || !status.components) { setLive(false); return; }
-            setLive(true);
-            const badge = document.getElementById('status-badge');
-            const mailInstalled = status.components?.mail_server?.installed || false;
+        // ------------------------------------------------------------------ rendu
+        function composantsEtat(c) { return !c ? ['', '—'] : !c.installed ? ['att', 'NON INSTALLÉ'] : c.running ? ['ok', 'EN MARCHE'] : ['hors', 'ARRÊTÉ']; }
 
-            if (!mailInstalled) {
-                document.getElementById('install-banner').style.display = 'block';
-                document.getElementById('main-content').style.display = 'none';
-                document.getElementById('btn-install').style.display = 'inline-block';
-                badge.textContent = 'Not Installed';
-                badge.className = 'status-badge stopped';
-                return;
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const cm = S && S.components ? S.components.mail_server : null, cw = S && S.components ? S.components.webmail : null;
+            const etat = $('etat');
+            const installe = !!(cm && cm.installed);
+            if (!S && !SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!S || !S.components) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!installe) { etat.className = 'actif att'; etat.textContent = 'NON INSTALLÉ'; }
+            else if (cm.running && cw && cw.running) { etat.className = 'actif'; etat.textContent = 'EN MARCHE'; }
+            else if (cm.running || (cw && cw.running)) { etat.className = 'actif att'; etat.textContent = 'PARTIEL'; }
+            else { etat.className = 'actif hors'; etat.textContent = 'ARRÊTÉ'; }
+            $('installPan').hidden = !(S && S.components && !installe);
+            const enMarche = !!(cm && cm.running), webEnMarche = !!(cw && cw.running);
+            $('bDemarrer').hidden = !(installe && !(enMarche && webEnMarche));
+            $('bArreter').hidden = !(installe && (enMarche || webEnMarche));
+
+            // Tuiles
+            $('tBoites').textContent = USERS ? USERS.length : (S && S.user_count != null ? S.user_count : '—');
+            $('tStock').textContent = S ? tiret(S.storage) : '—';
+            $('tDomaine').textContent = S ? tiret(S.domain) : '—';
+            const cc = $('cCert'); cc.className = 'tuile';
+            if (SSL && SSL.installed === false) { $('tCert').textContent = 'Absent'; $('sCert').textContent = 'aucun certificat'; cc.classList.add('hors'); }
+            else if (SSL && SSL.installed) {
+                const j = SSL.days_remaining;
+                $('tCert').textContent = (j === null || j === undefined) ? '—' : j + ' j';
+                $('sCert').textContent = (SSL.type === 'acme' ? 'Let’s Encrypt' : SSL.type === 'selfsigned' ? 'auto-signé' : 'TLS') + (SSL.status === 'expired' ? ' · expiré' : SSL.status === 'expiring_soon' ? ' · bientôt expiré' : '');
+                cc.classList.add(SSL.status === 'expired' ? 'hors' : SSL.status === 'expiring_soon' ? 'att' : 'ok');
+            } else { $('tCert').textContent = '—'; $('sCert').textContent = 'TLS'; }
+            const prot = protections();
+            const mesurees = prot.filter(p => p.on !== null), actives = mesurees.filter(p => p.on).length;
+            $('tProt').textContent = mesurees.length ? actives + '/' + mesurees.length : '—';
+            $('cProt').className = 'tuile ' + (!mesurees.length ? '' : actives === mesurees.length ? 'ok' : actives === 0 ? 'hors' : 'att');
+            const up = S && S.ports ? PORTS.filter(([p]) => S.ports[p] === true).length : null;
+            $('tPorts').textContent = up === null ? '—' : up + '/' + PORTS.length;
+            $('cPorts').className = 'tuile ' + (up === null ? '' : up === PORTS.length ? 'ok' : up === 0 ? 'hors' : 'att');
+
+            rendreComposants(cm, cw); rendrePorts(); rendreProtections(prot); rendreAcces(); rendreBoites(); rendreAlias();
+            if (ONGLET === 'socle') rendreSocle();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function ligne(nom, sous, pastilleEl, boutons) {
+            const l = el('div', 'ligne'); const n = el('div', 'nom'); n.appendChild(el('b', '', nom)); if (sous) n.appendChild(el('small', '', sous)); l.appendChild(n);
+            if (pastilleEl) l.appendChild(pastilleEl);
+            const g = el('div', 'grp'); (boutons || []).forEach(b => g.appendChild(b)); l.appendChild(g); return l;
+        }
+
+        function rendreComposants(cm, cw) {
+            const z = $('comp'); z.replaceChildren();
+            if (!S || !S.components) { z.appendChild(el('div', 'vide', SESSION_OK ? 'Composants non lisibles' : '—')); return; }
+            const [c1, l1] = composantsEtat(cm), [c2, l2] = composantsEtat(cw);
+            const bm = [], bw = [];
+            if (cm && !cm.installed) bm.push(btn('Installer', 'prim', () => agir('Installation du serveur mail', 'POST', '/install', undefined, 1500)));
+            else if (cm && cm.running) bm.push(btn('Arrêter', 'danger', () => demander('Arrêter le serveur mail ? Plus aucun courrier ne sera reçu ni distribué.', () => agir('Arrêt du serveur mail', 'POST', '/stop', undefined, 1200))));
+            else if (cm) bm.push(btn('Démarrer', 'ok', () => agir('Démarrage du serveur mail', 'POST', '/start', undefined, 2000)));
+            if (cw && !cw.installed) bw.push(btn('Installer', 'prim', () => agir('Installation du webmail', 'POST', '/webmail/install', undefined, 1500)));
+            else if (cw && cw.running) bw.push(btn('Arrêter', 'danger', () => demander('Arrêter le webmail ?', () => agir('Arrêt du webmail', 'POST', '/webmail/stop', undefined, 1200))));
+            else if (cw) bw.push(btn('Démarrer', 'ok', () => agir('Démarrage du webmail', 'POST', '/webmail/start', undefined, 2000)));
+            z.appendChild(ligne('Serveur mail', 'Postfix + Dovecot (LXC)' + (cm && cm.ip ? ' · ' + cm.ip : ''), pastille(c1, l1), bm));
+            z.appendChild(ligne('Webmail', 'Roundcube (LXC)' + (cw && cw.port ? ' · port ' + cw.port : ''), pastille(c2, l2), bw));
+        }
+
+        function rendrePorts() {
+            const z = $('ports'); z.replaceChildren();
+            PORTS.forEach(([p, nom]) => {
+                const v = S && S.ports ? S.ports[p] : undefined;
+                const d = el('div', 'port ' + (v === true ? 'ok' : v === false ? 'hors' : ''));
+                d.appendChild(el('b', '', String(p))); d.appendChild(el('small', '', nom + (v === true ? ' · ouvert' : v === false ? ' · fermé' : ' · —')));
+                z.appendChild(d);
+            });
+        }
+
+        // Mesures réelles : DKIM = clé publiée ; antispam = Rspamd répond ; ClamAV = activé ; greylisting = non mesurable.
+        function protections() {
+            return [
+                { cle: 'dkim', nom: 'DKIM', sous: 'Signature des courriers sortants', on: DKIMREC ? !!DKIMREC.record : null, lab: ['CLÉ PUBLIÉE', 'PAS DE CLÉ'] },
+                { cle: 'spam', nom: 'Antispam (Rspamd)', sous: 'Filtrage du courrier entrant', on: SPAM ? !!SPAM.enabled : null, lab: ['ACTIF', 'INACTIF'] },
+                { cle: 'grey', nom: 'Greylisting', sous: 'Retarde les expéditeurs inconnus', on: null, lab: ['ACTIF', 'INACTIF'] },
+                { cle: 'av', nom: 'ClamAV', sous: 'Analyse antivirus' + (AV && AV.running ? ' · démon en marche' : ''), on: AV ? !!AV.enabled : null, lab: ['ACTIF', 'INACTIF'] }
+            ];
+        }
+        function rendreProtections(prot) {
+            const z = $('prot'); z.replaceChildren();
+            prot.forEach(p => {
+                const pill = p.on === null ? pastille('', '—', 'Non mesurable par l’API') : pastille(p.on ? 'ok' : 'att', p.on ? p.lab[0] : p.lab[1]);
+                const bs = [];
+                if (p.cle === 'dkim') bs.push(btn('Générer la clé', '', () => agir('Génération de la clé DKIM', 'POST', '/dkim/setup', undefined, 2000)));
+                if (p.cle === 'spam') {
+                    bs.push(btn('Activer', 'ok', () => agir('Activation de l’antispam', 'POST', '/spam/enable', undefined, 1000)));
+                    bs.push(btn('Désactiver', 'danger', () => demander('Désactiver l’antispam ? Le courrier entrant ne sera plus filtré.', () => agir('Désactivation de l’antispam', 'POST', '/spam/disable', undefined, 1000))));
+                }
+                if (p.cle === 'grey') {
+                    bs.push(btn('Activer', 'ok', () => agir('Activation du greylisting', 'POST', '/grey/enable', undefined, 1000)));
+                    bs.push(btn('Désactiver', 'danger', () => demander('Désactiver le greylisting ?', () => agir('Désactivation du greylisting', 'POST', '/grey/disable', undefined, 1000))));
+                }
+                if (p.cle === 'av') {
+                    bs.push(btn('Activer', 'ok', () => agir('Activation de ClamAV', 'POST', '/av/enable', undefined, 1000)));
+                    bs.push(btn('Désactiver', 'danger', () => demander('Désactiver l’analyse antivirus ?', () => agir('Désactivation de ClamAV', 'POST', '/av/disable', undefined, 1000))));
+                }
+                z.appendChild(ligne(p.nom, p.sous, pill, bs));
+            });
+        }
+
+        function rendreAcces() {
+            const hote = ACC ? (ACC.mail_server || (ACC.domain ? 'mail.' + ACC.domain : '')) : '';
+            // Le lien mène là où il le dit (#1014) : une seule adresse alimente l'affichage et la destination.
+            const webmailUrl = ACC ? urlSure((ACC.webmail && ACC.webmail.url) || (ACC.domain ? 'https://webmail.' + ACC.domain : '')) : '';
+            const a = $('webmailUrl'), ext = $('externeOuvrir');
+            a.textContent = webmailUrl || '—';
+            if (webmailUrl) { a.href = webmailUrl; ext.href = webmailUrl; ext.hidden = false; } else { a.removeAttribute('href'); ext.removeAttribute('href'); ext.hidden = true; }
+            $('imapUrl').textContent = hote ? hote + ':993 (SSL) · ' + hote + ':143 (STARTTLS)' : '—';
+            $('smtpUrl').textContent = hote ? hote + ':587 (STARTTLS) · ' + hote + ':465 (SSL)' : '—';
+            $('acUrl').textContent = tiret(ACC && ACC.apps && ACC.apps.thunderbird);
+            $('adUrl').textContent = tiret(ACC && ACC.apps && ACC.apps.outlook);
+        }
+
+        function vide(tb, n, msg) { const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function rendreBoites() {
+            const tb = $('bUsers'); tb.replaceChildren();
+            $('nBoites').textContent = USERS && USERS.length ? USERS.length + ' boîte' + (USERS.length > 1 ? 's' : '') : '';
+            if (USERS === null) { vide(tb, 3, '—'); return; }
+            if (!USERS.length) { vide(tb, 3, 'Aucune boîte'); return; }
+            USERS.forEach(u => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(u.email))); tr.appendChild(el('td', '', tiret(u.size)));
+                const td = el('td', 'act'); const g = el('div', 'grp');
+                g.appendChild(btn('Mot de passe', '', () => ouvrirMotDePasse(u.email)));
+                g.appendChild(btn('Réparer', '', () => agir('Réparation de ' + u.email, 'POST', '/user/repair/' + encodeURIComponent(u.email))));
+                g.appendChild(btn('Supprimer', 'danger', () => demander('Supprimer la boîte ' + u.email + ' ? Les courriers qu’elle contient seront perdus.', () => agir('Suppression de ' + u.email, 'DELETE', '/user/' + encodeURIComponent(u.email)))));
+                td.appendChild(g); tr.appendChild(td); tb.appendChild(tr);
+            });
+        }
+        function rendreAlias() {
+            const tb = $('bAlias'); tb.replaceChildren();
+            $('nAlias').textContent = ALIAS && ALIAS.length ? ALIAS.length + ' alias' : '';
+            if (ALIAS === null) { vide(tb, 3, '—'); return; }
+            if (!ALIAS.length) { vide(tb, 3, 'Aucun alias'); return; }
+            ALIAS.forEach(a => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(a.alias))); tr.appendChild(el('td', 'mono', tiret(a.target)));
+                const td = el('td', 'act'); const g = el('div', 'grp');
+                g.appendChild(btn('Supprimer', 'danger', () => demander('Supprimer l’alias ' + a.alias + ' ?', () => agir('Suppression de l’alias ' + a.alias, 'DELETE', '/alias/' + encodeURIComponent(a.alias)))));
+                td.appendChild(g); tr.appendChild(td); tb.appendChild(tr);
+            });
+        }
+
+        function rendreSocle() {
+            const s = SOCLE;
+            $('sMaildir').textContent = !s ? '—' : s.maildir ? 'Maildir' : tiret(s.mail_location);
+            $('sSieve').textContent = !s ? '—' : s.sieve ? 'actif' : 'inactif';
+            $('sAv').textContent = !s ? '—' : tiret(s.antivirus);
+        }
+        function rendreReglages() {
+            const f = $('fReglages'), s = SETT;
+            f.domain.value = s ? (s.domain || '') : ''; f.hostname.value = s ? (s.hostname || 'mail') : '';
+            f.mail_ip.value = s ? (s.mail_ip || '') : ''; f.webmail_port.value = s ? (s.webmail_port || 80) : '';
+        }
+        function rendreJournal() {
+            $('logTexte').textContent = LOGS === null ? '—' : (LOGS.join('\n').trim() || 'Aucune ligne de journal');
+            $('nLog').textContent = LOGS && LOGS.length ? LOGS.length + ' lignes' : '';
+            annoncer();
+        }
+
+        // ------------------------------------------------------------------ formulaires
+        function ouvrirMotDePasse(email) { const f = $('fPwd'); f.hidden = false; f.email.value = email; f.password.value = ''; f.password.focus(); annoncer(); }
+        $('addUser').addEventListener('click', () => { $('fUser').hidden = !$('fUser').hidden; annoncer(); });
+        $('addAlias').addEventListener('click', () => { $('fAlias').hidden = !$('fAlias').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { const f = $(b.dataset.ferme); f.reset(); f.hidden = true; annoncer(); }));
+        $('fUser').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/user', { email: f.email.value.trim(), password: f.password.value });
+            f.password.value = '';
+            if (r.demo) { retour(detail(r), 'att'); return; }
+            if (reussi(r)) { f.reset(); f.hidden = true; retour('Boîte créée.', 'ok'); charger(); } else retour('Création impossible : ' + detail(r), 'ko');
+        });
+        $('fPwd').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/user/password', { email: f.email.value, password: f.password.value });
+            f.password.value = '';
+            if (r.demo) { retour(detail(r), 'att'); return; }
+            if (reussi(r)) { f.reset(); f.hidden = true; retour('Mot de passe changé.', 'ok'); } else retour('Changement impossible : ' + detail(r), 'ko');
+        });
+        $('fAlias').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/alias', { alias: f.alias.value.trim(), target: f.target.value.trim() });
+            if (r.demo) { retour(detail(r), 'att'); return; }
+            if (reussi(r)) { f.reset(); f.hidden = true; retour('Alias créé.', 'ok'); charger(); } else retour('Création impossible : ' + detail(r), 'ko');
+        });
+        $('fReglages').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/settings', { domain: f.domain.value, hostname: f.hostname.value, mail_ip: f.mail_ip.value, webmail_port: parseInt(f.webmail_port.value, 10) || 80 });
+            if (r.demo) { retour(detail(r), 'att'); return; }
+            if (reussi(r)) retour('Réglages enregistrés.', 'ok'); else retour('Enregistrement impossible : ' + detail(r), 'ko');
+        });
+        $('fAcme').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            await agir('Demande de certificat Let’s Encrypt', 'POST', '/acme/issue', { email: f.email.value.trim() || null }, 3000);
+        });
+        $('fInstall').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/install');
+            if (r.demo) { retour(detail(r), 'att'); return; }
+            if (!reussi(r)) { retour('Installation impossible : ' + detail(r), 'ko'); return; }
+            if (f.webmail.checked) {
+                const w = await ecrire('POST', '/webmail/install');
+                if (!reussi(w)) { retour('Serveur mail lancé, mais le webmail a échoué : ' + detail(w), 'ko'); return; }
             }
-            document.getElementById('install-banner').style.display = 'none';
-            document.getElementById('main-content').style.display = 'block';
-            document.getElementById('btn-install').style.display = 'none';
+            retour('Installation lancée en arrière-plan.', 'ok'); setTimeout(charger, 2000);
+        });
 
-            const running = status.running;
-            badge.textContent = running ? '● Running' : '○ Stopped';
-            badge.className = `status-badge ${running ? 'running' : 'stopped'}`;
-            document.getElementById('btn-start').style.display = running ? 'none' : 'inline-block';
-            document.getElementById('btn-stop').style.display = running ? 'inline-block' : 'none';
+        $('bDemarrer').addEventListener('click', () => agir('Démarrage', 'POST', '/start', undefined, 2000));
+        $('bArreter').addEventListener('click', () => demander('Arrêter les services de messagerie ? Plus aucun courrier ne sera reçu ni distribué.', () => agir('Arrêt', 'POST', '/stop', undefined, 1200)));
+        $('aRestart').addEventListener('click', () => demander('Redémarrer les services de messagerie ? Le courrier est interrompu quelques instants.', () => agir('Redémarrage', 'POST', '/restart', undefined, 3000)));
+        $('aSelf').addEventListener('click', () => agir('SSL auto-signé', 'POST', '/ssl/setup'));
+        $('aDkim').addEventListener('click', () => agir('Génération de la clé DKIM', 'POST', '/dkim/setup', undefined, 2000));
+        $('aSpam').addEventListener('click', () => agir('Installation de l’antispam', 'POST', '/spam/setup', undefined, 3000));
+        $('aGrey').addEventListener('click', () => agir('Installation du greylisting', 'POST', '/grey/setup', undefined, 2000));
+        $('aAv').addEventListener('click', () => agir('Installation de ClamAV (peut durer plusieurs minutes)', 'POST', '/av/setup', undefined, 5000));
+        $('aBackup').addEventListener('click', () => agir('Sauvegarde', 'POST', '/backup'));
+        $('sReconcile').addEventListener('click', () => demander('Bascule mbox vers Maildir : opération destructive. Une sauvegarde est prise automatiquement avant, et la bascule est annulée si elle échoue.', async () => { await agir('Bascule Maildir', 'POST', '/maildir/reconcile', undefined, 5000); chargerSocle(); }));
+        $('sSieveOn').addEventListener('click', async () => { await agir('Activation de Sieve', 'POST', '/sieve/enable', undefined, 6000); });
+        $('sAvOn').addEventListener('click', () => agir('ClamAV activé', 'POST', '/antivirus/on', undefined, 6000));
+        $('sAvOff').addEventListener('click', () => demander('Désactiver ClamAV ?', () => agir('ClamAV désactivé', 'POST', '/antivirus/off', undefined, 6000)));
+        $('sSsl').addEventListener('click', () => agir('Renouvellement du SSL', 'POST', '/ssl/renew'));
+        $('aDns').addEventListener('click', async () => {
+            if (DEMO) { DNS = { records: [{ type: 'MX', name: 'exemple.test', value: '10 mail.exemple.test.' }, { type: 'A', name: 'mail.exemple.test', value: '192.0.2.10' }, { type: 'TXT', name: 'exemple.test', value: 'v=spf1 mx a:mail.exemple.test -all' }], note: '' }; }
+            else { try { DNS = await lire('/dns-setup'); } catch (e) { DNS = null; retour('Enregistrements DNS illisibles : ' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable'), 'ko'); return; } }
+            const tb = $('bDns'); tb.replaceChildren();
+            (DNS.records || []).forEach(r => { const tr = el('tr'); tr.appendChild(el('td', '', tiret(r.type))); tr.appendChild(el('td', 'mono', tiret(r.name))); tr.appendChild(el('td', 'mono', tiret(r.value))); tb.appendChild(tr); });
+            if (!(DNS.records || []).length) vide(tb, 3, 'Aucun enregistrement');
+            const rec = DKIMREC && DKIMREC.record;
+            $('dkimBloc').hidden = !rec; $('dkimTxt').textContent = rec || '';
+            $('dnsNote').textContent = 'Remplacer les valeurs entre chevrons par l’adresse publique du serveur.';
+            $('dnsPan').hidden = false; annoncer();
+        });
 
-            document.getElementById('user-count').textContent = status.user_count ?? 0;
-            document.getElementById('storage').textContent = status.storage || '0';
-            document.getElementById('domain').textContent = status.domain || '-';
-
-            updateComponent('mail', status.components?.mail_server);
-            updateComponent('webmail', status.components?.webmail);
-
-            // Ports
-            const ports = status.ports || {};
-            let up = 0, tot = 0;
-            document.getElementById('port-grid').innerHTML = Object.entries(PORT_META).map(([p, meta]) => {
-                const active = !!ports[p]; tot++; if (active) up++;
-                return `<div class="port-item ${active ? 'active' : 'inactive'}"><div class="icon">${active ? '🟢' : '🔴'}</div><div class="num">${p}</div><div class="name">${meta[1]}</div></div>`;
-            }).join('');
-            const pe = document.getElementById('ports-up');
-            pe.textContent = `${up}/${tot}`;
-            document.querySelector('#ports-up').parentElement.className = 'stat-card ' + (up === tot ? 'healthy' : up === 0 ? 'dead' : 'warning');
+        // ------------------------------------------------------------------ onglets
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'socle') chargerSocle();
+            if (nom === 'reglages') chargerReglages();
+            if (nom === 'journaux') chargerJournal();
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+        $('logRaf').addEventListener('click', chargerJournal);
+        $('logLignes').addEventListener('change', chargerJournal);
 
-        function updateComponent(name, comp) {
-            const installed = comp?.installed || false;
-            const running = comp?.running || false;
-            const badge = document.getElementById(`${name}-badge`);
-            document.getElementById(`comp-${name}`).className = 'component ' + (running ? 'up' : installed ? 'down' : '');
-            if (installed) {
-                badge.textContent = running ? '● Running' : '○ Stopped';
-                badge.className = `status-badge ${running ? 'running' : 'stopped'}`;
-                document.getElementById(`${name}-install`).style.display = 'none';
-                document.getElementById(`${name}-start`).style.display = running ? 'none' : 'inline-block';
-                document.getElementById(`${name}-stop`).style.display = running ? 'inline-block' : 'none';
-            } else {
-                badge.textContent = 'Not Installed';
-                badge.className = 'status-badge stopped';
-                document.getElementById(`${name}-install`).style.display = 'inline-block';
-                document.getElementById(`${name}-start`).style.display = 'none';
-                document.getElementById(`${name}-stop`).style.display = 'none';
-            }
+        // ------------------------------------------------------------------ hauteur annoncée à l'hôte (iframes)
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'mail' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function loadSecurity() {
-            const [dkim, spam, grey, av] = await Promise.all([
-                api('/dkim/status'), api('/spam/status'), api('/grey/status'), api('/av/status')
-            ]);
-            const mk = (ok, warn) => `<span class="${ok ? 'ok' : (warn ? 'warn' : 'err')}">${ok ? '✅' : (warn ? '⚠️' : '❌')}</span>`;
-
-            document.getElementById('toggle-dkim').checked = dkim.opendkim_running || false;
-            document.getElementById('dkim-status').innerHTML =
-                `<span class="${dkim.key_exists ? 'ok' : 'err'}">Key ${dkim.key_exists ? '✅' : '❌'}</span><span class="${dkim.opendkim_running ? 'ok' : 'warn'}">Svc ${dkim.opendkim_running ? '✅' : '⚠️'}</span>`;
-
-            document.getElementById('toggle-spam').checked = spam.enabled || false;
-            document.getElementById('spam-status').innerHTML =
-                `<span class="${spam.installed ? 'ok' : 'err'}">Inst ${spam.installed ? '✅' : '❌'}</span><span class="${spam.running ? 'ok' : 'warn'}">Run ${spam.running ? '✅' : '⚠️'}</span>`;
-
-            document.getElementById('toggle-grey').checked = grey.enabled || false;
-            document.getElementById('grey-status').innerHTML =
-                `<span class="${grey.installed ? 'ok' : 'err'}">Inst ${grey.installed ? '✅' : '❌'}</span><span class="${grey.running ? 'ok' : 'warn'}">Run ${grey.running ? '✅' : '⚠️'}</span>`;
-
-            document.getElementById('toggle-av').checked = av.enabled || false;
-            document.getElementById('av-status').innerHTML =
-                `<span class="${av.installed ? 'ok' : 'err'}">Inst ${av.installed ? '✅' : '❌'}</span><span class="${av.running ? 'ok' : 'warn'}">Run ${av.running ? '✅' : '⚠️'}</span>`;
-
-            let score = 0;
-            if (dkim.opendkim_running) score++;
-            if (spam.enabled) score++;
-            if (grey.enabled) score++;
-            if (av.enabled) score++;
-            const se = document.getElementById('security-score');
-            se.textContent = `${score}/4`;
-            se.style.color = score >= 3 ? 'var(--green)' : score >= 2 ? 'var(--yellow)' : 'var(--red)';
-        }
-
-        async function toggleDKIM(el) { if (el.checked) { const r = await api('/dkim/setup', { method: 'POST' }); toast(r.success ? 'DKIM setup started' : 'Failed', r.success ? 'success' : 'error'); } setTimeout(loadSecurity, 2000); }
-        async function toggleSpam(el) { const a = el.checked ? 'enable' : 'disable'; const r = await api(`/spam/${a}`, { method: 'POST' }); toast(r.success ? `SpamAssassin ${a}d` : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 1000); }
-        async function toggleGrey(el) { const a = el.checked ? 'enable' : 'disable'; const r = await api(`/grey/${a}`, { method: 'POST' }); toast(r.success ? `Greylisting ${a}d` : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 1000); }
-        async function toggleAV(el) { const a = el.checked ? 'enable' : 'disable'; const r = await api(`/av/${a}`, { method: 'POST' }); toast(r.success ? `ClamAV ${a}d` : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 1000); }
-
-        let accessData = {};
-        async function loadAccess() {
-            const d = await api('/access');
-            accessData = d;
-            const domain = d.domain || 'example.com';
-            const host = d.mail_server || `mail.${domain}`;
-            // LE LIEN MENE LA OU IL DIT (#1014). Il affichait l'adresse
-            // publique et naviguait vers `local_url` — c'est-a-dire, avant
-            // correction, `http://localhost:<port>` : dans le navigateur de
-            // l'operateur, la machine de l'operateur. Le clic ne menait nulle
-            // part alors que le texte promettait le webmail.
-            const webmailUrl = d.webmail?.url || `https://webmail.${domain}`;
-            document.getElementById('webmail-url').textContent = webmailUrl;
-            document.getElementById('webmail-url').href = webmailUrl;
-            // Meme adresse que le lien ci-dessus : deux calculs separes pour
-            // la meme destination finissent par diverger, et c'est ainsi que
-            // l'un des deux s'est mis a pointer sur localhost.
-            document.getElementById('external-open').href = webmailUrl;
-            document.getElementById('imap-url').textContent = `${host}:993 (SSL) · ${host}:143 (STARTTLS)`;
-            document.getElementById('smtp-url').textContent = `${host}:587 (STARTTLS) · ${host}:465 (SSL)`;
-            document.getElementById('autoconfig-url').textContent = d.apps?.thunderbird || '-';
-            document.getElementById('autodiscover-url').textContent = d.apps?.outlook || '-';
-
-            const ssl = await api('/ssl');
-            const sslEl = document.getElementById('ssl-status');
-            sslEl.textContent = ssl.installed ? '✅' : '❌';
-            sslEl.style.color = ssl.installed ? 'var(--green)' : 'var(--red)';
-        }
-
-        async function loadUsers() {
-            const d = await api('/users');
-            const list = document.getElementById('user-list');
-            const users = d.users || [];
-            if (!users.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--p31-dim)">No users</td></tr>'; return; }
-            list.innerHTML = users.map(u => `<tr>
-                <td class="mono">📧 ${u.email}</td>
-                <td>${u.size || '-'}</td>
-                <td>
-                    <button class="btn sm" onclick="changePassword('${u.email}')">🔑 Password</button>
-                    <button class="btn sm" onclick="repairMailbox('${u.email}')">🔧 Repair</button>
-                    <button class="btn sm danger" onclick="deleteUser('${u.email}')">🗑️ Delete</button>
-                </td></tr>`).join('');
-        }
-
-        async function loadAliases() {
-            const d = await api('/aliases');
-            const list = document.getElementById('alias-list');
-            const aliases = d.aliases || [];
-            if (!aliases.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--p31-dim)">No aliases</td></tr>'; return; }
-            list.innerHTML = aliases.map(a => `<tr>
-                <td class="mono">🔀 ${a.alias}</td>
-                <td class="mono">🎯 ${a.target}</td>
-                <td><button class="btn sm danger" onclick="deleteAlias('${a.alias}')">🗑️</button></td>
-            </tr>`).join('');
-        }
-
-        async function loadExternal() {
-            const d = await api('/external/status');
-            const statusEl = document.getElementById('external-status');
-            const provEl = document.getElementById('external-providers');
-            if (d && d.plugin_enabled) {
-                statusEl.className = 'alert info';
-                statusEl.innerHTML = `✅ External mailboxes are <strong>enabled</strong> (ident_switch)` +
-                    (d.account_count != null ? ` — ${d.account_count} account(s) configured across users.` : '.');
-                const provs = d.providers || [];
-                provEl.innerHTML = provs.map(p => `<div class="provider-card">
-                    <span class="pico">${p.icon || '📧'}</span>
-                    <div class="pinfo"><div class="pname">${p.name}</div><div class="pdetail">IMAP ${p.imap || '?'} · SMTP ${p.smtp || '?'}</div></div>
-                </div>`).join('') || '';
-            } else if (d && d.plugin_installed === false) {
-                statusEl.className = 'alert warning';
-                statusEl.innerHTML = '⚠️ The <strong>ident_switch</strong> plugin is not installed yet — external mailboxes are unavailable. Install it from the mail package.';
-                provEl.innerHTML = '';
-            } else {
-                statusEl.className = 'alert info';
-                statusEl.innerHTML = '📥 External mailboxes let each user pull their Gmail / Outlook / IMAP account into SecuBox Webmail.';
-                provEl.innerHTML = '';
-            }
-        }
-
-        async function loadLogs() {
-            const lines = document.getElementById('log-lines').value;
-            const d = await api(`/logs?lines=${lines}`);
-            document.getElementById('log-content').textContent = (d.logs || []).join('\n') || 'No logs available';
-        }
-
-        async function loadSettings() {
-            const d = await api('/settings');
-            document.getElementById('cfg-domain').value = d.domain || '';
-            document.getElementById('cfg-hostname').value = d.hostname || 'mail';
-            document.getElementById('cfg-mail-ip').value = d.mail_ip || '';
-            document.getElementById('cfg-webmail-port').value = d.webmail_port || 80;
-        }
-
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['users', 'aliases', 'external', 'logs', 'settings', 'actions', 'socle'];
-            const idx = tabs.indexOf(name) + 1;
-            document.querySelector(`.tab:nth-child(${idx})`).classList.add('active');
-            document.getElementById(`tab-${name}`).classList.add('active');
-            if (name === 'settings') loadSettings();
-            if (name === 'logs') loadLogs();
-            if (name === 'external') loadExternal();
-            if (name === 'socle') loadSocle();
-        }
-
-        // ── Socle #1169 : Maildir / Sieve / ClamAV / SSL renew ────────────────
-        async function loadSocle() {
-            const s = await api('/socle/status');
-            document.getElementById('socle-maildir').textContent =
-                s.maildir ? 'Maildir ✓' : (s.mail_location || 'mbox');
-            document.getElementById('socle-sieve').textContent = s.sieve ? 'actif ✓' : 'inactif';
-            document.getElementById('socle-av').textContent = s.antivirus || '-';
-        }
-        function socleLog(m) { document.getElementById('socle-log').textContent = m || ''; }
-        async function reconcileMaildir() {
-            if (!confirm('Bascule mbox→Maildir (destructif). Un backup est pris AUTOMATIQUEMENT avant, et la bascule est annulée si le backup échoue. Continuer ?')) return;
-            socleLog('Réconciliation Maildir en cours…');
-            const r = await api('/maildir/reconcile', { method: 'POST' });
-            socleLog(r.message || 'lancé'); setTimeout(loadSocle, 5000);
-        }
-        async function enableSieve() {
-            socleLog('Activation Sieve en cours…');
-            const r = await api('/sieve/enable', { method: 'POST' });
-            socleLog(r.message || 'lancé'); setTimeout(loadSocle, 6000);
-        }
-        async function toggleAntivirus(action) {
-            socleLog('ClamAV ' + action + ' en cours…');
-            const r = await api('/antivirus/' + action, { method: 'POST' });
-            socleLog(r.message || 'lancé'); setTimeout(loadSocle, 6000);
-        }
-        async function renewSsl() {
-            socleLog('Renouvellement SSL en cours…');
-            const r = await api('/ssl/renew', { method: 'POST' });
-            socleLog(r.message || 'lancé');
-        }
-
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-
-        async function doInstall() {
-            const domain = document.getElementById('install-domain').value.trim();
-            if (!domain) { toast('Domain required', 'error'); return; }
-            document.getElementById('install-actions').style.display = 'none';
-            document.getElementById('install-status').style.display = 'block';
-            document.getElementById('install-progress').style.width = '20%';
-            document.getElementById('install-message').textContent = 'Installing mail server…';
-            await api('/install', { method: 'POST' });
-            document.getElementById('install-progress').style.width = '60%';
-            if (document.getElementById('install-webmail').checked) {
-                document.getElementById('install-message').textContent = 'Installing webmail…';
-                await api('/webmail/install', { method: 'POST' });
-            }
-            document.getElementById('install-progress').style.width = '100%';
-            document.getElementById('install-message').textContent = 'Installation started. Check logs.';
-            setTimeout(() => { hideModal('install-modal'); refresh(); }, 2000);
-        }
-
-        async function startMail() { await api('/start', { method: 'POST' }); toast('Starting…'); setTimeout(refresh, 2000); }
-        async function stopMail() { await api('/stop', { method: 'POST' }); toast('Stopped'); setTimeout(refresh, 1000); }
-        async function installMail() { await api('/install', { method: 'POST' }); toast('Installation started'); }
-        async function startWebmail() { await api('/webmail/start', { method: 'POST' }); toast('Starting…'); setTimeout(refresh, 2000); }
-        async function stopWebmail() { await api('/webmail/stop', { method: 'POST' }); toast('Stopped'); setTimeout(refresh, 1000); }
-        async function installWebmail() { await api('/webmail/install', { method: 'POST' }); toast('Installation started'); }
-        async function startServices() { await api('/start', { method: 'POST' }); toast('Starting…'); setTimeout(refresh, 2000); }
-        async function stopServices() { await api('/stop', { method: 'POST' }); toast('Stopped'); setTimeout(refresh, 1000); }
-        async function restartServices() { await api('/restart', { method: 'POST' }); toast('Restarting…'); setTimeout(refresh, 3000); }
-
-        async function addUser() {
-            const email = document.getElementById('user-email').value.trim();
-            const password = document.getElementById('user-password').value;
-            if (!email || !password) { toast('Email and password required', 'error'); return; }
-            const r = await api('/user', { method: 'POST', body: JSON.stringify({ email, password }) });
-            if (r.success) { hideModal('user-modal'); document.getElementById('user-email').value=''; document.getElementById('user-password').value=''; toast('✅ User created'); refresh(); } else toast(r.detail || 'Failed', 'error');
-        }
-        async function deleteUser(email) { if (!confirm(`Delete ${email}?`)) return; await api(`/user/${encodeURIComponent(email)}`, { method: 'DELETE' }); toast('🗑️ Deleted'); refresh(); }
-        async function changePassword(email) { const password = prompt(`New password for ${email}:`); if (!password) return; const r = await api('/user/password', { method: 'POST', body: JSON.stringify({ email, password }) }); toast(r.success ? '🔑 Password changed' : 'Failed', r.success ? 'success' : 'error'); }
-        async function repairMailbox(email) { const r = await api(`/user/repair/${encodeURIComponent(email)}`, { method: 'POST' }); toast(r.success ? '🔧 Mailbox repaired' : 'Failed', r.success ? 'success' : 'error'); }
-
-        async function addAlias() {
-            const alias = document.getElementById('alias-from').value.trim();
-            const target = document.getElementById('alias-to').value.trim();
-            if (!alias || !target) { toast('Both addresses required', 'error'); return; }
-            const r = await api('/alias', { method: 'POST', body: JSON.stringify({ alias, target }) });
-            if (r.success) { hideModal('alias-modal'); toast('✅ Alias created'); refresh(); } else toast(r.detail || 'Failed', 'error');
-        }
-        async function deleteAlias(alias) { if (!confirm(`Delete alias ${alias}?`)) return; await api(`/alias/${encodeURIComponent(alias)}`, { method: 'DELETE' }); toast('🗑️ Deleted'); refresh(); }
-
-        async function saveSettings() {
-            const s = { domain: document.getElementById('cfg-domain').value, hostname: document.getElementById('cfg-hostname').value, mail_ip: document.getElementById('cfg-mail-ip').value, webmail_port: parseInt(document.getElementById('cfg-webmail-port').value) || 80 };
-            const r = await api('/settings', { method: 'POST', body: JSON.stringify(s) });
-            toast(r.success ? '💾 Settings saved' : 'Failed', r.success ? 'success' : 'error');
-        }
-
-        async function setupACME() { const email = prompt("Email for Let's Encrypt (optional):"); const r = await api('/acme/issue', { method: 'POST', body: JSON.stringify({ email }) }); toast(r.success ? '🔒 ACME request started' : 'Failed', r.success ? 'success' : 'error'); }
-        async function setupSelfSignedSSL() { const r = await api('/ssl/setup', { method: 'POST' }); toast(r.success ? '🔏 Self-signed SSL setup' : 'Failed', r.success ? 'success' : 'error'); }
-        async function setupDKIM() { const r = await api('/dkim/setup', { method: 'POST' }); toast(r.success ? '🔐 DKIM setup started' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 2000); }
-        async function setupSpam() { const r = await api('/spam/setup', { method: 'POST' }); toast(r.success ? '🚫 SpamAssassin setup' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 3000); }
-        async function setupGrey() { const r = await api('/grey/setup', { method: 'POST' }); toast(r.success ? '⏳ Greylisting setup' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 2000); }
-        async function setupAV() { const r = await api('/av/setup', { method: 'POST' }); toast(r.success ? '🦠 ClamAV setup (may take minutes)' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 5000); }
-        async function createBackup() { const r = await api('/backup', { method: 'POST' }); toast(r.success ? `💾 Backup: ${r.file}` : 'Failed', r.success ? 'success' : 'error'); }
-
-        async function showDNSSetup() {
-            const d = await api('/dns-setup');
-            document.getElementById('dns-records').innerHTML = (d.records || []).map(r =>
-                `<tr><td><strong>${r.type}</strong></td><td class="mono">${r.name}</td><td class="mono" style="word-break:break-all">${r.value}</td></tr>`).join('');
-            const dkim = await api('/dkim/record');
-            if (dkim.exists) { document.getElementById('dkim-record').style.display = 'block'; document.getElementById('dkim-txt').textContent = dkim.record || ''; }
-            else document.getElementById('dkim-record').style.display = 'none';
-            showModal('dns-modal');
-        }
-
-        // Full refresh (data + status). Live status pulse runs more often.
-        function refresh() { loadStatus(); loadAccess(); loadSecurity(); loadUsers(); loadAliases(); }
-        refresh();
-        setInterval(() => { loadStatus(); loadSecurity(); }, 15000);  // reactive live pulse
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, un formulaire ouvert ou une confirmation.
+        setInterval(() => {
+            const a = document.activeElement, saisie = a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName);
+            const formOuvert = ['fUser', 'fPwd', 'fAlias'].some(i => !$(i).hidden);
+            if (document.hidden || DEMO || CONFIRM || saisie || formOuvert) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>
