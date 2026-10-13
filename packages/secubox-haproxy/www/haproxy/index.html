@@ -4,1539 +4,601 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  HAProxy + WAF au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - HAProxy + WAF Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — HAProxy</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn-group { display: flex; gap: 0.5rem; }
-        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.running .value { color: var(--green); }
-        .stat-card.stopped .value { color: var(--red); }
-        .stat-card.waf .value { color: var(--orange); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { margin-bottom: 1rem; color: var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-size: 0.8rem; }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
-        .badge.up { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.down { background: rgba(248,81,73,0.2); color: var(--red); }
-        .badge.waf { background: rgba(240,136,62,0.2); color: var(--orange); }
-        .badge.bypass { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .waf-panel { background: linear-gradient(135deg, rgba(240,136,62,0.1), rgba(248,81,73,0.1)); border: 1px solid var(--orange); }
-        .waf-panel h2 { color: var(--orange); }
-        .toggle { position: relative; width: 50px; height: 26px; display: inline-block; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 26px; transition: 0.3s; }
-        .toggle .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .slider { background: var(--green); }
-        .toggle input:checked + .slider:before { transform: translateX(24px); }
-        .waf-status { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 6px; margin-bottom: 1rem; }
-        .waf-status .indicator { width: 12px; height: 12px; border-radius: 50%; }
-        .waf-status .indicator.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
-        .waf-status .indicator.inactive { background: var(--red); }
-        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; } .grid-2 { grid-template-columns: 1fr; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal.active {
-            display: flex;
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            border-radius: 8px;
-            box-shadow: 0 0 30px rgba(51, 255, 102, 0.1);
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            margin: 0;
-            font-size: 1.1rem;
-        }
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            color: var(--p31-dim);
-            cursor: pointer;
-            padding: 0;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-close:hover {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        #modal-body {
-            padding: 1.5rem;
-            flex: 1;
-            overflow-y: auto;
-        }
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.5rem;
-            padding: 1rem 1.5rem;
-            border-top: 1px solid var(--p31-ghost);
-        }
-        .modal-footer .btn {
-            margin: 0;
-        }
-
-        /* Form Styles */
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-size: 0.85rem;
-            color: var(--p31-mid);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-        .form-group input,
-        .form-group select {
-            width: 100%;
-        }
-        .form-row {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        .form-row > * {
-            flex: 1;
-        }
-        .form-check {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .form-check input[type="checkbox"] {
-            width: auto;
-            margin: 0;
-        }
-        .form-check label {
-            font-size: 0.9rem;
-            color: var(--p31-mid);
-            margin: 0;
-            text-transform: none;
-        }
-
-        /* Toast Styles */
-        #toast-container {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-        .toast {
-            background: var(--tube-pale);
-            border: 2px solid var(--p31-dim);
-            border-radius: 6px;
-            padding: 1rem 1.25rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            font-family: 'Courier Prime', monospace;
-            max-width: 400px;
-            animation: slideIn 0.3s ease-out;
-        }
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-        }
-        .toast.removing {
-            animation: slideOut 0.3s ease-out forwards;
-        }
-        .toast-success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-        .toast-success::before {
-            content: "✓ ";
-            font-weight: bold;
-        }
-        .toast-error {
-            border-color: #ff4466;
-            color: #ff4466;
-        }
-        .toast-error::before {
-            content: "✕ ";
-            font-weight: bold;
-        }
-        .toast-info {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-        }
-        .toast-warning {
-            border-color: var(--p31-decay);
-            color: var(--p31-decay);
-        }
-
-        @media (max-width: 768px) {
-            .modal-content {
-                width: 95%;
-            }
-            #toast-container {
-                bottom: 1rem;
-                right: 1rem;
-            }
-            .toast {
-                max-width: 280px;
-            }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto} .pan h3 .btn~.btn{margin-left:0}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        td.num{text-align:right}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .btn{margin-right:5px}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;margin:1px 3px 1px 0}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:10px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+        .conf p{margin:0;flex:1 1 240px;overflow-wrap:anywhere}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie label.case{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--texte)}
+        form.saisie input,form.saisie select,form.saisie textarea,.filtre{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie label.case input{width:auto}
+        form.saisie input:focus,form.saisie select:focus,form.saisie textarea:focus,.filtre:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        form.saisie .large{grid-column:1/-1}
+        .filtre{max-width:260px;margin-bottom:8px}
+        .liste{display:grid;gap:6px}
+        .ligne{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;justify-content:space-between;border:1px solid var(--trait);border-radius:10px;padding:8px 12px;background:rgba(8,18,38,.5);min-width:0}
+        .ligne>*{min-width:0;overflow-wrap:anywhere} .ligne small{color:var(--faible);margin-left:8px}
+        .ligne a{color:var(--cyan)}
+        .actions{display:flex;flex-wrap:wrap;gap:8px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>HAProxy + WAF Dashboard</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="generateConfig()">Generate Config</button>
-                <button class="btn success" onclick="reload()">Reload</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h5"/><path d="M8 12l6-6h7"/><path d="M8 12h13"/><path d="M8 12l6 6h7"/></svg>
+                <div><h1>HAProxy + WAF</h1><small>Frontal TLS, vhosts, backends et certificats</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="stats-row">
-            <div class="stat-card" id="statusCard">
-                <div class="value" id="status">-</div>
-                <div class="label">HAProxy Status</div>
-            </div>
-            <div class="stat-card waf" id="wafCard">
-                <div class="value" id="wafStatus">-</div>
-                <div class="label">WAF Status</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="vhosts-count">-</div>
-                <div class="label">VHosts</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="backends-count">-</div>
-                <div class="label">Backends</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="requests">-</div>
-                <div class="label">Total Requests</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cService" title="Processus haproxy en cours d’exécution (pgrep côté API, valeur mise en cache)."><span class="l">HAProxy</span><span class="v" id="tService">—</span><span class="s" id="sService">service</span></div>
+            <div class="tuile" id="cWaf" title="Intégration du WAF sbxwaf : actif = activé dans la configuration et socket du WAF présent."><span class="l">WAF</span><span class="v" id="tWaf">—</span><span class="s" id="sWaf">sbxwaf</span></div>
+            <div class="tuile cy" title="Nombre de vhosts déclarés dans la configuration HAProxy."><span class="l">VHosts</span><span class="v" id="tVhosts">—</span><span class="s">domaines routés</span></div>
+            <div class="tuile cy" title="Nombre de backends déclarés dans la configuration HAProxy."><span class="l">Backends</span><span class="v" id="tBackends">—</span><span class="s">groupes de serveurs</span></div>
+            <div class="tuile cy" title="Somme des requêtes totales (stot) des seuls frontends, depuis le démarrage de HAProxy. Les backends et serveurs ne sont pas additionnés : ils compteraient chaque requête plusieurs fois."><span class="l">Requêtes totales</span><span class="v" id="tReq">—</span><span class="s">frontends, depuis le démarrage</span></div>
+            <div class="tuile" id="cCerts" title="Certificats du dossier de HAProxy. Les échéances viennent de openssl côté API."><span class="l">Certificats</span><span class="v" id="tCerts">—</span><span class="s" id="sCerts">dans le magasin</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections HAProxy">
+            <button type="button" role="tab" id="o-composants" data-t="composants" aria-selected="true" aria-controls="t-composants">Composants</button>
+            <button type="button" role="tab" id="o-acces" data-t="acces" aria-selected="false" aria-controls="t-acces">Accès</button>
+            <button type="button" role="tab" id="o-vhosts" data-t="vhosts" aria-selected="false" aria-controls="t-vhosts">VHosts</button>
+            <button type="button" role="tab" id="o-backends" data-t="backends" aria-selected="false" aria-controls="t-backends">Backends</button>
+            <button type="button" role="tab" id="o-stats" data-t="stats" aria-selected="false" aria-controls="t-stats">Stats en direct</button>
+            <button type="button" role="tab" id="o-certs" data-t="certs" aria-selected="false" aria-controls="t-certs">Certificats</button>
+            <button type="button" role="tab" id="o-actions" data-t="actions" aria-selected="false" aria-controls="t-actions">Actions</button>
         </div>
 
-        <!-- WAF Control Panel -->
-        <div class="card waf-panel">
-            <h2>WAF Integration</h2>
-            <div class="waf-status">
-                <div class="indicator" id="wafIndicator"></div>
-                <span id="wafLabel">WAF Protection</span>
-                <label class="toggle" style="margin-left: auto;">
-                    <input type="checkbox" id="wafToggle" onchange="toggleWAF(this.checked)">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
-                When enabled, all HTTP traffic is inspected by the WAF before reaching backends.
-                Traffic flow: Client → HAProxy → WAF Inspector → Backend
-            </p>
-            <div class="btn-group">
-                <button class="btn" onclick="syncRoutes()">Sync WAF Routes</button>
-                <button class="btn" onclick="window.location='/waf/'">Open WAF Dashboard</button>
-            </div>
+        <div id="resultat" class="retour" role="status" hidden></div>
+        <div id="conf" class="conf" role="alertdialog" aria-labelledby="confMsg" hidden>
+            <p id="confMsg"></p>
+            <button class="btn danger" id="confOui" type="button">Confirmer</button>
+            <button class="btn" id="confNon" type="button">Annuler</button>
         </div>
 
-        <!-- Tabbed Content -->
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" data-tab="components" onclick="switchTab('components')">Components</div>
-                <div class="tab" data-tab="access" onclick="switchTab('access')">Access</div>
-                <div class="tab" data-tab="vhosts" onclick="switchTab('vhosts')">VHosts</div>
-                <div class="tab" data-tab="backends" onclick="switchTab('backends')">Backends</div>
-                <div class="tab" data-tab="stats" onclick="switchTab('stats')">Live Stats</div>
-                <div class="tab" data-tab="certs" onclick="switchTab('certs')">Certificates</div>
-                <div class="tab" data-tab="actions" onclick="switchTab('actions')">Actions</div>
+        <section id="t-composants" role="tabpanel" aria-labelledby="o-composants">
+            <div class="pan"><h3>Composants <i>lus sur le système</i></h3>
+                <div class="tab"><table><thead><tr><th>Composant</th><th>Description</th><th>État</th><th>Détail</th></tr></thead><tbody id="bComp"></tbody></table></div></div>
+        </section>
+
+        <section id="t-acces" role="tabpanel" aria-labelledby="o-acces" hidden>
+            <div class="pan"><h3>Points d’accès <i>frontaux, administration et vhosts actifs</i></h3>
+                <div class="liste" id="bAcces"></div>
+                <p class="note">Le nom d’hôte de la box est celui de cette page. Un vhost « contourne le WAF » seulement s’il le déclare dans la configuration.</p></div>
+        </section>
+
+        <section id="t-vhosts" role="tabpanel" aria-labelledby="o-vhosts" hidden>
+            <div class="pan"><h3>Hôtes virtuels <i id="nVhosts"></i><button class="btn prim sm" id="addVhost" type="button">+ Ajouter un vhost</button></h3>
+                <form class="saisie" id="fVhost" hidden>
+                    <label>Domaine<input name="domain" placeholder="exemple.org" required autocomplete="off"></label>
+                    <label>Backend<select name="backend"></select></label>
+                    <label class="case"><input type="checkbox" name="ssl" checked> Activer TLS</label>
+                    <label class="case"><input type="checkbox" name="ssl_redirect" checked> Forcer HTTPS</label>
+                    <label class="case"><input type="checkbox" name="acme" checked> Renouvellement ACME</label>
+                    <label class="case"><input type="checkbox" name="waf_bypass"> Contourner le WAF</label>
+                    <label class="case"><input type="checkbox" name="enabled" checked> Actif</label>
+                    <div class="bout large"><button class="btn prim" type="submit" id="vhostOk">Ajouter</button><button class="btn" type="button" data-ferme="fVhost">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Domaine</th><th>Backend</th><th>TLS</th><th>WAF</th><th>Actions</th></tr></thead><tbody id="bVhosts"></tbody></table></div>
+                <p class="note">L’API enregistre la demande et resynchronise les routes du WAF ; la définition des vhosts reste celle de la configuration HAProxy (haproxy.toml). Régénérez puis rechargez ensuite depuis l’onglet Actions.</p></div>
+        </section>
+
+        <section id="t-backends" role="tabpanel" aria-labelledby="o-backends" hidden>
+            <div class="pan"><h3>Backends <i id="nBackends"></i><button class="btn prim sm" id="addBackend" type="button">+ Ajouter un backend</button></h3>
+                <form class="saisie" id="fBackend" hidden>
+                    <label>Nom<input name="name" placeholder="mon-backend" required autocomplete="off"></label>
+                    <label>Mode<select name="mode"><option value="http">HTTP</option><option value="tcp">TCP</option></select></label>
+                    <label>Équilibrage<select name="balance"><option value="roundrobin">Tourniquet</option><option value="leastconn">Moins de connexions</option><option value="source">Adresse source</option></select></label>
+                    <label>Chemin de contrôle<input name="health_uri" value="/health"></label>
+                    <label class="case"><input type="checkbox" name="health_check" checked> Contrôles de santé</label>
+                    <label class="large">Serveurs (un par ligne ou séparés par une virgule, hôte:port)<textarea name="servers" rows="2" placeholder="192.0.2.10:8080"></textarea></label>
+                    <div class="bout large"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fBackend">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Mode</th><th>Équilibrage</th><th>Serveurs</th><th>Actions</th></tr></thead><tbody id="bBack"></tbody></table></div>
+                <p class="note">Même remarque que pour les vhosts : l’API journalise la demande sans modifier haproxy.toml. La modification d’un backend existant et la gestion serveur par serveur n’ont pas de route côté API.</p></div>
+        </section>
+
+        <section id="t-stats" role="tabpanel" aria-labelledby="o-stats" hidden>
+            <div class="pan"><h3>Statistiques HAProxy <i id="nStats"></i></h3>
+                <input class="filtre" id="fStats" type="search" placeholder="Filtrer (nom, état)…" aria-label="Filtrer les statistiques">
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Type</th><th>État</th><th class="num">Sessions</th><th class="num">Requêtes</th><th class="num">Reçu</th><th class="num">Émis</th></tr></thead><tbody id="bStats"></tbody></table></div>
+                <p class="note" id="nStatsNote">Lu sur le socket d’administration de HAProxy (show stat). Sessions = sessions en cours.</p></div>
+        </section>
+
+        <section id="t-certs" role="tabpanel" aria-labelledby="o-certs" hidden>
+            <div class="pan"><h3>Certificats TLS <i id="nCerts"></i><button class="btn prim sm" id="addCert" type="button">+ Demander un certificat</button></h3>
+                <form class="saisie" id="fCert" hidden>
+                    <label>Domaine<input name="domain" placeholder="exemple.org" required autocomplete="off"></label>
+                    <label class="case"><input type="checkbox" name="staging"> Serveur de test Let’s Encrypt</label>
+                    <div class="bout"><button class="btn prim" type="submit" id="certOk">Demander</button><button class="btn" type="button" data-ferme="fCert">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Certificat</th><th>Domaines</th><th>Échéance</th><th>État</th><th>Chemin</th><th>Actions</th></tr></thead><tbody id="bCerts"></tbody></table></div>
+                <p class="note">La demande passe par certbot (jusqu’à deux minutes). Un certificat supprimé est sauvegardé dans le sous-dossier backup du magasin.</p></div>
+        </section>
+
+        <section id="t-actions" role="tabpanel" aria-labelledby="o-actions" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Service HAProxy</h3>
+                    <div class="actions"><button class="btn prim" id="aReload" type="button">Recharger la configuration</button><button class="btn danger" id="aRestart" type="button">Redémarrer</button></div>
+                    <p class="note">Recharger relit le fichier de configuration sans couper les connexions ; redémarrer les interrompt brièvement.</p></div>
+                <div class="pan"><h3>Configuration</h3>
+                    <div class="actions"><button class="btn prim" id="aGen" type="button">Générer la configuration</button></div>
+                    <p class="note">Écrit la configuration HAProxy à partir de haproxy.toml puis la valide (haproxy -c). Ne recharge pas le service.</p></div>
+                <div class="pan" style="grid-column:1/-1"><h3>Intégration WAF <i id="nWaf"></i></h3>
+                    <div class="actions"><button class="btn prim" id="aToggle" type="button">Activer le WAF</button><button class="btn" id="aSync" type="button">Synchroniser les routes du WAF</button><a class="btn" href="/waf/" id="aWaf">Ouvrir le tableau WAF</a></div>
+                    <p class="note">Avec le WAF actif, le trafic HTTP traverse sbxwaf avant d’atteindre les backends : client, HAProxy, WAF, backend. L’API ne persiste pas l’état du WAF dans haproxy.toml : l’état affiché reste celui de la configuration.</p></div>
             </div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-            <div id="components" class="tab-content active">
-                <table>
-                    <thead><tr><th>Component</th><th>Description</th><th>Status</th></tr></thead>
-                    <tbody id="components-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="access" class="tab-content">
-                <div id="access-list" style="display: grid; gap: 0.5rem;"></div>
-            </div>
-
-            <div id="vhosts" class="tab-content">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-                    <h3 style="margin:0;color:var(--p31-decay)">Virtual Hosts</h3>
-                    <button class="btn primary" onclick="showAddVhostModal()">+ Add VHost</button>
-                </div>
-                <table>
-                    <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th><th>WAF</th><th>Actions</th></tr></thead>
-                    <tbody id="vhost-list"><tr><td colspan="5">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="backends" class="tab-content">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-                    <h3 style="margin:0;color:var(--p31-decay)">Backends</h3>
-                    <button class="btn primary" onclick="showAddBackendModal()">+ Add Backend</button>
-                </div>
-                <table>
-                    <thead><tr><th>Name</th><th>Mode</th><th>Balance</th><th>Servers</th><th>Actions</th></tr></thead>
-                    <tbody id="backend-list"><tr><td colspan="5">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="stats" class="tab-content">
-                <table>
-                    <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Sessions</th><th>Bytes In</th><th>Bytes Out</th></tr></thead>
-                    <tbody id="stats-list"><tr><td colspan="6">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="certs" class="tab-content">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-                    <h3 style="margin:0;color:var(--p31-decay)">SSL Certificates</h3>
-                    <button class="btn primary" onclick="showRequestCertModal()">+ Request Certificate</button>
-                </div>
-                <table>
-                    <thead><tr><th>Certificate</th><th>Path</th><th>Actions</th></tr></thead>
-                    <tbody id="cert-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="actions" class="tab-content">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 6px;">
-                        <h3 style="margin-bottom: 0.5rem;">Service Control</h3>
-                        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">Manage HAProxy service</p>
-                        <div class="btn-group">
-                            <button class="btn success" onclick="restart()">Restart</button>
-                            <button class="btn primary" onclick="reload()">Reload Config</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Generic Modal -->
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modal-title"></h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div id="modal-body"></div>
-            <div id="modal-footer" class="modal-footer"></div>
-        </div>
-    </div>
-
-    <!-- Toast Container -->
-    <div id="toast-container"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/haproxy';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const NOMBRE = new Intl.NumberFormat('fr-FR');
 
-        /* Modal Functions */
-        function openModal(title, body, footer = '') {
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-body').innerHTML = body;
-            document.getElementById('modal-footer').innerHTML = footer || '';
-            document.getElementById('modal').classList.add('active');
+        let STATUT = null, COMPOSANTS = null, ACCES = null, VHOSTS = null, BACKENDS = null, STATS = null, STATS_ERR = false, CERTS = null, SESSION_OK = true;
+        let CONFIRM = null;     // action en attente de confirmation : jamais de dialogue natif
+        let EDIT_VHOST = null;  // nom d'origine du vhost en cours de modification
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        function closeModal() {
-            document.getElementById('modal').classList.remove('active');
-            document.getElementById('modal-title').textContent = '';
-            document.getElementById('modal-body').innerHTML = '';
-            document.getElementById('modal-footer').innerHTML = '';
-        }
-
-        /* Keyboard/Backdrop Event Handlers */
-        document.getElementById('modal')?.addEventListener('click', (e) => {
-            if (e.target.id === 'modal') closeModal();
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
-        });
-
-        /* Toast Functions */
-        function showToast(message, type = 'info', duration = 3000) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            container.appendChild(toast);
-
-            if (duration > 0) {
-                setTimeout(() => {
-                    toast.classList.add('removing');
-                    setTimeout(() => toast.remove(), 300);
-                }, duration);
-            }
-            return toast;
-        }
-
-        function showSuccess(message, duration = 3000) {
-            return showToast(message, 'success', duration);
-        }
-
-        function showError(message, duration = 3000) {
-            return showToast(message, 'error', duration);
-        }
-
-        function showInfo(message, duration = 3000) {
-            return showToast(message, 'info', duration);
-        }
-
-        function showWarning(message, duration = 3000) {
-            return showToast(message, 'warning', duration);
-        }
-
-        /* ══════════════════════════════════════════════════════════════ */
-        /* Form Validation */
-        /* ══════════════════════════════════════════════════════════════ */
-        function validateForm(fields) {
-            for (const { id, rules } of fields) {
-                const el = document.getElementById(id);
-                if (!el) continue;
-                const val = el.value?.trim() || '';
-
-                if (rules.required && !val) {
-                    showToast(rules.requiredMsg || `${id} is required`, 'error');
-                    el.focus();
-                    return false;
-                }
-                if (rules.pattern && val && !rules.pattern.test(val)) {
-                    showToast(rules.patternMsg || `Invalid ${id} format`, 'error');
-                    el.focus();
-                    return false;
-                }
-                if (rules.min !== undefined && val && parseInt(val) < rules.min) {
-                    showToast(rules.minMsg || `${id} must be at least ${rules.min}`, 'error');
-                    el.focus();
-                    return false;
-                }
-                if (rules.max !== undefined && val && parseInt(val) > rules.max) {
-                    showToast(rules.maxMsg || `${id} must be at most ${rules.max}`, 'error');
-                    el.focus();
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        async function api(path, opts = {}) {
+        // Écriture : mêmes méthodes, mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                const ct = res.headers.get('content-type') || '';
-                if (!ct.includes('application/json')) {
-                    console.warn('[API] Non-JSON response for', path, ':', ct);
-                    return {};
-                }
-                return res.json();
-            } catch (e) { console.warn('[API] Error:', path, e); return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                // Plusieurs routes répondent 200 avec success:false ou error : c'est un échec.
+                const ok = r.ok && !(data && (data.success === false || data.error));
+                return { ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data || {};
+            const m = d.detail || d.error || d.validation;
+            if (m) return typeof m === 'string' ? m : JSON.stringify(m);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(ok, msg) { const r = $('resultat'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function octets(v) {
+            if (v === null || v === undefined || v === '' || isNaN(Number(v))) return '—';
+            const b = Number(v);
+            if (b < 1024) return b + ' o';
+            if (b < 1048576) return (b / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            if (b < 1073741824) return (b / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+            return (b / 1073741824).toFixed(2).replace('.', ',') + ' Go';
+        }
+        function entier(v) { return (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : NOMBRE.format(Number(v)); }
+        function srv(s) {
+            if (typeof s === 'string') return s;
+            if (s && typeof s === 'object') { const a = s.address || s.name; return a ? (s.port ? a + ':' + s.port : String(a)) : '—'; }
+            return '—';
+        }
+        function urlSure(u) { return /^https?:\/\//i.test(u) ? u : null; }
+        function ligneVide(corps, n, msg) { corps.textContent = ''; const tr = el('tr'), td = el('td', 'vide', msg); td.colSpan = n; tr.appendChild(td); corps.appendChild(tr); }
+        function cellule(contenu, cls) { const td = el('td', cls); if (contenu instanceof Node) td.appendChild(contenu); else td.textContent = contenu; return td; }
+        function ligne(corps, cellules) { const tr = el('tr'); cellules.forEach(c => tr.appendChild(c)); corps.appendChild(tr); return tr; }
+
+        // ----- Confirmation intégrée à la page -----
+        function demander(message, action) {
+            CONFIRM = action; $('confMsg').textContent = message; $('conf').hidden = false; $('conf').scrollIntoView({ block: 'nearest' }); $('confNon').focus(); annoncer();
+        }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConf);
+        $('confOui').addEventListener('click', async () => { const a = CONFIRM; fermerConf(); if (a) await a(); });
+        document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && CONFIRM) fermerConf(); });
+
+        async function agir(methode, chemin, corps, succes, echec, apres) {
+            const r = await ecrire(methode, chemin, corps);
+            if (r.ok) { retour(true, typeof succes === 'function' ? succes(r.data || {}) : succes); if (apres) await apres(); }
+            else retour(false, echec + ' : ' + detail(r));
+            return r;
         }
 
-        /* ══════════════════════════════════════════════════════════════ */
-        /* Enhanced API Call with Error Handling */
-        /* ══════════════════════════════════════════════════════════════ */
-        async function apiCall(path, opts = {}) {
-            try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
-                    return { error: 'Unauthorized' };
-                }
-
-                const ct = res.headers.get('content-type') || '';
-                if (!ct.includes('application/json')) {
-                    console.warn('[API] Non-JSON response for', path, ':', ct);
-                    return { error: 'Non-JSON response' };
-                }
-
-                const data = await res.json();
-
-                if (!res.ok || data.error) {
-                    const msg = data.error || data.detail || `Error ${res.status}`;
-                    showToast(msg, 'error');
-                    return { error: msg };
-                }
-
-                return data;
-            } catch (e) {
-                console.warn('[API] Error:', path, e);
-                showToast('Network error: ' + e.message, 'error');
-                return { error: e.message };
-            }
+        // ----- Données de démonstration (adresses de documentation, RFC 5737) -----
+        function demoData() {
+            STATUT = { running: true, http_port: 80, https_port: 443, stats_port: 8404, waf_enabled: true, waf_available: true, vhost_count: 3, backend_count: 3 };
+            COMPOSANTS = { components: [
+                { name: 'HAProxy Service', type: 'service', description: 'Load balancer and reverse proxy', running: true, config_path: '/etc/haproxy/haproxy.cfg' },
+                { name: 'WAF Inspector', type: 'service', description: 'Web Application Firewall (sbxwaf)', enabled: true, available: true, port: 8085 },
+                { name: 'haproxyctl', type: 'cli', description: 'Control script for HAProxy management', path: '/usr/sbin/haproxyctl', installed: true },
+                { name: 'Certificate Store', type: 'storage', description: 'TLS certificates directory', path: '/etc/haproxy/certs', exists: true }] };
+            ACCES = { access: [
+                { name: 'HTTP Frontend', type: 'frontend', port: 80, url: 'http://{{hostname}}:80', protocol: 'http' },
+                { name: 'HTTPS Frontend', type: 'frontend', port: 443, url: 'https://{{hostname}}:443', protocol: 'https' },
+                { name: 'Stats Dashboard', type: 'admin', port: 8404, url: 'http://{{hostname}}:8404/stats', protocol: 'http' },
+                { name: 'portail.exemple.org', type: 'vhost', domain: 'portail.exemple.org', backend: 'portail', url: 'https://portail.exemple.org', waf_protected: true },
+                { name: 'api.exemple.org', type: 'vhost', domain: 'api.exemple.org', backend: 'api', url: 'https://api.exemple.org', waf_protected: false }] };
+            VHOSTS = { vhosts: [
+                { name: 'portail.exemple.org', domain: 'portail.exemple.org', backend: 'portail', ssl: true, ssl_redirect: true, acme: true, waf_bypass: false, enabled: true },
+                { name: 'api.exemple.org', domain: 'api.exemple.org', backend: 'api', ssl: true, ssl_redirect: true, acme: true, waf_bypass: true, enabled: true },
+                { name: 'ancien.exemple.org', domain: 'ancien.exemple.org', backend: 'portail', ssl: false, ssl_redirect: false, acme: false, waf_bypass: false, enabled: false }] };
+            BACKENDS = { backends: [
+                { name: 'portail', servers: ['192.0.2.10:8080', '192.0.2.11:8080'], mode: 'http', balance: 'roundrobin' },
+                { name: 'api', servers: ['192.0.2.20:9000'], mode: 'http', balance: 'leastconn' },
+                { name: 'ssh-relais', servers: ['198.51.100.5:22'], mode: 'tcp', balance: 'source' },
+                { name: 'waf_inspector', type: 'waf', mode: 'http', port: 8085, description: 'WAF inspection backend (sbxwaf)' }] };
+            STATS = { stats: [
+                { pxname: 'http-in', svname: 'FRONTEND', type: '0', status: 'OPEN', scur: '12', stot: '48210', bin: '91234567', bout: '812345678' },
+                { pxname: 'https-in', svname: 'FRONTEND', type: '0', status: 'OPEN', scur: '31', stot: '203455', bin: '412345678', bout: '5123456789' },
+                { pxname: 'portail', svname: 'BACKEND', type: '1', status: 'UP', scur: '22', stot: '150800', bin: '312345678', bout: '4023456789' },
+                { pxname: 'portail', svname: 'srv0', type: '2', status: 'UP', scur: '11', stot: '75400', bin: '156172839', bout: '2011728394' },
+                { pxname: 'portail', svname: 'srv1', type: '2', status: 'DOWN', scur: '0', stot: '0', bin: '0', bout: '0' }] };
+            STATS_ERR = false;
+            CERTS = { certificates: [
+                { name: 'portail_exemple_org', path: '/etc/haproxy/certs/portail_exemple_org.pem', domains: ['portail.exemple.org'], issuer: "Let's Encrypt", expires_at: '2026-12-01T10:00:00', days_until_expiry: 49, expired: false },
+                { name: 'api_exemple_org', path: '/etc/haproxy/certs/api_exemple_org.pem', domains: ['api.exemple.org', 'www.api.exemple.org'], issuer: "Let's Encrypt", expires_at: '2026-10-28T08:00:00', days_until_expiry: 15, expired: false },
+                { name: 'ancien_exemple_org', path: '/etc/haproxy/certs/ancien_exemple_org.pem', domains: ['ancien.exemple.org'], issuer: "Let's Encrypt", expires_at: '2026-09-30T08:00:00', days_until_expiry: -13, expired: true }],
+                total: 3, expiring_soon: 1, expired: 1 };
         }
 
-        // ══════════════════════════════════════════════════════════════
-        // VHost CRUD
-        // ══════════════════════════════════════════════════════════════
-        let cachedBackends = [];
-
-        async function loadBackendOptions() {
-            const d = await api('/backends');
-            cachedBackends = (d.backends || []).filter(b => b.type !== 'waf');
-            return cachedBackends.map(b =>
-                `<option value="${b.name}">${b.name}</option>`
-            ).join('');
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/components'), lire('/access'), lire('/vhosts'), lire('/backends'), lire('/stats'), lire('/certificates')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0); COMPOSANTS = val(1); ACCES = val(2); VHOSTS = val(3); BACKENDS = val(4); STATS = val(5); CERTS = val(6);
+            STATS_ERR = !!(STATS && STATS.error);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire HAProxy (service arrêté ou injoignable).';
+            rendre();
         }
 
-        async function showAddVhostModal() {
-            const backendOpts = await loadBackendOptions();
-            const body = `
-                <div class="form-group">
-                    <label>Domain</label>
-                    <input type="text" id="vhost-domain" placeholder="example.com">
-                </div>
-                <div class="form-group">
-                    <label>Backend</label>
-                    <select id="vhost-backend">
-                        <option value="">-- Select Backend --</option>
-                        ${backendOpts}
-                    </select>
-                </div>
-                <div class="form-row">
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-ssl" checked>
-                        <label>Enable SSL</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-ssl-redirect" checked>
-                        <label>Force HTTPS</label>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-acme" checked>
-                        <label>Auto-renew (ACME)</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-waf-bypass">
-                        <label>Bypass WAF</label>
-                    </div>
-                </div>
-                <div class="form-check">
-                    <input type="checkbox" id="vhost-enabled" checked>
-                    <label>Enabled</label>
-                </div>
-            `;
-            const footer = `
-                <button class="btn" onclick="closeModal()">Cancel</button>
-                <button class="btn primary" onclick="saveVhost(false)">Add VHost</button>
-            `;
-            openModal('Add Virtual Host', body, footer);
+        function tuile(id, valeur, classe) { $('t' + id).textContent = valeur; if (classe !== undefined) $('c' + id).className = 'tuile ' + classe; }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            const s = STATUT;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (s.running ? '' : ' hors'); etat.textContent = s.running ? 'EN MARCHE' : 'ARRÊTÉ'; }
+
+            // Tuiles
+            if (s && typeof s.running === 'boolean') tuile('Service', s.running ? 'En marche' : 'Arrêté', s.running ? 'ok' : 'hors'); else tuile('Service', '—', 'cy');
+            $('sService').textContent = s ? ['http_port', 'https_port'].map(k => s[k]).filter(Boolean).join(' · ') + (s.stats_port ? ' · stats ' + s.stats_port : '') : 'service';
+            if (s && s.waf_enabled !== undefined) {
+                if (s.waf_enabled && s.waf_available) tuile('Waf', 'Actif', 'ok');
+                else if (s.waf_enabled) tuile('Waf', 'Indisponible', 'att');
+                else tuile('Waf', 'Désactivé', 'cy');
+            } else tuile('Waf', '—', 'cy');
+            $('sWaf').textContent = s && s.waf_enabled && !s.waf_available ? 'activé, socket du WAF absent' : 'sbxwaf';
+            const nv = s && s.vhost_count !== undefined ? s.vhost_count : (VHOSTS ? (VHOSTS.vhosts || []).length : null);
+            const nb = s && s.backend_count !== undefined ? s.backend_count : (BACKENDS ? (BACKENDS.backends || []).filter(b => b.type !== 'waf').length : null);
+            $('tVhosts').textContent = nv === null ? '—' : nv; $('tBackends').textContent = nb === null ? '—' : nb;
+            // Requêtes : frontends seulement (type 0) ; mesure absente = « — »
+            const lignes = (STATS && STATS.stats) || [];
+            const fronts = lignes.filter(x => String(x.type) === '0');
+            $('tReq').textContent = fronts.length ? entier(fronts.reduce((a, x) => a + (parseInt(x.stot, 10) || 0), 0)) : '—';
+            if (CERTS && Array.isArray(CERTS.certificates)) {
+                const nExp = CERTS.expired || 0, nBient = CERTS.expiring_soon || 0;
+                tuile('Certs', CERTS.certificates.length, nExp ? 'hors' : nBient ? 'att' : 'ok');
+                $('sCerts').textContent = nExp ? nExp + ' expiré' + (nExp > 1 ? 's' : '') : nBient ? nBient + ' expire' + (nBient > 1 ? 'nt' : '') + ' sous 30 j' : 'tous valides';
+            } else { tuile('Certs', '—', 'cy'); $('sCerts').textContent = 'dans le magasin'; }
+
+            rendreComposants(); rendreAcces(); rendreVhosts(); rendreBackends(); rendreStats(); rendreCerts(); rendreActions();
+            annoncer();
         }
 
-        async function showEditVhostModal(vhost) {
-            const backendOpts = await loadBackendOptions();
-            const body = `
-                <input type="hidden" id="vhost-original-name" value="${vhost.name || vhost.domain}">
-                <div class="form-group">
-                    <label>Domain</label>
-                    <input type="text" id="vhost-domain" value="${vhost.domain}">
-                </div>
-                <div class="form-group">
-                    <label>Backend</label>
-                    <select id="vhost-backend">
-                        <option value="">-- Select Backend --</option>
-                        ${backendOpts}
-                    </select>
-                </div>
-                <div class="form-row">
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-ssl" ${vhost.ssl ? 'checked' : ''}>
-                        <label>Enable SSL</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-ssl-redirect" ${vhost.ssl_redirect ? 'checked' : ''}>
-                        <label>Force HTTPS</label>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-acme" ${vhost.acme ? 'checked' : ''}>
-                        <label>Auto-renew (ACME)</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="vhost-waf-bypass" ${vhost.waf_bypass ? 'checked' : ''}>
-                        <label>Bypass WAF</label>
-                    </div>
-                </div>
-                <div class="form-check">
-                    <input type="checkbox" id="vhost-enabled" ${vhost.enabled !== false ? 'checked' : ''}>
-                    <label>Enabled</label>
-                </div>
-            `;
-            const footer = `
-                <button class="btn" onclick="closeModal()">Cancel</button>
-                <button class="btn primary" onclick="saveVhost(true)">Save Changes</button>
-            `;
-            openModal('Edit Virtual Host', body, footer);
-            document.getElementById('vhost-backend').value = vhost.backend || '';
-        }
-
-        async function saveVhost(isEdit) {
-            const valid = validateForm([
-                { id: 'vhost-domain', rules: { required: true, requiredMsg: 'Domain is required', pattern: /^[a-zA-Z0-9*][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$/, patternMsg: 'Invalid domain format' }},
-                { id: 'vhost-backend', rules: { required: true, requiredMsg: 'Please select a backend' }}
-            ]);
-            if (!valid) return;
-
-            const data = {
-                domain: document.getElementById('vhost-domain').value.trim(),
-                backend: document.getElementById('vhost-backend').value,
-                ssl: document.getElementById('vhost-ssl').checked,
-                ssl_redirect: document.getElementById('vhost-ssl-redirect').checked,
-                acme: document.getElementById('vhost-acme').checked,
-                waf_bypass: document.getElementById('vhost-waf-bypass').checked,
-                enabled: document.getElementById('vhost-enabled').checked
-            };
-
-            let res;
-            if (isEdit) {
-                const origName = document.getElementById('vhost-original-name').value;
-                res = await apiCall(`/vhost/${encodeURIComponent(origName)}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(data)
-                });
-            } else {
-                res = await apiCall('/vhost', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-            }
-
-            if (!res.error) {
-                closeModal();
-                showToast(isEdit ? 'VHost updated' : 'VHost created', 'success');
-                loadVhosts();
-                loadStatus();
-            }
-        }
-
-        async function deleteVhost(name) {
-            if (!confirm(`Delete vhost "${name}"?\n\nThis will remove the domain routing.`)) return;
-
-            const res = await apiCall(`/vhost/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            if (!res.error) {
-                showToast(`VHost "${name}" deleted`, 'success');
-                loadVhosts();
-                loadStatus();
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // Backend CRUD
-        // ══════════════════════════════════════════════════════════════
-        function showAddBackendModal() {
-            const body = `
-                <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" id="backend-name" placeholder="my-backend">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Mode</label>
-                        <select id="backend-mode">
-                            <option value="http">HTTP</option>
-                            <option value="tcp">TCP</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Balance</label>
-                        <select id="backend-balance">
-                            <option value="roundrobin">Round Robin</option>
-                            <option value="leastconn">Least Connections</option>
-                            <option value="source">Source IP</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-check">
-                    <input type="checkbox" id="backend-health" checked>
-                    <label>Enable Health Checks</label>
-                </div>
-                <div class="form-group">
-                    <label>Health Check URI</label>
-                    <input type="text" id="backend-health-uri" value="/health" placeholder="/health">
-                </div>
-            `;
-            const footer = `
-                <button class="btn" onclick="closeModal()">Cancel</button>
-                <button class="btn primary" onclick="saveBackend(false)">Add Backend</button>
-            `;
-            openModal('Add Backend', body, footer);
-        }
-
-        async function showEditBackendModal(backend) {
-            const body = `
-                <input type="hidden" id="backend-original-name" value="${backend.name}">
-                <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" id="backend-name" value="${backend.name}">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Mode</label>
-                        <select id="backend-mode">
-                            <option value="http" ${backend.mode === 'http' ? 'selected' : ''}>HTTP</option>
-                            <option value="tcp" ${backend.mode === 'tcp' ? 'selected' : ''}>TCP</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Balance</label>
-                        <select id="backend-balance">
-                            <option value="roundrobin" ${backend.balance === 'roundrobin' ? 'selected' : ''}>Round Robin</option>
-                            <option value="leastconn" ${backend.balance === 'leastconn' ? 'selected' : ''}>Least Connections</option>
-                            <option value="source" ${backend.balance === 'source' ? 'selected' : ''}>Source IP</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-check">
-                    <input type="checkbox" id="backend-health" ${backend.health_check !== false ? 'checked' : ''}>
-                    <label>Enable Health Checks</label>
-                </div>
-                <div class="form-group">
-                    <label>Health Check URI</label>
-                    <input type="text" id="backend-health-uri" value="${backend.health_uri || '/health'}">
-                </div>
-            `;
-            const footer = `
-                <button class="btn" onclick="closeModal()">Cancel</button>
-                <button class="btn primary" onclick="saveBackend(true)">Save Changes</button>
-            `;
-            openModal('Edit Backend', body, footer);
-        }
-
-        async function saveBackend(isEdit) {
-            const valid = validateForm([
-                { id: 'backend-name', rules: { required: true, requiredMsg: 'Name is required', pattern: /^[a-zA-Z][a-zA-Z0-9_-]*$/, patternMsg: 'Name must start with letter, only letters/numbers/hyphens/underscores' }}
-            ]);
-            if (!valid) return;
-
-            const data = {
-                name: document.getElementById('backend-name').value.trim(),
-                mode: document.getElementById('backend-mode').value,
-                balance: document.getElementById('backend-balance').value,
-                health_check: document.getElementById('backend-health').checked,
-                health_uri: document.getElementById('backend-health-uri').value.trim() || '/health'
-            };
-
-            let res;
-            if (isEdit) {
-                const origName = document.getElementById('backend-original-name').value;
-                res = await apiCall(`/backend/${encodeURIComponent(origName)}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(data)
-                });
-            } else {
-                res = await apiCall('/backend', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-            }
-
-            if (!res.error) {
-                closeModal();
-                showToast(isEdit ? 'Backend updated' : 'Backend created', 'success');
-                loadBackends();
-                loadStatus();
-            }
-        }
-
-        async function deleteBackend(name) {
-            const backend = cachedBackends.find(b => b.name === name);
-            const serverCount = backend?.servers?.length || 0;
-
-            const msg = serverCount > 0
-                ? `Delete backend "${name}" and its ${serverCount} server(s)?`
-                : `Delete backend "${name}"?`;
-
-            if (!confirm(msg)) return;
-
-            const res = await apiCall(`/backend/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            if (!res.error) {
-                showToast(`Backend "${name}" deleted`, 'success');
-                loadBackends();
-                loadStatus();
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // Server CRUD (nested under Backend)
-        // ══════════════════════════════════════════════════════════════
-        async function showBackendServers(backendName) {
-            const d = await api(`/backend/${encodeURIComponent(backendName)}`);
-            const backend = d.backend || d;
-            const servers = backend.servers || [];
-
-            const serverRows = servers.length === 0
-                ? '<tr><td colspan="5" style="color:var(--p31-dim)">No servers configured</td></tr>'
-                : servers.map(s => `
-                    <tr>
-                        <td>${s.name}</td>
-                        <td>${s.address}</td>
-                        <td>${s.port}</td>
-                        <td>${s.weight || 100}</td>
-                        <td>
-                            <button class="btn" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="showEditServerModal('${backendName}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Edit</button>
-                            <button class="btn danger" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="deleteServer('${backendName}', '${s.name}')">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
-
-            const body = `
-                <p style="color:var(--p31-dim);margin-bottom:1rem">Backend: <strong>${backendName}</strong></p>
-                <table style="margin-bottom:1rem">
-                    <thead><tr><th>Name</th><th>Address</th><th>Port</th><th>Weight</th><th>Actions</th></tr></thead>
-                    <tbody>${serverRows}</tbody>
-                </table>
-            `;
-            const footer = `
-                <button class="btn" onclick="closeModal()">Close</button>
-                <button class="btn primary" onclick="showAddServerModal('${backendName}')">+ Add Server</button>
-            `;
-            openModal('Manage Servers', body, footer);
-        }
-
-        function showAddServerModal(backendName) {
-            const body = `
-                <input type="hidden" id="server-backend" value="${backendName}">
-                <div class="form-group">
-                    <label>Server Name</label>
-                    <input type="text" id="server-name" placeholder="server1">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Address</label>
-                        <input type="text" id="server-address" placeholder="192.168.1.10">
-                    </div>
-                    <div class="form-group">
-                        <label>Port</label>
-                        <input type="number" id="server-port" value="80" min="1" max="65535">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Weight</label>
-                        <input type="number" id="server-weight" value="100" min="1" max="256">
-                    </div>
-                    <div class="form-check" style="align-self:end;padding-bottom:0.6rem">
-                        <input type="checkbox" id="server-check" checked>
-                        <label>Health Check</label>
-                    </div>
-                </div>
-            `;
-            const footer = `
-                <button class="btn" onclick="showBackendServers('${backendName}')">Back</button>
-                <button class="btn primary" onclick="saveServer('${backendName}', false)">Add Server</button>
-            `;
-            openModal('Add Server', body, footer);
-        }
-
-        function showEditServerModal(backendName, server) {
-            const body = `
-                <input type="hidden" id="server-backend" value="${backendName}">
-                <input type="hidden" id="server-original-name" value="${server.name}">
-                <div class="form-group">
-                    <label>Server Name</label>
-                    <input type="text" id="server-name" value="${server.name}">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Address</label>
-                        <input type="text" id="server-address" value="${server.address}">
-                    </div>
-                    <div class="form-group">
-                        <label>Port</label>
-                        <input type="number" id="server-port" value="${server.port}" min="1" max="65535">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Weight</label>
-                        <input type="number" id="server-weight" value="${server.weight || 100}" min="1" max="256">
-                    </div>
-                    <div class="form-check" style="align-self:end;padding-bottom:0.6rem">
-                        <input type="checkbox" id="server-check" ${server.check !== false ? 'checked' : ''}>
-                        <label>Health Check</label>
-                    </div>
-                </div>
-            `;
-            const footer = `
-                <button class="btn" onclick="showBackendServers('${backendName}')">Back</button>
-                <button class="btn primary" onclick="saveServer('${backendName}', true)">Save Changes</button>
-            `;
-            openModal('Edit Server', body, footer);
-        }
-
-        async function saveServer(backendName, isEdit) {
-            const valid = validateForm([
-                { id: 'server-name', rules: { required: true, requiredMsg: 'Server name is required' }},
-                { id: 'server-address', rules: { required: true, requiredMsg: 'Address is required' }},
-                { id: 'server-port', rules: { required: true, min: 1, max: 65535, minMsg: 'Port must be 1-65535', maxMsg: 'Port must be 1-65535' }}
-            ]);
-            if (!valid) return;
-
-            const data = {
-                backend: backendName,
-                name: document.getElementById('server-name').value.trim(),
-                address: document.getElementById('server-address').value.trim(),
-                port: parseInt(document.getElementById('server-port').value),
-                weight: parseInt(document.getElementById('server-weight').value) || 100,
-                check: document.getElementById('server-check').checked
-            };
-
-            let res;
-            if (isEdit) {
-                const origName = document.getElementById('server-original-name').value;
-                res = await apiCall(`/server/${encodeURIComponent(origName)}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(data)
-                });
-            } else {
-                res = await apiCall('/server', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-            }
-
-            if (!res.error) {
-                showToast(isEdit ? 'Server updated' : 'Server added', 'success');
-                showBackendServers(backendName);
-            }
-        }
-
-        async function deleteServer(backendName, serverName) {
-            if (!confirm(`Delete server "${serverName}" from backend "${backendName}"?`)) return;
-
-            const res = await apiCall(`/server/${encodeURIComponent(serverName)}?backend=${encodeURIComponent(backendName)}`, { method: 'DELETE' });
-            if (!res.error) {
-                showToast(`Server "${serverName}" deleted`, 'success');
-                showBackendServers(backendName);
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // Certificate CRUD
-        // ══════════════════════════════════════════════════════════════
-        function showRequestCertModal() {
-            const body = `
-                <div class="form-group">
-                    <label>Domain</label>
-                    <input type="text" id="cert-domain" placeholder="example.com">
-                </div>
-                <div class="form-check">
-                    <input type="checkbox" id="cert-staging">
-                    <label>Use Let's Encrypt Staging (for testing)</label>
-                </div>
-                <div id="cert-progress" style="display:none;margin-top:1rem">
-                    <p style="color:var(--p31-mid)">Requesting certificate...</p>
-                    <div style="background:var(--tube-soft);height:4px;border-radius:2px;overflow:hidden">
-                        <div id="cert-progress-bar" style="background:var(--p31-peak);height:100%;width:0%;transition:width 0.5s"></div>
-                    </div>
-                </div>
-            `;
-            const footer = `
-                <button class="btn" onclick="closeModal()">Cancel</button>
-                <button class="btn primary" id="cert-submit-btn" onclick="requestCertificate()">Request Certificate</button>
-            `;
-            openModal('Request SSL Certificate', body, footer);
-        }
-
-        async function requestCertificate() {
-            const valid = validateForm([
-                { id: 'cert-domain', rules: { required: true, requiredMsg: 'Domain is required', pattern: /^[a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$/, patternMsg: 'Invalid domain format' }}
-            ]);
-            if (!valid) return;
-
-            const domain = document.getElementById('cert-domain').value.trim();
-            const staging = document.getElementById('cert-staging').checked;
-
-            // Show progress
-            document.getElementById('cert-progress').style.display = 'block';
-            document.getElementById('cert-submit-btn').disabled = true;
-            const progressBar = document.getElementById('cert-progress-bar');
-            progressBar.style.width = '30%';
-
-            const res = await apiCall('/certificate/request', {
-                method: 'POST',
-                body: JSON.stringify({ domain, staging })
+        function rendreComposants() {
+            const b = $('bComp'); const liste = COMPOSANTS && COMPOSANTS.components;
+            if (!liste) return ligneVide(b, 4, '—');
+            if (!liste.length) return ligneVide(b, 4, 'Aucun composant.');
+            b.textContent = '';
+            liste.forEach(c => {
+                const etats = el('td');
+                const poser = (cle, oui, non) => { if (typeof c[cle] === 'boolean') etats.appendChild(pastille(c[cle] ? 'ok' : 'hors', c[cle] ? oui : non)); };
+                poser('running', 'EN MARCHE', 'ARRÊTÉ'); poser('enabled', 'ACTIVÉ', 'DÉSACTIVÉ'); poser('available', 'DISPONIBLE', 'INDISPONIBLE'); poser('installed', 'INSTALLÉ', 'ABSENT'); poser('exists', 'PRÉSENT', 'ABSENT');
+                if (!etats.firstChild) etats.textContent = '—';
+                const det = [c.config_path, c.path, c.port ? 'port ' + c.port : null].filter(Boolean).join(' · ');
+                ligne(b, [cellule(c.name || '—'), cellule(c.description || '—'), etats, cellule(tiret(det), 'mono')]);
             });
-
-            progressBar.style.width = '100%';
-
-            if (!res.error) {
-                setTimeout(() => {
-                    closeModal();
-                    showToast(`Certificate requested for ${domain}`, 'success');
-                    loadCerts();
-                }, 500);
-            } else {
-                document.getElementById('cert-progress').style.display = 'none';
-                document.getElementById('cert-submit-btn').disabled = false;
-            }
         }
 
-        async function deleteCertificate(name) {
-            if (!confirm(`Delete certificate "${name}"?`)) return;
-
-            const res = await apiCall(`/certificate/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            if (!res.error) {
-                showToast(`Certificate "${name}" deleted`, 'success');
-                loadCerts();
-            }
+        function rendreAcces() {
+            const b = $('bAcces'); b.textContent = '';
+            const liste = ACCES && ACCES.access;
+            if (!liste) { b.appendChild(el('div', 'vide', '—')); return; }
+            if (!liste.length) { b.appendChild(el('div', 'vide', 'Aucun point d’accès.')); return; }
+            const types = { frontend: 'frontal', admin: 'administration', vhost: 'vhost' };
+            liste.forEach(a => {
+                const l = el('div', 'ligne'), g = el('div');
+                g.appendChild(el('strong', null, a.name || '—'));
+                g.appendChild(el('small', null, types[a.type] || tiret(a.type)));
+                if (typeof a.waf_protected === 'boolean') g.appendChild(pastille(a.waf_protected ? 'ok' : 'att', a.waf_protected ? 'PROTÉGÉ PAR LE WAF' : 'CONTOURNE LE WAF'));
+                l.appendChild(g);
+                const url = urlSure(String(a.url || '').replace('{{hostname}}', location.hostname || 'localhost'));
+                if (url) { const lien = el('a', 'mono', url); lien.href = url; lien.target = '_blank'; lien.rel = 'noopener'; l.appendChild(lien); } else l.appendChild(el('span', 'mono', '—'));
+                b.appendChild(l);
+            });
         }
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-            document.getElementById(tabName).classList.add('active');
+        function rendreVhosts() {
+            const b = $('bVhosts'); const liste = VHOSTS && VHOSTS.vhosts;
+            $('nVhosts').textContent = liste ? liste.length + ' vhost' + (liste.length > 1 ? 's' : '') : '';
+            if (!liste) return ligneVide(b, 5, '—');
+            if (!liste.length) return ligneVide(b, 5, 'Aucun vhost configuré.');
+            b.textContent = '';
+            liste.forEach(v => {
+                const nom = v.name || v.domain;
+                const tls = el('td');
+                tls.appendChild(pastille(v.ssl ? 'ok' : 'att', v.ssl ? 'TLS' : 'SANS TLS'));
+                if (v.ssl_redirect) tls.appendChild(pastille('cy', 'REDIRECTION HTTPS'));
+                if (v.acme) tls.appendChild(pastille('cy', 'ACME'));
+                if (v.enabled === false) tls.appendChild(pastille('', 'INACTIF'));
+                const act = el('td', 'act');
+                const bm = el('button', 'btn sm', 'Modifier'); bm.type = 'button'; bm.addEventListener('click', () => ouvrirVhost(v));
+                const bs = el('button', 'btn sm danger', 'Supprimer'); bs.type = 'button';
+                bs.addEventListener('click', () => demander('Supprimer le vhost « ' + nom + ' » ? Le routage de ce domaine sera retiré.',
+                    () => agir('DELETE', '/vhost/' + encodeURIComponent(nom), undefined, 'Vhost « ' + nom + ' » supprimé.', 'Suppression impossible', charger)));
+                act.appendChild(bm); act.appendChild(bs);
+                ligne(b, [cellule(v.domain || nom, 'mono'), cellule(tiret(v.backend)), tls,
+                          cellule(pastille(v.waf_bypass ? 'att' : 'ok', v.waf_bypass ? 'CONTOURNÉ' : 'PROTÉGÉ')), act]);
+            });
         }
 
-        async function loadStatus() {
-            const d = await api('/status');
-
-            // HAProxy status
-            const statusEl = document.getElementById('status');
-            const statusCard = document.getElementById('statusCard');
-            statusEl.textContent = d.running ? 'Running' : 'Stopped';
-            statusCard.className = d.running ? 'stat-card running' : 'stat-card stopped';
-
-            // WAF status
-            const wafEl = document.getElementById('wafStatus');
-            const wafIndicator = document.getElementById('wafIndicator');
-            const wafToggle = document.getElementById('wafToggle');
-
-            if (d.waf_enabled && d.waf_available) {
-                wafEl.textContent = 'Active';
-                wafIndicator.className = 'indicator active';
-                wafToggle.checked = true;
-            } else if (d.waf_enabled) {
-                wafEl.textContent = 'Unavailable';
-                wafIndicator.className = 'indicator inactive';
-                wafToggle.checked = true;
-            } else {
-                wafEl.textContent = 'Disabled';
-                wafIndicator.className = 'indicator inactive';
-                wafToggle.checked = false;
-            }
-
-            document.getElementById('vhosts-count').textContent = d.vhost_count || 0;
-            document.getElementById('backends-count').textContent = d.backend_count || 0;
+        function optionsBackend(courant) {
+            const sel = $('fVhost').backend; sel.textContent = '';
+            const vide = el('option', null, '— choisir un backend —'); vide.value = ''; sel.appendChild(vide);
+            ((BACKENDS && BACKENDS.backends) || []).filter(x => x.type !== 'waf').forEach(x => { const o = el('option', null, x.name); o.value = x.name; sel.appendChild(o); });
+            sel.value = courant || '';
         }
-
-        async function loadVhosts() {
-            const d = await api('/vhosts');
-            const list = document.getElementById('vhost-list');
-            const vhosts = d.vhosts || [];
-            if (!vhosts.length) {
-                list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No vhosts configured</td></tr>';
-                return;
-            }
-            list.innerHTML = vhosts.map(v => `
-                <tr>
-                    <td><strong>${v.domain}</strong></td>
-                    <td>${v.backend || '-'}</td>
-                    <td>
-                        ${v.ssl ? '<span class="badge up">SSL</span>' : ''}
-                        ${v.acme ? '<span class="badge up" style="margin-left:4px">ACME</span>' : ''}
-                        ${!v.ssl ? '<span class="badge bypass">No SSL</span>' : ''}
-                    </td>
-                    <td>${v.waf_bypass ? '<span class="badge bypass">Bypass</span>' : '<span class="badge waf">Protected</span>'}</td>
-                    <td>
-                        <button class="btn" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick='showEditVhostModal(${JSON.stringify(v)})'>Edit</button>
-                        <button class="btn danger" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="deleteVhost('${v.name || v.domain}')">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
+        function ouvrirVhost(v) {
+            const f = $('fVhost'); EDIT_VHOST = v ? (v.name || v.domain) : null;
+            f.reset(); optionsBackend(v ? v.backend : '');
+            if (v) { f.domain.value = v.domain || ''; f.ssl.checked = !!v.ssl; f.ssl_redirect.checked = !!v.ssl_redirect; f.acme.checked = !!v.acme; f.waf_bypass.checked = !!v.waf_bypass; f.enabled.checked = v.enabled !== false; }
+            $('vhostOk').textContent = v ? 'Enregistrer' : 'Ajouter';
+            f.hidden = false; f.domain.focus(); annoncer();
         }
+        $('addVhost').addEventListener('click', () => { if ($('fVhost').hidden) ouvrirVhost(null); else $('fVhost').hidden = true; annoncer(); });
+        $('fVhost').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const domaine = f.domain.value.trim();
+            if (!/^[a-zA-Z0-9*][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$/.test(domaine)) return retour(false, 'Domaine invalide.');
+            if (!f.backend.value) return retour(false, 'Choisissez un backend.');
+            // Le champ « name » est obligatoire côté API (VHostCreate) : l'ancienne page l'omettait, d'où un 422 à chaque envoi.
+            const corps = { name: EDIT_VHOST || domaine, domain: domaine, backend: f.backend.value, ssl: f.ssl.checked, ssl_redirect: f.ssl_redirect.checked, acme: f.acme.checked, waf_bypass: f.waf_bypass.checked, enabled: f.enabled.checked };
+            const edition = EDIT_VHOST;
+            agir(edition ? 'PUT' : 'POST', edition ? '/vhost/' + encodeURIComponent(edition) : '/vhost', corps,
+                edition ? 'Vhost mis à jour.' : 'Vhost ajouté.', 'Enregistrement impossible', async () => { f.hidden = true; await charger(); });
+        });
 
-        async function loadBackends() {
-            const d = await api('/backends');
-            const list = document.getElementById('backend-list');
-            const backends = d.backends || [];
-            cachedBackends = backends;
-            if (!backends.length) {
-                list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No backends</td></tr>';
-                return;
-            }
-            list.innerHTML = backends.map(b => {
-                const isWaf = b.type === 'waf' || b.name === 'waf_inspector';
-                const serverCount = b.servers?.length || 0;
-                return `
-                <tr>
-                    <td><strong>${b.name}</strong></td>
-                    <td>${b.mode || 'http'}</td>
-                    <td>${b.balance || '-'}</td>
-                    <td>
-                        ${isWaf ? '<span class="badge waf">WAF Inspector</span>' : `${serverCount} server${serverCount !== 1 ? 's' : ''}`}
-                        ${!isWaf ? `<button class="btn" style="padding:0.2rem 0.5rem;font-size:0.7rem;margin-left:0.5rem" onclick="showBackendServers('${b.name}')">Manage</button>` : ''}
-                    </td>
-                    <td>
-                        ${!isWaf ? `
-                            <button class="btn" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick='showEditBackendModal(${JSON.stringify(b)})'>Edit</button>
-                            <button class="btn danger" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="deleteBackend('${b.name}')">Delete</button>
-                        ` : ''}
-                    </td>
-                </tr>
-            `}).join('');
-        }
-
-        async function loadStats() {
-            const d = await api('/stats');
-            const list = document.getElementById('stats-list');
-            const stats = (d.stats || []).filter(s => s.svname).slice(0, 30);
-            let totalReqs = 0;
-            (d.stats || []).forEach(s => totalReqs += parseInt(s.stot || 0));
-            document.getElementById('requests').textContent = totalReqs.toLocaleString();
-
-            if (!stats.length) {
-                list.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No stats available</td></tr>';
-                return;
-            }
-            list.innerHTML = stats.map(s => `
-                <tr>
-                    <td>${s.pxname}/${s.svname}</td>
-                    <td>${s.type === '0' ? 'Frontend' : s.type === '1' ? 'Backend' : 'Server'}</td>
-                    <td><span class="badge ${s.status === 'UP' || s.status === 'OPEN' ? 'up' : 'down'}">${s.status || '-'}</span></td>
-                    <td>${s.scur || 0}</td>
-                    <td>${formatBytes(s.bin || 0)}</td>
-                    <td>${formatBytes(s.bout || 0)}</td>
-                </tr>
-            `).join('');
-        }
-
-        async function loadCerts() {
-            const d = await api('/certificates');
-            const list = document.getElementById('cert-list');
-            const certs = d.certificates || [];
-            if (!certs.length) {
-                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No certificates</td></tr>';
-                return;
-            }
-            list.innerHTML = certs.map(c => `
-                <tr>
-                    <td><strong>${c.name}</strong></td>
-                    <td style="font-family:monospace;font-size:0.8rem;color:var(--p31-dim)">${c.path}</td>
-                    <td>
-                        <button class="btn danger" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="deleteCertificate('${c.name}')">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function formatBytes(bytes) {
-            bytes = parseInt(bytes) || 0;
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
-        }
-
-        async function toggleWAF(enabled) {
-            await api('/waf/toggle', { method: 'POST', body: JSON.stringify({ enabled }) });
-            refresh();
-        }
-
-
-        async function syncRoutes() {
-            const d = await api('/waf/sync-routes', { method: 'POST' });
-            alert(`Synced ${d.routes} routes to WAF`);
-        }
-
-        async function generateConfig() {
-            const d = await api('/generate', { method: 'POST' });
-            if (d.success) {
-                alert(`Config generated: ${d.vhosts} vhosts, ${d.backends} backends, WAF: ${d.waf_enabled ? 'enabled' : 'disabled'}`);
-            } else {
-                alert('Config validation failed: ' + (d.validation || 'Unknown error'));
-            }
-            refresh();
-        }
-
-        async function reload() {
-            await api('/reload', { method: 'POST' });
-            refresh();
-        }
-
-        async function loadComponents() {
-            const d = await api('/components');
-            const list = document.getElementById('components-list');
-            const components = d.components || [];
-            if (!components.length) {
-                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No components</td></tr>';
-                return;
-            }
-            list.innerHTML = components.map(c => {
-                let status = 'stopped';
-                let statusText = 'Unknown';
-                if (c.running || c.available || c.enabled || c.installed || c.exists) {
-                    status = 'up';
-                    statusText = c.running ? 'Running' : (c.available ? 'Available' : (c.enabled ? 'Enabled' : (c.installed ? 'Installed' : 'OK')));
-                } else {
-                    statusText = c.running === false ? 'Stopped' : (c.available === false ? 'Unavailable' : 'Missing');
+        function rendreBackends() {
+            const b = $('bBack'); const liste = BACKENDS && BACKENDS.backends;
+            $('nBackends').textContent = liste ? liste.filter(x => x.type !== 'waf').length + ' backend(s)' : '';
+            if (!liste) return ligneVide(b, 5, '—');
+            if (!liste.length) return ligneVide(b, 5, 'Aucun backend.');
+            b.textContent = '';
+            const equil = { roundrobin: 'Tourniquet', leastconn: 'Moins de connexions', source: 'Adresse source' };
+            liste.forEach(x => {
+                const waf = x.type === 'waf' || x.name === 'waf_inspector';
+                const sv = Array.isArray(x.servers) ? x.servers : [];
+                const cs = el('td');
+                if (waf) { cs.appendChild(pastille('cy', 'INSPECTEUR WAF')); cs.appendChild(el('span', 'mono', x.port ? ' port ' + x.port : '')); }
+                else { cs.appendChild(el('span', null, sv.length + ' serveur' + (sv.length > 1 ? 's' : ''))); if (sv.length) { const d = el('div', 'mono', sv.map(srv).join(' · ')); d.style.color = 'var(--faible)'; cs.appendChild(d); } }
+                const act = el('td', 'act');
+                if (!waf) {
+                    const bs = el('button', 'btn sm danger', 'Supprimer'); bs.type = 'button';
+                    bs.addEventListener('click', () => demander(sv.length ? 'Supprimer le backend « ' + x.name + ' » et ses ' + sv.length + ' serveur(s) ?' : 'Supprimer le backend « ' + x.name + ' » ?',
+                        () => agir('DELETE', '/backend/' + encodeURIComponent(x.name), undefined, 'Backend « ' + x.name + ' » supprimé.', 'Suppression impossible', charger)));
+                    act.appendChild(bs);
                 }
-                return `<tr>
-                    <td>${c.name}</td>
-                    <td style="color:var(--text-dim)">${c.description}</td>
-                    <td><span class="badge ${status}">${statusText}</span></td>
-                </tr>`;
-            }).join('');
+                ligne(b, [cellule(x.name || '—', 'mono'), cellule(tiret(x.mode)), cellule(equil[x.balance] || tiret(x.balance)), cs, act]);
+            });
         }
+        $('addBackend').addEventListener('click', () => { const f = $('fBackend'); f.hidden = !f.hidden; if (!f.hidden) f.name.focus(); annoncer(); });
+        $('fBackend').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target;
+            const nom = f.name.value.trim();
+            if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(nom)) return retour(false, 'Nom invalide : une lettre puis lettres, chiffres, tirets ou soulignés.');
+            // « servers » est obligatoire côté API (BackendCreate, liste de chaînes) : l'ancienne page l'omettait (422).
+            const servers = f.servers.value.split(/[\n,]+/).map(x => x.trim()).filter(Boolean);
+            const corps = { name: nom, servers, mode: f.mode.value, balance: f.balance.value, health_check: f.health_check.checked, health_uri: f.health_uri.value.trim() || '/health' };
+            agir('POST', '/backend', corps, 'Backend ajouté.', 'Ajout impossible', async () => { f.hidden = true; await charger(); });
+        });
 
-        async function loadAccess() {
-            const d = await api('/access');
-            const list = document.getElementById('access-list');
-            const access = d.access || [];
-            if (!access.length) {
-                list.innerHTML = '<p style="color:var(--text-dim)">No access points</p>';
-                return;
-            }
-            list.innerHTML = access.map(a => {
-                const url = a.url.replace('{{hostname}}', location.hostname);
-                return `<div style="background:var(--bg-dark);padding:0.75rem 1rem;border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-                    <div>
-                        <strong>${a.name}</strong>
-                        <span style="color:var(--text-dim);margin-left:1rem;font-size:0.85rem">${a.type}${a.waf_protected !== undefined ? (a.waf_protected ? ' - WAF Protected' : ' - WAF Bypass') : ''}</span>
-                    </div>
-                    <a href="${url}" target="_blank" style="color:var(--primary)">${url}</a>
-                </div>`;
-            }).join('');
+        const TYPES = { '0': 'Frontend', '1': 'Backend', '2': 'Serveur', '3': 'Écoute' };
+        function rendreStats() {
+            const b = $('bStats');
+            const toutes = ((STATS && STATS.stats) || []).filter(x => x.svname);
+            $('nStats').textContent = toutes.length ? toutes.length + ' ligne(s)' : '';
+            $('nStatsNote').textContent = STATS_ERR ? 'Le socket d’administration de HAProxy est indisponible : aucune statistique.' : 'Lu sur le socket d’administration de HAProxy (show stat). Sessions = sessions en cours.';
+            if (!STATS) return ligneVide(b, 7, '—');
+            const q = $('fStats').value.trim().toLowerCase();
+            const liste = toutes.filter(x => !q || (x.pxname + '/' + x.svname + ' ' + (x.status || '')).toLowerCase().includes(q)).slice(0, 300);
+            if (!liste.length) return ligneVide(b, 7, STATS_ERR ? 'Statistiques indisponibles.' : 'Aucune statistique.');
+            b.textContent = '';
+            liste.forEach(x => {
+                const ok = x.status === 'UP' || x.status === 'OPEN';
+                ligne(b, [cellule(x.pxname + '/' + x.svname, 'mono'), cellule(TYPES[String(x.type)] || tiret(x.type)),
+                          cellule(x.status ? pastille(ok ? 'ok' : (/^(DOWN|MAINT|NOLB)/.test(x.status) ? 'hors' : 'att'), x.status) : '—'),
+                          cellule(entier(x.scur), 'num'), cellule(entier(x.stot), 'num'), cellule(octets(x.bin), 'num'), cellule(octets(x.bout), 'num')]);
+            });
         }
+        $('fStats').addEventListener('input', rendreStats);
 
-        async function restart() {
-            await api('/restart', { method: 'POST' });
-            setTimeout(refresh, 2000);
+        function rendreCerts() {
+            const b = $('bCerts'); const liste = CERTS && CERTS.certificates;
+            $('nCerts').textContent = liste ? liste.length + ' certificat(s)' : '';
+            if (!liste) return ligneVide(b, 6, '—');
+            if (!liste.length) return ligneVide(b, 6, 'Aucun certificat.');
+            b.textContent = '';
+            liste.forEach(c => {
+                const j = c.days_until_expiry;
+                let etat;
+                if (c.expired) etat = pastille('hors', 'EXPIRÉ');
+                else if (typeof j === 'number') etat = pastille(j <= 30 ? 'att' : 'ok', j <= 30 ? 'EXPIRE SOUS ' + j + ' J' : 'VALIDE');
+                else etat = '—';
+                const quand = c.expires_at ? new Date(c.expires_at) : null;
+                const ech = quand && !isNaN(quand) ? quand.toLocaleDateString('fr-FR') + (typeof j === 'number' ? ' (' + (j < 0 ? 'il y a ' + (-j) : 'dans ' + j) + ' j)' : '') : '—';
+                const act = el('td', 'act');
+                const bs = el('button', 'btn sm danger', 'Supprimer'); bs.type = 'button';
+                // L'ancienne page visait une route au singulier qui n'existe pas (404) ; la vraie route est /certificates/{nom}.
+                bs.addEventListener('click', () => demander('Supprimer le certificat « ' + c.name + ' » ? Il sera déplacé dans le sous-dossier backup du magasin.',
+                    () => agir('DELETE', '/certificates/' + encodeURIComponent(c.name), undefined, 'Certificat « ' + c.name + ' » supprimé.', 'Suppression impossible', charger)));
+                act.appendChild(bs);
+                ligne(b, [cellule(c.name || '—', 'mono'), cellule((c.domains && c.domains.length) ? c.domains.join(', ') : '—'), cellule(ech), cellule(etat), cellule(tiret(c.path), 'mono'), act]);
+            });
         }
+        $('addCert').addEventListener('click', () => { const f = $('fCert'); f.hidden = !f.hidden; if (!f.hidden) f.domain.focus(); annoncer(); });
+        $('fCert').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const domaine = f.domain.value.trim();
+            if (!/^[a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$/.test(domaine)) return retour(false, 'Domaine invalide.');
+            $('certOk').disabled = true; retour(true, 'Demande en cours auprès de certbot (jusqu’à deux minutes)…');
+            // L'ancienne page visait une route inexistante (404) ; la vraie route est /certificates/acme.
+            await agir('POST', '/certificates/acme', { domain: domaine, staging: f.staging.checked }, 'Certificat demandé pour ' + domaine + '.', 'Demande impossible', async () => { f.hidden = true; await charger(); });
+            $('certOk').disabled = false;
+        });
 
-        function refresh() {
-            loadComponents();
-            loadAccess();
-            loadStatus();
-            loadVhosts();
-            loadBackends();
-            loadStats();
-            loadCerts();
+        // ----- Actions -----
+        function rendreActions() {
+            const actif = !!(STATUT && STATUT.waf_enabled);
+            $('aToggle').textContent = actif ? 'Désactiver le WAF' : 'Activer le WAF';
+            $('aToggle').className = 'btn ' + (actif ? 'danger' : 'prim');
+            $('nWaf').textContent = STATUT && STATUT.waf_enabled !== undefined ? (actif ? 'activé dans la configuration' : 'désactivé dans la configuration') : '';
         }
+        $('aToggle').addEventListener('click', () => {
+            const cible = !(STATUT && STATUT.waf_enabled);
+            demander(cible ? 'Activer l’intégration du WAF ? Le trafic HTTP passera par sbxwaf avant les backends.' : 'Désactiver l’intégration du WAF ? Le trafic ne sera plus inspecté.',
+                () => agir('POST', '/waf/toggle', { enabled: cible }, 'Demande « WAF ' + (cible ? 'activé' : 'désactivé') + ' » envoyée.', 'Bascule impossible', charger));
+        });
+        $('aSync').addEventListener('click', () => agir('POST', '/waf/sync-routes', undefined, d => (d.routes !== undefined ? d.routes : '—') + ' route(s) synchronisée(s) vers le WAF.', 'Synchronisation impossible', charger));
+        $('aGen').addEventListener('click', () => demander('Générer la configuration HAProxy ? Le fichier de configuration sera réécrit puis validé. Le service n’est pas rechargé.',
+            () => agir('POST', '/generate', undefined, d => 'Configuration générée : ' + tiret(d.vhosts) + ' vhost(s), ' + tiret(d.backends) + ' backend(s), WAF ' + (d.waf_enabled ? 'activé' : 'désactivé') + '.', 'Validation de la configuration en échec', charger)));
+        $('aReload').addEventListener('click', () => demander('Recharger la configuration de HAProxy ?',
+            () => agir('POST', '/reload', undefined, 'HAProxy rechargé.', 'Rechargement en échec', charger)));
+        $('aRestart').addEventListener('click', () => demander('Redémarrer HAProxy ? Les connexions en cours seront interrompues.',
+            () => agir('POST', '/restart', undefined, 'HAProxy redémarré.', 'Redémarrage en échec', () => new Promise(r => setTimeout(() => charger().then(r), 2000)))));
 
-        refresh();
-        setInterval(refresh, 15000);
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+
+        // ----- Onglets -----
+        const ONGLETS = ['composants', 'acces', 'vhosts', 'backends', 'stats', 'certs', 'actions'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'haproxy' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, un formulaire ou une confirmation ouverts.
+        setInterval(() => {
+            const saisie = ['fVhost', 'fBackend', 'fCert'].some(f => !$(f).hidden) || /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+            if (document.hidden || DEMO || CONFIRM || saisie) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
