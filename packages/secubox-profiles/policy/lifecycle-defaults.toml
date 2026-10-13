@@ -60,7 +60,9 @@ eye-network_at_              = "eager"
 "adblock-sync"               = "on-demand"
 "ai-gateway"                 = "on-demand"
 "ai-insights"                = "on-demand"
-"annuaire"                   = "on-demand"
+# L'annuaire porte la synchro du maillage, l'inscription au maitre et la flotte :
+# endormi, il ne synchronise plus rien et /fleet/ rend 502 (#2548).
+"annuaire"                   = "always-on"
 "annuaire-apply"             = "on-demand"
 "billets"                    = "on-demand"
 "c3box"                      = "on-demand"
