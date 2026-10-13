@@ -4,26 +4,246 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Espaces (#2212, #2538), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/hub/public/menu (les six espaces) + /api/v1/hub/public/health-batch (l'état de chaque module).
+  L'état affiché vient de health-batch (la vérité : un module monté dans l'agrégateur n'a ni unité ni socket) ; `active` du menu ne sert qu'en repli.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives. #<id> dans l'URL : l'espace ouvert.
 -->
-<!-- SecuBox · Page d'un espace (#2212) : #<id> dans l'URL ; services de l'espace avec leur état. -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox · Espace</title>
-    <link rel="stylesheet" href="/shared/design-tokens.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="/apercu/apercu.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <title>SecuBox — Espaces</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn[aria-pressed=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem} #erreur[hidden]{display:none}
+        /* Onglets : une rangée défilante, jamais coupée */
+        .onglets{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+        .onglet{flex:0 0 auto;display:flex;align-items:center;gap:7px;font:inherit;font-size:.82rem;padding:7px 12px;border-radius:10px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer}
+        .onglet:hover{border-color:var(--cyan);color:var(--texte)} .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglet[aria-selected=true]{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .onglet .nb{font-size:.7rem;color:var(--faible);font-variant-numeric:tabular-nums} .onglet[aria-selected=true] .nb{color:var(--doux)}
+        .pt{width:9px;height:9px;border-radius:50%;background:var(--faible);flex:none} .pt.ok{background:var(--vert)} .pt.att{background:var(--orange)} .pt.hors{background:var(--rouge)} .pt.veille{background:var(--cyan)}
+        .outils{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+        .outils input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;flex:1 1 200px;max-width:340px}
+        .outils input:focus{outline:none;border-color:var(--cyan)} .outils .nbr{color:var(--faible);font-size:.76rem;margin-left:auto}
+        .grille{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+        a.carte{display:flex;flex-direction:column;gap:3px;border:1px solid var(--trait);border-left:3px solid var(--vert);border-radius:10px;padding:9px 11px;background:rgba(8,18,38,.5);color:var(--texte);text-decoration:none;min-width:0}
+        a.carte:hover{border-color:var(--cyan)} a.carte:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        a.carte.degrade{border-left-color:var(--orange)} a.carte.hors{border-left-color:var(--rouge)} a.carte.veille{border-left-color:var(--cyan)} a.carte.inconnu{border-left-color:var(--faible)}
+        a.carte b{overflow-wrap:anywhere;font-size:.9rem} a.carte small{color:var(--doux);font-size:.74rem;overflow-wrap:anywhere}
+        a.carte .n{font-size:.78rem;font-weight:700;color:var(--vert)} a.carte.degrade .n{color:var(--orange)} a.carte.hors .n{color:var(--rouge)} a.carte.veille .n{color:var(--cyan)} a.carte.inconnu .n{color:var(--faible)}
+        .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+        .count{color:var(--faible);font-weight:400}
+        @media (max-width:560px){.onglet{padding:6px 9px;font-size:.78rem}}
+    </style>
 </head>
-<body class="module-root hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main">
-        <header class="page"><h1 id="titre">Espace</h1><div class="actions"><a class="btn" href="/apercu/">← Vue d'ensemble</a></div></header>
-        <div id="erreur" class="banner err" hidden></div>
-        <section><h2>Services <span id="nb" class="count"></span></h2><div id="services" class="grille"></div></section>
-    </main>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
+                <div><h1 id="titre" style="margin:0;font-size:1.35rem;font-weight:800">Espace</h1><small id="subline">Les services d’un espace et leur état</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><a class="btn" href="/apercu/">← Vue d’ensemble</a></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <div class="onglets" id="onglets" role="tablist" aria-label="Espaces"></div>
+
+        <div class="outils">
+            <input id="filtre" type="search" placeholder="Filtrer les services de cet espace…" aria-label="Filtrer les services" autocomplete="off">
+            <button class="btn" type="button" data-etat="tous" aria-pressed="true">Tous</button>
+            <button class="btn" type="button" data-etat="ok" aria-pressed="false">En marche</button>
+            <button class="btn" type="button" data-etat="att" aria-pressed="false">Dégradés</button>
+            <button class="btn" type="button" data-etat="hors" aria-pressed="false">À l’arrêt</button>
+            <span class="nbr" id="nb">—</span>
+        </div>
+
+        <div id="services" class="grille" role="tabpanel" aria-live="polite"><div class="vide">Chargement…</div></div>
+    </div></div></main>
+
     <script src="/shared/sidebar.js"></script>
-    <script src="espace.js" defer></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+        // Un état UNIQUE par service, dit par la sonde de santé ; le champ `active` du menu (unité ou socket) n'est qu'un repli.
+        //   ok = en marche · att = dégradé · hors = à l'arrêt ou en panne · veille = endormi (attendu) · inconnu = ni sonde ni indice
+        const LIBELLE = { ok: 'actif', att: 'dégradé', hors: 'à l’arrêt', veille: 'en veille', inconnu: 'état inconnu' };
+        function etatDe(it, sante) {
+            const s = sante[it.id];
+            if (s && s.status) {
+                if (s.status === 'error') return 'hors';
+                if (s.status === 'ok') return s.veille ? 'veille' : 'ok';
+                return 'att';
+            }
+            if (it.active === true) return 'ok';
+            if (it.active === false) return 'hors';
+            return 'inconnu';
+        }
+        const GRAVITE = { hors: 3, att: 2, inconnu: 1, veille: 0, ok: 0 };
+        function pire(items, sante) {
+            let p = 'ok';
+            items.forEach(it => { const e = etatDe(it, sante); if ((GRAVITE[e] || 0) > (GRAVITE[p] || 0)) p = e; });
+            return p;
+        }
+        const CLASSE_PT = { ok: 'ok', att: 'att', hors: 'hors', veille: 'veille', inconnu: '' };
+
+        let ESPACES = [], SANTE = {}, COURANT = '', FILTRE = '', ETAT = 'tous';
+
+        function demoData() {
+            const IT = (id, nom, icone, actif, objet) => ({ id, name: nom, icon: icone, path: '/' + id + '/', active: actif, objet, description: 'Service d’exemple ' + nom });
+            ESPACES = [
+                { id: 'apercu', nom: 'Vue d’ensemble', icone: '🏠', items: [IT('hub', 'Hub', '🧭', true, 'SERVICE'), IT('metrics', 'Metrics', '📊', true, 'SERVICE')] },
+                { id: 'protection', nom: 'Protection', icone: '🛡️', items: [IT('waf', 'WAF', '🛡️', true, 'SERVICE'), IT('nac', 'NAC', '🔌', true, 'SERVICE'), IT('crowd', 'Détecteur', '👁️', false, 'SERVICE'), IT('vpn', 'WireGuard', '🔐', true, 'DEVICE')] },
+                { id: 'surveillance', nom: 'Surveillance', icone: '👁️', items: [IT('soc', 'SOC', '📡', true, 'SERVICE'), IT('dpi', 'DPI', '🔬', true, 'SERVICE')] },
+                { id: 'services', nom: 'Services', icone: '📦', items: [IT('mail', 'Courrier', '✉️', true, 'SERVICE')] },
+                { id: 'identite', nom: 'Identité & accès', icone: '👤', items: [IT('auth', 'Authentification', '🔑', true, 'SERVICE')] },
+                { id: 'systeme', nom: 'Système', icone: '⚙️', items: [IT('system', 'Système', '⚙️', true, 'SERVICE'), IT('backup', 'Sauvegarde', '💾', true, 'SERVICE')] }];
+            SANTE = { waf: { status: 'ok', msg: 'répond' }, nac: { status: 'ok', msg: 'Running' }, vpn: { status: 'warn', msg: 'inactive/dead' }, backup: { status: 'ok', msg: 'Au repos (tâche planifiée)', veille: true } };
+        }
+
+        async function lire(url) {
+            const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        }
+
+        function dessineOnglets() {
+            const z = $('onglets'); z.textContent = '';
+            ESPACES.forEach(e => {
+                const b = el('button', 'onglet'); b.type = 'button'; b.setAttribute('role', 'tab'); b.id = 'onglet-' + e.id; b.dataset.id = e.id;
+                b.setAttribute('aria-selected', e.id === COURANT ? 'true' : 'false'); b.tabIndex = e.id === COURANT ? 0 : -1;
+                b.setAttribute('aria-controls', 'services');
+                b.appendChild(el('span', 'pt ' + (CLASSE_PT[pire(e.items || [], SANTE)] || '')));
+                b.appendChild(el('span', null, (e.icone ? e.icone + ' ' : '') + e.nom));
+                b.appendChild(el('span', 'nb', String((e.items || []).length)));
+                b.addEventListener('click', () => ouvre(e.id));
+                z.appendChild(b);
+            });
+        }
+
+        function ouvre(id) {
+            if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + encodeURIComponent(id));
+            COURANT = id; rend();
+            const b = $('onglet-' + id); if (b) b.scrollIntoView({ block: 'nearest', inline: 'center' });
+        }
+
+        function rend() {
+            const espace = ESPACES.find(e => e.id === COURANT);
+            dessineOnglets();
+            const g = $('services'); g.textContent = '';
+            if (!espace) {
+                $('titre').textContent = 'Espace';
+                $('nb').textContent = '—';
+                g.appendChild(el('div', 'vide', 'Choisissez un espace dans les onglets ci-dessus.'));
+                return;
+            }
+            document.title = 'SecuBox — ' + espace.nom;
+            $('titre').textContent = (espace.icone ? espace.icone + ' ' : '') + espace.nom;
+            const q = FILTRE.trim().toLowerCase();
+            let n = 0;
+            (espace.items || []).forEach(it => {
+                const e = etatDe(it, SANTE);
+                if (ETAT !== 'tous' && !(ETAT === 'ok' ? (e === 'ok' || e === 'veille') : e === ETAT)) return;
+                const st = SANTE[it.id] || {};
+                const pieces = [it.objet, st.msg].filter(Boolean);
+                const hay = [it.name, it.id, it.description, pieces.join(' ')].join(' ').toLowerCase();
+                if (q && hay.indexOf(q) < 0) return;
+                const a = el('a', 'carte ' + (e === 'ok' ? '' : e)); a.href = it.path;
+                a.appendChild(el('b', null, (it.icon || '') + ' ' + it.name));
+                a.appendChild(el('span', 'n', LIBELLE[e]));
+                if (pieces.length) a.appendChild(el('small', null, pieces.join(' · ')));
+                if (it.description) a.appendChild(el('small', null, it.description));
+                g.appendChild(a); n++;
+            });
+            if (!n) g.appendChild(el('div', 'vide', 'Aucun service ne correspond à ce filtre.'));
+            $('nb').textContent = n + ' / ' + (espace.items || []).length + ' services';
+        }
+
+        function etatGlobal() {
+            const tous = ESPACES.reduce((a, e) => a.concat(e.items || []), []);
+            const p = pire(tous, SANTE), z = $('etat');
+            z.className = 'actif ' + (p === 'hors' ? 'hors' : p === 'att' ? 'att' : p === 'inconnu' ? 'neutre' : '');
+            z.textContent = p === 'hors' ? 'DES SERVICES À L’ARRÊT' : p === 'att' ? 'DÉGRADÉ' : p === 'inconnu' ? 'ÉTAT PARTIEL' : 'TOUT FONCTIONNE';
+        }
+
+        async function chargeSante() {
+            if (DEMO) return;
+            try { const b = await lire('/api/v1/hub/public/health-batch'); SANTE = (b && b.modules) || {}; } catch (e) { /* la sonde manque : repli sur `active` du menu */ }
+        }
+        async function charge(complet) {
+            $('rafraichir').disabled = true;
+            try {
+                if (DEMO) { demoData(); }
+                else {
+                    if (complet || !ESPACES.length) { const m = await lire('/api/v1/hub/public/menu'); ESPACES = m.espaces || []; }
+                    await chargeSante();
+                }
+                $('erreur').hidden = true;
+                const id = decodeURIComponent((location.hash || '').slice(1));
+                if (id && !ESPACES.some(e => e.id === id)) {
+                    COURANT = '';
+                    $('erreur').hidden = false; $('erreur').textContent = 'Impossible d’afficher cet espace (espace inconnu : ' + id + ').';
+                } else if (id) COURANT = id;
+                else if (!COURANT && ESPACES.length) COURANT = ESPACES.some(e => e.id === 'protection') ? 'protection' : ESPACES[0].id;
+                rend(); etatGlobal();
+                $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            } catch (e) {
+                $('erreur').hidden = false; $('erreur').textContent = 'Impossible d’afficher les espaces (' + e.message + ').';
+                $('etat').className = 'actif hors'; $('etat').textContent = 'HORS LIGNE';
+            } finally { $('rafraichir').disabled = false; }
+        }
+
+        $('demo').hidden = !DEMO;
+        $('rafraichir').addEventListener('click', () => charge(true));
+        $('filtre').addEventListener('input', e => { FILTRE = e.target.value; rend(); });
+        document.querySelectorAll('.outils [data-etat]').forEach(b => b.addEventListener('click', () => {
+            ETAT = b.dataset.etat;
+            document.querySelectorAll('.outils [data-etat]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+            rend();
+        }));
+        // Clavier (motif WAI-ARIA des onglets) : flèches, Début, Fin.
+        $('onglets').addEventListener('keydown', ev => {
+            const ids = ESPACES.map(e => e.id), i = ids.indexOf(COURANT);
+            let j = i;
+            if (ev.key === 'ArrowRight') j = (i + 1) % ids.length; else if (ev.key === 'ArrowLeft') j = (i - 1 + ids.length) % ids.length;
+            else if (ev.key === 'Home') j = 0; else if (ev.key === 'End') j = ids.length - 1; else return;
+            ev.preventDefault(); ouvre(ids[j]); const b = $('onglet-' + ids[j]); if (b) b.focus();
+        });
+        window.addEventListener('hashchange', () => { const id = decodeURIComponent(location.hash.slice(1)); if (ESPACES.some(e => e.id === id)) { COURANT = id; $('erreur').hidden = true; rend(); } else charge(false); });
+        charge(true);
+        if (!DEMO) { setInterval(() => { if (!document.hidden) charge(false).catch(() => {}); }, 15000); setInterval(() => { if (!document.hidden) charge(true).catch(() => {}); }, 120000); }
+    </script>
 </body>
 </html>

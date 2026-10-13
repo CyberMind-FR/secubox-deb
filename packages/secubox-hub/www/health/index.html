@@ -4,66 +4,272 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<!--
-  SecuBox · Health Monitor — live status of vital + common services.
-  Consumes /api/v1/hub/public/health-batch. Dark hybrid-skin via /shared/sidebar.js.
+  SecuBox — Santé des services (#2538), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/hub/public/health-batch (état de chaque module), /api/v1/hub/public/menu (nom, page et espace de chaque module),
+  /api/v1/hub/public/info (nom de la box), /api/v1/health-doctor/checks (preuve dynamique du WAF). Seule action : rejouer le test du WAF (POST, jeton de session).
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
-    <title>SecuBox · Health Monitor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/design-tokens.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="health.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <title>SecuBox — Santé</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn[aria-pressed=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff}
+        .btn.sm{padding:3px 9px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem} #erreur[hidden]{display:none}
+        /* Tuiles = boutons-filtres */
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:560px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile:hover{border-color:var(--cyan)} .tuile:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .tuile[aria-pressed=true]{border-color:var(--cyan);background:linear-gradient(160deg,rgba(41,182,246,.24),rgba(8,18,38,.8))}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.veille .v{color:var(--cyan)}
+        .outils{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+        .outils input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;flex:1 1 200px;max-width:340px}
+        .outils input:focus{outline:none;border-color:var(--cyan)} .outils .nbr{color:var(--faible);font-size:.76rem;margin-left:auto}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;margin-left:6px}
+        .pan h3 .btn{margin-left:8px;vertical-align:middle}
+        .liste{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+        /* Une ligne = un service ; cliquable (déplie), clavier, et SON TEXTE RESTE SÉLECTIONNABLE */
+        .svc{border:1px solid var(--trait);border-left:3px solid var(--vert);border-radius:10px;background:rgba(8,18,38,.5);min-width:0}
+        .svc.att{border-left-color:var(--orange)} .svc.hors{border-left-color:var(--rouge)} .svc.veille{border-left-color:var(--cyan)} .svc.inconnu{border-left-color:var(--faible)}
+        .svc-tete{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;align-items:center;padding:7px 10px;cursor:pointer;user-select:text;-webkit-user-select:text}
+        .svc-tete:hover{background:rgba(41,182,246,.06)} .svc-tete:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px;border-radius:10px}
+        .pt{width:9px;height:9px;border-radius:50%;background:var(--faible);flex:none} .svc .pt{background:var(--vert)} .svc.att .pt{background:var(--orange)} .svc.hors .pt{background:var(--rouge)} .svc.veille .pt{background:var(--cyan)} .svc.inconnu .pt{background:var(--faible)}
+        .svc-nom{font-weight:700;overflow-wrap:anywhere;user-select:text} .svc-msg{grid-column:2;color:var(--doux);font-size:.74rem;overflow-wrap:anywhere;user-select:text}
+        .svc-detail{padding:6px 10px 10px;border-top:1px solid rgba(86,150,255,.12);display:grid;gap:6px;font-size:.78rem}
+        .svc-detail[hidden]{display:none}
+        .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px} .kv .k{color:var(--doux)} .kv .v{user-select:text;overflow-wrap:anywhere}
+        .actions{display:flex;gap:6px;flex-wrap:wrap}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;overflow-wrap:anywhere;user-select:text}
+        .vide{color:var(--faible);font-size:.8rem;padding:8px 2px}
+        .count{color:var(--faible);font-weight:400}
+        #retour{font-size:.78rem;color:var(--doux)} #retour.ko{color:#ffd9de}
+        .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)}
+    </style>
 </head>
-<body class="module-root hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main">
-        <header class="page">
-            <h1>💚 Health Monitor <span class="ver" id="ver">v1.0</span></h1>
-            <div class="actions">
-                <span class="updated" id="updated">—</span>
-                <button class="btn" id="refresh" type="button">↻ Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>
+                <div><h1 style="margin:0;font-size:1.35rem;font-weight:800">Santé des services</h1><small id="subline">État de chaque module, relevé toutes les 15 s</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="pause" type="button" aria-pressed="false">⏸ Pause</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div id="error" class="banner err" hidden></div>
-        <div id="loading" class="banner info">Loading service health…</div>
-
-        <div id="content" hidden>
-            <!-- Summary strip -->
-            <section class="summary" id="summary"></section>
-
-            <!-- WAF : preuve dynamique -->
-            <section id="wafSection" hidden>
-                <h2>🛡️ WAF — test dynamique <span class="count" id="wafAge"></span>
-                    <button class="btn" id="wafRun" type="button">▶ Rejouer</button></h2>
-                <div class="svc-grid" id="waf"></div>
-            </section>
-
-            <!-- Vital services -->
-            <section>
-                <h2>Vital services <span class="count" id="vitalCount"></span></h2>
-                <div class="svc-grid" id="vital"></div>
-            </section>
-
-            <!-- Common services -->
-            <section>
-                <h2>Common services <span class="count" id="commonCount"></span></h2>
-                <div class="svc-grid" id="common"></div>
-            </section>
+        <div class="tuiles" id="tuiles" role="group" aria-label="Filtrer par état">
+            <button class="tuile ok" type="button" data-f="ok" aria-pressed="false"><span class="v" id="nOk">—</span><span class="l">En bonne santé</span><span class="s">actifs et sains</span></button>
+            <button class="tuile veille" type="button" data-f="veille" aria-pressed="false"><span class="v" id="nVeille">—</span><span class="l">En veille</span><span class="s">attendu : endormis ou au repos</span></button>
+            <button class="tuile att" type="button" data-f="att" aria-pressed="false"><span class="v" id="nAtt">—</span><span class="l">Dégradés</span><span class="s">actifs mais à surveiller</span></button>
+            <button class="tuile hors" type="button" data-f="hors" aria-pressed="false"><span class="v" id="nHors">—</span><span class="l">En panne</span><span class="s">à l’arrêt ou en échec</span></button>
+            <button class="tuile" type="button" data-f="tous" aria-pressed="true"><span class="v" id="nTot">—</span><span class="l">Services</span><span class="s" id="nScore">santé —</span></button>
         </div>
-    </main>
+
+        <div class="outils">
+            <input id="filtre" type="search" placeholder="Filtrer par nom ou message…" aria-label="Filtrer les services" autocomplete="off">
+            <button class="btn" type="button" id="deplier">Tout déplier</button>
+            <span class="nbr" id="nbr">—</span>
+        </div>
+
+        <div class="pan" id="wafSection" hidden>
+            <h3>🛡️ WAF — test dynamique <i id="wafAge"></i><button class="btn sm" id="wafRun" type="button">▶ Rejouer</button> <span id="retour" role="status"></span></h3>
+            <div class="liste" id="waf"></div>
+        </div>
+        <div class="pan"><h3>Services vitaux <span class="count" id="vitalCount"></span> <i>la colonne vertébrale de sécurité et de service</i></h3><div class="liste" id="vital"><div class="vide">Chargement…</div></div></div>
+        <div class="pan"><h3>Autres services <span class="count" id="commonCount"></span></h3><div class="liste" id="common"><div class="vide">—</div></div></div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script src="/shared/sidebar.js"></script>
-    <script src="health.js" defer></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const VITAUX = new Set(['waf', 'waf-ng', 'mitmproxy', 'haproxy', 'aggregator', 'hub', 'system', 'vortex-dns', 'dns-guard', 'certs', 'wireguard', 'soc', 'metrics', 'core']);
+        const LIBELLE = { ok: 'en bonne santé', veille: 'en veille', att: 'dégradé', hors: 'en panne', inconnu: 'inconnu' };
+        const RANG = { hors: 0, att: 1, inconnu: 2, veille: 3, ok: 4 };
+
+        let MODULES = {}, NOMS = {}, FILTRE = 'tous', TEXTE = '', OUVERTS = new Set(), PAUSE = false, RELEVE = 0, HOTE = '';
+
+        // Un état par module : error → en panne ; ok → sain (ou en veille si la sonde le dit) ; tout le reste → dégradé ; rien → inconnu.
+        function etat(m) {
+            if (!m || !m.status) return 'inconnu';
+            if (m.status === 'error') return 'hors';
+            if (m.status === 'ok') return m.veille ? 'veille' : 'ok';
+            return 'att';
+        }
+
+        async function lire(url, opts) {
+            const r = await fetch(url, Object.assign({ credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } }, opts || {}));
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2400); }
+
+        function demoData() {
+            MODULES = { waf: { status: 'ok', msg: 'Running' }, haproxy: { status: 'ok', msg: 'Running' }, 'dns-guard': { status: 'ok', msg: 'Monté dans l’agrégateur' }, hub: { status: 'ok', msg: 'Socket active' },
+                        certs: { status: 'warn', msg: 'Active (auto-restart)' }, mail: { status: 'error', msg: 'Failed' }, backup: { status: 'ok', msg: 'Au repos (tâche planifiée)', veille: true },
+                        nextcloud: { status: 'ok', msg: 'Asleep (on-demand)', veille: true }, nac: { status: 'ok', msg: 'Running' }, torrent: { status: 'warn', msg: 'inactive/dead' } };
+            NOMS = { waf: { nom: 'WAF', path: '/waf/', espace: 'protection' }, mail: { nom: 'Courrier', path: '/mail/', espace: 'services' }, certs: { nom: 'Certificats', path: '/certs/', espace: 'systeme' } };
+            HOTE = 'demo';
+        }
+
+        function carte(id, m) {
+            const e = etat(m), nom = (NOMS[id] && NOMS[id].nom) || id;
+            const d = el('div', 'svc ' + (e === 'ok' ? '' : e)); d.dataset.id = id;
+            const t = el('div', 'svc-tete'); t.tabIndex = 0; t.setAttribute('role', 'button'); t.setAttribute('aria-expanded', OUVERTS.has(id) ? 'true' : 'false');
+            t.appendChild(el('span', 'pt')); t.appendChild(el('span', 'svc-nom', nom));
+            t.appendChild(el('span', 'svc-msg', (m && m.msg) || LIBELLE[e]));
+            const det = el('div', 'svc-detail'); det.hidden = !OUVERTS.has(id);
+            const kv = el('div', 'kv');
+            [['Identifiant', id], ['État', LIBELLE[e]], ['Message', (m && m.msg) || '—'], ['Espace', (NOMS[id] && NOMS[id].espace) || '—']].forEach(p => { kv.appendChild(el('span', 'k', p[0])); kv.appendChild(el('code', 'v', p[1])); });
+            det.appendChild(kv);
+            const act = el('div', 'actions');
+            if (NOMS[id] && NOMS[id].path) { const a = el('a', 'btn sm', 'Ouvrir la page'); a.href = NOMS[id].path; act.appendChild(a); }
+            const c = el('button', 'btn sm', 'Copier l’identifiant'); c.type = 'button';
+            c.addEventListener('click', ev => { ev.stopPropagation(); copie(id); });
+            act.appendChild(c); det.appendChild(act);
+            // Cliquer déplie — SAUF si la personne est en train de sélectionner du texte (la sélection reste possible).
+            const bascule = () => {
+                const o = !OUVERTS.has(id); if (o) OUVERTS.add(id); else OUVERTS.delete(id);
+                det.hidden = !o; t.setAttribute('aria-expanded', o ? 'true' : 'false');
+            };
+            t.addEventListener('click', () => { if (String(window.getSelection && window.getSelection()).length) return; bascule(); });
+            t.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); bascule(); } });
+            d.appendChild(t); d.appendChild(det);
+            return d;
+        }
+        async function copie(txt) {
+            try { await navigator.clipboard.writeText(txt); toast('Copié : ' + txt); }
+            catch (e) { toast('Copie impossible — sélectionnez « ' + txt + ' » dans le détail'); }
+        }
+
+        function rend() {
+            const ids = Object.keys(MODULES);
+            const cnt = { ok: 0, veille: 0, att: 0, hors: 0, inconnu: 0 };
+            ids.forEach(i => { cnt[etat(MODULES[i])]++; });
+            $('nOk').textContent = cnt.ok; $('nVeille').textContent = cnt.veille; $('nAtt').textContent = cnt.att + cnt.inconnu; $('nHors').textContent = cnt.hors; $('nTot').textContent = ids.length;
+            // Santé pondérée : sain et veille = 1, dégradé = 0,5, panne = 0 ; un module sans sonde n'entre pas dans le calcul.
+            const evalues = ids.length - cnt.inconnu;
+            const score = evalues ? Math.round(((cnt.ok + cnt.veille + cnt.att * 0.5) / evalues) * 100) : null;
+            $('nScore').textContent = 'santé ' + (score == null ? '—' : score + ' %');
+            const g = $('etat');
+            g.className = 'actif ' + (cnt.hors ? 'hors' : cnt.att ? 'att' : '');
+            g.textContent = !ids.length ? 'AUCUNE DONNÉE' : cnt.hors ? cnt.hors + ' EN PANNE' : cnt.att ? cnt.att + ' DÉGRADÉ' + (cnt.att > 1 ? 'S' : '') : 'TOUT VA BIEN';
+            const q = TEXTE.trim().toLowerCase();
+            const garde = i => {
+                const e = etat(MODULES[i]);
+                if (FILTRE !== 'tous' && !(FILTRE === 'att' ? (e === 'att' || e === 'inconnu') : e === FILTRE)) return false;
+                if (q) return (i + ' ' + ((NOMS[i] && NOMS[i].nom) || '') + ' ' + ((MODULES[i] && MODULES[i].msg) || '')).toLowerCase().indexOf(q) >= 0;
+                return true;
+            };
+            const tri = (a, b) => (RANG[etat(MODULES[a])] - RANG[etat(MODULES[b])]) || a.localeCompare(b);
+            const vit = ids.filter(i => VITAUX.has(i) && garde(i)).sort(tri), com = ids.filter(i => !VITAUX.has(i) && garde(i)).sort(tri);
+            const remplit = (zone, liste, vide) => { zone.textContent = ''; if (!liste.length) zone.appendChild(el('div', 'vide', vide)); liste.forEach(i => zone.appendChild(carte(i, MODULES[i]))); };
+            remplit($('vital'), vit, ids.length ? 'Aucun service vital pour ce filtre.' : 'Aucun module relevé.');
+            remplit($('common'), com, ids.length ? 'Aucun autre service pour ce filtre.' : '—');
+            $('vitalCount').textContent = '(' + vit.length + ')'; $('commonCount').textContent = '(' + com.length + ')';
+            $('nbr').textContent = (vit.length + com.length) + ' / ' + ids.length + ' services';
+            document.querySelectorAll('#tuiles [data-f]').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === FILTRE ? 'true' : 'false'));
+        }
+
+        // Preuve dynamique du WAF (health-doctor, #1883) : charges canari attendues en 403 + témoin non bloqué. Section masquée si l'API n'est pas lisible.
+        function rendWaf(entree) {
+            const d = (entree && entree.details) || {}, tests = d.tests || [], zone = $('waf'); zone.textContent = '';
+            const ligne = (nom, ok, msg) => { const e = ok ? 'ok' : 'hors'; const x = el('div', 'svc ' + (ok ? '' : 'hors')); const t = el('div', 'svc-tete'); t.appendChild(el('span', 'pt')); t.appendChild(el('span', 'svc-nom', nom)); t.appendChild(el('span', 'svc-msg', msg)); x.appendChild(t); zone.appendChild(x); return e; };
+            ligne('WAF', !!(entree && entree.ok), entree && entree.ok ? 'bloque les attaques, laisse passer le trafic sain' : 'défaillant — voir le détail');
+            tests.forEach(t => ligne(t.libelle || t.id, !!t.ok, (t.attendu || '') + ' · ' + (t.code == null ? (t.erreur || 'pas de réponse') : 'HTTP ' + t.code)));
+            if (!tests.length) ligne('sbxwaf', false, d.erreur || 'test non exécuté');
+            $('wafAge').textContent = d.age_s != null ? 'il y a ' + d.age_s + ' s' : '';
+            $('wafSection').hidden = false;
+        }
+        async function chargeWaf() {
+            if (DEMO) { rendWaf({ ok: true, details: { age_s: 42, tests: [{ libelle: 'Injection SQL', attendu: '403', code: 403, ok: true }, { libelle: 'Page saine', attendu: '200', code: 200, ok: true }] } }); return; }
+            try { const s = await lire('/api/v1/health-doctor/checks'); const e = s && s.checks && s.checks['waf-selftest']; if (e) rendWaf(e); } catch (e) { /* illisible : section masquée */ }
+        }
+        async function rejouerWaf() {
+            const b = $('wafRun'), r = $('retour'); b.disabled = true; r.className = ''; r.textContent = 'Test en cours…';
+            try {
+                if (DEMO) { await new Promise(ok => setTimeout(ok, 400)); r.textContent = 'Test rejoué (démonstration).'; return; }
+                const t = jeton();
+                if (!t) { const e = new Error('session requise'); e.statut = 401; throw e; }
+                rendWaf(await lire('/api/v1/health-doctor/waf-selftest/run', { method: 'POST', headers: { Authorization: 'Bearer ' + t, Accept: 'application/json' } }));
+                r.textContent = 'Test rejoué.';
+            } catch (e) { r.className = 'ko'; r.textContent = e.statut === 401 || e.statut === 403 ? 'Session requise : connectez-vous pour rejouer le test.' : 'Échec du test (' + e.message + ').'; }
+            finally { b.disabled = false; }
+        }
+
+        async function charge() {
+            $('rafraichir').disabled = true;
+            try {
+                if (DEMO) demoData();
+                else {
+                    const b = await lire('/api/v1/hub/public/health-batch');
+                    if (b && b.warming) throw new Error('relevé en cours de préparation, réessayez dans quelques secondes');
+                    MODULES = (b && b.modules) || {};
+                    if (!Object.keys(NOMS).length) {
+                        try {
+                            const m = await lire('/api/v1/hub/public/menu');
+                            (m.espaces || []).forEach(e => (e.items || []).forEach(it => { NOMS[it.id] = { nom: it.name, path: it.path, espace: e.nom }; }));
+                        } catch (e) { /* sans le menu : les identifiants tiennent lieu de noms */ }
+                    }
+                    if (!HOTE) { try { const i = await lire('/api/v1/hub/public/info'); HOTE = (i && i.hostname) || ''; if (HOTE) $('subline').textContent = HOTE + ' · état de chaque module, relevé toutes les 15 s'; } catch (e) { /* facultatif */ } }
+                }
+                $('erreur').hidden = true; rend(); chargeWaf();
+                RELEVE = Date.now(); $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            } catch (e) {
+                $('erreur').hidden = false; $('erreur').textContent = 'Impossible de lire la santé (' + e.message + ').';
+                $('etat').className = 'actif hors'; $('etat').textContent = 'HORS LIGNE';
+            } finally { $('rafraichir').disabled = false; }
+        }
+
+        $('demo').hidden = !DEMO;
+        $('rafraichir').addEventListener('click', charge);
+        $('wafRun').addEventListener('click', rejouerWaf);
+        $('filtre').addEventListener('input', e => { TEXTE = e.target.value; rend(); });
+        document.querySelectorAll('#tuiles [data-f]').forEach(b => b.addEventListener('click', () => { FILTRE = (FILTRE === b.dataset.f && FILTRE !== 'tous') ? 'tous' : b.dataset.f; rend(); }));
+        $('deplier').addEventListener('click', () => {
+            const tout = Object.keys(MODULES), ouvrir = OUVERTS.size < tout.length;
+            OUVERTS = ouvrir ? new Set(tout) : new Set(); $('deplier').textContent = ouvrir ? 'Tout replier' : 'Tout déplier'; rend();
+        });
+        $('pause').addEventListener('click', () => { PAUSE = !PAUSE; $('pause').setAttribute('aria-pressed', PAUSE ? 'true' : 'false'); $('pause').textContent = PAUSE ? '▶ Reprendre' : '⏸ Pause'; if (!PAUSE) charge(); });
+        charge();
+        if (!DEMO) setInterval(() => { if (!PAUSE && !document.hidden) charge(); }, 15000);
+    </script>
 </body>
 </html>
