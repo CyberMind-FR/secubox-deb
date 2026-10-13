@@ -115,7 +115,7 @@
 
     <div class="pane" id="pane-matches">
       <h2>🔗 Matches</h2>
-      <p class="note">Paires offre↔demande compatibles rapprochées par le mesh. Accepte ta part ; quand les deux côtés ont accepté, la session s'ouvre.</p>
+      <p class="note">Paires offre↔demande compatibles (au moins un tag en commun) qui vous concernent. Acceptez votre côté ; quand les deux côtés ont accepté, la session s'ouvre.</p>
       <div id="matches-list"></div>
     </div>
 
@@ -266,10 +266,28 @@ async function refreshMatches() {
   const list = document.getElementById('matches-list');
   if (!r.ok) { list.textContent = 'auth requise'; return; }
   const matches = await r.json();
-  renderList(list, matches.map(m => itemEl(
-    [['match', m.match_id], ['offer', m.offer_id], ['req', m.req_id], ['offerer', m.offerer_did]],
-    [{label:'Accepter (offer)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'offer'}},
-     {label:'Accepter (request)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'request'}}])));
+  renderList(list, matches.length ? matches.map(matchEl)
+    : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune paire pour l\'instant.'})]);
+}
+
+// Une paire offre ↔ demande compatible (#2546) : le geste qui manque de NOTRE côté, ou l'attente de l'autre. Même rendu dans « À accepter » et dans l'onglet Matches.
+function matchEl(m) {
+  const demandeur = m.mon_cote === 'request', autre = demandeur ? m.noeud_offre : m.noeud_demande;
+  const champs = [[demandeur ? 'aide proposée par' : 'demande de', autre || '—'], ['tags', fmtTags(m.tags)]];
+  let actions = [], note = '';
+  if (m.prete) note = 'Les deux côtés ont accepté : la session peut s\'ouvrir.';
+  else if (demandeur) {
+    if (!m.demande_acceptee) actions = [{label: 'Accepter l\'aide de ' + (autre || 'ce nœud'), act: 'match-accept', data: {offerId: m.offer_id, reqId: m.req_id, side: 'request'}}];
+    else note = 'Vous avez accepté — en attente de ' + (autre || 'l\'autre nœud') + '.';
+    if (m.offre_acceptee) champs.push(['', autre + ' a accepté de vous aider']);
+  } else {
+    if (!m.offre_acceptee) actions = [{label: 'Accepter d\'aider ' + (autre || 'ce nœud'), act: 'match-accept', data: {offerId: m.offer_id, reqId: m.req_id, side: 'offer'}}];
+    else note = 'Vous avez accepté — en attente de ' + (autre || 'l\'autre nœud') + '.';
+    if (m.demande_acceptee) champs.push(['', autre + ' a accepté votre aide']);
+  }
+  const it = itemEl(champs, actions);
+  if (note) { const n = document.createElement('div'); n.className = 'note'; n.textContent = note; it.appendChild(n); }
+  return it;
 }
 
 // ── Panneau « En cours » (#2542) : demandes, offres et correspondances, toujours visibles, lues ensemble ───────────────────────────────────────
@@ -295,8 +313,7 @@ async function refreshEnCours() {
     const [reqs, offs, mats] = await Promise.all([lireEnCours('/api/v1/assist/requests/open'), lireEnCours('/api/v1/assist/offers'),
                                                    lireEnCours('/api/v1/assist/matches').catch(() => [])]);
     err.hidden = true;
-    const noeudDe = {}; offs.forEach(o => { noeudDe[o.issued_by] = o.noeud; });
-    const aider = new Set(mats.map(m => m.req_id));
+    const aider = new Set(mats.filter(m => m.mon_cote === 'request' && m.offre_acceptee).map(m => m.req_id));
     document.getElementById('enc-nreq').textContent = '(' + reqs.length + ')';
     document.getElementById('enc-noff').textContent = '(' + offs.length + ')';
     document.getElementById('enc-nmat').textContent = '(' + mats.length + ')';
@@ -314,10 +331,8 @@ async function refreshEnCours() {
       if (o.de_moi) { it.firstChild.appendChild(document.createTextNode(' ')); const b = document.createElement('span'); b.className = 'badge moi'; b.textContent = 'mon offre'; it.firstChild.appendChild(b); }
       return it;
     }) : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune offre en cours.'})]);
-    renderList(document.getElementById('enc-mat'), mats.length ? mats.map(m => itemEl(
-      [['aide proposée par', noeudDe[m.offerer_did] || (m.offerer_did || '').slice(-8)], ['pour votre demande', (m.req_id || '').slice(-8)]],
-      [{label: 'Accepter l\'aide', act: 'match-accept', data: {offerId: m.offer_id, reqId: m.req_id, side: 'request'}}]))
-      : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Rien à accepter. Quand un nœud répond à votre demande, l\'aide proposée apparaît ici.'})]);
+    renderList(document.getElementById('enc-mat'), mats.length ? mats.map(matchEl)
+      : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune paire pour l\'instant. Une offre et une demande qui partagent un tag apparaissent ici, avec le geste à faire.'})]);
     document.getElementById('enc-maj').textContent = 'mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
   } catch (e) {
     err.hidden = false;

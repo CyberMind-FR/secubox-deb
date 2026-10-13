@@ -14,7 +14,8 @@ OFFRES = [{"offer_id": "px-o1", "tags": ["dns"], "scope": None, "issued_by": "di
           {"offer_id": "px-o2", "tags": ["waf"], "scope": "sbx", "issued_by": "did:moi", "noeud": "gk1", "de_moi": True, "reste_s": 600}]
 DEMANDES = [{"req_id": "py-r1", "tags": ["gk1"], "reason": "besoin d'aide", "issued_by": "did:moi", "noeud": "gk1", "de_moi": True, "reste_s": 3500},
             {"req_id": "py-r2", "tags": ["dns"], "reason": "<img src=x onerror=window.__xss=1>", "issued_by": "did:autre", "noeud": "gk2", "de_moi": False, "reste_s": 90}]
-MATCHS = [{"match_id": "m1", "offer_id": "px-o1", "req_id": "py-r1", "offerer_did": "did:autre"}]
+MATCHS = [{"match_id": "m1", "offer_id": "px-o1", "req_id": "py-r1", "offerer_did": "did:autre", "requester_did": "did:moi", "mon_cote": "request",
+          "offre_acceptee": True, "demande_acceptee": False, "prete": False, "noeud_offre": "gk2", "noeud_demande": "gk1", "tags": ["dns"]}]
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +90,7 @@ def test_accepter_l_aide_pose_le_cote_demande_et_nomme_le_noeud(navigateur):
 def test_etats_vides_expliques(navigateur):
     ctx, p, _, _ = ouvre(navigateur, [], [], [])
     t = p.inner_text("#encours")
-    assert "Aucune demande en cours" in t and "Aucune offre en cours" in t and "Rien à accepter" in t
+    assert "Aucune demande en cours" in t and "Aucune offre en cours" in t and "Aucune paire pour l'instant" in t
     ctx.close()
 
 
@@ -116,4 +117,54 @@ def test_le_parcours_est_explique_dans_la_page(navigateur):
     p.click("#encours details.aide summary")
     t = p.inner_text("#encours details.aide")
     assert "Répondre" in t and "Accepter l'aide" in t and "expire" in t
+    ctx.close()
+
+
+# ── #2546 : chaque état d'une paire propose le geste qui manque de NOTRE côté ─────────────────────────────────────────────
+def _paire(**k):
+    return {"match_id": "m", "offer_id": "px-o1", "req_id": "py-r1", "offerer_did": "did:autre", "requester_did": "did:moi", "mon_cote": "request",
+            "offre_acceptee": False, "demande_acceptee": False, "prete": False, "noeud_offre": "gk2", "noeud_demande": "gk1", "tags": ["dns"], **k}
+
+
+def test_une_paire_non_acceptee_propose_d_accepter_cote_demande(navigateur):
+    ctx, p, posts, _ = ouvre(navigateur, matchs=[_paire()])
+    assert "Accepter l'aide de gk2" in p.inner_text("#enc-mat")
+    p.click("#enc-mat [data-act=match-accept]")
+    p.wait_for_function("true")
+    assert ("match/accept", {"offer_id": "px-o1", "req_id": "py-r1", "side": "request"}) in posts
+    ctx.close()
+
+
+def test_cote_offre_propose_d_aider_le_demandeur(navigateur):
+    ctx, p, posts, _ = ouvre(navigateur, matchs=[_paire(mon_cote="offer")])
+    assert "Accepter d'aider gk1" in p.inner_text("#enc-mat")
+    p.click("#enc-mat [data-act=match-accept]")
+    p.wait_for_function("true")
+    assert ("match/accept", {"offer_id": "px-o1", "req_id": "py-r1", "side": "offer"}) in posts
+    ctx.close()
+
+
+def test_apres_mon_acceptation_plus_de_bouton_et_on_attend_l_autre(navigateur):
+    ctx, p, _, _ = ouvre(navigateur, matchs=[_paire(demande_acceptee=True)])
+    assert p.locator("#enc-mat [data-act]").count() == 0 and "en attente de gk2" in p.inner_text("#enc-mat")
+    ctx.close()
+
+
+def test_l_autre_a_deja_accepte_est_dit(navigateur):
+    ctx, p, _, _ = ouvre(navigateur, matchs=[_paire(offre_acceptee=True)])
+    assert "gk2 a accepté de vous aider" in p.inner_text("#enc-mat") and "Accepter l'aide" in p.inner_text("#enc-mat")
+    ctx.close()
+
+
+def test_paire_prete_dit_que_la_session_peut_s_ouvrir_sans_bouton(navigateur):
+    ctx, p, _, _ = ouvre(navigateur, matchs=[_paire(offre_acceptee=True, demande_acceptee=True, prete=True)])
+    assert "la session peut s'ouvrir" in p.inner_text("#enc-mat") and p.locator("#enc-mat [data-act]").count() == 0
+    ctx.close()
+
+
+def test_l_onglet_matches_montre_les_memes_gestes(navigateur):
+    ctx, p, _, _ = ouvre(navigateur, matchs=[_paire()])
+    p.click("#mtabs [data-tab=matches]")
+    p.wait_for_function("document.getElementById('matches-list').children.length > 0")
+    assert "Accepter l'aide de gk2" in p.inner_text("#matches-list")
     ctx.close()

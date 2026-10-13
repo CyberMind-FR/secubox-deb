@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — assist 0.2.14 : les paires offre ↔ demande se voient et s'acceptent (ref #2546)
+
+« Pas de matches ni de rendez-vous possible » : `/matches` rendait seulement les paires déjà acceptées des deux côtés alors que les boutons « Accepter » étaient posés sur cette liste — jamais acceptables. `rendezvous.candidate_matches` rend les paires compatibles qui nous concernent avec l'état de chaque côté ; le panneau « En cours » et l'onglet Matches proposent le geste qui manque ; `ready_matches` reste strict pour ouvrir la session. Tests `test_matches_candidats_2546.py` et le panneau.
+
 ## 2026-10-13 — Auto-Load, assistant et annuaire : la box préparée rejoint le maître, s'inscrit et peut demander de l'aide (ref #2544)
 
 « Synchro premier pas et préparation box, pour auto add et remote in gk2 master register and help ». Atelier : `--code-maillage-*` dépose le code d'invitation à part (0600) ; agent (0.8.0) : l'installe pour `secubox-automesh` au premier démarrage puis l'efface de `/boot` ; assistant (0.5.8) : mode `automesh` (aucun secret dans le fichier signé), active jonction + annuaire + assistance sans bloquer l'installation, `aide = "demander"` publie une demande d'aide « première installation » (consentement du demandeur inchangé) ; annuaire (0.11.3) : l'inscription chez le maître est retentée à chaque passage de synchro. Tests dans les trois paquets ; procédure dans `docs/dossiers/automesh.md`.
