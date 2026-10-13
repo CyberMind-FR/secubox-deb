@@ -1,3 +1,17 @@
+secubox-ai-gateway (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /ai-gateway/ refaite au profil Aurora (#2597) : page autonome, lecture seule, ?demo=1 et ?embed=1, bandeau « session
+    requise » sur 401/403, hauteur annoncee a l'hote (sbxVue), aucune police ni feuille distante, aucun dialogue natif.
+  * Corrige : l'ancienne page appelait /stats, /config et /requests, routes qui n'ont jamais existe (404 muet, tuiles a 0 et
+    valeurs inventees « gpt-4 », « 60 req/min », « $0.00 ») ; elle redirigeait sur 401 au lieu d'avertir ; elle injectait des
+    donnees d'API par innerHTML. La nouvelle page lit /status, /providers, /audit/stats, /cache/stats et /rate-limits.
+  * Cles d'API : jamais lues ni affichees (seul le booleen has_api_key : configuree / absente / sans objet), jamais stockees.
+  * Non repris : jetons consommes, cout estime, latence, liste des requetes recentes et taux de cache (l'API ne les fournit pas),
+    version « v1.0.0 » codee en dur dans l'en-tete. Aucune action d'ecriture (l'ancienne page n'en avait pas).
+  * Tests : tests/test_ai_gateway_aurora_2597.py (statique + navigateur Playwright).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 18:10:00 +0200
+
 secubox-ai-gateway (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-mcp-server (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

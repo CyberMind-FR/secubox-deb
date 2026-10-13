@@ -4,211 +4,253 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Passerelle d'IA au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, lecture seule, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives annoncées.
+  Aucune clé d'API n'est lue, affichée ni stockée : seul l'état « configurée / absente » est montré.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - AI Gateway</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Passerelle d’IA</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622;
-            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7;
-            --bg-dark: var(--tube-light); --bg-card: var(--tube-pale); --border: var(--tube-soft);
-            --text: #1b3d1c; --text-dim: var(--p31-dim); --primary: var(--p31-peak);
-            --danger: #ff4466; --warning: #ffb347; --purple: #a371f7;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; background: var(--bg-dark); border: 1px solid var(--border); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
-        .stat-value.purple { color: var(--purple); }
-        .stat-value.warning { color: var(--warning); }
-        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
-        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; }
-        .status-badge.ok { background: rgba(0,221,68,0.2); color: var(--p31-mid); }
-        .status-badge.error { background: rgba(255,68,102,0.2); color: var(--danger); }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; background: var(--bg-dark); }
-        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-dark); border-radius: 6px; margin-bottom: 0.5rem; }
-        .config-item label { font-weight: 600; }
-        .config-item code { background: var(--bg-card); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
-        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .large{grid-column:1/-1}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .lig{display:grid;grid-template-columns:minmax(80px,30%) 1fr auto;gap:4px 10px;align-items:center;font-size:.8rem;padding:3px 0}
+        .lig .n{overflow-wrap:anywhere;color:var(--doux)} .lig .q{font-variant-numeric:tabular-nums;font-weight:600}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre b{display:block;height:100%;background:var(--cyan)}
+        .barre b.vert{background:var(--vert)} .barre b.orange{background:var(--orange)} .barre b.violet{background:var(--violet)}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <div class="main">
-        <div class="header">
-            <h1>🤖 AI Gateway</h1>
-            <span class="badge">v1.0.0</span>
-        </div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4"/><circle cx="12" cy="3" r="1"/><circle cx="9" cy="13" r="1.3"/><circle cx="15" cy="13" r="1.3"/><path d="M9.5 16.5h5"/></svg>
+                <div><h1>Passerelle d’IA</h1><small>Souveraineté des données : classification, assainissement, fournisseurs</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">📊</div>
-                <div class="stat-value" id="total-requests">-</div>
-                <div class="stat-label">Total Requests</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">⚡</div>
-                <div class="stat-value purple" id="tokens-used">-</div>
-                <div class="stat-label">Tokens Used</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🔄</div>
-                <div class="stat-value" id="cache-hits">-</div>
-                <div class="stat-label">Cache Hits</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">💰</div>
-                <div class="stat-value warning" id="cost-estimate">-</div>
-                <div class="stat-label">Est. Cost</div>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cMode" title="Mode hors ligne : quand il est actif, toutes les requêtes sont forcées en traitement local (LOCAL_ONLY) et rien ne part vers un fournisseur externe."><span class="l">Mode hors ligne</span><span class="v" id="tMode">—</span><span class="s">traitement local forcé</span></div>
+            <div class="tuile cy" title="Entrées du journal d’audit de la passerelle sur les dernières 24 heures (chaque décision de routage y est écrite)."><span class="l">Événements d’audit (24 h)</span><span class="v" id="tReq">—</span><span class="s">journal d’audit</span></div>
+            <div class="tuile" id="cErr" title="Entrées d’audit de ces 24 heures dont le détail porte une erreur."><span class="l">Erreurs (24 h)</span><span class="v" id="tErr">—</span><span class="s" id="sErr">dans le journal d’audit</span></div>
+            <div class="tuile ok" id="cProv" title="Fournisseurs activés dans la configuration, sur le total connu de la passerelle."><span class="l">Fournisseurs actifs</span><span class="v" id="tProv">—</span><span class="s" id="sProv">activés</span></div>
+            <div class="tuile cy" title="Réponses mémorisées (mémoire + fichiers) pour les requêtes répétées."><span class="l">Cache</span><span class="v" id="tCache">—</span><span class="s" id="sCache">entrées</span></div>
+        </section>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>🟢 Service Status</h2>
-                <button class="btn btn-sm" onclick="loadStatus()">Refresh</button>
-            </div>
-            <div id="status-display">
-                <div class="status-badge ok">Loading...</div>
-            </div>
+        <div class="grille">
+            <div class="pan large"><h3>Fournisseurs <i id="nProv"></i></h3>
+                <div class="tab"><table><thead><tr><th>Priorité</th><th>Fournisseur</th><th>Classe</th><th>Modèle</th><th>État</th><th>Clé d’API</th></tr></thead><tbody id="bProv"></tbody></table></div>
+                <p class="note">« Disponible » = le fournisseur répond à la sonde de la passerelle ; « Configuré » = activé mais injoignable ; la clé n’est jamais affichée, seulement sa présence.</p></div>
+            <div class="pan"><h3>Requêtes par classe <i>24 h</i></h3><div id="lClasse"></div>
+                <p class="note">LOCAL_ONLY reste sur la machine ; SANITIZED : données personnelles retirées, fournisseurs européens ; CLOUD_DIRECT : requête générique.</p></div>
+            <div class="pan"><h3>Requêtes par fournisseur <i>24 h</i></h3><div id="lFourn"></div></div>
+            <div class="pan"><h3>Service</h3>
+                <dl class="kv"><dt>Module</dt><dd id="kMod">—</dd><dt>Version API</dt><dd id="kVer">—</dd><dt>État</dt><dd id="kEtat">—</dd><dt>Mode hors ligne</dt><dd id="kOff">—</dd></dl></div>
+            <div class="pan"><h3>Cache et limites de débit</h3>
+                <dl class="kv"><dt>En mémoire</dt><dd id="kMem">—</dd><dt>Sur disque</dt><dd id="kDisque">—</dd><dt>Durée de vie</dt><dd id="kAge">—</dd>
+                <dt>Limite LOCAL_ONLY</dt><dd id="kRl1">—</dd><dt>Limite SANITIZED</dt><dd id="kRl2">—</dd><dt>Limite CLOUD_DIRECT</dt><dd id="kRl3">—</dd></dl>
+                <p class="note">Limites par client et par minute, selon la classe de la requête.</p></div>
+            <div class="pan large"><h3>Ce que cette page ne montre pas</h3>
+                <p class="note" style="margin:0">L’API de la passerelle ne fournit ni jetons consommés, ni coût estimé, ni latence, ni liste de requêtes récentes : ces mesures sont omises plutôt qu’inventées. Cette page est en lecture seule ; les fournisseurs et leurs clés se règlent par l’API authentifiée.</p></div>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h2>⚙️ Configuration</h2>
-            </div>
-            <div id="config-display">
-                <div class="config-item">
-                    <label>Offline Mode</label>
-                    <code id="offline-mode">-</code>
-                </div>
-                <div class="config-item">
-                    <label>Default Model</label>
-                    <code id="default-model">-</code>
-                </div>
-                <div class="config-item">
-                    <label>Rate Limit</label>
-                    <code id="rate-limit">-</code>
-                </div>
-                <div class="config-item">
-                    <label>Cache Enabled</label>
-                    <code id="cache-enabled">-</code>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h2>📋 Recent Requests</h2>
-            </div>
-            <table>
-                <thead>
-                    <tr><th>Time</th><th>Model</th><th>Tokens</th><th>Latency</th><th>Status</th></tr>
-                </thead>
-                <tbody id="requests-table">
-                    <tr><td colspan="5" style="text-align:center;color:var(--text-dim);">Loading...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/ai-gateway';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nb = v => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('fr-FR') : '—';
 
-        async function api(path, method = 'GET') {
-            const token = localStorage.getItem('sbx_token');
-            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
-            try {
-                const res = await fetch(API + path, { method, headers });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch { return null; }
+        let STATUT = null, PROVS = null, AUDIT = null, CACHE = null, LIMITES = null, SESSION_OK = true;
+
+        // Lecture seule : le jeton (jamais un jeton de fournisseur) vient de la session de l'administrateur.
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
 
-        async function loadStatus() {
-            const data = await api('/status');
-            if (!data) return;
-
-            const statusEl = document.getElementById('status-display');
-            const isOk = data.status === 'ok';
-            statusEl.innerHTML = `<div class="status-badge ${isOk ? 'ok' : 'error'}">
-                ${isOk ? '✓' : '✗'} ${data.status?.toUpperCase() || 'UNKNOWN'} - ${data.module || 'ai-gateway'} v${data.version || '1.0.0'}
-            </div>`;
-
-            document.getElementById('offline-mode').textContent = data.offline_mode ? 'Yes' : 'No';
+        function demoData() {
+            STATUT = { module: 'ai-gateway', status: 'ok', version: '1.0.0', offline_mode: false };
+            PROVS = { providers: [
+                { name: 'localai', enabled: true, priority: 1, classification: 'local_only', model: 'mistral-7b-instruct-v0.3', status: 'available', has_api_key: null },
+                { name: 'mistral', enabled: true, priority: 2, classification: 'sanitized', model: 'mistral-large-latest', status: 'available', has_api_key: true },
+                { name: 'claude', enabled: true, priority: 3, classification: 'cloud_direct', model: 'modele-fictif-a', status: 'configured', has_api_key: true },
+                { name: 'openai', enabled: false, priority: 4, classification: 'cloud_direct', model: 'modele-fictif-b', status: 'disabled', has_api_key: false }] };
+            AUDIT = { total_requests: 1248, by_classification: { local_only: 702, sanitized: 351, cloud_direct: 195 }, by_provider: { localai: 702, mistral: 351, claude: 195 }, errors: 9 };
+            CACHE = { memory_entries: 42, file_entries: 118, max_age_seconds: 3600 };
+            LIMITES = { limits: { local_only: 100, sanitized: 30, cloud_direct: 20 } };
         }
 
-        async function loadStats() {
-            const data = await api('/stats');
-            if (!data) return;
-
-            document.getElementById('total-requests').textContent = (data.total_requests || 0).toLocaleString();
-            document.getElementById('tokens-used').textContent = (data.tokens_used || 0).toLocaleString();
-            document.getElementById('cache-hits').textContent = (data.cache_hits || 0).toLocaleString();
-            document.getElementById('cost-estimate').textContent = '$' + (data.cost_estimate || 0).toFixed(2);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const e = await Promise.allSettled([lire('/status'), lire('/providers'), lire('/audit/stats?hours=24'), lire('/cache/stats'), lire('/rate-limits')]);
+            const val = i => e[i].status === 'fulfilled' ? e[i].value : null;
+            const refus = e.some(x => x.status === 'rejected' && (x.reason.statut === 401 || x.reason.statut === 403));
+            SESSION_OK = !refus;
+            STATUT = val(0); PROVS = val(1); AUDIT = val(2); CACHE = val(3); LIMITES = val(4);
+            const tous = e.every(x => x.status === 'rejected');
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire la passerelle d’IA (service arrêté ou injoignable).';
+            rendre();
         }
 
-        async function loadConfig() {
-            const data = await api('/config');
-            if (!data) return;
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        const CLASSES = { local_only: ['LOCAL_ONLY', 'ok', 'vert'], sanitized: ['SANITIZED', 'cy', ''], cloud_direct: ['CLOUD_DIRECT', 'att', 'orange'] };
+        function classePastille(c) { const k = CLASSES[c]; return k ? pastille(k[1], k[0]) : pastille('', tiret(c).toUpperCase()); }
 
-            document.getElementById('default-model').textContent = data.default_model || 'gpt-4';
-            document.getElementById('rate-limit').textContent = (data.rate_limit || 60) + ' req/min';
-            document.getElementById('cache-enabled').textContent = data.cache_enabled ? 'Yes' : 'No';
+        function listeBarres(id, entrees, couleur, vide) {
+            const c = $(id); c.replaceChildren();
+            if (!entrees.length) { c.appendChild(el('div', 'vide', vide)); return; }
+            const max = Math.max.apply(null, entrees.map(x => x[1]).concat([1]));
+            entrees.forEach(([nom, q, coul]) => {
+                const l = el('div', 'lig'); l.appendChild(el('span', 'n', nom));
+                const b = el('div', 'barre'), i = el('b', coul || couleur); i.style.width = Math.round(100 * q / max) + '%'; b.appendChild(i); l.appendChild(b);
+                l.appendChild(el('span', 'q', nb(q))); c.appendChild(l);
+            });
         }
 
-        async function loadRequests() {
-            const data = await api('/requests?limit=10');
-            const tbody = document.getElementById('requests-table');
-            if (!data?.requests?.length) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);">No recent requests</td></tr>';
-                return;
-            }
-            tbody.innerHTML = data.requests.map(r => `
-                <tr>
-                    <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
-                    <td>${r.model || '-'}</td>
-                    <td>${r.tokens || '-'}</td>
-                    <td>${r.latency_ms || '-'}ms</td>
-                    <td style="color:${r.success ? 'var(--primary)' : 'var(--danger)'};">${r.success ? '✓' : '✗'}</td>
-                </tr>
-            `).join('');
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s.status === 'ok') { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            else { etat.className = 'actif att'; etat.textContent = String(s.status || 'inconnu').toUpperCase(); }
+
+            const off = s && typeof s.offline_mode === 'boolean' ? s.offline_mode : null;
+            $('tMode').textContent = off === null ? '—' : (off ? 'ACTIF' : 'inactif');
+            $('cMode').className = 'tuile ' + (off ? 'att' : 'cy');
+            const a = AUDIT;
+            $('tReq').textContent = a ? nb(a.total_requests) : '—';
+            $('tErr').textContent = a ? nb(a.errors) : '—';
+            $('cErr').className = 'tuile ' + (a && a.errors > 0 ? 'att' : 'ok');
+            const ps = PROVS && Array.isArray(PROVS.providers) ? PROVS.providers : null;
+            const actifs = ps ? ps.filter(p => p.enabled).length : null;
+            $('tProv').textContent = ps ? actifs : '—';
+            $('sProv').textContent = ps ? 'sur ' + ps.length : 'activés';
+            $('cProv').className = 'tuile ' + (ps && actifs === 0 ? 'att' : 'ok');
+            const c = CACHE;
+            $('tCache').textContent = c ? nb((c.memory_entries || 0) + (c.file_entries || 0)) : '—';
+            $('sCache').textContent = c ? nb(c.memory_entries) + ' en mémoire · ' + nb(c.file_entries) + ' fichiers' : 'entrées';
+
+            // Service
+            $('kMod').textContent = tiret(s && s.module); $('kVer').textContent = tiret(s && s.version);
+            $('kEtat').textContent = tiret(s && s.status); $('kOff').textContent = off === null ? '—' : (off ? 'actif' : 'inactif');
+            // Cache / limites
+            $('kMem').textContent = c ? nb(c.memory_entries) : '—'; $('kDisque').textContent = c ? nb(c.file_entries) : '—';
+            $('kAge').textContent = c && typeof c.max_age_seconds === 'number' ? Math.round(c.max_age_seconds / 60) + ' min' : '—';
+            const lim = LIMITES && LIMITES.limits;
+            ['local_only', 'sanitized', 'cloud_direct'].forEach((k, i) => { $('kRl' + (i + 1)).textContent = lim && typeof lim[k] === 'number' ? lim[k] + ' req/min' : '—'; });
+
+            rendreFournisseurs(ps);
+            const bc = a && a.by_classification ? a.by_classification : null;
+            listeBarres('lClasse', bc ? Object.keys(CLASSES).filter(k => k in bc).map(k => [CLASSES[k][0], bc[k], CLASSES[k][2]]) : [], 'cyan', SESSION_OK ? 'Aucune donnée' : '—');
+            const bp = a && a.by_provider ? Object.keys(a.by_provider).map(k => [k, a.by_provider[k]]).sort((x, y) => y[1] - x[1]) : [];
+            listeBarres('lFourn', bp, 'violet', SESSION_OK ? 'Aucune requête sur 24 h' : '—');
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        // Initial load
-        loadStatus();
-        loadStats();
-        loadConfig();
-        loadRequests();
+        function rendreFournisseurs(ps) {
+            const tb = $('bProv'); tb.replaceChildren();
+            $('nProv').textContent = ps && ps.length ? ps.length + ' fournisseur' + (ps.length > 1 ? 's' : '') : '';
+            if (!ps || !ps.length) { const tr = el('tr'), td = el('td', 'vide', SESSION_OK && ps ? 'Aucun fournisseur' : '—'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            ps.forEach(p => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(p.priority)));
+                tr.appendChild(el('td', '', tiret(p.name)));
+                const k = el('td'); k.appendChild(classePastille(p.classification)); tr.appendChild(k);
+                tr.appendChild(el('td', 'mono', tiret(p.model)));
+                const e = el('td');
+                if (p.status === 'available') e.appendChild(pastille('ok', 'DISPONIBLE'));
+                else if (p.status === 'configured') e.appendChild(pastille('att', 'CONFIGURÉ', 'Activé mais injoignable à la sonde'));
+                else if (p.status === 'disabled') e.appendChild(pastille('', 'DÉSACTIVÉ'));
+                else e.appendChild(pastille('', tiret(p.status).toUpperCase()));
+                tr.appendChild(e);
+                const cle = el('td');
+                if (p.has_api_key === true) cle.appendChild(pastille('ok', 'CONFIGURÉE'));
+                else if (p.has_api_key === false) cle.appendChild(pastille(p.enabled ? 'att' : '', 'ABSENTE'));
+                else cle.appendChild(pastille('', 'SANS OBJET', 'Fournisseur local : pas de clé'));
+                tr.appendChild(cle); tb.appendChild(tr);
+            });
+        }
 
-        // Auto-refresh
-        setInterval(() => { loadStatus(); loadStats(); }, 30000);
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'ai-gateway' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué ; page en lecture seule : aucune saisie ni confirmation à protéger.
+        setInterval(() => { if (document.hidden || DEMO) return; charger(); }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
