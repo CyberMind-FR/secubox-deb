@@ -1,3 +1,9 @@
+secubox-premier-pas (0.5.8-1~bookworm1) bookworm; urgency=medium
+
+  * Maillage « automesh » (#2544) : la box preparee rejoint son parent toute seule. `[maillage] mode = "automesh"` (aucun secret dans le fichier signe : le code est depose a part par l'atelier Auto-Load) ; l'action active, une par une, la minuterie de jonction, l'annuaire (inscription chez le maitre) et l'assistance, sans jamais arreter la premiere installation (etape souple). `aide = "demander"` publie UNE demande d'aide ouverte « premiere installation » (en tant que `secubox`, un marqueur evite les doublons) que le maitre voit dans « En cours » ; le demandeur garde le dernier mot, aucune session sans son consentement. Ajoute dans l'assistant web et console (Automatique, case « Demander de l'aide »). 11 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 20:00:00 +0200
+
 secubox-premier-pas (0.5.7-1~bookworm1) bookworm; urgency=medium
 
   * Le kiosque ouvre l'ADMINISTRATION, pas le Hall (#2534) : le Hall est une realisation personnelle de gk2, pas l'accueil de toute box (retour du mainteneur). Le lanceur choisit admin.localhost:9078 (console locale, sans authentification pour le seul kiosque) puis :9080, apres verification que la page est bien le tableau de bord SecuBox et non le Hall ; l'assistant premier-pas reste prioritaire sur une box neuve. KIOSK_START="hall" dans /etc/default/secubox-kiosk rend l'ancien comportement ; sans administration joignable, repli sur le Hall. 5 tests (determine_url extraite du vrai lanceur, avec de faux curl).

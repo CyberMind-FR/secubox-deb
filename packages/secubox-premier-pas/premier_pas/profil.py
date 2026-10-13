@@ -18,7 +18,7 @@ Format TOML (docs/design/premier-pas-maquette.html) :
     [admin]    mot_de_passe = "demander" | empreinte argon2 ; totp = "enroler"
     [reseau]   mode = routeur|pont|lan ; domaine (absent si mode = lan)
     [services] profil = un profil de secubox-profilectl
-    [maillage] mode = rejoindre|premiere|plus_tard ; rejoindre, jeton
+    [maillage] mode = rejoindre|premiere|plus_tard|automesh ; rejoindre, jeton ; aide = demander|non (automesh)
     [apt]      auto = true|false ; heure = "HH:MM"
 
 JAMAIS de mot de passe en clair : firstboot.sh en écrivait un dans
@@ -45,7 +45,10 @@ LIBELLES = {
 
 COMPTES_SYSTEME = frozenset({"root", "admin", "gk2", "operator"})
 MODES_RESEAU = {"routeur": "router", "pont": "bridge", "lan": "single"}
-MODES_MAILLAGE = ("rejoindre", "premiere", "plus_tard")
+MODES_MAILLAGE = ("rejoindre", "premiere", "plus_tard", "automesh")
+# `automesh` (#2544) : la box rejoint son parent TOUTE SEULE avec le code d'invitation déposé par la préparation (Auto-Load) ; aucun secret dans le profil.
+# `aide = "demander"` publie UNE demande d'aide ouverte « première installation » : le maître la voit et répond, le demandeur garde le dernier mot.
+AIDES_MAILLAGE = ("demander", "non")
 PROFILS_DIR = Path("/usr/share/secubox/profiles")
 # « actuel » : garder les modules de l'image, sans secubox-profilectl. Un profil
 # nommé est un instantané d'une AUTRE box : il arrête ce qu'il ne liste pas et
@@ -172,6 +175,11 @@ def examine(profil: Dict[str, Any], profils_connus: Optional[List[str]] = None) 
             refuse("maillage", "rejoindre : l'adresse IP de la box maîtresse")
         elif not _JETON.match(str(m.get("jeton", ""))):
             refuse("maillage", "jeton : celui de l'invitation (sbx-mesh-invite)")
+    if mm in MODES_MAILLAGE and "aide" in m:
+        if mm not in ("automesh", "rejoindre"):
+            refuse("maillage", "aide : seulement avec un maillage à rejoindre (automesh, rejoindre)")
+        elif m.get("aide") not in AIDES_MAILLAGE:
+            refuse("maillage", f"aide : {', '.join(AIDES_MAILLAGE)}")
 
     # mises à jour
     apt = profil.get("apt") or {}
