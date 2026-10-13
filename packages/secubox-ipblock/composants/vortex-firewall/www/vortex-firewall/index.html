@@ -4,405 +4,391 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Vortex Firewall au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Vortex Firewall</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Vortex Firewall</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-        .header h1 { font-size: 1.5rem; color: var(--p31-peak); text-shadow: var(--bloom-text); }
-        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; }
-        .btn:hover { background: var(--tube-bezel); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .btn.primary { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-peak); }
-        .btn.success { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-hot); }
-        .btn.danger { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-text); }
-        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.25rem; }
-        .stat-card.blocked .value { color: var(--p31-decay); text-shadow: var(--bloom-amber); }
-        .stat-card.inbound .value { color: var(--p31-decay); }
-        .stat-card.outbound .value { color: var(--p31-hot); }
-        .stat-card.lists .value { color: var(--p31-peak); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
-        th { color: var(--p31-dim); font-weight: 500; }
-        tr:hover { background: rgba(51,255,102,0.05); }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.enabled { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
-        .badge.disabled { background: rgba(15,136,34,0.2); color: var(--p31-dim); }
-        .badge.drop { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
-        .badge.reject { background: rgba(255,179,71,0.15); color: var(--p31-decay-dim); }
-        .badge.log { background: rgba(51,255,102,0.1); color: var(--p31-mid); }
-        .toggle { position: relative; display: inline-block; width: 50px; height: 26px; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--p31-ghost); border-radius: 26px; transition: 0.3s; }
-        .toggle-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: var(--p31-dim); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .toggle-slider { background: var(--p31-mid); }
-        .toggle input:checked + .toggle-slider:before { transform: translateX(24px); background: var(--p31-peak); }
-        .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .status-dot.active { background: var(--p31-peak); box-shadow: var(--bloom-soft); }
-        .status-dot.inactive { background: var(--p31-decay); }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { font-size: 1.1rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .close-btn { background: none; border: none; color: var(--p31-dim); cursor: pointer; font-size: 1.5rem; }
-        .close-btn:hover { color: var(--p31-decay); }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.875rem; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--p31-mid); box-shadow: 0 0 8px rgba(51,255,102,0.3); }
-        .feed-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--tube-soft); border-radius: 6px; margin-bottom: 0.5rem; }
-        .feed-item .name { font-weight: 500; color: var(--p31-mid); }
-        .feed-item .category { font-size: 0.75rem; color: var(--p31-dim); }
-        .actions { display: flex; gap: 0.5rem; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-        .nft-status { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.875rem; }
-        .nft-status.available { background: rgba(51,255,102,0.1); border: 1px solid var(--p31-mid); color: var(--p31-peak); }
-        .nft-status.unavailable { background: rgba(255,179,71,0.1); border: 1px solid var(--p31-decay); color: var(--p31-decay); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.ok:hover{background:rgba(46,204,113,.14)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:10px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+        #conf p{margin:0;flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;margin-right:auto}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .flux{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 10px;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;margin-bottom:6px;background:rgba(8,18,38,.5)}
+        .flux>div{min-width:0} .flux b{font-weight:600;overflow-wrap:anywhere} .flux small{display:block;color:var(--faible);font-size:.7rem}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>Vortex Firewall</h1>
-            <div class="header-actions">
-                <div id="nftStatus" class="nft-status">Checking nftables...</div>
-                <div class="status-indicator">
-                    <span class="status-dot" id="statusDot"></span>
-                    <span id="statusText">Loading...</span>
-                </div>
-                <label class="toggle">
-                    <input type="checkbox" id="enableToggle" onchange="toggleEnable()">
-                    <span class="toggle-slider"></span>
-                </label>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v5c0 4.6 3.2 8.4 8 10 4.8-1.6 8-5.4 8-10V6z"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+                <div><h1>Vortex Firewall</h1><small>Listes d’adresses bloquées, appliquées par nftables</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <span class="actif neutre" id="nft" title="Présence de la commande nft sur la box.">nftables —</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn" id="bascule" type="button" hidden>Activer</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
-
-        <div class="stats-grid">
-            <div class="stat-card blocked">
-                <div class="value" id="statBlocked">-</div>
-                <div class="label">Blocked IPs</div>
-            </div>
-            <div class="stat-card inbound">
-                <div class="value" id="statInbound">-</div>
-                <div class="label">Inbound Blocked</div>
-            </div>
-            <div class="stat-card outbound">
-                <div class="value" id="statOutbound">-</div>
-                <div class="label">Outbound Blocked</div>
-            </div>
-            <div class="stat-card lists">
-                <div class="value" id="statLists">-</div>
-                <div class="label">Active Lists</div>
-            </div>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="conf" role="alertdialog" aria-labelledby="confTxt" hidden>
+            <p id="confTxt"></p>
+            <button class="btn danger" id="confOui" type="button">Confirmer</button>
+            <button class="btn" id="confNon" type="button">Annuler</button>
         </div>
 
-        <div class="card">
-            <h2>
-                IP Blocklists
-                <div>
-                    <button class="btn btn-sm" onclick="updateAllBlocklists()">Update All</button>
-                    <button class="btn btn-sm primary" onclick="showAddBlocklist()">Add Blocklist</button>
-                    <button class="btn btn-sm success" onclick="applyBlocklists()">Apply</button>
-                </div>
-            </h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Format</th>
-                        <th>IPs</th>
-                        <th>Last Updated</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="blocklistsTable"></tbody>
-            </table>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Adresses chargées depuis les listes activées (fichiers téléchargés). Les règles personnalisées ne sont pas comptées ici."><span class="l">Adresses bloquées</span><span class="v" id="tIp">—</span><span class="s">dans les listes actives</span></div>
+            <div class="tuile hors" title="Paquets entrants écartés, lus sur les compteurs nftables de la table vortex_firewall. « — » si le pare-feu est désactivé ou nft absent."><span class="l">Entrants écartés</span><span class="v" id="tIn">—</span><span class="s">paquets</span></div>
+            <div class="tuile hors" title="Paquets sortants écartés, lus sur les compteurs nftables de la table vortex_firewall. « — » si le pare-feu est désactivé ou nft absent."><span class="l">Sortants écartés</span><span class="v" id="tOut">—</span><span class="s">paquets</span></div>
+            <div class="tuile cy" title="Listes activées dans la configuration."><span class="l">Listes actives</span><span class="v" id="tListes">—</span><span class="s">sources</span></div>
+            <div class="tuile cy" title="Règles personnalisées enregistrées (adresse ou CIDR)."><span class="l">Règles perso</span><span class="v" id="tRegles">—</span><span class="s">enregistrées</span></div>
+        </section>
 
-        <div class="card">
-            <h2>
-                Custom IP Rules
-                <button class="btn btn-sm primary" onclick="showAddRule()">Add Rule</button>
-            </h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>IP/CIDR</th>
-                        <th>Action</th>
-                        <th>Direction</th>
-                        <th>Comment</th>
-                        <th>Created</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="rulesTable"></tbody>
-            </table>
-        </div>
+        <div class="pan"><h3>Listes de blocage <i id="nListes"></i>
+                <button class="btn sm" id="majTout" type="button">Tout mettre à jour</button>
+                <button class="btn prim sm" id="addListe" type="button">+ Ajouter une liste</button>
+                <button class="btn ok sm" id="appliquer" type="button">Appliquer</button></h3>
+            <div id="rListes" class="retour" hidden></div>
+            <form class="saisie" id="fListe" hidden>
+                <label>Nom<input name="name" placeholder="spamhaus-drop" required></label>
+                <label>Adresse (URL)<input name="url" placeholder="https://…" required></label>
+                <label>Format<select name="format"><option value="plain">Simple (une adresse par ligne)</option><option value="cidr">Notation CIDR</option><option value="csv">CSV (adresse en première colonne)</option></select></label>
+                <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fListe">Annuler</button></div>
+            </form>
+            <div class="tab"><table><thead><tr><th>Nom</th><th>Format</th><th>Adresses</th><th>Dernière mise à jour</th><th>État</th><th>Actions</th></tr></thead><tbody id="bListes"></tbody></table></div>
+            <p class="note">« Appliquer » vide puis recharge les ensembles nftables (listes activées et règles personnalisées « abandon ») ; il faut que le pare-feu soit activé.</p></div>
 
-        <div class="card">
-            <h2>Available Threat Feeds</h2>
-            <div id="feedsList"></div>
-        </div>
+        <div class="pan"><h3>Règles personnalisées <i id="nRegles"></i>
+                <button class="btn prim sm" id="addRegle" type="button">+ Ajouter une règle</button></h3>
+            <div id="rRegles" class="retour" hidden></div>
+            <form class="saisie" id="fRegle" hidden>
+                <label>Adresse ou CIDR<input name="ip" placeholder="192.0.2.10 ou 198.51.100.0/24" required></label>
+                <label>Action<select name="action"><option value="drop">Abandon (silencieux)</option><option value="reject">Rejet (avec ICMP)</option><option value="log">Journaliser seulement</option></select></label>
+                <label>Sens<select name="direction"><option value="both">Les deux (entrant + sortant)</option><option value="in">Entrant seulement</option><option value="out">Sortant seulement</option></select></label>
+                <label>Commentaire (facultatif)<input name="comment" placeholder="Attaquant connu"></label>
+                <div class="bout"><button class="btn prim" type="submit">Ajouter</button><button class="btn" type="button" data-ferme="fRegle">Annuler</button></div>
+            </form>
+            <div class="tab"><table><thead><tr><th>Adresse / CIDR</th><th>Action</th><th>Sens</th><th>Commentaire</th><th>Créée</th><th>Actions</th></tr></thead><tbody id="bRegles"></tbody></table></div>
+            <p class="note">Limite de l’API : à l’application, seules les règles « abandon » sont chargées, et dans les deux sens. Le sens, « rejet » et « journaliser » sont enregistrés mais pas appliqués.</p></div>
 
-        <!-- Add Blocklist Modal -->
-        <div class="modal" id="addBlocklistModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add IP Blocklist</h3>
-                    <button class="close-btn" onclick="closeModal('addBlocklistModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" id="blName" placeholder="e.g., spamhaus-drop">
-                </div>
-                <div class="form-group">
-                    <label>URL</label>
-                    <input type="text" id="blUrl" placeholder="https://...">
-                </div>
-                <div class="form-group">
-                    <label>Format</label>
-                    <select id="blFormat">
-                        <option value="plain">Plain (one IP per line)</option>
-                        <option value="cidr">CIDR notation</option>
-                        <option value="csv">CSV (IP in first column)</option>
-                    </select>
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('addBlocklistModal')">Cancel</button>
-                    <button class="btn primary" onclick="addBlocklist()">Add</button>
-                </div>
-            </div>
-        </div>
+        <div class="pan"><h3>Flux de menaces disponibles <i id="nFlux"></i></h3>
+            <div id="rFlux" class="retour" hidden></div>
+            <div id="lFlux"></div>
+            <p class="note">Catalogue fixe fourni par l’API. « Ajouter » télécharge la liste et l’enregistre dans la configuration.</p></div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- Add Rule Modal -->
-        <div class="modal" id="addRuleModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add IP Rule</h3>
-                    <button class="close-btn" onclick="closeModal('addRuleModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>IP or CIDR</label>
-                    <input type="text" id="ruleIp" placeholder="192.168.1.100 or 10.0.0.0/8">
-                </div>
-                <div class="form-group">
-                    <label>Action</label>
-                    <select id="ruleAction">
-                        <option value="drop">Drop (silent)</option>
-                        <option value="reject">Reject (with ICMP)</option>
-                        <option value="log">Log only</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Direction</label>
-                    <select id="ruleDirection">
-                        <option value="both">Both (in + out)</option>
-                        <option value="in">Inbound only</option>
-                        <option value="out">Outbound only</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Comment (optional)</label>
-                    <input type="text" id="ruleComment" placeholder="e.g., Known attacker">
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('addRuleModal')">Cancel</button>
-                    <button class="btn primary" onclick="addRule()">Add</button>
-                </div>
-            </div>
-        </div>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/vortex-firewall';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = v => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('fr-FR') : '—';
 
-        async function api(path, opts = {}) {
+        let SERVICE = null, STATS = null, LISTES = null, REGLES = null, FLUX = null, SESSION_OK = true, ERREUR = '';
+        let CONFIRM = null;   // fonction à exécuter si l'on confirme : jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                if (!res.ok) return {};
-                const text = await res.text();
-                return text ? JSON.parse(text) : {};
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const d = new Date(ts);
+            if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR');
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+
+        function ilya(h) { return new Date(Date.now() - h * 3600000).toISOString(); }
+        function demoData() {
+            SERVICE = { enabled: true, nftables_available: true, blocklists_count: 2, total_blocked_ips: 18432, packets_blocked_in: 52310, packets_blocked_out: 1874 };
+            STATS = { enabled: true, total_blocked_ips: 18432, blocklists_count: 2, custom_rules_count: 2, packets_blocked_inbound: 52310, packets_blocked_outbound: 1874 };
+            LISTES = [
+                { name: 'liste-exemple-a', url: 'https://listes.example.net/a.txt', format: 'cidr', enabled: true, ips_count: 17210, last_updated: ilya(3) },
+                { name: 'liste-exemple-b', url: 'https://listes.example.net/b.txt', format: 'plain', enabled: true, ips_count: 1222, last_updated: ilya(27) },
+                { name: 'liste-exemple-c', url: 'https://listes.example.net/c.txt', format: 'csv', enabled: false, ips_count: 0, last_updated: null }];
+            REGLES = [
+                { ip: '203.0.113.9', action: 'drop', direction: 'both', comment: 'Balayage de ports', created: ilya(30) },
+                { ip: '198.51.100.0/24', action: 'log', direction: 'in', comment: null, created: ilya(120) }];
+            FLUX = [
+                { name: 'Flux exemple A', url: 'https://flux.example.net/a.txt', format: 'cidr', category: 'spam' },
+                { name: 'Flux exemple B', url: 'https://flux.example.net/b.txt', format: 'plain', category: 'botnet' }];
         }
 
-        async function loadStatus() {
-            const d = await api('/service');
-            const enabled = d.enabled || false;
-            const nftAvailable = d.nftables_available || false;
-
-            document.getElementById('enableToggle').checked = enabled;
-            document.getElementById('statusDot').className = 'status-dot ' + (enabled ? 'active' : 'inactive');
-            document.getElementById('statusText').textContent = enabled ? 'Active' : 'Disabled';
-
-            const nftEl = document.getElementById('nftStatus');
-            if (nftAvailable) {
-                nftEl.className = 'nft-status available';
-                nftEl.textContent = 'nftables OK';
-            } else {
-                nftEl.className = 'nft-status unavailable';
-                nftEl.textContent = 'nftables unavailable';
-            }
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; ERREUR = ''; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/service'), lire('/stats'), lire('/blocklists'), lire('/rules'), lire('/feeds')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            SERVICE = val(0); STATS = val(1);
+            const b = val(2); LISTES = b ? (b.blocklists || []) : null;
+            const r = val(3); REGLES = r ? (r.rules || []) : null;
+            const f = val(4); FLUX = f ? (f.feeds || []) : null;
+            ERREUR = (tous && !refus) ? 'Impossible de lire le pare-feu (service arrêté ou injoignable).' : '';
+            rendre();
         }
 
-        async function loadStats() {
-            const d = await api('/stats');
-            document.getElementById('statBlocked').textContent = (d.total_blocked_ips || 0).toLocaleString();
-            document.getElementById('statInbound').textContent = (d.packets_blocked_inbound || 0).toLocaleString();
-            document.getElementById('statOutbound').textContent = (d.packets_blocked_outbound || 0).toLocaleString();
-            document.getElementById('statLists').textContent = d.blocklists_count || 0;
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !ERREUR; $('erreur').textContent = ERREUR;
+            const actif = SERVICE ? SERVICE.enabled : (STATS ? STATS.enabled : null);
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (actif === null || actif === undefined) { etat.className = 'actif hors'; etat.textContent = 'ÉTAT INCONNU'; }
+            else if (actif) { etat.className = 'actif'; etat.textContent = 'ACTIF'; }
+            else { etat.className = 'actif att'; etat.textContent = 'DÉSACTIVÉ'; }
+            const nft = $('nft');
+            if (SERVICE && typeof SERVICE.nftables_available === 'boolean') {
+                nft.className = 'actif' + (SERVICE.nftables_available ? '' : ' hors'); nft.textContent = SERVICE.nftables_available ? 'nftables OK' : 'nftables indisponible';
+            } else { nft.className = 'actif neutre'; nft.textContent = 'nftables —'; }
+            const bas = $('bascule');
+            bas.hidden = !(SESSION_OK && (actif === true || actif === false));
+            bas.textContent = actif ? 'Désactiver' : 'Activer';
+            bas.className = 'btn' + (actif ? ' danger' : ' ok');
+            const lecture = !!(SERVICE && SERVICE.nftables_available && SERVICE.enabled);   // compteurs nft = 0 sans table : non mesurés
+            const s = STATS;
+            $('tIp').textContent = s ? nombre(s.total_blocked_ips) : '—';
+            $('tIn').textContent = s && lecture ? nombre(s.packets_blocked_inbound) : '—';
+            $('tOut').textContent = s && lecture ? nombre(s.packets_blocked_outbound) : '—';
+            $('tListes').textContent = s ? nombre(s.blocklists_count) : '—';
+            $('tRegles').textContent = s ? nombre(s.custom_rules_count) : (REGLES ? nombre(REGLES.length) : '—');
+            $('maj').textContent = (SESSION_OK && (SERVICE || STATS)) ? 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR') : '—';
+            rendreListes(); rendreRegles(); rendreFlux();
         }
 
-        async function loadBlocklists() {
-            const d = await api('/blocklists');
-            const tbody = document.getElementById('blocklistsTable');
-            tbody.innerHTML = (d.blocklists || []).map(bl => `<tr>
-                <td>${bl.name}</td>
-                <td>${bl.format}</td>
-                <td>${(bl.ips_count || 0).toLocaleString()}</td>
-                <td>${bl.last_updated ? new Date(bl.last_updated).toLocaleDateString() : '-'}</td>
-                <td><span class="badge ${bl.enabled ? 'enabled' : 'disabled'}">${bl.enabled ? 'Enabled' : 'Disabled'}</span></td>
-                <td class="actions">
-                    <button class="btn btn-sm danger" onclick="removeBlocklist('${bl.name}')">Remove</button>
-                </td>
-            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No blocklists configured</td></tr>';
+        function ligneVide(corps, n, msg) { const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = n; tr.appendChild(td); corps.appendChild(tr); }
+        function actions(td, libelle, cle, fn) {
+            if (CONFIRM && CONFIRM.cle === cle) { td.appendChild(el('span', 'pill att', 'Confirmer ci-dessus')); return; }
+            const b = el('button', 'btn sm danger', libelle); b.type = 'button'; b.addEventListener('click', fn); td.appendChild(b);
         }
 
-        async function loadRules() {
-            const d = await api('/rules');
-            const tbody = document.getElementById('rulesTable');
-            tbody.innerHTML = (d.rules || []).map(r => `<tr>
-                <td><code>${r.ip}</code></td>
-                <td><span class="badge ${r.action}">${r.action}</span></td>
-                <td>${r.direction}</td>
-                <td>${r.comment || '-'}</td>
-                <td>${r.created ? new Date(r.created).toLocaleDateString() : '-'}</td>
-                <td class="actions">
-                    <button class="btn btn-sm danger" onclick="removeRule('${r.ip}')">Remove</button>
-                </td>
-            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No custom rules</td></tr>';
+        function rendreListes() {
+            const c = $('bListes'); c.textContent = '';
+            $('nListes').textContent = LISTES ? '· ' + LISTES.length : '';
+            if (!LISTES) { ligneVide(c, 6, '—'); return; }
+            if (!LISTES.length) { ligneVide(c, 6, 'Aucune liste configurée.'); return; }
+            LISTES.forEach(bl => {
+                const tr = el('tr');
+                tr.appendChild(el('td', null, tiret(bl.name)));
+                tr.appendChild(el('td', null, tiret(bl.format)));
+                // ips_count vaut 0 quand le fichier n'a jamais été téléchargé : alors non mesuré
+                tr.appendChild(el('td', null, bl.last_updated ? nombre(bl.ips_count) : '—'));
+                tr.appendChild(el('td', null, quand(bl.last_updated)));
+                const e = el('td'); e.appendChild(pastille(bl.enabled ? 'ok' : '', bl.enabled ? 'ACTIVÉE' : 'DÉSACTIVÉE')); tr.appendChild(e);
+                const a = el('td', 'act');
+                actions(a, 'Retirer', 'liste:' + bl.name, () => demander('liste:' + bl.name, 'Retirer la liste « ' + bl.name + ' » ? Sa configuration et son fichier téléchargé sont supprimés ; les adresses restent bloquées jusqu’au prochain « Appliquer ».', () => retirerListe(bl.name)));
+                tr.appendChild(a); c.appendChild(tr);
+            });
         }
 
-        async function loadFeeds() {
-            const d = await api('/feeds');
-            const div = document.getElementById('feedsList');
-            div.innerHTML = (d.feeds || []).map(f => `<div class="feed-item">
-                <div>
-                    <div class="name">${f.name}</div>
-                    <div class="category">${f.category}</div>
-                </div>
-                <button class="btn btn-sm primary" onclick="addFeed('${f.name}', '${f.url}', '${f.format}')">Add</button>
-            </div>`).join('');
+        const ACTIONS = { drop: ['att', 'ABANDON'], reject: ['att', 'REJET'], log: ['cy', 'JOURNAL'] };
+        const SENS = { both: 'Entrant + sortant', in: 'Entrant', out: 'Sortant' };
+        function rendreRegles() {
+            const c = $('bRegles'); c.textContent = '';
+            $('nRegles').textContent = REGLES ? '· ' + REGLES.length : '';
+            if (!REGLES) { ligneVide(c, 6, '—'); return; }
+            if (!REGLES.length) { ligneVide(c, 6, 'Aucune règle personnalisée.'); return; }
+            REGLES.forEach(r => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(r.ip)));
+                const ac = ACTIONS[r.action] || ['', tiret(r.action).toUpperCase()];
+                const t1 = el('td'); t1.appendChild(pastille(ac[0], ac[1])); tr.appendChild(t1);
+                tr.appendChild(el('td', null, SENS[r.direction] || tiret(r.direction)));
+                tr.appendChild(el('td', null, tiret(r.comment)));
+                tr.appendChild(el('td', null, quand(r.created)));
+                const a = el('td', 'act');
+                actions(a, 'Retirer', 'regle:' + r.ip, () => demander('regle:' + r.ip, 'Retirer la règle pour ' + r.ip + ' ? L’adresse reste bloquée jusqu’au prochain « Appliquer ».', () => retirerRegle(r.ip)));
+                tr.appendChild(a); c.appendChild(tr);
+            });
         }
 
-        async function toggleEnable() {
-            const enabled = document.getElementById('enableToggle').checked;
-            const d = await api('/enable?enabled=' + enabled, { method: 'POST' });
-            if (!d.success && d.detail) {
-                alert('Error: ' + d.detail);
-                document.getElementById('enableToggle').checked = !enabled;
-            }
-            loadStatus();
+        function rendreFlux() {
+            const d = $('lFlux'); d.textContent = '';
+            $('nFlux').textContent = FLUX ? '· ' + FLUX.length : '';
+            if (!FLUX) { d.appendChild(el('div', 'vide', '—')); return; }
+            if (!FLUX.length) { d.appendChild(el('div', 'vide', 'Aucun flux proposé.')); return; }
+            const connus = new Set((LISTES || []).map(b => b.name));
+            FLUX.forEach(f => {
+                const ligne = el('div', 'flux'), g = el('div');
+                g.appendChild(el('b', null, tiret(f.name))); g.appendChild(el('small', null, tiret(f.category) + ' · ' + tiret(f.format)));
+                ligne.appendChild(g);
+                if (connus.has(f.name)) ligne.appendChild(pastille('ok', 'DÉJÀ AJOUTÉ', 'Une liste de ce nom existe déjà.'));
+                else { const b = el('button', 'btn prim sm', 'Ajouter'); b.type = 'button'; b.addEventListener('click', () => ajouterFlux(f)); ligne.appendChild(b); }
+                d.appendChild(ligne);
+            });
         }
 
-        function showAddBlocklist() {
-            document.getElementById('addBlocklistModal').classList.add('active');
-        }
+        // Confirmation intégrée : un seul panneau, jamais de dialogue natif.
+        function demander(cle, texte, fn) { CONFIRM = { cle, fn }; $('confTxt').textContent = texte; $('conf').hidden = false; rendreListes(); rendreRegles(); $('conf').scrollIntoView({ block: 'nearest' }); }
+        function annuler() { CONFIRM = null; $('conf').hidden = true; rendreListes(); rendreRegles(); }
+        $('confNon').addEventListener('click', annuler);
+        $('confOui').addEventListener('click', async () => { const fn = CONFIRM && CONFIRM.fn; CONFIRM = null; $('conf').hidden = true; if (fn) await fn(); });
 
-        function showAddRule() {
-            document.getElementById('addRuleModal').classList.add('active');
+        async function retirerListe(nom) {
+            const res = await ecrire('DELETE', '/blocklists/' + encodeURIComponent(nom));
+            if (res.ok) { retour('rListes', true, 'Liste « ' + nom + ' » retirée.'); charger(); } else retour('rListes', false, 'Retrait impossible : ' + detail(res));
         }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
+        async function retirerRegle(ip) {
+            const res = await ecrire('DELETE', '/rules/' + encodeURIComponent(ip));
+            if (res.ok) { retour('rRegles', true, 'Règle pour ' + ip + ' retirée.'); charger(); } else retour('rRegles', false, 'Retrait impossible : ' + detail(res));
         }
-
-        async function addBlocklist() {
-            const name = document.getElementById('blName').value.trim();
-            const url = document.getElementById('blUrl').value.trim();
-            const format = document.getElementById('blFormat').value;
-            if (!name || !url) return alert('Name and URL required');
-            await api('/blocklists', { method: 'POST', body: JSON.stringify({ name, url, format, enabled: true }) });
-            closeModal('addBlocklistModal');
-            refresh();
+        async function ajouterFlux(f) {
+            const res = await ecrire('POST', '/blocklists', { name: f.name, url: f.url, format: f.format, enabled: true });
+            if (res.ok) { retour('rFlux', true, 'Flux « ' + f.name + ' » ajouté.'); charger(); } else retour('rFlux', false, 'Ajout impossible : ' + detail(res));
         }
-
-        async function addRule() {
-            const ip = document.getElementById('ruleIp').value.trim();
-            const action = document.getElementById('ruleAction').value;
-            const direction = document.getElementById('ruleDirection').value;
-            const comment = document.getElementById('ruleComment').value.trim() || null;
-            if (!ip) return alert('IP required');
-            await api('/rules', { method: 'POST', body: JSON.stringify({ ip, action, direction, comment }) });
-            closeModal('addRuleModal');
-            refresh();
+        async function basculer() {
+            const actif = SERVICE ? SERVICE.enabled : (STATS ? STATS.enabled : false);
+            const cible = !actif;
+            demander('bascule', cible
+                ? 'Activer le pare-feu ? La table nftables vortex_firewall est créée et les listes sont chargées : les adresses listées seront écartées en entrée et en sortie.'
+                : 'Désactiver le pare-feu ? La table nftables vortex_firewall est supprimée : plus aucune adresse des listes n’est écartée.',
+                async () => {
+                    const res = await ecrire('POST', '/enable?enabled=' + cible);
+                    if (res.ok && res.data && res.data.success) { toast(cible ? 'Pare-feu activé.' : 'Pare-feu désactivé.'); charger(); }
+                    else { retour('rListes', false, 'Bascule impossible : ' + detail(res)); charger(); }
+                });
         }
+        $('bascule').addEventListener('click', basculer);
+        $('majTout').addEventListener('click', async () => {
+            const res = await ecrire('POST', '/blocklists/update');
+            if (!res.ok) { retour('rListes', false, 'Mise à jour impossible : ' + detail(res)); return; }
+            const rs = (res.data && res.data.results) || [], ko = rs.filter(r => !r.success).map(r => r.name);
+            retour('rListes', !ko.length, rs.length + ' liste(s) traitée(s)' + (ko.length ? ', échec : ' + ko.join(', ') : '') + '. Pensez à « Appliquer ».');
+            charger();
+        });
+        $('appliquer').addEventListener('click', () => demander('appliquer',
+            'Appliquer les listes ? Les ensembles nftables sont vidés puis rechargés avec les listes activées et les règles « abandon » : le blocage change immédiatement.',
+            async () => {
+                const res = await ecrire('POST', '/blocklists/apply');
+                if (res.ok && res.data && res.data.success) retour('rListes', true, 'Appliqué : IPv4 ' + res.data.ipv4_blocked + ', IPv6 ' + res.data.ipv6_blocked + '.');
+                else retour('rListes', false, 'Application impossible : ' + ((res.data && (res.data.error || res.data.detail)) ? String(res.data.error || res.data.detail) : detail(res)));
+                charger();
+            }));
 
-        async function addFeed(name, url, format) {
-            await api('/blocklists', { method: 'POST', body: JSON.stringify({ name, url, format, enabled: true }) });
-            refresh();
+        function formulaire(idBouton, idForm) {
+            $(idBouton).addEventListener('click', () => { const f = $(idForm); f.hidden = !f.hidden; });
         }
+        formulaire('addListe', 'fListe'); formulaire('addRegle', 'fRegle');
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; }));
+        $('fListe').addEventListener('submit', async ev => {
+            ev.preventDefault(); const d = new FormData(ev.target);
+            const name = String(d.get('name') || '').trim(), url = String(d.get('url') || '').trim(), format = String(d.get('format'));
+            if (!name || !url) { retour('rListes', false, 'Nom et adresse requis.'); return; }
+            const res = await ecrire('POST', '/blocklists', { name, url, format, enabled: true });
+            if (res.ok) { retour('rListes', true, 'Liste « ' + name + ' » ajoutée.'); ev.target.reset(); ev.target.hidden = true; charger(); } else retour('rListes', false, 'Ajout impossible : ' + detail(res));
+        });
+        $('fRegle').addEventListener('submit', async ev => {
+            ev.preventDefault(); const d = new FormData(ev.target);
+            const ip = String(d.get('ip') || '').trim(), action = String(d.get('action')), direction = String(d.get('direction'));
+            const comment = String(d.get('comment') || '').trim() || null;
+            if (!ip) { retour('rRegles', false, 'Adresse requise.'); return; }
+            const res = await ecrire('POST', '/rules', { ip, action, direction, comment });
+            if (res.ok) { retour('rRegles', true, 'Règle pour ' + ip + ' ajoutée (appliquée au prochain « Appliquer »).'); ev.target.reset(); ev.target.hidden = true; charger(); } else retour('rRegles', false, 'Ajout impossible : ' + detail(res));
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-        async function removeBlocklist(name) {
-            if (!confirm('Remove blocklist ' + name + '?')) return;
-            await api('/blocklists/' + encodeURIComponent(name), { method: 'DELETE' });
-            refresh();
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'vortex-firewall' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function removeRule(ip) {
-            if (!confirm('Remove rule for ' + ip + '?')) return;
-            await api('/rules/' + encodeURIComponent(ip), { method: 'DELETE' });
-            refresh();
-        }
-
-        async function updateAllBlocklists() {
-            const d = await api('/blocklists/update', { method: 'POST' });
-            alert('Updated ' + (d.results || []).length + ' blocklists');
-            refresh();
-        }
-
-        async function applyBlocklists() {
-            const d = await api('/blocklists/apply', { method: 'POST' });
-            if (d.success) {
-                alert('Applied! IPv4: ' + d.ipv4_blocked + ', IPv6: ' + d.ipv6_blocked);
-            } else {
-                alert('Error: ' + (d.error || 'Unknown'));
-            }
-            refresh();
-        }
-
-        function refresh() {
-            loadStatus();
-            loadStats();
-            loadBlocklists();
-            loadRules();
-            loadFeeds();
-        }
-
-        refresh();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || !$('fListe').hidden || !$('fRegle').hidden) return;
+            charger();
+        }, 30000);
+        charger().then(annoncer);
     </script>
 </body>
 </html>
