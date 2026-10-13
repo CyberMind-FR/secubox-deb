@@ -1167,17 +1167,20 @@ async def centers_proposal_accept(req: CenterProposalAcceptRequest):
 # ---------------------------------------------------------------------------
 
 
-def _publish_self_node():
-    """Publish this node's signed NodeRecord into the directory (idempotent).
+def _publish_self_node() -> bool:
+    """Publish this node's signed NodeRecord into the directory (idempotent). Rend True quand la box est inscrite (publiée ou déjà à jour).
 
     In-process (journal owner → no JWT, no write race). Requires the node
     identity key from `annuairectl init`; a no-op if absent. Skips when the
     latest record for this DID already matches the current mesh metadata, so a
     restart does not spam the log.
+
+    False = pas encore possible (pas de clé d'identité, pas de maillage) : l'appelant RÉESSAIE (#2544). Avant, seul le démarrage essayait :
+    une box neuve, sans maillage à ce moment-là, ne s'inscrivait jamais chez le maître.
     """
     key_path = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
     if not os.path.exists(key_path):
-        return
+        return False
     try:
         from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
         from annuaire.mesh_sync import read_self_meta  # noqa: PLC0415
@@ -1186,19 +1189,34 @@ def _publish_self_node():
         with open(key_path, "r", encoding="ascii") as fh:
             priv = bytes.fromhex(fh.read().strip())
         if len(priv) != 32:
-            return
+            return False
         meta = read_self_meta()
         if not meta:
-            return
+            return False
         did = did_from_pubkey(public_from_private(priv))
         j = get_journal()
         fields = ("node_id", "boxname", "pubkey_wg", "mesh_ip", "ddns", "endpoint")
         existing = next((n for n in _get_nodes(j) if n.get("did") == did), None)
         if existing and all(existing.get(k) == meta[k] for k in fields):
-            return
+            return True
         publish_node(j, priv, did, **meta)
-    except Exception:
-        pass
+        return True
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("secubox.annuaire.sync").warning("inscription de la box dans l'annuaire impossible : %s", e)
+        return False
+
+
+_NOEUD_INSCRIT = False
+
+
+def _inscrire_si_besoin() -> bool:
+    """Tente l'inscription tant qu'elle n'a pas abouti, puis ne relit plus rien (#2544) : appelé à chaque passage de synchro."""
+    global _NOEUD_INSCRIT
+    if not _NOEUD_INSCRIT:
+        _NOEUD_INSCRIT = _publish_self_node()
+        if _NOEUD_INSCRIT:
+            logging.getLogger("secubox.annuaire.sync").info("box inscrite dans l'annuaire du maillage")
+    return _NOEUD_INSCRIT
 
 
 @app.on_event("startup")
@@ -1241,6 +1259,7 @@ async def _dir_sync_loop():
     interval = int(os.environ.get("ANNUAIRE_DIR_SYNC_INTERVAL", "300"))
     peers_path = os.environ.get("ANNUAIRE_PEERS_PATH", "/var/lib/secubox/p2p/wg_mesh.json")
     while True:
+        await asyncio.to_thread(_inscrire_si_besoin)
         await asyncio.to_thread(_cycle_sync, peers_path)
         await asyncio.sleep(interval)
 
@@ -1253,6 +1272,7 @@ async def _assist_sync_loop():
     peers_path = os.environ.get("ANNUAIRE_PEERS_PATH", "/var/lib/secubox/p2p/wg_mesh.json")
     while True:
         await asyncio.sleep(interval)
+        await asyncio.to_thread(_inscrire_si_besoin)
         await asyncio.to_thread(_cycle_sync, peers_path, "assist_")
 
 

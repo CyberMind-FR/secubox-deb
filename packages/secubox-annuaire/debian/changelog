@@ -1,3 +1,9 @@
+secubox-annuaire (0.11.3-1~bookworm1) bookworm; urgency=medium
+
+  * Une box qui rejoint le maillage APRES le demarrage de l'annuaire s'inscrit chez le maitre (#2544). `_publish_self_node` ne tournait qu'au demarrage : sans maillage a ce moment-la (box neuve, preparee par Auto-Load), il ne reessayait jamais, et le maitre ne voyait la box ni dans la flotte ni dans l'assistance. Il rend maintenant un booleen (inscrite ou non), est retente a chaque passage de synchronisation (cycle complet et voie rapide) jusqu'a l'inscription, puis se tait ; l'echec est journalise. Idempotent : aucun doublon dans le journal. 5 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 20:00:00 +0200
+
 secubox-annuaire (0.11.2-1~bookworm1) bookworm; urgency=medium
 
   * Demandes et offres d'assistance : synchronisation rapide (#2540). Mesure sur deux box : la replication marchait mais tirait TOUT le journal (/log/export = 3 Mo, 5 136 entrees dont 5 061 bannissements) toutes les 300 s pour une cinquantaine d'entrees d'assistance, et le premier passage d'une RPi (5 135 ajouts un a un) bloquait plus de 7 minutes ; `except Exception: pass` ne laissait aucune trace d'un echec. /log/export?ops=assist_ n'exporte que l'assistance ; une voie rapide (ANNUAIRE_ASSIST_SYNC_INTERVAL, 20 s par defaut) ne tire que assist_* ; un echec de synchro est journalise (« synchronisation (voie « assist_ ») echouee : … »), un passage qui ingere quelque chose aussi, un passage sans changement reste muet ; POST /sync/now (JWT) force un passage. 8 tests.

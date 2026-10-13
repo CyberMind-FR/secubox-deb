@@ -44,7 +44,7 @@ CLES: Dict[str, frozenset] = {
     "admin": frozenset({"mot_de_passe", "totp"}),
     "reseau": frozenset({"mode", "domaine"}),
     "services": frozenset({"profil"}),
-    "maillage": frozenset({"mode", "rejoindre"}),                 # `jeton` y est refusé : il expire en 15 min et ne se signe pas
+    "maillage": frozenset({"mode", "rejoindre", "aide"}),                 # `jeton` y est refusé : il expire en 15 min et ne se signe pas
     "apt": frozenset({"auto", "heure"}),
     "provision": frozenset({"mode", "jeton", "lot", "grace_min", "infra"}),
 }

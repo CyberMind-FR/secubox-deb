@@ -260,6 +260,13 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
         # pas joignable dans la seconde (vu deux fois sur gk3, #1544).
         out.append(Action("maillage", f"rejoindre {m['rejoindre']}",
                           ["sbx-mesh-join", str(m["rejoindre"]), str(m["jeton"])], essais=12))
+    elif m["mode"] == "automesh":
+        # La jonction elle-même est faite par secubox-automesh (code déposé par la préparation) : ici on prépare le terrain — annuaire (inscription chez le
+        # maître) et assistance — et on rend la main. Souple : une première installation ne doit pas échouer pour un maillage qui arrive plus tard.
+        out.append(Action("maillage", "maillage automatique : jonction, annuaire et assistance activés", fn=_activer_maillage, souple=True))
+        if m.get("aide") == "demander":
+            nom = str((profil.get("box") or {}).get("nom") or "")
+            out.append(Action("maillage", "demande d'aide « première installation » publiée au maillage", fn=lambda: _demander_aide(nom), souple=True))
     else:
         out.append(Action("maillage", "première box" if m["mode"] == "premiere" else "maillage plus tard"))
     heure = str(apt.get("heure", "03:00"))
@@ -268,6 +275,42 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     out.append(Action("majs", "minuterie des mises à jour",
                       ["systemctl", "enable" if apt["auto"] else "disable", "--now", "secubox-majauto.timer"]))
     return out
+
+
+# ── Maillage automatique (#2544) ────────────────────────────────────────────
+
+CLE_ANNUAIRE = Path("/etc/secubox/secrets/annuaire/node.key")
+MARQUEUR_AIDE = Path("/var/lib/secubox/premier-pas/aide-demandee")
+UNITES_MAILLAGE = ("secubox-automesh.timer", "secubox-annuaire.service", "secubox-assist.service")
+
+
+def _activer_maillage() -> None:
+    """Active, une par une, la jonction automatique (minuterie), l'annuaire (inscription chez le maître) et l'assistance. Une unité absente de cette image
+    est dite dans le journal et n'arrête rien ; seule l'absence de TOUTES les unités est une erreur."""
+    ratees = []
+    for unite in UNITES_MAILLAGE:
+        r = subprocess.run(["systemctl", "enable", "--now", unite], capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            ratees.append(unite)
+    if len(ratees) == len(UNITES_MAILLAGE):
+        raise RuntimeError("aucune unité du maillage n'a pu être activée : " + ", ".join(ratees))
+
+
+def _demander_aide(nom: str) -> None:
+    """Publie UNE demande d'aide ouverte « première installation » (journal signé de l'annuaire, en tant que `secubox`, comme le fait l'API de l'assistance).
+
+    Une seule fois (marqueur) : une réapplication du profil ne multiplie pas les demandes. Le maître la voit dans « En cours » et y répond ; le demandeur
+    accepte l'aide proposée : aucune session sans son consentement. Sans identité d'annuaire (annuairectl init), on le dit et l'étape est remise (souple)."""
+    if MARQUEUR_AIDE.exists():
+        return
+    if not CLE_ANNUAIRE.exists():
+        raise RuntimeError("identité d'annuaire absente : la demande d'aide sera publiée quand la box aura son identité (annuairectl init)")
+    r = subprocess.run(["runuser", "-u", "secubox", "--", "/usr/sbin/secubox-assistctl", "request-open", "--tags", "premiere-installation",
+                        "--ttl", "86400", "--reason", f"première installation de {nom or 'cette box'}"], capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        raise RuntimeError("demande d'aide non publiée : " + cause(r.stderr or r.stdout))
+    MARQUEUR_AIDE.parent.mkdir(parents=True, exist_ok=True)
+    MARQUEUR_AIDE.write_text(time.strftime("%Y-%m-%dT%H:%M:%S%z") + "\n")
 
 
 # ── Jeton de démarrage (couche 2) ──────────────────────────────────────────

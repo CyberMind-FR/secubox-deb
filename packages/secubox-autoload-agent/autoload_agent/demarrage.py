@@ -54,3 +54,61 @@ def installer_jeton(source: Path = SOURCE, destination: Path = DESTINATION) -> s
     os.chmod(destination, 0o600)
     _effacer(source)
     return "installe"
+
+
+# ── Code d'invitation du maillage (#2544) ─────────────────────────────────
+SOURCE_MAILLAGE = Path("/boot/secubox/autoload/maillage")
+DESTINATION_MAILLAGE = Path("/var/lib/secubox/p2p/automesh.code")
+_CODE_MAILLAGE = re.compile(r"^sbxmesh1\.[A-Za-z0-9_-]{8,512}\.[A-Za-z0-9_-]{4}$")
+
+
+def code_maillage_valide(texte: str) -> bool:
+    """Forme du code `sbxmesh1.<base64url>.<somme>`, et sa somme de contrôle quand la box sait la lire (secubox-p2p installé) : un code tronqué ou fauté
+    est refusé ICI, au lieu d'échouer en silence toutes les 2 minutes."""
+    t = texte.strip()
+    if t != texte.rstrip("\n") or not _CODE_MAILLAGE.match(t):
+        return False
+    try:
+        import sys  # noqa: PLC0415
+        sys.path.insert(0, "/usr/lib/secubox/p2p")
+        from api import automesh  # noqa: PLC0415
+        automesh.decoder(t)
+    except ImportError:
+        return True                                              # atelier sans secubox-p2p : la forme seule
+    except ValueError:
+        return False
+    return True
+
+
+def installer_code_maillage(source: Path = SOURCE_MAILLAGE, destination: Path = DESTINATION_MAILLAGE, proprietaire=("secubox", "secubox")) -> str:
+    """Pose le code d'invitation déposé par l'atelier là où `secubox-automesh` le lit (0600, propriétaire `secubox`), puis l'EFFACE de /boot.
+
+    Rend `absent`, `installe`, `deja_present` (un code déjà en cours n'est pas remplacé), `refuse` (mal formé ou lien symbolique : laissé en place pour que
+    l'atelier le voie ; aucune valeur n'est journalisée). Le code ne donne aucun droit : le parent valide le jeton qu'il contient."""
+    if not os.path.lexists(source):
+        return "absent"
+    if source.is_symlink() or not source.is_file():
+        return "refuse"
+    try:
+        texte = source.read_text(encoding="ascii")
+    except (OSError, UnicodeDecodeError):
+        return "refuse"
+    if not code_maillage_valide(texte):
+        return "refuse"
+    if destination.exists():
+        _effacer(source)
+        return "deja_present"
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="ascii") as f:
+        f.write(texte.strip() + "\n")
+    os.chmod(destination, 0o600)
+    if proprietaire:
+        try:
+            import shutil  # noqa: PLC0415
+            shutil.chown(destination, *proprietaire)
+            shutil.chown(destination.parent, *proprietaire)
+        except (LookupError, PermissionError, OSError):
+            pass                                                 # hors box (atelier, tests) : pas de compte `secubox`
+    _effacer(source)
+    return "installe"

@@ -64,7 +64,7 @@ def cle_init(home: Path, publique: Path) -> str:
     return fpr
 
 
-def preparer(reponses: Path, boot: Path, home: Path, trousseau: Path, jeton: Optional[str] = None) -> Path:
+def preparer(reponses: Path, boot: Path, home: Path, trousseau: Path, jeton: Optional[str] = None, code_maillage: Optional[str] = None) -> Path:
     """Valide, signe, vérifie puis dépose `secubox/autoload/{reponses.toml,reponses.toml.sig,jeton}` sous `boot` (la partition de démarrage montée). Rend le dossier."""
     from premier_pas import provision as PV
     reponses, boot = Path(reponses), Path(boot)
@@ -78,6 +78,10 @@ def preparer(reponses: Path, boot: Path, home: Path, trousseau: Path, jeton: Opt
         raise AtelierErreur(f"[provision].jeton doit valoir « {REF_JETON} » : c'est le seul fichier que l'agent installe depuis /boot")
     if jeton is not None and not _JETON.match(jeton):
         raise AtelierErreur("jeton mal formé (attendu : gk2_ + 32 caractères hexadécimaux)")
+    if code_maillage is not None:
+        from autoload_agent.demarrage import code_maillage_valide  # noqa: PLC0415
+        if not code_maillage_valide(code_maillage):
+            raise AtelierErreur("code de maillage mal formé (attendu : sbxmesh1.… avec sa somme de contrôle ; à créer sur le maître : Maillage › Inviter)")
     with tempfile.TemporaryDirectory(prefix="sbx-atelier-") as tmp:
         copie = Path(tmp) / "reponses.toml"
         shutil.copyfile(reponses, copie)
@@ -100,5 +104,13 @@ def preparer(reponses: Path, boot: Path, home: Path, trousseau: Path, jeton: Opt
         fd = os.open(cible, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="ascii") as f:
             f.write(jeton + "\n")
+        os.chmod(cible, 0o600)
+    if code_maillage is not None:
+        # Même mécanique que le jeton (#2544) : fichier SÉPARÉ du fichier signé (qui n'est pas chiffré), 0600 ; l'agent l'installe au premier démarrage
+        # pour `secubox-automesh`, puis l'efface de /boot. Durée de vie du code : celle de l'invitation côté maître.
+        cible = dossier / "maillage"
+        fd = os.open(cible, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="ascii") as f:
+            f.write(code_maillage.strip() + "\n")
         os.chmod(cible, 0o600)
     return dossier

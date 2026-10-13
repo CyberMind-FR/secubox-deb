@@ -6,11 +6,13 @@
 """autoload-atelier — prépare une image ou une carte SD pour le provisionnement Auto-Load (#2280). À lancer à l'atelier ou sur l'infrastructure, jamais sur la box cliente.
 
   autoload-atelier cle-init  --homedir D --export TROUSSEAU.gpg            crée la clé « SecuBox Provisioning » (UNE fois) et exporte sa partie publique
-  autoload-atelier preparer  --reponses R.toml --boot POINT_DE_MONTAGE --homedir D [--trousseau T.gpg] [--jeton-fichier F]
-                                                                          valide, signe, vérifie puis dépose reponses.toml, reponses.toml.sig et le jeton sur /boot
+  autoload-atelier preparer  --reponses R.toml --boot POINT_DE_MONTAGE --homedir D [--trousseau T.gpg] [--jeton-fichier F] [--code-maillage-fichier F]
+                                                                          valide, signe, vérifie puis dépose reponses.toml, reponses.toml.sig, le jeton et le code de maillage sur /boot
   autoload-atelier verifier  --boot POINT_DE_MONTAGE [--trousseau T.gpg]    contrôle ce qui est déposé, comme la box le fera
 
 Le jeton est lu d'un fichier (--jeton-fichier) ou de l'entrée standard (--jeton-stdin) : jamais en argument de commande, jamais affiché.
+Le code d'invitation du maillage (sbxmesh1.…, créé sur le maître) de même : --code-maillage-fichier ou --code-maillage-stdin. La box le pose pour la jonction
+automatique au premier démarrage, puis l'efface de /boot ; il ne donne aucun droit (le maître valide).
 """
 import argparse
 import sys
@@ -42,6 +44,9 @@ def main(argv=None):
     g = p.add_mutually_exclusive_group()
     g.add_argument("--jeton-fichier")
     g.add_argument("--jeton-stdin", action="store_true")
+    c2 = p.add_mutually_exclusive_group()
+    c2.add_argument("--code-maillage-fichier")
+    c2.add_argument("--code-maillage-stdin", action="store_true")
     v = sub.add_parser("verifier")
     v.add_argument("--boot", required=True)
     v.add_argument("--trousseau", default=TROUSSEAU)
@@ -57,13 +62,20 @@ def main(argv=None):
                 jeton = Path(a.jeton_fichier).read_text(encoding="ascii").strip()
             elif a.jeton_stdin:
                 jeton = sys.stdin.readline().strip()
-            dossier = A.preparer(Path(a.reponses), Path(a.boot), Path(a.homedir), Path(a.trousseau), jeton)
-            print(f"déposé dans {dossier} : reponses.toml, reponses.toml.sig" + (", jeton (0600)" if jeton else " (sans jeton)"))
+            code = None
+            if a.code_maillage_fichier:
+                code = Path(a.code_maillage_fichier).read_text(encoding="ascii").strip()
+            elif a.code_maillage_stdin:
+                code = sys.stdin.readline().strip()
+            dossier = A.preparer(Path(a.reponses), Path(a.boot), Path(a.homedir), Path(a.trousseau), jeton, code)
+            print(f"déposé dans {dossier} : reponses.toml, reponses.toml.sig" + (", jeton (0600)" if jeton else " (sans jeton)")
+                  + (", code de maillage (0600)" if code else ""))
             return 0
         from premier_pas import provision as PV
         d = Path(a.boot) / "secubox" / "autoload"
         PV.charger_signe(d / "reponses.toml", d / "reponses.toml.sig", Path(a.trousseau))
-        print("réponses valides et signature acceptée" + (" ; jeton présent" if (d / "jeton").exists() else " ; AUCUN jeton"))
+        print("réponses valides et signature acceptée" + (" ; jeton présent" if (d / "jeton").exists() else " ; AUCUN jeton")
+              + (" ; code de maillage présent" if (d / "maillage").exists() else ""))
         return 0
     except (A.AtelierErreur, OSError) as e:
         print(f"autoload-atelier : {e}", file=sys.stderr)

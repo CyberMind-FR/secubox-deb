@@ -146,11 +146,13 @@ const PAGES = {
   },
   maillage: {
     aide: "Rejoindre vos autres box (identités, Flotte, journal partagés), ou être la première.",
-    opts: [["rejoindre","Rejoindre une box","avec son invitation"],["premiere","Première box","elle deviendra maîtresse"],["plus_tard","Plus tard",""]],
+    opts: [["automesh","Automatique","avec le code reçu à la préparation de la box"],["rejoindre","Rejoindre une box","avec son invitation"],["premiere","Première box","elle deviendra maîtresse"],["plus_tard","Plus tard",""]],
     cle: "mode", section: "maillage",
     extra: p => `<div class="champs" id="l-rejoindre"><label>Adresse de la box maîtresse<input id="c-ip" inputmode="decimal" value="${esc((p.maillage||{}).rejoindre || "")}" placeholder="192.168.1.200"></label>
-      <label>Jeton d'invitation<input id="c-jeton" spellcheck="false" autocomplete="off" placeholder="sbx-mesh-invite sur la box maîtresse"></label></div>`,
-    valeurs: () => brouillon.mode === "rejoindre" ? {mode: "rejoindre", rejoindre: $("#c-ip").value, jeton: $("#c-jeton").value} : {mode: brouillon.mode},
+      <label>Jeton d'invitation<input id="c-jeton" spellcheck="false" autocomplete="off" placeholder="sbx-mesh-invite sur la box maîtresse"></label></div>
+      <label id="l-aide"><input type="checkbox" id="c-aide"${(p.maillage||{}).aide === "demander" ? " checked" : ""}> Demander de l'aide pour cette première installation <small>(le maître la voit ; vous gardez le dernier mot)</small></label>`,
+    valeurs: () => brouillon.mode === "rejoindre" ? {mode: "rejoindre", rejoindre: $("#c-ip").value, jeton: $("#c-jeton").value}
+                 : brouillon.mode === "automesh" ? {mode: "automesh", aide: $("#c-aide").checked ? "demander" : "non"} : {mode: brouillon.mode},
   },
   majs: {
     aide: "La box reçoit les correctifs de apt.secubox.in, vérifiés par la clé du dépôt.",
@@ -201,7 +203,7 @@ function rendEtape() {
 function visibilite(id) {
   const montre = (sel, oui) => { const n = $(sel); if (n) n.hidden = !oui; };
   if (id === "reseau") montre("#l-domaine", brouillon.mode !== "lan");
-  if (id === "maillage") montre("#l-rejoindre", brouillon.mode === "rejoindre");
+  if (id === "maillage") { montre("#l-rejoindre", brouillon.mode === "rejoindre"); montre("#l-aide", brouillon.mode === "automesh"); }
   if (id === "majs") montre("#l-heure", brouillon.auto === "oui");
 }
 

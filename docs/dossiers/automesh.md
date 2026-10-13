@@ -25,4 +25,14 @@ Besoin : support à distance et première installation d'une box lite. La box AP
 
 ## À valider sur deux box
 
-Le tunnel s'établit de bout en bout (parent applique le pair de façon asynchrone) ; le dépôt du code par Auto-Load (agent) n'est pas encore branché : phase suivante, avec la découverte du parent par mDNS (`_secubox._tcp` annonce déjà `node_id` et `mesh_ip`).
+Le tunnel s'établit de bout en bout (parent applique le pair de façon asynchrone) ; le dépôt du code par Auto-Load est branché (#2544, ci-dessous) ; reste la découverte du parent par mDNS (`_secubox._tcp` annonce déjà `node_id` et `mesh_ip`).
+
+
+## Dépôt par Auto-Load et inscription chez le maître (#2544)
+
+1. Sur le maître : créer l'invitation (`POST /api/v1/p2p/master-link/invite`, JWT administrateur) ; durée limitée.
+2. À l'atelier : `autoload-atelier preparer … --code-maillage-stdin` (ou `--code-maillage-fichier`). Le code est validé (forme + somme), déposé à part sur `/boot/secubox/autoload/maillage` en 0600, jamais affiché, jamais dans le fichier de réponses signé (non chiffré). Dans ce fichier : `[maillage] mode = "automesh"` (et, au choix, `aide = "demander"`).
+3. Au premier démarrage : `autoload-agent-demarrage` installe le code dans `/var/lib/secubox/p2p/automesh.code` (0600, `secubox`) et l'efface de `/boot`. L'assistant (mode `automesh`) active la minuterie de jonction, l'annuaire et l'assistance — sans jamais bloquer l'installation.
+4. `secubox-automesh` appelle le parent (HTTPS à certificat vérifié pour un parent distant) ; le parent valide et approuve.
+5. L'annuaire de la box se publie dans le journal du maître au passage de synchro suivant (≤ 5 min ; `POST /api/v1/annuaire/sync/now` pour forcer), et la voie rapide (20 s) échange demandes et offres d'assistance.
+6. `aide = "demander"` : une demande d'aide ouverte « première installation » est publiée UNE fois. Le maître la voit dans « En cours » de `/assist/` et répond ; le demandeur accepte l'aide proposée : **aucune session n'est ouverte sans le consentement du demandeur**, et le code ne donne aucun droit par lui-même.

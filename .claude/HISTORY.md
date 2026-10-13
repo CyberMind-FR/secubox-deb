@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — Auto-Load, assistant et annuaire : la box préparée rejoint le maître, s'inscrit et peut demander de l'aide (ref #2544)
+
+« Synchro premier pas et préparation box, pour auto add et remote in gk2 master register and help ». Atelier : `--code-maillage-*` dépose le code d'invitation à part (0600) ; agent (0.8.0) : l'installe pour `secubox-automesh` au premier démarrage puis l'efface de `/boot` ; assistant (0.5.8) : mode `automesh` (aucun secret dans le fichier signé), active jonction + annuaire + assistance sans bloquer l'installation, `aide = "demander"` publie une demande d'aide « première installation » (consentement du demandeur inchangé) ; annuaire (0.11.3) : l'inscription chez le maître est retentée à chaque passage de synchro. Tests dans les trois paquets ; procédure dans `docs/dossiers/automesh.md`.
+
 ## 2026-10-13 — assist 0.2.13 : panneau « En cours » (demandes, offres, aides à accepter) (ref #2542)
 
 Après la synchro rapide (#2540), « gk1 ne voit pas l'offre de gk2 » : l'API assist rendait les bonnes données des deux côtés (vérifié sur le vrai journal), mais la page les cachait dans des onglets et une carte vide quand l'autorisation manquait. Panneau « En cours » toujours visible, gestes par ligne, parcours expliqué (Répondre → Accepter l'aide), `noeud`/`de_moi`/`reste_s` dans `/offers` et `/requests/open`. Tests `test_en_cours_2542.py` et `test_panneau_en_cours_2542.py`.
