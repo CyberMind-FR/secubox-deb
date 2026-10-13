@@ -4,149 +4,299 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  Annuaire·Miroir au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SecuBox · Annuaire·Miroir</title>
-  <link rel="stylesheet" href="/shared/design-tokens.css">
-  <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-  <style>
-    .an-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:14px 0}
-    .an-card{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);border-radius:10px;padding:14px}
-    .an-card .l{color:var(--text-muted,#6b6b7a);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
-    .an-card .v{font-size:22px;font-weight:700;margin-top:4px;word-break:break-all}
-    .v.ok{color:var(--matrix-green,#00ff41)} .v.bad{color:var(--cinnabar,#e63946)}
-    .mono{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted,#6b6b7a)}
-    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
-    th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line,#2a2a3a)}
-    th{color:var(--gold-hermetic,#c9a84c);text-transform:uppercase;font-size:10px;letter-spacing:.5px}
-    td{color:var(--text,#e8e6d9)} .empty{color:var(--text-muted,#6b6b7a);padding:24px;text-align:center}
-    .op{font-size:10px;padding:2px 7px;border-radius:12px;border:1px solid var(--line,#2a2a3a);color:var(--cyber-cyan,#00d4ff)}
-    h2{font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);margin:.6em 0 .2em}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Annuaire·Miroir</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .tuile .v.petit{font-size:.95rem;line-height:1.15}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie .titre{grid-column:1/-1;font-size:.8rem}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout,form.saisie .avert{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+        form.saisie .avert{color:var(--orange);font-size:.72rem}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
-  <nav class="sidebar" id="sidebar"></nav>
-  <script src="/shared/sidebar.js"></script>
-  <main class="main">
-    <header class="header">
-      <div class="header-title"><h1>🪞 Annuaire·Miroir</h1>
-        <span class="badge" id="chain-badge">chain —</span></div>
-    </header>
-    <p class="mono">Federated self-certifying trust substrate — append-only BLAKE2b-chained log. The legibility of trust is the deepest form of respect.</p>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
+                <div><h1>Annuaire·Miroir</h1><small>Journal signé, chaîné en BLAKE2b, en ajout seul</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
 
-    <div class="an-grid">
-      <div class="an-card"><div class="l">Chain integrity</div><div class="v" id="chain">—</div></div>
-      <div class="an-card"><div class="l">Tip height</div><div class="v" id="height">—</div></div>
-      <div class="an-card"><div class="l">Merkle root</div><div class="v mono" id="merkle" style="font-size:11px">—</div></div>
-    </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cChaine" title="Résultat de la vérification de toute la chaîne de hachage du journal (route /status). Une rupture signale une altération."><span class="l">Intégrité de la chaîne</span><span class="v" id="tChaine">—</span><span class="s" id="sChaine">vérification BLAKE2b</span></div>
+            <div class="tuile cy" title="Nombre d’entrées du journal, déduit de la hauteur de la dernière entrée + 1 (le journal commence à 0)."><span class="l">Entrées du journal</span><span class="v" id="tEntrees">—</span><span class="s" id="sEntrees">hauteur de pointe —</span></div>
+            <div class="tuile cy" title="Offres de service non révoquées publiées sur ce nœud."><span class="l">Services offerts</span><span class="v" id="tServices">—</span><span class="s">offres non révoquées</span></div>
+            <div class="tuile cy" title="Abonnements présents dans le journal, quel que soit leur état."><span class="l">Abonnements</span><span class="v" id="tAbos">—</span><span class="s" id="sAbos">tous états</span></div>
+            <div class="tuile cy" title="Racine de Merkle BLAKE2b sur tous les hachages d’entrée. Deux nœuds au même état publient la même racine."><span class="l">Racine de Merkle</span><span class="v petit mono" id="tMerkle">—</span><span class="s">hachage public (tronqué)</span></div>
+        </section>
 
-    <h2>Trust log</h2>
-    <table><thead><tr><th>#</th><th>op</th><th>type</th><th>author</th><th>when</th></tr></thead>
-      <tbody id="log"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table>
+        <div class="pan"><h3>Journal de confiance <i id="nLog"></i></h3>
+            <div class="tab"><table><thead><tr><th>#</th><th>Opération</th><th>Type</th><th>Auteur</th><th>Date</th></tr></thead><tbody id="bLog"></tbody></table></div>
+            <p class="note" id="noteLog">Les 50 dernières entrées, la plus récente en haut.</p></div>
 
-    <h2>Services</h2>
-    <p class="mono" style="margin:4px 0 8px">Non-revoked service offers published on this node. Subscribe requires a MEMBER identity and JWT.</p>
-    <table>
-      <thead><tr><th>Name</th><th>Kind</th><th>Provider</th><th>Approval</th><th>Action</th></tr></thead>
-      <tbody id="svc-list"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-    </table>
-    <div id="svc-msg" style="font-size:12px;margin:6px 0;color:var(--cyber-cyan,#00d4ff)"></div>
+        <div class="pan"><h3>Services <i>offres publiées sur ce nœud</i></h3>
+            <div id="rServ" class="retour" hidden></div>
+            <form class="saisie" id="fAbo" hidden autocomplete="off">
+                <div class="titre" id="titreAbo"></div>
+                <label>Votre identifiant (did:plc:…)<input name="subscriber_did" id="aboDid" placeholder="did:plc: + 32 caractères hexadécimaux" required spellcheck="false" autocomplete="off"></label>
+                <label>Votre clé privée Ed25519 (64 caractères hexadécimaux)<input name="subscriber_priv_hex" id="aboCle" type="password" required spellcheck="false" autocomplete="off"></label>
+                <div class="avert">La clé est envoyée au service de ce nœud pour signer l’abonnement (contrat existant de l’API) ; elle n’est ni affichée ni conservée par cette page.</div>
+                <div class="bout"><button class="btn prim" type="submit">Confirmer l’abonnement</button><button class="btn" type="button" id="aboAnnule">Annuler</button></div>
+            </form>
+            <div class="tab"><table><thead><tr><th>Nom</th><th>Genre</th><th>Fournisseur</th><th>Approbation</th><th>Action</th></tr></thead><tbody id="bServ"></tbody></table></div>
+            <p class="note">S’abonner exige une identité MEMBRE et une session administrateur.</p></div>
 
-    <h2>My subscriptions</h2>
-    <table>
-      <thead><tr><th>Service</th><th>Subscription ID</th><th>State</th></tr></thead>
-      <tbody id="sub-list"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
-    </table>
-  </main>
+        <div class="pan"><h3>Abonnements <i id="nAbos"></i></h3>
+            <div class="tab"><table><thead><tr><th>Service</th><th>Identifiant d’abonnement</th><th>État</th></tr></thead><tbody id="bAbos"></tbody></table></div>
+            <p class="note" id="noteAbos">Tous les abonnements du journal.</p></div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-  <script>
-    const API='/api/v1/annuaire';
-    async function j(p){try{const r=await fetch(API+p);if(!r.ok)throw 0;return await r.json();}catch(e){return null;}}
-    function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
-    function shortdid(s){s=String(s||'');return s.length>22?s.slice(0,14)+'…'+s.slice(-5):s;}
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/annuaire';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const court = (s, n) => { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 8) + '…' + s.slice(-5) : s; };
 
-    function stateColor(st){
-      const m={approved:'var(--matrix-green,#00ff41)',pending:'var(--gold-hermetic,#c9a84c)',
-               rejected:'var(--cinnabar,#e63946)',revoked:'var(--text-muted,#6b6b7a)'};
-      return m[st]||'inherit';
-    }
+        let STATUT = null, LOG = null, SERVICES = null, ABOS = null, SESSION_OK = true, MINE = '', ABO_EN_COURS = null;
 
-    async function subscribe(serviceId){
-      const msg=document.getElementById('svc-msg');
-      msg.textContent='';
-      const subDid=prompt('Your subscriber did:plc (leave blank to skip):');
-      if(!subDid||!subDid.startsWith('did:plc:')){msg.textContent='Subscribe cancelled (no valid DID entered).';return;}
-      const subPriv=prompt('Your raw Ed25519 private key hex (32 bytes = 64 hex chars):');
-      if(!subPriv||subPriv.length!==64){msg.textContent='Subscribe cancelled (invalid key length).';return;}
-      try{
-        const r=await fetch(API+'/service/'+serviceId+'/subscribe',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({subscriber_did:subDid,subscriber_priv_hex:subPriv})
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : même route, même corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(ok, msg) { const r = $('rServ'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            return d ? (typeof d === 'string' ? d : 'Requête refusée (champs invalides)') : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable');
+        }
+        function pastille(cls, txt, tip) { const p = el('span', 'pill ' + (cls || ''), txt); if (tip) p.title = tip; return p; }
+        function quand(ts) {
+            if (!ts) return '—';
+            const d = new Date(ts);
+            return isNaN(d) ? String(ts) : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
+        }
+        function vide(tb, n, txt) { tb.replaceChildren(); const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+
+        // ----- Démonstration : adresses de documentation, identifiants fictifs -----
+        const D1 = 'did:plc:' + '0123456789abcdef0123456789abcdef', D2 = 'did:plc:' + 'fedcba9876543210fedcba9876543210';
+        function donneesDemo() {
+            const t = h => new Date(Date.now() - h * 3600e3).toISOString();
+            return {
+                statut: { module: 'annuaire', chain_ok: true, chain_broken_at: null, merkle_root: '7c1e4a90b2d35f6e8a1c9d04b7e2f358a6c0d1e9f4b27a35c8d6e0f1a2b3c4d5', tip_height: 41 },
+                log: [{ height: 39, op: 'service_offer', payload_type: 'ServiceOffer', author: D1, created_at: t(30) },
+                      { height: 40, op: 'service_subscribe', payload_type: 'Subscription', author: D2, created_at: t(5) },
+                      { height: 41, op: 'config_publish', payload_type: 'ConfigBlob', author: D1, created_at: t(1) }],
+                services: [{ service_id: 'a1b2c3', name: 'miroir-apt', kind: 'mirror', provider: D1, approval_mode: 'auto' },
+                           { service_id: 'd4e5f6', name: 'api-metrics', kind: 'api', provider: D2, approval_mode: 'pending' }],
+                abos: [{ subscription_id: '9f8e7d6c5b4a39281706f5e4d3c2b1a0', service_id: 'a1b2c3', state: 'approved' },
+                       { subscription_id: '1a2b3c4d5e6f70819293a4b5c6d7e8f9', service_id: 'd4e5f6', state: 'pending' }]
+            };
+        }
+
+        async function charger() {
+            if (DEMO) {
+                const d = donneesDemo(); STATUT = d.statut; LOG = d.log; SERVICES = d.services; ABOS = d.abos; SESSION_OK = true;
+                $('demo').hidden = false; rendre(); return;
+            }
+            SESSION_OK = true;
+            const lecture = async (chemin) => { try { return await lire(chemin); } catch (e) { if (e.statut === 401 || e.statut === 403) SESSION_OK = false; return null; } };
+            const [st, lg, sv, ab] = await Promise.all([lecture('/status'), lecture('/log?limit=50'), lecture('/services'), lecture('/subscriptions' + (MINE ? '?mine=' + encodeURIComponent(MINE) : ''))]);
+            STATUT = st; SERVICES = sv && Array.isArray(sv.services) ? sv.services : null; ABOS = ab && Array.isArray(ab.subscriptions) ? ab.subscriptions : null;
+            LOG = Array.isArray(lg) ? lg : (lg && Array.isArray(lg.entries) ? lg.entries : null);
+            rendre();
+        }
+
+        function rendre() {
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif att'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'INJOIGNABLE'; }
+            else { const ok = s.chain_ok !== false; etat.className = 'actif' + (ok ? '' : ' hors'); etat.textContent = ok ? 'CHAÎNE VÉRIFIÉE' : 'CHAÎNE ROMPUE'; }
+
+            const cc = $('cChaine'), tc = $('tChaine');
+            if (!s || s.chain_ok === undefined) { cc.className = 'tuile'; tc.textContent = '—'; $('sChaine').textContent = 'vérification BLAKE2b'; }
+            else if (s.chain_ok) { cc.className = 'tuile ok'; tc.textContent = 'Vérifiée'; $('sChaine').textContent = 'aucune altération détectée'; }
+            else { cc.className = 'tuile hors'; tc.textContent = 'Rompue'; $('sChaine').textContent = 'rupture à la hauteur ' + tiret(s.chain_broken_at); }
+            const h = s && typeof s.tip_height === 'number' ? s.tip_height : null;
+            $('tEntrees').textContent = h === null ? '—' : String(h + 1);
+            $('sEntrees').textContent = h === null ? 'hauteur de pointe —' : (h < 0 ? 'journal vide' : 'hauteur de pointe ' + h);
+            const m = $('tMerkle'); m.textContent = s && s.merkle_root ? court(s.merkle_root, 22) : '—'; m.title = s && s.merkle_root ? s.merkle_root : '';
+            $('tServices').textContent = SERVICES ? SERVICES.length : '—';
+            $('tAbos').textContent = ABOS ? ABOS.length : '—';
+            $('sAbos').textContent = MINE ? 'filtrés sur votre identifiant' : 'tous états';
+
+            rendreLog(); rendreServices(); rendreAbos();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreLog() {
+            const tb = $('bLog');
+            if (!LOG) { vide(tb, 5, '—'); $('nLog').textContent = ''; return; }
+            if (!LOG.length) { vide(tb, 5, 'Aucune entrée : le graphe de confiance est vide.'); $('nLog').textContent = ''; return; }
+            tb.replaceChildren();
+            $('nLog').textContent = LOG.length + ' entrée' + (LOG.length > 1 ? 's' : '');
+            LOG.slice(-50).reverse().forEach(e => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(e.height)));
+                const o = el('td'); o.appendChild(pastille('cy', tiret(e.op || e.payload_type))); tr.appendChild(o);
+                tr.appendChild(el('td', '', tiret(e.payload_type)));
+                const a = el('td', 'mono', tiret(court(e.author, 22))); a.title = e.author || ''; tr.appendChild(a);
+                tr.appendChild(el('td', 'mono', quand(e.created_at)));
+                tb.appendChild(tr);
+            });
+        }
+
+        function rendreServices() {
+            const tb = $('bServ');
+            if (!SERVICES) { vide(tb, 5, '—'); return; }
+            if (!SERVICES.length) { vide(tb, 5, 'Aucune offre de service pour le moment.'); return; }
+            tb.replaceChildren();
+            SERVICES.forEach(s => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(s.name)));
+                const k = el('td'); k.appendChild(pastille('cy', tiret(s.kind))); tr.appendChild(k);
+                const p = el('td', 'mono', tiret(court(s.provider, 22))); p.title = s.provider || ''; tr.appendChild(p);
+                const ap = el('td'); ap.appendChild(pastille(s.approval_mode === 'auto' ? 'ok' : 'att', s.approval_mode === 'auto' ? 'AUTOMATIQUE' : s.approval_mode === 'pending' ? 'SUR VALIDATION' : tiret(s.approval_mode))); tr.appendChild(ap);
+                const ac = el('td'); const b = el('button', 'btn sm prim', 'S’abonner'); b.type = 'button';
+                b.addEventListener('click', () => ouvrirAbo(s)); ac.appendChild(b); tr.appendChild(ac);
+                tb.appendChild(tr);
+            });
+        }
+
+        function couleurEtat(st) { return st === 'approved' ? 'ok' : st === 'pending' ? 'att' : st === 'rejected' ? 'hors' : ''; }
+        const LIB_ETAT = { approved: 'APPROUVÉ', pending: 'EN ATTENTE', rejected: 'REFUSÉ', revoked: 'RÉVOQUÉ' };
+        function rendreAbos() {
+            const tb = $('bAbos');
+            $('nAbos').textContent = ABOS && ABOS.length ? ABOS.length : '';
+            $('noteAbos').textContent = MINE ? 'Filtré sur l’identifiant saisi lors du dernier abonnement.' : 'Tous les abonnements du journal.';
+            if (!ABOS) { vide(tb, 3, '—'); return; }
+            if (!ABOS.length) { vide(tb, 3, MINE ? 'Aucun abonnement pour cet identifiant.' : 'Aucun abonnement pour le moment.'); return; }
+            tb.replaceChildren();
+            ABOS.forEach(s => {
+                const tr = el('tr');
+                const a = el('td', 'mono', tiret(court(s.service_id, 22))); a.title = s.service_id || ''; tr.appendChild(a);
+                const b = el('td', 'mono', tiret(court(s.subscription_id, 22))); b.title = s.subscription_id || ''; tr.appendChild(b);
+                const e = el('td'); e.appendChild(pastille(couleurEtat(s.state), LIB_ETAT[s.state] || tiret(s.state))); tr.appendChild(e);
+                tb.appendChild(tr);
+            });
+        }
+
+        // ----- Abonnement : confirmation intégrée (formulaire), jamais de dialogue natif -----
+        function ouvrirAbo(s) {
+            ABO_EN_COURS = s;
+            $('titreAbo').textContent = 'S’abonner au service « ' + tiret(s.name) + ' » (' + court(s.service_id, 22) + ')';
+            $('fAbo').hidden = false; $('aboDid').focus(); annoncer();
+        }
+        function fermerAbo() { ABO_EN_COURS = null; $('fAbo').hidden = true; $('aboCle').value = ''; annoncer(); }
+        $('aboAnnule').addEventListener('click', fermerAbo);
+        $('fAbo').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const did = $('aboDid').value.trim(), cle = $('aboCle').value;
+            if (!did.startsWith('did:plc:')) { retour(false, 'Abonnement annulé : identifiant did:plc: invalide.'); return; }
+            if (cle.length !== 64) { retour(false, 'Abonnement annulé : la clé doit faire 64 caractères hexadécimaux.'); return; }
+            const s = ABO_EN_COURS; if (!s) return;
+            const res = await ecrire('POST', '/service/' + s.service_id + '/subscribe', { subscriber_did: did, subscriber_priv_hex: cle });
+            $('aboCle').value = '';
+            if (!res.ok) { retour(false, 'Échec : ' + detail(res)); return; }
+            const d = res.data || {};
+            retour(true, 'Abonné — état : ' + (LIB_ETAT[d.state] || tiret(d.state)) + ' (identifiant : ' + court(d.subscription_id, 22) + ')');
+            fermerAbo(); MINE = did; toast('Abonnement enregistré'); charger();
         });
-        const data=await r.json();
-        if(!r.ok){msg.textContent='Error: '+(data.detail||JSON.stringify(data));return;}
-        msg.textContent='Subscribed — state: '+(data.state||'?')+' (subscription_id: '+shortdid(data.subscription_id||'')+')';
-        loadSubscriptions(subDid);
-      }catch(e){msg.textContent='Error: '+e;}
-    }
 
-    async function loadServices(){
-      const tb=document.getElementById('svc-list');
-      const data=await j('/services');
-      const svcs=data&&Array.isArray(data.services)?data.services:[];
-      if(!svcs.length){tb.innerHTML='<tr><td colspan="5" class="empty">No service offers yet.</td></tr>';return;}
-      tb.innerHTML=svcs.map(s=>`<tr>
-        <td>${esc(s.name||'')}</td>
-        <td><span class="op">${esc(s.kind||'')}</span></td>
-        <td class="mono" title="${esc(s.provider)}">${esc(shortdid(s.provider))}</td>
-        <td><span style="color:${s.approval_mode==='auto'?'var(--matrix-green,#00ff41)':'var(--gold-hermetic,#c9a84c)'}">${esc(s.approval_mode||'')}</span></td>
-        <td><button style="font-size:11px;padding:3px 10px;cursor:pointer;background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);color:var(--cyber-cyan,#00d4ff);border-radius:6px"
-            onclick="subscribe('${esc(s.service_id||'')}')">Subscribe</button></td>
-        </tr>`).join('');
-    }
+        $('rafraichir').addEventListener('click', charger);
 
-    async function loadSubscriptions(filterDid){
-      const tb=document.getElementById('sub-list');
-      const params=filterDid?'?mine='+encodeURIComponent(filterDid):'';
-      const data=await j('/subscriptions'+params);
-      const subs=data&&Array.isArray(data.subscriptions)?data.subscriptions:[];
-      if(!subs.length){tb.innerHTML='<tr><td colspan="3" class="empty">No subscriptions'+(filterDid?' for this DID':'')+' yet.</td></tr>';return;}
-      tb.innerHTML=subs.map(s=>`<tr>
-        <td class="mono">${esc(shortdid(s.service_id))}</td>
-        <td class="mono">${esc(shortdid(s.subscription_id))}</td>
-        <td><span style="color:${stateColor(s.state)};font-weight:600">${esc(s.state||'?')}</span></td>
-        </tr>`).join('');
-    }
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'annuaire' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-    async function load(){
-      const st=await j('/status');
-      if(st){
-        const ok=st.chain_ok!==false;
-        const cb=document.getElementById('chain'); cb.textContent=ok?'VERIFIED':('BROKEN @'+st.chain_broken_at);
-        cb.className='v '+(ok?'ok':'bad');
-        document.getElementById('chain-badge').textContent='chain '+(ok?'✓':'✗');
-        document.getElementById('height').textContent=(st.tip_height==null||st.tip_height<0)?'0 (empty)':st.tip_height;
-        document.getElementById('merkle').textContent=st.merkle_root||'—';
-      }
-      const log=await j('/log');
-      const tb=document.getElementById('log');
-      const rows=Array.isArray(log)?log:(log&&Array.isArray(log.entries)?log.entries:[]);
-      if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="empty">No log entries yet — the trust graph is empty.</td></tr>';return;}
-      tb.innerHTML=rows.slice(-50).reverse().map(e=>`<tr>
-        <td>${esc(e.height)}</td><td><span class="op">${esc(e.op||(e.payload&&e.payload_type)||'?')}</span></td>
-        <td>${esc(e.payload_type||'')}</td><td class="mono" title="${esc(e.author)}">${esc(shortdid(e.author))}</td>
-        <td class="mono">${esc((e.ts||e.timestamp||'').toString().replace('T',' ').slice(0,19))}</td></tr>`).join('');
-      await loadServices();
-      await loadSubscriptions();
-    }
-    document.addEventListener('DOMContentLoaded',load);
-    setInterval(load,15000);
-  </script>
-  <script src="/shared/crt-engine.js"></script>
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        if (!DEMO) setInterval(() => { if (!document.hidden && $('fAbo').hidden) charger(); }, 20000);
+    </script>
 </body>
 </html>
