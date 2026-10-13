@@ -429,6 +429,24 @@ determine_url() {
         echo "${url%/}/$pp"
         return
     fi
+    # LE KIOSQUE OUVRE L'ADMINISTRATION (#2534). Le Hall est une realisation propre a gk2, pas l'accueil de toute box : sur la console
+    # locale (admin.localhost:9078, sans authentification pour le seul kiosque, #1695) puis sur le port ordinaire (9080), c'est le
+    # tableau de bord SecuBox. KIOSK_START="hall" (dans /etc/default/secubox-kiosk) rend l'ancien comportement.
+    local defauts="${KIOSK_DEFAUTS:-/etc/default/secubox-kiosk}" start="admin"
+    if [ -r "$defauts" ]; then
+        start="$(sed -n 's/^KIOSK_START="\{0,1\}\([a-z]*\)"\{0,1\}[[:space:]]*$/\1/p' "$defauts" | tail -1)"
+        start="${start:-admin}"
+    fi
+    if [ "$start" = "admin" ]; then
+        local aport page
+        for aport in 9078 9080; do
+            page="$(curl -s --connect-timeout 2 --max-time 5 --resolve "admin.localhost:$aport:127.0.0.1" "http://admin.localhost:$aport/" 2>/dev/null)" || continue
+            if printf '%s' "$page" | grep -q '<title>SecuBox' && ! printf '%s' "$page" | grep -q 'id="featgrid"'; then
+                echo "http://admin.localhost:$aport/"
+                return
+            fi
+        done
+    fi
     # Box configurée : LE HALL PAR SON PROPRE VHOST (#1668). Par localhost, le
     # serveur par défaut renvoie vers /hall/, copie montée dans la console où
     # les chemins absolus des cartes tombent sur l'administration. Chromium

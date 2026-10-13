@@ -1,3 +1,9 @@
+secubox-premier-pas (0.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * Le kiosque ouvre l'ADMINISTRATION, pas le Hall (#2534) : le Hall est une realisation personnelle de gk2, pas l'accueil de toute box (retour du mainteneur). Le lanceur choisit admin.localhost:9078 (console locale, sans authentification pour le seul kiosque) puis :9080, apres verification que la page est bien le tableau de bord SecuBox et non le Hall ; l'assistant premier-pas reste prioritaire sur une box neuve. KIOSK_START="hall" dans /etc/default/secubox-kiosk rend l'ancien comportement ; sans administration joignable, repli sur le Hall. 5 tests (determine_url extraite du vrai lanceur, avec de faux curl).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 15:00:00 +0200
+
 secubox-premier-pas (0.5.6-1~bookworm1) bookworm; urgency=medium
 
   * Le domaine est PROPOSE a l'etape « Reseau et domaine » (#2530) : `<nom de la box>.secubox.in`, en web comme en console. Le DNS de secubox.in est gere par gk2 (gk1.secubox.in resout deja vers l'adresse publique que gk2 recoit et route). Sans domaine, firstboot gardait nginx seul (« frontal : domaine de la box inconnu ») et la box n'avait ni frontal HAProxy ni WAF. Le champ reste modifiable, un domaine deja choisi n'est pas ecrase, et le mode « LAN seul » n'a toujours pas de domaine. 8 tests.
