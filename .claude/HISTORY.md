@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — hub 1.11.0 : /espace/, /health/ et /appareil/ au profil Aurora (ref #2538)
+
+« Les onglets sont pétés » sur `/espace/#protection` : la Vue d'ensemble Aurora (#2485) avait supprimé `apercu.css`/`apercu.js` que `/espace/` et `/appareil/` liaient encore. Pages refaites sur données réelles : `/espace/` (onglets réactifs, état tiré de `health-batch`, filtres, clavier), `/health/` (tuiles-filtres, lignes dépliables et sélectionnables, WAF rejouable), `/appareil/` (feuille intégrée). Garde-fou : aucune ressource locale manquante dans une page du hub. Tests `test_espace_aurora_2538.py`, `test_health_aurora_2538.py`, `test_pages_sans_ressource_manquante_2538.py`.
+
 ## 2026-10-13 — p2p 1.13.2 : la jonction automatique joint un parent distant en HTTPS (ref #2536)
 
 Essai réel gk1 → gk2 avec un code d'invitation déposé dans `automesh.code` : échec. `sbx-mesh-join` n'utilisait que HTTP:7331 (filtré par le pare-feu de gk2 depuis le LAN, et injoignable derrière une Freebox) ; l'état disait « RuntimeError ». Parent local → HTTP:7331 inchangé ; parent distant → HTTPS par le nginx du parent, certificat vérifié. Message d'échec lisible, jeton jamais journalisé. Test `packages/secubox-p2p/tests/test_transport_jonction_2536.py`.

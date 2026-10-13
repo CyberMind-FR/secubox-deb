@@ -1,3 +1,12 @@
+secubox-hub (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pages /espace/, /health/ et /appareil/ au profil Aurora (#2538). La Vue d'ensemble Aurora (#2485) avait supprime apercu.css et apercu.js : /espace/ et /appareil/ les liaient encore (404), deux pages sans feuille de style. Un test refuse desormais toute ressource locale manquante dans une page du hub.
+  * /espace/ : onglets des six espaces (compte, pire etat de l'espace, fleches/Debut/Fin, #id dans l'adresse), cartes avec l'etat REEL tire de health-batch (le champ `active` du menu, fonde sur l'unite ou la socket, est faux pour un module monte dans l'agregateur : DNS Guard s'y voyait « a l'arret »), filtre texte et etat, actualisation 15 s, erreur de menu dite (« HORS LIGNE »).
+  * /health/ : tuiles = boutons-filtres (aria-pressed), recherche, lignes cliquables qui deplient le detail (identifiant, etat, message, espace, lien vers la page du module, copie de l'identifiant), texte SELECTIONNABLE (un glisser ne deplie pas), « tout deplier », pause de l'actualisation, filtre et lignes depliees conserves a chaque releve, test du WAF rejouable avec retour integre (« session requise » sans jeton), plus de police externe.
+  * /appareil/ : feuille Aurora integree, script inchange. 40 tests navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 17:00:00 +0200
+
 secubox-hub (1.10.2-1~bookworm1) bookworm; urgency=medium
 
   * Pastilles de la barre laterale (#2512) : DNS Guard, HAProxy, Hardening restaient grises alors qu'ils repondent. Le lot de sante (/public/health-batch) jugeait par unite systemd et par socket ; un module monte EN PROCESSUS par l'agregateur n'a ni l'un ni l'autre. Le lot est maintenant complete par la liste « mounted » du /health de l'agregateur (appel hors boucle, ensemble vide si injoignable : aucun module declare en service a tort), et R-Level, page du Toolbox, suit le Toolbox. Une unite en echec reste une alarme. 10 tests.
