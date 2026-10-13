@@ -178,6 +178,24 @@ def test_missing_jwt_secret_raises(monkeypatch, tmp_path):
         auth._secret()
 
 
+def test_secret_ajoute_apres_le_demarrage_est_lu_sans_redemarrage(monkeypatch, tmp_path):
+    """#2554 : la config est en cache par processus. Un service lance AVANT que
+    api.jwt_secret n'entre dans secubox.conf levait « not configured » a chaque
+    requete jusqu'au redemarrage (WAF, system, users, nac de gk1 : 500). La
+    relecture se fait une fois quand le secret est vide ; jamais de valeur par defaut."""
+    from secubox_core import config
+    conf = tmp_path / "secubox.conf"
+    conf.write_text('[api]\nsocket_dir = "/tmp/x"\n')
+    monkeypatch.delenv("SECUBOX_JWT_SECRET", raising=False)
+    monkeypatch.setattr(config, "_CONF_PATHS", [conf])
+    monkeypatch.setattr(config, "_CONFIG", None)
+    with pytest.raises(RuntimeError):
+        auth._secret()
+    conf.write_text('[api]\nsocket_dir = "/tmp/x"\njwt_secret = "' + "s" * 64 + '"\n')
+    assert auth._secret() == "s" * 64          # sans redemarrer, sans reload explicite
+    monkeypatch.setattr(config, "_CONFIG", None)
+
+
 def test_insecure_placeholder_is_gone():
     src = Path(auth.__file__).read_text()
     assert "CHANGEME_INSECURE" not in src
