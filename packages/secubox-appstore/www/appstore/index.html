@@ -4,522 +4,576 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  App Store au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SecuBox · App Store</title>
-  <link rel="stylesheet" href="/shared/design-tokens.css">
-  <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-  <style>
-    .as-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}
-    .as-bar input,.as-bar select{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);
-      color:var(--text,#e8e6d9);padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px}
-    .as-bar input{min-width:220px}
-    .as-stat{color:var(--text-muted,#6b6b7a);font-size:12px;margin-left:auto}
-    .as-stat b{color:var(--cyber-cyan,#00d4ff)}
-    .as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
-    .as-card{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);border-radius:10px;
-      padding:14px;display:flex;flex-direction:column;gap:8px}
-    .as-card:hover{border-color:var(--gold-hermetic,#c9a84c)}
-    .as-top{display:flex;align-items:center;gap:10px}
-    .as-ico{font-size:24px}
-    .as-name{font-weight:700;font-size:14px;word-break:break-word}
-    .as-desc{color:var(--text-muted,#6b6b7a);font-size:12px;min-height:30px;line-height:1.4}
-    .as-badges{display:flex;gap:6px;flex-wrap:wrap}
-    .pill{font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--line,#2a2a3a);text-transform:uppercase;letter-spacing:.4px}
-    .pill.cat{color:var(--cyber-cyan,#00d4ff)} .pill.tier{color:var(--gold-hermetic,#c9a84c)}
-    .pill.s-running{color:var(--matrix-green,#00ff41);border-color:#1d5a2a}
-    .pill.s-installed{color:var(--cyber-cyan,#00d4ff)}
-    .pill.s-available{color:var(--text-muted,#6b6b7a)}
-    .pill.s-tier-locked{color:var(--cinnabar,#e63946);border-color:#5a1d23}
-    .as-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
-    .as-btn{background:transparent;border:1px solid var(--line,#2a2a3a);color:var(--text,#e8e6d9);
-      padding:5px 10px;border-radius:6px;font-family:inherit;font-size:11px;cursor:pointer}
-    .as-btn:hover{border-color:var(--gold-hermetic,#c9a84c)}
-    .as-btn.danger{color:var(--cinnabar,#e63946)} .as-btn:disabled{opacity:.4;cursor:not-allowed}
-    .as-over{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:1000;align-items:center;justify-content:center}
-    .as-over.on{display:flex}
-    .as-modal{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);border-radius:12px;
-      width:min(720px,92vw);max-height:88vh;overflow:auto;padding:18px}
-    .as-modal h2{font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);margin:.2em 0}
-    .as-modal textarea{width:100%;min-height:300px;background:#0a0a0f;color:var(--text,#e8e6d9);
-      border:1px solid var(--line,#2a2a3a);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:10px}
-    .as-row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center}
-    .as-msg{font-size:12px;margin-right:auto;color:var(--text-muted,#6b6b7a)}
-    .as-deps{color:var(--text-muted,#6b6b7a);font-size:12px;margin:6px 0}
-    /* Objets fédérés (#1391) */
-    .fed-filtres{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
-    .fed-chip{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;cursor:pointer;
-      border:1px solid var(--line,#2a2a3a);background:transparent;color:var(--text-muted,#6b6b7a)}
-    .fed-chip span{opacity:.7;font-family:'JetBrains Mono',monospace}
-    .fed-chip.on{border-color:var(--cyber-cyan,#00d4ff);color:var(--cyber-cyan,#00d4ff)}
-    .fed-meta{font-size:11px;color:var(--text-muted,#6b6b7a);margin:4px 0}
-    .fed-retri{font-size:11px;color:var(--gold-hermetic,#c9a84c);margin:0 0 4px}
-    .fed-retri a{color:var(--cyber-cyan,#00d4ff)}
-    /* Aperçus embarqués dans le .sbx (#1395) */
-    .fed-shot{display:block;padding:0;border:1px solid var(--line,#2a2a3a);border-radius:6px;overflow:hidden;
-      aspect-ratio:640/328;background:#0a0a0f;cursor:zoom-in;width:100%}
-    .fed-shot img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
-    .fed-shot:focus-visible{outline:2px solid var(--cyber-cyan,#00d4ff);outline-offset:2px}
-    .fed-shot.vide{display:flex;align-items:center;justify-content:center;cursor:default;
-      color:var(--text-muted,#6b6b7a);font-size:11px;letter-spacing:.4px}
-    .fed-shot.vide span{font-size:26px;opacity:.5;margin-right:6px}
-    .fed-lb{display:grid;gap:10px}
-    .fed-lb img{width:100%;border-radius:6px;border:1px solid var(--line,#2a2a3a)}
-    /* Métapaquets imbriqués (#1397) : la force du lien se lit dans le trait */
-    .mp-legende{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--text-muted,#6b6b7a);margin:0 0 8px}
-    .mp-legende i{display:inline-block;width:18px;margin-right:5px;vertical-align:middle;border-top:2px solid var(--cyber-cyan,#00d4ff)}
-    .mp-legende i.rec{border-top-style:dashed} .mp-legende i.sug{border-top-style:dotted;border-color:var(--text-muted,#6b6b7a)}
-    .mp-arbre{font-size:12px;overflow-x:auto}
-    .mp-noeud>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;
-      padding:6px 8px;border-radius:8px}
-    .mp-noeud>summary::-webkit-details-marker{display:none}
-    .mp-noeud>summary:hover{background:rgba(0,212,255,.05)}
-    .mp-noeud>summary:focus-visible{outline:2px solid var(--cyber-cyan,#00d4ff)}
-    .mp-noeud>summary::before{content:'▸';color:var(--text-muted,#6b6b7a);width:10px}
-    .mp-noeud[open]>summary::before{content:'▾'}
-    .mp-label{font-weight:700;font-size:13px}
-    .mp-racine>summary .mp-label{font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:15px}
-    .mp-pq{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted,#6b6b7a)}
-    .mp-cpt{font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:auto;white-space:nowrap}
-    .mp-cpt b{font-weight:600}
-    .mp-desc{flex-basis:100%;color:var(--text-muted,#6b6b7a);font-size:11px;padding-left:16px}
-    .mp-cmd{font:inherit;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;background:none;
-      color:var(--text-muted,#6b6b7a);border:1px solid var(--line,#2a2a3a)}
-    .mp-cmd:hover{color:var(--cyber-cyan,#00d4ff);border-color:var(--cyber-cyan,#00d4ff)}
-    .mp-enf{margin-left:14px;padding-left:10px;border-left:2px solid var(--cyber-cyan,#00d4ff)}
-    .mp-enf.recommande{border-left-style:dashed;border-left-color:rgba(0,212,255,.55)}
-    .mp-enf.suggere{border-left-style:dotted;border-left-color:var(--text-muted,#6b6b7a);opacity:.85}
-    .mp-force{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted,#6b6b7a);margin:4px 0 0 2px}
-    .mp-mod>summary .mp-label{font-weight:600;font-size:12px}
-    .mp-pt{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--line,#2a2a3a);flex:none;align-self:center}
-    .mp-pt.on{background:var(--matrix-green,#00ff41);box-shadow:0 0 6px rgba(0,255,65,.5)}
-    .mp-deps{padding:4px 0 8px 30px;display:grid;gap:4px}
-    .mp-deps div{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-    .mp-deps span.k{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted,#6b6b7a);width:88px}
-    .mp-chip{font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:1px 7px;border-radius:10px;
-      border:1px solid var(--line,#2a2a3a);color:var(--text-muted,#6b6b7a)}
-    .mp-chip.sbx{color:var(--cyber-cyan,#00d4ff)}
-    .mp-chip.on{border-color:#1d5a2a}
-    .mp-chip.on::before{content:'✓ ';color:var(--matrix-green,#00ff41)}
-    .mp-abs{font-size:11px;color:var(--gold-hermetic,#c9a84c)}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — App Store</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.45;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.jn{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.10)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        a{color:var(--cyan)}
+        /* Filtres */
+        .barre-f{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}
+        .barre-f input,.barre-f select,.saisie input,textarea{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0}
+        .barre-f input{flex:1 1 200px;max-width:380px} .barre-f select{flex:0 1 auto}
+        .barre-f input:focus,.barre-f select:focus,.saisie input:focus,textarea:focus{outline:none;border-color:var(--cyan)}
+        .barre-f .cpt{margin-left:auto;color:var(--doux);font-size:.74rem} .barre-f .cpt b{color:var(--cyan)}
+        /* Groupes */
+        .groupes{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        .groupe{text-align:left;font:inherit;color:var(--texte);cursor:pointer;padding:9px 11px;border-radius:12px;background:rgba(18,40,78,.5);border:1px solid var(--trait);min-width:0}
+        .groupe:hover{border-color:var(--cyan)} .groupe:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .groupe.on{border-color:var(--cyan);background:rgba(41,182,246,.16)}
+        .groupe .t{display:flex;align-items:baseline;gap:8px} .groupe b{font-size:.84rem} .groupe .n{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;font-size:.76rem;color:var(--cyan)} .groupe .n.plein{color:var(--vert)}
+        .groupe .d{font-size:.7rem;color:var(--faible);margin-top:4px;line-height:1.35}
+        /* Cartes */
+        .cartes{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+        .carte{border:1px solid var(--trait);border-radius:12px;padding:11px 12px;background:linear-gradient(160deg,rgba(18,40,78,.55),rgba(8,18,38,.6));display:flex;flex-direction:column;gap:7px;min-width:0}
+        .carte:hover{border-color:var(--trait2)}
+        .carte .nom{font-weight:700;font-size:.9rem;overflow-wrap:anywhere} .carte .desc{color:var(--doux);font-size:.74rem;line-height:1.4;min-height:30px;overflow-wrap:anywhere}
+        .carte .pills{display:flex;gap:5px;flex-wrap:wrap} .carte .acts{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:auto}
+        .carte .meta{font-size:.7rem;color:var(--faible);overflow-wrap:anywhere}
+        .ap{display:block;padding:0;border:1px solid var(--trait);border-radius:8px;overflow:hidden;aspect-ratio:640/328;background:#0a162e;cursor:zoom-in;width:100%}
+        .ap img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
+        .ap.vide{display:flex;align-items:center;justify-content:center;cursor:default;color:var(--faible);font-size:.7rem}
+        .lb{display:grid;gap:8px} .lb img{width:100%;border-radius:8px;border:1px solid var(--trait)}
+        .puces{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+        .puces button{font:inherit;font-size:.74rem;padding:4px 11px;border-radius:999px;cursor:pointer;border:1px solid var(--trait);background:transparent;color:var(--doux)}
+        .puces button span{opacity:.75;font-variant-numeric:tabular-nums} .puces button.on{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.1)}
+        .puces button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .saisie{display:grid;gap:6px;margin:2px 0;width:100%} .saisie label{font-size:.7rem;color:var(--doux)} .saisie input{width:100%}
+        .saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        textarea{width:100%;min-height:240px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem}
+        .rang{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        /* Arbre des métapaquets */
+        .leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.7rem;color:var(--faible);margin:0 0 8px}
+        .leg i{display:inline-block;width:18px;margin-right:5px;vertical-align:middle;border-top:2px solid var(--cyan)} .leg i.rec{border-top-style:dashed} .leg i.sug{border-top-style:dotted;border-color:var(--faible)}
+        .arbre{font-size:.78rem;overflow-x:auto}
+        .nd>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:6px 8px;border-radius:8px}
+        .nd>summary::-webkit-details-marker{display:none} .nd>summary:hover{background:rgba(41,182,246,.07)} .nd>summary:focus-visible{outline:2px solid var(--cyan)}
+        .nd>summary::before{content:'▸';color:var(--faible);width:10px} .nd[open]>summary::before{content:'▾'}
+        .nd .lb2{font-weight:700} .nd.racine>summary .lb2{color:var(--cyan);font-size:.9rem}
+        .nd .pq{font-size:.7rem;color:var(--faible)} .nd .cp{margin-left:auto;font-size:.7rem;white-space:nowrap;font-variant-numeric:tabular-nums} .nd .cp b{font-weight:700}
+        .nd .ds{flex-basis:100%;color:var(--faible);font-size:.7rem;padding-left:16px;overflow-wrap:anywhere}
+        .nd .cmd{font:inherit;font-size:.66rem;padding:1px 7px;border-radius:6px;cursor:pointer;background:none;color:var(--faible);border:1px solid var(--trait)} .nd .cmd:hover{color:var(--cyan);border-color:var(--cyan)}
+        .enf{margin-left:14px;padding-left:10px;border-left:2px solid var(--cyan)} .enf.recommande{border-left-style:dashed;border-left-color:rgba(41,182,246,.55)} .enf.suggere{border-left-style:dotted;border-left-color:var(--faible);opacity:.9}
+        .enf .fo{font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faible);margin:4px 0 0 2px}
+        .pt{width:8px;height:8px;border-radius:50%;display:inline-block;background:rgba(159,179,214,.3);flex:none;align-self:center} .pt.on{background:var(--vert);box-shadow:0 0 6px rgba(46,204,113,.5)}
+        .deps{padding:4px 0 8px 30px;display:grid;gap:4px} .deps div{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+        .deps .k{font-size:.64rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faible);width:84px}
+        .chip{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.68rem;padding:1px 7px;border-radius:10px;border:1px solid var(--trait);color:var(--faible)}
+        .chip.sbx{color:var(--cyan)} .chip.on{border-color:rgba(46,204,113,.5)} .chip.on::before{content:'✓ ';color:var(--vert)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
-  <nav class="sidebar" id="sidebar"></nav>
-  <script src="/shared/sidebar.js"></script>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h16l-1.4 11a2 2 0 0 1-2 1.7H7.4a2 2 0 0 1-2-1.7L4 8Z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/></svg>
+                <div><h1>App Store</h1><small>Modules, fonctionnalités, métapaquets et objets fédérés</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-  <main class="main">
-    <header class="header">
-      <div class="header-title">
-        <h1>🛍️ App Store</h1>
-        <span class="badge" id="board-badge">tier —</span>
-      </div>
-    </header>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Modules du catalogue de cette box (installés ou non)."><span class="l">Modules</span><span class="v" id="tTotal">—</span><span class="s">dans le catalogue</span></div>
+            <div class="tuile cy" title="Modules du catalogue dont le paquet est installé (dpkg)."><span class="l">Installés</span><span class="v" id="tInst">—</span><span class="s">paquets présents</span></div>
+            <div class="tuile ok" title="Modules installés dont le service systemd est actif."><span class="l">En marche</span><span class="v" id="tRun">—</span><span class="s">service actif</span></div>
+            <div class="tuile" title="Modules non installés, publiés au dépôt et permis par le niveau de la box."><span class="l">Disponibles</span><span class="v" id="tDispo">—</span><span class="s" id="sDispo">installables</span></div>
+            <div class="tuile cy" title="Niveau (tier) de cette box : il décide quels modules sont permis."><span class="l">Niveau de la box</span><span class="v" id="tTier">—</span><span class="s">lite · standard · pro</span></div>
+        </section>
 
-    <!-- GROUPES (#1323) : une fonctionnalité, plusieurs paquets. Ils viennent
-         AVANT la barre de filtres parce qu'ils répondent à une autre question :
-         les filtres servent à retrouver un module qu'on nomme déjà, les groupes
-         à choisir quand on ne sait pas encore lequel. L'ordre descend du socle
-         vers l'agrément — ce qui fait tenir le lien, puis ce qu'on en fait. -->
-    <section id="groupes-panel" style="margin:18px 0 6px">
-      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
-        <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">Fonctionnalités</h2>
-        <span style="font-size:11px;color:var(--text-muted,#6b6b7a)" id="groupes-stat">…</span>
-        <button type="button" id="groupes-raz" onclick="groupeChoisi(null)"
-                style="margin-left:auto;display:none;font:inherit;font-size:11px;padding:3px 9px;cursor:pointer;
-                       background:none;color:var(--text-muted,#6b6b7a);border:1px solid var(--line,#2a2a3a);border-radius:8px">
-          ✕ tout le catalogue</button>
-      </div>
-      <div id="groupes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px"></div>
-    </section>
+        <div class="pan" id="pGroupes"><h3>Fonctionnalités <i id="gStat">—</i><button class="btn sm" id="gRaz" type="button" hidden>✕ tout le catalogue</button></h3>
+            <div class="groupes" id="groupes"></div>
+            <p class="note">Une fonctionnalité regroupe plusieurs modules. Le compte « installés / total » est recalculé ici d’après l’état réel du catalogue.</p></div>
 
-    <!-- MÉTAPAQUETS (#1397). L'arbre qui sert à PROFILER : on installe un
-         nœud, pas une liste. sbxos pose la box et son Hall ; secubox la box ;
-         une fonction une intention ; un service un service qui marche. -->
-    <section id="mp-panel" style="margin:18px 0 10px">
-      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px">
-        <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">Métapaquets</h2>
-        <span style="font-size:11px;color:var(--text-muted,#6b6b7a)" id="mp-stat">…</span>
-      </div>
-      <div class="mp-legende" aria-label="Légende">
-        <span><i></i>requis (Depends)</span><span><i class="rec"></i>recommandé — installé par défaut, retirable</span>
-        <span><i class="sug"></i>suggéré — optionnel</span><span><span class="mp-pt on"></span> installé sur cette box</span>
-      </div>
-      <div class="mp-arbre" id="mp-arbre"></div>
-    </section>
+        <div class="pan" id="pModules"><h3>Modules <i id="mStat"></i></h3>
+            <div id="rMod" class="retour" hidden></div>
+            <div class="barre-f">
+                <input id="q" type="search" placeholder="Chercher un module…" aria-label="Chercher un module">
+                <select id="fCat" aria-label="Catégorie"><option value="">Toutes catégories</option></select>
+                <select id="fTier" aria-label="Niveau"><option value="">Tous niveaux</option><option>lite</option><option>standard</option><option>pro</option><option>all</option></select>
+                <select id="fEtat" aria-label="État"><option value="">Tous états</option><option value="running">en marche</option><option value="installed">installé</option><option value="available">disponible</option><option value="unpublished">non publié</option><option value="tier-locked">verrouillé par niveau</option></select>
+                <span class="cpt" id="cpt">—</span>
+            </div>
+            <div class="pan" id="pCfg" hidden style="margin-bottom:10px">
+                <h3 id="cfgTitre">Configuration <i class="mono" id="cfgChemin"></i><button class="btn sm" id="cfgFerme" type="button">Fermer</button></h3>
+                <div class="note" id="cfgDeps" style="margin:0 0 6px"></div>
+                <textarea id="cfgTexte" spellcheck="false" aria-label="Contenu de la configuration"></textarea>
+                <div class="rang"><span class="note" id="cfgMsg" style="margin:0 auto 0 0" role="status"></span>
+                    <span id="cfgActs" class="rang" style="margin:0"></span></div>
+            </div>
+            <div class="cartes" id="grille"></div></div>
 
-    <div class="as-bar">
-      <input id="q" type="search" placeholder="Search modules…" oninput="render()">
-      <select id="category" onchange="render()"><option value="">All categories</option></select>
-      <select id="tier" onchange="render()"><option value="">All tiers</option>
-        <option>lite</option><option>standard</option><option>pro</option><option>all</option></select>
-      <select id="state" onchange="render()"><option value="">All states</option>
-        <option value="running">running</option><option value="installed">installed</option>
-        <option value="available">available</option><option value="unpublished">unpublished</option>
-        <option value="tier-locked">tier-locked</option></select>
-      <span class="as-stat" id="stat">loading…</span>
-    </div>
-    <div class="as-grid" id="grid"></div>
+        <div class="pan" id="pMeta"><h3>Métapaquets <i id="mpStat">—</i></h3>
+            <div class="leg"><span><i></i>requis (Depends)</span><span><i class="rec"></i>recommandé — installé par défaut, retirable</span><span><i class="sug"></i>suggéré — optionnel</span><span><span class="pt on"></span> installé sur cette box</span></div>
+            <div class="arbre" id="arbre"></div></div>
 
-    <!-- OBJETS FÉDÉRÉS (#1391). L'App Store ne distribue plus seulement des
-         modules : des objets SBX signés — métablogs d'abord. Chaque carte dit
-         qui l'a publié, sous quelle licence, sur quel canal, et si la
-         fédération a certifié l'éditeur. -->
-    <section id="fed-panel" style="margin-top:24px">
-      <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">
-        🌐 Objets fédérés <span id="fed-stat" style="font-size:12px;color:var(--text-muted,#6b6b7a);font-family:'JetBrains Mono',monospace">—</span></h2>
-      <p style="font-size:11px;color:var(--text-muted,#6b6b7a);margin:3px 0 8px;font-family:'JetBrains Mono',monospace">
-        Paquets .sbx signés par leur éditeur, vérifiés à l'installation (signature, intégrité, certificat SBX). Un site installé arrive non publié.</p>
-      <div class="fed-filtres" id="fed-filtres" role="group" aria-label="Type d'objet"></div>
-      <input id="fed-q" type="search" placeholder="Chercher un objet (nom, description, licence)…" aria-label="Chercher un objet fédéré"
-        style="width:100%;max-width:420px;margin:0 0 10px;padding:6px 10px;border-radius:8px;border:1px solid var(--line,#2a2a3a);background:var(--panel,#14141c);color:inherit;font:inherit;font-size:12px">
-      <div class="as-grid" id="fed-grid"></div>
-      <div id="fed-plus" style="margin-top:10px"></div>
-    </section>
+        <div class="pan" id="pFed"><h3>Objets fédérés <i id="fStat">—</i></h3>
+            <p class="note" style="margin:0 0 8px">Paquets .sbx signés par leur éditeur, vérifiés à l’installation (signature, intégrité, certificat SBX). Un site installé arrive non publié.</p>
+            <div id="rFed" class="retour" hidden></div>
+            <div class="puces" id="fPuces" role="group" aria-label="Type d’objet"></div>
+            <div class="barre-f"><input id="fQ" type="search" placeholder="Chercher un objet (nom, description, licence)…" aria-label="Chercher un objet fédéré"></div>
+            <div class="pan" id="pLb" hidden style="margin-bottom:10px"><h3 id="lbTitre">Aperçus <button class="btn sm" id="lbFerme" type="button">Fermer</button></h3>
+                <div class="lb" id="lbImgs"></div><p class="note">Aperçus embarqués dans le paquet, couverts par la signature de l’éditeur.</p></div>
+            <div class="cartes" id="fGrille"></div>
+            <div class="rang" id="fPlus"></div></div>
 
-    <section id="mesh-panel" style="margin-top:24px">
-      <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">
-        🌐 Mesh Catalog <span id="mesh-stat" style="font-size:12px;color:var(--text-muted,#6b6b7a);font-family:'JetBrains Mono',monospace">—</span></h2>
-      <p style="font-size:11px;color:var(--text-muted,#6b6b7a);margin:3px 0 8px;font-family:'JetBrains Mono',monospace">
-        Services federated across the gondwana mesh (annuaire directory) — which node offers each, over which channel, and how to reach it.</p>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="text-align:left;color:var(--gold-hermetic,#c9a84c)">
-          <th style="padding:6px 8px">Service</th><th>Kind</th><th>Node</th><th>Channel</th><th>Reach</th></tr></thead>
-        <tbody id="mesh-list"><tr><td colspan="5" style="padding:10px;color:var(--text-muted,#6b6b7a)">loading…</td></tr></tbody>
-      </table>
-    </section>
-  </main>
+        <div class="pan" id="pMesh"><h3>Catalogue du maillage <i id="meStat">—</i></h3>
+            <p class="note" style="margin:0 0 8px">Services fédérés sur le maillage gondwana (annuaire) : quel nœud offre chaque service, par quel canal et comment l’atteindre.</p>
+            <div class="tab"><table><thead><tr><th>Service</th><th>Type</th><th>Nœud</th><th>Canal</th><th>Accès</th></tr></thead><tbody id="bMesh"></tbody></table></div></div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-  <!-- Config / detail drawer -->
-  <div class="as-over" id="over">
-    <div class="as-modal">
-      <h2 id="m-title">module</h2>
-      <div class="as-deps" id="m-deps"></div>
-      <div class="as-actions" id="m-actions" style="margin-bottom:10px"></div>
-      <label style="font-size:12px;color:var(--text-muted,#6b6b7a)">Config (<span id="m-path"></span>)</label>
-      <textarea id="m-config" spellcheck="false"></textarea>
-      <div class="as-row">
-        <span class="as-msg" id="m-msg"></span>
-        <button class="as-btn" onclick="closeModal()">Close</button>
-        <button class="as-btn" id="m-save" onclick="saveConfig()">Save config</button>
-      </div>
-    </div>
-  </div>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/appstore', FED = '/api/appstore';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const ICONES = { media: '🎬', email: '✉️', ai: '🧠', iot: '🛰️', communication: '💬', publishing: '📰', network: '🌐', security: '🛡️', system: '⚙️', vpn: '🔒', dashboard: '📊', monitoring: '📈', misc: '🧩' };
+        const ICO_FED = { app: '🧩', site: '🌐', metablog: '📰', waf: '🛡️', dataset: '🗂️', archive: '📦', config: '⚙️', template: '🧱' };
+        const TYPES_FED = [['', 'Tout'], ['app', 'Applications'], ['site', 'Sites'], ['metablog', 'Métablogs'], ['waf', 'WAF'], ['dataset', 'Données'], ['archive', 'Archives'], ['config', 'Configurations']];
+        const LIB_ETAT = { running: ['ok', 'EN MARCHE'], installed: ['cy', 'INSTALLÉ'], available: ['', 'DISPONIBLE'], unpublished: ['att', 'NON PUBLIÉ'], 'tier-locked': ['hors', 'VERROUILLÉ'] };
 
-  <script>
-    const API='/api/v1/appstore';
-    const ICONS={media:'🎬',email:'✉️',ai:'🧠',iot:'🛰️',communication:'💬',publishing:'📰',
-      network:'🌐',security:'🛡️',system:'⚙️',vpn:'🔒',dashboard:'📊',monitoring:'📈',misc:'🧩'};
-    let ALL=[], CUR=null;
+        let CATS = null, ALL = null, GROUPES = null, MP = null, MESH = null, FEDALL = null;
+        let SESSION_OK = true, GROUPE = null, FED_TYPE = 'metablog', FED_N = 48;
+        const FED_PAGE = 48;
+        let CONFIRM = null;     // { genre:'module'|'cfg', cle, verbe } : confirmation en cours dans la page
+        let FEDCONF = null;     // { id, nom } : installation fédérée en cours de confirmation
+        let CUR = null;         // module dont la configuration est ouverte
+        let CFG_LECTURE = true;
 
-    async function jget(p){try{const r=await fetch(API+p);if(!r.ok)throw 0;return await r.json();}catch(e){return null;}}
-    async function jsend(p,m,b){try{const r=await fetch(API+p,{method:m,headers:{'Content-Type':'application/json'},
-      body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));return{ok:r.ok,j};}catch(e){return{ok:false,j:{detail:String(e)}};}}
-    function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(base, chemin) {
+            const r = await fetch(base + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page, jeton en plus. Inerte en démonstration.
+        async function ecrire(base, methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(base + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && (res.data.detail || res.data.erreur)) ? String(res.data.detail || res.data.erreur) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        const court = n => String(n || '').replace(/^secubox-/, '');
+        const lienSur = u => /^https?:\/\//i.test(String(u || ''));
 
-    async function load(){
-      const cats=await jget('/categories');
-      if(cats&&cats.categories){const sel=document.getElementById('category');
-        cats.categories.forEach(c=>{const o=document.createElement('option');o.value=c.name;o.textContent=`${c.name} (${c.count})`;sel.appendChild(o);});}
-      const data=await jget('/catalog');
-      ALL=(data&&Array.isArray(data.modules))?data.modules:[];
-      document.getElementById('board-badge').textContent='tier '+((cats&&cats.board_tier)||'?');
-      render();
-      loadGroupes();
-      loadMeta();
-      loadMesh();
-    }
+        function demoData() {
+            CATS = { categories: [{ name: 'media', count: 2 }, { name: 'network', count: 3 }, { name: 'security', count: 2 }], board_tier: 'standard' };
+            const m = (name, category, tier, state, description, version) => ({ name, category, tier, state, description, version: version || null, installed: state === 'running' || state === 'installed', running: state === 'running', installable: state !== 'unpublished', depends: ['secubox-core'] });
+            ALL = [m('secubox-radio', 'media', 'standard', 'running', 'Radio internet et lecture de flux.', '1.4.0'), m('secubox-galerie', 'media', 'pro', 'tier-locked', 'Galerie de photos partagée.'),
+                m('secubox-dns', 'network', 'lite', 'running', 'Résolveur DNS local et filtrage.', '2.1.3'), m('secubox-vpn', 'network', 'standard', 'installed', 'Accès distant chiffré.', '1.9.0'),
+                m('secubox-relais', 'network', 'standard', 'available', 'Relais de services entre nœuds.'), m('secubox-garde', 'security', 'lite', 'running', 'Surveillance et alertes du nœud.', '3.0.2'),
+                m('secubox-coffre', 'security', 'pro', 'unpublished', 'Coffre de secrets (pas encore publié).')];
+            GROUPES = { groupes: [{ id: 'ecouter', label: 'Écouter et regarder', description: 'Radio et galerie chez soi.', membres: [{ name: 'secubox-radio' }, { name: 'secubox-galerie' }] },
+                { id: 'reseau', label: 'Réseau de confiance', description: 'DNS, VPN et relais.', membres: [{ name: 'secubox-dns' }, { name: 'secubox-vpn' }, { name: 'secubox-relais' }] }] };
+            MP = { disponible: true, noeuds: [
+                { meta: 'sbxos', label: 'SecuBox OS', niveau: 'racine', description: 'La box et son Hall.', requiert: ['secubox'], recommande: [], suggere: [], installe: true, compte: { requis: { installes: 3, total: 3 } } },
+                { meta: 'secubox', label: 'SecuBox', niveau: 'fonction', description: 'Le socle du nœud.', requiert: ['secubox-dns', 'secubox-garde'], recommande: ['secubox-vpn'], suggere: ['secubox-relais'], installe: true, compte: { requis: { installes: 2, total: 2 }, recommandes: { installes: 1, total: 1 }, suggeres: { installes: 0, total: 1 } } }],
+                paquets: {
+                    'secubox-dns': { paquet: 'secubox-dns', version: '2.1.3', installe: true, resume: 'Résolveur DNS.', depends: [{ nom: 'unbound', installe: true }], recommends: [], suggests: [] },
+                    'secubox-garde': { paquet: 'secubox-garde', version: '3.0.2', installe: true, resume: 'Surveillance du nœud.', depends: [], recommends: [], suggests: [] },
+                    'secubox-vpn': { paquet: 'secubox-vpn', version: '1.9.0', installe: true, resume: 'Accès distant.', depends: [{ nom: 'wireguard-tools', installe: true }], recommends: [], suggests: [] },
+                    'secubox-relais': { paquet: 'secubox-relais', version: '', installe: false, resume: 'Relais de services.', depends: [], recommends: [], suggests: [] } } };
+            MESH = { catalog: [{ name: 'tor-socks', kind: 'socks', endpoint: 'socks5://192.0.2.10:9050', channel: 'mesh', provider_node: 'satellite-a', provider_mesh_ip: '10.10.0.2' },
+                { name: 'proxy-http', kind: 'http', endpoint: 'http://198.51.100.20:3128', channel: 'public', provider_node: 'satellite-b', provider_mesh_ip: '10.10.0.3' }], node_count: 2 };
+            FEDALL = { objets: [{ id: 'mb-1', type: 'metablog', name: 'Carnet de bord', description: 'Journal d’un nœud.', author: 'Atelier Exemple', license: 'CC-BY-4.0', version: '1.0.2', channel: 'stable', certifie: true, verrouille: false, apercus: 0 },
+                { id: 'mb-2', type: 'metablog', name: 'Gazette locale', description: 'Nouvelles du quartier.', author: 'Collectif Exemple', license: 'CC-BY-SA-4.0', version: '0.9.0', channel: 'beta', certifie: false, verrouille: false, motif: 'Éditeur inconnu de la fédération', apercus: 0 },
+                { id: 'ap-1', type: 'app', name: 'Calepin', description: 'Prise de notes chiffrée.', author: 'Atelier Exemple', license: 'MIT', version: '2.3.1', channel: 'stable', certifie: true, verrouille: true, apercus: 0 }], canaux_ouverts: ['stable'] };
+        }
 
-    // ── GROUPES ────────────────────────────────────────────────────────────
-    let GROUPES=[], GROUPE=null;
-    async function loadGroupes(){
-      const d=await jget('/groupes');
-      GROUPES=(d&&Array.isArray(d.groupes))?d.groupes:[];
-      const z=document.getElementById('groupes'), st=document.getElementById('groupes-stat');
-      if(!GROUPES.length){ st.textContent='aucune'; z.innerHTML=''; return; }
-      st.textContent=GROUPES.length+' fonctionnalités · cliquez pour filtrer';
-      z.innerHTML=GROUPES.map(g=>{
-        const complet=g.installes>=g.total;
-        // LE COMPTE EST LE MESSAGE. « 3/4 » dit d'un coup ce qu'il reste à
-        // faire, là où un bouton « installer » seul laisserait croire qu'on
-        // repart de zéro.
-        const teinte=complet?'var(--matrix-green,#00ff41)':'var(--cyber-cyan,#00d4ff)';
-        return '<button type="button" class="groupe-carte" data-g="'+esc(g.id)+'" onclick="groupeChoisi(\''+esc(g.id)+'\')"'
-          +' style="text-align:left;font:inherit;cursor:pointer;padding:11px 12px;border-radius:10px;'
-          +'background:var(--panel,#14141c);border:1px solid '+(GROUPE===g.id?teinte:'var(--line,#2a2a3a)')+'">'
-          +'<div style="display:flex;align-items:baseline;gap:8px">'
-          +'<b style="font-size:.86rem">'+esc(g.label)+'</b>'
-          +'<span style="margin-left:auto;font:600 11px/1 \'JetBrains Mono\',monospace;color:'+teinte+'">'
-          + g.installes+'/'+g.total+'</span></div>'
-          +'<div style="font-size:11px;color:var(--text-muted,#6b6b7a);margin-top:4px;line-height:1.35">'+esc(g.description)+'</div>'
-          +'</button>';
-      }).join('');
-    }
-    function groupeChoisi(id){
-      GROUPE=(GROUPE===id)?null:id;            // recliquer défait le choix
-      document.getElementById('groupes-raz').style.display=GROUPE?'':'none';
-      loadGroupes(); render();
-    }
-    function membresDu(id){
-      const g=GROUPES.find(x=>x.id===id);
-      return g?g.membres.map(m=>m.name):[];
-    }
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const e = await Promise.allSettled([lire(API, '/categories'), lire(API, '/catalog'), lire(API, '/groupes'), lire(API, '/metapaquets'), lire(API, '/mesh-catalog'), lire(FED, '/catalog')]);
+            const val = i => e[i].status === 'fulfilled' ? e[i].value : null;
+            const refus = e.some(x => x.status === 'rejected' && (x.reason.statut === 401 || x.reason.statut === 403));
+            const tous = e.every(x => x.status === 'rejected');
+            SESSION_OK = !refus;
+            CATS = val(0); const c = val(1); ALL = c && Array.isArray(c.modules) ? c.modules : null;
+            GROUPES = val(2); MP = val(3); MESH = val(4); FEDALL = val(5);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire l’App Store (service arrêté ou injoignable).';
+            rendre();
+        }
+        async function rechargerCatalogue() {
+            if (DEMO) { rendre(); return; }
+            try { const c = await lire(API, '/catalog'); if (c && Array.isArray(c.modules)) ALL = c.modules; } catch (e) { /* on garde l'état affiché */ }
+            rendre();
+        }
 
-    // ── MÉTAPAQUETS ────────────────────────────────────────────────────────
-    let MP=null;
-    async function loadMeta(){
-      MP=await jget('/metapaquets');
-      const z=document.getElementById('mp-arbre'), st=document.getElementById('mp-stat');
-      if(!MP||!MP.disponible){st.textContent='arbre indisponible';z.innerHTML='';return;}
-      const N={}; MP.noeuds.forEach(n=>N[n.meta]=n);
-      const niv={};MP.noeuds.forEach(n=>niv[n.niveau]=(niv[n.niveau]||0)+1);
-      st.textContent=(niv.racine||0)+' racines · '+(niv.fonction||0)+' fonctions · '+(niv.service||0)+' services · '
-        +Object.keys(MP.paquets).length+' modules';
-      // Les racines qu'aucun nœud ne contient : sbxos (qui contient secubox).
-      const contenus=new Set(); MP.noeuds.forEach(n=>['requiert','recommande','suggere'].forEach(l=>n[l].forEach(x=>contenus.add(x))));
-      z.innerHTML=MP.noeuds.filter(n=>n.niveau==='racine'&&!contenus.has(n.meta)).map(n=>noeud(n,N,0)).join('');
-    }
-    function compteur(c){
-      const parts=[['requis','requis'],['recommandes','recom.'],['suggeres','sugg.']].filter(([k])=>c[k]).map(([k,l])=>{
-        const v=c[k], plein=v.installes>=v.total;
-        return l+' <b style="color:'+(plein?'var(--matrix-green,#00ff41)':(k==='requis'?'var(--cinnabar,#e63946)':'var(--cyber-cyan,#00d4ff)'))+'">'+v.installes+'/'+v.total+'</b>';
-      });
-      return parts.join(' · ');
-    }
-    function noeud(n,N,prof){
-      const cls='mp-noeud'+(n.niveau==='racine'?' mp-racine':'');
-      const ouvert=prof<2?' open':'';
-      let h='<details class="'+cls+'"'+ouvert+'><summary>'
-        +'<span class="mp-pt'+(n.installe?' on':'')+'" title="'+(n.installe?'métapaquet installé':'métapaquet non installé')+'"></span>'
-        +'<span class="mp-label">'+esc(n.label)+'</span><span class="mp-pq">'+esc(n.meta)+'</span>'
-        +'<button type="button" class="mp-cmd" data-cmd="apt install '+esc(n.meta)+'" title="Copier la commande d\'installation">apt install</button>'
-        +'<span class="mp-cpt">'+compteur(n.compte||{})+'</span>'
-        +'<span class="mp-desc">'+esc(n.description)+'</span></summary>';
-      for(const [lien,titre] of [['requiert','requis'],['recommande','recommandés'],['suggere','suggérés']]){
-        if(!n[lien].length)continue;
-        h+='<div class="mp-enf '+lien+'"><div class="mp-force">'+titre+'</div>'
-          +n[lien].map(x=>N[x]?noeud(N[x],N,prof+1):module(x)).join('')+'</div>';
-      }
-      return h+'</details>';
-    }
-    function puces(liste){
-      return liste.map(d=>'<span class="mp-chip'+(d.nom.startsWith('secubox-')?' sbx':'')+(d.installe?' on':'')+'" title="'
-        +esc(d.contrainte?d.nom+' ('+d.contrainte+')':d.nom)+(d.alternatives?' | '+esc(d.alternatives.join(' | ')):'')+'">'
-        +esc(d.nom.replace(/^secubox-/,''))+'</span>').join('');
-    }
-    function module(nom){
-      const p=MP.paquets[nom]||{paquet:nom,depends:[],recommends:[],suggests:[]};
-      const abs=(p.absorbe&&p.absorbe.length)?'<span class="mp-abs" title="Paquets remplacés (Replaces), transitionnels ou disparus">absorbe '
-        +p.absorbe.map(a=>esc(a.replace(/^secubox-/,''))).join(', ')+'</span>':'';
-      const arch=(p.architecture&&p.architecture!=='all'&&p.architecture!=='any')?'<span class="pill">'+esc(p.architecture)+' seul.</span>':'';
-      let deps='';
-      for(const [c,l] of [['depends','dépend de'],['recommends','recommande'],['suggests','suggère']])
-        if(p[c]&&p[c].length)deps+='<div><span class="k">'+l+'</span>'+puces(p[c])+'</div>';
-      return '<details class="mp-noeud mp-mod"><summary>'
-        +'<span class="mp-pt'+(p.installe?' on':'')+'"></span>'
-        +'<span class="mp-label">'+esc(nom.replace(/^secubox-/,''))+'</span>'
-        +(p.version?'<span class="mp-pq">'+esc(p.version)+'</span>':'<span class="mp-pq">non installé</span>')
-        +arch+abs+'<span class="mp-desc">'+esc(p.resume||'')+'</span></summary>'
-        +'<div class="mp-deps">'+(deps||'<div><span class="k">dépend de</span>—</div>')+'</div></details>';
-    }
-    document.getElementById('mp-arbre').addEventListener('click',async e=>{
-      const b=e.target.closest('[data-cmd]'); if(!b)return;
-      e.preventDefault();                       // ne pas replier le nœud
-      try{await navigator.clipboard.writeText(b.dataset.cmd);b.textContent='copié ✓';}
-      catch(_){b.textContent=b.dataset.cmd;}
-      setTimeout(()=>{b.textContent='apt install';},1600);
-    });
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!ALL) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            const n = f => ALL ? ALL.filter(f).length : null;
+            const nb = v => v === null ? '—' : v;
+            $('tTotal').textContent = nb(ALL ? ALL.length : null);
+            $('tInst').textContent = nb(n(m => m.installed));
+            $('tRun').textContent = nb(n(m => m.state === 'running'));
+            $('tDispo').textContent = nb(n(m => m.state === 'available'));
+            const nonPub = n(m => m.state === 'unpublished'), verr = n(m => m.state === 'tier-locked');
+            $('sDispo').textContent = ALL ? (nonPub + ' non publié(s) · ' + verr + ' verrouillé(s)') : 'installables';
+            $('tTier').textContent = tiret(CATS && CATS.board_tier);
+            rendreFiltres(); rendreGroupes(); rendreModules(); rendreArbre(); rendreFed(); rendreMesh();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-    async function loadMesh(){
-      const d=await jget('/mesh-catalog');
-      const tb=document.getElementById('mesh-list'), st=document.getElementById('mesh-stat');
-      const items=(d&&Array.isArray(d.catalog))?d.catalog:[];
-      st.textContent=items.length?(items.length+' service(s) · '+(d.node_count||0)+' node(s)'):'no federated services';
-      if(!items.length){tb.innerHTML='<tr><td colspan="5" style="padding:10px;color:var(--text-muted,#6b6b7a)">No services emancipated across the mesh yet.</td></tr>';return;}
-      tb.innerHTML=items.map(s=>{
-        const reach=s.endpoint?('<a href="'+esc(s.endpoint)+'" target="_blank" rel="noopener" style="color:var(--cyber-cyan,#00d4ff)">'+esc(s.endpoint)+'</a>'):'—';
-        const ip=s.provider_mesh_ip?(' <span style="color:var(--text-muted,#6b6b7a)">('+esc(s.provider_mesh_ip)+')</span>'):'';
-        return '<tr style="border-top:1px solid var(--line,#2a2a3a)">'
-          +'<td style="padding:6px 8px">'+esc(s.name)+'</td>'
-          +'<td><span style="font-size:10px;padding:1px 6px;border:1px solid var(--line,#2a2a3a);border-radius:10px;color:var(--cyber-cyan,#00d4ff)">'+esc(s.kind||'')+'</span></td>'
-          +'<td style="font-family:\'JetBrains Mono\',monospace">'+esc(s.provider_node||'?')+ip+'</td>'
-          +'<td>'+esc(s.channel||'—')+'</td>'
-          +'<td style="font-family:\'JetBrains Mono\',monospace">'+reach+'</td></tr>';
-      }).join('');
-    }
+        function rendreFiltres() {
+            const sel = $('fCat'), cur = sel.value; sel.replaceChildren(new Option('Toutes catégories', ''));
+            ((CATS && CATS.categories) || []).forEach(c => sel.appendChild(new Option(c.name + ' (' + c.count + ')', c.name)));
+            sel.value = cur;
+        }
 
-    function actionsFor(m){
-      if(!m.installed) return `<button class="as-btn" disabled title="Install arrives in a later phase">Install</button>`;
-      const b=[];
-      if(m.running){ b.push(`<button class="as-btn" onclick="act('${m.name}','restart')">Restart</button>`);
-                     b.push(`<button class="as-btn danger" onclick="act('${m.name}','stop')">Stop</button>`); }
-      else        { b.push(`<button class="as-btn" onclick="act('${m.name}','start')">Start</button>`); }
-      b.push(`<button class="as-btn" onclick="act('${m.name}','enable')">Enable</button>`);
-      b.push(`<button class="as-btn danger" onclick="act('${m.name}','disable')">Disable</button>`);
-      b.push(`<button class="as-btn" onclick="openModal('${m.name}')">Config</button>`);
-      return b.join('');
-    }
+        // ----- Fonctionnalités : le compte « installés » est recalculé ici (l'API compte les membres connus du catalogue) -----
+        function installesDe(g) {
+            if (!ALL) return null;
+            const idx = {}; ALL.forEach(m => { idx[m.name] = m; });
+            return (g.membres || []).filter(x => idx[x.name] && idx[x.name].installed).length;
+        }
+        function rendreGroupes() {
+            const z = $('groupes'); z.replaceChildren();
+            const gs = GROUPES && Array.isArray(GROUPES.groupes) ? GROUPES.groupes : [];
+            $('gStat').textContent = gs.length ? gs.length + ' fonctionnalité' + (gs.length > 1 ? 's' : '') + ' · cliquez pour filtrer' : (GROUPES ? 'aucune' : '—');
+            $('gRaz').hidden = !GROUPE;
+            gs.forEach(g => {
+                const total = (g.membres || []).length, inst = installesDe(g);
+                const b = el('button', 'groupe' + (GROUPE === g.id ? ' on' : '')); b.type = 'button'; b.setAttribute('aria-pressed', String(GROUPE === g.id));
+                const t = el('div', 't'); t.appendChild(el('b', '', tiret(g.label)));
+                const c = el('span', 'n' + (inst !== null && inst >= total ? ' plein' : ''), (inst === null ? '—' : inst) + '/' + total); c.title = 'Modules installés / modules de la fonctionnalité'; t.appendChild(c);
+                b.appendChild(t); b.appendChild(el('div', 'd', g.description || ''));
+                b.addEventListener('click', () => { GROUPE = GROUPE === g.id ? null : g.id; rendre(); });
+                z.appendChild(b);
+            });
+        }
+        $('gRaz').addEventListener('click', () => { GROUPE = null; rendre(); });
 
-    function render(){
-      const q=document.getElementById('q').value.toLowerCase();
-      const cat=document.getElementById('category').value, tier=document.getElementById('tier').value, state=document.getElementById('state').value;
-      // Le groupe choisi RESTREINT le catalogue ; les filtres s'appliquent
-      // ensuite, à l'intérieur. L'inverse aurait été déroutant : on choisit
-      // une fonctionnalité, puis on cherche dedans.
-      const membres=GROUPE?membresDu(GROUPE):null;
-      let items=ALL.filter(m=>{
-        if(membres&&membres.indexOf(m.name)<0)return false;
-        if(cat&&m.category!==cat)return false; if(tier&&m.tier!==tier)return false; if(state&&m.state!==state)return false;
-        if(q&&!(m.name.toLowerCase().includes(q)||(m.description||'').toLowerCase().includes(q)))return false; return true;});
-      const running=ALL.filter(m=>m.state==='running').length, installed=ALL.filter(m=>m.installed).length;
-      document.getElementById('stat').innerHTML=`showing <b>${items.length}</b>/${ALL.length} · installed <b>${installed}</b> · running <b>${running}</b>`;
-      const grid=document.getElementById('grid');
-      if(!items.length){grid.innerHTML='<div style="color:var(--text-muted,#6b6b7a);padding:30px">No modules match.</div>';return;}
-      grid.innerHTML=items.map(m=>{
-        const ico=ICONS[m.category]||ICONS.misc, label=m.name.replace(/^secubox-/,''), st=m.state||'available';
-        return `<div class="as-card">
-          <div class="as-top"><span class="as-ico">${ico}</span><span class="as-name">${esc(label)}</span></div>
-          <div class="as-desc">${esc(m.description||'')}</div>
-          <div class="as-badges"><span class="pill cat">${esc(m.category)}</span>
-            <span class="pill tier">${esc(m.tier)}</span><span class="pill s-${st}">${st}</span>
-            ${m.version?`<span class="pill">v${esc(m.version)}</span>`:''}</div>
-          <div class="as-actions">${actionsFor(m)}</div>
-        </div>`;}).join('');
-    }
+        // ----- Modules -----
+        function filtres() {
+            const q = $('q').value.toLowerCase(), cat = $('fCat').value, tier = $('fTier').value, etat = $('fEtat').value;
+            let membres = null;
+            if (GROUPE && GROUPES && GROUPES.groupes) { const g = GROUPES.groupes.find(x => x.id === GROUPE); membres = g ? (g.membres || []).map(x => x.name) : null; }
+            return (ALL || []).filter(m => {
+                if (membres && membres.indexOf(m.name) < 0) return false;
+                if (cat && m.category !== cat) return false; if (tier && m.tier !== tier) return false; if (etat && m.state !== etat) return false;
+                if (q && !(String(m.name).toLowerCase().includes(q) || String(m.description || '').toLowerCase().includes(q))) return false;
+                return true;
+            });
+        }
+        function actionsDe(m, cell) {
+            if (!m.installed) {
+                const b = btn('Installer', '', () => {}); b.disabled = true;
+                b.title = 'Installation depuis cette page : non reprise. En ligne de commande : apt install ' + m.name; cell.appendChild(b); return;
+            }
+            const c = CONFIRM && CONFIRM.genre === 'module' && CONFIRM.cle === m.name ? CONFIRM : null;
+            if (c) {
+                cell.appendChild(el('span', 'note', (c.verbe === 'stop' ? 'Arrêter' : 'Désactiver') + ' ' + court(m.name) + ' ?'));
+                cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; agir(m.name, c.verbe); }));
+                cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                return;
+            }
+            const sans = (txt, verbe) => btn(txt, '', () => agir(m.name, verbe));
+            const avec = (txt, verbe) => btn(txt, 'danger', () => { CONFIRM = { genre: 'module', cle: m.name, verbe }; rendre(); });
+            if (m.running) { cell.appendChild(sans('Redémarrer', 'restart')); cell.appendChild(avec('Arrêter', 'stop')); }
+            else cell.appendChild(sans('Démarrer', 'start'));
+            cell.appendChild(sans('Activer', 'enable')); cell.appendChild(avec('Désactiver', 'disable'));
+            cell.appendChild(btn('Config', '', () => ouvrirCfg(m.name)));
+        }
+        function rendreModules() {
+            const g = $('grille'); g.replaceChildren();
+            const items = filtres();
+            $('mStat').textContent = ALL ? ALL.length + ' au catalogue' : '';
+            $('cpt').replaceChildren(document.createTextNode('affichés '), Object.assign(el('b', '', ALL ? items.length : '—'), {}), document.createTextNode(ALL ? '/' + ALL.length : ''));
+            if (!items.length) { g.appendChild(el('div', 'vide', ALL ? 'Aucun module ne correspond.' : '—')); return; }
+            items.forEach(m => {
+                const k = el('div', 'carte'); const st = m.state || 'available', [cl, lib] = LIB_ETAT[st] || ['', String(st).toUpperCase()];
+                k.appendChild(el('div', 'nom', (ICONES[m.category] || ICONES.misc) + ' ' + court(m.name)));
+                k.appendChild(el('div', 'desc', m.description || ''));
+                const p = el('div', 'pills'); p.appendChild(pastille('cy', tiret(m.category))); p.appendChild(pastille('jn', tiret(m.tier), 'Niveau minimal de la box')); p.appendChild(pastille(cl, lib));
+                if (m.version) p.appendChild(pastille('', 'v' + m.version)); k.appendChild(p);
+                const a = el('div', 'acts'); actionsDe(m, a); k.appendChild(a); g.appendChild(k);
+            });
+        }
+        ['q', 'fCat', 'fTier', 'fEtat'].forEach(i => $(i).addEventListener('input', rendreModules));
+        ['fCat', 'fTier', 'fEtat'].forEach(i => $(i).addEventListener('change', () => { rendreModules(); annoncer(); }));
+        $('q').addEventListener('input', annoncer);
 
-    async function act(name,verb){
-      const r=await jsend(`/module/${name}/action/${verb}`,'POST');
-      if(!r.ok){alert(`${verb} failed: ${(r.j&&r.j.detail)||'error'}`);return;}
-      const data=await jget('/catalog'); ALL=(data&&Array.isArray(data.modules))?data.modules:ALL; render();
-      if(CUR&&CUR===name) renderModalActions();
-    }
+        async function agir(nom, verbe) {
+            const r = await ecrire(API, 'POST', '/module/' + encodeURIComponent(nom) + '/action/' + verbe);
+            if (r.ok) { retour('rMod', true, court(nom) + ' : ' + verbe + ' effectué.'); await rechargerCatalogue(); }
+            else { retour('rMod', false, verbe + ' impossible : ' + detail(r)); rendre(); }
+        }
 
-    async function openModal(name){
-      CUR=name; document.getElementById('m-title').textContent=name.replace(/^secubox-/,'');
-      const m=ALL.find(x=>x.name===name)||{};
-      document.getElementById('m-deps').innerHTML='Depends: '+((m.depends&&m.depends.length)?m.depends.map(esc).join(', '):'—');
-      renderModalActions();
-      document.getElementById('m-msg').textContent='loading config…';
-      document.getElementById('m-config').value='';
-      document.getElementById('over').classList.add('on');
-      const cfg=await jget(`/module/${name}/config`);
-      const ta=document.getElementById('m-config'), save=document.getElementById('m-save');
-      document.getElementById('m-path').textContent=(cfg&&cfg.path)||'';
-      if(cfg&&cfg.readable===false){ta.value='';ta.disabled=true;save.disabled=true;document.getElementById('m-msg').textContent='config not readable by appstore';}
-      else if(cfg&&!cfg.exists){ta.value='';ta.disabled=false;save.disabled=false;document.getElementById('m-msg').textContent='no config file yet — saving creates it';}
-      else{ta.value=(cfg&&cfg.content)||'';ta.disabled=false;save.disabled=false;document.getElementById('m-msg').textContent='';}
-    }
-    function renderModalActions(){const m=ALL.find(x=>x.name===CUR)||{};document.getElementById('m-actions').innerHTML=actionsFor(m);}
-    function closeModal(){document.getElementById('over').classList.remove('on');CUR=null;}
+        // ----- Configuration d'un module (panneau intégré, plus de fenêtre modale) -----
+        async function ouvrirCfg(nom) {
+            CUR = nom; CONFIRM = null;
+            const m = (ALL || []).find(x => x.name === nom) || {};
+            $('cfgTitre').firstChild.textContent = 'Configuration de ' + court(nom) + ' ';
+            $('cfgDeps').textContent = 'Dépend de : ' + ((m.depends && m.depends.length) ? m.depends.join(', ') : '—');
+            $('cfgTexte').value = ''; $('cfgChemin').textContent = ''; $('cfgMsg').textContent = 'lecture de la configuration…';
+            $('pCfg').hidden = false; cfgActions(false); $('pCfg').scrollIntoView({ block: 'nearest' });
+            let cfg = null;
+            if (DEMO) cfg = { path: '/etc/secubox/exemple.toml', exists: true, readable: true, content: '# configuration de démonstration\n[service]\nport = 8080\n' };
+            else { try { cfg = await lire(API, '/module/' + encodeURIComponent(nom) + '/config'); } catch (e) { cfg = null; } }
+            if (CUR !== nom) return;
+            const ta = $('cfgTexte');
+            $('cfgChemin').textContent = (cfg && cfg.path) || '';
+            if (!cfg) { CFG_LECTURE = false; ta.disabled = true; $('cfgMsg').textContent = 'configuration illisible (session requise ou service arrêté)'; }
+            else if (cfg.readable === false) { CFG_LECTURE = false; ta.disabled = true; $('cfgMsg').textContent = 'configuration non lisible par l’App Store'; }
+            else { CFG_LECTURE = true; ta.disabled = false; ta.value = cfg.content || ''; $('cfgMsg').textContent = cfg.exists ? '' : 'pas encore de fichier de configuration — enregistrer le crée'; }
+            cfgActions(false); annoncer();
+        }
+        function cfgActions(confirm) {
+            const z = $('cfgActs'); z.replaceChildren();
+            if (confirm) {
+                z.appendChild(el('span', 'note', 'Écrire cette configuration ?'));
+                z.appendChild(btn('Confirmer', 'danger', enregistrerCfg)); z.appendChild(btn('Annuler', '', () => cfgActions(false)));
+            } else {
+                const b = btn('Enregistrer', 'prim', () => cfgActions(true)); b.disabled = !CFG_LECTURE; z.appendChild(b);
+            }
+        }
+        async function enregistrerCfg() {
+            if (!CUR) return;
+            $('cfgMsg').textContent = 'enregistrement…';
+            const r = await ecrire(API, 'PUT', '/module/' + encodeURIComponent(CUR) + '/config', { content: $('cfgTexte').value });
+            $('cfgMsg').textContent = r.ok ? 'enregistré ✓ (redémarrer le service pour appliquer)' : ('échec : ' + detail(r));
+            cfgActions(false);
+        }
+        $('cfgFerme').addEventListener('click', () => { $('pCfg').hidden = true; CUR = null; annoncer(); });
 
-    async function saveConfig(){
-      if(!CUR)return; const content=document.getElementById('m-config').value;
-      document.getElementById('m-msg').textContent='saving…';
-      const r=await jsend(`/module/${CUR}/config`,'PUT',{content});
-      document.getElementById('m-msg').textContent=r.ok?'saved ✓ (restart the service to apply)':('save failed: '+((r.j&&r.j.detail)||'error'));
-    }
-    document.getElementById('over').addEventListener('click',e=>{if(e.target.id==='over')closeModal();});
-    // ── OBJETS FÉDÉRÉS (#1391) ────────────────────────────────────────────
-    const FED='/api/appstore';
-    const FED_TYPES=[['','Tout'],['app','Applications'],['site','Sites'],['metablog','Métablogs'],
-      ['waf','WAF'],['dataset','Données'],['archive','Archives'],['config','Configurations']];
-    const FED_ICO={app:'🧩',site:'🌐',metablog:'📰',waf:'🛡️',dataset:'🗂️',archive:'📦',config:'⚙️',template:'🧱'};
-    // PAR PAGES (#1393) : 165 métablogs ne s'affichent pas d'un bloc.
-    const FED_PAGE=48;
-    let FED_ALL=[], FED_TYPE='metablog', FED_N=FED_PAGE;
-    function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
-    async function loadFed(){
-      let d=null;
-      try{const r=await fetch(FED+'/catalog',{credentials:'same-origin'});if(r.ok)d=await r.json();}catch(e){}
-      FED_ALL=(d&&Array.isArray(d.objets))?d.objets:[];
-      const st=document.getElementById('fed-stat');
-      st.textContent=d?(FED_ALL.length+' objet(s) · canaux ouverts : '+((d.canaux_ouverts||[]).join(', ')||'aucun')):'fédération indisponible';
-      renderFed();
-    }
-    function renderFed(){
-      const f=document.getElementById('fed-filtres');
-      f.innerHTML=FED_TYPES.map(([k,l])=>{
-        const n=k?FED_ALL.filter(o=>o.type===k).length:FED_ALL.length;
-        return '<button type="button" class="fed-chip'+(FED_TYPE===k?' on':'')+'" data-t="'+k+'">'+esc(l)+' <span>'+n+'</span></button>';
-      }).join('');
-      const q=(document.getElementById('fed-q').value||'').toLowerCase();
-      const items=FED_ALL.filter(o=>(!FED_TYPE||o.type===FED_TYPE)
-        &&(!q||(o.name+' '+(o.description||'')+' '+(o.license||'')+' '+(o.author||'')).toLowerCase().includes(q)));
-      const g=document.getElementById('fed-grid'), plus=document.getElementById('fed-plus');
-      if(!items.length){g.innerHTML='<div style="color:var(--text-muted,#6b6b7a);padding:18px">Aucun objet ne correspond.</div>';plus.innerHTML='';return;}
-      plus.innerHTML=items.length>FED_N
-        ?'<button type="button" class="as-btn" id="fed-plus-btn">Afficher '+Math.min(FED_PAGE,items.length-FED_N)+' de plus ('+FED_N+'/'+items.length+')</button>'
-        :'<span style="font-size:11px;color:var(--text-muted,#6b6b7a)">'+items.length+' objet(s)</span>';
-      g.innerHTML=items.slice(0,FED_N).map(o=>{
-        const sig=o.certifie?'<span class="pill s-running" title="Éditeur certifié par la CA de la fédération">✓ signé · certifié</span>'
-                           :'<span class="pill s-unpublished" title="'+esc(o.motif||'')+'">⚠ éditeur non certifié</span>';
-        const lock=o.verrouille?'<span class="pill tier" title="Canal non ouvert par le certificat de cette box">🔒 '+esc(o.channel)+'</span>'
-                              :'<span class="pill">'+esc(o.channel)+'</span>';
-        const btn=(o.certifie&&!o.verrouille)?'<button class="as-btn" data-install="'+esc(o.id)+'" data-name="'+esc(o.name)+'">Installer</button>'
-                                            :'<button class="as-btn" disabled title="'+esc(o.verrouille?'canal non ouvert':(o.motif||''))+'">Installer</button>';
-        const retri=(o.wallet||o.support_url)?'<div class="fed-retri">💠 '+esc(o.wallet||'')+(o.support_url?' · <a href="'+esc(o.support_url)+'" target="_blank" rel="noopener">soutenir</a>':'')+'</div>':'';
-        const n=+o.apercus||0;
-        const shot=n
-          ?'<button type="button" class="fed-shot" data-apercu="'+esc(o.id)+'" data-n="'+n+'" data-name="'+esc(o.name)+'" title="Agrandir l\'aperçu">'
-            +'<img loading="lazy" decoding="async" width="640" height="328" src="'+FED+'/object/'+encodeURIComponent(o.id)+'/apercu/1" alt="Aperçu de '+esc(o.name)+'"></button>'
-          :'<div class="fed-shot vide" aria-hidden="true"><span>'+(FED_ICO[o.type]||'🧩')+'</span>pas d\'aperçu</div>';
-        return '<div class="as-card">'
-          +shot
-          +'<div class="as-top"><span class="as-ico">'+(FED_ICO[o.type]||'🧩')+'</span><span class="as-name">'+esc(o.name)+'</span></div>'
-          +'<div class="as-desc">'+esc(o.description||'')+'</div>'
-          +'<div class="fed-meta">✍️ '+esc(o.author)+' · ⚖️ '+esc(o.license)+' · v'+esc(o.version)+'</div>'
-          +retri
-          +'<div class="as-badges"><span class="pill cat">'+esc(o.type)+'</span>'+lock+sig+'</div>'
-          +'<div class="as-actions">'+btn+'</div></div>';
-      }).join('');
-    }
-    document.getElementById('fed-filtres').addEventListener('click',e=>{
-      const b=e.target.closest('[data-t]'); if(!b)return; FED_TYPE=b.dataset.t; FED_N=FED_PAGE; renderFed();});
-    document.getElementById('fed-q').addEventListener('input',()=>{FED_N=FED_PAGE; renderFed();});
-    document.getElementById('fed-plus').addEventListener('click',e=>{
-      if(e.target.id==='fed-plus-btn'){FED_N+=FED_PAGE; renderFed();}});
-    document.getElementById('fed-grid').addEventListener('click',async e=>{
-      const a=e.target.closest('[data-apercu]');
-      if(a){ouvreApercus(a.dataset.apercu,+a.dataset.n,a.dataset.name);return;}
-      const b=e.target.closest('[data-install]'); if(!b)return;
-      const nom=prompt('Nom du site à créer (il ne doit pas exister) :', b.dataset.name+'-copie');
-      if(!nom)return;
-      b.disabled=true;
-      const h={'Content-Type':'application/json'}; const t=jeton(); if(t)h.Authorization='Bearer '+t;
-      let r,j={};
-      try{r=await fetch(FED+'/install',{method:'POST',credentials:'same-origin',headers:h,
-        body:JSON.stringify({id:b.dataset.install,nom:nom.trim()})});j=await r.json().catch(()=>({}));}catch(err){j={erreur:String(err)};}
-      b.disabled=false;
-      alert(r&&r.ok?('✅ Installé : '+j.nom+'\n'+(j.suite||'')):('❌ '+(j.erreur||'échec')));
-    });
+        // ----- Métapaquets (arbre) -----
+        function compteur(c) {
+            const z = el('span', 'cp'); let premier = true;
+            [['requis', 'requis'], ['recommandes', 'recom.'], ['suggeres', 'sugg.']].forEach(([k, l]) => {
+                const v = c && c[k]; if (!v) return;
+                if (!premier) z.appendChild(document.createTextNode(' · ')); premier = false;
+                z.appendChild(document.createTextNode(l + ' '));
+                const b = el('b', '', v.installes + '/' + v.total); b.style.color = v.installes >= v.total ? 'var(--vert)' : (k === 'requis' ? 'var(--rouge)' : 'var(--cyan)'); z.appendChild(b);
+            });
+            return z;
+        }
+        function noeud(n, N, prof) {
+            const d = el('details', 'nd' + (n.niveau === 'racine' ? ' racine' : '')); if (prof < 2) d.open = true;
+            const s = el('summary');
+            const pt = el('span', 'pt' + (n.installe ? ' on' : '')); pt.title = n.installe ? 'métapaquet installé' : 'métapaquet non installé'; s.appendChild(pt);
+            s.appendChild(el('span', 'lb2', tiret(n.label))); s.appendChild(el('span', 'pq mono', tiret(n.meta)));
+            const cmd = el('button', 'cmd', 'apt install'); cmd.type = 'button'; cmd.title = 'Copier la commande d’installation';
+            cmd.addEventListener('click', async ev => {
+                ev.preventDefault(); const texte = 'apt install ' + n.meta;
+                try { await navigator.clipboard.writeText(texte); cmd.textContent = 'copié ✓'; } catch (_) { cmd.textContent = texte; }
+                setTimeout(() => { cmd.textContent = 'apt install'; }, 1600);
+            });
+            s.appendChild(cmd); s.appendChild(compteur(n.compte || {})); s.appendChild(el('span', 'ds', n.description || '')); d.appendChild(s);
+            if (prof < 8) [['requiert', 'requis'], ['recommande', 'recommandés'], ['suggere', 'suggérés']].forEach(([lien, titre]) => {
+                const l = n[lien] || []; if (!l.length) return;
+                const e = el('div', 'enf ' + lien); e.appendChild(el('div', 'fo', titre));
+                l.forEach(x => e.appendChild(N[x] ? noeud(N[x], N, prof + 1) : moduleMeta(x))); d.appendChild(e);
+            });
+            return d;
+        }
+        function moduleMeta(nom) {
+            const p = (MP.paquets && MP.paquets[nom]) || { depends: [], recommends: [], suggests: [] };
+            const d = el('details', 'nd'); const s = el('summary');
+            s.appendChild(el('span', 'pt' + (p.installe ? ' on' : '')));
+            s.appendChild(el('span', 'lb2', court(nom))); s.appendChild(el('span', 'pq mono', p.version || 'non installé'));
+            if (p.architecture && p.architecture !== 'all' && p.architecture !== 'any') s.appendChild(pastille('', p.architecture + ' seul.'));
+            if (p.absorbe && p.absorbe.length) { const a = el('span', 'pq', 'absorbe ' + p.absorbe.map(court).join(', ')); a.style.color = 'var(--jaune)'; a.title = 'Paquets remplacés (Replaces), transitionnels ou disparus'; s.appendChild(a); }
+            s.appendChild(el('span', 'ds', p.resume || '')); d.appendChild(s);
+            const z = el('div', 'deps'); let n = 0;
+            [['depends', 'dépend de'], ['recommends', 'recommande'], ['suggests', 'suggère']].forEach(([c, l]) => {
+                const L = p[c] || []; if (!L.length) return; n++;
+                const r = el('div'); r.appendChild(el('span', 'k', l));
+                L.forEach(x => { const ch = el('span', 'chip' + (String(x.nom).startsWith('secubox-') ? ' sbx' : '') + (x.installe ? ' on' : ''), court(x.nom)); ch.title = x.contrainte ? x.nom + ' (' + x.contrainte + ')' : x.nom; r.appendChild(ch); });
+                z.appendChild(r);
+            });
+            if (!n) { const r = el('div'); r.appendChild(el('span', 'k', 'dépend de')); r.appendChild(document.createTextNode('—')); z.appendChild(r); }
+            d.appendChild(z); return d;
+        }
+        function rendreArbre() {
+            const z = $('arbre'); z.replaceChildren();
+            if (!MP || !MP.disponible) { $('mpStat').textContent = MP ? 'arbre indisponible' : '—'; z.appendChild(el('div', 'vide', MP ? 'Arbre des métapaquets indisponible.' : '—')); return; }
+            const N = {}; MP.noeuds.forEach(n => { N[n.meta] = n; });
+            const niv = {}; MP.noeuds.forEach(n => { niv[n.niveau] = (niv[n.niveau] || 0) + 1; });
+            $('mpStat').textContent = (niv.racine || 0) + ' racines · ' + (niv.fonction || 0) + ' fonctions · ' + (niv.service || 0) + ' services · ' + Object.keys(MP.paquets || {}).length + ' modules';
+            const contenus = new Set(); MP.noeuds.forEach(n => ['requiert', 'recommande', 'suggere'].forEach(l => (n[l] || []).forEach(x => contenus.add(x))));
+            MP.noeuds.filter(n => n.niveau === 'racine' && !contenus.has(n.meta)).forEach(n => z.appendChild(noeud(n, N, 0)));
+        }
 
-    // Visionneuse : tous les aperçus signés du paquet, en grand.
-    function ouvreApercus(id,n,nom){
-      let ov=document.getElementById('fed-lb');
-      if(!ov){
-        ov=document.createElement('div'); ov.id='fed-lb'; ov.className='as-over';
-        ov.innerHTML='<div class="as-modal" role="dialog" aria-modal="true" aria-labelledby="fed-lb-t"><h2 id="fed-lb-t"></h2>'
-          +'<div class="fed-lb" id="fed-lb-imgs"></div><div class="as-row"><span class="as-msg">Aperçu embarqué dans le paquet, couvert par la signature de l\'éditeur.</span>'
-          +'<button type="button" class="as-btn" id="fed-lb-x">Fermer</button></div></div>';
-        document.body.appendChild(ov);
-        ov.addEventListener('click',e=>{if(e.target===ov||e.target.id==='fed-lb-x')ov.classList.remove('on');});
-        document.addEventListener('keydown',e=>{if(e.key==='Escape')ov.classList.remove('on');});
-      }
-      document.getElementById('fed-lb-t').textContent=nom;
-      let h='';
-      for(let i=1;i<=n;i++)h+='<img src="'+FED+'/object/'+encodeURIComponent(id)+'/apercu/'+i+'" alt="Aperçu '+i+' de '+esc(nom)+'">';
-      document.getElementById('fed-lb-imgs').innerHTML=h;
-      ov.classList.add('on'); document.getElementById('fed-lb-x').focus();
-    }
+        // ----- Objets fédérés -----
+        function rendreFed() {
+            const f = $('fPuces'); f.replaceChildren();
+            const tous = FEDALL && Array.isArray(FEDALL.objets) ? FEDALL.objets : null;
+            $('fStat').textContent = tous ? tous.length + ' objet(s) · canaux ouverts : ' + ((FEDALL.canaux_ouverts || []).join(', ') || 'aucun') : (SESSION_OK ? 'fédération indisponible' : '—');
+            const L = tous || [];
+            TYPES_FED.forEach(([k, lib]) => {
+                const nb = k ? L.filter(o => o.type === k).length : L.length;
+                const b = el('button', FED_TYPE === k ? 'on' : '', lib + ' '); b.type = 'button'; b.setAttribute('aria-pressed', String(FED_TYPE === k)); b.appendChild(el('span', '', nb));
+                b.addEventListener('click', () => { FED_TYPE = k; FED_N = FED_PAGE; rendreFed(); annoncer(); }); f.appendChild(b);
+            });
+            const q = ($('fQ').value || '').toLowerCase();
+            const items = L.filter(o => (!FED_TYPE || o.type === FED_TYPE) && (!q || (o.name + ' ' + (o.description || '') + ' ' + (o.license || '') + ' ' + (o.author || '')).toLowerCase().includes(q)));
+            const g = $('fGrille'), plus = $('fPlus'); g.replaceChildren(); plus.replaceChildren();
+            if (!items.length) { g.appendChild(el('div', 'vide', tous ? 'Aucun objet ne correspond.' : '—')); return; }
+            if (items.length > FED_N) plus.appendChild(btn('Afficher ' + Math.min(FED_PAGE, items.length - FED_N) + ' de plus (' + FED_N + '/' + items.length + ')', '', () => { FED_N += FED_PAGE; rendreFed(); annoncer(); }));
+            else plus.appendChild(el('span', 'note', items.length + ' objet(s)'));
+            items.slice(0, FED_N).forEach(o => g.appendChild(carteFed(o)));
+        }
+        function carteFed(o) {
+            const k = el('div', 'carte'); const n = +o.apercus || 0;
+            if (n) {
+                const b = el('button', 'ap'); b.type = 'button'; b.title = 'Agrandir l’aperçu';
+                const im = el('img'); im.loading = 'lazy'; im.decoding = 'async'; im.width = 640; im.height = 328; im.alt = 'Aperçu de ' + o.name; im.src = FED + '/object/' + encodeURIComponent(o.id) + '/apercu/1';
+                b.appendChild(im); b.addEventListener('click', () => ouvrirApercus(o.id, n, o.name)); k.appendChild(b);
+            } else { const v = el('div', 'ap vide', (ICO_FED[o.type] || '🧩') + '  pas d’aperçu'); v.setAttribute('aria-hidden', 'true'); k.appendChild(v); }
+            k.appendChild(el('div', 'nom', (ICO_FED[o.type] || '🧩') + ' ' + tiret(o.name)));
+            k.appendChild(el('div', 'desc', o.description || ''));
+            k.appendChild(el('div', 'meta', '✍️ ' + tiret(o.author) + ' · ⚖️ ' + tiret(o.license) + ' · v' + tiret(o.version)));
+            if (o.wallet || o.support_url) {
+                const r = el('div', 'meta', '💠 ' + (o.wallet || ''));
+                if (lienSur(o.support_url)) { r.appendChild(document.createTextNode(' · ')); const a = el('a', '', 'soutenir'); a.href = o.support_url; a.target = '_blank'; a.rel = 'noopener'; r.appendChild(a); }
+                k.appendChild(r);
+            }
+            const p = el('div', 'pills'); p.appendChild(pastille('cy', tiret(o.type)));
+            p.appendChild(o.verrouille ? pastille('jn', '🔒 ' + tiret(o.channel), 'Canal non ouvert par le certificat de cette box') : pastille('', tiret(o.channel)));
+            p.appendChild(o.certifie ? pastille('ok', '✓ signé · certifié', 'Éditeur certifié par la CA de la fédération') : pastille('att', '⚠ éditeur non certifié', o.motif || ''));
+            k.appendChild(p);
+            const a = el('div', 'acts');
+            if (FEDCONF && FEDCONF.id === o.id) {
+                const f = el('div', 'saisie'); const lab = el('label', '', 'Nom du site à créer (il ne doit pas exister)'); const inp = el('input'); inp.type = 'text'; inp.value = FEDCONF.nom; inp.setAttribute('aria-label', 'Nom du site à créer');
+                inp.addEventListener('input', () => { FEDCONF.nom = inp.value; }); lab.appendChild(inp); f.appendChild(lab);
+                const bo = el('div', 'bout'); bo.appendChild(btn('Confirmer l’installation', 'prim', () => installerFed(o))); bo.appendChild(btn('Annuler', '', () => { FEDCONF = null; rendreFed(); annoncer(); })); f.appendChild(bo); a.appendChild(f);
+            } else {
+                const b = btn('Installer', '', () => { FEDCONF = { id: o.id, nom: (o.name || '') + '-copie' }; rendreFed(); annoncer(); });
+                if (!(o.certifie && !o.verrouille)) { b.disabled = true; b.title = o.verrouille ? 'canal non ouvert' : (o.motif || ''); }
+                a.appendChild(b);
+            }
+            k.appendChild(a); return k;
+        }
+        async function installerFed(o) {
+            const nom = (FEDCONF && FEDCONF.nom || '').trim();
+            if (!nom) { retour('rFed', false, 'Donner un nom au site à créer.'); return; }
+            const r = await ecrire(FED, 'POST', '/install', { id: o.id, nom });
+            FEDCONF = null;
+            if (r.ok) retour('rFed', true, 'Installé : ' + ((r.data && r.data.nom) || nom) + (r.data && r.data.suite ? ' — ' + r.data.suite : ''));
+            else retour('rFed', false, 'Échec : ' + detail(r));
+            rendreFed();
+        }
+        function ouvrirApercus(id, n, nom) {
+            $('lbTitre').firstChild.textContent = 'Aperçus de ' + nom + ' ';
+            const z = $('lbImgs'); z.replaceChildren();
+            for (let i = 1; i <= n; i++) { const im = el('img'); im.src = FED + '/object/' + encodeURIComponent(id) + '/apercu/' + i; im.alt = 'Aperçu ' + i + ' de ' + nom; z.appendChild(im); }
+            $('pLb').hidden = false; $('pLb').scrollIntoView({ block: 'nearest' }); annoncer();
+        }
+        $('lbFerme').addEventListener('click', () => { $('pLb').hidden = true; annoncer(); });
+        $('fQ').addEventListener('input', () => { FED_N = FED_PAGE; rendreFed(); annoncer(); });
 
-    document.addEventListener('DOMContentLoaded',load);
-    document.addEventListener('DOMContentLoaded',loadFed);
-  </script>
-  <script src="/shared/crt-engine.js"></script>
+        // ----- Catalogue du maillage -----
+        function rendreMesh() {
+            const tb = $('bMesh'); tb.replaceChildren();
+            const items = MESH && Array.isArray(MESH.catalog) ? MESH.catalog : null;
+            $('meStat').textContent = items ? (items.length ? items.length + ' service(s) · ' + (MESH.node_count || 0) + ' nœud(s)' : 'aucun service fédéré') : '—';
+            if (!items || !items.length) { const tr = el('tr'), td = el('td', 'vide', items ? 'Aucun service émancipé sur le maillage pour l’instant.' : '—'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            items.forEach(s => {
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(s.name)));
+                const t = el('td'); t.appendChild(pastille('cy', tiret(s.kind))); tr.appendChild(t);
+                const nd = el('td', 'mono', tiret(s.provider_node || '?')); if (s.provider_mesh_ip) nd.appendChild(el('span', 'note', ' (' + s.provider_mesh_ip + ')')); tr.appendChild(nd);
+                tr.appendChild(el('td', '', tiret(s.channel)));
+                const ac = el('td', 'mono');
+                if (lienSur(s.endpoint)) { const a = el('a', '', s.endpoint); a.href = s.endpoint; a.target = '_blank'; a.rel = 'noopener'; ac.appendChild(a); } else ac.textContent = tiret(s.endpoint);
+                tr.appendChild(ac); tb.appendChild(tr);
+            });
+        }
+
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'appstore' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            const a = document.activeElement, saisie = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+            if (document.hidden || DEMO || CONFIRM || FEDCONF || saisie || !$('pCfg').hidden) return;
+            charger();
+        }, 60000);
+    </script>
 </body>
 </html>

@@ -1,3 +1,15 @@
+secubox-appstore (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /appstore/ refaite au profil Aurora (#2571) : un seul fichier autonome, ?demo=1 et ?embed=1, tuiles, panneaux, hauteur annoncee (sbxVue), « — » pour toute mesure absente, bandeau « session requise » sur 401/403.
+  * Corrige : le jeton sbx_token n'etait pas envoye sur les ecritures de /api/v1/appstore (action de module, config) ; les 401 etaient avalees sans message.
+  * Corrige : plus de confirm/alert/prompt natifs. L'installation d'un objet federe (nom du site) et l'enregistrement d'une config se confirment dans la page ; arreter ou desactiver un module demande aussi confirmation.
+  * Corrige : donnees d'API injectees en HTML sans echappement des guillemets, et gestionnaires onclick construits avec des noms d'API ; tout est desormais construit en textContent. Un point d'acces du maillage qui n'est pas http(s) n'est plus un lien.
+  * Corrige : le compte « installes/total » des fonctionnalites est recalcule d'apres l'etat reel du catalogue (l'API /groupes compte les membres connus du catalogue, pas les paquets installes).
+  * Les ecritures gardent les memes routes, methodes et corps : POST /module/<nom>/action/<verbe>, PUT /module/<nom>/config {content}, POST /api/appstore/install {id, nom}.
+  * Non repris : l'installation et le retrait de modules depuis la page (bouton Installer reste inactif comme avant, l'API les expose mais l'ancienne page ne les appelait pas) ; la fenetre modale (remplacee par un panneau integre) ; le composant metacatalog n'est pas touche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 11:00:00 +0200
+
 secubox-appstore (0.5.6-1~bookworm1) bookworm; urgency=medium
 
   * waf (absorbe par waf-ng, S7, #2050) retire du groupe « bouclier » du catalogue.
