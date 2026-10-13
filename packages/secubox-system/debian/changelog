@@ -1,3 +1,24 @@
+secubox-system (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * system : page /system/ refaite au profil Aurora (#2556), un seul fichier autonome (plus de police Google, de crt-engine ni de
+    hybrid-dark), mode demonstration (?demo=1) et integre (?embed=1), hauteur annoncee a l'hote, bandeau « session requise ».
+  * Bogues de l'ancienne page corriges : aucun jeton n'etait envoye sur les lectures protegees (securite, paquets, sessions,
+    journaux) qui s'affichaient « Unknown » ; trois cles de localStorage differentes (secubox_token, token) au lieu de sbx_token
+    (les anciennes restent lues en repli) ; la sauvegarde annoncait un nom « backup.tar.gz » invente alors que l'API renvoie
+    « file » et « size » ; « Enregistrer » les reglages renvoyait toujours Europe/Paris et changeait le fuseau a l'insu de
+    l'utilisateur (option « inchange » ajoutee, nom d'hote prerempli) ; seuls 4 services, 4 interfaces et 20 paquets etaient
+    montres (tout est liste) ; une mesure absente s'affichait 0 % ; messages de journaux, noms de services et identifiants de
+    session etaient inseres en HTML et dans des gestionnaires onclick (injection) : tout passe desormais par textContent ;
+    confirm()/alert() natifs, ignores par le navigateur du viewer, remplaces par une confirmation et un retour dans la page.
+  * Actions inchangees (memes routes, methodes et corps) : service_control, restart_services, reload_firewall, sync_time,
+    clear_cache, backup, check_updates, apply_updates, reboot, shutdown, settings, kiosk/enable, kiosk/disable, board/detect,
+    DELETE sessions/{id}, sessions/revoke-all. Confirmation ajoutee avant les actions sans retour arriere.
+  * Non repris : jauge concentrique (sa charge /10 n'avait pas de sens), mini-histogrammes CPU/memoire/disque (historique
+    jamais fourni par l'API, ils ne se remplissaient qu'en gardant la page ouverte), bouton « Check Updates » en double dans
+    l'en-tete, emojis des cartes. Le pare-feu est annonce « actif » par l'API sans verification : la page le dit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
 secubox-system (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * admin : la page /admin/ passe au profil Aurora (#2556) : fichier autonome, tuiles (processeur, memoire, disque,
