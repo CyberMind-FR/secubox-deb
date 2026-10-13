@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-13 — image RPi400 : le kiosque démarre au premier boot (ref #2522)
+
+Sur l'image alpha.14 lite, le kiosque ne démarrait pas : `secubox-console` livre un drop-in qui conditionne `secubox-kiosk.service` à `/var/lib/secubox/.kiosk-enabled` (#2332), et `build-rpi-usb.sh` écrivait l'unité et `boot-mode=kiosk` sans poser cette sentinelle. Elle est posée dans le bloc `--kiosk` et vérifiée par l'assertion de build. Test `tests/test_image_rpi_sentinelle_kiosque_2522.py`. Le « pas de web » du même démarrage est un autre défaut (`secubox-firstboot` en échec, pas de frontal HAProxy ni de nginx sur 80/443), à diagnostiquer avec son journal.
+
 ## 2026-10-13 — dns-guard 1.4.6 : la détection de tunneling ne lève plus de faux positifs (ref #2520)
 
 Lancée sur les 2 728 domaines réels les plus demandés de gk2, l'analyse du module levait 452 alertes dont 443 « tunneling high » fausses (règle base64 appliquée à la concaténation des sous-domaines). Chaque label est jugé seul, les TLD de sonde et les zones DNSBL sont ignorés : 18 alertes sur les mêmes domaines. Reste hors périmètre : brancher le détecteur sur le journal DNS d'ad-guard (rien ne l'alimente, `alerts.jsonl` absent depuis mai) et la règle DGA (2 douteux). Test `packages/secubox-dns-guard/tests/test_tunneling_faux_positifs_2520.py`.
