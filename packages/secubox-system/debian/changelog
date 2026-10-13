@@ -1,4 +1,4 @@
-secubox-system (1.8.0-1~bookworm1) bookworm; urgency=medium
+secubox-system (1.9.0-1~bookworm1) bookworm; urgency=medium
 
   * system : page /system/ refaite au profil Aurora (#2556), un seul fichier autonome (plus de police Google, de crt-engine ni de
     hybrid-dark), mode demonstration (?demo=1) et integre (?embed=1), hauteur annoncee a l'hote, bandeau « session requise ».
@@ -16,6 +16,10 @@ secubox-system (1.8.0-1~bookworm1) bookworm; urgency=medium
   * Non repris : jauge concentrique (sa charge /10 n'avait pas de sens), mini-histogrammes CPU/memoire/disque (historique
     jamais fourni par l'API, ils ne se remplissaient qu'en gardant la page ouverte), bouton « Check Updates » en double dans
     l'en-tete, emojis des cartes. Le pare-feu est annonce « actif » par l'API sans verification : la page le dit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 12:00:00 +0200
+
+secubox-system (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * admin : la page /admin/ passe au profil Aurora (#2556) : fichier autonome, tuiles (processeur, memoire, disque,
     services, charge, mises a jour), six onglets (apercu, services, journaux, stockage, processus, mises a jour),
