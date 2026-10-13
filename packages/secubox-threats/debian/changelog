@@ -1,3 +1,25 @@
+secubox-threats (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /ai-insights/ au profil Aurora (ref #2584) : fichier autonome (aucune police ni feuille externe, plus de
+    hybrid-dark ni de moteur CRT), six onglets (tableau de bord, menaces, anomalies, modeles, correlations, reglages),
+    ?demo=1 (donnees fictives RFC 5737, actions inertes), ?embed=1, hauteur annoncee a l'hote, « — » pour toute mesure absente.
+  * Bogues de l'ancienne page corriges : session expiree = redirection brutale vers /login.html (desormais bandeau « session
+    requise ») ; integration « active » (valeur reelle de l'API) affichee en orange car seule « running » etait reconnue ;
+    donnees d'API injectees en HTML sans echappement (description d'une menace, nom de modele, recommandation) : tout est
+    construit en texte ; valeurs 0 prises pour « absentes » (seuil 0, precision 0, 0 menace) et remplacees par un defaut ;
+    barres de l'historique a hauteur minimale de 5 % meme pour zero ; alert() et fenetre modale maison remplaces par une
+    confirmation et un retour integres a la page ; badge « v1.0.0 » code en dur retire.
+  * Non repris : le « score de risque global » (5 x menaces + 20 x critiques) et la « confiance ML » (85 % ou 50 % fixes) etaient
+    calcules par la page, pas mesures : retires. Les cartes de modeles en doublon du tableau. Le compteur « Anomalies » est
+    celui du registre (l'API ne distingue pas les anomalies actives) ; « Modeles actifs » devient « Modeles prets ou deployes »
+    (decompte reel de l'API).
+  * Ajoute des lectures deja existantes cote API : /stats (repartition par gravite et par type). Aucune route, methode ni
+    corps d'ecriture modifie : POST /config, /model/train, /model/deploy a l'identique. Un deploiement demande desormais une
+    confirmation.
+  * Tests : composants/ai-insights/tests (statique + Playwright).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 17:00:37 +0200
+
 secubox-threats (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Bannir 30 jours depuis /threats/ (#2465) : un bouton par adresse PUBLIQUE des alertes et des
