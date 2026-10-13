@@ -1,3 +1,17 @@
+secubox-appstore (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /metacatalog/ (catalogue de services, composant metacatalog) refaite au profil Aurora (#2584) : un seul fichier autonome, plus de police Google ni de scripts CRT, ?demo=1 et ?embed=1, tuiles, trois onglets (Services, Dependances, Routes d'API), hauteur annoncee (sbxVue), « — » pour toute mesure absente, bandeau « session requise » sur 401/403.
+  * Corrige : sur 401 ou jeton absent, l'ancienne page redirigeait de force vers /login.html (perte du contexte, boucle en iframe) ; elle affiche maintenant un bandeau et des tirets. Le jeton sbx_token n'est envoye que s'il existe.
+  * Corrige : les reponses 404/erreur (detail d'un service inconnu) etaient lues comme un service et affichaient « undefined » ; elles donnent maintenant un message.
+  * Corrige : donnees d'API injectees en innerHTML sans echappement et nom de service dans un onclick en ligne ; tout est construit en textContent, gestionnaires par addEventListener.
+  * Corrige : la fleche du graphe de dependances allait du service dont on depend vers celui qui depend, a l'inverse de la legende « depend de » ; elle est redessinee dans le bon sens (graphe SVG, plus de canvas).
+  * Corrige : les categories du filtre etaient codees en dur (4) alors que les donnees en portent d'autres ; elles viennent maintenant des services. Les compteurs sont recalcules depuis la liste (ajout de « Non installes », que /status melangeait aux inconnus).
+  * Corrige : l'actualisation automatique tournait onglet masque et ne relisait pas le graphe ; elle s'arrete onglet masque ou pendant une saisie, et relit aussi les dependances. Le choix du service de l'onglet Routes d'API n'est plus perdu a chaque relecture.
+  * L'unique ecriture garde la meme route, la meme methode et aucun corps : POST /api/v1/metacatalog/refresh (bouton Actualiser), resultat affiche dans la page. Le recalcul n'est pas destructif : pas de confirmation.
+  * Non repris : le panneau de detail lateral fixe est remplace par un panneau dans la page ; le graphe est en cercle comme avant (pas de disposition par forces) ; /categories, /endpoints (liste globale) et le filtre « installes seulement » cote serveur restent non appeles, comme dans l'ancienne page. Quand le catalogue ne peut pas lire l'OpenAPI d'un service, la page le dit au lieu de presenter les deux routes standard comme exhaustives.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 13 Oct 2026 14:00:00 +0200
+
 secubox-appstore (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /appstore/ refaite au profil Aurora (#2571) : un seul fichier autonome, ?demo=1 et ?embed=1, tuiles, panneaux, hauteur annoncee (sbxVue), « — » pour toute mesure absente, bandeau « session requise » sur 401/403.
