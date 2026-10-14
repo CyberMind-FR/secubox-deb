@@ -1,3 +1,12 @@
+secubox-photoprism (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /photoprism/ refaite au profil Aurora (#2612) : un seul fichier autonome, onglets Bibliotheque, Albums, Stockage, Reglages, Journaux, tuiles (etat, photos, videos, albums, originaux, a importer), ?demo=1 et ?embed=1, hauteur annoncee a l'hote, bandeau « session requise » sur 401/403.
+  * Bogues de l'ancienne page corriges : jeton lu sous jwt_token/token au lieu de sbx_token (repli conserve) ; redirection forcee vers /login.html sur 401 ; mesure en cours ou absente affichee « 0 » au lieu de « — » ; lien « Open PhotoPrism » vers http://hote:port (port du LXC non expose) remplace par public_url ; echec de demarrage/arret : le motif (champ output) n'etait pas lu ; titres d'albums injectes en innerHTML sans echappement ; menu journaux a 100/200 lignes alors que l'API n'en rend que 50 ; « Storage Used » affichait la taille des originaux comme espace disque ; confirm() natif remplace par une confirmation dans la page (arret, installation, indexation complete, mise a jour, desinstallation).
+  * Appels d'ecriture inchanges (routes, methodes, corps) : /container/start|stop|install|update|uninstall, /library/index|import, /backup, /album/create.
+  * Non repris : le formulaire de reglages (POST /config) et le bouton de reconnaissance faciale (/faces/enable|disable) — l'API les refuse depuis #1747, les reglages sont affiches en lecture seule ; l'ouverture d'un album (n'etait qu'un message « non implemente »). Aucune courbe : l'API ne fournit pas d'historique. Test d'existence des routes adapte aux nouveaux appelants.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-photoprism (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * `photoprismctl install` configure l'entree OIDC « SecuBox » une fois PhotoPrism installe (#2255). Le postinst la rejouait avant l'installation (« sso reporte ») et personne ne la rejouait ensuite : PhotoPrism restait en mot de passe seul, sans SSO. Un echec de sso previent sans annuler l'installation. 3 tests.

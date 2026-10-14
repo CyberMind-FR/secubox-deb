@@ -49,7 +49,8 @@ def client(tmp_path, monkeypatch):
 
 
 def test_chaque_route_de_la_page_existe():
-    appelees = set(re.findall(r"api\('(/[a-z/_-]+)", PAGE)) | {"/faces/enable", "/faces/disable"}
+    appelees = (set(re.findall(r"lire\('(/[a-z/_-]+)", PAGE)) | set(re.findall(r"ecrire\('[A-Z]+', '(/[a-z/_-]+)", PAGE))
+                | set(re.findall(r"action\('(/[a-z/_-]+)", PAGE)) | {"/faces/enable", "/faces/disable"})
     # Le schéma OpenAPI, pas app.routes : selon la version de FastAPI, un
     # routeur inclus y reste un objet opaque (_IncludedRouter).
     servies = set(M.app.openapi()["paths"])

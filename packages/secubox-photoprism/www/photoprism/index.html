@@ -4,944 +4,391 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  PhotoPrism au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - PhotoPrism Photo Management</title>
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <title>SecuBox — PhotoPrism</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-peak: #00dd44;
-            --p31-dim: #006622;
-            --p31-glow: rgba(0, 221, 68, 0.15);
-            --tube-light: #e8f5e9;
-            --tube-mid: #c8e6c9;
-            --tube-dark: #a5d6a7;
-            --text-primary: #1b5e20;
-            --text-secondary: #388e3c;
-            --text-dim: #66bb6a;
-            --surface: #f1f8e9;
-            --surface-alt: #dcedc8;
-            --border: #c5e1a5;
-            --error: #c62828;
-            --warning: #f57c00;
-            --success: #2e7d32;
-            --photoprism: #a855f7;
-            --photoprism-dark: #9333ea;
-            --photoprism-light: #c084fc;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-        }
-        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid var(--photoprism);
-        }
-        .header h1 { font-size: 1.5rem; color: var(--photoprism); }
-        .header-actions { display: flex; gap: 0.5rem; }
-
-        /* Stats Row */
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 8px var(--p31-glow);
-        }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--photoprism); margin-top: 0.25rem; }
-        .stat-card.running .value { color: var(--success); }
-        .stat-card.stopped .value { color: var(--error); }
-
-        /* Tabs */
-        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
-        .tab {
-            padding: 0.75rem 1.5rem;
-            cursor: pointer;
-            border: 1px solid transparent;
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            background: transparent;
-            color: var(--text-secondary);
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        .tab:hover { background: var(--surface-alt); }
-        .tab.active {
-            background: var(--surface);
-            border-color: var(--border);
-            color: var(--photoprism);
-            margin-bottom: -2px;
-            border-bottom: 2px solid var(--surface);
-        }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Cards */
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 8px var(--p31-glow);
-        }
-        .card h3 {
-            font-size: 1rem;
-            color: var(--photoprism);
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            border: 1px solid var(--photoprism);
-            background: var(--surface);
-            color: var(--photoprism);
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        .btn:hover { background: var(--photoprism); color: white; }
-        .btn-primary { background: var(--photoprism); color: white; }
-        .btn-primary:hover { background: var(--photoprism-dark); }
-        .btn-danger { border-color: var(--error); color: var(--error); }
-        .btn-danger:hover { background: var(--error); color: white; }
-        .btn-success { border-color: var(--success); color: var(--success); }
-        .btn-success:hover { background: var(--success); color: white; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
-        tr:hover { background: var(--surface-alt); }
-
-        /* Forms */
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
-        input, select {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: white;
-            color: var(--text-primary);
-            font-family: inherit;
-        }
-        input:focus, select:focus { outline: none; border-color: var(--photoprism); box-shadow: 0 0 5px rgba(168, 85, 247, 0.3); }
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-        .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-        .checkbox-label input[type="checkbox"] { width: auto; }
-
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        .badge-success { background: #c8e6c9; color: #2e7d32; }
-        .badge-error { background: #ffcdd2; color: #c62828; }
-        .badge-warning { background: #ffe0b2; color: #e65100; }
-        .badge-info { background: #e1bee7; color: #7b1fa2; }
-
-        /* Install Banner */
-        .install-banner {
-            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
-            border: 2px solid var(--photoprism);
-            border-radius: 12px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-        .install-banner h2 { color: var(--photoprism); margin-bottom: 1rem; }
-        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
-
-        /* Album Grid */
-        .album-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        .album-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .album-card:hover { border-color: var(--photoprism); transform: translateY(-2px); }
-        .album-icon { font-size: 3rem; margin-bottom: 0.5rem; }
-        .album-title { font-weight: 500; color: var(--text-primary); }
-        .album-count { font-size: 0.875rem; color: var(--text-dim); }
-
-        /* Storage Bar */
-        .storage-bar {
-            background: var(--border);
-            height: 20px;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 1rem 0;
-        }
-        .storage-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--photoprism) 0%, var(--photoprism-light) 100%);
-            transition: width 0.3s;
-        }
-        .storage-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.875rem;
-            color: var(--text-dim);
-        }
-
-        /* Face Recognition Toggle */
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 26px;
-        }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: var(--border);
-            transition: 0.4s;
-            border-radius: 26px;
-        }
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 20px;
-            width: 20px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: 0.4s;
-            border-radius: 50%;
-        }
-        input:checked + .toggle-slider { background-color: var(--photoprism); }
-        input:checked + .toggle-slider:before { transform: translateX(24px); }
-
-        /* Logs */
-        .logs-container {
-            background: #1a1a1a;
-            color: #c084fc;
-            padding: 1rem;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.8rem;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        /* Toast */
-        .toast {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            color: white;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-        }
-        .toast-success { background: var(--success); }
-        .toast-error { background: var(--error); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .spinner {
-            display: inline-block;
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid var(--border);
-            border-top-color: var(--photoprism);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Open PhotoPrism link */
-        .open-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--photoprism);
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .open-link:hover { text-decoration: underline; }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; max-width: 100%; }
-            .stats-row { grid-template-columns: repeat(2, 1fr); }
-            .tabs { overflow-x: auto; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:10px 12px;font-size:.82rem;display:grid;gap:8px}
+        .conf .actions{margin:0}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,.lignes select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,.lignes select:focus{outline:none;border-color:var(--cyan)}
+        .lignes{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:.78rem;color:var(--doux)} .lignes select{width:auto}
+        .albums{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+        .album{border:1px solid var(--trait);border-radius:12px;padding:10px;background:rgba(18,40,78,.5);min-width:0}
+        .album b{display:block;font-size:.84rem;overflow-wrap:anywhere} .album span{color:var(--faible);font-size:.7rem;display:block;margin-top:3px}
+        .barre{height:8px;border-radius:999px;background:rgba(159,179,214,.16);overflow:hidden;margin:8px 0 4px} .barre i{display:block;height:100%;background:var(--cyan)} .barre i.att{background:var(--orange)} .barre i.hors{background:var(--rouge)}
+        .barre-l{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.74rem;color:var(--doux)}
+        pre.journal{margin:0;max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.72rem;background:rgba(4,9,20,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;color:var(--doux)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>PhotoPrism Photo Management</h1>
-            <div class="header-actions">
-                <a id="openPhotoprism" href="#" target="_blank" class="btn" style="display: none;">Open PhotoPrism</a>
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="12" cy="12" r="3.4"/><path d="M7 5l1.2-2h7.6L17 5"/></svg>
+                <div><h1>PhotoPrism</h1><small>Photothèque dans son conteneur LXC</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a class="btn" id="ouvrir" href="#" target="_blank" rel="noopener" hidden>Ouvrir PhotoPrism</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="bascule" type="button" hidden>Démarrer</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div class="retour ko" id="erreur" role="alert" hidden></div>
+        <div class="retour" id="retour" role="status" hidden></div>
+        <div class="conf" id="conf" role="alertdialog" aria-labelledby="confTxt" hidden>
+            <span id="confTxt"></span>
+            <div class="actions"><button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        </div>
+        <div class="info" id="installer" hidden>PhotoPrism n’est pas installé sur ce nœud. L’installation télécharge la version native officielle dans son conteneur LXC.
+            <div class="actions"><button class="btn prim" id="btnInstaller" type="button">Installer PhotoPrism</button></div></div>
 
-        <!-- Install Banner (shown when not installed) -->
-        <div id="installBanner" class="install-banner" style="display: none;">
-            <h2>Welcome to PhotoPrism</h2>
-            <p>AI-Powered Photos App for the Decentralized Web. Browse, organize and share your photo collection.</p>
-            <button class="btn btn-primary" onclick="installPhotoprism()">Install PhotoPrism</button>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cEtat" title="État du conteneur PhotoPrism : en marche si l’application répond en HTTP, arrêté si le conteneur LXC est arrêté ou gelé, non installé sinon."><span class="l">État</span><span class="v" id="tEtat">—</span><span class="s" id="sEtat">conteneur LXC</span></div>
+            <div class="tuile cy" title="Nombre de fichiers image dans le dossier des originaux. Mesuré en arrière-plan toutes les dix minutes au plus ; « — » tant que la première mesure n’est pas faite."><span class="l">Photos</span><span class="v" id="tPhotos">—</span><span class="s">fichiers originaux</span></div>
+            <div class="tuile cy" title="Nombre de fichiers vidéo dans le dossier des originaux (même mesure que les photos)."><span class="l">Vidéos</span><span class="v" id="tVideos">—</span><span class="s">fichiers originaux</span></div>
+            <div class="tuile cy" title="Albums enregistrés dans le fichier albums.json de la photothèque."><span class="l">Albums</span><span class="v" id="tAlbums">—</span><span class="s">créés ici</span></div>
+            <div class="tuile cy" title="Taille disque du dossier des originaux (du -sh)."><span class="l">Originaux</span><span class="v" id="tStock">—</span><span class="s">occupation disque</span></div>
+            <div class="tuile" id="cImport" title="Fichiers déposés dans le dossier d’import, en attente d’être importés."><span class="l">À importer</span><span class="v" id="tImport">—</span><span class="s">fichiers en attente</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections PhotoPrism">
+            <button type="button" role="tab" id="o-biblio" data-t="biblio" aria-selected="true" aria-controls="t-biblio">Bibliothèque</button>
+            <button type="button" role="tab" id="o-albums" data-t="albums" aria-selected="false" aria-controls="t-albums">Albums</button>
+            <button type="button" role="tab" id="o-stockage" data-t="stockage" aria-selected="false" aria-controls="t-stockage">Stockage</button>
+            <button type="button" role="tab" id="o-reglages" data-t="reglages" aria-selected="false" aria-controls="t-reglages">Réglages</button>
+            <button type="button" role="tab" id="o-journaux" data-t="journaux" aria-selected="false" aria-controls="t-journaux">Journaux</button>
         </div>
 
-        <!-- Stats Row -->
-        <div class="stats-row">
-            <div class="stat-card" id="statStatus">
-                <div class="label">Status</div>
-                <div class="value">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Photos</div>
-                <div class="value" id="statPhotos">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Videos</div>
-                <div class="value" id="statVideos">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Albums</div>
-                <div class="value" id="statAlbums">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Storage Used</div>
-                <div class="value" id="statStorage">-</div>
-            </div>
-        </div>
+        <section id="t-biblio" role="tabpanel" aria-labelledby="o-biblio">
+            <div class="pan"><h3>Gestion de la bibliothèque</h3>
+                <div class="actions" style="margin:0 0 8px"><button class="btn prim" id="btnIndex" type="button">Indexer la bibliothèque</button><button class="btn" id="btnImport" type="button">Importer les photos</button></div>
+                <p class="note">Indexer relit tous les originaux (long sur une grande photothèque, lancé en arrière-plan). Importer ajoute les fichiers du dossier d’import. Les deux demandent que PhotoPrism soit en marche.</p>
+                <p class="note" id="nMesure" hidden>Première mesure de la photothèque en cours : les comptes restent à « — » jusqu’à son terme.</p></div>
+        </section>
 
-        <!-- Tabs -->
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('library')">Library</div>
-            <div class="tab" onclick="showTab('albums')">Albums</div>
-            <div class="tab" onclick="showTab('faces')">Faces</div>
-            <div class="tab" onclick="showTab('storage')">Storage</div>
-            <div class="tab" onclick="showTab('settings')">Settings</div>
-            <div class="tab" onclick="showTab('logs')">Logs</div>
-        </div>
-
-        <!-- Library Tab -->
-        <div id="tab-library" class="tab-content active">
-            <div class="card">
-                <h3>Library Management</h3>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
-                    <button class="btn btn-primary" id="btnIndex" onclick="startIndexing()">Index Library</button>
-                    <button class="btn" id="btnImport" onclick="startImport()">Import Photos</button>
-                </div>
-                <div class="form-row">
-                    <div class="stat-card">
-                        <div class="label">Total Photos</div>
-                        <div class="value" id="libPhotos">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="label">Total Videos</div>
-                        <div class="value" id="libVideos">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="label">Pending Import</div>
-                        <div class="value" id="libPending">0</div>
-                    </div>
-                </div>
-                <p style="margin-top: 1rem; color: var(--text-dim); font-size: 0.875rem;">
-                    Place photos in the import folder, then click "Import Photos" to add them to your library.
-                </p>
-            </div>
-        </div>
-
-        <!-- Albums Tab -->
-        <div id="tab-albums" class="tab-content">
-            <div class="card">
-                <h3>Albums</h3>
-                <div style="margin-bottom: 1rem;">
-                    <div class="form-row" style="align-items: flex-end;">
-                        <div class="form-group">
-                            <label>Album Title</label>
-                            <input type="text" id="albumTitle" placeholder="e.g., Vacation 2024">
-                        </div>
-                        <div class="form-group">
-                            <label>Description</label>
-                            <input type="text" id="albumDesc" placeholder="Optional description">
-                        </div>
-                        <div class="form-group">
-                            <button class="btn btn-primary" onclick="createAlbum()">Create Album</button>
-                        </div>
-                    </div>
-                </div>
-                <div id="albumsGrid" class="album-grid">
-                    <p style="color: var(--text-dim);">No albums yet. Create one above.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Faces Tab -->
-        <div id="tab-faces" class="tab-content">
-            <div class="card">
-                <h3>Face Recognition</h3>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <div>
-                        <p style="color: var(--text-secondary);">Enable AI-powered face recognition to automatically identify and group photos by people.</p>
-                        <p style="color: var(--text-dim); font-size: 0.875rem; margin-top: 0.5rem;">Status: <span id="faceStatus">-</span></p>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="faceToggle" onchange="toggleFaceRecognition()">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <p style="color: var(--text-dim); font-size: 0.875rem;">
-                    Note: Changes to face recognition settings require a restart of PhotoPrism.
-                </p>
-            </div>
-        </div>
-
-        <!-- Storage Tab -->
-        <div id="tab-storage" class="tab-content">
-            <div class="card">
-                <h3>Storage Information</h3>
-                <div id="storageInfo">
-                    <div class="form-row">
-                        <div>
-                            <label style="color: var(--text-dim);">Originals Path</label>
-                            <p id="storOriginals" style="font-family: monospace;">/srv/photoprism/originals</p>
-                        </div>
-                        <div>
-                            <label style="color: var(--text-dim);">Import Path</label>
-                            <p id="storImport" style="font-family: monospace;">/srv/photoprism/import</p>
-                        </div>
-                    </div>
-                    <div class="storage-bar">
-                        <div class="storage-fill" id="storageBar" style="width: 0%;"></div>
-                    </div>
-                    <div class="storage-info">
-                        <span>Used: <span id="storUsed">0</span></span>
-                        <span>Free: <span id="storFree">0</span></span>
-                        <span>Total: <span id="storTotal">0</span></span>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Storage Breakdown</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Location</th>
-                            <th>Size</th>
-                        </tr>
-                    </thead>
-                    <tbody id="storageTable">
-                        <tr><td colspan="2">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div id="tab-settings" class="tab-content">
-            <div class="card">
-                <h3>Configuration</h3>
-                <form id="settingsForm" onsubmit="saveSettings(event)">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Port</label>
-                            <input type="number" id="cfgPort" value="2342" min="1024" max="65535">
-                        </div>
-                        <div class="form-group">
-                            <label>Data Path</label>
-                            <input type="text" id="cfgDataPath" value="/srv/photoprism">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Originals Path</label>
-                            <input type="text" id="cfgOriginals" value="/srv/photoprism/originals">
-                        </div>
-                        <div class="form-group">
-                            <label>Import Path</label>
-                            <input type="text" id="cfgImport" value="/srv/photoprism/import">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Timezone</label>
-                            <select id="cfgTimezone">
-                                <option value="Europe/Paris">Europe/Paris</option>
-                                <option value="Europe/London">Europe/London</option>
-                                <option value="America/New_York">America/New_York</option>
-                                <option value="America/Los_Angeles">America/Los_Angeles</option>
-                                <option value="Asia/Tokyo">Asia/Tokyo</option>
-                                <option value="UTC">UTC</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Construction</label>
-                            <input type="text" id="cfgImage" value="native — dl.photoprism.app (LXC uniquement)" readonly>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Domain (for HAProxy)</label>
-                            <input type="text" id="cfgDomain" value="photos.secubox.local">
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1rem;">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="cfgFaces"> Face Recognition
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="cfgExperimental"> Experimental Features
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="cfgReadonly"> Read-only Mode
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="cfgPublic"> Public Mode (no login)
-                        </label>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Settings</button>
+        <section id="t-albums" role="tabpanel" aria-labelledby="o-albums" hidden>
+            <div class="pan"><h3>Albums <i id="nAlb"></i></h3>
+                <form class="saisie" id="fAlbum">
+                    <label>Titre de l’album<input name="title" placeholder="Vacances 2026" required autocomplete="off"></label>
+                    <label>Description (facultatif)<input name="description" autocomplete="off"></label>
+                    <div><button class="btn prim" type="submit">Créer l’album</button></div>
                 </form>
-            </div>
-            <div class="card">
-                <h3>Maintenance</h3>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <button class="btn" onclick="updatePhotoprism()">Update to Latest</button>
-                    <button class="btn" onclick="createBackup()">Create Backup</button>
-                    <button class="btn btn-danger" onclick="uninstallPhotoprism()">Uninstall</button>
-                </div>
-            </div>
-        </div>
+                <div class="albums" id="gAlb"></div></div>
+        </section>
 
-        <!-- Logs Tab -->
-        <div id="tab-logs" class="tab-content">
-            <div class="card">
-                <h3>Container Logs</h3>
-                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
-                    <label>Lines:</label>
-                    <select id="logLines" onchange="loadLogs()">
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                        <option value="200">200</option>
-                    </select>
-                    <button class="btn" onclick="loadLogs()">Refresh</button>
-                </div>
-                <div class="logs-container" id="logsContainer">Loading logs...</div>
+        <section id="t-stockage" role="tabpanel" aria-labelledby="o-stockage" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Disque des données <i>df sur le dossier de données</i></h3>
+                    <div class="barre"><i id="bDisque" style="width:0%"></i></div>
+                    <div class="barre-l"><span>Utilisé : <b id="sUtil">—</b></span><span>Libre : <b id="sLibre">—</b></span><span>Total : <b id="sTotal">—</b></span></div>
+                    <p class="note">« — » si le disque n’a pas pu être mesuré. Mesure mise en cache par l’API.</p></div>
+                <div class="pan"><h3>Dossiers</h3>
+                    <div class="tab"><table><thead><tr><th>Dossier</th><th>Chemin</th><th>Taille</th></tr></thead><tbody id="bDoss"></tbody></table></div></div>
             </div>
-        </div>
-    </main>
+        </section>
 
+        <section id="t-reglages" role="tabpanel" aria-labelledby="o-reglages" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Configuration <i>lecture seule</i></h3>
+                    <dl class="kv">
+                        <dt>Construction</dt><dd id="kBuild">—</dd><dt>Conteneur</dt><dd id="kLxc">—</dd><dt>Adresse LXC</dt><dd class="mono" id="kIp">—</dd>
+                        <dt>Port</dt><dd id="kPort">—</dd><dt>Domaine</dt><dd class="mono" id="kDom">—</dd><dt>Fuseau horaire</dt><dd id="kTz">—</dd>
+                        <dt>HAProxy</dt><dd id="kHap">—</dd><dt>Reconnaissance faciale</dt><dd id="kFaces">—</dd>
+                        <dt>Fonctions expérimentales</dt><dd id="kExp">—</dd><dt>Lecture seule</dt><dd id="kRo">—</dd><dt>Mode public</dt><dd id="kPub">—</dd>
+                    </dl>
+                    <p class="note">Les réglages sont tenus par /etc/secubox/photoprism.toml et appliqués par photoprismctl : l’API refuse de les réécrire, cette page ne les modifie donc pas.</p></div>
+                <div class="pan"><h3>Maintenance</h3>
+                    <div class="actions" style="margin:0"><button class="btn" id="btnMaj" type="button">Mettre à jour</button><button class="btn" id="btnSauve" type="button">Créer une sauvegarde</button><button class="btn danger" id="btnArret" type="button">Désinstaller (arrêt du conteneur)</button></div>
+                    <p class="note">Mettre à jour retélécharge la version native officielle (plusieurs minutes, en arrière-plan). La sauvegarde archive le dossier storage/ dans /var/backups/secubox/photoprism/. « Désinstaller » arrête le conteneur ; les données sont conservées.</p></div>
+            </div>
+        </section>
+
+        <section id="t-journaux" role="tabpanel" aria-labelledby="o-journaux" hidden>
+            <div class="pan"><h3>Journaux du conteneur <i>l’API en rend 50 au plus</i></h3>
+                <div class="lignes"><label for="nLignes">Lignes</label><select id="nLignes"><option value="20">20</option><option value="50" selected>50</option></select><button class="btn" id="btnLogs" type="button">Recharger</button></div>
+                <pre class="journal" id="journal">—</pre></div>
+        </section>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/photoprism';
-        let isRunning = false;
-        let containerStatus = 'not_installed';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const oui = v => v === true ? 'Activé' : v === false ? 'Désactivé' : '—';
 
-        function getToken() {
-            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+        let ST = null, ALB = null, STO = null, FACES = null, LOGS = null, SESSION_OK = true, ONGLET = 'biblio';
+        let CONF = null;   // action en attente de confirmation : { texte, fn } ; jamais de dialogue natif
+
+        // Jeton : sbx_token (clé commune à toutes les pages) ; les anciennes clés de cette page restent lues en repli.
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token') || localStorage.getItem('token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        async function api(endpoint, options = {}) {
-            const token = getToken();
-            const headers = { 'Content-Type': 'application/json', ...options.headers };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
-            if (res.status === 401) {
-                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                throw new Error('Unauthorized');
-            }
-            return res.json();
-        }
-
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['library', 'albums', 'faces', 'storage', 'settings', 'logs'];
-            document.querySelector(`.tab:nth-child(${tabs.indexOf(name)+1})`).classList.add('active');
-            document.getElementById('tab-' + name).classList.add('active');
-            if (name === 'logs') loadLogs();
-            if (name === 'storage') loadStorage();
-            if (name === 'faces') loadFaces();
-            if (name === 'albums') loadAlbums();
-        }
-
-        function toast(msg, type = 'success') {
-            const t = document.createElement('div');
-            t.className = 'toast toast-' + type;
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-
-        async function refresh() {
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const status = await api('/status');
-                containerStatus = status.container_status;
-                isRunning = status.container_status === 'running';
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function motif(r) {
+            if (r.demo) return 'Démonstration : action inerte.';
+            const d = r.data || {};
+            if (d.error) return String(d.error);
+            if (d.success === false && d.output) return String(d.output).slice(0, 300);
+            if (d.detail) return typeof d.detail === 'string' ? d.detail : 'requête refusée';
+            return r.statut ? 'HTTP ' + r.statut : 'Serveur injoignable';
+        }
+        // Une action de l'API répond 200 avec { success: false, error } : ce n'est pas une réussite.
+        const reussi = r => r.ok && r.data && r.data.success === true;
 
-                // Show/hide install banner
-                document.getElementById('installBanner').style.display =
-                    status.container_status === 'not_installed' ? 'block' : 'none';
-
-                // Update stats
-                const statEl = document.getElementById('statStatus');
-                statEl.querySelector('.value').textContent = status.container_status;
-                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
-
-                const libStats = status.library_stats || {};
-                document.getElementById('statPhotos').textContent = libStats.total_photos || 0;
-                document.getElementById('statVideos').textContent = libStats.total_videos || 0;
-                document.getElementById('statAlbums').textContent = libStats.total_albums || 0;
-                document.getElementById('statStorage').textContent = libStats.storage_used || '-';
-
-                document.getElementById('libPhotos').textContent = libStats.total_photos || 0;
-                document.getElementById('libVideos').textContent = libStats.total_videos || 0;
-                document.getElementById('libPending').textContent = libStats.import_pending || 0;
-
-                // Update toggle button
-                const btn = document.getElementById('btnToggle');
-                if (status.container_status === 'not_installed') {
-                    btn.textContent = 'Install';
-                    btn.className = 'btn btn-primary';
-                    btn.onclick = installPhotoprism;
-                } else if (isRunning) {
-                    btn.textContent = 'Stop';
-                    btn.className = 'btn btn-danger';
-                    btn.onclick = () => toggleService();
-                } else {
-                    btn.textContent = 'Start';
-                    btn.className = 'btn btn-success';
-                    btn.onclick = () => toggleService();
-                }
-
-                // Enable/disable action buttons
-                document.getElementById('btnIndex').disabled = !isRunning;
-                document.getElementById('btnImport').disabled = !isRunning;
-
-                // Open PhotoPrism link
-                const openLink = document.getElementById('openPhotoprism');
-                if (isRunning) {
-                    openLink.style.display = 'inline-flex';
-                    openLink.href = `http://${window.location.hostname}:${status.port}`;
-                } else {
-                    openLink.style.display = 'none';
-                }
-
-                // Load settings
-                document.getElementById('cfgPort').value = status.port || 2342;
-                document.getElementById('cfgDataPath').value = status.data_path || '/srv/photoprism';
-                document.getElementById('cfgOriginals').value = status.originals_path || '/srv/photoprism/originals';
-                document.getElementById('cfgImport').value = status.import_path || '/srv/photoprism/import';
-                document.getElementById('cfgTimezone').value = status.timezone || 'Europe/Paris';
-                document.getElementById('cfgImage').value = status.build || 'native — dl.photoprism.app (LXC uniquement)';
-                document.getElementById('cfgDomain').value = status.domain || 'photos.secubox.local';
-                document.getElementById('cfgFaces').checked = status.face_recognition !== false;
-                document.getElementById('cfgExperimental').checked = status.experimental || false;
-                document.getElementById('cfgReadonly').checked = status.readonly || false;
-                document.getElementById('cfgPublic').checked = status.public || false;
-
-            } catch (e) {
-                console.error(e);
-                toast('Failed to load status', 'error');
-            }
+        function demoData() {
+            ST = { deployment: 'lxc-native', build: 'native — dl.photoprism.app (LXC uniquement)', port: 2342, lxc_name: 'photoprism', lxc_ip: '192.0.2.130', lxc_state: 'running', http_reachable: true,
+                   data_path: '/data/photoprism', originals_path: '/data/shared/photos', import_path: '/data/photoprism/import', timezone: 'Europe/Paris', domain: 'photos.example.org', public_url: 'https://photos.example.org/',
+                   haproxy: true, face_recognition: true, experimental: false, readonly: false, public: false, container_status: 'running',
+                   library_stats: { total_photos: 18452, total_videos: 312, total_albums: 3, storage_used: '84G', import_pending: 12, mesure_en_cours: false } };
+            ALB = { albums: [{ id: 'a1', title: 'Vacances 2025', description: 'Corse', photo_count: 412, created: '2026-08-02T10:12:00' }, { id: 'a2', title: 'Famille', photo_count: 1290, created: '2026-08-15T18:40:00' }, { id: 'a3', title: 'Chantier', photo_count: 0, created: '2026-09-30T09:00:00' }] };
+            STO = { data_path: '/data/photoprism', originals_path: '/data/shared/photos', import_path: '/data/photoprism/import', data_size: '6.2G', originals_size: '84G', import_size: '120M', disk_free: '310G', disk_total: '916G', disk_used_percent: 66 };
+            FACES = { enabled: true, status: 'active' };
+            LOGS = { logs: '2026-10-14 08:02:11 info  index: scanning originals\n2026-10-14 08:02:40 info  index: completed in 29s\n2026-10-14 08:05:02 info  server: listening on 192.0.2.130:2342' };
         }
 
-        async function toggleService() {
-            const action = isRunning ? '/container/stop' : '/container/start';
-            try {
-                document.getElementById('btnToggle').disabled = true;
-                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
-                const res = await api(action, { method: 'POST' });
-                if (res.success) {
-                    toast(isRunning ? 'PhotoPrism stopped!' : 'PhotoPrism started!');
-                } else {
-                    toast(res.error || 'Action failed', 'error');
-                }
-                await refresh();
-            } catch (e) {
-                toast('Action failed: ' + e.message, 'error');
-            } finally {
-                document.getElementById('btnToggle').disabled = false;
-            }
+        async function charger(tout) {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const aLire = [['ST', '/status']];
+            if (tout || ONGLET === 'albums') aLire.push(['ALB', '/albums']);
+            if (tout || ONGLET === 'stockage') aLire.push(['STO', '/storage']);
+            if (tout || ONGLET === 'reglages') aLire.push(['FACES', '/faces']);
+            if (tout || ONGLET === 'journaux') aLire.push(['LOGS', '/logs?lines=' + $('nLignes').value]);
+            const essais = await Promise.allSettled(aLire.map(x => lire(x[1])));
+            let refus = false;
+            essais.forEach((e, i) => {
+                const cle = aLire[i][0];
+                const v = e.status === 'fulfilled' ? e.value : null;
+                if (e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403)) refus = true;
+                if (cle === 'ST') ST = v; else if (cle === 'ALB') ALB = v; else if (cle === 'STO') STO = v; else if (cle === 'FACES') FACES = v; else LOGS = v;
+            });
+            SESSION_OK = !refus;
+            const tousKo = essais.every(e => e.status === 'rejected');
+            $('erreur').hidden = !(tousKo && !refus);
+            if (tousKo && !refus) $('erreur').textContent = 'Impossible de lire PhotoPrism (service arrêté ou injoignable).';
+            rendre();
         }
 
-        async function installPhotoprism() {
-            if (!confirm('Install PhotoPrism? This will download the official native build into its LXC.')) return;
-            toast('Installing PhotoPrism... This may take a few minutes.');
-            try {
-                const res = await api('/container/install', { method: 'POST' });
-                if (res.success) {
-                    // L'installation tourne en arrière-plan et démarre le service elle-même.
-                    toast(res.message || 'Install started');
-                    await refresh();
-                } else {
-                    toast(res.error || 'Install failed', 'error');
-                }
-            } catch (e) {
-                toast('Install failed: ' + e.message, 'error');
-            }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = ST, etat = $('etat');
+            const cs = s ? s.container_status : null;
+            const lib = (s && s.library_stats) || null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (cs === 'running') { etat.className = 'actif'; etat.textContent = 'EN MARCHE'; }
+            else if (cs === 'stopped') { etat.className = 'actif att'; etat.textContent = 'ARRÊTÉ'; }
+            else { etat.className = 'actif neutre'; etat.textContent = 'NON INSTALLÉ'; }
+            const libelle = { running: 'En marche', stopped: 'Arrêté', not_installed: 'Non installé' };
+            $('tEtat').textContent = s ? (libelle[cs] || tiret(cs)) : '—';
+            $('cEtat').className = 'tuile ' + (cs === 'running' ? 'ok' : cs === 'stopped' ? 'att' : cs ? '' : '');
+            $('sEtat').textContent = s ? (s.http_reachable ? 'répond en HTTP' : 'ne répond pas · LXC ' + tiret(s.lxc_state)) : 'conteneur LXC';
+            // Comptes : « — » tant que l'API n'a pas fini sa première mesure (elle rend alors des zéros marqués mesure_en_cours).
+            const mesure = !!(lib && !lib.mesure_en_cours);
+            const nb = v => (mesure && v !== null && v !== undefined) ? v : '—';
+            $('tPhotos').textContent = lib ? nb(lib.total_photos) : '—';
+            $('tVideos').textContent = lib ? nb(lib.total_videos) : '—';
+            $('tAlbums').textContent = lib ? nb(lib.total_albums) : '—';
+            $('tStock').textContent = lib && mesure ? tiret(lib.storage_used) : '—';
+            $('tImport').textContent = lib ? nb(lib.import_pending) : '—';
+            $('cImport').className = 'tuile ' + (mesure && lib.import_pending > 0 ? 'att' : 'cy');
+            $('nMesure').hidden = !(lib && lib.mesure_en_cours);
+            // Bouton principal et bandeau d'installation
+            const b = $('bascule');
+            $('installer').hidden = !(SESSION_OK && cs === 'not_installed');
+            b.hidden = !(SESSION_OK && s && cs && cs !== 'not_installed');
+            if (cs === 'running') { b.textContent = 'Arrêter'; b.className = 'btn danger'; } else { b.textContent = 'Démarrer'; b.className = 'btn prim'; }
+            $('btnIndex').disabled = !(s && cs === 'running'); $('btnImport').disabled = !(s && cs === 'running');
+            // Lien d'ouverture : l'adresse publique donnée par l'API (l'ancienne page visait http://<hôte>:<port>, jamais exposé)
+            const o = $('ouvrir'), u = s && s.public_url ? String(s.public_url) : '';
+            if (cs === 'running' && /^https?:\/\//.test(u)) { o.href = u; o.hidden = false; } else o.hidden = true;
+            // Réglages en lecture seule
+            $('kBuild').textContent = tiret(s && s.build); $('kLxc').textContent = s ? tiret(s.lxc_name) + ' · ' + tiret(s.lxc_state) : '—';
+            $('kIp').textContent = tiret(s && s.lxc_ip); $('kPort').textContent = tiret(s && s.port); $('kDom').textContent = tiret(s && s.domain); $('kTz').textContent = tiret(s && s.timezone);
+            $('kHap').textContent = s ? oui(s.haproxy) : '—';
+            $('kFaces').textContent = FACES ? oui(FACES.enabled) + (FACES.status ? ' (' + FACES.status + ')' : '') : (s ? oui(s.face_recognition) : '—');
+            $('kExp').textContent = s ? oui(s.experimental) : '—'; $('kRo').textContent = s ? oui(s.readonly) : '—'; $('kPub').textContent = s ? oui(s.public) : '—';
+            rendreAlbums(); rendreStockage(); rendreJournal();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function startIndexing() {
-            if (!isRunning) return toast('PhotoPrism must be running', 'error');
-            toast('Starting indexing...');
-            try {
-                const res = await api('/library/index', { method: 'POST' });
-                if (res.success) {
-                    toast('Indexing started!');
-                } else {
-                    toast(res.error || 'Indexing failed', 'error');
-                }
-            } catch (e) {
-                toast('Indexing failed: ' + e.message, 'error');
-            }
+        function rendreAlbums() {
+            const g = $('gAlb'); g.replaceChildren();
+            const liste = ALB && Array.isArray(ALB.albums) ? ALB.albums : [];
+            $('nAlb').textContent = liste.length ? liste.length + ' album' + (liste.length > 1 ? 's' : '') : '';
+            if (!liste.length) { g.appendChild(el('div', 'vide', ALB ? 'Aucun album pour l’instant. Créez-en un ci-dessus.' : '—')); return; }
+            liste.forEach(a => {
+                const c = el('div', 'album'); c.appendChild(el('b', '', tiret(a.title)));
+                c.appendChild(el('span', '', (a.photo_count != null ? a.photo_count : '—') + ' photo' + (a.photo_count > 1 ? 's' : '')));
+                if (a.description) c.appendChild(el('span', '', a.description));
+                g.appendChild(c);
+            });
         }
 
-        async function startImport() {
-            if (!isRunning) return toast('PhotoPrism must be running', 'error');
-            toast('Starting import...');
-            try {
-                const res = await api('/library/import', { method: 'POST' });
-                if (res.success) {
-                    toast('Import started!');
-                    await refresh();
-                } else {
-                    toast(res.error || 'Import failed', 'error');
-                }
-            } catch (e) {
-                toast('Import failed: ' + e.message, 'error');
-            }
+        // L'API rend « 0 » pour une mesure impossible (dossier absent, df en échec) : pour le disque, 0 total = non mesuré.
+        function rendreStockage() {
+            const s = STO, b = $('bDisque');
+            const dispo = !!(s && s.disk_total && s.disk_total !== '0');
+            const pct = dispo && typeof s.disk_used_percent === 'number' ? s.disk_used_percent : null;
+            b.style.width = (pct === null ? 0 : pct) + '%'; b.className = pct !== null && pct >= 90 ? 'hors' : pct !== null && pct >= 75 ? 'att' : '';
+            $('sUtil').textContent = pct === null ? '—' : pct + ' %'; $('sLibre').textContent = dispo ? tiret(s.disk_free) : '—'; $('sTotal').textContent = dispo ? tiret(s.disk_total) : '—';
+            const tb = $('bDoss'); tb.replaceChildren();
+            if (!s) { const tr = el('tr'), td = el('td', 'vide', '—'); td.colSpan = 3; tr.appendChild(td); tb.appendChild(tr); return; }
+            [['Données', s.data_path, s.data_size], ['Originaux', s.originals_path, s.originals_size], ['Import', s.import_path, s.import_size]].forEach(l => {
+                const tr = el('tr'); tr.appendChild(el('td', '', l[0])); tr.appendChild(el('td', 'mono', tiret(l[1]))); tr.appendChild(el('td', '', tiret(l[2]))); tb.appendChild(tr);
+            });
         }
+        function rendreJournal() { $('journal').textContent = LOGS ? (LOGS.logs || 'Aucun journal disponible') : '—'; }
 
-        async function loadAlbums() {
-            try {
-                const res = await api('/albums');
-                const grid = document.getElementById('albumsGrid');
-                const albums = res.albums || [];
-                if (albums.length === 0) {
-                    grid.innerHTML = '<p style="color: var(--text-dim);">No albums yet. Create one above.</p>';
-                } else {
-                    grid.innerHTML = albums.map(a => `
-                        <div class="album-card" onclick="viewAlbum('${a.id}')">
-                            <div class="album-icon">📷</div>
-                            <div class="album-title">${a.title}</div>
-                            <div class="album-count">${a.photo_count || 0} photos</div>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error(e);
-            }
+        // ----- Confirmation intégrée -----
+        function demander(texte, fn) { CONF = { texte, fn }; $('confTxt').textContent = texte; $('conf').hidden = false; annoncer(); }
+        function fermer() { CONF = null; $('conf').hidden = true; annoncer(); }
+        $('confOui').addEventListener('click', () => { const c = CONF; fermer(); if (c) c.fn(); });
+        $('confNon').addEventListener('click', fermer);
+
+        // ----- Actions (mêmes routes et mêmes corps que l'ancienne page) -----
+        async function action(chemin, ok, echec) {
+            const r = await ecrire('POST', chemin);
+            if (reussi(r)) { retour(true, (r.data.message || ok)); charger(true); }
+            else retour(false, echec + ' : ' + motif(r));
         }
+        $('bascule').addEventListener('click', () => {
+            const marche = ST && ST.container_status === 'running';
+            if (marche) demander('Arrêter le conteneur PhotoPrism ? L’application sera indisponible jusqu’au prochain démarrage.', () => action('/container/stop', 'PhotoPrism arrêté.', 'Arrêt impossible'));
+            else action('/container/start', 'PhotoPrism démarré.', 'Démarrage impossible');
+        });
+        $('btnInstaller').addEventListener('click', () => demander('Installer PhotoPrism ? La version native officielle est téléchargée dans son conteneur LXC (plusieurs minutes, en arrière-plan).', () => action('/container/install', 'Installation lancée.', 'Installation impossible')));
+        $('btnIndex').addEventListener('click', () => demander('Lancer l’indexation complète de la bibliothèque ? Tous les originaux sont relus (long, en arrière-plan).', () => action('/library/index', 'Indexation lancée.', 'Indexation impossible')));
+        $('btnImport').addEventListener('click', () => action('/library/import', 'Import lancé.', 'Import impossible'));
+        $('btnMaj').addEventListener('click', () => demander('Mettre PhotoPrism à jour ? La version native officielle est retéléchargée puis le service redémarre.', () => action('/container/update', 'Mise à jour lancée.', 'Mise à jour impossible')));
+        $('btnSauve').addEventListener('click', () => action('/backup', 'Sauvegarde lancée.', 'Sauvegarde impossible'));
+        $('btnArret').addEventListener('click', () => demander('Arrêter le conteneur PhotoPrism ? Il n’est pas détruit, les données sont conservées.', () => action('/container/uninstall', 'Conteneur arrêté, données conservées.', 'Arrêt impossible')));
+        $('fAlbum').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const title = f.elements.title.value.trim(), description = f.elements.description.value.trim();
+            if (!title) { retour(false, 'Titre de l’album requis.'); return; }
+            const r = await ecrire('POST', '/album/create', { title, description });
+            if (reussi(r)) { f.reset(); retour(true, 'Album créé.'); charger(true); }
+            else retour(false, 'Création impossible : ' + motif(r));
+        });
+        $('btnLogs').addEventListener('click', () => charger(false));
+        $('nLignes').addEventListener('change', () => charger(false));
 
-        async function createAlbum() {
-            const title = document.getElementById('albumTitle').value.trim();
-            const description = document.getElementById('albumDesc').value.trim();
-            if (!title) return toast('Album title required', 'error');
-
-            try {
-                const res = await api('/album/create', {
-                    method: 'POST',
-                    body: JSON.stringify({ title, description })
-                });
-                if (res.success) {
-                    toast('Album created!');
-                    document.getElementById('albumTitle').value = '';
-                    document.getElementById('albumDesc').value = '';
-                    await loadAlbums();
-                } else {
-                    toast(res.error || 'Failed to create', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
+        // ----- Onglets -----
+        const NOMS = ['biblio', 'albums', 'stockage', 'reglages', 'journaux'];
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            NOMS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom !== 'biblio') charger(false);
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', () => charger(true));
 
-        function viewAlbum(id) {
-            toast('Album view not implemented yet');
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'photoprism' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function loadFaces() {
-            try {
-                const res = await api('/faces');
-                document.getElementById('faceToggle').checked = res.enabled;
-                document.getElementById('faceStatus').textContent = res.status;
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function toggleFaceRecognition() {
-            const enabled = document.getElementById('faceToggle').checked;
-            try {
-                const endpoint = enabled ? '/faces/enable' : '/faces/disable';
-                const res = await api(endpoint, { method: 'POST' });
-                if (res.success) {
-                    toast(res.message || 'Settings updated');
-                } else {
-                    toast(res.error || 'Failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        async function loadStorage() {
-            try {
-                const res = await api('/storage');
-                document.getElementById('storOriginals').textContent = res.originals_path || '/srv/photoprism/originals';
-                document.getElementById('storImport').textContent = res.import_path || '/srv/photoprism/import';
-                document.getElementById('storUsed').textContent = res.originals_size || '0';
-                document.getElementById('storFree').textContent = res.disk_free || '0';
-                document.getElementById('storTotal').textContent = res.disk_total || '0';
-                document.getElementById('storageBar').style.width = (res.disk_used_percent || 0) + '%';
-
-                const table = document.getElementById('storageTable');
-                table.innerHTML = `
-                    <tr><td>Data</td><td>${res.data_size || '0'}</td></tr>
-                    <tr><td>Originals</td><td>${res.originals_size || '0'}</td></tr>
-                    <tr><td>Import</td><td>${res.import_size || '0'}</td></tr>
-                `;
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function saveSettings(e) {
-            e.preventDefault();
-            try {
-                const res = await api('/config', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        port: parseInt(document.getElementById('cfgPort').value),
-                        data_path: document.getElementById('cfgDataPath').value,
-                        originals_path: document.getElementById('cfgOriginals').value,
-                        import_path: document.getElementById('cfgImport').value,
-                        timezone: document.getElementById('cfgTimezone').value,
-                        domain: document.getElementById('cfgDomain').value,
-                        face_recognition: document.getElementById('cfgFaces').checked,
-                        experimental: document.getElementById('cfgExperimental').checked,
-                        readonly: document.getElementById('cfgReadonly').checked,
-                        public: document.getElementById('cfgPublic').checked,
-                    })
-                });
-                if (res.success) {
-                    toast('Settings saved! Restart PhotoPrism to apply.');
-                } else {
-                    toast(res.error || 'Save failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        async function loadLogs() {
-            const lines = document.getElementById('logLines').value;
-            try {
-                const data = await api('/logs?lines=' + lines);
-                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
-            } catch (e) {
-                document.getElementById('logsContainer').textContent = 'Error loading logs';
-            }
-        }
-
-        async function createBackup() {
-            toast('Creating backup...');
-            try {
-                const res = await api('/backup', { method: 'POST' });
-                if (res.success) {
-                    toast(res.message || ('Backup started → ' + res.path));
-                } else {
-                    toast(res.error || 'Backup failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        async function updatePhotoprism() {
-            if (!confirm('Update PhotoPrism to latest version?')) return;
-            toast('Updating PhotoPrism...');
-            try {
-                const res = await api('/container/update', { method: 'POST' });
-                if (res.success) {
-                    // Détaché côté serveur (plusieurs minutes) : « lancée », pas « finie ».
-                    toast(res.message || 'Update started');
-                    await refresh();
-                } else {
-                    toast(res.error || 'Update failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        async function uninstallPhotoprism() {
-            if (!confirm('Uninstall PhotoPrism? This will remove the container (data is preserved).')) return;
-            try {
-                const res = await api('/container/uninstall', { method: 'POST' });
-                if (res.success) {
-                    toast('PhotoPrism uninstalled');
-                    await refresh();
-                } else {
-                    toast(res.error || 'Uninstall failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        // Initialize
-        refresh();
-        setInterval(refresh, 30000);
+        charger(true);
+        // Ni onglet masqué, ni confirmation ouverte, ni saisie d'album en cours.
+        setInterval(() => {
+            const f = $('fAlbum');
+            if (document.hidden || DEMO || CONF || f.elements.title.value || f.elements.description.value) return;
+            charger(false);
+        }, 30000);
     </script>
 </body>
 </html>
