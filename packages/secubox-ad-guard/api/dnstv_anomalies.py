@@ -25,6 +25,7 @@ Fonctions pures : aucune E/S ici ; le lancement (lecture du magasin, socket d'ac
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import math
 import re
 import time
@@ -200,8 +201,20 @@ def gravite_dnsguard(score: int) -> str:
 def _alerte(client: str, regle: str, domaine: str, score: int, tags: List[str], ts: int) -> dict:
     t = type_dnsguard(regle)
     ident = hashlib.sha256(f"{client}|{regle}|{domaine}|{ts}".encode()).hexdigest()[:24]
-    return {"id": "dns-" + ident, "type": t, "severity": gravite_dnsguard(score), "domain": domaine, "client_ip": client or None,
-            "description": LIBELLES_DNSGUARD[t], "details": {"rule": regle, "tags": list(tags)[:8], "source": "ad-guard"},
+    details = {"rule": regle, "tags": list(tags)[:8], "source": "ad-guard"}
+    # Un détournement sans appareil connu porte l'adresse RÉSOLUE dans `client` : un serveur distant n'est pas un client du réseau.
+    # Seule une adresse privée (LAN, wg) est un client ; une adresse publique passe dans `details`, une chaîne illisible est écartée.
+    client_ip = None
+    try:
+        ip = ipaddress.ip_address(client)
+        if ip.is_private:
+            client_ip = str(ip)
+        else:
+            details["adresse_resolue"] = str(ip)
+    except ValueError:
+        pass
+    return {"id": "dns-" + ident, "type": t, "severity": gravite_dnsguard(score), "domain": domaine, "client_ip": client_ip,
+            "description": LIBELLES_DNSGUARD[t], "details": details,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + "Z", "blocked": False}
 
 
