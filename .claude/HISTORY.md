@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-14 — Aurora vague 5 : 12 pages (ref #2612) ; correctifs WAF et navigation déployés (closes #2613, closes #2615, closes #2629, closes #2631)
+Pages au profil Aurora : radio (0.2.0, binaire Go arm64 à construire par la CI, **non déployé**), picobrew, lyrion, jellyfin, jitsi, gitea, nextcloud, vm, meshtastic, matrix, photoprism, zkp (PR #2617 à #2628, un test Playwright par page). Déployées sur gk2 sauf radio. Déployés aussi : core 1.7.8 (gk2, gk3), waf-ng 1.29.1 (gk2, redémarrage du WAF, `admin.gk2` 200 ensuite), auth 1.6.2 (gk2, gk3) ; paquets dans `/data/apt` (trixie). #2612 reste ouverte jusqu'au déploiement de radio. Poste de travail : les blocages SSH venaient d'un maître de multiplexage périmé (`ControlPath=none` : 0,7 s).
+
 ## 2026-10-14 — /identite/ dans la navigation système (ref #2631)
 `/identite/` (secubox-auth 1.6.2) porte la barre du haut et le menu de gauche communs, comme `/acces/` (#2613) ; encadrée ou avec `?embed=1`, elle reste sans menu. Test Playwright `test_identite_navigation_2631.py` (4).
 
