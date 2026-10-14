@@ -1,3 +1,34 @@
+secubox-gitea (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /gitea/ refaite au profil Aurora (#2612) : fichier unique et autonome
+    (plus de police Google ni de feuilles crt/hybrid-dark), tuiles, onglets
+    Aperçu / Accès / Dépôts / Utilisateurs / Actions, ?demo=1 (données
+    fictives, actions inertes) et ?embed=1, hauteur annoncée à l'hôte.
+  * Bogues de l'ancienne page corrigés : la session absente (401) renvoyait
+    brutalement vers /login.html, elle affiche maintenant un bandeau et des
+    tirets ; confirm()/alert() natifs remplacés par une confirmation dans la
+    page (suppression d'utilisateur, arrêt et redémarrage du conteneur) ;
+    données d'API injectées en innerHTML et en gestionnaires onclick (nom de
+    dépôt ou d'utilisateur hostile) remplacées par du texte ; 0 dépôt ou
+    utilisateur n'est plus confondu avec une mesure absente ; l'adresse de
+    clone SSH git@hôte:2222/... (invalide avec un port) est écrite en
+    ssh://git@hôte:2222/... ; le lien « Ouvrir » ne retire plus le premier
+    « .git » du nom mais seulement le suffixe, et refuse tout lien non http(s) ;
+    nom d'utilisateur encodé dans l'URL de suppression ; l'erreur d'une action
+    est lue dans la réponse au lieu d'être ignorée.
+  * Les appels d'écriture sont inchangés : POST /start, /stop, /restart,
+    /install, /backup, /user (corps username, email, password, admin) et
+    DELETE /user/<nom>.
+  * Remplacé : « Voir les sauvegardes » (message « bientôt ») liste maintenant
+    GET /backups ; « Shell du conteneur » (boîte de dialogue) devient une note
+    dans la page.
+  * Non repris : les chemins de données /srv/gitea et /data/lxc/gitea, écrits en
+    dur dans l'ancienne page et que l'API ne fournit pas ; aucune action
+    nouvelle (restauration, webhooks, quotas, suppression de dépôt) n'est
+    ajoutée, l'ancienne page ne les avait pas.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 08:00:00 +0200
+
 secubox-gitea (1.6.8-1~bookworm1) bookworm; urgency=medium
 
   * Le frontal SSH 2222 est écrit dans /etc/haproxy/cfg.d/20-gitea-ssh.cfg
