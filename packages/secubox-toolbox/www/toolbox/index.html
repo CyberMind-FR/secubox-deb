@@ -2,1424 +2,218 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  SecuBox-Deb :: ToolBoX admin dashboard (P31 light skin) — sub-tab nav (#513)
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Toolbox », la cabine numérique : coque d'administration au profil Aurora (#2684).
+  Neuf onglets, chacun une page autonome du profil Aurora encadrée de même origine (apercu, clients, filtres, social, pubs,
+  /soc/reseau.html, tor, sentinelle, config). La coque ne porte que : l'en-tête, quatre tuiles de situation (lecture seule),
+  l'avertissement R2 et la navigation. Toutes les actions (niveaux R, RAZ, splice, Tor, Sentinelle, Ad-Guard…) vivent dans
+  les pages d'onglet, avec les mêmes appels qu'avant. Aucune adresse MAC en clair, aucun secret : seules des empreintes
+  d'appareils circulent, dans les onglets.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, transmis aux onglets (qui rendent leurs actions inertes).
 -->
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — ToolBoX (cabine numérique)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-    <style>
-        :root{--p31-peak:#00dd44;--p31-hot:#00ff55;--p31-mid:#009933;--p31-dim:#006622;--p31-decay:#ffb347;--tube-light:#e8f5e9;--tube-pale:#c8e6c9;--tube-soft:#a5d6a7;--bg-card:var(--tube-pale);--border:var(--tube-soft);--text-dim:var(--p31-dim);--red:#ff4466;--purple:#9e76ff;--bloom-text:0 0 2px var(--p31-peak),0 0 6px var(--p31-peak);--bloom-soft:0 0 6px var(--p31-peak)}
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:'Courier Prime',monospace;background:var(--tube-light);color:var(--p31-mid);display:flex;min-height:100vh}
-        .sidebar{width:220px;position:fixed;height:100vh;overflow-y:auto}
-        .main{flex:1;margin-left:220px;padding:1.5rem}
-        .header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border:1px solid var(--border);background:var(--bg-card);margin-bottom:1rem}
-        .header h1{font-size:1.4rem;color:var(--p31-hot);text-shadow:var(--bloom-text)}
-        .badge{font-size:0.85rem;color:var(--p31-dim);padding:0.2rem 0.6rem;border:1px solid var(--border);border-radius:3px}
-        /* Tor switch status badges (#683) */
-        .badge-green{color:var(--p31-hot);border-color:var(--p31-peak);text-shadow:var(--bloom-soft)}
-        .badge-yellow{color:var(--p31-decay);border-color:var(--p31-decay)}
-        .badge-red{color:var(--red);border-color:var(--red)}
-        .btn-green{border-color:var(--p31-peak)!important;color:var(--p31-hot)!important}
-        /* Sub-tab nav (#513) */
-        .tabs{display:flex;gap:0.3rem;margin-bottom:1.2rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
-        .tab{font-family:inherit;font-size:0.9rem;padding:0.5rem 1rem;background:transparent;color:var(--p31-dim);border:1px solid var(--border);border-bottom:none;cursor:pointer;border-radius:3px 3px 0 0}
-        .tab:hover{color:var(--p31-peak);background:rgba(0,221,68,0.05)}
-        .tab.active{color:var(--p31-hot);text-shadow:var(--bloom-text);background:var(--bg-card);border-color:var(--p31-mid);font-weight:bold}
-        .panel{display:none}
-        .panel.active{display:block;animation:fade .15s ease-in}
-        @keyframes fade{from{opacity:0}to{opacity:1}}
-        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1rem}
-        .card{background:var(--bg-card);border:1px solid var(--border);padding:1rem;box-shadow:var(--bloom-soft)}
-        .card h2{font-size:1rem;color:var(--p31-hot);text-shadow:var(--bloom-text);margin-bottom:0.6rem;padding-bottom:0.4rem;border-bottom:1px solid var(--border)}
-        .kv{display:grid;grid-template-columns:1fr 2fr;gap:0.3rem 0.8rem;font-size:0.88rem}
-        .kv .k{color:var(--p31-dim)}
-        .kv .v{color:var(--p31-peak);text-shadow:var(--bloom-text)}
-        table{width:100%;border-collapse:collapse;font-size:0.85rem}
-        th,td{text-align:left;padding:0.4rem 0.5rem;border-bottom:1px solid var(--border)}
-        th{color:var(--p31-hot);text-shadow:var(--bloom-text)}
-        .empty{color:var(--text-dim);font-style:italic;padding:1rem;text-align:center}
-        .toolbar{display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap}
-        button{font-family:inherit;font-size:0.9rem;padding:0.4rem 0.9rem;background:transparent;color:var(--p31-peak);border:1px solid var(--p31-mid);cursor:pointer;text-shadow:var(--bloom-text)}
-        button.mini{font-size:0.7rem;padding:0.1rem 0.45rem;white-space:nowrap;margin-left:0.3rem}
-        .filterlist li{flex-wrap:wrap;gap:0.2rem}
-        button:hover{background:rgba(0,221,68,0.1)}
-        .r2-banner{background:rgba(255,179,71,0.08);border-left:2px solid var(--p31-decay);padding:0.6rem 0.8rem;margin-bottom:1rem;font-size:0.85rem;color:#996b1a}
-        .state-validated{color:var(--p31-peak);text-shadow:var(--bloom-text)}
-        .state-throttle{color:var(--p31-decay)}
-        .state-quarantine{color:var(--red)}
-        /* level chips + switcher (folded from kbin /admin/) */
-        .chip{display:inline-block;padding:0.1rem 0.45rem;border-radius:99px;font-size:0.7rem;font-weight:bold}
-        .chip.r0{background:#cfd8cf;color:#555}
-        .chip.r1{background:rgba(0,221,68,0.25);color:var(--p31-mid)}
-        .chip.r2{background:rgba(255,179,71,0.3);color:#996b1a}
-        .chip.r3{background:rgba(158,118,255,0.25);color:#6a4fd0}
-        .lvlbtn{font-size:0.68rem;padding:0.12rem 0.4rem;margin-right:0.15rem;border:1px solid var(--p31-dim)}
-        code{background:rgba(0,0,0,0.05);padding:0.1rem 0.3rem;border-radius:2px;font-size:0.78rem}
-        a.link{color:var(--p31-mid);text-decoration:underline}
-        .filterlist{max-height:60vh;overflow-y:auto;margin:0;padding:0}
-        .filterlist li{font-size:0.82rem;padding:0.2rem 0;border-bottom:1px solid var(--border);list-style:none;display:flex;justify-content:space-between;align-items:center}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — ToolBoX (cabine numérique)</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+  .principal{min-width:0}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px;min-width:0}
+  .marque h1{margin:0;font-size:1.3rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-1px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .droite a{color:var(--cyan)}
+  .btn{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;min-height:30px;cursor:pointer}
+  .btn:hover{border-color:var(--cyan)}
+  a:focus-visible,.btn:focus-visible,.onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .r2{border:1px solid var(--orange);border-left-width:3px;background:rgba(255,159,28,.08);border-radius:10px;padding:7px 12px;font-size:.78rem;color:var(--doux)}
+  .r2 b{color:var(--orange)}
+  [hidden]{display:none!important}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)}
+  .onglets{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;border-bottom:1px solid var(--trait);scrollbar-width:thin}
+  .onglet{flex:none;font:inherit;font-size:.8rem;color:var(--doux);background:rgba(10,22,46,.6);border:1px solid var(--trait);border-radius:10px 10px 0 0;padding:7px 12px;min-height:36px;cursor:pointer;white-space:nowrap}
+  .onglet:hover{color:var(--texte);border-color:var(--trait2)}
+  .onglet[aria-selected="true"]{color:var(--texte);font-weight:700;border-color:var(--cyan);background:rgba(41,182,246,.16);box-shadow:inset 0 -2px 0 var(--cyan)}
+  .vue{min-width:0}
+  .vue iframe{width:100%;height:1200px;border:0;display:block;background:transparent}
+  .note{color:var(--faible);font-size:.68rem}
+</style>
 </head>
 <body>
-<div class="sidebar" id="sidebar"></div>
-<div class="main">
-    <div class="header">
-        <h1>📡 ToolBoX — Cabine numérique</h1>
-        <span class="badge" id="version-badge">v—</span>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="principal"><div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(41,182,246,.14)"/><path d="M9 7h6M9 11h6"/><circle cx="12" cy="16.5" r="1.4"/></svg>
+      <div><h1>ToolBoX — Cabine numérique</h1><small>Passerelle MITM consentie · clients · filtres · Tor · Sentinelle</small></div>
     </div>
+    <span class="actif neutre" id="etat" aria-live="polite" title="État de la coque : EN LIGNE si le module Toolbox répond à son contrôle de santé.">Chargement…</span>
+    <div class="droite"><span id="maj">—</span><a id="cfgBrute" href="/api/v1/toolbox/admin/config" target="_blank" rel="noopener">⚙ Config brute</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
 
-    <div class="r2-banner" id="r2-banner">
-        <strong>R2 actif :</strong> TLS-break opt-in. Voir #475 / #474 pour la doctrine.
-    </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="r2" id="r2"><b>R2 actif :</b> TLS-break uniquement avec le consentement explicite du client (clic « Activer mon accès ») ; sans consentement, le trafic chiffré n'est jamais ouvert. Les appareils ne sont désignés que par une empreinte (jamais par leur MAC).</div>
 
-    <!-- Sub-tab navigation (#513) -->
-    <nav class="tabs" id="tabs">
-        <button class="tab active" data-tab="overview" onclick="switchTab('overview')">📊 Vue d'ensemble</button>
-        <button class="tab" data-tab="clients" onclick="switchTab('clients')">👥 Clients</button>
-        <button class="tab" data-tab="filtres" onclick="switchTab('filtres')">🚦 Filtres MITM</button>
-        <button class="tab" data-tab="social" onclick="switchTab('social')">🕸️ Cartographie sociale</button>
-        <button class="tab" data-tab="ads" onclick="switchTab('ads')">🛑 Pubs</button>
-        <button class="tab" data-tab="reseau" onclick="switchTab('reseau')">📡 Réseau</button>
-        <button class="tab" data-tab="tor" onclick="switchTab('tor')">🧅 Tor</button>
-        <button class="tab" data-tab="sentinel" onclick="switchTab('sentinel')">🛡️ Sentinelle</button>
-        <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
-    </nav>
+  <section class="tuiles" aria-label="Situation">
+    <div class="tuile cy" title="Version du module Toolbox annoncée par son contrôle de santé (/health)."><span class="l">Version</span><span class="v" id="tVersion">—</span><span class="s">module toolbox</span></div>
+    <div class="tuile" id="cMode" title="R2 : le trafic chiffré est ouvert pour les clients consentants (TLS-break sur consentement). R1 : métadonnées seulement. Lu dans la configuration du module."><span class="l">Mode</span><span class="v" id="tMode">—</span><span class="s" id="sMode">interception</span></div>
+    <div class="tuile cy" title="Clients dont une activité récente est connue du module (empreintes distinctes, fenêtre 24 h)."><span class="l">Clients actifs</span><span class="v" id="tClients">—</span><span class="s">appareils distincts</span></div>
+    <div class="tuile cy" title="Événements reçus des analyseurs (DPI, cookies, SOC, JA4, avatar) sur les dernières 24 heures."><span class="l">Événements 24 h</span><span class="v" id="tEvents">—</span><span class="s">toutes sources</span></div>
+  </section>
 
-    <!-- #2373 : chaque onglet est une page autonome du profil projet reference Aurora, encadree de meme origine ; les anciens panneaux restent dans le DOM (masques) pour le reste du script -->
-    <div id="pageCard" style="display:none"><iframe id="pageFrame" title="Toolbox" style="width:100%;height:1200px;border:0;display:block;background:transparent"></iframe></div>
+  <div class="onglets" id="onglets" role="tablist" aria-label="Sections de la Toolbox"></div>
+  <div class="vue" id="vue" role="tabpanel" aria-live="off"><iframe id="cadreVue" title="Toolbox"></iframe></div>
+  <p class="note">Chaque onglet est une page autonome : les actions (niveaux R, remise à zéro, splice, Tor, Sentinelle, Ad-Guard) s'y confirment dans la page, jamais par une fenêtre du navigateur.</p>
+</div></div></main>
 
-    <!-- Overview -->
-    <section class="panel active" id="panel-overview">
-        <div class="toolbar">
-            <button onclick="refreshAll()">🔁 Refresh</button>
-        </div>
-        <div class="grid">
-            <div class="card">
-                <h2>📊 Live metrics (24h)</h2>
-                <div class="kv" id="metrics"><span class="k">loading…</span><span class="v"></span></div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Clients (folds in the kbin /admin/ level switcher) -->
-    <section class="panel" id="panel-clients">
-        <div class="toolbar">
-            <button onclick="loadClients()">🔁 Refresh</button>
-            <button type="button" onclick="resetAllClients()" style="color:var(--red,#e63946)">↺ Reset all</button>
-        </div>
-        <div class="card" style="margin-bottom:1rem">
-            <h2>👥 Clients actifs</h2>
-            <div id="clients"><div class="empty">loading…</div></div>
-        </div>
-        <div class="card" style="display:none" id="client-detail-card">
-            <h2 id="detail-title">🔍 Détails client</h2>
-            <div id="client-detail"></div>
-        </div>
-    </section>
-
-    <!-- Filtres MITM (bypass list) -->
-    <section class="panel" id="panel-filtres">
-        <div class="toolbar">
-            <button onclick="loadFilters()">🔁 Refresh</button>
-        </div>
-        <div class="card">
-            <h2>🔌 Splice whitelist (apps cert-pinned)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
-                Hôtes <b>force-spliced</b> : TLS passthrough, jamais déchiffrés ni injectés (apps qui cassent sous MITM — ChatGPT, clients natifs). Analyse passive (SNI/DPI) + Tor si actif conservés. Effet immédiat (moteur Go) + miroir moteur Python.
-            </p>
-            <div style="display:flex;gap:0.4rem;margin-bottom:0.6rem">
-                <input id="splice-host" type="text" placeholder="ex: openai.com" style="flex:1;background:#111;color:var(--p31-fg,#e8e6d9);border:1px solid #2a2a3f;padding:0.4rem;border-radius:4px;font-family:monospace;font-size:0.82rem">
-                <button onclick="spliceAdd()">➕ Whitelist</button>
-            </div>
-            <ul class="filterlist" id="splice-list"><li class="empty">loading…</li></ul>
-        </div>
-        <div class="card">
-            <h2>🔍 Propositions auto-apprises (cert-pinning détecté)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
-                SNIs dont le client a <b>rejeté notre certificat</b> (signal de pinning). Promouvoir = ajouter à la splice whitelist ; ignorer = ne plus proposer.
-            </p>
-            <ul class="filterlist" id="splice-cands"><li class="empty">loading…</li></ul>
-        </div>
-        <div class="card">
-            <h2>🚦 Hosts bypassés (mitm ignore_hosts)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
-                Vue regex legacy (moteur Python). Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto).
-            </p>
-            <p style="font-size:0.72rem;color:var(--p31-gold,#c9a84c)">🧅 Ces hosts (+ la liste TLS-splice) sont aussi <b>refusés à l'exposition Tor</b> par le module exposure — on ne ré-expose jamais anonymement un endpoint que les clients épinglent.</p>
-            <ul class="filterlist" id="filters"><li class="empty">loading…</li></ul>
-        </div>
-    </section>
-
-    <!-- Cartographie sociale (Phase 11 operator aggregate) -->
-    <section class="panel" id="panel-social">
-        <div class="toolbar">
-            <button onclick="loadSocial()">🔁 Refresh</button>
-        </div>
-        <div class="grid">
-            <div class="card">
-                <h2>🕸️ Agrégat trackers (24h)</h2>
-                <div class="kv" id="social-kpi"><span class="k">loading…</span><span class="v"></span></div>
-            </div>
-            <div class="card">
-                <h2>🛰️ Réseaux CDN / edge</h2>
-                <div id="social-cdn"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card">
-                <h2>🤖 Anti-bot / "prouvez que vous êtes humain"</h2>
-                <div id="social-antibot"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card">
-                <h2>📡 Opérateur-grade / proche-État</h2>
-                <div id="social-opgrade"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>🛡️ Blocages par appareil (13.C)</h2>
-                <div id="social-devblocks"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>🎯 Top tracker domains</h2>
-                <div id="social-trackers"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>👤 Clients anonymisés</h2>
-                <div id="social-clients"><div class="empty">loading…</div></div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Pubs bloquées (#656 — contextual ad-block metrics) -->
-    <section class="panel" id="panel-ads">
-        <div class="toolbar">
-            <button onclick="loadAds()">🔁 Refresh</button>
-        </div>
-        <div class="card" style="grid-column:1/-1">
-            <h2>🛡️ Ad-Guard <span id="adguard-badge" class="badge">…</span></h2>
-            <div class="kv">
-                <span class="k">Master switch du blocage pub (sinkhole DNS + cosmetic R3) — indépendant des niveaux R0→R4</span>
-                <span class="v"><button id="adguard-toggle" onclick="toggleAdGuard()">…</button></span>
-            </div>
-        </div>
-        <div id="ads-section" class="grid">
-            <div class="card" style="grid-column:1/-1;border-left:3px solid var(--matrix-green,#00ff41)">
-                <h2>🛡️ Blocage DNS (couche principale)</h2>
-                <div class="kv" id="ads-dns"><span class="k">loading…</span><span class="v"></span></div>
-                <p style="font-size:.72rem;color:var(--p31-dim,#888);margin-top:.4rem">La plupart des pubs sont tuées ICI, au DNS, avant d'atteindre le moteur MITM — le compteur « 204 » ci-dessous ne mesure QUE ce qui passe le DNS.</p>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>🛑 Bloqués par le moteur MITM (204, 24h)</h2>
-                <div class="kv" id="ads-kpi"><span class="k">loading…</span><span class="v"></span></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>🎯 Top hôtes publicitaires bloqués</h2>
-                <div id="ads-hosts"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>🔎 Trackers/pubs détectés <span style="font-size:.72rem;opacity:.6">(candidats — observés, pas encore promus au blocage)</span></h2>
-                <div id="ads-candidates"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>🌐 Top sites visités</h2>
-                <div id="ads-sites"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
-                <h2>👤 Top visiteurs (trackers/pubs bloqués)</h2>
-                <div id="ads-visitors"><div class="empty">loading…</div></div>
-                <div id="ads-client-detail"></div>
-            </div>
-        </div>
-    </section>
-
-    <!-- #758 — network-layer stats (nft named counters + interface throughput) -->
-    <section class="panel" id="panel-reseau">
-        <h2>📡 Statistiques réseau (nftables)</h2>
-        <div id="ns-stale" style="display:none;color:var(--cinnabar,#e63946);font-size:.85em">⚠ données périmées (collecteur arrêté ?)</div>
-        <div id="ns-kpi" class="kpis"></div>
-        <h3>Débit interfaces (24h)</h3>
-        <div id="ns-throughput"></div>
-        <h3>Drops &amp; attaques par catégorie (24h)</h3>
-        <div id="ns-drops"></div>
-    </section>
-
-    <!-- Tor egress quick-switch (#683) -->
-    <section class="panel" id="panel-tor">
-        <div class="toolbar">
-            <button type="button" onclick="refreshTorTab()">🔁 Refresh</button>
-            <button type="button" onclick="torNewnym()">🔄 Nouvelle identité</button>
-            <button type="button" onclick="torLeaks()">🔍 Vérifier l'IP de sortie</button>
-        </div>
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🧅 Mode Tor <span class="badge" id="tor-badge">…</span></h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.6rem">
-                Quick-switch : route l'egress des workers MITM par le réseau Tor. L'inspection
-                (ad-block, poison, bannière, safe-browsing) reste intacte — seule l'IP de sortie
-                change. Fail-closed (pas de repli clearnet), sans fuite DNS. Armement asynchrone
-                (quelques secondes via le reconciler).
-            </p>
-            <div class="kv" id="tor-stats"><span class="k">loading…</span><span class="v"></span></div>
-            <div style="margin-top:0.8rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <button type="button" class="btn-green" id="tor-on-btn" onclick="torSet(true)">🛡️ Activer le mode Tor</button>
-                <button type="button" id="tor-off-btn" onclick="torSet(false)">⏹ Désactiver</button>
-                <label style="font-size:0.8rem;color:var(--p31-dim,#888)">Preset
-                    <select id="tor-preset">
-                        <option value="anonymous">anonymous</option>
-                        <option value="stealth">stealth (bridges)</option>
-                        <option value="minimal">minimal (SOCKS)</option>
-                    </select>
-                </label>
-                <span id="tor-msg" style="font-size:0.8rem;color:var(--p31-peak,#0a0)"></span>
-            </div>
-        </div>
-
-        <!-- Exit-country selection (#683 follow-up, Task 7) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🌍 Pays de sortie (ExitNodes)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.6rem">
-                Restreint les nœuds de sortie Tor aux pays sélectionnés (ctrl/cmd-clic pour une
-                multi-sélection ; aucune sélection = tous pays). L'IP de sortie effective reste
-                vérifiable via le bouton « Vérifier l'IP de sortie » ci-dessus.
-            </p>
-            <p class="r2-banner" style="margin:0 0 0.6rem 0">
-                ⚠️ <strong>Fail-closed :</strong> <code>StrictNodes 1</code> est forcé côté
-                reconciler — si AUCUN nœud de sortie n'existe dans les pays choisis,
-                <strong>plus aucun trafic Tor ne circule</strong> (pas de repli silencieux vers un
-                autre pays).
-            </p>
-            <div class="kv" id="tor-cc-current"><span class="k">Sélection actuelle</span><span class="v">loading…</span></div>
-            <select id="tor-cc-select" multiple size="8" style="width:100%;margin-top:0.5rem;font-family:inherit;background:var(--tube-light,#e8f5e9);color:var(--p31-mid);border:1px solid var(--border)"></select>
-            <div style="margin-top:0.6rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <button type="button" id="tor-cc-apply">✔ Appliquer la sélection</button>
-                <button type="button" id="tor-cc-clear">✖ Effacer (tous pays)</button>
-                <span id="tor-cc-msg" style="font-size:0.8rem"></span>
-            </div>
-        </div>
-
-        <!-- Tor-VPN clients (#683 follow-up, Task 7) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🔀 Clients Tor-VPN (routage sélectif)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.4rem">
-                IP / CIDR / MAC dont TOUT le trafic 80/443 est routé via Tor, indépendamment du
-                mode kbin global ci-dessus.
-            </p>
-            <p class="r2-banner" style="margin:0 0 0.6rem 0">
-                ⚠️ <strong>IPv6 non tunnelé (Phase 1) :</strong> seul l'IPv4 des clients routés
-                passe par Tor — leur IPv6 sortirait en clair si actif. Désactivez l'IPv6 sur les
-                clients routés (ou la RA du LAN) pour éviter toute fuite. Les sélecteurs IPv6 sont
-                <strong>refusés (400)</strong> par l'API.
-            </p>
-            <div class="toolbar" style="margin-bottom:0.6rem">
-                <select id="tor-vpn-kind" style="font-family:inherit">
-                    <option value="ip">IP</option>
-                    <option value="cidr">CIDR</option>
-                    <option value="mac">MAC</option>
-                </select>
-                <input type="text" id="tor-vpn-selector" placeholder="ex: 192.168.1.42" style="font-family:inherit;padding:0.4rem;border:1px solid var(--border);background:var(--tube-light,#e8f5e9);color:var(--p31-mid);flex:1;min-width:180px">
-                <button type="button" id="tor-vpn-add">➕ Ajouter</button>
-                <span id="tor-vpn-msg" style="font-size:0.8rem"></span>
-            </div>
-            <div id="tor-vpn-list"><div class="empty">loading…</div></div>
-
-            <div style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px dashed var(--border)">
-                <h3 style="font-size:0.85rem;margin:0 0 0.3rem 0">🖧 Clients LAN (depuis NAC)</h3>
-                <p style="font-size:0.8rem;color:var(--p31-dim,#888);margin:0 0 0.4rem 0">
-                    Clients LAN en ligne et autorisés (NAC) — bascule pour router tout leur trafic
-                    80/443 via Tor sans saisir l'IP à la main.
-                </p>
-                <div id="tor-vpn-nac-list"><div class="empty">loading…</div></div>
-            </div>
-        </div>
-
-        <!-- obfs4 bridges (#683 follow-up / Task 8, Task 7 panel) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🌉 Ponts obfs4 (anti-censure)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.4rem">
-                Colle une ligne <code>Bridge obfs4 …</code> (obtenue via le « moat » intégré de
-                Tor Browser ou <a class="link" href="https://bridges.torproject.org" target="_blank" rel="noopener">bridges.torproject.org</a>).
-                Dès qu'un pont valide est présent, Tor bascule en <code>UseBridges 1</code> ; liste
-                vide = Tor direct.
-            </p>
-            <div class="toolbar" style="margin-bottom:0.6rem">
-                <input type="text" id="tor-bridge-line" placeholder="Bridge obfs4 1.2.3.4:443 FINGERPRINT cert=... iat-mode=0" style="font-family:inherit;padding:0.4rem;border:1px solid var(--border);background:var(--tube-light,#e8f5e9);color:var(--p31-mid);flex:1;min-width:280px">
-                <button type="button" id="tor-bridge-add">➕ Ajouter</button>
-                <span id="tor-bridge-msg" style="font-size:0.8rem"></span>
-            </div>
-            <div id="tor-bridge-list"><div class="empty">loading…</div></div>
-        </div>
-
-        <!-- Emancipate — publish this dashboard as a .onion (Task 7) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🧅 Émancipation — publier ce tableau de bord en .onion</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.6rem">
-                Crée (ou réutilise) un hidden service Tor pointant vers cette WebUI (via nginx
-                :9080). Persistant aux redémarrages de Tor.
-            </p>
-            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <button type="button" id="tor-emancipate-btn">🚀 Publier en .onion</button>
-                <span id="tor-emancipate-msg" style="font-size:0.8rem"></span>
-            </div>
-            <div id="tor-emancipate-result" style="margin-top:0.6rem"></div>
-        </div>
-
-        <!-- Hidden services + .onion-DNS status (Task 7) -->
-        <div class="card">
-            <h2>🕸️ Hidden services &amp; DNS .onion</h2>
-            <div class="kv" id="tor-onion-dns"><span class="k">DNS .onion</span><span class="v">loading…</span></div>
-            <div id="tor-hs-list" style="margin-top:0.6rem"><div class="empty">loading…</div></div>
-        </div>
-    </section>
-
-    <!-- Sentinelle -->
-    <section class="panel" id="panel-sentinel">
-        <div class="toolbar">
-            <button onclick="loadSentinel()">🔁 Refresh</button>
-            <span id="sentinel-state" class="v" style="margin-left:.5rem">…</span>
-        </div>
-        <div id="sentinel-verdict" class="card" style="margin-bottom:.8rem"></div>
-        <div id="sentinel-detections"></div>
-        <div id="sentinel-c2" style="margin-top:1rem"></div>
-    </section>
-
-    <!-- Config -->
-    <section class="panel" id="panel-config">
-        <div class="toolbar">
-            <button onclick="window.open('/api/v1/toolbox/admin/config', '_blank')">⚙ Config TOML brute</button>
-        </div>
-        <div class="card">
-            <h2>⚙ Configuration</h2>
-            <div class="kv" id="cfg-summary"><span class="k">loading…</span><span class="v"></span></div>
-        </div>
-    </section>
-</div>
-
-<script src="/shared/sidebar.js"></script>
 <script>
-const API = '/api/v1/toolbox';
+(function () {
+  'use strict';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+  if (EMBED) document.body.classList.add('emb');
+  // Menu commun : hors ?embed=1 et hors démonstration
+  if (!EMBED && !DEMO) { var sc = document.createElement('script'); sc.src = '/shared/sidebar.js'; document.body.appendChild(sc); }
 
-// onglet -> page autonome (#2373). « Réseau » encadre la page « Réseau en direct » du SOC (une seule source).
-const TB_PAGES = { overview: 'apercu.html', clients: 'clients.html', filtres: 'filtres.html', social: 'social.html', ads: 'pubs.html',
+  var API = '/api/v1/toolbox';
+  function $(id) { return document.getElementById(id); }
+  function tiret(v) { return (v === null || v === undefined || v === '') ? '—' : String(v); }
+  function nombre(v) { return (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('fr-FR') : '—'; }
+
+  // onglet -> page autonome (#2373). « Réseau » encadre la page « Réseau en direct » du SOC (une seule source).
+  var TB_PAGES = { overview: 'apercu.html', clients: 'clients.html', filtres: 'filtres.html', social: 'social.html', ads: 'pubs.html',
                    reseau: '/soc/reseau.html', tor: 'tor.html', sentinel: 'sentinelle.html', config: 'config.html' };
-function switchTab(name) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    const page = TB_PAGES[name], card = document.getElementById('pageCard'), f = document.getElementById('pageFrame');
-    if (page && card && f) {
-        card.style.display = '';
-        const src = page + (page.includes('?') ? '&' : '?') + 'embed=1';
-        if (f.dataset.p !== name) { f.dataset.p = name; f.style.height = '1200px'; f.src = src; }
-    }
-    location.hash = name;
-}
-// hauteur annoncee par la page encadree : sbxToolboxVue (pages du Toolbox), sbxVue (page du SOC)
-window.addEventListener('message', (e) => {
-    if (e.origin !== location.origin || !e.data) return;
-    const h = e.data.sbxToolboxVue || e.data.sbxVue, f = document.getElementById('pageFrame');
-    if (h && f) f.style.height = Math.min(4000, Math.max(300, +h + 4)) + 'px';
-});
+  var ONGLETS = [
+    ['overview', '📊 Vue d\'ensemble'], ['clients', '👥 Clients'], ['filtres', '🚦 Filtres MITM'], ['social', '🕸️ Cartographie sociale'],
+    ['ads', '🛑 Pubs'], ['reseau', '📡 Réseau'], ['tor', '🧅 Tor'], ['sentinel', '🛡️ Sentinelle'], ['config', '⚙ Config']
+  ];
 
-async function J(path) {
-    try {
-        const r = await fetch(API + path, { credentials: 'same-origin' });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return await r.json();
-    } catch (e) { return { __error: e.message }; }
-}
-
-async function loadCfg() {
-    const c = await J('/admin/config');
-    const el = document.getElementById('cfg-summary');
-    if (c.__error) { el.innerHTML = `<span class="k">err</span><span class="v">${c.__error}</span>`; return; }
-    el.innerHTML = `
-        <span class="k">SSID</span>     <span class="v">${c.ap.ssid}</span>
-        <span class="k">iface</span>    <span class="v">${c.ap.iface}</span>
-        <span class="k">channel</span>  <span class="v">${c.ap.channel}</span>
-        <span class="k">DHCP</span>     <span class="v">${c.dhcp.range_start} → ${c.dhcp.range_end}</span>
-        <span class="k">portal</span>   <span class="v">${c.portal.listen_host}:${c.portal.listen_port}</span>
-        <span class="k">R2 enabled</span> <span class="v">${c.r2.enabled ? '✓' : '✗'}</span>
-        <span class="k">MITM listen</span> <span class="v">${c.r2.mitm_listen}</span>
-        <span class="k">quarantine ≥</span> <span class="v">${c.quarantine.score_quarantine}</span>
-    `;
-    document.getElementById('r2-banner').style.display = c.r2.enabled ? '' : 'none';
-}
-
-function levelChip(lvl) {
-    const l = (lvl || 'r1').toLowerCase();
-    return `<span class="chip ${l}">${l.toUpperCase()}</span>`;
-}
-
-function levelSwitcher(macHash, current) {
-    const cur = (current || 'r1').toLowerCase();
-    return ['r0','r1','r2','r3'].map(l =>
-        l === cur ? '' :
-        `<button class="lvlbtn" onclick="setLevel('${macHash}','${l}')">${l.toUpperCase()}</button>`
-    ).join('');
-}
-
-async function setLevel(macHash, level) {
-    try {
-        const fd = new FormData(); fd.append('level', level);
-        const r = await fetch(`${API}/admin/clients/${macHash}/level`, {
-            method: 'POST', body: fd, credentials: 'same-origin'
-        });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        loadClients();
-    } catch (e) { alert('Échec changement niveau : ' + e.message); }
-}
-
-async function loadClients() {
-    const d = await J('/admin/clients/rich');
-    const el = document.getElementById('clients');
-    const rows = (d && d.clients) ? d.clients : (Array.isArray(d) ? d : null);
-    if (!rows) { el.innerHTML = `<div class="empty">${(d && d.__error) || 'no data'}</div>`; return; }
-    if (!rows.length) { el.innerHTML = '<div class="empty">no clients</div>'; return; }
-    const shown = rows.slice(0, 5);   // #575 — cap the list to top 5
-    const escA = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    let html = '<table><thead><tr><th>MAC (hash)</th><th>IP / type</th><th>state</th><th>niveau</th><th>score</th><th>last</th><th>Actions</th></tr></thead><tbody>';
-    for (const c of shown) {
-        const ago = c.last_seen ? Math.round((Date.now()/1000 - c.last_seen) / 60) + 'm' : '—';
-        html += `<tr>
-            <td><code>${c.mac_hash}</code></td>
-            <td>${c.ip || '—'} <span style="white-space:nowrap">${c.device_emoji||''} ${c.flag||''}</span>${c.asn_org ? `<br><span style="color:var(--p31-dim,#888);font-size:0.72rem" title="${escA(c.device||'')}">${escA(c.asn_org)}</span>` : ''}</td>
-            <td><span class="state-${c.state}">${c.state || '—'}</span></td>
-            <td>${levelChip(c.level)} ${levelSwitcher(c.mac_hash, c.level)}</td>
-            <td>${c.score ?? '—'}</td>
-            <td>${ago}</td>
-            <td>
-                <a class="link" href="${API}/admin/clients/${c.mac_hash}/social" target="_blank" style="font-size:0.8rem">🕸️ Carto</a>
-                ·
-                <a class="link" href="${API}/admin/clients/${c.mac_hash}/report" target="_blank" style="font-size:0.8rem">PDF</a>
-                ·
-                <a class="link" href="javascript:void(0)" onclick="loadClientDetail('${c.mac_hash}')" style="font-size:0.8rem">Events</a>
-                ·
-                <a class="link" href="javascript:void(0)" onclick="resetClient('${c.mac_hash}')" style="font-size:0.8rem;color:var(--red)">↺ Reset</a>
-            </td>
-        </tr>`;
-    }
-    html += '</tbody></table>';
-    if (rows.length > shown.length) {
-        html += `<div class="empty">+ ${rows.length - shown.length} autres clients (top 5 affichés)</div>`;
-    }
-    el.innerHTML = html;
-}
-
-// Phase 12.B — RAZ a specific client's accumulated statistics
-// (social mapping graph + toolbox events). Operator-gated.
-async function resetClient(macHash) {
-    if (!confirm(`Remettre à zéro les statistiques du client ${macHash.slice(0,16)}… ?\n\nCela efface sa cartographie sociale + ses events. Irréversible.`)) return;
-    try {
-        const r = await fetch(`${API}/admin/clients/${macHash}/reset`, {
-            method: 'POST', credentials: 'same-origin'
-        });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const j = await r.json();
-        alert(`RAZ effectuée : ${j.rows_deleted || 0} enregistrements supprimés.`);
-        loadClients();
-    } catch (e) { alert('Échec RAZ : ' + e.message); }
-}
-
-async function resetAllClients() {
-    if (!confirm('Remettre à zéro TOUS les clients ? (events, consentements, graphes social — scores remis à zéro, clients conservés)')) return;
-    try {
-        const r = await fetch(`${API}/admin/clients/reset-all`, {method:'POST', credentials:'same-origin'});
-        const d = await r.json().catch(()=>({}));
-        if (!r.ok) { alert('Reset all refusé: ' + (d.detail || ('HTTP ' + r.status))); return; }
-        await loadClients();
-        if (typeof loadSocial === 'function') loadSocial();
-    } catch (e) {
-        alert('Reset all erreur: ' + e);
-    }
-}
-
-async function quarantine(ip) {
-    if (!ip) return;
-    if (!confirm(`Mettre en quarantaine l'appareil ${ip} ? Tout son trafic sera coupé 6h.`)) return;
-    try {
-        const r = await fetch(`${API}/admin/quarantine/${encodeURIComponent(ip)}`, { method: 'POST', credentials: 'same-origin' });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        alert('Appareil en quarantaine (6h).');
-        loadSocial();
-    } catch (e) { alert('Échec quarantaine : ' + e.message); }
-}
-
-async function loadMetrics() {
-    const m = await J('/admin/metrics');
-    const el = document.getElementById('metrics');
-    if (m.__error) { el.innerHTML = `<span class="k">err</span><span class="v">${m.__error}</span>`; return; }
-    const ev = m.events_by_source || {};
-    let evHtml = '';
-    for (const src of ['dpi','cookies','soc','ja4','avatar']) {
-        const n = ev[src] || 0;
-        evHtml += `<span class="k">${src}</span><span class="v">${n}</span>`;
-    }
-    el.innerHTML = `
-        <span class="k">Clients actifs</span> <span class="v">${m.clients_active || 0}</span>
-        <span class="k">Events 24h</span>     <span class="v">${m.events_24h_total || 0}</span>
-        ${evHtml}
-        <span class="k">MITM connections</span> <span class="v">${m.mitm?.connections || 0}</span>
-        <span class="k">MITM hosts</span>     <span class="v">${m.mitm?.unique_hosts || 0}</span>
-        <span class="k">Cert-pin blocks</span> <span class="v">${m.mitm?.tls_pinned || 0}</span>
-    `;
-}
-
-async function loadClientDetail(macHash) {
-    const card = document.getElementById('client-detail-card');
-    const title = document.getElementById('detail-title');
-    const div = document.getElementById('client-detail');
-    title.textContent = `🔍 Détails client — ${macHash}`;
-    card.style.display = '';
-    card.scrollIntoView({behavior:'smooth', block:'nearest'});
-    div.innerHTML = '<div class="empty">loading…</div>';
-    const d = await J(`/admin/clients/${macHash}/events`);
-    if (d.__error) { div.innerHTML = `<div class="empty">${d.__error}</div>`; return; }
-    const ev = d.events_by_source || {};
-    const summary = Object.keys(ev).length
-        ? Object.entries(ev).map(([s,n]) => `<span style="margin-right:1rem"><b>${s}</b>: ${n}</span>`).join('')
-        : '<i style="color:var(--text-dim)">aucun event</i>';
-    let recentHtml = '';
-    if (d.recent && d.recent.length) {
-        recentHtml = '<table><thead><tr><th>Time</th><th>Source</th><th>Détail</th></tr></thead><tbody>';
-        for (const e of d.recent) {
-            const t = new Date(e.ts*1000).toLocaleTimeString();
-            const detail = e.host || e.url || e.sni || e.kind || '?';
-            recentHtml += `<tr><td>${t}</td><td><b>${e.source}</b></td><td><code>${detail}</code></td></tr>`;
-        }
-        recentHtml += '</tbody></table>';
-    }
-    div.innerHTML = `
-        <p style="margin-bottom:0.8rem">${summary}</p>
-        <p style="margin-bottom:0.5rem;font-size:0.85rem;color:var(--p31-dim)">Récents :</p>
-        ${recentHtml}
-        <p style="margin-top:0.8rem">
-            <a class="link" href="${API}/admin/clients/${macHash}/report" target="_blank">⬇ Télécharger PDF complet</a>
-        </p>
-    `;
-}
-
-async function loadHealth() {
-    // Liveness card removed (redundant generic status); /health still drives the
-    // top version-badge.
-    const h = await J('/health');
-    if (h && h.version) document.getElementById('version-badge').textContent = `v${h.version}`;
-}
-
-const _esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-async function loadFilters() {
-    loadSpliceList();
-    loadSpliceCands();
-    const el = document.getElementById('filters');
-    const d = await J('/admin/filter-control/list');
-    const items = (d && d.hosts) ? d.hosts : (Array.isArray(d) ? d : null);
-    if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
-    if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
-    const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned',
-                   'splice-seed': '🔀 splice', 'splice-learned': '🔀 splice·auto',
-                   'mesh-splice': '🌐 mesh', 'mesh-bypass': '🌐 mesh', 'mesh-disabled': '🌐 mesh'};
-    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // Show ALL entries (bypass + splice) — every explicit splicing must be
-    // displayed + known. The <ul> scrolls (see .filterlist max-height).
-    el.innerHTML = `<li style="opacity:.6;font-size:.72rem">${items.length} hôtes exclus (MITM-bypass + splice) — ✅ = appliqué</li>` + items.map(h => {
-        const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
-        const src = (typeof h === 'object' && h.source) ? h.source : '';
-        const badge = BADGE[src] || esc(src);
-        const enabled = (typeof h === 'object') ? h.enabled !== false : true;
-        const editable = (typeof h === 'object') ? !!h.editable : false;
-        const pd = esc(host).replace(/"/g, '&quot;');
-        const chk = `<input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleFilter(this)" data-pattern="${pd}" title="appliqué ? (décocher = présent mais non appliqué)">`;
-        const del = `<button onclick="deleteFilter(this)" data-pattern="${pd}" title="${editable ? 'supprimer' : 'seed paquet : sera désactivé (non supprimable)'}" style="background:none;border:0;cursor:pointer;color:var(--cinnabar,#e63946);font-size:.8rem">🗑</button>`;
-        const tor = ` <span title="refusé à l'exposition Tor" style="color:var(--p31-gold,#c9a84c);font-size:0.72rem">🧅 Tor-exclu</span>`;
-        const dim = enabled ? '' : 'opacity:.45;text-decoration:line-through';
-        return `<li style="${dim}"><span style="display:flex;align-items:center;gap:.35rem;min-width:0"><span>${chk}</span><code style="overflow:hidden;text-overflow:ellipsis">${esc(host)}</code>${badge ? `<span style="color:var(--p31-dim,#888);font-size:0.72rem;white-space:nowrap">${badge}</span>` : ''}${tor}</span>${del}</li>`;
-    }).join('');
-}
-
-async function toggleFilter(el) {
-    const pattern = el.dataset.pattern;
-    try {
-        const r = await fetch(API + '/admin/filter-control/toggle', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pattern }) });
-        if (!r.ok) { el.checked = !el.checked; return; }
-        loadFilters();
-    } catch (e) { el.checked = !el.checked; }
-}
-
-async function deleteFilter(el) {
-    const pattern = el.dataset.pattern;
-    if (!confirm('Supprimer / désactiver « ' + pattern + ' » ?')) return;
-    try {
-        await fetch(API + '/admin/filter-control/delete', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pattern }) });
-        loadFilters();
-    } catch (e) {}
-}
-
-// ── #740 splice whitelist (cert-pinned apps) ──
-async function _splicePost(url, host) {
-    try {
-        const r = await fetch(API + url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({host})});
-        return r.ok;
-    } catch (e) { return false; }
-}
-async function loadSpliceList() {
-    const el = document.getElementById('splice-list');
-    const d = await J('/admin/splice-whitelist/list');
-    const items = (d && d.hosts) || [];
-    if (d && d.__error) { el.innerHTML = `<li class="empty">${_esc(d.__error)}</li>`; return; }
-    if (!items.length) { el.innerHTML = '<li class="empty">aucun hôte whitelisté</li>'; return; }
-    el.innerHTML = items.map(h =>
-        `<li><code>${_esc(h)}</code> <button class="mini" title="Re-soumettre à l'analyse MITM" onclick="spliceRemove('${_esc(h)}')">✕ de-whitelist</button></li>`
-    ).join('');
-}
-async function loadSpliceCands() {
-    const el = document.getElementById('splice-cands');
-    const d = await J('/admin/splice-whitelist/candidates');
-    const items = (d && d.candidates) || [];
-    if (d && d.__error) { el.innerHTML = `<li class="empty">${_esc(d.__error)}</li>`; return; }
-    if (!items.length) { el.innerHTML = '<li class="empty">aucune proposition</li>'; return; }
-    el.innerHTML = items.map(c =>
-        `<li><code>${_esc(c.host)}</code> <span style="color:var(--p31-dim,#888);font-size:0.72rem">${c.hits}× rejet cert</span> ` +
-        `<button class="mini" onclick="splicePromote('${_esc(c.host)}')">✅ whitelist</button> ` +
-        `<button class="mini" onclick="spliceIgnore('${_esc(c.host)}')">🚫 ignorer</button></li>`
-    ).join('');
-}
-async function spliceAdd() {
-    const inp = document.getElementById('splice-host');
-    const host = (inp.value || '').trim().toLowerCase();
-    if (!host) return;
-    if (await _splicePost('/admin/splice-whitelist/json-add', host)) { inp.value=''; loadSpliceList(); }
-    else alert('hôte invalide (DNS nu requis, ex: openai.com)');
-}
-async function spliceRemove(host) { if (await _splicePost('/admin/splice-whitelist/json-remove', host)) loadSpliceList(); }
-async function splicePromote(host) { if (await _splicePost('/admin/splice-whitelist/promote', host)) { loadSpliceList(); loadSpliceCands(); } }
-async function spliceIgnore(host) { if (await _splicePost('/admin/splice-whitelist/ignore', host)) loadSpliceCands(); }
-
-// ── kbin Tor egress quick-switch (#683) ──
-async function loadTor() {
-    const st = await J('/admin/tor/state');
-    const badge = document.getElementById('tor-badge');
-    const stats = document.getElementById('tor-stats');
-    if (st.__error) {
-        badge.textContent = 'err'; badge.className = 'badge badge-red';
-        stats.innerHTML = `<span class="k">err</span><span class="v">${st.__error}</span>`;
-        return;
-    }
-    const on = !!st.tor_mode;
-    badge.textContent = on ? (st.running ? `ON · ${st.bootstrap||0}%` : 'ON (tor down)') : 'OFF';
-    badge.className = 'badge ' + (on ? (st.running && st.bootstrap >= 100 ? 'badge-green' : 'badge-yellow') : '');
-    const psel = document.getElementById('tor-preset');
-    if (psel && st.tor_preset) psel.value = st.tor_preset;
-    stats.innerHTML = `
-        <span class="k">Mode Tor</span>    <span class="v">${on ? '🧅 activé' : '⚪ désactivé'}</span>
-        <span class="k">Daemon</span>      <span class="v">${st.running ? '🟢 running' : '⚪ stopped'}</span>
-        <span class="k">Bootstrap</span>   <span class="v">${st.bootstrap || 0}%</span>
-        <span class="k">Circuits</span>    <span class="v">${st.circuits || 0}</span>
-        <span class="k">IP de sortie</span><span class="v">${st.exit_ip || '— (cliquez « Vérifier »)'}</span>
-        <span class="k">Preset</span>      <span class="v">${st.tor_preset || 'anonymous'}</span>
-    `;
-}
-
-async function torSet(on) {
-    const msg = document.getElementById('tor-msg');
-    const preset = (document.getElementById('tor-preset') || {}).value || 'anonymous';
-    msg.textContent = on ? 'armement…' : 'désactivation…';
-    try {
-        const body = on ? JSON.stringify({tor_preset: preset}) : '{}';
-        const r = await fetch(`${API}/admin/tor/${on ? 'on' : 'off'}`, {
-            method: 'POST', headers: {'content-type': 'application/json'},
-            body, credentials: 'same-origin'
-        });
-        if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 403 ? ' (admin.gk2 only)' : ''));
-        msg.textContent = on ? 'armé ✓ (tunnel dans quelques secondes)' : 'désarmé ✓';
-        setTimeout(() => { msg.textContent = ''; loadTor(); }, 1500);
-    } catch (e) { msg.textContent = 'échec : ' + e.message; }
-}
-
-async function torNewnym() {
-    const msg = document.getElementById('tor-msg');
-    msg.textContent = 'nouveau circuit…';
-    try {
-        const r = await fetch(`${API}/admin/tor/newnym`, {method: 'POST', credentials: 'same-origin'});
-        const d = await r.json();
-        msg.textContent = (r.ok && d.success) ? 'nouvelle identité ✓' : 'échec NEWNYM';
-        setTimeout(() => { msg.textContent = ''; loadTor(); }, 1500);
-    } catch (e) { msg.textContent = 'échec : ' + e.message; }
-}
-
-async function torLeaks() {
-    const msg = document.getElementById('tor-msg');
-    msg.textContent = 'sonde SOCKS…';
-    try {
-        const r = await fetch(`${API}/admin/tor/check-leaks`, {method: 'POST', credentials: 'same-origin'});
-        const d = await r.json();
-        msg.textContent = d.ok ? `IP de sortie : ${d.tor_ip}` : ('échec : ' + (d.error || 'tor down'));
-        setTimeout(() => loadTor(), 800);
-    } catch (e) { msg.textContent = 'échec : ' + e.message; }
-}
-
-// ── Tor exit-country / Tor-VPN clients / obfs4 bridges / emancipate /
-//    hidden services + .onion-DNS (Task 7, #683 follow-up) ──
-
-// Toolbox's own tor-* endpoints: same vhost/cookie gate as torSet() above
-// (no bearer token needed — _require_tor_admin blocks the public kbin vhost).
-async function Tj(path, opts) {
-    try {
-        const r = await fetch(API + path, Object.assign({ credentials: 'same-origin' }, opts || {}));
-        let d = {};
-        try { d = await r.json(); } catch (e) { d = {}; }
-        if (!r.ok) return { __error: (d && d.detail) || ('HTTP ' + r.status) };
-        return d;
-    } catch (e) { return { __error: String((e && e.message) || e) }; }
-}
-
-// Cross-module fetch (secubox-exposure / secubox-tor, via nginx). These
-// modules gate with JWT (Depends(require_jwt)) — attach the same bearer
-// token the rest of the fleet's webuis read from localStorage 'sbx_token'
-// (see feedback: wrong key → login loop). 401 → login, mirrors exposure's
-// own dashboard (www/exposure/index.html).
-async function Xj(base, path, opts) {
-    try {
-        const tok = localStorage.getItem('sbx_token') || '';
-        const headers = Object.assign(
-            { 'Content-Type': 'application/json' },
-            (opts && opts.headers) || {},
-            tok ? { 'Authorization': 'Bearer ' + tok } : {}
-        );
-        const r = await fetch(base + path, Object.assign({ credentials: 'same-origin' }, opts || {}, { headers }));
-        if (r.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return { __error: '401' }; }
-        let d = {};
-        try { d = await r.json(); } catch (e) { d = {}; }
-        if (!r.ok) return { __error: (d && d.detail) || ('HTTP ' + r.status) };
-        return d;
-    } catch (e) { return { __error: String((e && e.message) || e) }; }
-}
-
-// IPv4-only guard for the NAC → Tor-VPN toggle list: the VPN backend
-// rejects IPv6 selectors with a 400 (Phase 1, v4-only routing) — never
-// even offer a toggle for a v6-looking address.
-function isIPv4(ip) {
-    return /^(\d{1,3}\.){3}\d{1,3}$/.test(String(ip || ''));
-}
-
-// Static ISO 3166-1 alpha-2 list — deliberately curated (not exhaustive):
-// countries with a meaningful Tor relay population + major regions. #683.
-const ISO_COUNTRIES = [
-    ['US','États-Unis'],['DE','Allemagne'],['FR','France'],['GB','Royaume-Uni'],['NL','Pays-Bas'],
-    ['CH','Suisse'],['SE','Suède'],['NO','Norvège'],['FI','Finlande'],['DK','Danemark'],
-    ['AT','Autriche'],['BE','Belgique'],['IE','Irlande'],['IS','Islande'],['LU','Luxembourg'],
-    ['CZ','Tchéquie'],['PL','Pologne'],['RO','Roumanie'],['ES','Espagne'],['IT','Italie'],
-    ['PT','Portugal'],['CA','Canada'],['AU','Australie'],['NZ','Nouvelle-Zélande'],['JP','Japon'],
-    ['SG','Singapour'],['HK','Hong Kong'],['KR','Corée du Sud'],['BR','Brésil'],['MX','Mexique'],
-    ['AR','Argentine'],['CL','Chili'],['IN','Inde'],['ZA','Afrique du Sud'],['UA','Ukraine'],
-    ['EE','Estonie'],['LV','Lettonie'],['LT','Lituanie'],['GR','Grèce'],['HU','Hongrie'],
-    ['BG','Bulgarie'],['HR','Croatie'],['SI','Slovénie'],['SK','Slovaquie'],['RS','Serbie'],
-    ['MD','Moldavie'],['MT','Malte'],['CY','Chypre'],['IL','Israël'],['TR','Turquie'],
-    ['TW','Taïwan'],['TH','Thaïlande'],['ID','Indonésie'],['MY','Malaisie'],['PH','Philippines'],
-    ['VN','Vietnam'],['AE','Émirats arabes unis'],['SA','Arabie saoudite'],['EG','Égypte'],
-    ['MA','Maroc'],['NG','Nigeria'],['KE','Kenya'],['CO','Colombie'],['PE','Pérou'],
-    ['UY','Uruguay'],['PA','Panama'],['LI','Liechtenstein'],['AD','Andorre'],['MC','Monaco'],
-    ['GE','Géorgie'],['AM','Arménie'],['AZ','Azerbaïdjan'],
-];
-
-function renderCcSelect() {
-    const sel = document.getElementById('tor-cc-select');
-    if (!sel || sel.options.length) return; // populate once
-    const sorted = ISO_COUNTRIES.slice().sort((a, b) => a[1].localeCompare(b[1], 'fr'));
-    sel.innerHTML = sorted.map(([cc, name]) => `<option value="${esc(cc)}">${esc(name)} (${esc(cc)})</option>`).join('');
-}
-
-async function loadExitCountry() {
-    renderCcSelect();
-    const sel = document.getElementById('tor-cc-select');
-    const cur = document.getElementById('tor-cc-current');
-    const d = await Tj('/exit_country');
-    if (d.__error) { cur.innerHTML = `<span class="k">err</span><span class="v">${esc(d.__error)}</span>`; return; }
-    const countries = d.countries || [];
-    const set = new Set(countries);
-    if (sel) Array.from(sel.options).forEach(o => { o.selected = set.has(o.value); });
-    cur.innerHTML = `<span class="k">Sélection actuelle</span><span class="v">${
-        countries.length ? countries.map(esc).join(', ') : 'tous pays (aucune restriction)'
-    }</span>`;
-}
-
-async function applyExitCountry() {
-    const sel = document.getElementById('tor-cc-select');
-    const msg = document.getElementById('tor-cc-msg');
-    const countries = sel ? Array.from(sel.selectedOptions).map(o => o.value) : [];
-    msg.textContent = 'application…';
-    const d = await Tj('/exit_country', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ countries }),
+  var liste = $('onglets'), cadre = $('cadreVue'), courant = '';
+  ONGLETS.forEach(function (o) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'onglet'; b.setAttribute('role', 'tab'); b.id = 'tab-' + o[0];
+    b.setAttribute('data-tab', o[0]); b.setAttribute('aria-controls', 'vue'); b.setAttribute('aria-selected', 'false'); b.tabIndex = -1;
+    b.textContent = o[1];
+    b.addEventListener('click', function () { choisir(o[0], true); });
+    b.addEventListener('keydown', function (e) {
+      var i = ONGLETS.findIndex(function (x) { return x[0] === o[0]; }), n = -1;
+      if (e.key === 'ArrowRight') n = (i + 1) % ONGLETS.length;
+      else if (e.key === 'ArrowLeft') n = (i + ONGLETS.length - 1) % ONGLETS.length;
+      else if (e.key === 'Home') n = 0;
+      else if (e.key === 'End') n = ONGLETS.length - 1;
+      if (n >= 0) { e.preventDefault(); choisir(ONGLETS[n][0], true); $('tab-' + ONGLETS[n][0]).focus(); }
     });
-    msg.textContent = d.__error ? ('échec : ' + esc(d.__error)) : 'appliqué ✓ (reconciliation asynchrone)';
-    setTimeout(() => { msg.textContent = ''; loadExitCountry(); }, 1500);
-}
+    liste.appendChild(b);
+  });
 
-async function clearExitCountry() {
-    const sel = document.getElementById('tor-cc-select');
-    if (sel) Array.from(sel.options).forEach(o => { o.selected = false; });
-    await applyExitCountry();
-}
-
-async function loadVpnClients() {
-    const el = document.getElementById('tor-vpn-list');
-    const d = await Tj('/vpn/clients');
-    if (d.__error) { el.innerHTML = `<div class="empty">${esc(d.__error)}</div>`; return; }
-    const rows = d.clients || [];
-    if (!rows.length) { el.innerHTML = '<div class="empty">aucun client routé</div>'; return; }
-    el.innerHTML = '<table><thead><tr><th>Type</th><th>Sélecteur</th><th></th></tr></thead><tbody>' +
-        rows.map(c => `<tr>
-            <td>${esc(c.kind)}</td>
-            <td><code>${esc(c.selector)}</code></td>
-            <td><button type="button" class="tor-vpn-rm" data-kind="${esc(c.kind)}" data-selector="${esc(c.selector)}" style="background:none;border:0;cursor:pointer;color:var(--red,#e63946)">🗑 retirer</button></td>
-        </tr>`).join('') + '</tbody></table>';
-    el.querySelectorAll('.tor-vpn-rm').forEach(b =>
-        b.addEventListener('click', () => removeVpnClient(b.dataset.kind, b.dataset.selector)));
-}
-
-async function addVpnClient() {
-    const kind = document.getElementById('tor-vpn-kind').value;
-    const input = document.getElementById('tor-vpn-selector');
-    const selector = input.value.trim();
-    const msg = document.getElementById('tor-vpn-msg');
-    if (!selector) { msg.textContent = 'sélecteur requis'; return; }
-    // Client-side IPv6 guard — IPv4 selectors never contain ':'; surface the
-    // Phase-1 v4-only limitation cleanly instead of a bare 400.
-    if (kind !== 'mac' && selector.includes(':')) {
-        msg.textContent = '⚠ IPv6 non supporté (Phase 1, routage v4 uniquement) — utilisez une adresse IPv4';
-        return;
-    }
-    msg.textContent = 'ajout…';
-    const d = await Tj('/vpn/client', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, selector }),
+  function choisir(nom, maj) {
+    if (!TB_PAGES[nom]) nom = 'overview';
+    ONGLETS.forEach(function (o) {
+      var b = $('tab-' + o[0]), on = o[0] === nom;
+      b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
     });
-    if (d.__error) {
-        msg.textContent = selector.includes(':')
-            ? '⚠ échec : IPv6 refusé (routage v4 uniquement, Phase 1)'
-            : 'échec : ' + esc(d.__error);
-        return;
+    $('vue').setAttribute('aria-labelledby', 'tab-' + nom);
+    if (nom !== courant) {
+      courant = nom;
+      var page = TB_PAGES[nom];
+      var src = page + (page.indexOf('?') >= 0 ? '&' : '?') + (DEMO ? 'demo=1&' : '') + 'embed=1';
+      cadre.style.height = '1200px';
+      cadre.title = 'Toolbox — ' + nom;
+      cadre.src = src;
     }
-    msg.textContent = 'ajouté ✓';
-    input.value = '';
-    setTimeout(() => { msg.textContent = ''; }, 1500);
-    loadVpnClients();
-    loadNacVpnClients();
-}
+    if (maj && location.hash !== '#' + nom) { try { history.replaceState(null, '', '#' + nom); } catch (e) { location.hash = nom; } }
+    annoncer();
+  }
+  window.addEventListener('hashchange', function () { var h = location.hash.replace('#', ''); if (TB_PAGES[h]) choisir(h, false); });
 
-async function removeVpnClient(kind, selector) {
-    const msg = document.getElementById('tor-vpn-msg');
-    const d = await Tj('/vpn/client', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, selector }),
+  // hauteur annoncée par la page encadrée : sbxToolboxVue (pages du Toolbox), sbxVue (page du SOC)
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin || !e.data || e.source !== cadre.contentWindow) return;
+    var h = e.data.sbxToolboxVue || e.data.sbxVue;
+    if (h) { cadre.style.height = Math.min(4000, Math.max(300, +h + 4)) + 'px'; annoncer(); }
+  });
+
+  // hauteur annoncée à l'hôte éventuel : la mesure du cadre, jamais du document
+  function annoncer() {
+    if (window.parent === window) return;
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'toolbox' }, location.origin); } catch (e) { /* hors iframe */ }
+  }
+  if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+
+  // ── lectures de situation (GET seulement) ──
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  function lire(chemin) {
+    var h = { Accept: 'application/json' }, t = jeton();
+    if (t) h.Authorization = 'Bearer ' + t;
+    return fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: h }).then(function (r) {
+      if (!r.ok) { var e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+      return r.json();
     });
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); return; }
-    loadVpnClients();
-    loadNacVpnClients();
-}
+  }
+  function etat(txt, cls) { var e = $('etat'); e.textContent = txt; e.className = 'actif ' + cls; }
 
-// NAC online-clients → one-click Tor-VPN toggle. Cross-references
-// secubox-nac's "online AND allowed" clients (not banned/quarantined)
-// against the current /vpn/clients selector set to derive the toggle's
-// ON/OFF state, so the operator never has to hand-type IPs.
-async function loadNacVpnClients() {
-    const el = document.getElementById('tor-vpn-nac-list');
-    if (!el) return;
-    const [nacData, vpnData] = await Promise.all([
-        Xj('/api/v1/nac', '/clients'),
-        Tj('/vpn/clients'),
-    ]);
-    if (nacData.__error) { el.innerHTML = `<div class="empty">${esc(nacData.__error)}</div>`; return; }
-    const routedIps = new Set(
-        (vpnData.clients || []).filter(c => c.kind === 'ip').map(c => c.selector)
-    );
-    const allClients = nacData.clients || [];
-    const clients = allClients.filter(c =>
-        c.online === true && c.zone !== 'quarantine' && c.status !== 'quarantine'
-    );
-    const v4Clients = clients.filter(c => isIPv4(c.ip));
-    const v6Skipped = clients.length - v4Clients.length;
-    if (!v4Clients.length) {
-        el.innerHTML = `<div class="empty">aucun client LAN en ligne/autorisé${v6Skipped ? ` (${v6Skipped} client(s) IPv6-only masqué(s) — routage v4 uniquement)` : ''}</div>`;
-        return;
+  function peindre(h, c, m) {
+    $('tVersion').textContent = h && h.version ? 'v' + h.version : '—';
+    var r2 = c && c.r2 ? !!c.r2.enabled : null;
+    $('tMode').textContent = r2 === null ? '—' : (r2 ? 'R2' : 'R1');
+    $('sMode').textContent = r2 === null ? 'interception' : (r2 ? 'TLS-break sur consentement' : 'métadonnées seules');
+    $('cMode').className = 'tuile ' + (r2 ? 'att' : 'cy');
+    $('r2').hidden = (r2 === false);
+    $('tClients').textContent = m ? nombre(m.clients_active) : '—';
+    $('tEvents').textContent = m ? nombre(m.events_24h_total) : '—';
+    $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+  }
+
+  function charger() {
+    if (DEMO) {
+      $('demo').hidden = false;
+      peindre({ version: '2.99.0' }, { r2: { enabled: true } }, { clients_active: 7, events_24h_total: 1284 });
+      etat('DÉMO', 'att');
+      return Promise.resolve();
     }
-    el.innerHTML = '<table><thead><tr><th>Nom</th><th>IP</th><th>MAC</th><th>Tor-VPN</th></tr></thead><tbody>' +
-        v4Clients.map(c => {
-            const ip = c.ip || '';
-            const on = routedIps.has(ip);
-            const hostname = c.custom_hostname || c.hostname || '(sans nom)';
-            return `<tr>
-                <td>${esc(hostname)}</td>
-                <td><code>${esc(ip)}</code></td>
-                <td><code>${esc(c.mac || '')}</code></td>
-                <td><label style="cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem">
-                    <input type="checkbox" class="nac-vpn-toggle" data-ip="${esc(ip)}" ${on ? 'checked' : ''}>
-                    ${on ? '🟢 routé' : '⚪ off'}
-                </label></td>
-            </tr>`;
-        }).join('') + '</tbody></table>' +
-        (v6Skipped ? `<p style="font-size:0.75rem;color:var(--p31-dim,#888);margin-top:0.3rem">${v6Skipped} client(s) IPv6-only masqué(s) (routage v4 uniquement).</p>` : '');
-    el.querySelectorAll('.nac-vpn-toggle').forEach(chk =>
-        chk.addEventListener('change', () => toggleNacVpnClient(chk)));
-}
-
-async function toggleNacVpnClient(chk) {
-    const ip = chk.dataset.ip;
-    const turnOn = chk.checked;
-    const msg = document.getElementById('tor-vpn-msg');
-    chk.disabled = true;
-    const d = await Tj('/vpn/client', {
-        method: turnOn ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'ip', selector: ip }),
+    var refus = false;
+    function sur(p) { return p.catch(function (e) { if (e && (e.statut === 401 || e.statut === 403)) refus = true; return null; }); }
+    return Promise.all([sur(lire('/health')), sur(lire('/admin/config')), sur(lire('/admin/metrics'))]).then(function (r) {
+      peindre(r[0], r[1], r[2]);
+      $('session').hidden = !refus;
+      if (r[0]) etat('EN LIGNE', ''); else if (refus) etat('SESSION REQUISE', 'att'); else etat('HORS LIGNE', 'hors');
     });
-    if (d.__error && msg) { msg.textContent = 'échec bascule Tor-VPN : ' + esc(d.__error); }
-    await Promise.all([loadVpnClients(), loadNacVpnClients()]);
-}
+  }
 
-async function loadBridges() {
-    const el = document.getElementById('tor-bridge-list');
-    const d = await Tj('/tor/bridges');
-    if (d.__error) { el.innerHTML = `<div class="empty">${esc(d.__error)}</div>`; return; }
-    const rows = d.bridges || [];
-    if (!rows.length) { el.innerHTML = '<div class="empty">aucun pont configuré (Tor direct)</div>'; return; }
-    el.innerHTML = '<ul class="filterlist">' + rows.map(line => `<li>
-            <code style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85%">${esc(line)}</code>
-            <button type="button" class="tor-bridge-rm" data-line="${esc(line)}" style="background:none;border:0;cursor:pointer;color:var(--red,#e63946)">🗑</button>
-        </li>`).join('') + '</ul>';
-    el.querySelectorAll('.tor-bridge-rm').forEach(b =>
-        b.addEventListener('click', () => removeBridge(b.dataset.line)));
-}
+  $('rafraichir').addEventListener('click', charger);
+  setInterval(function () { if (!document.hidden) charger(); }, 30000);
 
-async function addBridge() {
-    const input = document.getElementById('tor-bridge-line');
-    const line = input.value.trim();
-    const msg = document.getElementById('tor-bridge-msg');
-    if (!line) { msg.textContent = 'ligne requise'; return; }
-    msg.textContent = 'ajout…';
-    const d = await Tj('/tor/bridge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line }),
-    });
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); return; }
-    msg.textContent = 'ajouté ✓';
-    input.value = '';
-    setTimeout(() => { msg.textContent = ''; }, 1500);
-    loadBridges();
-}
-
-async function removeBridge(line) {
-    const msg = document.getElementById('tor-bridge-msg');
-    const d = await Tj('/tor/bridge', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line }),
-    });
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); return; }
-    loadBridges();
-}
-
-async function emancipateWebui() {
-    const btn = document.getElementById('tor-emancipate-btn');
-    const msg = document.getElementById('tor-emancipate-msg');
-    const out = document.getElementById('tor-emancipate-result');
-    btn.disabled = true;
-    msg.textContent = 'publication… (jusqu’à 10s)';
-    const d = await Xj('/api/v1/exposure', '/tor/emancipate_webui', { method: 'POST' });
-    btn.disabled = false;
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); out.innerHTML = ''; return; }
-    msg.textContent = 'publié ✓';
-    const onion = (d.output && d.output.onion) || (d.tor && d.tor.onion) || '';
-    if (onion) {
-        out.innerHTML = `<div class="kv"><span class="k">.onion</span><span class="v"><code id="tor-onion-addr">${esc(onion)}</code></span></div>
-            <button type="button" id="tor-onion-copy" style="margin-top:0.4rem">📋 Copier</button>`;
-        const copyBtn = document.getElementById('tor-onion-copy');
-        if (copyBtn) copyBtn.addEventListener('click', () => {
-            (navigator.clipboard ? navigator.clipboard.writeText(onion) : Promise.reject())
-                .then(() => { copyBtn.textContent = '✓ copié'; setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 1500); })
-                .catch(() => { copyBtn.textContent = 'échec copie'; });
-        });
-    } else {
-        out.innerHTML = '<div class="empty">publié, mais aucune adresse .onion retournée pour l’instant — voir la liste ci-dessous</div>';
-    }
-    loadHiddenServices();
-}
-
-async function loadHiddenServices() {
-    const el = document.getElementById('tor-hs-list');
-    const dnsEl = document.getElementById('tor-onion-dns');
-    const [hs, dns] = await Promise.all([
-        Xj('/api/v1/tor', '/hidden_services'),
-        Xj('/api/v1/tor', '/onion_dns'),
-    ]);
-    if (dnsEl) {
-        if (dns.__error) {
-            dnsEl.innerHTML = `<span class="k">err</span><span class="v">${esc(dns.__error)}</span>`;
-        } else {
-            const ok = v => v ? '🟢 oui' : '🔴 non';
-            dnsEl.innerHTML =
-                `<span class="k">Tor DNSPort (9053)</span><span class="v">${ok(dns.dnsport_up)}</span>` +
-                `<span class="k">Zone forward Unbound</span><span class="v">${ok(dns.forward_zone_installed)}</span>` +
-                `<span class="k">Résolution .onion (canari)</span><span class="v">${ok(dns.resolves)}</span>`;
-        }
-    }
-    if (hs.__error) { el.innerHTML = `<div class="empty">${esc(hs.__error)}</div>`; return; }
-    const rows = hs.services || [];
-    if (!rows.length) { el.innerHTML = '<div class="empty">aucun hidden service détecté</div>'; return; }
-    el.innerHTML = '<table><thead><tr><th>Nom</th><th>.onion</th><th>Port local</th><th>État</th></tr></thead><tbody>' +
-        rows.map(s => `<tr>
-            <td>${esc(s.name)}</td>
-            <td>${s.has_address ? `<code>${esc(s.onion_address)}</code>` : '<span class="empty">en attente…</span>'}</td>
-            <td>${s.local_port ?? '—'}</td>
-            <td>${s.enabled === false ? '⚪ désactivé' : '🟢 actif'}</td>
-        </tr>`).join('') + '</tbody></table>';
-}
-
-function refreshTorTab() {
-    loadTor();
-    loadExitCountry();
-    loadVpnClients();
-    loadNacVpnClients();
-    loadBridges();
-    loadHiddenServices();
-}
-
-// ── Sentinel — compromise evaluation + detections (#823) ──
-const SENTINEL_TIER = {
-    clean:        { emoji: '🟢', label: 'Aucune compromission détectée', color: 'var(--p31-hot,#0a0)' },
-    suspicious:   { emoji: '🟠', label: 'Activité suspecte',              color: 'var(--p31-decay,#c77d00)' },
-    compromised:  { emoji: '🔴', label: 'Compromission confirmée',        color: 'var(--red,#e63946)' },
-};
-
-function sentinelDisposition(action) {
-    return action === 'block' ? 'Bloquée' : 'Détectée — observée';
-}
-
-function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"]/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-
-async function loadSentinel() {
-    const stateEl = document.getElementById('sentinel-state');
-    const vEl = document.getElementById('sentinel-verdict');
-    const dEl = document.getElementById('sentinel-detections');
-    const stats = await J('/admin/sentinel/stats');
-    const data = await J('/admin/sentinel/verdicts');
-
-    if (stats.__error || data.__error || !data.active) {
-        stateEl.textContent = '⚪ Sentinelle inactive';
-        vEl.innerHTML = '<span class="v">Sentinelle inactive — aucune donnée de détection réseau.</span>';
-        dEl.innerHTML = '';
-        return;
-    }
-
-    stateEl.textContent = `🟢 active · ${stats.detections || 0} détections · ${stats.blocked || 0} bloquées · ${stats.spyware || 0} spyware`;
-
-    const a = data.assess || { tier: 'clean' };
-    const t = SENTINEL_TIER[a.tier] || SENTINEL_TIER.clean;
-    vEl.innerHTML =
-        `<div style="font-size:1.1rem;color:${t.color}">${t.emoji} ${esc(t.label)}</div>` +
-        `<div class="v" style="margin-top:.4rem">Sévérité max ${a.worst_severity || 0}/100 · ` +
-        `Confiance ${a.worst_confidence || 0}/100 · ${a.count || 0} détections · ` +
-        `${esc(a.dominant_class || '—')}</div>`;
-
-    const rows = (data.detections || []).map(d => {
-        const when = Number.isFinite(d.ts) ? new Date(d.ts * 1000).toISOString().replace('T', ' ').slice(0, 19) : '?';
-        return `<tr>
-            <td>${esc(d.class)}</td>
-            <td>${d.severity || 0}/${d.confidence || 0}</td>
-            <td>${esc(sentinelDisposition(d.action))}</td>
-            <td>${when}</td>
-            <td><details><summary>rapport</summary><pre style="white-space:pre-wrap;font-size:.75rem">${esc(d.report)}</pre></details></td>
-        </tr>`;
-    }).join('');
-    dEl.innerHTML = rows
-        ? `<table><thead><tr><th>Menace</th><th>Sév/Conf</th><th>Disposition</th><th>Vu</th><th>Détail</th></tr></thead><tbody>${rows}</tbody></table>`
-        : '<span class="v">Aucune détection récente.</span>';
-
-    if (!stats.__error && data.active) loadSentinelC2();
-}
-
-async function loadSentinelC2() {
-    const el = document.getElementById('sentinel-c2');
-    if (!el) return;
-    const d = await J('/admin/sentinel/c2');
-    if (d.__error || !d.active) { el.innerHTML = ''; return; }
-    const row = (h, kind) => `<tr>
-        <td>${esc(h.host)}</td>
-        <td>${esc((h.signals || []).join(', '))}</td>
-        <td>${h.interval_s ? Math.round(h.interval_s) + 's' : '—'}</td>
-        <td>${h.devices || (h.windows ? 'w' + h.windows : '')}</td>
-        <td>${kind === 'learned'
-            ? `<button class="c2-ign" data-host="${esc(h.host)}">Ignorer</button>`
-            : '<span class="v">candidat</span>'}</td></tr>`;
-    const learned = (d.learned || []).map(h => row(h, 'learned')).join('');
-    const cand = (d.candidates || []).map(h => row(h, 'candidate')).join('');
-    el.innerHTML = `<h3>🕸️ C2 appris</h3>` + ((learned || cand)
-        ? `<table><thead><tr><th>Hôte</th><th>Signaux</th><th>Intervalle</th><th>Vu</th><th></th></tr></thead><tbody>${learned}${cand}</tbody></table>`
-        : '<span class="v">Aucun C2 appris ni candidat.</span>');
-    el.querySelectorAll('.c2-ign').forEach(b => b.addEventListener('click', () => c2Ignore(b.dataset.host)));
-}
-
-async function c2Ignore(host) {
-    await fetch(`${API}/admin/sentinel/c2/allow`, {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'host=' + encodeURIComponent(host),
-    });
-    loadSentinelC2();
-}
-
-async function loadSocial() {
-    const agg = await J('/admin/social-aggregate?hours=24');
-    const kpi = document.getElementById('social-kpi');
-    const trk = document.getElementById('social-trackers');
-    const cli = document.getElementById('social-clients');
-    const cdn = document.getElementById('social-cdn');
-    if (agg.__error) {
-        kpi.innerHTML = `<span class="k">err</span><span class="v">${agg.__error}</span>`;
-        trk.innerHTML = cli.innerHTML = '';
-        if (cdn) cdn.innerHTML = '';
-        return;
-    }
-    kpi.innerHTML = `
-        <span class="k">Clients actifs</span> <span class="v">${agg.active_clients || 0}</span>
-        <span class="k">Trackers vus</span>   <span class="v">${agg.total_trackers_seen || 0}</span>
-        <span class="k">Hors-UE (Phase C)</span> <span class="v">${agg.extra_eu_trackers || 0}</span>
-        <span class="k">Fenêtre</span>        <span class="v">${agg.window_hours || 24}h</span>
-    `;
-    const td = agg.by_tracker_domain || [];
-    const escT = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    if (!td.length) {
-        trk.innerHTML = '<div class="empty">aucun tracker dans la fenêtre</div>';
-    } else {
-        const row = r => `<tr><td><code>${escT(r.tracker_domain)}</code></td><td>${r.hits}</td><td>${r.clients}</td></tr>`;
-        const top = td.slice(0, 5).map(row).join('');
-        const rest = td.slice(5).map(row).join('');
-        let html = '<table><thead><tr><th>Tracker domain</th><th>hits</th><th>clients</th></tr></thead>'
-                 + '<tbody>' + top + '</tbody>';
-        if (rest) {
-            html += '<tbody id="sbx-trk-rest" style="display:none">' + rest + '</tbody>';
-        }
-        html += '</table>';
-        if (rest) {
-            html += `<button type="button" onclick="(function(b){var x=document.getElementById('sbx-trk-rest');var on=x.style.display==='none';x.style.display=on?'':'none';b.textContent=on?'▴ réduire':'▾ tout afficher (${td.length})';})(this)" style="margin-top:6px;background:none;border:0;color:var(--p31,#2C70C0);cursor:pointer;font-size:0.8rem">▾ tout afficher (${td.length})</button>`;
-        }
-        trk.innerHTML = html;
-    }
-    const bc = agg.by_client || [];
-    cli.innerHTML = bc.length
-        ? '<table><thead><tr><th>Client (hash)</th><th>sites</th><th>trackers</th><th>last</th></tr></thead><tbody>' +
-          bc.slice(0, 5).map(r => {
-              const ago = r.last_seen ? Math.round((Date.now()/1000 - r.last_seen)/60) + 'm' : '—';
-              return `<tr><td><code>${(r.client_mac_hash||'').slice(0,16)}</code></td><td>${r.sites}</td><td>${r.trackers}</td><td>${ago}</td></tr>`;
-          }).join('') +
-          '</tbody></table>'
-        : '<div class="empty">aucun client</div>';
-    if (cdn) {
-        const bv = agg.by_cdn || [];
-        cdn.innerHTML = bv.length
-            ? '<table><thead><tr><th>CDN / edge</th><th>hôtes</th></tr></thead><tbody>' +
-              bv.slice(0, 5).map(r => `<tr><td>${r.cdn_vendor}</td><td>${r.hosts}</td></tr>`).join('') +
-              '</tbody></table>'
-            : '<div class="empty">aucun CDN détecté</div>';
-    }
-    const ab = document.getElementById('social-antibot');
-    if (ab) {
-        const ba = agg.by_antibot || [];
-        ab.innerHTML = ba.length
-            ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${agg.antibot_clients||0} client(s) défié(s)</p>` +
-              '<table><thead><tr><th>Vendor</th><th>sites</th><th>clients</th><th>défis</th></tr></thead><tbody>' +
-              ba.slice(0, 5).map(r => `<tr><td>🤖 ${r.antibot_vendor}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.challenges}</td></tr>`).join('') +
-              '</tbody></table>'
-            : '<div class="empty">aucun anti-bot détecté</div>';
-    }
-    const dbk = document.getElementById('social-devblocks');
-    if (dbk) {
-        const db = await J('/admin/device-blocks?hours=24');
-        const bd = (db && db.by_device) || [];
-        dbk.innerHTML = bd.length
-            ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${db.devices||0} appareil(s) · ${db.total_hits||0} blocages 24h</p>` +
-              '<table><thead><tr><th>Appareil (hash)</th><th>IP</th><th>blacklist</th><th>DoH</th><th>total</th><th>Quarantaine</th></tr></thead><tbody>' +
-              bd.slice(0, 5).map(r => `<tr><td><code>${(r.mac_hash||'').slice(0,16)}</code></td><td>${r.ip||'—'}</td><td>${r.blacklist||0}</td><td>${r.doh||0}</td><td>${r.total||0}</td><td><a class="link" href="javascript:void(0)" onclick="quarantine('${r.ip||''}')" style="color:var(--red);font-size:0.78rem">⛔ Quarantaine</a></td></tr>`).join('') +
-              '</tbody></table>'
-            : '<div class="empty">aucun blocage attribué (24h)</div>';
-    }
-    const og = document.getElementById('social-opgrade');
-    if (og) {
-        const bo = agg.by_opgrade || [];
-        og.innerHTML = bo.length
-            ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${agg.opgrade_clients||0} client(s) exposé(s)</p>` +
-              '<table><thead><tr><th>Vendor</th><th>catégorie</th><th>sites</th><th>clients</th><th>events</th></tr></thead><tbody>' +
-              bo.slice(0, 5).map(r => `<tr><td>📡 ${r.opgrade_vendor}</td><td>${r.category}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.events}</td></tr>`).join('') +
-              '</tbody></table>'
-            : '<div class="empty">aucune surface opérateur-grade détectée</div>';
-    }
-}
-
-// ── Ad-Guard master switch (#740) ──
-async function loadAdGuard() {
-    const f = await J('/admin/filters');
-    const on = !(f && f.ad_guard === false);
-    const b = document.getElementById('adguard-badge');
-    const t = document.getElementById('adguard-toggle');
-    if (b) { b.textContent = on ? '🟢 ON' : '🔴 OFF'; b.className = 'badge ' + (on ? 'badge-green' : 'badge-red'); }
-    if (t) t.textContent = on ? '⏸ Désactiver' : '▶ Activer';
-}
-async function toggleAdGuard() {
-    const f = await J('/admin/filters');
-    const on = !(f && f.ad_guard === false);
-    await fetch(`${API}/admin/filters`, { method: 'POST', headers: { 'content-type': 'application/json' },
-        credentials: 'same-origin', body: JSON.stringify({ ad_guard: !on }) });
-    setTimeout(loadAdGuard, 400);
-}
-
-async function loadAds() {
-    loadAdGuard();
-    const d = await J('/admin/ad-stats?hours=24');
-    const kpi = document.getElementById('ads-kpi');
-    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    if (!d || d.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(d&&d.__error)||'no data'}</span>`; return; }
-    // #ads — DNS-layer blocking (the real ad-blocker; engine 204s are secondary)
-    const dns = d.dns_sinkhole || {};
-    const dnsEl = document.getElementById('ads-dns');
-    if (dnsEl) {
-      dnsEl.innerHTML = dns.enabled
-        ? `<span class="k">État</span> <span class="v" style="color:var(--matrix-green,#00ff41)">🟢 actif</span>`
-          + ` <span class="k">Domaines pub/tracker sinkholés</span> <span class="v">${(dns.domains||0).toLocaleString('fr-FR')}</span>`
-          + ` <span class="k">Règles réseau</span> <span class="v">${(dns.net_rules||0).toLocaleString('fr-FR')}</span>`
-          + ` <span class="k">Sources</span> <span class="v">${(dns.sources||[]).join(', ')||'—'}</span>`
-        : (dns.enabled === false
-            ? `<span class="k">État</span> <span class="v" style="color:var(--cinnabar,#e63946)">⚪ désactivé</span>`
-            : `<span class="k">État</span> <span class="v">indisponible</span>`);
-    }
-    kpi.innerHTML = `<span class="k">Pubs bloquées (204)</span> <span class="v">${d.total_blocked||0}</span>`
-      + ` <span class="k">Trackers détectés</span> <span class="v">${d.trackers_seen||0}</span>`
-      + ` <span class="k">Pages nettoyées</span> <span class="v">${d.pages_cleaned||0}</span>`
-      + ` <span class="k">Drops réseau</span> <span class="v">${d.network_drops||0}</span>`
-      + ` <span class="k" title="estimation : un contenu bloqué n'est jamais téléchargé, on ne peut pas mesurer les octets réels — ~45 Ko/blocage">Ko évités <span style="opacity:.6">(est.)</span></span> <span class="v">~${Math.round((d.total_bytes||0)/1024)}</span>`;
-    const hostRows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>~${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
-    const siteRows = (d.top_sites||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.site)}</code></td><td>${r.hits}</td></tr>`).join('');
-    document.getElementById('ads-hosts').innerHTML = hostRows
-      ? '<table><thead><tr><th>Tracker / pub host</th><th>bloqués</th><th>Ko (est.)</th></tr></thead><tbody>'+hostRows+'</tbody></table>'
-      : '<div class="empty">rien de bloqué dans la fenêtre</div>';
-    document.getElementById('ads-sites').innerHTML = siteRows
-      ? '<table><thead><tr><th>Site</th><th>trackers/pubs bloqués</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
-      : '';
-    // #802 — detected candidates (observed, awaiting promotion to active blocking)
-    const candRows = (d.top_candidates||[]).slice(0, 15).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td></tr>`).join('');
-    const candCumul = !!d.candidates_cumulative;
-    const candHdr = candCumul
-      ? `${d.total_candidates||0} hôtes en attente de promotion <span style="opacity:.75">(cumul — rien de neuf dans la fenêtre)</span>`
-      : `${d.total_candidates||0} hôtes détectés dans la fenêtre`;
-    document.getElementById('ads-candidates').innerHTML = candRows
-      ? `<div style="font-size:.78rem;opacity:.7;margin-bottom:.4rem">${candHdr}</div><table><thead><tr><th>Hôte détecté</th><th>observations</th></tr></thead><tbody>${candRows}</tbody></table>`
-      : '<div class="empty">aucun tracker/pub détecté (backlog vide)</div>';
-    const visRows = (d.top_visitors||[]).slice(0, 5).map(r=>{
-        const mh = esc(r.mac_hash);
-        return `<tr><td><a href="#" onclick="loadAdsClient('${mh}');return false;"><code>${mh}</code></a></td><td>${r.hits}</td></tr>`;
-    }).join('');
-    document.getElementById('ads-visitors').innerHTML = visRows
-      ? '<table><thead><tr><th>Visiteur</th><th>trackers/pubs</th></tr></thead><tbody>'+visRows+'</tbody></table>'
-      : '<div class="empty">aucun visiteur dans la fenêtre</div>';
-}
-
-async function loadAdsClient(mh) {
-    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const detail = document.getElementById('ads-client-detail');
-    detail.innerHTML = '<div class="empty">loading…</div>';
-    const d = await J('/admin/ad-stats/client/'+encodeURIComponent(mh));
-    if (!d || d.__error) { detail.innerHTML = `<div class="empty">${(d&&d.__error)||'no data'}</div>`; return; }
-    const rows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
-    detail.innerHTML = `<h3>👤 <code>${esc(d.mac_hash)}</code> — ${d.total||0} trackers/pubs bloqués</h3>`
-      + (rows
-        ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+rows+'</tbody></table>'
-        : '<div class="empty">aucune pub bloquée pour ce visiteur</div>');
-}
-
-// ── Réseau tab (#758) — hub netstats endpoints ──
-async function Jhub(path) {
-    try {
-        const r = await fetch('/api/v1/hub' + path, { credentials: 'same-origin' });
-        if (!r.ok) return { __error: 'HTTP ' + r.status };
-        return await r.json();
-    } catch (e) { return { __error: String(e) }; }
-}
-
-function sparkline(points, color) {
-    // points: [[ts, value], …] → inline SVG polyline, auto-scaled.
-    if (!points || !points.length) return '<span style="opacity:.5">—</span>';
-    const W = 240, H = 40, vals = points.map(p => p[1]);
-    const max = Math.max(1, ...vals), n = points.length;
-    const path = points.map((p, i) =>
-        `${(i / Math.max(1, n - 1) * W).toFixed(1)},${(H - p[1] / max * H).toFixed(1)}`).join(' ');
-    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
-        + `<polyline fill="none" stroke="${color}" stroke-width="1.5" points="${path}"/></svg>`;
-}
-
-function fmtBps(b) {
-    if (b > 1e6) return (b / 1e6).toFixed(1) + ' Mb/s';
-    if (b > 1e3) return (b / 1e3).toFixed(1) + ' kb/s';
-    return (b || 0) + ' b/s';
-}
-
-// Endpoints: /api/v1/hub/netstats/summary  /api/v1/hub/netstats/series
-async function loadNetstats() {
-    const sum = await Jhub('/netstats/summary');
-    const kpi = document.getElementById('ns-kpi');
-    document.getElementById('ns-stale').style.display = (sum && sum.stale) ? 'block' : 'none';
-    if (!sum || sum.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(sum && sum.__error) || 'no data'}</span>`; return; }
-    const cats = sum.categories || {};
-    kpi.innerHTML = `<span class="k">Drops réseau (total)</span> <span class="v">${sum.network_drops || 0}</span>`
-        + Object.keys(cats).map(c => ` <span class="k">${c}</span> <span class="v">${(cats[c].packets) || 0}</span>`).join('');
-
-    const ser = await Jhub('/netstats/series?window=86400&step=300');
-    const tp = document.getElementById('ns-throughput');
-    const dr = document.getElementById('ns-drops');
-    if (!ser || ser.__error) { tp.textContent = 'no data'; dr.textContent = ''; return; }
-    const inb = ser.in_bps || {}, outb = ser.out_bps || {};
-    tp.innerHTML = Object.keys(inb).map(ifc =>
-        `<div class="row"><b>${ifc}</b> ↓ ${fmtBps((inb[ifc].slice(-1)[0] || [0, 0])[1])} ${sparkline(inb[ifc], '#00d4ff')}`
-        + ` ↑ ${fmtBps(((outb[ifc] || []).slice(-1)[0] || [0, 0])[1])} ${sparkline(outb[ifc] || [], '#c9a84c')}</div>`).join('') || '<span style="opacity:.5">—</span>';
-    const drops = ser.drops || {};
-    dr.innerHTML = Object.keys(drops).map(c =>
-        `<div class="row"><b>${c}</b> ${sparkline(drops[c], '#e63946')}</div>`).join('') || '<span style="opacity:.5">—</span>';
-}
-
-async function refreshAll() {
-    await Promise.all([loadCfg(), loadClients(), loadHealth(), loadMetrics()]);
-}
-
-// Task 7 (#683 follow-up) — wire the exit-country / VPN-client / bridge /
-// emancipate controls. Static IDs, no per-row interpolation here (per-row
-// remove/copy buttons are wired inline after each render, above).
-document.getElementById('tor-cc-apply')?.addEventListener('click', applyExitCountry);
-document.getElementById('tor-cc-clear')?.addEventListener('click', clearExitCountry);
-document.getElementById('tor-vpn-add')?.addEventListener('click', addVpnClient);
-document.getElementById('tor-bridge-add')?.addEventListener('click', addBridge);
-document.getElementById('tor-emancipate-btn')?.addEventListener('click', emancipateWebui);
-
-// Deep-link : open the tab named in the URL hash on load.
-const initial = (location.hash || '').replace('#', '');
-if (['overview','clients','filtres','social','ads','reseau','tor','sentinel','config'].includes(initial)) switchTab(initial);
-else switchTab('overview');
-
-refreshAll();
-setInterval(() => {
-    // Only refresh the currently-visible tab's live data.
-    const active = document.querySelector('.tab.active')?.dataset.tab;
-    if (active === 'overview') { loadHealth(); loadMetrics(); }
-    else if (active === 'clients') loadClients();
-    else if (active === 'social') loadSocial();
-}, 10000);
+  var initial = (location.hash || '').replace('#', '');
+  choisir(TB_PAGES[initial] ? initial : 'overview', false);
+  charger();
+})();
 </script>
 </body>
 </html>

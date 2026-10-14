@@ -1,3 +1,10 @@
+secubox-toolbox (2.13.3-1~bookworm1) bookworm; urgency=medium
+
+  * Page /toolbox/ (coque d'administration) au profil Aurora (#2684) : page autonome sombre, quatre tuiles de situation avec infobulles (version, mode R1/R2, clients actifs, evenements 24 h ; « — » si la mesure manque), avertissement R2 (consentement explicite), pastille d'etat, bandeau de session requise, `?demo=1` annoncee (transmise aux onglets) et `?embed=1`. Onglets accessibles (role tab, aria-selected, fleches/Debut/Fin, focus visible, defilement horizontal a 420 px), memes neuf pages encadrees, lien profond par ancre, hauteur du cadre appliquee (sbxToolboxVue/sbxVue) et annoncee a l'hote (sbxVue). Lectures seules : GET /health, /admin/config, /admin/metrics, jeton sbx_token en Bearer sous try/catch. Menu commun charge hors embed et hors demo. Plus de police distante ni de skin partage.
+  * Non repris : les anciens panneaux masques de la coque (code mort depuis #2373, jamais affiches) et leurs actions, toutes portees par les pages d'onglet avec les memes appels ; le rafraichissement de 10 s de ces panneaux ; les boites alert/confirm. « Config TOML brute » devient un lien « Config brute » (meme URL). Aucune route ni API modifiee. 12 tests (statiques + navigateur) ; tests de routes et de l'onglet Reseau mis a jour pour viser les pages d'onglet.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:58:47 +0200
+
 secubox-toolbox (2.13.2-1~bookworm1) bookworm; urgency=medium
 
   * Page /rlevel/ au profil Aurora (#2552) : page autonome sombre, tuiles (pairs, en ligne, forces, inspection reelle), « Mon niveau » et vue admin en cartes sur telephone, legende des quatre modes, `?demo=1` annoncee, `?embed=1`. Appels et corps identiques (GET /rlevel/peers, POST /rlevel/peer, GET/POST /rlevel/me), delegation d'evenements et echappement conserves (garde XSS proxypac). Plus de skin partage ni de police distante. 5 tests navigateur.

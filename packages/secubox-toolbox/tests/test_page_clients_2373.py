@@ -56,10 +56,13 @@ def test_routes_ecriture_identiques_a_l_ancien_onglet():
     assert "'/social'" in SRC and "'/report'" in SRC
 
 
-def test_ancien_onglet_toujours_coherent():
-    old = (PAGE.parent / "index.html").read_text(encoding="utf-8")
-    for r in ("/admin/clients/${macHash}/level", "/admin/clients/${macHash}/reset", "/admin/clients/reset-all"):
-        assert r in old or "clients/reset-all" in old
+def test_coque_encadre_cet_onglet_et_ne_porte_plus_les_ecritures():
+    """#2684 : la coque index.html (Aurora) n'a plus les anciens panneaux masques ; elle encadre clients.html,
+    qui porte seul les routes niveau / RAZ / reset-all (verifiees plus haut)."""
+    coque = (PAGE.parent / "index.html").read_text(encoding="utf-8")
+    assert "clients: 'clients.html'" in coque
+    assert "clients/reset-all" not in coque and "method:" not in coque
+    assert "clients/reset-all" in SRC
 
 
 def test_oublier_des_clients_est_branche_et_confirme_dans_la_page_2379():
