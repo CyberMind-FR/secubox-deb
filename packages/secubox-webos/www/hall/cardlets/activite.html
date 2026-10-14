@@ -2,131 +2,247 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1560 (SBX OS P4) — CARTE « ACTIVITÉ ».
+  SecuBox #1560 (SBX OS P4) — CARTE « ACTIVITÉ », au profil Aurora (.claude/AURORA-REFERENCE.md, #2658).
 
   Le flux des gestes de la box : arrivées, communautés, fils ouverts au BBS,
   fichiers partagés, diffusions lancées. Il vient de /api/v1/sbxid/activite,
   qui applique LA règle de visibilité (secubox_core.sbxid.activites_visibles) :
   le visiteur ne voit que le public, une personne de la box voit aussi le
   « node », un membre ce qui concerne sa communauté. La carte n'en décide rien.
+
+  Page autonome. ?demo=1 : données fictives, liens inertes. ?embed=1 : sans en-tête de marque.
+  Mesure absente = « — ». Tout texte venu du serveur passe par textContent (aucun HTML injecté).
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Activité — vue micro</title>
-<link rel="stylesheet" href="../spicy.css">
+<title>Activité</title>
 <style>
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#6a4bb8; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#a98cf0; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#a98cf0; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; }
-  body { background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.4; }
-  .mw { display:flex; flex-direction:column; height:100%; padding:.65rem .75rem; gap:.45rem; }
-  .tete { display:flex; align-items:center; gap:.45rem; }
-  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
-              font-size:.9rem; color:#fff; background:#6a4bb8; flex:0 0 auto; }
-  .tete b { font-size:.88rem; }
-  .tete .m { margin-left:auto; font-size:.66rem; color:var(--muted); font-variant-numeric:tabular-nums; }
-  ol { list-style:none; margin:0; padding:0; overflow-y:auto; flex:1; scrollbar-width:thin; }
-  li { display:grid; grid-template-columns:1.3rem 1fr auto; gap:.1rem .4rem; align-items:baseline;
-       padding:.32rem 0; border-top:1px solid var(--border); font-size:.74rem; }
-  li:first-child { border-top:0; }
-  li .g { text-align:center; }
-  li .qui { font-weight:650; }
-  li .quand { color:var(--muted); font-size:.62rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  li .k { grid-column:2 / 4; color:var(--muted); font-size:.62rem; }
-  li a { color:var(--accent); text-decoration:none; }
-  li a:hover { text-decoration:underline; }
-  .vide { color:var(--muted); font-size:.74rem; margin:auto; text-align:center; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+    /* alias lus par les scripts partagés du Hall (slicebar.css, aide.js) */
+    --line:var(--trait);--line-2:var(--trait2);--muted:var(--doux);--up:var(--vert)}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  [hidden]{display:none!important}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .emb .cadre,.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  .emb .app,.dans .app{padding:10px;gap:8px}
+  .emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .marque .pic{font-size:1.5rem;line-height:1}
+  .emb .marque{display:none} .dans .marque small{display:none} .dans .marque h1{font-size:1.05rem}
+  .tete>.actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .tete>.actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .tete>.actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .tete>.actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .tete>.actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .btn.principal{background:rgba(41,182,246,.2);border-color:var(--cyan)} .btn.danger{color:var(--rouge);border-color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.ko .v{color:var(--rouge)} .tuile.vi .v{color:var(--violet)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .emb .pan,.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--doux);font-weight:600}
+  .msg{padding:12px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .defile{overflow-x:auto;max-width:100%}
+  .dans .tuiles{display:none}
+  .liste{list-style:none;margin:0;padding:0;display:grid}
+  .liste li{display:grid;grid-template-columns:1.6rem minmax(0,1fr) auto;gap:2px 8px;align-items:baseline;padding:8px 2px;border-top:1px solid rgba(86,150,255,.12);font-size:.82rem}
+  .liste li:first-child{border-top:0}
+  .liste li:hover{background:rgba(41,182,246,.07)}
+  .liste .g{text-align:center}
+  .liste .corps{min-width:0;overflow-wrap:anywhere}
+  .liste .qui{font-weight:650}
+  .liste .quand{color:var(--faible);font-size:.7rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .liste .k{grid-column:2 / 4;font-size:.68rem}
+  .pastille{display:inline-block;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);border-radius:999px;padding:0 8px;font-size:.66rem}
+  .pastille.com{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+  .liste a{color:var(--cyan);text-decoration:none} .liste a:hover{text-decoration:underline} .liste a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 </style>
-<div class="mw">
-  <div class="tete"><span class="ic">✦</span><b>Activité</b><span class="m" id="n">…</span></div>
-  <ol id="liste"></ol>
-  <p class="vide" id="vide" hidden>Rien encore — les arrivées, fils et partages apparaîtront ici.</p>
-</div>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque"><span class="pic" aria-hidden="true">✦</span>
+      <div><h1>Activité</h1><small>Les gestes récents de la box</small></div></div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune lecture réelle, liens inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+
+  <section class="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Nombre de gestes dans la liste affichée (30 au plus par lecture)."><span class="l">Récents</span><span class="v" id="tN">—</span><span class="s">dans la liste</span></div>
+    <div class="tuile cy" title="Ancienneté du geste le plus récent de la liste."><span class="l">Dernier geste</span><span class="v long" id="tDernier">—</span><span class="s">il y a</span></div>
+    <div class="tuile cy" title="Gestes visibles de tous, compté sur la liste affichée (déduit par la page)."><span class="l">Publics</span><span class="v" id="tPublic">—</span><span class="s">sur la liste</span></div>
+    <div class="tuile vi" title="Gestes réservés à une communauté, compté sur la liste affichée (déduit par la page)."><span class="l">Communauté</span><span class="v" id="tCom">—</span><span class="s">sur la liste</span></div>
+  </section>
+
+  <div class="pan"><h3>Flux <i>GET /api/v1/sbxid/activite</i></h3>
+    <ol class="liste" id="liste"></ol>
+    <p class="msg" id="msg" hidden></p>
+    <p class="note" id="retour" role="status" hidden></p>
+  </div>
+</div></div>
 <script src="/api/v1/webos/public/hotes.js"></script>
 <script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script>
-const GLYPHES = {user_joined:"👋", community_joined:"🤝", permission_granted:"🔑",
+(function(){
+  'use strict';
+  var ONGLET_NOM = 'activite';
+  // Variantes d'affichage : ?embed=1 (encadrée par une autre page) et iframe du Hall.
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if(Q.get('embed')) document.documentElement.classList.add('emb');
+  try{ if(window.top !== window) document.documentElement.classList.add('dans'); }catch(e){ document.documentElement.classList.add('dans'); }
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  function vide(n){ while(n.firstChild) n.removeChild(n.firstChild); return n; }
+  function nb(x){ x = Number(x); return isFinite(x) ? x : 0; }
+  function pastille(cls, texte){ var e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
+  function entetes(){ var h = {Accept:'application/json'}; try{ var t = localStorage.getItem('sbx_token'); if(t) h.Authorization = 'Bearer ' + t; }catch(e){} return h; }
+  // Hauteur annoncée à l'hôte : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer(){
+    if(parent === window) return;
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: ONGLET_NOM}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+  var GLYPHES = {user_joined:"👋", community_joined:"🤝", permission_granted:"🔑",
                  bbs_post:"💬", file_shared:"📎", radio_live:"📡"};
-const PHRASES = {user_joined:"a rejoint la box", community_joined:"a rejoint {c}",
+  var PHRASES = {user_joined:"a rejoint la box", community_joined:"a rejoint {c}",
                  permission_granted:"a reçu une autorisation", bbs_post:"a ouvert « {t} »",
                  file_shared:"a partagé {f}", radio_live:"diffusion : « {t} »"};
-const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function depuis(t){
-  const d = Math.max(0, Date.now()/1000 - t);
-  if (d < 90) return "à l'instant";
-  if (d < 3600) return Math.round(d/60) + " min";
-  if (d < 86400) return Math.round(d/3600) + " h";
-  return Math.round(d/86400) + " j";
-}
-// OÙ MÈNE UNE ACTIVITÉ (#1569). Le collecteur écrit /bbs/t/<id> et
-// /bbs/f/<id> : ces chemins n'existent pas sur le Hall, le BBS vit sur SON
-// hôte. Un fil ou un fichier s'ouvre donc sur https://bbs.<box>/…, dans le
-// surf du Hall ; une diffusion ouvre son média dans le viewer. Rien d'autre :
-// un contexte ne pousse jamais vers une adresse arbitraire.
-const BBS = (window.SBX_DOMAINE ? SBX_DOMAINE.hote("bbs.gk2.secubox.in") : "bbs.gk2.secubox.in");
-function cible(a){
-  const ctx = a.context || {};
-  const m = /^\/bbs\/(t|f)\/([A-Za-z0-9_-]{1,64})$/.exec(String(ctx.lien || ""));
-  if (m) return { sbx: "surf", url: `https://${BBS}/${m[1]}/${m[2]}` };
-  if (a.kind === "radio_live" && /^https?:\/\/[^\s"<>]+$/i.test(String(ctx.url || "")))
-    return { sbx: "voir", url: String(ctx.url) };
-  // Une vidéo de la bibliothèque YouTube SAS diffusée au Hall est un chemin RELATIF du Hall (/api/v1/ytsas/stream/<id>) : il
-  // s'ouvre dans le viewer, sur l'origine du Hall. Liste fermée : ce seul chemin, jamais un autre relatif.
-  if (a.kind === "radio_live" && /^\/api\/v1\/ytsas\/stream\/[A-Za-z0-9_.-]{1,64}$/.test(String(ctx.url || "")))
-    return { sbx: "voir", url: location.origin + String(ctx.url) };
-  return null;
-}
-function ligne(a){
-  const ctx = a.context || {};
-  const phrase = (PHRASES[a.kind] || a.kind)
-    .replace("{c}", esc(a.community_name || "une communauté"))
-    .replace("{t}", esc(ctx.titre || "")).replace("{f}", esc(ctx.nom || "un fichier"));
-  const qui = a.author === "diffusion" ? "Hall" : String(a.qui || "").replace(/^bbs:/, "");
-  const c = cible(a);
-  const corps = c ? `<a href="${esc(c.url)}" data-sbx="${c.sbx}" target="_blank" rel="noopener">${phrase}</a>` : phrase;
-  const k = a.visibility === "community" ? `✦ ${esc(a.community_name || "")}` : a.visibility === "public" ? "public" : "";
-  return `<li><span class="g">${GLYPHES[a.kind] || "•"}</span><span><span class="qui">${esc(qui)}</span> ${corps}</span>`
-       + `<span class="quand">${depuis(a.at)}</span>${k ? `<span class="k">${k}</span>` : ""}</li>`;
-}
-async function charge(){
-  try {
-    const r = await fetch("/api/v1/sbxid/activite?n=30", {credentials:"same-origin"});
-    const j = await r.json();
-    const l = j.activites || [];
-    document.getElementById("liste").innerHTML = l.map(ligne).join("");
-    document.getElementById("vide").hidden = l.length > 0;
-    document.getElementById("n").textContent = l.length ? l.length + " récentes" : "";
-  } catch (e) { document.getElementById("n").textContent = "indisponible"; }
-}
-charge(); setInterval(charge, 60000);
-// DANS LE HALL, le lien s'ouvre CHEZ LUI (surf / viewer) ; seule, la carte
-// laisse le navigateur ouvrir un onglet.
-document.getElementById("liste").addEventListener("click", ev => {
-  const l = ev.target.closest("a[data-sbx]");
-  if (!l || parent === window || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
-  ev.preventDefault();
-  try { parent.postMessage({ sbx: l.dataset.sbx, url: l.href, titre: l.textContent }, "*"); } catch (e) {}
-});
-// LE THÈME DU HALL (#1566) : les jetons sombres ne servaient qu'au thème du
-// système. Le Hall donne le sien par ?theme= au chargement, puis par message
-// quand on bascule — comme pour delegue.html.
-(function(){
-  const t = new URLSearchParams(location.search).get("theme");
-  if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+  function depuis(t){
+    var d = Math.max(0, Date.now()/1000 - t);
+    if (d < 90) return "à l'instant";
+    if (d < 3600) return Math.round(d/60) + " min";
+    if (d < 86400) return Math.round(d/3600) + " h";
+    return Math.round(d/86400) + " j";
+  }
+  // OÙ MÈNE UNE ACTIVITÉ (#1569). Le collecteur écrit /bbs/t/<id> et
+  // /bbs/f/<id> : ces chemins n'existent pas sur le Hall, le BBS vit sur SON
+  // hôte. Un fil ou un fichier s'ouvre donc sur https://bbs.<box>/…, dans le
+  // surf du Hall ; une diffusion ouvre son média dans le viewer. Rien d'autre :
+  // un contexte ne pousse jamais vers une adresse arbitraire.
+  var BBS = (window.SBX_DOMAINE ? SBX_DOMAINE.hote("bbs.gk2.secubox.in") : "bbs.gk2.secubox.in");
+  function cible(a){
+    var ctx = a.context || {};
+    var m = /^\/bbs\/(t|f)\/([A-Za-z0-9_-]{1,64})$/.exec(String(ctx.lien || ""));
+    if (m) return { sbx: "surf", url: "https://" + BBS + "/" + m[1] + "/" + m[2] };
+    if (a.kind === "radio_live" && /^https?:\/\/[^\s"<>]+$/i.test(String(ctx.url || "")))
+      return { sbx: "voir", url: String(ctx.url) };
+    // Une vidéo de la bibliothèque YouTube SAS diffusée au Hall est un chemin RELATIF du Hall (/api/v1/ytsas/stream/<id>) : il
+    // s'ouvre dans le viewer, sur l'origine du Hall. Liste fermée : ce seul chemin, jamais un autre relatif.
+    if (a.kind === "radio_live" && /^\/api\/v1\/ytsas\/stream\/[A-Za-z0-9_.-]{1,64}$/.test(String(ctx.url || "")))
+      return { sbx: "voir", url: location.origin + String(ctx.url) };
+    return null;
+  }
+  // La phrase est découpée sur ses {marques} : chaque valeur serveur entre en TEXTE, jamais en HTML.
+  function phrase(a){
+    var ctx = a.context || {};
+    var val = {c: a.community_name || "une communauté", t: ctx.titre || "", f: ctx.nom || "un fichier"};
+    var modele = PHRASES[a.kind] || a.kind;
+    return String(modele).split(/(\{[ctf]\})/).map(function(p){ var m = /^\{([ctf])\}$/.exec(p); return m ? val[m[1]] : p; }).join("");
+  }
+  function ligne(a){
+    var li = el("li");
+    li.appendChild(el("span", "g", GLYPHES[a.kind] || "•"));
+    var corps = el("span", "corps");
+    var qui = a.author === "diffusion" ? "Hall" : String(a.qui || "").replace(/^bbs:/, "");
+    corps.appendChild(el("span", "qui", qui)); corps.appendChild(document.createTextNode(" "));
+    var c = cible(a), txt = phrase(a);
+    if (c) {
+      var lien = el("a", null, txt); lien.href = c.url; lien.target = "_blank"; lien.rel = "noopener noreferrer"; lien.dataset.sbx = c.sbx;
+      corps.appendChild(lien);
+    } else corps.appendChild(document.createTextNode(txt));
+    li.appendChild(corps);
+    li.appendChild(el("span", "quand", depuis(a.at)));
+    if (a.visibility === "community") li.appendChild(el("span", "k pastille com", "✦ " + (a.community_name || "")));
+    else if (a.visibility === "public") li.appendChild(el("span", "k pastille", "public"));
+    return li;
+  }
+
+  function tuiles(l){
+    if (l == null) { ["tN", "tDernier", "tPublic", "tCom"].forEach(function(i){ $(i).textContent = "—"; }); return; }
+    $("tN").textContent = l.length;
+    $("tDernier").textContent = l.length ? depuis(Math.max.apply(null, l.map(function(a){ return nb(a.at); }))) : "—";
+    $("tPublic").textContent = l.filter(function(a){ return a.visibility === "public"; }).length;
+    $("tCom").textContent = l.filter(function(a){ return a.visibility === "community"; }).length;
+  }
+  function message(texte, erreur){ var m = $("msg"); m.hidden = !texte; m.textContent = texte || ""; m.className = "msg" + (erreur ? " err" : ""); }
+  function afficher(l){
+    var ol = vide($("liste"));
+    l.forEach(function(a){ ol.appendChild(ligne(a)); });
+    message(l.length ? "" : "Rien encore — les arrivées, fils et partages apparaîtront ici.");
+    tuiles(l);
+    pastille(l.length ? "" : "neutre", l.length ? "À JOUR" : "AUCUN GESTE");
+  }
+
+  // Données fictives (démonstration) : noms inventés, aucune requête.
+  function demoListe(){
+    var n = Date.now()/1000;
+    return [
+      {kind:"user_joined", qui:"alice-demo", at:n-120, visibility:"public"},
+      {kind:"bbs_post", qui:"bbs:bob-demo", at:n-1500, visibility:"public", context:{titre:"Bienvenue dans le forum", lien:"/bbs/t/1"}},
+      {kind:"community_joined", qui:"carole-demo", at:n-5200, visibility:"community", community_name:"Atelier réseau"},
+      {kind:"file_shared", qui:"dan-demo", at:n-9000, visibility:"community", community_name:"Atelier réseau", context:{nom:"schema-baie.pdf", lien:"/bbs/f/2"}},
+      {kind:"radio_live", author:"diffusion", at:n-30000, visibility:"public", context:{titre:"Émission d'exemple", url:"https://exemple.test/flux"}},
+      {kind:"permission_granted", qui:"eve-demo", at:n-90000, visibility:"public"}
+    ];
+  }
+
+  var jeton = 0;
+  function charge(){
+    var mon = ++jeton;
+    $("maj").textContent = "Relevé " + new Date().toLocaleTimeString("fr-FR");
+    $("session").hidden = true; $("retour").hidden = true;
+    if (DEMO) { $("demo").hidden = false; afficher(demoListe()); annoncer(); return; }
+    fetch("/api/v1/sbxid/activite?n=30", {credentials:"same-origin", cache:"no-store", headers:entetes()})
+      .then(function(r){
+        if (r.status === 401 || r.status === 403) { if (mon !== jeton) return; vide($("liste")); tuiles(null); pastille("neutre", "SESSION REQUISE"); $("session").hidden = false; message("Aucune mesure : session requise.", false); annoncer(); return; }
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json().then(function(j){ if (mon !== jeton) return; afficher(j.activites || []); annoncer(); });
+      })
+      .catch(function(){ if (mon !== jeton) return; vide($("liste")); tuiles(null); pastille("hors", "HORS LIGNE"); message("Flux indisponible pour le moment.", true); annoncer(); });
+  }
+  charge();
+  $("rafraichir").onclick = charge;
+  setInterval(function(){ if (!document.hidden) charge(); }, 60000);
+
+  // DANS LE HALL, le lien s'ouvre CHEZ LUI (surf / viewer) ; seule, la carte laisse le navigateur ouvrir un onglet.
+  // Message identique à l'ancienne carte : {sbx, url, titre}.
+  $("liste").addEventListener("click", function(ev){
+    var l = ev.target.closest && ev.target.closest("a[data-sbx]");
+    if (!l) return;
+    if (DEMO) { ev.preventDefault(); $("retour").hidden = false; $("retour").textContent = "Démonstration : lien inerte, rien n’est ouvert."; annoncer(); return; }
+    if (parent === window || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: l.dataset.sbx, url: l.href, titre: l.textContent }, location.origin); } catch (e) {}
+  });
+  addEventListener("message", function(ev){
+    var d = ev.data;
+    if (d && d.sbx === "relis") charge();
+  });
 })();
-addEventListener("message", ev => {
-  const d = ev.data;
-  if (d && d.sbx === "relis") { charge(); return; }
-  if (d && d.sbx === "theme" && (d.theme === "dark" || d.theme === "light"))
-    document.documentElement.setAttribute("data-theme", d.theme);
-});
 </script>
+</body>
+</html>

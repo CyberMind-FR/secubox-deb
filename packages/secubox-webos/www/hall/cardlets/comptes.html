@@ -2,8 +2,10 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1466 — carte « Mes comptes » du Hall.
+  SecuBox #1466 — carte « Mes comptes » du Hall, au profil Aurora (.claude/AURORA-REFERENCE.md, #2658).
 
   Les comptes de la PERSONNE SBX OS (courriel, Nextcloud, PeerTube, BBS),
   tels que l'Identity Manager les a liés à son user_uuid — lus sur
@@ -11,53 +13,117 @@
   Sans mot de passe (#1562, #1665) : courriel, Nextcloud, PeerTube et BBS
   s'ouvrent avec la session du Hall, par leur entrée dédiée. Gitea n'a pas
   encore d'entrée automatique : son identifiant est rappelé.
+
+  Page autonome. ?demo=1 : comptes fictifs, liens inertes. ?embed=1 : sans en-tête de marque.
+  Mesure absente = « — ». Tout texte venu du serveur passe par textContent (aucun HTML injecté).
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mes comptes</title>
 <style>
-  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
-         --surf2:#f5f7fc; --cyan:#0784a8; --ok:#0f9d54; }
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-    --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
-    --surf2:#10151f; --cyan:#28d6ff; --ok:#35d07f; } }
-  :root[data-theme="dark"]{ --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
-    --surf2:#10151f; --cyan:#28d6ff; --ok:#35d07f; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+    /* alias lus par les scripts partagés du Hall (slicebar.css, aide.js) */
+    --line:var(--trait);--line-2:var(--trait2);--muted:var(--doux);--up:var(--vert)}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px;overflow:hidden}
-  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem}
-  .h{display:flex;align-items:center;gap:7px}
-  .h b{font-size:.86rem}
-  .h .qui{margin-left:auto;font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .h .qui strong{color:var(--cyan)}
-  .liste{display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1;min-height:0}
-  a.cpt{display:grid;grid-template-columns:1.6rem minmax(0,1fr) auto;align-items:center;gap:8px;text-decoration:none;color:inherit;
-    border:1px solid var(--line);border-radius:9px;padding:6px 9px;background:var(--surf2)}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  [hidden]{display:none!important}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .emb .cadre,.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  .emb .app,.dans .app{padding:10px;gap:8px}
+  .emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .marque .pic{font-size:1.5rem;line-height:1}
+  .emb .marque{display:none} .dans .marque small{display:none} .dans .marque h1{font-size:1.05rem}
+  .tete>.actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .tete>.actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .tete>.actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .tete>.actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .tete>.actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .btn.principal{background:rgba(41,182,246,.2);border-color:var(--cyan)} .btn.danger{color:var(--rouge);border-color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.ko .v{color:var(--rouge)} .tuile.vi .v{color:var(--violet)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .emb .pan,.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--doux);font-weight:600}
+  .msg{padding:12px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .defile{overflow-x:auto;max-width:100%}
+  .dans .tuiles{display:none}
+  .liste{display:grid;gap:6px}
+  a.cpt{display:grid;grid-template-columns:1.8rem minmax(0,1fr) auto;align-items:center;gap:8px;text-decoration:none;color:inherit;
+    border:1px solid var(--trait);border-radius:12px;padding:8px 10px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-height:44px}
   a.cpt:hover,a.cpt:focus-visible{border-color:var(--cyan);outline:none}
-  a.cpt .ic{font-size:1.05rem;text-align:center}
-  a.cpt .n{font-size:.8rem;font-weight:600}
-  a.cpt .id{display:block;font-size:.68rem;color:var(--muted);font-family:"JetBrains Mono",ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  a.cpt .go{font-size:.66rem;color:var(--cyan);white-space:nowrap}
-  a.cpt .go.passif{color:var(--ok)}
-  .vide{color:var(--muted);font-size:.76rem;line-height:1.45;padding:6px 2px}
+  a.cpt:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  a.cpt .ic{font-size:1.15rem;text-align:center}
+  a.cpt .n{font-size:.86rem;font-weight:600;display:block}
+  a.cpt .id{display:block;font-size:.7rem;color:var(--doux);font-family:"JetBrains Mono",ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  a.cpt .go{font-size:.68rem;color:var(--cyan);text-align:right}
+  a.cpt .go.passif{color:var(--vert)}
+  .vide{color:var(--doux);font-size:.82rem;line-height:1.45;padding:10px;border:1px dashed var(--trait2);border-radius:12px;text-align:center;overflow-wrap:anywhere}
   .vide a{color:var(--cyan)}
-  .pied{font-size:.62rem;color:var(--faint);border-top:1px solid var(--line);padding-top:.35rem}
-  .pied a{color:var(--muted)}
+  .pied{font-size:.72rem;color:var(--faible)} .pied a{color:var(--doux)}
 </style>
-<div class="mw">
-  <div class="h"><span aria-hidden="true">🗝️</span><b>Mes comptes</b><span class="qui" id="qui"></span></div>
-  <div class="liste" id="liste"><div class="vide">Lecture…</div></div>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque"><span class="pic" aria-hidden="true">🗝️</span>
+      <div><h1>Mes comptes</h1><small>Ouverts avec ta session du Hall</small></div></div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="qui" title="Ton pseudo SBX OS">—</span></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune lecture réelle, liens inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+
+  <section class="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Nombre de comptes affichés : ceux liés à ton identité, plus les services ouverts par OIDC."><span class="l">Comptes</span><span class="v" id="tN">—</span><span class="s">affichés</span></div>
+    <div class="tuile ok" title="Comptes qui s’ouvrent avec ta session du Hall, sans mot de passe."><span class="l">Sans mot de passe</span><span class="v" id="tPassif">—</span><span class="s">ouverts d’office</span></div>
+  </section>
+
+  <div class="pan"><h3>Comptes liés <i>GET /api/v1/sbxid/moi</i></h3>
+    <div class="liste" id="liste"><div class="vide">Lecture…</div></div>
+    <div class="retour note" id="retour" role="status" hidden></div>
+  </div>
   <div class="pied">Ouverts avec votre session du Hall · <a href="/identite/" target="_top">Mon identité</a></div>
-</div>
+</div></div>
 <script src="../sonde.js"></script>
 <script>
 (function(){
   "use strict";
-  var q = new URLSearchParams(location.search), th = q.get('theme');
-  if (th === 'dark' || th === 'light') document.documentElement.setAttribute('data-theme', th);
+  var ONGLET_NOM = 'comptes';
+  // Variantes d'affichage : ?embed=1 (encadrée par une autre page) et iframe du Hall.
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if(Q.get('embed')) document.documentElement.classList.add('emb');
+  try{ if(window.top !== window) document.documentElement.classList.add('dans'); }catch(e){ document.documentElement.classList.add('dans'); }
   var $ = function(id){ return document.getElementById(id); };
-  function el(tag, cls, txt){ var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  function vide(n){ while(n.firstChild) n.removeChild(n.firstChild); return n; }
+  function nb(x){ x = Number(x); return isFinite(x) ? x : 0; }
+  function pastille(cls, texte){ var e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
+  function entetes(){ var h = {Accept:'application/json'}; try{ var t = localStorage.getItem('sbx_token'); if(t) h.Authorization = 'Bearer ' + t; }catch(e){} return h; }
+  // Hauteur annoncée à l'hôte : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer(){
+    if(parent === window) return;
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: ONGLET_NOM}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
   // Les services de la box : hôte dérivé de celui du Hall (hall.X → <svc>.X).
   var dom = location.hostname.replace(/^hall\./, '');
   var SVC = {
@@ -72,35 +138,65 @@
   var OIDC = {
     photoprism: {ic:'🖼️', nom:'PhotoPrism', hote:'photoprism', chemin:'/api/v1/oidc/login', passif:true}
   };
-  function vide(html){ $('liste').innerHTML = '<div class="vide">' + html + '</div>'; }
-  fetch('/api/v1/sbxid/moi', {credentials:'same-origin', headers:{Accept:'application/json'}})
-    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
-    .then(function(m){
-      if (!m.identite){ vide('Pas d\'identité SBX OS pour cette session. <a href="/identite/" target="_top">Ouvrir mon identité</a>'); return; }
-      $('qui').replaceChildren('', el('strong', null, m.identite.pseudo));
-      var liens = (m.liens || []).filter(function(l){ return SVC[l.app]; });
-      // un seul lien par service : le nom « réel » avant un compte d'appareil sbx-…
-      var vu = {};
-      liens.sort(function(a, b){ return (/^sbx-/i.test(a.app_handle) ? 1 : 0) - (/^sbx-/i.test(b.app_handle) ? 1 : 0); });
-      liens = liens.filter(function(l){ if (vu[l.app]) return false; vu[l.app] = 1; return true; });
-      // Services OIDC : un par service, avec le pseudo de la personne comme nom de compte (créé à la première connexion).
-      Object.keys(OIDC).forEach(function(app){
-        if (!vu[app]) liens.push({app: app, app_handle: m.identite.pseudo, oidc: true});
-      });
-      if (!liens.length){ vide('Aucun compte lié pour l\'instant. L\'administration de la box peut vous en ouvrir (courriel, Nextcloud, PeerTube).'); return; }
-      var box = $('liste'); box.replaceChildren();
-      liens.forEach(function(l){
-        var s = SVC[l.app] || OIDC[l.app], a = el('a', 'cpt');
-        a.href = 'https://' + s.hote + '.' + dom + (s.chemin || '/');
-        a.target = '_blank'; a.rel = 'noopener';
-        a.append(el('span', 'ic', s.ic));
-        var t = el('span'); t.append(el('span', 'n', s.nom), el('span', 'id', l.app_handle)); a.append(t);
-        a.append(el('span', 'go' + (s.passif ? ' passif' : ''), s.passif ? 'ouvert d\'office ↗' : 'ouvrir ↗'));
-        a.title = l.oidc ? 'Ouvert avec votre session du Hall, sans mot de passe ; le compte se crée à la première connexion'
-                         : (s.passif ? 'Ouvert avec votre session du Hall, sans mot de passe' : ('Identifiant ' + l.app_handle + ' · ' + s.aide));
-        box.appendChild(a);
-      });
-    })
-    .catch(function(){ vide('Identité injoignable pour le moment.'); });
+  function tuiles(n, passifs){ $('tN').textContent = n == null ? '—' : n; $('tPassif').textContent = passifs == null ? '—' : passifs; }
+  function vides(texte, lien){
+    var d = el('div', 'vide', texte);
+    if (lien){ d.appendChild(document.createTextNode(' ')); var a = el('a', null, lien); a.href = '/identite/'; a.target = '_top'; d.appendChild(a); }
+    vide($('liste')).appendChild(d);
+  }
+  function inerte(ev){ ev.preventDefault(); $('retour').hidden = false; $('retour').textContent = 'Démonstration : lien inerte, rien n’est ouvert.'; annoncer(); }
+
+  function rend(m){
+    if (!m.identite){ tuiles(null, null); pastille('neutre', 'SANS IDENTITÉ'); $('qui').textContent = '—'; vides("Pas d'identité SBX OS pour cette session.", 'Ouvrir mon identité'); return; }
+    $('qui').textContent = m.identite.pseudo;
+    var liens = (m.liens || []).filter(function(l){ return SVC[l.app]; });
+    // un seul lien par service : le nom « réel » avant un compte d'appareil sbx-…
+    var vu = {};
+    liens.sort(function(a, b){ return (/^sbx-/i.test(a.app_handle) ? 1 : 0) - (/^sbx-/i.test(b.app_handle) ? 1 : 0); });
+    liens = liens.filter(function(l){ if (vu[l.app]) return false; vu[l.app] = 1; return true; });
+    // Services OIDC : un par service, avec le pseudo de la personne comme nom de compte (créé à la première connexion).
+    Object.keys(OIDC).forEach(function(app){
+      if (!vu[app]) liens.push({app: app, app_handle: m.identite.pseudo, oidc: true});
+    });
+    if (!liens.length){ tuiles(0, 0); pastille('neutre', 'AUCUN COMPTE'); vides("Aucun compte lié pour l'instant. L'administration de la box peut vous en ouvrir (courriel, Nextcloud, PeerTube)."); return; }
+    var box = vide($('liste')), passifs = 0;
+    liens.forEach(function(l){
+      var s = SVC[l.app] || OIDC[l.app], a = el('a', 'cpt');
+      a.href = 'https://' + s.hote + '.' + dom + (s.chemin || '/');
+      a.target = '_blank'; a.rel = 'noopener';
+      if (s.passif) passifs++;
+      a.appendChild(el('span', 'ic', s.ic));
+      var t = el('span'); t.appendChild(el('span', 'n', s.nom)); t.appendChild(el('span', 'id', l.app_handle)); a.appendChild(t);
+      a.appendChild(el('span', 'go' + (s.passif ? ' passif' : ''), s.passif ? "ouvert d'office ↗" : 'ouvrir ↗'));
+      a.title = l.oidc ? 'Ouvert avec votre session du Hall, sans mot de passe ; le compte se crée à la première connexion'
+                       : (s.passif ? 'Ouvert avec votre session du Hall, sans mot de passe' : ('Identifiant ' + l.app_handle + ' · ' + s.aide));
+      if (DEMO) a.addEventListener('click', inerte);
+      box.appendChild(a);
+    });
+    tuiles(liens.length, passifs); pastille('', 'À JOUR');
+  }
+
+  var jeton = 0;
+  function charge(){
+    var mon = ++jeton;
+    $('session').hidden = true; $('retour').hidden = true;
+    if (DEMO){
+      $('demo').hidden = false;
+      rend({identite:{pseudo:'gek-demo'}, liens:[{app:'email', app_handle:'gek-demo@exemple.test'}, {app:'nextcloud', app_handle:'gek-demo'}, {app:'gitea', app_handle:'gek-demo'}]});
+      annoncer(); return;
+    }
+    fetch('/api/v1/sbxid/moi', {credentials:'same-origin', cache:'no-store', headers:entetes()})
+      .then(function(r){ if (r.status === 401 || r.status === 403) return {refus:true}; return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(m){
+        if (mon !== jeton) return;
+        if (m.refus){ tuiles(null, null); pastille('neutre', 'SESSION REQUISE'); $('session').hidden = false; vides('Aucune mesure : session requise.'); }
+        else rend(m);
+        annoncer();
+      })
+      .catch(function(){ if (mon !== jeton) return; tuiles(null, null); pastille('hors', 'HORS LIGNE'); vides('Identité injoignable pour le moment.'); annoncer(); });
+  }
+  charge();
 })();
 </script>
+</body>
+</html>
