@@ -1,3 +1,11 @@
+secubox-podcaster (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /podcaster/ refaite au profil Aurora (ref #2637) : tuiles (flux, épisodes, téléchargés, file, service, worker) lues dans GET /status, liste des flux et épisodes, mêmes appels d'API qu'avant (ajout, auto-téléchargement, réimport, suppression, import OPML, audiolivre ZIP, téléchargement d'un épisode, configuration), menu commun hors ?embed=1 et hors démonstration, ?demo=1 (données fictives, aucune écriture), session absente annoncée par un bandeau, hauteur annoncée à l'hôte. Conservés de #2635 : erreur par flux, date de dernière vérification, copie de l'adresse, réimport.
+  * La suppression d'un flux demande une confirmation dans la page, et le titre d'un audiolivre se saisit dans la page : plus de confirm() ni de prompt() du navigateur, que le viewer ignore.
+  * Pas repris : l'API ne change pas (aucune route ni modèle). Le portail public et le flux partagé restent des liens ; une session expirée n'envoie plus vers /login.html, un bandeau le dit. Les écritures exigent toujours un administrateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 15:00:00 +0200
+
 secubox-podcaster (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Import YouTube : audio m4a sans ré-encodage ; état par flux (last_error, last_refresh) ; POST /feeds/{id}/refresh ; page : erreur visible, copier l'adresse, réimporter (ref #2635).
