@@ -1,3 +1,12 @@
+secubox-messagerie (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /messagerie/ refaite au profil Aurora (ref #2646) : page autonome en français (CSS/JS en ligne), tuiles (mur public, privés, identité, dernier message avec infobulles de définition), fil à onglets Mur public / Privés, formulaire d'envoi, mode ?demo=1 (données fictives, actions inertes, bandeau orange) et ?embed=1, bandeau « session requise » sur 401/403, état « hors ligne » visible, hauteur annoncée à l'hôte (sbxVue, onglet messagerie), menu commun hors cadre du Hall.
+  * Corrigé : le retrait d'un message demandait confirm() natif (ignoré par le navigateur du viewer, retrait impossible) : confirmation intégrée à la page ; une panne du service ne laissait qu'une ligne de texte : état HORS LIGNE et bandeau ; les compteurs affichaient vide au lieu de « — » quand la mesure manque.
+  * Non repris : le thème clair (?theme=light|dark) : le profil Aurora est sombre uniquement.
+  * Appels inchangés : GET /fil, /prives, /annuaire ; POST /messages (corps corps, pseudo, parent, public, destinataire) et DELETE /messages/{id}, avec l'en-tête X-Sbx-Messagerie. Aucun changement d'API. Tests Playwright ajoutés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-messagerie (0.2.3-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-auth au lieu de secubox-sbxid (transitoire, #2050).

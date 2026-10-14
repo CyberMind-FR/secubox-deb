@@ -4,158 +4,209 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Tableau de posture (page historique www/index.html) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune
+  dépendance (CSS et JS en ligne ; le composant defcon-badge.js, absent du paquet, n'est plus chargé). Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives. Tout texte venu de l'API est posé en textContent, jamais en HTML.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Posture Dashboard</title>
-    <script src="defcon-badge.js"></script>
+    <title>SecuBox — Tableau de posture</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --bg: #0a0a0a; --card: #1a1a1a; --border: #27272a;
-            --text: #fff; --muted: #71717a; --defcon5: #22c55e;
-            --defcon4: #86efac; --defcon3: #f97316; --defcon2: #ef4444;
-            --defcon1: #991b1b;
-        }
-        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; padding: 1.5rem; }
-        .hero { text-align: center; margin-bottom: 2rem; }
-        .hero .emoji { font-size: 4rem; margin-bottom: 1rem; }
-        .hero .level { font-size: 3rem; font-weight: 900; font-family: monospace; }
-        .hero .desc { color: var(--muted); }
-        .score { font-size: 2rem; font-weight: 700; }
-        .bar { height: 8px; background: var(--border); border-radius: 4px; margin: 1rem 0; overflow: hidden; }
-        .bar .fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
-        .badge.compliant { background: rgba(34,197,94,0.15); color: var(--defcon5); border: 1px solid var(--defcon5); }
-        .badge.non-compliant { background: rgba(239,68,68,0.15); color: var(--defcon2); border: 1px solid var(--defcon2); }
-        .list { display: flex; flex-direction: column; gap: 0.75rem; }
-        .item { display: flex; justify-content: space-between; padding: 0.5rem; background: #1f1f1f; border-radius: 0.5rem; }
-        h2 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--muted); font-weight: 500; }
-        .timestamp { text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 2rem; }
-        .loading { color: var(--muted); text-align: center; padding: 2rem; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,159,28,.09),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:2px 9px;font-size:.7rem;min-height:24px} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.cy .v{color:var(--cyan)} .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.ro .v{color:var(--rouge)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .liste{display:grid;gap:6px}
+        .ligne{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;background:rgba(8,18,38,.6);border:1px solid var(--trait);border-radius:8px;font-size:.8rem;min-width:0}
+        .ligne span{overflow-wrap:anywhere;min-width:0} .ligne b{font-variant-numeric:tabular-nums;white-space:nowrap}
+        .barre{height:8px;border-radius:4px;background:rgba(159,179,214,.16);overflow:hidden;margin:6px 0 8px} .barre i{display:block;height:100%;background:var(--cyan)}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.crit,.pill.high{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.warn,.pill.medium{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .gros{font-size:1.6rem;font-weight:800;font-variant-numeric:tabular-nums}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
     </style>
 </head>
 <body>
-    <div class="hero" id="hero">
-        <defcon-card api-path="/api/v1/security-posture"></defcon-card>
-    </div>
-    <div class="grid">
-        <defcon-badge api-path="/api/v1/security-posture" refresh="30"></defcon-badge>
-    </div>
-    <h2>Security Components</h2>
-    <div class="grid">
-        <div class="card">
-            <h3>DEFCON Level</h3>
-            <div id="defcon-level">--</div>
-            <div class="bar"><div class="fill" id="defcon-bar"></div></div>
-            <div class="list" id="defcon-categories"></div>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 6v5.6c0 4.4 3.1 8.1 7.5 9.6 4.4-1.5 7.5-5.2 7.5-9.6V6z"/><path d="M8.5 13.5 11 10l2 2.4 2.5-3.4"/></svg>
+                <div><h1>Tableau de posture</h1><small>DEFCON, conformité CSPN et TPN, performance, recommandations</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cDefcon" title="Niveau et score DEFCON annoncés par /defcon."><span class="l">DEFCON</span><span class="v long" id="tDefcon">—</span><span class="s" id="sDefcon">score sur 100</span></div>
+            <div class="tuile vi" id="cCspn" title="Conformité CSPN : score de /cspn/summary et conformité déclarée."><span class="l">CSPN</span><span class="v" id="tCspn">—</span><span class="s" id="sCspn">conformité</span></div>
+            <div class="tuile vi" id="cTpn" title="Protection des médias (TPN) : score de /tpn/summary et conformité déclarée."><span class="l">TPN médias</span><span class="v" id="tTpn">—</span><span class="s" id="sTpn">conformité</span></div>
+            <div class="tuile cy" id="cPerf" title="Score de performance de /performance/summary."><span class="l">Performance</span><span class="v" id="tPerf">—</span><span class="s">score</span></div>
+        </section>
+
+        <div class="grille">
+            <div class="pan"><h3>Niveau DEFCON <i id="defNom"></i></h3><div class="barre"><i id="defBarre" style="width:0"></i></div><div class="liste" id="defCats"></div></div>
+            <div class="pan"><h3>Conformité CSPN <i id="cspnBadge"></i></h3><div class="barre"><i id="cspnBarre" style="width:0"></i></div><div class="liste" id="cspnStats"></div></div>
+            <div class="pan"><h3>TPN médias <i id="tpnBadge"></i></h3><div class="barre"><i id="tpnBarre" style="width:0"></i></div></div>
+            <div class="pan"><h3>Performance</h3><div class="barre"><i id="perfBarre" style="width:0"></i></div><div class="liste" id="perfStats"></div></div>
         </div>
-        <div class="card">
-            <h3>CSPN Compliance</h3>
-            <div class="score" id="cspn-score">--%</div>
-            <span class="badge" id="cspn-badge">Loading...</span>
-            <div class="bar"><div class="fill" id="cspn-bar"></div></div>
-            <div class="list" id="cspn-stats"></div>
-        </div>
-        <div class="card">
-            <h3>TPN Media</h3>
-            <div class="score" id="tpn-score">--%</div>
-            <span class="badge" id="tpn-badge">Loading...</span>
-            <div class="bar"><div class="fill" id="tpn-bar"></div></div>
-            <div class="list" id="tpn-stats"></div>
-        </div>
-        <div class="card">
-            <h3>Performance</h3>
-            <div class="score" id="perf-score">--%</div>
-            <div class="bar"><div class="fill" id="perf-bar"></div></div>
-            <div class="list" id="perf-stats"></div>
-        </div>
-    </div>
-    <div class="card" style="margin-top: 1.5rem;">
-        <h2>Recommendations</h2>
-        <div id="recommendations"></div>
-    </div>
-    <div class="timestamp">Last updated: <span id="timestamp">--</span></div>
+
+        <div class="pan"><h3>Recommandations</h3><div class="liste" id="recos"></div></div>
+        <p class="note">Cette page lit /overview, /defcon, /cspn/summary, /tpn/summary et /performance/summary : une route absente de l’API laisse la mesure à « — ».</p>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/security-posture';
-        async function fetchJSON(endpoint) {
-            try {
-                const r = await fetch(`${API}${endpoint}`);
-                return r.ok ? await r.json() : null;
-            } catch { return null; }
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const COULEUR = c => /^#[0-9a-fA-F]{3,8}$/.test(c || '') ? c : '';
+        const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+        const dec = v => num(v) == null ? '—' : v.toFixed(1).replace('.', ',');
+
+        let REP = null, SESSION_OK = true, CHARGE = false;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-        async function refresh() {
-            const [overview, defcon, cspn, tpn, perf] = await Promise.all([
-                fetchJSON('/overview'),
-                fetchJSON('/defcon'),
-                fetchJSON('/cspn/summary'),
-                fetchJSON('/tpn/summary'),
-                fetchJSON('/performance/summary')
-            ]);
-            update(overview, defcon, cspn, tpn, perf);
+
+        function demoData() {
+            REP = {
+                o: { recommendations: [{ severity: 'high', text: 'Mettre à jour 4 paquets de sécurité (démonstration).' }, { severity: 'medium', text: 'Renouveler les règles WAF (démonstration).' }] },
+                d: { level_name: 'DEFCON 3', score: 74.5, color: '#ff9f1c', category_scores: { 'Authentification': 88, 'Pare-feu': 81, 'Système': 58 } },
+                c: { summary: { compliance_score: 66.7, is_compliant: false, total_requirements: 6, passed: 4, failed: 2 } },
+                t: { summary: { compliance_score: 100, is_compliant: true } },
+                p: { score: 82.3, category_scores: { 'Latence': 90, 'Mémoire': 74.6 } }
+            };
         }
-        function update(o, d, c, t, p) {
-            document.getElementById('timestamp').textContent = new Date().toLocaleString();
-            if(d) {
-                document.getElementById('defcon-level').textContent = d.level_name + ' - ' + d.score?.toFixed(1) + '/100';
-                const bar = document.getElementById('defcon-bar');
-                if(bar) { bar.style.width = d.score + '%'; bar.style.background = d.color || '#6b7280'; }
-                const cats = document.getElementById('defcon-categories');
-                if(cats && d.category_scores) {
-                    cats.innerHTML = Object.entries(d.category_scores).map(([k,v]) => 
-                        `<div class="item"><span>${k}</span><span>${v.toFixed(1)}%</span></div>`
-                    ).join('');
-                }
-            }
-            if(c?.summary) {
-                const s = c.summary;
-                document.getElementById('cspn-score').textContent = (s.compliance_score||0).toFixed(1) + '%';
-                const badge = document.getElementById('cspn-badge');
-                if(badge) { badge.className = 'badge ' + (s.is_compliant ? 'compliant' : 'non-compliant'); badge.textContent = s.is_compliant ? 'COMPLIANT' : 'NON-COMPLIANT'; }
-                const bar = document.getElementById('cspn-bar');
-                if(bar) { bar.style.width = (s.compliance_score||0) + '%'; bar.style.background = s.is_compliant ? '#22c55e' : '#ef4444'; }
-                const stats = document.getElementById('cspn-stats');
-                if(stats) stats.innerHTML = `
-                    <div class="item"><span>Total</span><span>${s.total_requirements||0}</span></div>
-                    <div class="item"><span>Passed</span><span>${s.passed||0}</span></div>
-                    <div class="item"><span>Failed</span><span>${s.failed||0}</span></div>
-                `;
-            }
-            if(t?.summary) {
-                const s = t.summary;
-                document.getElementById('tpn-score').textContent = (s.compliance_score||0).toFixed(1) + '%';
-                const badge = document.getElementById('tpn-badge');
-                if(badge) { badge.className = 'badge ' + (s.is_compliant ? 'compliant' : 'non-compliant'); badge.textContent = s.is_compliant ? 'COMPLIANT' : 'NON-COMPLIANT'; }
-                const bar = document.getElementById('tpn-bar');
-                if(bar) { bar.style.width = (s.compliance_score||0) + '%'; bar.style.background = s.is_compliant ? '#3b82f6' : '#ef4444'; }
-            }
-            if(p) {
-                document.getElementById('perf-score').textContent = (p.score||0).toFixed(1) + '%';
-                const bar = document.getElementById('perf-bar');
-                if(bar) { bar.style.width = (p.score||0) + '%'; bar.style.background = p.score >= 80 ? '#22c55e' : p.score >= 60 ? '#eab308' : '#ef4444'; }
-                const stats = document.getElementById('perf-stats');
-                if(stats && p.category_scores) {
-                    stats.innerHTML = Object.entries(p.category_scores).map(([k,v]) => 
-                        `<div class="item"><span>${k}</span><span>${v.toFixed(1)}%</span></div>`
-                    ).join('');
-                }
-            }
-            if(o?.recommendations) {
-                const recs = document.getElementById('recommendations');
-                if(recs) {
-                    if(o.recommendations.length === 0) recs.innerHTML = '<div class="loading">All systems optimal!</div>';
-                    else recs.innerHTML = o.recommendations.map(r => 
-                        `<div class="item"><span>${r.severity?.toUpperCase()||'INFO'}</span><span>${r.text||'No description'}</span></div>`
-                    ).join('');
-                }
-            }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/overview'), lire('/defcon'), lire('/cspn/summary'), lire('/tpn/summary'), lire('/performance/summary')]);
+            const v = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            REP = { o: v(0), d: v(1), c: v(2), t: v(3), p: v(4) };
+            CHARGE = true;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire la posture (service arrêté ou injoignable).';
+            rendre();
         }
-        refresh();
-        setInterval(refresh, 30000);
+
+        function lignes(zone, paires) {
+            const z = $(zone); z.replaceChildren();
+            paires.forEach(([k, v]) => { const l = el('div', 'ligne'); l.appendChild(el('span', null, k)); l.appendChild(el('b', null, v)); z.appendChild(l); });
+        }
+        function barre(id, score, couleur) { const b = $(id); b.style.width = (num(score) == null ? 0 : Math.max(0, Math.min(100, score))) + '%'; b.style.background = couleur; }
+        function badge(id, resume) {
+            const b = $(id); b.className = 'pill';
+            if (!resume) { b.textContent = ''; return; }
+            b.className = 'pill ' + (resume.is_compliant ? 'ok' : 'hors'); b.textContent = resume.is_compliant ? 'CONFORME' : 'NON CONFORME';
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const e = $('etat'), r = REP || {};
+            const rien = !r.o && !r.d && !r.c && !r.t && !r.p;
+            if (!SESSION_OK) { e.className = 'actif neutre'; e.textContent = 'SESSION REQUISE'; }
+            else if (!CHARGE) { e.className = 'actif neutre'; e.textContent = 'Chargement…'; }
+            else if (rien) { e.className = 'actif hors'; e.textContent = 'HORS LIGNE'; }
+            else { e.className = 'actif'; e.textContent = DEMO ? 'DÉMONSTRATION' : 'EN LIGNE'; }
+
+            // DEFCON : forme historique (level_name, score, category_scores) ou forme actuelle de /defcon (overall.name, overall.score).
+            const d = r.d, ov = d && d.overall ? d.overall : null;
+            const nomDef = d ? (d.level_name || (ov && ov.name) || null) : null, scDef = d ? (num(d.score) != null ? d.score : ov ? num(ov.score) : null) : null;
+            const coulDef = (d && COULEUR(d.color)) || (ov && COULEUR(ov.color)) || '#29b6f6';
+            $('tDefcon').textContent = nomDef || '—';
+            $('sDefcon').textContent = scDef != null ? dec(scDef) + ' / 100' : 'score sur 100';
+            $('defNom').textContent = nomDef ? nomDef + (scDef != null ? ' — ' + dec(scDef) + ' / 100' : '') : '';
+            barre('defBarre', scDef, coulDef);
+            if (d && d.category_scores) lignes('defCats', Object.entries(d.category_scores).map(([k, v]) => [k, num(v) == null ? '—' : dec(v) + ' %']));
+            else lignes('defCats', []);
+
+            const c = r.c && r.c.summary ? r.c.summary : null, t = r.t && r.t.summary ? r.t.summary : null;
+            $('tCspn').textContent = c ? dec(c.compliance_score || 0) + ' %' : '—'; $('sCspn').textContent = c ? (c.is_compliant ? 'conforme' : 'non conforme') : 'conformité';
+            $('tTpn').textContent = t ? dec(t.compliance_score || 0) + ' %' : '—'; $('sTpn').textContent = t ? (t.is_compliant ? 'conforme' : 'non conforme') : 'conformité';
+            badge('cspnBadge', c); badge('tpnBadge', t);
+            barre('cspnBarre', c ? c.compliance_score || 0 : null, c && c.is_compliant ? '#2ecc71' : '#ff4d5e');
+            barre('tpnBarre', t ? t.compliance_score || 0 : null, t && t.is_compliant ? '#3b82f6' : '#ff4d5e');
+            lignes('cspnStats', c ? [['Total', String(c.total_requirements || 0)], ['Réussies', String(c.passed || 0)], ['Échouées', String(c.failed || 0)]] : []);
+
+            const p = r.p;
+            $('tPerf').textContent = p && num(p.score) != null ? dec(p.score) + ' %' : '—';
+            barre('perfBarre', p ? p.score || 0 : null, p && p.score >= 80 ? '#2ecc71' : p && p.score >= 60 ? '#ffd23f' : '#ff4d5e');
+            lignes('perfStats', p && p.category_scores ? Object.entries(p.category_scores).map(([k, v]) => [k, num(v) == null ? '—' : dec(v) + ' %']) : []);
+
+            const z = $('recos'); z.replaceChildren();
+            const rec = r.o && Array.isArray(r.o.recommendations) ? r.o.recommendations : null;
+            if (!rec) z.appendChild(el('div', 'vide', '—'));
+            else if (!rec.length) z.appendChild(el('div', 'vide', 'Tous les systèmes sont optimaux.'));
+            else rec.forEach(x => { const l = el('div', 'ligne'); l.appendChild(el('span', 'pill ' + String(x.severity || '').toLowerCase().replace(/[^a-z]/g, ''), (x.severity || 'info').toUpperCase())); l.appendChild(el('span', null, x.text || 'Aucune description')); z.appendChild(l); });
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleString('fr-FR');
+            annoncer();
+        }
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'security-posture-tableau' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        setInterval(() => { if (document.hidden || DEMO) return; charger(); }, 30000);
     </script>
 </body>
 </html>

@@ -1,3 +1,12 @@
+secubox-zia (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /zia/ (chat plein cadre, index.html) refaite au profil Aurora (ref #2646) : page autonome en français, tuiles (moteur, modèle, échanges de la session, avec infobulles), discussion avec traces d'outils, objets du bus et actions Ouvrir / Lire / Discuter, suggestions, saisie vocale conservée (voix.js), mode ?demo=1 (réponses fictives, aucun appel, voix inerte, bandeau orange) et ?embed=1, état EN LIGNE / HORS LIGNE d'après /health, hauteur annoncée à l'hôte (sbxVue, onglet zia), menu commun hors cadre du Hall.
+  * Corrigé : le texte de l'API, les titres et les attributs des objets passaient par innerHTML / insertAdjacentHTML (échappement manuel) : tout est désormais posé en nœuds DOM (le gras et le cœur sont reconstruits sans HTML) ; un service arrêté n'affichait rien dans l'en-tête : état HORS LIGNE et « — » au lieu de « local » inventé.
+  * Non repris : le thème clair (?theme=light|dark) : le profil Aurora est sombre uniquement.
+  * Appels inchangés : POST /v1/chat (corps message, sans jeton, comme avant), GET /health, messages d'hôte sbx (ouvre, voir, ouvre-hote). micro.html, voix.js et admin.html ne sont pas touchés. Aucun changement d'API. Tests Playwright ajoutés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:30:00 +0200
+
 secubox-zia (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /zia/admin.html (administration de ZIA) au profil Aurora (#2597) : page autonome sombre, sans police ni script externe ; tuiles (moteur, modèle, objets au bus, échanges, latence moyenne, remote), cartes Moteur, Accès et bus, Niveau 3 remote ; `?demo=1` annoncée et inerte, `?embed=1`, « — » pour toute mesure absente, bandeau « session requise » sur 401/403, aucun dialogue natif. Les écritures sont celles de l'ancienne page : POST /config (un sous-ensemble de réglages par carte, mêmes clés) et POST /llm/test. Armer l'escalade remote (passage de désarmé à armé) demande une confirmation intégrée à la page. 12 tests (statique + vrai navigateur).
