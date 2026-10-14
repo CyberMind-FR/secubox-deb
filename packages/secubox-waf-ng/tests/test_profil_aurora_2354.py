@@ -9,23 +9,18 @@ S = PAGE.read_text(encoding="utf-8")
 
 
 def test_le_profil_aurora_est_present_et_remappe_la_palette():
-    assert "PROFIL PROJET RÉFÉRENCE AURORA" in S
-    bloc = S[S.index("PROFIL PROJET RÉFÉRENCE AURORA"):]
-    for jeton in ("--fond: #060d1b", "--cyan: #29b6f6", "--red: #ff4d5e", "--green: #2ecc71"):
-        assert jeton in bloc
+    """#2683 : la page porte les jetons Aurora nativement (plus de surcouche sur l'ancien skin)."""
+    for jeton in ("--fond:#060d1b", "--cyan:#29b6f6", "--rouge:#ff4d5e", "--vert:#2ecc71"):
+        assert jeton in S
 
 
 def test_les_six_autres_onglets_sont_couverts_par_les_memes_classes():
     for onglet in ("overview", "attackers", "visits", "recon", "history", "campaigns"):
         assert f'data-tab="{onglet}"' in S
-    bloc = S[S.index("PROFIL PROJET RÉFÉRENCE AURORA"):]
-    for classe in (".card", ".stat-card", ".data-table", ".waf-tab", ".btn"):
-        assert re.search(re.escape(classe) + r"[\s,{.:]", bloc), classe
+    for classe in (".pan", ".tuile", ".waf-tab", ".btn", "table"):
+        assert re.search(re.escape(classe) + r"[\s,{.:]", S), classe
 
 
-def test_aurora_repond_au_skin_partage_a_specificite_superieure():
-    """hybrid-skin.css est injecté après la page et pose ses teintes en !important : sans préfixe plus spécifique, rien ne change."""
-    bloc = S[S.index("PROFIL PROJET RÉFÉRENCE AURORA"):]
-    assert "html :is(.hybrid-skin, body) button.waf-tab" in bloc
-    assert "html :is(.hybrid-skin, body) .stat-card .value" in bloc
-    assert "html :is(.hybrid-skin, body) table th" in bloc
+def test_aurora_ne_charge_plus_le_skin_partage():
+    """#2683 : hybrid-skin.css (teintes en !important) n'est plus chargé, donc plus de surcharge à spécificité supérieure."""
+    assert "hybrid-skin" not in S and "hybrid-dark" not in S
