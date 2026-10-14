@@ -5,245 +5,231 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox-Deb :: secubox-voicestudio :: panneau d'ADMINISTRATION (#1917)
-  Facette webui (portail). Sa jumelle d'usager est usager.html. Charte : hybrid-dark
-  (WEBUI-PANEL-GUIDELINES) — cyan #00d4ff, Courier Prime, emoji fonctionnels.
-  Toute action privilégiée passe par l'API, qui délègue à voicestudioctl (audité).
+  VoiceStudio, panneau d'ADMINISTRATION (#1917) au profil Aurora (.claude/AURORA-REFERENCE.md, #2648) : page autonome,
+  aucune dépendance. Sa jumelle d'usager est usager.html. Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données
+  fictives, actions inertes. Toute action privilégiée passe par l'API, qui délègue à voicestudioctl (audité).
+  Aucun secret affiché, sauf la nouvelle clé d'API, montrée une seule fois à son renouvellement (comme avant).
 -->
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox — VoiceStudio</title>
-    <script>
-        /* Encadré par le Hall : on masque NOTRE coquille, jamais le contenu (§ 9). */
-        (function () {
-            var embarque = true;
-            try { embarque = window.top !== window.self; } catch (e) { embarque = true; }
-            if (embarque) document.documentElement.classList.add('sbx-embed');
-        })();
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2); --text: #e8e6d9;
-            --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944; --yellow: #ffcc00;
-            --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
-        }
-        :root.sbx-embed .sidebar, :root.sbx-embed .global-menu-bar, :root.sbx-embed .global-status-bar { display: none !important; }
-        :root.sbx-embed .main { margin-left: 0 !important; padding-top: 1rem !important; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; min-height: 100vh;
-                background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-width: 0; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; margin-top: .2rem; }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);
-               cursor: pointer; font-size: 0.8rem; font-family: inherit; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.good { background: rgba(0,221,68,0.12); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h3 { color: var(--cyan); font-size: .9rem; margin-bottom: .7rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; }
-        .stat-card .value { font-size: 1.2rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; word-break: break-word; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
-        .stat-card.orange .value { color: var(--orange); } .stat-card.red .value { color: var(--red); }
-        .stat-card.blue .value { color: var(--blue); } .stat-card.purple .value { color: var(--purple); }
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
-        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; background: none; border-top: 0; border-left: 0; border-right: 0; font-family: inherit; }
-        .tab:hover { color: var(--cyan); } .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .tab-content { display: none; } .tab-content.active { display: block; }
-        .rows { display: flex; flex-direction: column; gap: .25rem; }
-        .row { display: flex; justify-content: space-between; gap: 1rem; padding: .4rem .6rem; background: var(--bg-row); border-radius: 4px;
-               border-left: 3px solid var(--border); font-size: .78rem; flex-wrap: wrap; }
-        .row .k { color: var(--p31-dim); text-transform: uppercase; font-size: .68rem; letter-spacing: .05em; }
-        .row .v { color: var(--cyan); text-align: right; word-break: break-all; }
-        .row.ok { border-left-color: var(--green); } .row.warn { border-left-color: var(--orange); } .row.bad { border-left-color: var(--red); }
-        .form-group { margin-bottom: .7rem; }
-        .form-group label { display: block; margin-bottom: .2rem; font-size: .68rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: .05em; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: .45rem; background: rgba(20,30,45,.8); border: 1px solid var(--border);
-               border-radius: 4px; font-family: inherit; font-size: .8rem; color: var(--text); }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,.3); }
-        .form-group .aide { font-size: .65rem; color: var(--p31-dim); margin-top: .2rem; }
-        .form-row { display: flex; gap: .7rem; flex-wrap: wrap; } .form-row .form-group { flex: 1; min-width: 150px; }
-        pre.journal { background: rgba(0,0,0,.45); border: 1px solid var(--border); border-radius: 6px; padding: .6rem; font-size: .7rem;
-               max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word; color: #b8c4d0; }
-        .banniere { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 10px 14px; border-radius: 8px; font-size: .85rem; }
-        .banniere[hidden] { display: none; }
-        .banniere.panne { border: 1px solid #b4553a; border-left: 4px solid #e8734f; background: rgba(232,115,79,.10); color: #f2ded7; }
-        .banniere.progres { border: 1px solid var(--blue); border-left: 4px solid var(--blue); background: rgba(68,136,255,.10); }
-        .banniere .txt { flex: 1; min-width: 0; }
-        .barre { height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 6px; }
-        .barre > i { display: block; height: 100%; width: 40%; background: var(--blue); animation: va-et-vient 1.4s ease-in-out infinite; }
-        @keyframes va-et-vient { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
-        .toast { position: fixed; bottom: 70px; right: 20px; padding: .75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: .8rem;
-                 z-index: 2000; opacity: 0; transform: translateY(20px); transition: all .3s; box-shadow: 0 0 20px rgba(0,212,255,.4); max-width: 80vw; }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; display: flex; gap: .7rem; align-items: flex-start; }
-        .toast.error button { background: none; border: 0; color: #fff; cursor: pointer; font-size: 1rem; }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: rgba(20,30,45,.97); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 560px; max-width: 92vw; max-height: 85vh; overflow-y: auto; }
-        .modal-content h3 { color: var(--cyan); margin-bottom: .8rem; }
-        .cle { background: rgba(0,0,0,.5); border: 1px dashed var(--orange); border-radius: 6px; padding: .7rem; word-break: break-all; color: var(--orange); font-size: .85rem; margin: .8rem 0; user-select: all; }
-        audio { width: 100%; margin-top: .6rem; }
-        ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: rgba(20,30,45,.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) { .main { margin-left: 0; padding-top: 60px; } .row .v { text-align: left; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block;overflow-wrap:anywhere}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        a.btn{text-decoration:none}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.good{border-color:var(--vert);color:var(--vert)} .btn.good:hover{background:rgba(46,204,113,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .panne{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;overflow-wrap:anywhere}
+        .progres{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);margin-top:6px;overflow:hidden} .barre i{display:block;height:100%;width:40%;background:var(--orange);animation:va 1.4s ease-in-out infinite alternate}
+        @keyframes va{from{margin-left:0}to{margin-left:60%}}
+        .confirm{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .confirm p{margin:0 0 6px;overflow-wrap:anywhere}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)} .tuile.bl .v{color:var(--bleu)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px}
+        .onglets button{font:inherit;font-size:.78rem;padding:6px 12px;border-radius:999px;border:1px solid var(--trait);background:transparent;color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button[aria-selected=true]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.16)}
+        .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .kv dd.ok{color:var(--vert)} .kv dd.warn{color:var(--orange)} .kv dd.bad{color:var(--rouge)}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0;overflow-wrap:anywhere}
+        .saisie{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));align-items:start;margin-bottom:10px}
+        .champ{display:grid;gap:3px;font-size:.72rem;color:var(--doux);min-width:0}
+        input,select,textarea{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan)}
+        textarea{resize:vertical}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .sortie{margin:8px 0 0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.74rem}
+        audio{width:100%;margin-top:10px}
+        .cle{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.8rem;overflow-wrap:anywhere;padding:8px;border:1px solid var(--vert);border-radius:8px;background:rgba(46,204,113,.08);margin:8px 0}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;display:flex;gap:10px;align-items:flex-start;overflow-wrap:anywhere}
+        .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto} .toast.error{border-color:var(--rouge)}
+        .toast button{background:none;border:0;color:inherit;cursor:pointer;font-size:1rem}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div>
-                <h1>🎙️ VoiceStudio</h1>
-                <div class="sub" id="subline">Moteur vocal studio du parc — LXC natif</div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v4M8.5 21.5h7"/></svg>
+                <div><h1>VoiceStudio</h1><small id="subline">Moteur vocal studio du parc — LXC natif</small></div>
             </div>
-            <div class="btn-group">
-                <a class="btn" href="usager.html" title="La facette usager">🗣️ Page usager</a>
-                <button class="btn" data-action="rafraichir">↻ Actualiser</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a class="btn" href="usager.html" title="La facette usager">Page usager</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="panne" class="panne" role="alert" hidden><b id="panneQuoi"></b> <span id="panneDetail"></span></div>
+        <div id="progres" class="progres" role="status" hidden><b id="progresTitre"></b><div class="barre"><i></i></div></div>
+        <div id="confirm" class="confirm" role="alertdialog" hidden><p id="confirmTexte"></p><div class="bout" style="margin:0"><button class="btn danger" id="confirmOui" type="button">Confirmer</button><button class="btn" id="confirmNon" type="button">Annuler</button></div></div>
 
-        <div id="panne" class="banniere panne" hidden role="alert"><span>⚠️</span><div class="txt"><b id="panneQuoi"></b> <span id="panneDetail"></span></div></div>
-        <div id="progres" class="banniere progres" hidden role="status"><span>⏳</span><div class="txt"><b id="progresTitre"></b><div class="barre"><i></i></div></div></div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cLxc" title="État du conteneur LXC qui porte le moteur : actif (RUNNING), endormi (STOPPED, mode à la demande) ou autre."><span class="l">LXC</span><span class="v" id="vLxc">—</span><span class="s">conteneur du moteur</span></div>
+            <div class="tuile cy" id="cMoteur" title="Réponse du moteur à sa sonde /health : répond, démarre (HTTP 503) ou muet."><span class="l">Moteur</span><span class="v" id="vMoteur">—</span><span class="s">sonde /health</span></div>
+            <div class="tuile bl" title="Permanent : le moteur répond sans délai. À la demande : il dort et se réveille au premier appel (30 à 60 s)."><span class="l">Mode</span><span class="v long" id="vMode">—</span><span class="s">cycle de vie</span></div>
+            <div class="tuile cy" title="Plafond de mémoire du conteneur (cgroup), appliqué à chaud."><span class="l">Mémoire max</span><span class="v" id="vMemoire">—</span><span class="s">plafond du LXC</span></div>
+            <div class="tuile vi" title="Taille des données du moteur (voix clonées, historique, base), modèles compris."><span class="l">Données</span><span class="v" id="vDonnees">—</span><span class="s">sur disque</span></div>
+            <div class="tuile cy" title="Version du moteur amont installée dans le LXC."><span class="l">Version</span><span class="v long" id="vVersion">—</span><span class="s">moteur amont</span></div>
+        </section>
 
-        <div class="grid">
-            <div class="stat-card" id="cLxc"><div class="value" id="vLxc">-</div><div class="label">🧱 LXC</div></div>
-            <div class="stat-card" id="cMoteur"><div class="value" id="vMoteur">-</div><div class="label">🎙️ Moteur</div></div>
-            <div class="stat-card blue"><div class="value" id="vMode">-</div><div class="label">⚙️ Mode</div></div>
-            <div class="stat-card cyan"><div class="value" id="vMemoire">-</div><div class="label">🧠 Mémoire max</div></div>
-            <div class="stat-card purple"><div class="value" id="vDonnees">-</div><div class="label">📁 Données</div></div>
-            <div class="stat-card cyan"><div class="value" id="vVersion">-</div><div class="label">🏷️ Version</div></div>
+        <div class="onglets" role="tablist" aria-label="Sections">
+            <button role="tab" data-tab="etat" aria-selected="true" type="button">État</button>
+            <button role="tab" data-tab="reglages" aria-selected="false" type="button">Réglages</button>
+            <button role="tab" data-tab="cle" aria-selected="false" type="button">Clé d’API</button>
+            <button role="tab" data-tab="essai" aria-selected="false" type="button">Essai</button>
+            <button role="tab" data-tab="journal" aria-selected="false" type="button">Journal</button>
+            <button role="tab" data-tab="sauvegarde" aria-selected="false" type="button">Sauvegarde</button>
         </div>
 
-        <div class="card">
-            <div class="tabs" role="tablist">
-                <button class="tab active" data-tab="etat">📊 État</button>
-                <button class="tab" data-tab="reglages">⚙️ Réglages</button>
-                <button class="tab" data-tab="cle">🔑 Clé d'API</button>
-                <button class="tab" data-tab="essai">🧪 Essai</button>
-                <button class="tab" data-tab="journal">📜 Journal</button>
-                <button class="tab" data-tab="sauvegarde">💾 Sauvegarde</button>
+        <section class="pan" id="tab-etat" role="tabpanel">
+            <h3>État du moteur <i>GET /detail</i></h3>
+            <div class="bout" style="margin:0 0 10px">
+                <button class="btn good" data-action="start" id="bStart" type="button">▶ Démarrer</button>
+                <button class="btn" data-action="restart" id="bRestart" type="button">Redémarrer le moteur</button>
+                <button class="btn danger" data-action="stop" id="bStop" type="button">⏹ Arrêter</button>
+                <button class="btn prim" data-action="installer" id="bInstaller" type="button" hidden>Installer le moteur</button>
             </div>
+            <dl class="kv" id="detailEtat"></dl>
+        </section>
 
-            <section class="tab-content active" id="tab-etat">
-                <div class="btn-group" style="margin-bottom:1rem">
-                    <button class="btn good" data-action="start" id="bStart">▶ Démarrer</button>
-                    <button class="btn" data-action="restart" id="bRestart">🔄 Redémarrer le moteur</button>
-                    <button class="btn danger" data-action="stop" id="bStop">⏹ Arrêter</button>
-                    <button class="btn primary" data-action="installer" id="bInstaller" hidden>🛠 Installer le moteur</button>
-                </div>
-                <div class="rows" id="detailEtat"></div>
-            </section>
-
-            <section class="tab-content" id="tab-reglages">
-                <div class="form-row">
-                    <div class="form-group"><label for="fMode">Mode</label>
-                        <select id="fMode">
-                            <option value="permanent">♾️ Permanent — répond sans délai</option>
-                            <option value="demande">💤 À la demande — dort, se réveille au 1er appel</option>
-                        </select>
-                        <div class="aide">À la demande rend la mémoire quand personne ne parle ; le premier appel attend le démarrage à froid (30 à 60 s).</div></div>
-                    <div class="form-group"><label for="fInact">Inactivité avant sommeil (s)</label><input type="number" id="fInact" min="60" max="86400" step="60">
-                        <div class="aide">Mode « à la demande » seulement.</div></div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group"><label for="fMem">Mémoire maximale du LXC</label><input type="text" id="fMem" placeholder="4G" pattern="[1-9][0-9]{0,4}[GM]">
-                        <div class="aide">Ex. 4G. Appliquée à chaud.</div></div>
-                    <div class="form-group"><label for="fCpu">Poids CPU (1–10000)</label><input type="number" id="fCpu" min="1" max="10000">
-                        <div class="aide">100 = poids par défaut ; plus bas, le moteur cède le pas aux autres services.</div></div>
-                </div>
-                <div class="form-group"><label for="fAsr">Modèle de reconnaissance (faster-whisper)</label>
+        <section class="pan" id="tab-reglages" role="tabpanel" hidden>
+            <h3>Réglages du moteur <i>POST /config</i></h3>
+            <div class="saisie">
+                <div class="champ"><label for="fMode">Mode</label>
+                    <select id="fMode">
+                        <option value="permanent">Permanent — répond sans délai</option>
+                        <option value="demande">À la demande — dort, se réveille au 1er appel</option>
+                    </select>
+                    <span class="note">À la demande rend la mémoire quand personne ne parle ; le premier appel attend le démarrage à froid (30 à 60 s).</span></div>
+                <div class="champ"><label for="fInact">Inactivité avant sommeil (s)</label><input type="number" id="fInact" min="60" max="86400" step="60">
+                    <span class="note">Mode « à la demande » seulement.</span></div>
+                <div class="champ"><label for="fMem">Mémoire maximale du LXC</label><input type="text" id="fMem" placeholder="4G" pattern="[1-9][0-9]{0,4}[GM]">
+                    <span class="note">Ex. 4G. Appliquée à chaud.</span></div>
+                <div class="champ"><label for="fCpu">Poids CPU (1–10000)</label><input type="number" id="fCpu" min="1" max="10000">
+                    <span class="note">100 = poids par défaut ; plus bas, le moteur cède le pas aux autres services.</span></div>
+                <div class="champ"><label for="fAsr">Modèle de reconnaissance (faster-whisper)</label>
                     <select id="fAsr">
                         <option>Systran/faster-whisper-tiny</option><option>Systran/faster-whisper-tiny.en</option>
                         <option>Systran/faster-whisper-base</option><option>Systran/faster-whisper-base.en</option>
                         <option>Systran/faster-whisper-small</option><option>Systran/faster-whisper-small.en</option>
                         <option>Systran/faster-whisper-medium</option><option>Systran/faster-whisper-large-v3</option>
                     </select>
-                    <div class="aide">Un modèle plus grand comprend mieux mais pèse plus (RAM, latence). Le moteur redémarre.</div></div>
-                <button class="btn primary" data-action="appliquer-reglages">✓ Appliquer</button>
+                    <span class="note">Un modèle plus grand comprend mieux mais pèse plus (RAM, latence). Le moteur redémarre.</span></div>
+            </div>
+            <button class="btn prim" data-action="appliquer-reglages" type="button">✓ Appliquer</button>
 
-                <h3 style="margin-top:1.4rem">🌐 Adresses publiées</h3>
-                <div class="form-group"><label for="fPub">Adresses de la box où écoute le port 3900 (une par ligne)</label>
-                    <textarea id="fPub" rows="3" placeholder="192.168.1.9&#10;10.10.0.5"></textarea>
-                    <div class="aide">LAN et maillage seulement, jamais le WAN. Vide : le loopback (127.0.0.1) seulement. Chaque adresse doit être une IPv4 de cette box.</div></div>
-                <button class="btn primary" data-action="publier">🌐 Publier</button>
-            </section>
+            <h3 style="margin-top:16px">Adresses publiées <i>POST /publier</i></h3>
+            <div class="champ"><label for="fPub">Adresses de la box où écoute le port 3900 (une par ligne)</label>
+                <textarea id="fPub" rows="3" placeholder="192.168.1.9&#10;10.10.0.5"></textarea>
+                <span class="note">LAN et maillage seulement, jamais le WAN. Vide : le loopback (127.0.0.1) seulement. Chaque adresse doit être une IPv4 de cette box.</span></div>
+            <div class="bout"><button class="btn prim" data-action="publier" type="button">Publier</button></div>
+        </section>
 
-            <section class="tab-content" id="tab-cle">
-                <div class="rows" id="detailCle"></div>
-                <p class="sub" style="margin:.8rem 0">La clé n'est jamais affichée en entier. Les autres box qui utilisent ce moteur (<code>voice.toml</code>, <code>[distant] cle</code>) en ont une copie.</p>
-                <button class="btn danger" data-action="renouveler">🔄 Renouveler la clé</button>
-            </section>
+        <section class="pan" id="tab-cle" role="tabpanel" hidden>
+            <h3>Clé d’API du moteur <i>GET /cle</i></h3>
+            <dl class="kv" id="detailCle"></dl>
+            <p class="note">La clé n’est jamais affichée en entier. Les autres box qui utilisent ce moteur (<span class="mono">voice.toml</span>, <span class="mono">[distant] cle</span>) en ont une copie.</p>
+            <div class="bout"><button class="btn danger" data-action="renouveler" type="button">Renouveler la clé</button></div>
+            <div id="nouvelleCle" hidden>
+                <h3 style="margin-top:14px">Nouvelle clé d’API</h3>
+                <p class="note" style="margin:0">Elle n’est affichée <b>qu’une fois</b>. L’ancienne clé ne fonctionne plus.</p>
+                <div class="cle" id="cleValeur"></div>
+                <p class="note" style="margin:0">À reporter dans <span class="mono">/etc/secubox/voice.toml</span>, section <span class="mono">[distant] cle</span> de chaque box qui utilise ce moteur (gk2…).</p>
+                <div class="bout"><button class="btn prim" data-action="copier-cle" type="button">Copier</button><button class="btn" data-action="fermer-cle" type="button">J’ai noté la clé</button></div>
+            </div>
+        </section>
 
-            <section class="tab-content" id="tab-essai">
-                <h3>🗣️ Dire un texte</h3>
-                <div class="form-row">
-                    <div class="form-group" style="flex:3"><label for="eTexte">Texte</label><textarea id="eTexte" rows="3" maxlength="2000">Bonjour, ici la voix de votre SecuBox.</textarea></div>
-                    <div class="form-group"><label for="eVoix">Voix</label><select id="eVoix"><option value="">(défaut du moteur)</option></select></div>
-                    <div class="form-group"><label for="eFmt">Format</label><select id="eFmt"><option>mp3</option><option>wav</option><option>opus</option></select></div>
-                </div>
-                <div class="btn-group"><button class="btn primary" data-action="dire">▶ Dire</button><button class="btn" data-action="voix">↻ Voix</button></div>
-                <audio id="eAudio" controls hidden></audio>
+        <section class="pan" id="tab-essai" role="tabpanel" hidden>
+            <h3>Dire un texte <i>POST /essai/dire</i></h3>
+            <div class="saisie">
+                <div class="champ" style="grid-column:1/-1"><label for="eTexte">Texte</label><textarea id="eTexte" rows="3" maxlength="2000">Bonjour, ici la voix de votre SecuBox.</textarea></div>
+                <div class="champ"><label for="eVoix">Voix</label><select id="eVoix"><option value="">(défaut du moteur)</option></select></div>
+                <div class="champ"><label for="eFmt">Format</label><select id="eFmt"><option>mp3</option><option>wav</option><option>opus</option></select></div>
+            </div>
+            <div class="bout"><button class="btn prim" data-action="dire" type="button">▶ Dire</button><button class="btn" data-action="voix" type="button">⟳ Voix</button></div>
+            <audio id="eAudio" controls hidden></audio>
 
-                <h3 style="margin-top:1.4rem">🎤 Transcrire un enregistrement</h3>
-                <div class="form-row">
-                    <div class="form-group" style="flex:3"><label for="eFichier">Fichier audio</label><input type="file" id="eFichier" accept="audio/*"></div>
-                    <div class="form-group"><label for="eLangue">Langue</label><input type="text" id="eLangue" placeholder="fr (vide : détection)" maxlength="8"></div>
-                </div>
-                <button class="btn primary" data-action="transcrire">▶ Transcrire</button>
-                <pre class="journal" id="eResultat" style="margin-top:.7rem" hidden></pre>
-            </section>
+            <h3 style="margin-top:16px">Transcrire un enregistrement <i>POST /essai/transcrire</i></h3>
+            <div class="saisie">
+                <div class="champ"><label for="eFichier">Fichier audio</label><input type="file" id="eFichier" accept="audio/*"></div>
+                <div class="champ"><label for="eLangue">Langue</label><input type="text" id="eLangue" placeholder="fr (vide : détection)" maxlength="8"></div>
+            </div>
+            <div class="bout"><button class="btn prim" data-action="transcrire" type="button">▶ Transcrire</button></div>
+            <pre class="sortie" id="eResultat" hidden></pre>
+        </section>
 
-            <section class="tab-content" id="tab-journal">
-                <div class="btn-group" style="margin-bottom:.7rem">
-                    <button class="btn" data-action="journal">↻ Charger</button>
-                    <select id="jN" class="btn"><option>100</option><option>250</option><option>500</option></select>
-                </div>
-                <pre class="journal" id="jTexte">(non chargé)</pre>
-            </section>
+        <section class="pan" id="tab-journal" role="tabpanel" hidden>
+            <h3>Journal du moteur <i>GET /journal</i></h3>
+            <div class="bout" style="margin:0 0 8px">
+                <button class="btn" data-action="journal" type="button">⟳ Charger</button>
+                <select id="jN" aria-label="Nombre de lignes" style="width:auto"><option>100</option><option>250</option><option>500</option></select>
+            </div>
+            <pre class="sortie" id="jTexte">(non chargé)</pre>
+        </section>
 
-            <section class="tab-content" id="tab-sauvegarde">
-                <p class="sub" style="margin-bottom:.8rem">Archive des données du moteur (voix clonées, historique, base) <b>sans</b> les modèles, qui se retéléchargent. Conservation : les 3 dernières, en 0600 dans <code>/var/backups/secubox/voicestudio/</code>.</p>
-                <div class="rows" id="detailSauv" style="margin-bottom:.8rem"></div>
-                <button class="btn primary" data-action="sauvegarde">💾 Sauvegarder maintenant</button>
-            </section>
-        </div>
-    </main>
-
+        <section class="pan" id="tab-sauvegarde" role="tabpanel" hidden>
+            <h3>Sauvegarde <i>POST /sauvegarde</i></h3>
+            <p class="note" style="margin:0 0 10px">Archive des données du moteur (voix clonées, historique, base) <b>sans</b> les modèles, qui se retéléchargent. Conservation : les 3 dernières, en 0600 dans <span class="mono">/var/backups/secubox/voicestudio/</span>.</p>
+            <dl class="kv" id="detailSauv"></dl>
+            <div class="bout"><button class="btn prim" data-action="sauvegarde" type="button">Sauvegarder maintenant</button></div>
+        </section>
+    </div></div></main>
     <div class="toast" id="toast" role="status"></div>
-    <div class="modal" id="modalCle"><div class="modal-content">
-        <h3>🔑 Nouvelle clé d'API</h3>
-        <p>Elle n'est affichée <b>qu'une fois</b>. L'ancienne clé ne fonctionne plus.</p>
-        <div class="cle" id="cleValeur"></div>
-        <p class="sub">À reporter dans <code>/etc/secubox/voice.toml</code> → <code>[distant] cle</code> de chaque box qui utilise ce moteur (gk2…).</p>
-        <div class="btn-group" style="margin-top:1rem"><button class="btn primary" data-action="copier-cle">📋 Copier</button><button class="btn" data-action="fermer-cle">J'ai noté la clé</button></div>
-    </div></div>
 
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        let ENCADRE = false;
+        try { ENCADRE = window.top !== window.self; } catch (e) { ENCADRE = true; }
+        const EMBED = !!Q.get('embed') || ENCADRE;
+        if (EMBED) document.body.classList.add('emb');
+        else if (!DEMO) { const sc = document.createElement('script'); sc.src = '/shared/sidebar.js'; document.body.appendChild(sc); }   // menu commun
+    </script>
     <script>
     (function () {
         'use strict';
         var API = '/api/v1/voicestudio';
-        var etat = null, timer = null, derniereOperation = null;
+        var etat = null, timer = null, derniereOperation = null, confirmation = null, sessionOk = true;
 
         function $(id) { return document.getElementById(id); }
-        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+        function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
         function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function tiret(v) { return (v === null || v === undefined || v === '') ? '—' : String(v); }
 
         /* Message transitoire (succès, progrès) : ~3 s. Erreur : reste jusqu'à ✕. */
         var tToast = null;
@@ -253,45 +239,60 @@
         }
         function errorToast(m) {
             var t = $('toast'); clearTimeout(tToast); t.className = 'toast error show'; t.textContent = '';
-            var s = document.createElement('span'); s.textContent = '⚠️ ' + m;
-            var b = document.createElement('button'); b.textContent = '✕'; b.setAttribute('aria-label', 'Fermer');
+            var s = el('span', '', '⚠ ' + m);
+            var b = el('button', '', '✕'); b.type = 'button'; b.setAttribute('aria-label', 'Fermer');
             b.addEventListener('click', function () { t.className = 'toast'; });
             t.appendChild(s); t.appendChild(b);
         }
 
+        /* Mêmes routes, méthodes, corps et en-têtes que l'ancienne page ; Accept/no-store seulement sur les lectures JSON. */
         async function api(chemin, opts) {
             opts = opts || {}; var h = opts.headers || {}; var j = jeton();
             if (j) h['Authorization'] = 'Bearer ' + j;
             if (opts.json !== undefined) { h['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
-            var r = await fetch(API + chemin, { method: opts.method || 'GET', headers: h, body: opts.body, credentials: 'same-origin' });
-            if (r.status === 401) { errorToast('🔒 Connexion requise'); throw new Error('401'); }
-            if (r.status === 403) { errorToast('🔒 Réservé aux administrateurs'); throw new Error('403'); }
+            var init = { method: opts.method || 'GET', headers: h, body: opts.body, credentials: 'same-origin' };
+            if (init.method === 'GET') { h['Accept'] = 'application/json'; init.cache = 'no-store'; }
+            var r = await fetch(API + chemin, init);
+            if (r.status === 401) { throw new Error('401'); }
+            if (r.status === 403) { throw new Error('403'); }
             return r;
         }
         async function erreurDe(r) { try { var d = await r.json(); return d.detail || ('HTTP ' + r.status); } catch (e) { return 'HTTP ' + r.status; } }
+        function refus(e) { return e && (e.message === '401' || e.message === '403'); }
+        function signaler(e) { if (e && e.message === '401') errorToast('Connexion requise'); else if (e && e.message === '403') errorToast('Réservé aux administrateurs'); }
 
         /* Double cache : la dernière réponse est réaffichée aussitôt, pendant que la suivante charge. */
         function cacheLire() { try { return JSON.parse(localStorage.getItem('vs_statut') || 'null'); } catch (e) { return null; } }
         function cacheEcrire(v) { try { localStorage.setItem('vs_statut', JSON.stringify(v)); } catch (e) { /* stockage indisponible : sans effet */ } }
 
-        function annoncePanne(quoi, detail) { $('panneQuoi').textContent = quoi; $('panneDetail').textContent = detail || ''; $('panne').hidden = false; }
+        function annoncePanne(quoi, detail) { $('panneQuoi').textContent = quoi; $('panneDetail').textContent = detail || ''; $('panne').hidden = false; annoncer(); }
         function effacePanne() { $('panne').hidden = true; }
 
-        function pastille(carte, classe, texte, id) { $(carte).className = 'stat-card ' + classe; $(id).textContent = texte; }
-        function ligne(k, v, classe) { return '<div class="row ' + (classe || '') + '"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'; }
+        function tuile(carte, classe, texte, id) { $(carte).className = 'tuile ' + classe; $(id).textContent = texte; }
+        function ligne(dl, k, v, classe) { dl.appendChild(el('dt', '', k)); dl.appendChild(el('dd', classe || '', v)); }
+        function pastille(classe, texte) { var p = $('etat'); p.className = 'actif ' + classe; p.textContent = texte; }
+
+        function vider() {
+            etat = null;
+            tuile('cLxc', 'cy', '—', 'vLxc'); tuile('cMoteur', 'cy', '—', 'vMoteur');
+            ['vMode', 'vMemoire', 'vDonnees', 'vVersion'].forEach(function (i) { $(i).textContent = '—'; });
+            $('detailEtat').replaceChildren(); $('detailSauv').replaceChildren(); $('progres').hidden = true;
+            ['bStart', 'bRestart', 'bStop'].forEach(function (b) { $(b).hidden = true; });
+        }
 
         function rendre(s) {
             etat = s;
             var lxc = s.lxc || '?', moteur = !!s.moteur;
-            pastille('cLxc', lxc === 'RUNNING' ? 'green' : (lxc === 'STOPPED' ? 'orange' : 'red'),
-                     lxc === 'RUNNING' ? '🟢 actif' : (lxc === 'STOPPED' ? '💤 endormi' : '🔴 ' + lxc.toLowerCase()), 'vLxc');
-            pastille('cMoteur', moteur ? 'green' : (s.demarrage ? 'orange' : (lxc === 'STOPPED' ? 'orange' : 'red')),
-                     moteur ? '● répond' : (s.demarrage ? '⏳ démarre' : '○ muet'), 'vMoteur');
-            $('vMode').textContent = s.mode === 'demande' ? '💤 demande' : '♾️ permanent';
-            $('vMemoire').textContent = s.memoire || '-';
-            $('vDonnees').textContent = (s.donnees_mo != null ? Math.round(s.donnees_mo) + ' Mo' : '-');
-            $('vVersion').textContent = s.version || '-';
+            tuile('cLxc', lxc === 'RUNNING' ? 'ok' : (lxc === 'STOPPED' ? 'att' : 'hors'),
+                  lxc === 'RUNNING' ? 'actif' : (lxc === 'STOPPED' ? 'endormi' : lxc.toLowerCase()), 'vLxc');
+            tuile('cMoteur', moteur ? 'ok' : (s.demarrage || lxc === 'STOPPED' ? 'att' : 'hors'),
+                  moteur ? 'répond' : (s.demarrage ? 'démarre' : 'muet'), 'vMoteur');
+            $('vMode').textContent = s.mode === 'demande' ? 'à la demande' : (s.mode ? 'permanent' : '—');
+            $('vMemoire').textContent = tiret(s.memoire);
+            $('vDonnees').textContent = (s.donnees_mo != null ? Math.round(s.donnees_mo) + ' Mo' : '—');
+            $('vVersion').textContent = tiret(s.version);
             $('subline').textContent = 'Moteur vocal studio du parc — LXC natif' + (s.commit ? ' · ' + s.commit : '') + (s.source === 'cache' ? ' · état en cache' : '');
+            if (moteur) pastille('', 'MOTEUR EN LIGNE'); else if (s.demarrage || lxc === 'STOPPED') pastille('att', s.demarrage ? 'DÉMARRAGE' : 'ENDORMI'); else pastille('hors', 'MOTEUR MUET');
 
             var op = s.operation || {}, prov = s.provisionnement === 'activating' || s.provisionnement === 'active';
             var enCours = op.etat === 'en-cours' || prov;
@@ -307,60 +308,88 @@
             $('bInstaller').hidden = !!s.installed;
             $('bStart').hidden = !s.installed; $('bRestart').hidden = !s.installed; $('bStop').hidden = !s.installed;
 
-            var d = '';
-            d += ligne('Installé', s.installed ? 'oui' : (prov ? 'installation en cours…' : 'non — « Installer le moteur »'), s.installed ? 'ok' : 'warn');
-            d += ligne('Conteneur', lxc + ' (' + (s.ip || '?') + ':' + (s.port || 3900) + ')', lxc === 'RUNNING' ? 'ok' : 'warn');
-            d += ligne('Moteur (/health)', moteur ? 'répond' : (s.demarrage ? 'démarre (HTTP 503)' : 'ne répond pas'), moteur ? 'ok' : (s.demarrage ? 'warn' : 'bad'));
-            d += ligne('Mandataire du port 3900', s.mandataire || '?', s.mandataire === 'active' ? 'ok' : 'warn');
-            d += ligne('Publié sur', (s.publier && s.publier.length ? s.publier.join(', ') + ', ' : '') + '127.0.0.1');
-            d += ligne('Mode', s.mode === 'demande' ? 'à la demande (sommeil après ' + (s.inactivite_s || '?') + ' s)' : 'permanent');
+            var d = $('detailEtat'); d.replaceChildren();
+            ligne(d, 'Installé', s.installed ? 'oui' : (prov ? 'installation en cours…' : 'non — « Installer le moteur »'), s.installed ? 'ok' : 'warn');
+            ligne(d, 'Conteneur', lxc + ' (' + (s.ip || '?') + ':' + (s.port || 3900) + ')', lxc === 'RUNNING' ? 'ok' : 'warn');
+            ligne(d, 'Moteur (/health)', moteur ? 'répond' : (s.demarrage ? 'démarre (HTTP 503)' : 'ne répond pas'), moteur ? 'ok' : (s.demarrage ? 'warn' : 'bad'));
+            ligne(d, 'Mandataire du port 3900', s.mandataire || '?', s.mandataire === 'active' ? 'ok' : 'warn');
+            ligne(d, 'Publié sur', (s.publier && s.publier.length ? s.publier.join(', ') + ', ' : '') + '127.0.0.1');
+            ligne(d, 'Mode', s.mode === 'demande' ? 'à la demande (sommeil après ' + (s.inactivite_s || '?') + ' s)' : 'permanent');
             var mh = s.memoire_hote || {}, go = function (mo) { return (mo / 1024).toFixed(1).replace('.', ',') + ' Go'; };
             if (mh.disponible_mo != null) {
                 var assez = (mh.effective_mo != null ? mh.effective_mo : mh.disponible_mo) >= 3800 || (mh.moteur_mo || 0) >= 2500;
-                d += ligne('Mémoire de la box', go(mh.disponible_mo) + ' disponibles · swap disque libre ' + go(mh.swap_disque_mo || 0) + ' · moteur ' + go(mh.moteur_mo || 0),
-                           assez ? 'ok' : 'warn');
-                d += ligne('Synthèse vocale', assez ? 'mémoire suffisante' : 'il faut ≈ 3,7 Go libres : les autres conteneurs endormables seront mis en sommeil à la demande',
-                           assez ? 'ok' : 'warn');
+                ligne(d, 'Mémoire de la box', go(mh.disponible_mo) + ' disponibles · swap disque libre ' + go(mh.swap_disque_mo || 0) + ' · moteur ' + go(mh.moteur_mo || 0),
+                      assez ? 'ok' : 'warn');
+                ligne(d, 'Synthèse vocale', assez ? 'mémoire suffisante' : 'il faut ≈ 3,7 Go libres : les autres conteneurs endormables seront mis en sommeil à la demande',
+                      assez ? 'ok' : 'warn');
             }
-            d += ligne('Reconnaissance', s.asr || '?'); d += ligne('Poids CPU', s.cpu_poids);
-            d += ligne('Version amont', (s.version || '?') + ' · commit ' + (s.commit || '?'));
-            $('detailEtat').innerHTML = d;
+            ligne(d, 'Reconnaissance', tiret(s.asr)); ligne(d, 'Poids CPU', tiret(s.cpu_poids));
+            ligne(d, 'Version amont', (s.version || '?') + ' · commit ' + (s.commit || '?'));
 
             /* Les champs ne sont réécrits que s'ils n'ont pas le focus : on ne vole pas une saisie en cours. */
             var champs = {fMode: s.mode, fInact: s.inactivite_s, fMem: s.memoire, fCpu: s.cpu_poids, fAsr: s.asr, fPub: (s.publier || []).join('\n')};
             Object.keys(champs).forEach(function (id) {
                 var e = $(id); if (document.activeElement !== e && champs[id] != null && e.dataset.sale !== '1') e.value = champs[id];
             });
-            $('detailSauv').innerHTML = ligne('Dernière archive', s.sauvegarde || 'aucune', s.sauvegarde ? 'ok' : 'warn');
+            var sv = $('detailSauv'); sv.replaceChildren();
+            ligne(sv, 'Dernière archive', s.sauvegarde || 'aucune', s.sauvegarde ? 'ok' : 'warn');
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function demoDonnees() {
+            return { module: 'voicestudio', version: '0.6.0', installed: true, running: true, lxc: 'RUNNING', moteur: true, ip: '192.0.2.40', port: 3900,
+                     mandataire: 'active', publier: ['192.0.2.10'], mode: 'demande', inactivite_s: 900, memoire: '4G', cpu_poids: 100,
+                     asr: 'Systran/faster-whisper-small', donnees_mo: 1843, commit: 'a1b2c3d', sauvegarde: 'voicestudio-demo.tar.gz',
+                     memoire_hote: { disponible_mo: 5200, effective_mo: 5200, swap_disque_mo: 2048, moteur_mo: 3100 }, operation: { etat: 'inactif' } };
+        }
+
+        function planifier(ms) { clearTimeout(timer); timer = setTimeout(tic, ms); }
+        /* Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte. */
+        function tic() {
+            var saisie = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+            if (document.hidden || confirmation || saisie) { planifier(5000); return; }
+            rafraichir();
         }
 
         async function rafraichir() {
+            if (DEMO) { sessionOk = true; $('session').hidden = true; effacePanne(); rendre(demoDonnees()); return; }
             try {
                 var r = await api('/detail');
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 var s = await r.json();
-                if (s.error) { annoncePanne('Module indisponible', ' — ' + s.error + '. Rien n\'est affiché de faux.'); return; }
+                sessionOk = true; $('session').hidden = true;
+                if (s.error) { annoncePanne('Module indisponible', ' — ' + s.error + '. Rien n\'est affiché de faux.'); pastille('hors', 'INDISPONIBLE'); planifier(15000); return; }
                 effacePanne(); cacheEcrire(s); rendre(s);
-                clearTimeout(timer); timer = setTimeout(rafraichir, (s.operation && s.operation.etat === 'en-cours') ? 4000 : 15000);
+                planifier((s.operation && s.operation.etat === 'en-cours') ? 4000 : 15000);
             } catch (e) {
                 /* 401/403 : l'API répond, c'est la SESSION qui manque — ne pas dire « injoignable ». */
-                if (e.message === '401') annoncePanne('Connexion requise', ' — ouvrez une session administrateur pour piloter VoiceStudio.');
-                else if (e.message === '403') annoncePanne('Réservé aux administrateurs', ' — cette page pilote le moteur et sa clé.');
-                else annoncePanne('API VoiceStudio injoignable', ' — les valeurs affichées sont les dernières connues, pas des mesures.');
-                clearTimeout(timer); timer = setTimeout(rafraichir, e.message === '401' || e.message === '403' ? 60000 : 30000);
+                if (e.message === '401') { sessionOk = false; vider(); $('session').hidden = false; pastille('neutre', 'SESSION REQUISE'); annoncePanne('Connexion requise', ' — ouvrez une session administrateur pour piloter VoiceStudio.'); }
+                else if (e.message === '403') { vider(); pastille('neutre', 'RÉSERVÉ'); annoncePanne('Réservé aux administrateurs', ' — cette page pilote le moteur et sa clé.'); }
+                else { pastille('hors', 'HORS LIGNE'); annoncePanne('API VoiceStudio injoignable', ' — les valeurs affichées sont les dernières connues, pas des mesures.'); }
+                planifier(refus(e) ? 60000 : 30000);
             }
         }
 
+        /* Écriture : inerte en démonstration. */
         async function action(chemin, titre, corps) {
+            if (DEMO) { toast('Démonstration : action inerte'); return null; }
             try {
                 var r = await api(chemin, { method: 'POST', json: corps });
                 if (r.status === 202) { toast('⏳ ' + titre + '…'); rafraichir(); return null; }
                 if (!r.ok) { errorToast(titre + ' : ' + await erreurDe(r)); return null; }
                 return await r.json();
-            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast(titre + ' : ' + e.message); return null; }
+            } catch (e) { if (refus(e)) signaler(e); else errorToast(titre + ' : ' + e.message); return null; }
         }
 
-        async function appliquerReglages() {
+        /* Confirmation intégrée à la page (jamais de dialogue natif). */
+        function demander(texte, suite) {
+            confirmation = suite; $('confirmTexte').textContent = texte; $('confirm').hidden = false; annoncer();
+            $('confirmOui').focus();
+        }
+        function fermerConfirmation() { confirmation = null; $('confirm').hidden = true; annoncer(); }
+
+        function appliquerReglages() {
             if (!etat) return;
             var v = {}, n = function (x) { return parseInt(x, 10); };
             if ($('fMode').value !== etat.mode) v.mode = $('fMode').value;
@@ -369,101 +398,119 @@
             if (n($('fCpu').value) !== etat.cpu_poids && $('fCpu').value) v.cpu_poids = n($('fCpu').value);
             if ($('fAsr').value !== etat.asr) v.asr = $('fAsr').value;
             if (!Object.keys(v).length) { toast('Rien à changer'); return; }
-            if (v.asr && !confirm('Changer le modèle de reconnaissance redémarre le moteur (quelques secondes sans service). Continuer ?')) return;
-            if (v.mode && !confirm('Changer de mode relance le mandataire du port 3900 (les connexions en cours sont coupées). Continuer ?')) return;
-            toast('⏳ Application…');
-            var r = await action('/config', 'Réglages', v);
-            if (r && r.ok) { ['fMode', 'fInact', 'fMem', 'fCpu', 'fAsr'].forEach(function (id) { $(id).dataset.sale = ''; }); toast('✓ Réglages appliqués'); rafraichir(); }
+            var avert = [];
+            if (v.asr) avert.push('Changer le modèle de reconnaissance redémarre le moteur (quelques secondes sans service).');
+            if (v.mode) avert.push('Changer de mode relance le mandataire du port 3900 (les connexions en cours sont coupées).');
+            var aller = async function () {
+                toast('⏳ Application…');
+                var r = await action('/config', 'Réglages', v);
+                if (r && r.ok) { ['fMode', 'fInact', 'fMem', 'fCpu', 'fAsr'].forEach(function (id) { $(id).dataset.sale = ''; }); toast('✓ Réglages appliqués'); rafraichir(); }
+            };
+            if (avert.length) demander(avert.join(' ') + ' Continuer ?', aller); else aller();
         }
 
-        async function publier() {
+        function publier() {
             var liste = $('fPub').value.split(/\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
             for (var i = 0; i < liste.length; i++) if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(liste[i])) { errorToast('Adresse invalide : ' + liste[i]); return; }
             var coupe = etat && etat.publier && etat.publier.some(function (a) { return liste.indexOf(a) < 0; });
-            if (coupe && !confirm('Une adresse actuellement publiée sera retirée : les box qui joignent le moteur par elle (gk2 → maillage) perdront le moteur. Continuer ?')) return;
-            var r = await action('/publier', 'Publication', { adresses: liste });
-            if (r && r.ok) { $('fPub').dataset.sale = ''; toast('✓ Publié sur : ' + (liste.join(', ') || '127.0.0.1')); rafraichir(); }
+            var aller = async function () {
+                var r = await action('/publier', 'Publication', { adresses: liste });
+                if (r && r.ok) { $('fPub').dataset.sale = ''; toast('✓ Publié sur : ' + (liste.join(', ') || '127.0.0.1')); rafraichir(); }
+            };
+            if (coupe) demander('Une adresse actuellement publiée sera retirée : les box qui joignent le moteur par elle (gk2 → maillage) perdront le moteur. Continuer ?', aller); else aller();
         }
 
         async function chargerCle() {
+            var dl = $('detailCle');
+            if (DEMO) { dl.replaceChildren(); ligne(dl, 'Clé du moteur', 'sk-dém…f3a9', 'ok'); return; }
             try {
                 var r = await api('/cle'); if (!r.ok) return;
                 var d = await r.json();
-                $('detailCle').innerHTML = ligne('Clé du moteur', d.presente ? d.apercu : 'absente', d.presente ? 'ok' : 'warn');
+                dl.replaceChildren(); ligne(dl, 'Clé du moteur', d.presente ? tiret(d.apercu) : 'absente', d.presente ? 'ok' : 'warn');
             } catch (e) { /* 401/403 déjà annoncés */ }
         }
 
-        async function renouveler() {
-            if (!confirm('Renouveler la clé ? L\'ancienne cesse de fonctionner immédiatement : les box qui utilisent ce moteur devront recevoir la nouvelle.')) return;
-            var r = await action('/cle/renouveler', 'Renouvellement de la clé');
-            if (r && r.cle) { $('cleValeur').textContent = r.cle; $('modalCle').classList.add('show'); chargerCle(); }
+        function renouveler() {
+            demander('Renouveler la clé ? L\'ancienne cesse de fonctionner immédiatement : les box qui utilisent ce moteur devront recevoir la nouvelle.', async function () {
+                var r = await action('/cle/renouveler', 'Renouvellement de la clé');
+                if (r && r.cle) { $('cleValeur').textContent = r.cle; $('nouvelleCle').hidden = false; chargerCle(); annoncer(); }
+            });
         }
 
         async function voix() {
+            if (DEMO) { remplirVoix([{ id: 'rapide', nom: 'Rapide — français (démo)', langue: 'fr' }, { id: 'v2', nom: 'Voix fictive', langue: 'fr' }]); return; }
             try {
                 var r = await api('/voix');
                 if (!r.ok) { errorToast('Voix : ' + await erreurDe(r)); return; }
-                var d = await r.json(), s = $('eVoix'), cur = s.value;
-                s.innerHTML = '<option value="">(défaut du moteur)</option>' + (d.voix || []).map(function (x) {
-                    return '<option value="' + esc(x.id) + '">' + esc(x.nom + (x.langue ? ' (' + x.langue + ')' : '')) + '</option>'; }).join('');
-                s.value = cur; toast('✓ ' + (d.voix || []).length + ' voix');
-            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Voix : ' + e.message); }
+                var d = await r.json(); remplirVoix(d.voix || []);
+            } catch (e) { if (refus(e)) signaler(e); else errorToast('Voix : ' + e.message); }
+        }
+        function remplirVoix(liste) {
+            var s = $('eVoix'), cur = s.value; s.replaceChildren();
+            var o0 = el('option', '', '(défaut du moteur)'); o0.value = ''; s.appendChild(o0);
+            liste.forEach(function (x) { var o = el('option', '', x.nom + (x.langue ? ' (' + x.langue + ')' : '')); o.value = x.id; s.appendChild(o); });
+            s.value = cur; toast('✓ ' + liste.length + ' voix');
         }
 
         async function dire() {
             var texte = $('eTexte').value.trim(); if (!texte) { errorToast('Texte vide'); return; }
+            if (DEMO) { toast('Démonstration : action inerte'); return; }
             toast('⏳ Synthèse…');
             try {
                 var r = await api('/essai/dire', { method: 'POST', json: { texte: texte, voix: $('eVoix').value, format: $('eFmt').value } });
                 if (!r.ok) { errorToast('Synthèse : ' + await erreurDe(r)); return; }
                 var blob = await r.blob(), a = $('eAudio');
                 if (a.dataset.url) URL.revokeObjectURL(a.dataset.url);
-                a.dataset.url = URL.createObjectURL(blob); a.src = a.dataset.url; a.hidden = false; a.play().catch(function () {});
-            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Synthèse : ' + e.message); }
+                a.dataset.url = URL.createObjectURL(blob); a.src = a.dataset.url; a.hidden = false; a.play().catch(function () {}); annoncer();
+            } catch (e) { if (refus(e)) signaler(e); else errorToast('Synthèse : ' + e.message); }
         }
 
         async function transcrire() {
             var f = $('eFichier').files[0]; if (!f) { errorToast('Choisissez un fichier audio'); return; }
+            if (DEMO) { toast('Démonstration : action inerte'); return; }
             var fd = new FormData(); fd.append('fichier', f); fd.append('langue', $('eLangue').value.trim());
             toast('⏳ Transcription…');
             try {
                 var r = await api('/essai/transcrire', { method: 'POST', body: fd });
                 if (!r.ok) { errorToast('Transcription : ' + await erreurDe(r)); return; }
-                var d = await r.json(), z = $('eResultat'); z.hidden = false; z.textContent = d.vide ? '(aucune parole détectée)' : d.texte;
-            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Transcription : ' + e.message); }
+                var d = await r.json(), z = $('eResultat'); z.hidden = false; z.textContent = d.vide ? '(aucune parole détectée)' : d.texte; annoncer();
+            } catch (e) { if (refus(e)) signaler(e); else errorToast('Transcription : ' + e.message); }
         }
 
         async function journal() {
+            if (DEMO) { $('jTexte').textContent = '2026-10-14 08:00:01 moteur prêt\n2026-10-14 08:02:17 synthèse 1,2 s (données de démonstration)'; annoncer(); return; }
             try {
                 var r = await api('/journal?n=' + encodeURIComponent($('jN').value));
                 if (!r.ok) { errorToast('Journal : ' + await erreurDe(r)); return; }
                 var d = await r.json(); $('jTexte').textContent = (d.lignes && d.lignes.length) ? d.lignes.join('\n') : '(journal vide — le LXC est-il arrêté ?)';
-                $('jTexte').scrollTop = $('jTexte').scrollHeight;
-            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Journal : ' + e.message); }
+                $('jTexte').scrollTop = $('jTexte').scrollHeight; annoncer();
+            } catch (e) { if (refus(e)) signaler(e); else errorToast('Journal : ' + e.message); }
         }
 
         async function sauvegarde() {
+            if (DEMO) { toast('Démonstration : action inerte'); return; }
             toast('⏳ Archive en cours…');
             var r = await action('/sauvegarde', 'Sauvegarde');
             if (r && r.ok) { toast('✓ ' + r.fichier); rafraichir(); }
         }
 
         function onglet(nom) {
-            document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === nom); });
-            document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.toggle('active', c.id === 'tab-' + nom); });
+            document.querySelectorAll('[data-tab]').forEach(function (t) { t.setAttribute('aria-selected', t.dataset.tab === nom ? 'true' : 'false'); });
+            document.querySelectorAll('[role=tabpanel]').forEach(function (c) { c.hidden = c.id !== 'tab-' + nom; });
             if (nom === 'cle') chargerCle();
             if (nom === 'essai' && $('eVoix').options.length < 2) voix();
+            annoncer();
         }
 
         var ACTIONS = {
             'rafraichir': rafraichir,
             'start': function () { action('/start', 'Démarrage'); },
-            'stop': function () { if (confirm('Arrêter le moteur ? Lexie et les box qui l\'utilisent perdent la voix « studio » (repli local pour les box en mode mixte).')) action('/stop', 'Arrêt'); },
-            'restart': function () { if (confirm('Redémarrer le moteur (quelques secondes sans service) ?')) action('/restart', 'Redémarrage'); },
-            'installer': function () { if (confirm('Installer le moteur dans le LXC ? 10 à 25 minutes, réseau nécessaire. Si un ancien moteur podman tourne, il continue de servir jusqu\'à la bascule.')) action('/installer', 'Installation'); },
+            'stop': function () { demander('Arrêter le moteur ? Lexie et les box qui l\'utilisent perdent la voix « studio » (repli local pour les box en mode mixte).', function () { action('/stop', 'Arrêt'); }); },
+            'restart': function () { demander('Redémarrer le moteur (quelques secondes sans service) ?', function () { action('/restart', 'Redémarrage'); }); },
+            'installer': function () { demander('Installer le moteur dans le LXC ? 10 à 25 minutes, réseau nécessaire. Si un ancien moteur podman tourne, il continue de servir jusqu\'à la bascule.', function () { action('/installer', 'Installation'); }); },
             'appliquer-reglages': appliquerReglages, 'publier': publier, 'renouveler': renouveler,
             'dire': dire, 'voix': voix, 'transcrire': transcrire, 'journal': journal, 'sauvegarde': sauvegarde,
-            'fermer-cle': function () { $('modalCle').classList.remove('show'); $('cleValeur').textContent = ''; },
+            'fermer-cle': function () { $('nouvelleCle').hidden = true; $('cleValeur').textContent = ''; annoncer(); },
             'copier-cle': function () {
                 var v = $('cleValeur').textContent;
                 (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () { toast('✓ Copiée'); },
@@ -475,10 +522,21 @@
             if (el.dataset.tab) { onglet(el.dataset.tab); return; }
             var f = ACTIONS[el.dataset.action]; if (f) f();
         });
-        $('modalCle').addEventListener('click', function (ev) { if (ev.target === $('modalCle')) ACTIONS['fermer-cle'](); });
+        $('rafraichir').addEventListener('click', rafraichir);
+        $('confirmOui').addEventListener('click', function () { var f = confirmation; fermerConfirmation(); if (f) f(); });
+        $('confirmNon').addEventListener('click', fermerConfirmation);
         ['fMode', 'fInact', 'fMem', 'fCpu', 'fAsr', 'fPub'].forEach(function (id) { $(id).addEventListener('input', function () { $(id).dataset.sale = '1'; }); });
 
-        var c = cacheLire(); if (c) rendre(c);
+        /* Hauteur annoncée à l'hôte (iframes) : la mesure est celle du cadre, jamais du document. */
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'voicestudio' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        $('demo').hidden = !DEMO;
+        if (DEMO) { $('subline').textContent = 'Moteur vocal studio du parc — démonstration'; }
+        else { var c = cacheLire(); if (c) rendre(c); }
         rafraichir();
     })();
     </script>

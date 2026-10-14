@@ -164,9 +164,9 @@ def test_les_pages_respectent_la_charte(page):
     h = lire(f"www/voicestudio/{page}")
     assert h.lstrip().startswith("<!DOCTYPE html>") and "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in h
     assert "onclick" not in h.lower()                                      # actions par data-* et un écouteur délégué
-    assert "sbx_token" in h and "function esc(" in h or page == "usager.html"
+    assert "sbx_token" in h and "innerHTML" not in h                       # jamais de données injectées en HTML (Aurora, #2648)
     assert "errorToast" in h and "'✕'" in h                                # erreurs persistantes, fermables
-    assert "Courier Prime" in h and "#00d4ff" in h
+    assert "IBM Plex Sans" in h and "#29b6f6" in h and "hybrid-skin" not in h      # profil Aurora (#2648)
     assert "verify=False" not in h and "eval(" not in h
     assert "@media" in h or "max-width" in h                               # adaptatif
 
@@ -174,7 +174,7 @@ def test_les_pages_respectent_la_charte(page):
 def test_la_page_d_administration_est_dans_le_chassis_et_masque_sa_coquille_encadree():
     h = lire("www/voicestudio/index.html")
     assert '<nav class="sidebar" id="sidebar"></nav>' in h and "/shared/sidebar.js" in h
-    assert "window.top !== window.self" in h and "sbx-embed" in h
+    assert "window.top !== window.self" in h and "classList.add('emb')" in h
 
 
 def test_la_page_d_usager_est_autonome_et_ne_porte_aucune_action_d_administration():
