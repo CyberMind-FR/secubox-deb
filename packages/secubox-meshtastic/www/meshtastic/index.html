@@ -1,728 +1,578 @@
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-<!-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
-<!-- Source-Disclosed License — All rights reserved except as expressly granted. -->
-<!-- See LICENCE-CMSD-1.0.md for terms. -->
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Meshtastic au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Jamais de clé de canal ni de code d'appairage affiché.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox — Meshtastic</title>
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-            --cyan: #00d4ff;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', 'Courier New', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', 'Courier New', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,0.18); }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.25rem; text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.red .value { color: var(--red); }
-        .stat-card.blue .value { color: var(--blue); }
-        .stat-card.purple .value { color: var(--purple); }
-        .stat-card.orange .value { color: var(--orange); }
-        .stat-card.dim .value { color: var(--p31-dim); }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h3 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
-        .card h3 .note { font-size: 0.62rem; color: var(--p31-dim); text-transform: none; font-weight: normal; letter-spacing: 0; }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.2rem; }
-        .tab { padding: 0.45rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; transition: all 0.2s; }
-        .tab:hover { color: var(--cyan); }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .banner { border-radius: 6px; padding: 0.7rem 0.9rem; font-size: 0.75rem; margin-bottom: 1rem; border: 1px dashed var(--border); }
-        .banner.warn { border-color: var(--orange); color: var(--orange); background: rgba(255,153,68,0.08); }
-        .banner.bad { border-color: var(--red); color: var(--red); background: rgba(255,68,102,0.08); }
-        .banner.ok { border-color: var(--green); color: var(--green); background: rgba(0,221,68,0.08); }
-
-        .agg-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
-        .agg-table th { text-align: left; color: var(--p31-dim); text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.06em; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); }
-        .agg-table td { padding: 0.3rem 0.4rem; border-bottom: 1px solid rgba(100,150,200,0.08); }
-        .agg-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-
-        select { padding: 0.4rem 0.6rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', 'Courier New', monospace; font-size: 0.75rem; color: var(--text); }
-        select:focus { outline: none; border-color: var(--cyan); }
-        input[type=text], input[type=number], textarea { padding: 0.4rem 0.6rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', 'Courier New', monospace; font-size: 0.78rem; color: var(--text); }
-        input:focus, textarea:focus { outline: none; border-color: var(--cyan); }
-
-        .row-list { display: flex; flex-direction: column; gap: 0.28rem; }
-        .node-row { display: grid; grid-template-columns: 1.6em 1fr auto auto auto auto auto; align-items: center; gap: 0.55rem; padding: 0.45rem 0.6rem; background: var(--bg-row); border-radius: 4px; font-size: 0.73rem; border-left: 3px solid var(--border); }
-        .node-row .glyph { text-align: center; }
-        .node-row .id { color: var(--cyan); font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .node-row .meta { font-size: 0.62rem; color: var(--p31-dim); white-space: nowrap; }
-        .node-row .num { font-size: 0.68rem; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .empty-note { padding: 1rem; text-align: center; color: var(--p31-dim); font-size: 0.75rem; }
-
-        .map-wrap { position: relative; background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-        #nodeMap { width: 100%; height: 320px; display: block; }
-        .map-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.65rem; color: var(--p31-dim); align-items: center; }
-        .map-legend .dot { display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%; margin-right: 0.3em; vertical-align: middle; }
-
-        .channel-card { background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; padding: 0.7rem 0.9rem; margin-bottom: 0.6rem; }
-        .channel-card .name { color: var(--cyan); font-weight: bold; font-size: 0.8rem; }
-        .grid-toggle-set { display: flex; gap: 0.4rem; margin-top: 0.5rem; align-items: center; flex-wrap: wrap; }
-        .grid-toggle { padding: 0.25rem 0.65rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.65rem; text-transform: uppercase; cursor: pointer; color: var(--p31-dim); background: transparent; letter-spacing: 0.04em; }
-        .grid-toggle.selected.off { color: var(--p31-dim); border-color: var(--p31-dim); background: rgba(107,123,139,0.15); }
-        .grid-toggle.selected.shared { color: var(--blue); border-color: var(--blue); background: rgba(68,136,255,0.15); }
-        .grid-toggle.selected.on { color: var(--green); border-color: var(--green); background: rgba(0,221,68,0.15); }
-
-        .msg-panel { display: flex; gap: 1rem; flex-wrap: wrap; }
-        .msg-channels { min-width: 160px; display: flex; flex-direction: column; gap: 0.25rem; }
-        .msg-chan-btn { text-align: left; padding: 0.35rem 0.55rem; border-radius: 4px; background: var(--bg-row); border: 1px solid var(--border); color: var(--text); font-size: 0.72rem; cursor: pointer; }
-        .msg-chan-btn.active { border-color: var(--cyan); color: var(--cyan); }
-        .msg-body { flex: 1; min-width: 260px; }
-        .msg-list { display: flex; flex-direction: column; gap: 0.35rem; max-height: 320px; overflow-y: auto; margin-bottom: 0.75rem; }
-        .msg-item { background: var(--bg-row); border-radius: 4px; padding: 0.4rem 0.6rem; font-size: 0.73rem; border-left: 3px solid var(--border); }
-        .msg-item .from { color: var(--cyan); font-weight: bold; margin-right: 0.4em; }
-        .msg-item .ts { float: right; color: var(--p31-dim); font-size: 0.62rem; }
-        .send-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-        .send-form input[type=number] { width: 5em; }
-        .send-form input[type=text] { flex: 1; min-width: 180px; }
-
-        .bar-row { display: grid; grid-template-columns: 5em 1fr 4em; gap: 0.6rem; align-items: center; margin-bottom: 0.4rem; font-size: 0.7rem; }
-        .bar-track { background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 0.9rem; }
-        .bar-fill { background: var(--cyan); height: 100%; }
-        .bar-count { text-align: right; color: var(--p31-dim); font-variant-numeric: tabular-nums; }
-
-        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 360px; }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
-        .toast .close { float: right; margin-left: 0.6rem; cursor: pointer; font-weight: bold; }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            .node-row { grid-template-columns: 1.4em 1fr auto; }
-            .node-row .meta, .node-row .num { display: none; }
-            .msg-panel { flex-direction: column; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .carte{width:100%;height:auto;display:block;max-height:460px}
+        .carte text{fill:var(--texte);font-size:12px;paint-order:stroke;stroke:#0a162e;stroke-width:4px;stroke-linejoin:round} .carte .sub{fill:var(--faible);font-size:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .conf{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.1);font-size:.8rem}
+        .conf span{min-width:0;overflow-wrap:anywhere;flex:1 1 240px}
+        .envoi{display:grid;grid-template-columns:90px 1fr auto;gap:8px;align-items:end;margin-top:10px}
+        .envoi label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .envoi input,.sel select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        .envoi input:focus,.sel select:focus{outline:none;border-color:var(--cyan)}
+        @media (max-width:560px){.envoi{grid-template-columns:1fr}}
+        .msgs{display:grid;grid-template-columns:150px 1fr;gap:10px}
+        @media (max-width:640px){.msgs{grid-template-columns:1fr}}
+        .liste-can{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+        @media (min-width:641px){.liste-can{flex-direction:column;flex-wrap:nowrap}}
+        .liste-can button[aria-pressed=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .fil{max-height:320px;overflow:auto;display:grid;gap:6px;align-content:start}
+        .msg{border:1px solid var(--trait);border-radius:10px;padding:6px 10px;background:rgba(8,18,38,.6);font-size:.8rem;overflow-wrap:anywhere}
+        .msg small{display:block;color:var(--faible);font-size:.68rem}
+        .canal{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 0;border-top:1px solid rgba(86,150,255,.12)}
+        .canal:first-of-type{border-top:0}
+        .canal b{min-width:110px;overflow-wrap:anywhere}
+        .bascule{display:inline-flex;gap:5px;flex-wrap:wrap}
+        .bascule button[aria-pressed=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .ligne-barre{display:grid;grid-template-columns:70px 1fr 120px;gap:8px;align-items:center;font-size:.78rem;margin:5px 0}
+        .barre{height:8px;border-radius:4px;background:rgba(159,179,214,.16);overflow:hidden;position:relative}
+        .barre i{position:absolute;left:0;top:0;bottom:0;background:var(--cyan);border-radius:4px}
+        .barre i.d{background:var(--vert)}
+        .ligne-barre span:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--doux)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .carte{width:100%;min-width:480px;height:auto;display:block;max-height:340px}
+        .carte text{fill:var(--texte);font-size:11px;paint-order:stroke;stroke:#0a162e;stroke-width:3px;stroke-linejoin:round} .carte .sub{fill:var(--faible);font-size:10px}
+        .legende{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.7rem;color:var(--doux);margin-top:6px}
+        .legende b{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div>
-                <h1>📡 Meshtastic</h1>
-                <div class="sub" id="subline">Loading…</div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12v8"/><circle cx="12" cy="10" r="2"/><path d="M7.8 5.8a6 6 0 0 0 0 8.4M16.2 5.8a6 6 0 0 1 0 8.4M4.9 3a10 10 0 0 0 0 14M19.1 3a10 10 0 0 1 0 14"/></svg>
+                <div><h1>Meshtastic</h1><small>Maillage radio LoRa, multi-grilles</small></div>
             </div>
-            <div class="btn-group">
-                <button class="btn" id="refreshBtn">↻ Refresh</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="info" id="radioAbs" hidden style="border-color:var(--orange);background:rgba(255,159,28,.1)">Radio absente : aucun module Meshtastic détecté. Les valeurs ci-dessous sont le dernier état connu en cache.</div>
 
-        <div id="authBanner" class="banner bad" style="display:none">🔒 Not authenticated — log in to view the Meshtastic panel.</div>
-        <div id="radioBanner" class="banner warn" style="display:none">📴 Radio absent — no Meshtastic device detected. Values below reflect the last known/cached state.</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cRadio" title="Présence du module radio Meshtastic, d’après le démon (état en cache)."><span class="l">Radio</span><span class="v" id="tRadio">—</span><span class="s">module LoRa</span></div>
+            <div class="tuile cy" title="Mode de fonctionnement du démon : nœud actif (pont MQTT), écoute passive, ou les deux."><span class="l">Mode</span><span class="v" id="tMode" style="font-size:1.05rem">—</span><span class="s">démon</span></div>
+            <div class="tuile ok" title="Nœuds connus du maillage (base du module + paquets entendus)."><span class="l">Nœuds</span><span class="v" id="tNoeuds">—</span><span class="s" id="sNoeuds">connus</span></div>
+            <div class="tuile cy" title="Canaux configurés dans le fichier de configuration du paquet (chacun a sa politique de grille)."><span class="l">Canaux</span><span class="v" id="tCanaux">—</span><span class="s">configurés</span></div>
+            <div class="tuile cy" title="Messages texte gardés en mémoire du démon depuis son démarrage, tous canaux confondus."><span class="l">Messages</span><span class="v" id="tMsgs">—</span><span class="s">depuis le démarrage</span></div>
+            <div class="tuile" title="Nœuds distincts entendus par l’écoute passive (recensement)."><span class="l">Entendus</span><span class="v" id="tEntendus">—</span><span class="s">écoute passive</span></div>
+        </section>
 
-        <div class="grid" id="statGrid">
-            <div class="stat-card cyan"><div class="value" id="sRadio">–</div><div class="label">📻 Radio</div></div>
-            <div class="stat-card blue"><div class="value" id="sMode">–</div><div class="label">🎛 Mode</div></div>
-            <div class="stat-card green"><div class="value" id="sNodes">–</div><div class="label">🛰 Nodes</div></div>
-            <div class="stat-card purple"><div class="value" id="sChannels">–</div><div class="label">📶 Channels</div></div>
-            <div class="stat-card orange"><div class="value" id="sMessages">–</div><div class="label">💬 Messages</div></div>
-            <div class="stat-card dim"><div class="value" id="sCensus">–</div><div class="label">👂 Heard (sniffer)</div></div>
+        <div class="onglets" role="tablist" aria-label="Sections Meshtastic">
+            <button type="button" role="tab" id="o-noeuds" data-t="noeuds" aria-selected="true" aria-controls="t-noeuds">Nœuds</button>
+            <button type="button" role="tab" id="o-messages" data-t="messages" aria-selected="false" aria-controls="t-messages">Messages</button>
+            <button type="button" role="tab" id="o-canaux" data-t="canaux" aria-selected="false" aria-controls="t-canaux">Canaux</button>
+            <button type="button" role="tab" id="o-ecoute" data-t="ecoute" aria-selected="false" aria-controls="t-ecoute">Écoute</button>
+            <button type="button" role="tab" id="o-radio" data-t="radio" aria-selected="false" aria-controls="t-radio">Radio</button>
         </div>
 
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" data-tab="tab-nodes">🛰 Nodes</div>
-                <div class="tab" data-tab="tab-messages">💬 Messages</div>
-                <div class="tab" data-tab="tab-channels">📶 Channels</div>
-                <div class="tab" data-tab="tab-sniffer">👂 Sniffer</div>
-                <div class="tab" data-tab="tab-grid">📻 Grid</div>
-            </div>
+        <section id="t-noeuds" role="tabpanel" aria-labelledby="o-noeuds" class="grille" style="grid-template-columns:1fr">
+            <div class="pan"><h3>Carte des nœuds positionnés <i id="nPos"></i></h3>
+                <div class="tab"><svg class="carte" id="carte" viewBox="0 0 640 300" role="img" aria-label="Carte hors ligne des nœuds positionnés"></svg></div>
+                <div class="legende"><span><b style="background:var(--vert)"></b>SNR ≥ 5 dB</span><span><b style="background:var(--jaune)"></b>0 à 5 dB</span><span><b style="background:var(--rouge)"></b>SNR &lt; 0 dB</span><span><b style="background:var(--faible)"></b>SNR inconnu</span></div>
+                <p class="note">Carte hors ligne, sans fond de tuiles : positions normalisées sur l’étendue des nœuds, à l’échelle (longitude corrigée de la latitude). Les graduations sont les coordonnées réelles des bords.</p></div>
+            <div class="pan"><h3>Nœuds <i id="nNoeuds"></i></h3>
+                <div class="tab"><table><thead><tr><th>Nœud</th><th>Rôle</th><th title="Niveau de batterie rapporté par le nœud ; « secteur » = alimenté (valeur 101 du protocole).">Batterie</th><th>RSSI</th><th>SNR</th><th>Dernière écoute</th><th>Position</th></tr></thead><tbody id="bNoeuds"></tbody></table></div></div>
+        </section>
 
-            <!-- Nodes tab -->
-            <div id="tab-nodes" class="tab-content active">
-                <h3 style="margin-bottom:0.5rem">🗺 Node map <span class="note">offline canvas — no external tiles, normalized to positioned nodes</span></h3>
-                <div class="map-wrap"><canvas id="nodeMap"></canvas></div>
-                <div class="map-legend">
-                    <span><span class="dot" style="background:var(--green)"></span>SNR ≥ 5 (good)</span>
-                    <span><span class="dot" style="background:var(--yellow)"></span>0 ≤ SNR &lt; 5 (fair)</span>
-                    <span><span class="dot" style="background:var(--red)"></span>SNR &lt; 0 (poor)</span>
-                    <span><span class="dot" style="background:var(--p31-dim)"></span>SNR unknown</span>
+        <section id="t-messages" role="tabpanel" aria-labelledby="o-messages" hidden>
+            <div class="pan"><h3>Messages <i id="nMsgs"></i></h3>
+                <div class="msgs">
+                    <div class="liste-can" id="listeCan" role="group" aria-label="Canaux"></div>
+                    <div><div class="fil" id="fil" tabindex="0"></div></div>
                 </div>
+                <div id="rEnvoi" class="retour" hidden style="margin-top:10px"></div>
+                <div class="conf" id="cEnvoi" hidden><span id="tEnvoi"></span><button class="btn danger sm" id="okEnvoi" type="button">Confirmer l’émission</button><button class="btn sm" id="noEnvoi" type="button">Annuler</button></div>
+                <form class="envoi" id="fEnvoi">
+                    <label>Canal (index)<input type="number" id="envCanal" min="0" value="0"></label>
+                    <label>Message<input type="text" id="envTexte" maxlength="228" placeholder="Texte à émettre sur la radio…" autocomplete="off"></label>
+                    <button class="btn prim" type="submit">Émettre…</button>
+                </form>
+                <p class="note">L’envoi émet un paquet radio réel : une confirmation est demandée. Les messages affichés sont ceux gardés par le démon depuis son démarrage.</p></div>
+        </section>
 
-                <h3 style="margin:1rem 0 0.5rem">📍 Positioned nodes <span class="note" id="posCount"></span></h3>
-                <div class="row-list" id="posNodeList"><div class="empty-note">Loading…</div></div>
+        <section id="t-canaux" role="tabpanel" aria-labelledby="o-canaux" hidden>
+            <div class="pan"><h3>Politique de grille par canal <i id="nCan"></i></h3>
+                <p class="note" style="margin:0 0 8px">Choisir à quelles grilles chaque canal est relayé (off / shared / on), puis enregistrer. Le changement est délégué au ctl privilégié, jamais appliqué dans le démon.</p>
+                <div id="rGrille" class="retour" hidden></div>
+                <div class="conf" id="cGrille" hidden><span id="tGrille"></span><button class="btn danger sm" id="okGrille" type="button">Confirmer</button><button class="btn sm" id="noGrille" type="button">Annuler</button></div>
+                <div id="listeGrille"></div></div>
+            <div class="pan" style="margin-top:10px"><h3>Lien de jonction du mesh</h3>
+                <p class="note" style="margin:0 0 8px">Le lien permet à une autre radio ou à un téléphone de rejoindre ce mesh. <b>Il contient la clé du canal</b> : il n’est jamais affiché ici, seulement copié dans le presse-papiers après confirmation, et sa divulgation est journalisée par le démon.</p>
+                <div id="rLien" class="retour" hidden></div>
+                <div class="conf" id="cLien" hidden><span>Copier dans le presse-papiers un lien qui contient la clé du canal ? Ne le partagez qu’avec des pairs de confiance.</span><button class="btn danger sm" id="okLien" type="button">Confirmer la copie</button><button class="btn sm" id="noLien" type="button">Annuler</button></div>
+                <button class="btn prim" id="lien" type="button">Copier le lien de jonction…</button></div>
+        </section>
 
-                <h3 style="margin:1rem 0 0.5rem">📭 Nodes without a fix <span class="note" id="noPosCount"></span></h3>
-                <div class="row-list" id="noPosNodeList"><div class="empty-note">Loading…</div></div>
-            </div>
+        <section id="t-ecoute" role="tabpanel" aria-labelledby="o-ecoute" hidden class="grille" style="grid-template-columns:1fr">
+            <div class="pan"><h3>Activité par canal <i>paquets captés</i></h3>
+                <div id="barres"></div>
+                <p class="note">Une seule échelle : le canal le plus actif. Vert = paquets déchiffrés (clé connue du module), cyan = total capté.</p></div>
+            <div class="pan"><h3>Recensement passif <i id="nCens"></i></h3>
+                <div class="tab"><table><thead><tr><th>Nœud</th><th>Paquets</th><th>RSSI</th><th>SNR</th><th>Première écoute</th><th>Dernière écoute</th></tr></thead><tbody id="bCens"></tbody></table></div>
+                <p class="note">RSSI et SNR sont ceux du dernier paquet entendu.</p></div>
+        </section>
 
-            <!-- Messages tab -->
-            <div id="tab-messages" class="tab-content">
-                <div class="msg-panel">
-                    <div class="msg-channels" id="msgChannelList"><div class="empty-note">No channels heard yet.</div></div>
-                    <div class="msg-body">
-                        <div class="msg-list" id="msgList"><div class="empty-note">Select a channel.</div></div>
-                        <div class="send-form">
-                            <input type="number" id="sendChannel" min="0" value="0" title="channel index">
-                            <input type="text" id="sendText" placeholder="Message text…" maxlength="228">
-                            <button class="btn primary" id="sendBtn">📤 Send</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <section id="t-radio" role="tabpanel" aria-labelledby="o-radio" hidden class="grille">
+            <div class="pan"><h3>Configuration du module <i>lue en direct</i><button class="btn sm" id="cfgBtn" type="button">⟳ Lire la configuration</button></h3>
+                <div id="rCfg" class="retour" hidden></div>
+                <dl class="kv" id="kvCfg"></dl>
+                <p class="note">Lecture seule. Le code d’appairage Bluetooth et les clés de canal ne sont jamais affichés. Région, flash du module et réglages radio ne se modifient pas depuis cette page.</p></div>
+            <div class="pan"><h3>Mode de fonctionnement <i>actuel : <span id="modeCourant">—</span></i></h3>
+                <div id="rMode" class="retour" hidden></div>
+                <div class="conf" id="cMode" hidden><span id="tMode2"></span><button class="btn danger sm" id="okMode" type="button">Confirmer</button><button class="btn sm" id="noMode" type="button">Annuler</button></div>
+                <div class="sel" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="modeSel" aria-label="Mode"><option value="active-node">active-node</option><option value="passive-listener">passive-listener</option><option value="both">both</option></select><button class="btn prim" id="modeBtn" type="button">Appliquer le mode…</button></div>
+                <p class="note">active-node : relais vers les grilles MQTT ; passive-listener : écoute et recensement seuls ; both : les deux. Le changement passe par le ctl privilégié.</p></div>
+        </section>
+    </div></div></main>
 
-            <!-- Channels tab -->
-            <div id="tab-channels" class="tab-content">
-                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.75rem">Toggle which grids each configured channel bridges to (off / shared / on), then Save. Changes are delegated to the privileged ctl (never applied in-process).</p>
-                <div id="channelList"><div class="empty-note">Loading…</div></div>
-
-                <h3 style="margin:1.4rem 0 0.4rem">🔗 Lien de partage du mesh</h3>
-                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.6rem">Ouvre ce lien (ou scanne le QR) dans l'app Meshtastic pour <strong>rejoindre ce mesh</strong>. ⚠ Il encode la clé du canal — ne le partage qu'avec des pairs de confiance (chaque génération est journalisée).</p>
-                <div class="btn-group">
-                    <button class="btn primary" id="shareBtn">🔗 Générer le lien de jonction</button>
-                    <button class="btn" id="shareCopyBtn" style="display:none">📋 Copier</button>
-                </div>
-                <div id="shareUrlBox" style="display:none;margin-top:0.7rem">
-                    <input type="text" id="shareUrl" readonly style="width:100%;font-size:0.62rem;padding:0.35rem;background:var(--panel);color:var(--cyan);border:1px solid var(--border)">
-                    <div id="shareQr" style="margin-top:0.7rem;max-width:220px;background:#c9f5e0;padding:0.4rem;border-radius:4px;display:inline-block"></div>
-                </div>
-            </div>
-
-            <!-- Sniffer tab -->
-            <div id="tab-sniffer" class="tab-content">
-                <h3 style="margin-bottom:0.5rem">📊 Channel activity</h3>
-                <div id="channelBars"><div class="empty-note">Loading…</div></div>
-
-                <h3 style="margin:1rem 0 0.5rem">👂 Census — every node heard passively</h3>
-                <table class="agg-table" id="censusTable"></table>
-            </div>
-
-            <!-- Grid (radio/mode) tab -->
-            <div id="tab-grid" class="tab-content">
-                <div id="gridRadioBanner" class="banner" style="margin-bottom:1rem"></div>
-
-                <h3 style="margin-bottom:0.5rem">⚙ Configuration du device</h3>
-                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.6rem">Config lue en direct sur le RAK (firmware, région, modem, rôle, Bluetooth, canaux).</p>
-                <div class="btn-group" style="margin-bottom:0.6rem">
-                    <button class="btn" id="deviceCfgBtn">↻ Lire la config du RAK</button>
-                </div>
-                <table class="agg-table" id="deviceCfgTable"><tbody><tr><td class="empty-note">Clique pour lire la configuration du device.</td></tr></tbody></table>
-
-                <h3 style="margin:1.4rem 0 0.5rem">🎛 Operating mode</h3>
-                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.75rem">Current mode: <strong id="curModeLabel">–</strong>. Switching mode is delegated to the privileged ctl.</p>
-                <div class="btn-group">
-                    <select id="modeSelect">
-                        <option value="active-node">active-node</option>
-                        <option value="passive-listener">passive-listener</option>
-                        <option value="both">both</option>
-                    </select>
-                    <button class="btn primary" id="modeApplyBtn">✅ Apply mode</button>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <div class="toast" id="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/meshtastic';
-        let statusData = null;
-        let authFailed = false;
-        let selectedMsgChannel = null;
-        let channelDraft = {}; // channel name -> Set of selected grid values, pending save
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = v => (typeof v === 'number' && isFinite(v)) ? v : null;
 
-        function token() {
-            try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
-        }
-        function authHeaders(extra) {
-            const h = Object.assign({}, extra || {});
-            const t = token();
-            if (t) h['Authorization'] = 'Bearer ' + t;
-            return h;
-        }
-        function esc(s) {
-            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
-        function fmtTs(ts) {
-            if (!ts) return '–';
-            try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return String(ts); }
-        }
+        let ST = null, SESSION_OK = true, SERVEUR_KO = false;
+        let CAN_SEL = null;          // canal de messages affiché
+        const BROUILLON = {};        // nom de canal -> { set:Set, base:string }
+        let MODE_SALE = false;       // choix de mode non appliqué : ne pas l'écraser à l'actualisation
+        let CFG_DEMO = null;
+        let CONF = null;             // confirmation ouverte : 'envoi' | 'grille' | 'mode' | 'lien'
 
-        function toast(msg) {
-            const t = document.getElementById('toast');
-            t.innerHTML = esc(msg);
-            t.className = 'toast show';
-            clearTimeout(t._hideTimer);
-            t._hideTimer = setTimeout(() => { t.className = 'toast'; }, 3000);
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-        function errorToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerHTML = esc(msg) + '<span class="close" data-act="dismiss-toast">✕</span>';
-            t.className = 'toast show error';
-            clearTimeout(t._hideTimer);
-        }
-        document.getElementById('toast').addEventListener('click', e => {
-            if (e.target.closest('[data-act="dismiss-toast"]')) {
-                document.getElementById('toast').className = 'toast';
-            }
-        });
-
-        async function api(path, opts) {
-            const res = await fetch(API + path, Object.assign({}, opts, { headers: authHeaders(Object.assign({ 'Content-Type': 'application/json' }, (opts && opts.headers) || {})) }));
-            if (res.status === 401) {
-                authFailed = true;
-                renderAuthState();
-                throw new Error('401');
-            }
-            let data = null;
-            try { data = await res.json(); } catch (e) { /* no body */ }
-            if (!res.ok) {
-                const detail = (data && data.detail) ? data.detail : ('HTTP ' + res.status);
-                throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-            }
-            return data;
-        }
-
-        function renderAuthState() {
-            document.getElementById('authBanner').style.display = authFailed ? '' : 'none';
-        }
-
-        async function refresh() {
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const data = await api('/status');
-                authFailed = false;
-                renderAuthState();
-                statusData = data;
-                renderAll();
-            } catch (e) {
-                if (e.message !== '401') errorToast('⚠️ Failed to load status: ' + e.message);
-            }
+                const r = await fetch(API + chemin, { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (d) return typeof d === 'string' ? d : 'requête refusée';
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        // Le démon répond 200 même quand le ctl échoue ou que la radio est absente : on lit le champ status.
+        function reussi(res, attendus) { return res.ok && res.data && attendus.indexOf(res.data.status) >= 0; }
+        function motif(res) {
+            if (!res.ok) return detail(res);
+            const d = res.data || {};
+            if (d.status === 'radio-absent') return 'radio absente';
+            return d.stderr ? String(d.stderr) : 'refusé (état ' + tiret(d.status) + ')';
         }
 
-        function renderAll() {
-            if (!statusData) return;
-            renderStats();
-            renderRadioBanners();
-            renderNodes();
-            renderMessages();
-            renderChannels();
-            renderSniffer();
-            renderGridTab();
+        function quand(ts) {
+            const n = nombre(ts);
+            if (!n) return '—';
+            const d = new Date(n < 1e12 ? n * 1000 : n);
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR');
         }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function ligneVide(tb, n, txt) { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        const couleurSnr = s => s == null ? '#6f84a8' : s >= 5 ? '#2ecc71' : s >= 0 ? '#ffd23f' : '#ff4d5e';
+        const aPos = n => Array.isArray(n.pos) && n.pos.length === 2 && nombre(n.pos[0]) !== null && nombre(n.pos[1]) !== null;
 
-        function renderStats() {
-            const s = statusData || {};
-            const nodes = s.nodes || [];
-            const msgsByChan = s.messages_by_channel || {};
-            const msgCount = Object.values(msgsByChan).reduce((a, l) => a + (l ? l.length : 0), 0);
-            const grids = s.grids || {};
-            document.getElementById('sRadio').textContent = s.radio === 'present' ? '🟢' : '📴';
-            document.getElementById('sMode').textContent = s.mode || '–';
-            document.getElementById('sNodes').textContent = nodes.length;
-            document.getElementById('sChannels').textContent = Object.keys(grids).length;
-            document.getElementById('sMessages').textContent = msgCount;
-            document.getElementById('sCensus').textContent = (s.census || []).length;
-            document.getElementById('subline').textContent =
-                (s.radio === 'present' ? 'Radio present' : 'Radio absent') + ' · mode ' + (s.mode || '?') +
-                ' · ' + nodes.length + ' node(s) · ' + msgCount + ' message(s)';
-        }
-
-        function renderRadioBanners() {
-            const absent = statusData && statusData.radio !== 'present';
-            document.getElementById('radioBanner').style.display = absent ? '' : 'none';
-        }
-
-        // --- Nodes tab -------------------------------------------------------
-
-        function snrColor(snr) {
-            if (snr == null) return '#6b7b8b';
-            if (snr >= 5) return '#00dd44';
-            if (snr >= 0) return '#ffcc00';
-            return '#ff4466';
-        }
-
-        function drawNodeMap() {
-            const canvas = document.getElementById('nodeMap');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            const w = canvas.width = canvas.clientWidth || canvas.parentElement.clientWidth || 300;
-            const h = canvas.height = 320;
-            ctx.clearRect(0, 0, w, h);
-
-            const nodes = ((statusData && statusData.nodes) || []).filter(n => Array.isArray(n.pos) && n.pos.length === 2);
-            if (!nodes.length) {
-                ctx.fillStyle = '#6b7b8b';
-                ctx.font = '13px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText('No positioned nodes yet', w / 2, h / 2);
-                return;
-            }
-
-            const pad = 30;
-            let lats = nodes.map(n => n.pos[0]);
-            let lons = nodes.map(n => n.pos[1]);
-            let minLat = Math.min(...lats), maxLat = Math.max(...lats);
-            let minLon = Math.min(...lons), maxLon = Math.max(...lons);
-            if (maxLat === minLat) { maxLat += 0.001; minLat -= 0.001; }
-            if (maxLon === minLon) { maxLon += 0.001; minLon -= 0.001; }
-
-            // faint grid
-            ctx.strokeStyle = 'rgba(100,150,200,0.12)';
-            ctx.lineWidth = 1;
-            for (let i = 0; i <= 4; i++) {
-                const y = pad + (i / 4) * (h - 2 * pad);
-                ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
-                const x = pad + (i / 4) * (w - 2 * pad);
-                ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
-            }
-
-            nodes.forEach(n => {
-                const [lat, lon] = n.pos;
-                const x = pad + ((lon - minLon) / (maxLon - minLon)) * (w - 2 * pad);
-                const y = h - pad - ((lat - minLat) / (maxLat - minLat)) * (h - 2 * pad);
-                const color = snrColor(n.snr);
-                ctx.beginPath();
-                ctx.arc(x, y, 6, 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-                ctx.lineWidth = 1.5;
-                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-                ctx.stroke();
-                ctx.fillStyle = '#e8e6d9';
-                ctx.font = '10px monospace';
-                ctx.textAlign = 'left';
-                ctx.fillText(n.short || n.id || '?', x + 9, y + 3);
-            });
-        }
-
-        function renderNodes() {
-            const nodes = (statusData && statusData.nodes) || [];
-            const withPos = nodes.filter(n => Array.isArray(n.pos) && n.pos.length === 2);
-            const noPos = nodes.filter(n => !(Array.isArray(n.pos) && n.pos.length === 2));
-
-            drawNodeMap();
-
-            document.getElementById('posCount').textContent = '(' + withPos.length + ')';
-            document.getElementById('noPosCount').textContent = '(' + noPos.length + ')';
-
-            const rowHtml = n => {
-                const glyph = n.snr == null ? '⚪' : (n.snr >= 5 ? '🟢' : (n.snr >= 0 ? '🟡' : '🔴'));
-                return '<div class="node-row">' +
-                    '<span class="glyph">' + glyph + '</span>' +
-                    '<span class="id" title="' + esc(n.id) + '">' + esc(n.long || n.short || n.id) + '</span>' +
-                    '<span class="meta">' + esc(n.role || '–') + '</span>' +
-                    '<span class="num" title="battery">🔋 ' + (n.battery != null ? n.battery + '%' : '–') + '</span>' +
-                    '<span class="num" title="RSSI">📶 ' + (n.rssi != null ? n.rssi : '–') + '</span>' +
-                    '<span class="num" title="SNR">〰 ' + (n.snr != null ? n.snr : '–') + '</span>' +
-                    '<span class="meta" title="last heard">' + fmtTs(n.last_heard) + '</span>' +
-                    '</div>';
+        // Données fictives : identifiants et coordonnées inventés, aucun nœud réel.
+        function demoData() {
+            const t = Math.floor(Date.now() / 1000);
+            ST = {
+                radio: 'present', mode: 'both',
+                grids: { LongFast: ['shared'], Maison: ['on', 'shared'], Prive: [] },
+                nodes: [
+                    { id: '!a1b2c3d4', short: 'GK2', long: 'Passerelle gk2', role: 'ROUTER', pos: [45.0001, 6.0002], battery: 101, rssi: null, snr: null, last_heard: t - 5, is_self: true },
+                    { id: '!0badc0de', short: 'EST', long: 'Relais est', role: 'ROUTER', pos: [45.0030, 6.0120], battery: 82, rssi: -96, snr: 7.5, last_heard: t - 40 },
+                    { id: '!0c0ffee1', short: 'NRD', long: 'Capteur nord', role: 'SENSOR', pos: [45.0105, 6.0040], battery: 47, rssi: -112, snr: 1.25, last_heard: t - 300 },
+                    { id: '!0decaf02', short: 'MOB', long: 'Mobile', role: 'CLIENT', pos: null, battery: null, rssi: -121, snr: -6.5, last_heard: t - 4000 }],
+                messages_by_channel: {
+                    0: [{ from: '!0badc0de', text: 'Bonjour le maillage', ts: t - 900 }, { from: '!a1b2c3d4', text: 'Reçu 5/5', ts: t - 880 }],
+                    1: [{ from: '!0c0ffee1', text: 'Niveau cuve : 62', ts: t - 120 }] },
+                census: [{ id: '!0badc0de', packets: 128, rssi: -96, snr: 7.5, first_heard: t - 86400, last_heard: t - 40 }, { id: '!0c0ffee1', packets: 31, rssi: -112, snr: 1.25, first_heard: t - 7200, last_heard: t - 300 }, { id: '!0decaf02', packets: 4, rssi: -121, snr: -6.5, first_heard: t - 9000, last_heard: t - 4000 }],
+                channel_stats: { 0: { packets: 140, decrypted: 140 }, 1: { packets: 23, decrypted: 0 } }
             };
-
-            document.getElementById('posNodeList').innerHTML = withPos.length
-                ? withPos.map(rowHtml).join('')
-                : '<div class="empty-note">No nodes with a position fix yet.</div>';
-            document.getElementById('noPosNodeList').innerHTML = noPos.length
-                ? noPos.map(rowHtml).join('')
-                : '<div class="empty-note">Every known node has a position fix.</div>';
+            CFG_DEMO = { firmware: '2.5.0-demo', hw_model: 'RAK4631', node_id: '!a1b2c3d4', long_name: 'Passerelle gk2', short_name: 'GK2', region: 'EU_868', modem_preset: 'LONG_FAST', hop_limit: 3, tx_enabled: true, role: 'ROUTER', ble_enabled: true, ble_pin: 123456, ble_mode: 'FIXED_PIN', wifi_enabled: false, channels: ['LongFast', 'Maison'] };
         }
 
-        // --- Messages tab ------------------------------------------------------
-
-        function renderMessages() {
-            const byChan = (statusData && statusData.messages_by_channel) || {};
-            const keys = Object.keys(byChan).sort((a, b) => Number(a) - Number(b));
-            const listEl = document.getElementById('msgChannelList');
-
-            if (!keys.length) {
-                listEl.innerHTML = '<div class="empty-note">No channels heard yet.</div>';
-            } else {
-                if (selectedMsgChannel == null || keys.indexOf(String(selectedMsgChannel)) === -1) {
-                    selectedMsgChannel = keys[0];
-                }
-                listEl.innerHTML = keys.map(k =>
-                    '<div class="msg-chan-btn' + (String(k) === String(selectedMsgChannel) ? ' active' : '') + '" data-act="msg-chan" data-ch="' + esc(k) + '">' +
-                    '# ' + esc(k) + ' <span style="color:var(--p31-dim);font-size:0.62rem">(' + (byChan[k] || []).length + ')</span></div>'
-                ).join('');
-            }
-
-            const msgs = (selectedMsgChannel != null && byChan[selectedMsgChannel]) || [];
-            const msgListEl = document.getElementById('msgList');
-            msgListEl.innerHTML = msgs.length
-                ? msgs.slice().reverse().map(m =>
-                    '<div class="msg-item"><span class="ts">' + fmtTs(m.ts) + '</span>' +
-                    '<span class="from">' + esc(m.from) + '</span>' + esc(m.text) + '</div>'
-                ).join('')
-                : '<div class="empty-note">No messages on this channel yet.</div>';
-        }
-
-        document.getElementById('msgChannelList').addEventListener('click', e => {
-            const t = e.target.closest('[data-act="msg-chan"]');
-            if (!t) return;
-            selectedMsgChannel = t.getAttribute('data-ch');
-            renderMessages();
-        });
-
-        async function sendMessage() {
-            const channelEl = document.getElementById('sendChannel');
-            const textEl = document.getElementById('sendText');
-            const channel = parseInt(channelEl.value, 10) || 0;
-            const text = textEl.value.trim();
-            if (!text) { errorToast('⚠️ Message text required'); return; }
-            const btn = document.getElementById('sendBtn');
-            btn.disabled = true;
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; SERVEUR_KO = false; rendre(); return; }
             try {
-                await api('/send', { method: 'POST', body: JSON.stringify({ channel: channel, text: text }) });
-                toast('📤 Sent on channel ' + channel);
-                textEl.value = '';
-                await refresh();
+                ST = await lire('/status'); SESSION_OK = true; SERVEUR_KO = false;
             } catch (e) {
-                if (e.message !== '401') errorToast('❌ Send failed: ' + e.message);
-            } finally {
-                btn.disabled = false;
+                ST = null;
+                if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; SERVEUR_KO = false; }
+                else { SESSION_OK = true; SERVEUR_KO = true; }
             }
-        }
-        document.getElementById('sendBtn').addEventListener('click', sendMessage);
-        document.getElementById('sendText').addEventListener('keydown', e => {
-            if (e.key === 'Enter') sendMessage();
-        });
-
-        // --- Channel share link + QR (the "lien" to join the mesh) --------------
-
-        async function loadShareLink() {
-            const btn = document.getElementById('shareBtn');
-            btn.disabled = true; btn.textContent = '⏳ Génération…';
-            try {
-                const d = await api('/channel-url');
-                if (!d || !d.url) { toast('Lien indisponible (radio absente ?)'); return; }
-                document.getElementById('shareUrl').value = d.url;
-                // Inline SVG QR (CSP-safe: no data: URI, no external resource).
-                document.getElementById('shareQr').innerHTML = d.qr_svg || '';
-                document.getElementById('shareUrlBox').style.display = 'block';
-                document.getElementById('shareCopyBtn').style.display = '';
-            } catch (e) {
-                toast('Erreur: ' + (e && e.message ? e.message : e));
-            } finally {
-                btn.disabled = false; btn.textContent = '🔗 Générer le lien de jonction';
-            }
-        }
-        document.getElementById('shareBtn').addEventListener('click', loadShareLink);
-        document.getElementById('shareCopyBtn').addEventListener('click', () => {
-            const u = document.getElementById('shareUrl');
-            u.select();
-            if (navigator.clipboard) navigator.clipboard.writeText(u.value).then(() => toast('Lien copié'));
-            else { document.execCommand('copy'); toast('Lien copié'); }
-        });
-
-        // --- Device configuration (read live from the RAK) ---------------------
-
-        function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
-
-        async function loadDeviceConfig() {
-            const btn = document.getElementById('deviceCfgBtn');
-            btn.disabled = true; btn.textContent = '⏳ Lecture…';
-            try {
-                const d = await api('/device-config');
-                if (!d || d.status === 'radio-absent') { toast('Radio absente'); return; }
-                const rows = [
-                    ['Firmware', d.firmware], ['Modèle', d.hw_model], ['Node', d.node_id],
-                    ['Nom', (d.long_name || '') + (d.short_name ? (' (' + d.short_name + ')') : '')],
-                    ['Région', d.region], ['Preset modem', d.modem_preset],
-                    ['Hop limit', d.hop_limit], ['TX', d.tx_enabled ? '✅ activé' : '⛔ désactivé'],
-                    ['Rôle', d.role],
-                    ['Bluetooth', d.ble_enabled ? ('✅ activé — PIN ' + (d.ble_pin != null ? d.ble_pin : '?') + ' (' + (d.ble_mode || '') + ')') : '⛔ désactivé'],
-                    ['WiFi', d.wifi_enabled ? '✅ activé' : '⛔ désactivé'],
-                    ['Canaux', (d.channels || []).join(', ') || '–'],
-                ];
-                document.getElementById('deviceCfgTable').innerHTML = '<tbody>' + rows.map(r =>
-                    '<tr><th style="width:42%">' + esc(r[0]) + '</th><td>' + (r[1] == null || r[1] === '' ? '–' : esc(r[1])) + '</td></tr>').join('') + '</tbody>';
-            } catch (e) {
-                toast('Erreur: ' + (e && e.message ? e.message : e));
-            } finally {
-                btn.disabled = false; btn.textContent = '↻ Lire la config du RAK';
-            }
-        }
-        document.getElementById('deviceCfgBtn').addEventListener('click', loadDeviceConfig);
-
-        // --- Channels tab (grid policy) ----------------------------------------
-
-        const GRID_VALUES = ['off', 'shared', 'on'];
-
-        function renderChannels() {
-            const grids = (statusData && statusData.grids) || {};
-            const names = Object.keys(grids).sort();
-            const el = document.getElementById('channelList');
-            if (!names.length) {
-                el.innerHTML = '<div class="empty-note">No configured channels found.</div>';
-                return;
-            }
-            el.innerHTML = names.map(name => {
-                if (!channelDraft[name]) channelDraft[name] = new Set(grids[name] || []);
-                const sel = channelDraft[name];
-                const toggles = GRID_VALUES.map(v =>
-                    '<span class="grid-toggle ' + v + (sel.has(v) ? ' selected' : '') + '" data-act="grid-toggle" data-ch="' + esc(name) + '" data-val="' + v + '">' + v + '</span>'
-                ).join('');
-                return '<div class="channel-card">' +
-                    '<span class="name">' + esc(name) + '</span>' +
-                    '<div class="grid-toggle-set">' + toggles +
-                    '<button class="btn sm primary" data-act="grid-save" data-ch="' + esc(name) + '">💾 Save</button>' +
-                    '</div></div>';
-            }).join('');
+            rendre();
         }
 
-        document.getElementById('channelList').addEventListener('click', e => {
-            const toggle = e.target.closest('[data-act="grid-toggle"]');
-            if (toggle) {
-                const ch = toggle.getAttribute('data-ch');
-                const val = toggle.getAttribute('data-val');
-                const set = channelDraft[ch] || (channelDraft[ch] = new Set());
-                if (set.has(val)) set.delete(val); else set.add(val);
-                renderChannels();
-                return;
-            }
-            const save = e.target.closest('[data-act="grid-save"]');
-            if (save) {
-                const ch = save.getAttribute('data-ch');
-                saveGrid(ch);
-            }
-        });
-
-        async function saveGrid(channel) {
-            const grid = Array.from(channelDraft[channel] || []);
-            try {
-                await api('/grid', { method: 'POST', body: JSON.stringify({ channel: channel, grid: grid }) });
-                toast('💾 Grid saved for ' + channel + ': ' + (grid.join(', ') || '(none)'));
-                await refresh();
-            } catch (e) {
-                if (e.message !== '401') errorToast('❌ Grid save failed for ' + channel + ': ' + e.message);
-            }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !SERVEUR_KO;
+            if (SERVEUR_KO) $('erreur').textContent = 'Impossible de lire l’état Meshtastic (démon arrêté ou injoignable).';
+            const s = ST, etat = $('etat');
+            const absente = !!(s && s.radio !== 'present');
+            $('radioAbs').hidden = !absente;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (absente) { etat.className = 'actif att'; etat.textContent = 'RADIO ABSENTE'; }
+            else { etat.className = 'actif'; etat.textContent = 'RADIO PRÉSENTE'; }
+            const noeuds = s && Array.isArray(s.nodes) ? s.nodes : null;
+            const byChan = s && s.messages_by_channel && typeof s.messages_by_channel === 'object' ? s.messages_by_channel : null;
+            $('tRadio').textContent = s ? (absente ? 'Absente' : 'Présente') : '—';
+            $('cRadio').className = 'tuile ' + (s ? (absente ? 'att' : 'ok') : 'cy');
+            $('tMode').textContent = tiret(s && s.mode);
+            $('tNoeuds').textContent = noeuds ? noeuds.length : '—';
+            $('sNoeuds').textContent = noeuds ? 'dont ' + noeuds.filter(aPos).length + ' positionné(s)' : 'connus';
+            $('tCanaux').textContent = s && s.grids ? Object.keys(s.grids).length : '—';
+            $('tMsgs').textContent = byChan ? Object.values(byChan).reduce((a, l) => a + (Array.isArray(l) ? l.length : 0), 0) : '—';
+            $('tEntendus').textContent = s && Array.isArray(s.census) ? s.census.length : '—';
+            const d = new Date(); $('maj').textContent = 'Relevé ' + d.toLocaleTimeString('fr-FR');
+            rendreNoeuds(); rendreMessages(); rendreCanaux(); rendreEcoute(); rendreRadio();
+            annoncer();
         }
 
-        // --- Sniffer tab ---------------------------------------------------------
-
-        function renderSniffer() {
-            const stats = (statusData && statusData.channel_stats) || {};
-            const keys = Object.keys(stats).sort((a, b) => Number(a) - Number(b));
-            const barsEl = document.getElementById('channelBars');
-            if (!keys.length) {
-                barsEl.innerHTML = '<div class="empty-note">No packet activity recorded yet.</div>';
-            } else {
-                const max = Math.max(...keys.map(k => (stats[k] && stats[k].packets) || (stats[k] && stats[k].count) || 0), 1);
-                barsEl.innerHTML = keys.map(k => {
-                    const st = stats[k] || {};
-                    const count = st.packets != null ? st.packets : (st.count != null ? st.count : 0);
-                    const pct = Math.round((count / max) * 100);
-                    return '<div class="bar-row"><span>ch ' + esc(k) + '</span>' +
-                        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
-                        '<span class="bar-count">' + count + '</span></div>';
-                }).join('');
-            }
-
-            const census = (statusData && statusData.census) || [];
-            const tbl = document.getElementById('censusTable');
-            if (!census.length) {
-                tbl.innerHTML = '<tr><td class="empty-note">No nodes heard passively yet.</td></tr>';
-                return;
-            }
-            let html = '<tr><th>Node</th><th class="num">Packets</th><th class="num">RSSI</th><th class="num">SNR</th><th>First heard</th><th>Last heard</th></tr>';
-            census.slice().sort((a, b) => (b.last_heard || 0) - (a.last_heard || 0)).forEach(c => {
-                html += '<tr><td>' + esc(c.id) + '</td>' +
-                    '<td class="num">' + (c.packets != null ? c.packets : '–') + '</td>' +
-                    '<td class="num">' + (c.rssi != null ? c.rssi : '–') + '</td>' +
-                    '<td class="num">' + (c.snr != null ? c.snr : '–') + '</td>' +
-                    '<td>' + fmtTs(c.first_heard) + '</td>' +
-                    '<td>' + fmtTs(c.last_heard) + '</td></tr>';
+        // ----- Nœuds -----
+        function rendreNoeuds() {
+            const tb = $('bNoeuds'); tb.replaceChildren();
+            const liste = ST && Array.isArray(ST.nodes) ? ST.nodes.slice().sort((a, b) => (b.last_heard || 0) - (a.last_heard || 0)) : [];
+            $('nNoeuds').textContent = liste.length ? liste.length + ' nœud' + (liste.length > 1 ? 's' : '') : '';
+            if (!liste.length) ligneVide(tb, 7, SESSION_OK && ST ? 'Aucun nœud connu' : '—');
+            liste.forEach(n => {
+                const tr = el('tr');
+                const c = el('td', '', tiret(n.long || n.short || n.id)); c.title = tiret(n.id); if (n.is_self) c.appendChild(pastille('cy', 'CE NŒUD')); tr.appendChild(c);
+                tr.appendChild(el('td', '', tiret(n.role)));
+                tr.appendChild(el('td', '', nombre(n.battery) === null ? '—' : n.battery >= 101 ? 'secteur' : n.battery + ' %'));
+                tr.appendChild(el('td', '', nombre(n.rssi) === null ? '—' : n.rssi + ' dBm'));
+                const sn = el('td', '', nombre(n.snr) === null ? '—' : n.snr + ' dB'); if (nombre(n.snr) !== null) sn.style.color = couleurSnr(n.snr); tr.appendChild(sn);
+                tr.appendChild(el('td', '', quand(n.last_heard)));
+                tr.appendChild(el('td', 'mono', aPos(n) ? n.pos[0].toFixed(4) + ', ' + n.pos[1].toFixed(4) : '—'));
+                tb.appendChild(tr);
             });
-            tbl.innerHTML = html;
+            rendreCarte(liste.filter(aPos));
         }
-
-        // --- Grid (radio/mode) tab -----------------------------------------------
-
-        function renderGridTab() {
-            const s = statusData || {};
-            const banner = document.getElementById('gridRadioBanner');
-            if (s.radio === 'present') {
-                banner.className = 'banner ok';
-                banner.textContent = '🟢 Radio present — device online.';
-            } else {
-                banner.className = 'banner warn';
-                banner.textContent = '📴 Radio absent — no Meshtastic device detected. Mode can still be pre-configured.';
-            }
-            document.getElementById('curModeLabel').textContent = s.mode || '–';
-            const modeSel = document.getElementById('modeSelect');
-            if (s.mode && modeSel.value !== s.mode) modeSel.value = s.mode;
-        }
-
-        async function applyMode() {
-            const mode = document.getElementById('modeSelect').value;
-            const btn = document.getElementById('modeApplyBtn');
-            btn.disabled = true;
-            try {
-                await api('/mode', { method: 'POST', body: JSON.stringify({ mode: mode }) });
-                toast('🎛 Mode set: ' + mode);
-                await refresh();
-            } catch (e) {
-                if (e.message !== '401') errorToast('❌ Mode change failed: ' + e.message);
-            } finally {
-                btn.disabled = false;
-            }
-        }
-        document.getElementById('modeApplyBtn').addEventListener('click', applyMode);
-
-        // --- Tabs ------------------------------------------------------------------
-
-        document.querySelectorAll('.tabs .tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                const scope = tab.closest('.card');
-                scope.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-                scope.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
-                if (tab.getAttribute('data-tab') === 'tab-nodes') drawNodeMap();
+        function rendreCarte(pos) {
+            const svg = $('carte'); svg.replaceChildren();
+            const NS = 'http://www.w3.org/2000/svg';
+            const n = (tag, at) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); return e; };
+            const txt = (x, y, t, cls, anc) => { const e = n('text', { x, y, 'text-anchor': anc || 'start', class: cls || '' }); e.textContent = t; svg.appendChild(e); };
+            $('nPos').textContent = pos.length ? pos.length + ' positionné' + (pos.length > 1 ? 's' : '') : '';
+            if (!pos.length) { txt(320, 150, SESSION_OK && ST ? 'Aucun nœud avec position' : '—', 'sub', 'middle'); return; }
+            const W = 640, H = 300, mx = 58, my = 28;
+            const lats = pos.map(p => p.pos[0]), lons = pos.map(p => p.pos[1]);
+            let minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
+            const k = Math.cos(((minLat + maxLat) / 2) * Math.PI / 180) || 1;
+            const dx = Math.max((maxLon - minLon) * k, 1e-4), dy = Math.max(maxLat - minLat, 1e-4);
+            const ech = Math.min((W - 2 * mx) / dx, (H - 2 * my) / dy);
+            const ox = (W - dx * ech) / 2, oy = (H - dy * ech) / 2;
+            const X = lon => ox + (lon - minLon) * k * ech, Y = lat => H - oy - (lat - minLat) * ech;
+            [0, 1].forEach(i => {
+                svg.appendChild(n('line', { x1: ox, y1: Y(i ? maxLat : minLat), x2: W - ox, y2: Y(i ? maxLat : minLat), stroke: 'rgba(86,150,255,.18)' }));
+                svg.appendChild(n('line', { x1: X(i ? maxLon : minLon), y1: oy, x2: X(i ? maxLon : minLon), y2: H - oy, stroke: 'rgba(86,150,255,.18)' }));
             });
+            txt(ox - 6, Y(maxLat) + 4, maxLat.toFixed(4) + '°', 'sub', 'end'); txt(ox - 6, Y(minLat) + 4, minLat.toFixed(4) + '°', 'sub', 'end');
+            txt(X(minLon), H - 6, minLon.toFixed(4) + '°', 'sub', 'middle'); txt(X(maxLon), H - 6, maxLon.toFixed(4) + '°', 'sub', 'middle');
+            pos.forEach(p => {
+                const x = X(p.pos[1]), y = Y(p.pos[0]);
+                svg.appendChild(n('circle', { cx: x, cy: y, r: 6, fill: couleurSnr(nombre(p.snr)), stroke: p.is_self ? '#29b6f6' : 'rgba(255,255,255,.45)', 'stroke-width': p.is_self ? 2.5 : 1.5 }));
+                txt(x + 9, y + 4, tiret(p.short || p.id));
+            });
+        }
+
+        // ----- Messages -----
+        function rendreMessages() {
+            const par = ST && ST.messages_by_channel && typeof ST.messages_by_channel === 'object' ? ST.messages_by_channel : {};
+            const cles = Object.keys(par).sort((a, b) => Number(a) - Number(b));
+            const lc = $('listeCan'); lc.replaceChildren();
+            $('nMsgs').textContent = '';
+            if (!cles.length) { lc.appendChild(el('span', 'note', SESSION_OK && ST ? 'Aucun canal entendu' : '—')); }
+            else if (CAN_SEL == null || cles.indexOf(String(CAN_SEL)) < 0) CAN_SEL = cles[0];
+            cles.forEach(k => {
+                const b = el('button', 'btn sm', 'Canal ' + k + ' (' + (Array.isArray(par[k]) ? par[k].length : 0) + ')'); b.type = 'button';
+                b.setAttribute('aria-pressed', String(String(k) === String(CAN_SEL)));
+                b.addEventListener('click', () => { CAN_SEL = k; rendreMessages(); annoncer(); });
+                lc.appendChild(b);
+            });
+            const fil = $('fil'); fil.replaceChildren();
+            const msgs = cles.length && Array.isArray(par[CAN_SEL]) ? par[CAN_SEL].slice().reverse() : [];
+            if (!msgs.length) fil.appendChild(el('div', 'vide', cles.length ? 'Aucun message sur ce canal' : '—'));
+            msgs.forEach(m => { const d = el('div', 'msg'); d.appendChild(el('small', '', tiret(m.from) + ' · ' + quand(m.ts))); d.appendChild(document.createTextNode(tiret(m.text))); fil.appendChild(d); });
+        }
+
+        // ----- Confirmations intégrées -----
+        function demanderConf(nom, texte) {
+            fermerConf(); CONF = nom;
+            const z = { envoi: 'cEnvoi', grille: 'cGrille', mode: 'cMode', lien: 'cLien' }[nom];
+            $(z).hidden = false; annoncer();
+            if (texte) { const t = { envoi: 'tEnvoi', grille: 'tGrille', mode: 'tMode2' }[nom]; $(t).textContent = texte; }
+        }
+        function fermerConf() { CONF = null; ['cEnvoi', 'cGrille', 'cMode', 'cLien'].forEach(i => { $(i).hidden = true; }); }
+
+        // Émission radio
+        let ENVOI = null;
+        $('fEnvoi').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const canal = parseInt($('envCanal').value, 10) || 0, texte = $('envTexte').value.trim();
+            if (!texte) { retour('rEnvoi', false, 'Texte du message requis.'); return; }
+            ENVOI = { canal, texte };
+            demanderConf('envoi', 'Émettre sur la radio, canal ' + canal + ' : « ' + texte + ' » ? Le paquet sera transmis sur les ondes.');
+        });
+        $('noEnvoi').addEventListener('click', () => { ENVOI = null; fermerConf(); });
+        $('okEnvoi').addEventListener('click', async () => {
+            const e = ENVOI; ENVOI = null; fermerConf(); if (!e) return;
+            const r = await ecrire('POST', '/send', { channel: e.canal, text: e.texte });
+            if (reussi(r, ['sent'])) { $('envTexte').value = ''; retour('rEnvoi', true, 'Message émis sur le canal ' + e.canal + '.'); charger(); }
+            else retour('rEnvoi', false, 'Émission impossible : ' + motif(r));
         });
 
-        window.addEventListener('resize', () => {
-            const nodesTab = document.getElementById('tab-nodes');
-            if (nodesTab && nodesTab.classList.contains('active')) drawNodeMap();
+        // ----- Canaux : politique de grille -----
+        const VALEURS = ['off', 'shared', 'on'];
+        let GRILLE_EN_COURS = null;
+        const cle = set => JSON.stringify(Array.from(set).sort());
+        function rendreCanaux() {
+            const grids = ST && ST.grids && typeof ST.grids === 'object' ? ST.grids : {};
+            const noms = Object.keys(grids).sort();
+            $('nCan').textContent = noms.length ? noms.length + ' canal' + (noms.length > 1 ? 'aux' : '') : '';
+            const z = $('listeGrille'); z.replaceChildren();
+            if (!noms.length) { z.appendChild(el('div', 'vide', SESSION_OK && ST ? 'Aucun canal configuré' : '—')); return; }
+            noms.forEach(nom => {
+                const serveur = new Set(Array.isArray(grids[nom]) ? grids[nom] : []);
+                let b = BROUILLON[nom];
+                if (!b || (cle(b.set) === b.base && b.base !== cle(serveur))) b = BROUILLON[nom] = { set: new Set(serveur), base: cle(serveur) };
+                const ligne = el('div', 'canal'); ligne.appendChild(el('b', '', nom));
+                const bas = el('span', 'bascule');
+                VALEURS.forEach(v => {
+                    const bt = el('button', 'btn sm', v); bt.type = 'button'; bt.setAttribute('aria-pressed', String(b.set.has(v)));
+                    bt.addEventListener('click', () => { if (b.set.has(v)) b.set.delete(v); else b.set.add(v); rendreCanaux(); annoncer(); });
+                    bas.appendChild(bt);
+                });
+                ligne.appendChild(bas);
+                const sale = cle(b.set) !== b.base;
+                const sv = el('button', 'btn prim sm', 'Enregistrer…'); sv.type = 'button'; sv.disabled = !sale;
+                sv.addEventListener('click', () => { GRILLE_EN_COURS = nom; demanderConf('grille', 'Appliquer au canal « ' + nom + ' » la politique de grille : ' + (Array.from(b.set).join(', ') || '(aucune)') + ' ?'); });
+                ligne.appendChild(sv);
+                if (sale) ligne.appendChild(el('span', 'note', 'modifié, non enregistré'));
+                z.appendChild(ligne);
+            });
+        }
+        $('noGrille').addEventListener('click', () => { GRILLE_EN_COURS = null; fermerConf(); });
+        $('okGrille').addEventListener('click', async () => {
+            const nom = GRILLE_EN_COURS; GRILLE_EN_COURS = null; fermerConf(); if (!nom || !BROUILLON[nom]) return;
+            const grid = Array.from(BROUILLON[nom].set);
+            const r = await ecrire('POST', '/grid', { channel: nom, grid });
+            if (r.ok && r.data && r.data.status !== 'error') { BROUILLON[nom].base = cle(BROUILLON[nom].set); retour('rGrille', true, 'Grille enregistrée pour ' + nom + ' : ' + (grid.join(', ') || '(aucune)') + '.'); charger(); }
+            else retour('rGrille', false, 'Enregistrement impossible pour ' + nom + ' : ' + motif(r));
         });
 
-        document.getElementById('refreshBtn').addEventListener('click', refresh);
+        // Lien de jonction : contient la clé du canal, copié sans jamais être affiché.
+        $('lien').addEventListener('click', () => demanderConf('lien'));
+        $('noLien').addEventListener('click', fermerConf);
+        $('okLien').addEventListener('click', async () => {
+            fermerConf();
+            if (DEMO) { retour('rLien', false, 'Démonstration : action inerte.'); return; }
+            try {
+                const r = await fetch(API + '/channel-url', { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                let d = null; try { d = await r.json(); } catch (e) { /* vide */ }
+                if (!r.ok) { retour('rLien', false, 'Lien indisponible : ' + ((d && typeof d.detail === 'string') ? d.detail : 'HTTP ' + r.status)); return; }
+                if (!d || !d.url) { retour('rLien', false, 'Lien indisponible (radio absente ?).'); return; }
+                try { await navigator.clipboard.writeText(d.url); retour('rLien', true, 'Lien copié dans le presse-papiers (non affiché).'); }
+                catch (e) { retour('rLien', false, 'Copie impossible depuis ce navigateur ; le lien n’est pas affiché.'); }
+            } catch (e) { retour('rLien', false, 'Lien indisponible : serveur injoignable.'); }
+        });
 
-        refresh();
-        setInterval(refresh, 30000);
+        // ----- Écoute passive -----
+        function rendreEcoute() {
+            const stats = ST && ST.channel_stats && typeof ST.channel_stats === 'object' ? ST.channel_stats : {};
+            const cles = Object.keys(stats).sort((a, b) => Number(a) - Number(b));
+            const bz = $('barres'); bz.replaceChildren();
+            if (!cles.length) bz.appendChild(el('div', 'vide', SESSION_OK && ST ? 'Aucune activité enregistrée' : '—'));
+            const max = Math.max(1, ...cles.map(k => nombre(stats[k] && stats[k].packets) || 0));
+            cles.forEach(k => {
+                const s = stats[k] || {}, tot = nombre(s.packets), dec = nombre(s.decrypted);
+                const l = el('div', 'ligne-barre'); l.appendChild(el('span', '', 'Canal ' + k));
+                const b = el('span', 'barre'); const t = el('i'); t.style.width = (tot === null ? 0 : tot / max * 100) + '%'; b.appendChild(t);
+                const d = el('i', 'd'); d.style.width = (dec === null ? 0 : dec / max * 100) + '%'; b.appendChild(d); l.appendChild(b);
+                l.appendChild(el('span', '', (tot === null ? '—' : tot) + ' · ' + (dec === null ? '—' : dec) + ' déch.'));
+                bz.appendChild(l);
+            });
+            const tb = $('bCens'); tb.replaceChildren();
+            const cens = ST && Array.isArray(ST.census) ? ST.census.slice().sort((a, b) => (b.last_heard || 0) - (a.last_heard || 0)) : [];
+            $('nCens').textContent = cens.length ? cens.length + ' nœud' + (cens.length > 1 ? 's' : '') : '';
+            if (!cens.length) ligneVide(tb, 6, SESSION_OK && ST ? 'Aucun nœud entendu passivement' : '—');
+            cens.forEach(c => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(c.id)));
+                tr.appendChild(el('td', '', tiret(c.packets)));
+                tr.appendChild(el('td', '', nombre(c.rssi) === null ? '—' : c.rssi + ' dBm'));
+                tr.appendChild(el('td', '', nombre(c.snr) === null ? '—' : c.snr + ' dB'));
+                tr.appendChild(el('td', '', quand(c.first_heard))); tr.appendChild(el('td', '', quand(c.last_heard)));
+                tb.appendChild(tr);
+            });
+        }
+
+        // ----- Radio : configuration lue + mode -----
+        function rendreRadio() {
+            const m = ST && ST.mode;
+            $('modeCourant').textContent = tiret(m);
+            if (m && !MODE_SALE && $('modeSel').value !== m) $('modeSel').value = m;
+        }
+        function afficherCfg(d) {
+            const z = $('kvCfg'); z.replaceChildren();
+            const oui = (b, t) => b ? t : 'désactivé';
+            const lignes = [['Firmware', d.firmware], ['Modèle', d.hw_model], ['Nœud', d.node_id],
+                ['Nom', d.long_name ? d.long_name + (d.short_name ? ' (' + d.short_name + ')' : '') : null],
+                ['Région', d.region], ['Préréglage modem', d.modem_preset], ['Sauts max', d.hop_limit],
+                ['Émission (TX)', d.tx_enabled === undefined ? null : oui(d.tx_enabled, 'activée')], ['Rôle', d.role],
+                ['Bluetooth', d.ble_enabled === undefined ? null : oui(d.ble_enabled, 'activé' + (d.ble_mode ? ' — ' + d.ble_mode : '') + ' (code non affiché)')],
+                ['Wi-Fi', d.wifi_enabled === undefined ? null : oui(d.wifi_enabled, 'activé')],
+                ['Canaux', Array.isArray(d.channels) && d.channels.length ? d.channels.join(', ') : null]];
+            lignes.forEach(l => { z.appendChild(el('dt', '', l[0])); z.appendChild(el('dd', '', tiret(l[1]))); });
+        }
+        $('cfgBtn').addEventListener('click', async () => {
+            const b = $('cfgBtn'); b.disabled = true;
+            try {
+                if (DEMO) { afficherCfg(CFG_DEMO); retour('rCfg', true, 'Configuration fictive (démonstration).'); return; }
+                const d = await lire('/device-config');
+                if (!d || d.status === 'radio-absent') { retour('rCfg', false, 'Radio absente : configuration indisponible.'); return; }
+                afficherCfg(d); $('rCfg').hidden = true;
+            } catch (e) {
+                retour('rCfg', false, e.statut === 401 || e.statut === 403 ? 'Session requise.' : e.statut === 503 ? 'Radio absente : configuration indisponible.' : 'Lecture impossible' + (e.statut ? ' (HTTP ' + e.statut + ')' : ' : serveur injoignable') + '.');
+            } finally { b.disabled = false; annoncer(); }
+        });
+        $('modeSel').addEventListener('change', () => { MODE_SALE = ST ? $('modeSel').value !== ST.mode : true; });
+        $('modeBtn').addEventListener('click', () => demanderConf('mode', 'Passer le démon en mode « ' + $('modeSel').value + ' » ? Le changement est appliqué par le ctl privilégié.'));
+        $('noMode').addEventListener('click', fermerConf);
+        $('okMode').addEventListener('click', async () => {
+            const mode = $('modeSel').value; fermerConf();
+            const r = await ecrire('POST', '/mode', { mode });
+            if (r.ok && r.data && r.data.status !== 'error') { MODE_SALE = false; retour('rMode', true, 'Mode appliqué : ' + mode + '.'); charger(); }
+            else retour('rMode', false, 'Changement impossible : ' + motif(r));
+        });
+
+        // ----- Onglets -----
+        const ONGLETS = ['noeuds', 'messages', 'canaux', 'ecoute', 'radio'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'meshtastic' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, pendant une saisie, une confirmation ou un choix de mode non appliqué.
+        setInterval(() => {
+            const a = document.activeElement, saisie = a && (a.tagName === 'INPUT' || a.tagName === 'SELECT');
+            if (document.hidden || DEMO || CONF || MODE_SALE || saisie || $('envTexte').value) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>
