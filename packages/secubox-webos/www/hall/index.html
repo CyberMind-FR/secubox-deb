@@ -24,6 +24,7 @@
 <html lang="fr" class="non-connecte non-lan">
 <head>
 <meta charset="utf-8">
+<script>/* Aurora (#2656) : sombre par défaut ; le choix mémorisé (#1240) est reposé plus bas, avant tout rendu. */try{if(!document.documentElement.getAttribute("data-theme"))document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <title>SecuBox Hall</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- FLAG LAN (#1247) : nginx (hall.vhost.conf, sub_filter) remplace le marqueur
@@ -41,55 +42,65 @@
      est le même que celui du BBS. -->
 <meta name="sbx-no-health-banner">
 <style>
-@font-face{font-family:"Cinzel";src:url("/fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
-@font-face{font-family:"Fraunces";src:url("/fonts/fraunces.woff2") format("woff2");font-weight:400 700;font-display:swap}
 @font-face{font-family:"Inter";src:url("/fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
 @font-face{font-family:"JetBrains Mono";src:url("/fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
+/* ── Profil Aurora (#2656) ───────────────────────────────────────────────────
+   Jetons Aurora (.claude/AURORA-REFERENCE.md §2) + anciens noms du Hall rebranchés
+   dessus : le JS et les règles existantes gardent leurs noms de variables. Sombre
+   par défaut ; data-theme="light" reste une variante Aurora claire sobre.
+   Police : pile Aurora, Inter (locale) en repli ; mono pour les identifiants. */
 :root{
-  --ink:#17232d; --paper:#eef2f6; --panel:#ffffff; --line:#dbe3e9; --line-2:#c5cfd7;
-  --soft:#f1f4f7; --dim:#647685;
-  --coral:#a73d42; --coral-s:#f6e7e8; --mint:#1f7a58; --mint-s:#e3f2ec;
-  --amber:#c87832; --amber-s:#fbf0e4; --cyan:#0a91c8; --cyan-s:#dcf1f7;
-  --sky:#1655a0; --sky-s:#e7f0fa; --gold:#b8912f; --gold-s:#f5ecd2; --violet:#5b46b8;
-  --nav:#0e1b2a; --nav-2:#16283c; --nav-ink:#dfe8f0; --nav-dim:#7f94a8; --nav-line:#22364c;
-  --shadow:0 1px 2px rgba(20,45,60,.05),0 8px 26px rgba(20,45,60,.10);
-  --lift:0 2px 6px rgba(20,45,60,.09),0 18px 40px -14px rgba(20,45,60,.26);
-  --r:16px; --sb-h:30px;
+  --fond:#060d1b; --trait:rgba(86,150,255,.22); --trait2:rgba(86,150,255,.38);
+  --texte:#eaf1ff; --doux:#9fb3d6; --faible:#6f84a8;
+  --cyan:#29b6f6; --bleu:#3b82f6; --vert:#2ecc71; --rouge:#ff4d5e; --orange:#ff9f1c; --violet:#a78bfa; --jaune:#ffd23f;
+  --police:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ink:var(--texte); --paper:var(--fond); --bg:#07122a; --panel:#0b1832; --panel-2:rgba(86,150,255,.06);
+  --line:var(--trait); --line-2:var(--trait2); --soft:rgba(59,130,246,.12); --dim:var(--doux);
+  --coral:var(--rouge); --coral-s:rgba(255,77,94,.14); --mint:var(--vert); --mint-s:rgba(46,204,113,.14);
+  --amber:var(--orange); --amber-s:rgba(255,159,28,.14); --cyan-s:rgba(41,182,246,.14);
+  --sky:var(--bleu); --sky-s:rgba(59,130,246,.16); --gold:var(--jaune); --gold-s:rgba(255,210,63,.14);
+  --btn:#2563eb;
+  --nav:#07112a; --nav-2:#0f2040; --nav-ink:var(--texte); --nav-dim:var(--doux); --nav-line:var(--trait);
+  --fond-degrade:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%);
+  --carte:linear-gradient(160deg,rgba(18,40,78,.78),rgba(8,18,38,.82));
+  --bande:rgba(6,13,27,.84);
+  --shadow:0 0 0 1px rgba(41,182,246,.06),0 8px 26px -10px rgba(0,0,0,.55);
+  --lift:0 0 0 1px rgba(41,182,246,.14),0 18px 44px -14px rgba(0,0,0,.75),0 0 30px rgba(41,182,246,.12);
+  --r:14px; --sb-h:30px;
+  color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --ink:#e9f0f6; --paper:#0a121b; --panel:#111f2c; --line:#22384a; --line-2:#2d4658;
-  --soft:#132534; --dim:#8ba0b1; --coral:#e07d82; --coral-s:#3a1d1e; --mint:#5fce9f;
-  --mint-s:#123028; --amber:#e0b06a; --amber-s:#3a2a12; --cyan:#33c4de; --cyan-s:#0f3441;
-  --sky:#6aa8e6; --sky-s:#14304a; --gold:#d9bd6a; --gold-s:#2b2718; --violet:#a08ce6;
-  --nav:#070f18; --nav-2:#0f2032; --nav-ink:#dfe8f0; --nav-dim:#6f88a0; --nav-line:#1b2d40;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -14px rgba(0,0,0,.6);
-  --lift:0 2px 6px rgba(0,0,0,.5),0 20px 44px -16px rgba(0,0,0,.7);
-}}
-:root[data-theme="dark"]{
-  --ink:#e9f0f6; --paper:#0a121b; --panel:#111f2c; --line:#22384a; --line-2:#2d4658;
-  --soft:#132534; --dim:#8ba0b1; --coral:#e07d82; --coral-s:#3a1d1e; --mint:#5fce9f;
-  --mint-s:#123028; --amber:#e0b06a; --amber-s:#3a2a12; --cyan:#33c4de; --cyan-s:#0f3441;
-  --sky:#6aa8e6; --sky-s:#14304a; --gold:#d9bd6a; --gold-s:#2b2718; --violet:#a08ce6;
-  --nav:#070f18; --nav-2:#0f2032; --nav-ink:#dfe8f0; --nav-dim:#6f88a0; --nav-line:#1b2d40;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -14px rgba(0,0,0,.6);
-  --lift:0 2px 6px rgba(0,0,0,.5),0 20px 44px -16px rgba(0,0,0,.7);
+/* Variante claire sobre : mêmes noms, teintes assombries pour garder le contraste. */
+:root[data-theme="light"]{
+  --fond:#eaf0fa; --trait:rgba(37,99,235,.20); --trait2:rgba(37,99,235,.36);
+  --texte:#0c1a33; --doux:#43597e; --faible:#5d7197;
+  --cyan:#0872a3; --bleu:#2563eb; --vert:#16803f; --rouge:#c1283a; --orange:#a85a05; --violet:#6746d0; --jaune:#8a6700;
+  --bg:#f4f7fd; --panel:#ffffff; --panel-2:rgba(37,99,235,.05); --soft:rgba(37,99,235,.08);
+  --coral-s:rgba(193,40,58,.10); --mint-s:rgba(22,128,63,.10); --amber-s:rgba(168,90,5,.10); --cyan-s:rgba(8,114,163,.10);
+  --sky-s:rgba(37,99,235,.10); --gold-s:rgba(138,103,0,.12);
+  --nav:#0c1a33; --nav-2:#16284a; --nav-ink:#eaf1ff; --nav-dim:#a9bbdb; --nav-line:rgba(86,150,255,.30);
+  --fond-degrade:radial-gradient(1200px 520px at 85% -10%,rgba(37,99,235,.14),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(193,40,58,.07),transparent 60%);
+  --carte:linear-gradient(160deg,#ffffff,#f1f5fc);
+  --bande:rgba(234,240,250,.88);
+  --shadow:0 1px 2px rgba(12,26,51,.06),0 8px 22px -10px rgba(12,26,51,.18);
+  --lift:0 2px 6px rgba(12,26,51,.10),0 18px 40px -14px rgba(12,26,51,.30);
+  color-scheme:light;
 }
 *{box-sizing:border-box} html,body{margin:0}
-body{color:var(--ink);background:var(--paper);font-family:"Inter",system-ui,sans-serif;font-size:15px;
+body{color:var(--texte);background:var(--fond-degrade),var(--fond);background-attachment:fixed;font-family:var(--police);font-size:14.5px;
   line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
-.serif{font-family:"Fraunces",Georgia,serif} .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.serif{font-family:var(--police)} .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
 a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 
 /* ── masthead ─────────────────────────────────────────────── */
 /* Entête AletheiaVox — repris de bbs.gk2 (logo médaille + format). */
-.mast{position:sticky;top:0;z-index:56;background:color-mix(in srgb,var(--paper) 88%,transparent);
-  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
+.mast{position:sticky;top:0;z-index:56;background:var(--bande);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--trait2);box-shadow:0 1px 0 rgba(41,182,246,.10),0 8px 30px -12px rgba(41,182,246,.25)}
 .mast-main{display:flex;align-items:center;gap:16px;padding:10px clamp(14px,3vw,26px);max-width:1560px;margin:0 auto}
 .logo{display:flex;align-items:center;gap:12px;flex:none}
 .logo img.medaille{width:46px;height:46px;border-radius:50%;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
 .logo-t{display:flex;flex-direction:column}
-.logo-h{font-family:"Fraunces","Cinzel";font-size:1.4rem;font-weight:700;letter-spacing:.02em;line-height:1;color:var(--sky)}
-.logo .sub{font-family:"JetBrains Mono";font-size:.55rem;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+.logo-h{font-family:var(--police);font-size:1.4rem;font-weight:800;letter-spacing:.02em;line-height:1;color:var(--texte)}
+.logo .sub{font-size:.62rem;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase}
 /* ── Médaillon animé de l'entête ──────────────────────────────────────────
    Les faces se relaient en fondu au-dessus du logo, qui reste dessous : c'est
    lui qu'on voit tant qu'elles n'ont pas chargé. Aucun mouvement — ni
@@ -175,17 +186,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .medaillon.n11{--n:11}
 .medaillon.n12{--n:12}
 .mast .drop{flex:1;min-width:150px;max-width:440px;position:relative}
-.mast .drop input{width:100%;padding:10px 14px 10px 38px;border-radius:11px;border:1.5px solid var(--line-2);
-  background:var(--panel);color:var(--ink);font-family:"JetBrains Mono";font-size:.78rem;outline:none;transition:.15s}
+.mast .drop input{width:100%;padding:10px 14px 10px 38px;border-radius:11px;border:1px solid var(--trait2);
+  background:rgba(10,22,46,.6);background:color-mix(in srgb,var(--panel) 70%,transparent);color:var(--texte);font-family:var(--police);font-size:.8rem;outline:none;transition:.15s}
 .mast .drop input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-s)}
 .mast .drop .ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.5}
 .mast-actions{display:flex;align-items:center;gap:9px;flex:none;margin-left:auto}
-.mast-actions .ibtn{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line-2);background:var(--panel);
+.mast-actions .ibtn{width:38px;height:38px;border-radius:10px;border:1px solid var(--trait2);background:var(--sky-s);
   display:grid;place-items:center;color:var(--ink);font-size:1rem}
 .mast-actions .who{display:flex;align-items:center;gap:9px;padding:5px 12px 5px 6px;border:1px solid var(--line);border-radius:22px}
 .mast-actions .who .av{width:30px;height:30px;border-radius:50%;background:var(--gold-s);display:grid;place-items:center;font-size:.95rem}
 .mast-actions .who b{font-size:.82rem}
-.mast-actions .who i{display:block;font-family:"JetBrains Mono";font-size:.54rem;color:var(--mint);font-style:normal}
+.mast-actions .who i{display:block;font-family:var(--police);font-size:.6rem;color:var(--mint);font-style:normal}
 /* Elle cachait le NOM et laissait « ● Identite locale » : c'est la ligne
    longue qui prenait la largeur, pas la courte. Le bloc telephone plus bas
    retire le pave de texte entier. */
@@ -199,14 +210,14 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   font-weight:500;border:1px solid transparent;white-space:nowrap;cursor:pointer;
   background:none;font-family:inherit;line-height:1;-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent}
 .mnav .it .ca{opacity:.6;font-size:.85em}
-.mnav .it.on{background:var(--sky);color:#fff}
+.mnav .it.on{background:var(--cyan-s);color:var(--cyan);border-color:var(--cyan)}
 /* Hover UNIQUEMENT sur pointeur fin : sur écran tactile (iPhone), une règle :hover
    sur l'entrée fait consommer le 1er tap par l'état survol → le clic n'ouvre jamais
    le mégamenu. On la neutralise donc sur tactile. */
 @media(hover:hover){.mnav .it:hover:not(.on){background:var(--soft);color:var(--ink)}}
 /* .mnav .it{display:flex} écrase .hidden : la règle doit être aussi spécifique. */
 .mnav .it.hidden{display:none}
-.mnav .badge{background:var(--coral);color:#fff;border-radius:20px;font-size:.6rem;padding:1px 6px;font-weight:700}
+.mnav .badge{background:var(--coral);color:#1a0004;border-radius:20px;font-size:.6rem;padding:1px 6px;font-weight:700}
 @media(max-width:720px){
 /* #1187 — le 3e menu (contextuel) faisait DÉBORDER la barre horizontalement sur
    téléphone : le document passait à 619px pour un écran de 390, et le pop se
@@ -270,7 +281,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Contexte du service embarqué, greffé dans le headbar racine (barre unique). */
 .nav-embed{display:inline-flex;align-items:center;gap:9px;padding-left:13px;margin-left:4px;border-left:2px solid var(--line-2)}
 .nav-embed .ne-ic{font-size:1.15rem}
-.nav-embed b{font-family:"Fraunces";font-size:.98rem}
+.nav-embed b{font-family:var(--police);font-size:.98rem}
 .nav-embed .eb-btn{padding:6px 11px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font-size:.76rem;text-decoration:none;cursor:pointer}
 .nav-embed .eb-btn:hover{border-color:var(--cyan);color:var(--cyan)}
 .topnav .who{display:flex;align-items:center;gap:9px;padding:5px 12px 5px 6px;border:1px solid var(--line);border-radius:22px}
@@ -331,11 +342,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
 .rail .sbx{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;border-bottom:1px solid var(--nav-line);margin-bottom:10px}
 .rail .sbx .mk{width:34px;height:34px;border-radius:9px;background:var(--sky);display:grid;place-items:center;font-size:1.05rem}
-.rail .sbx b{font-family:"Fraunces";color:var(--gold);font-size:1.15rem}
+.rail .sbx b{font-family:var(--police);color:var(--gold);font-size:1.15rem}
 .rail a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;color:var(--nav-ink);font-size:.9rem;
   margin:1px 0;transition:.12s}
 .rail a .g{width:20px;text-align:center;font-size:1rem}
-.rail a:hover{background:var(--nav-2)} .rail a.on{background:var(--sky);color:#fff;font-weight:600}
+.rail a:hover{background:var(--nav-2)} .rail a.on{background:var(--btn);color:#fff;font-weight:600}
 .rail a .st{margin-left:auto;width:7px;height:7px;border-radius:50%}
 .rail .sep{height:1px;background:var(--nav-line);margin:11px 6px}
 .rail h4{font-family:"JetBrains Mono";font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;color:var(--nav-dim);
@@ -350,12 +361,12 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 
 /* ── stat tiles ──────────────────────────────────────────── */
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:20px}
-.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:15px 17px;
+.tile{background:var(--carte);border:1px solid var(--trait);border-radius:12px;box-shadow:var(--shadow);padding:15px 17px;
   display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden}
-.tile .lbl{font-family:"JetBrains Mono";font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
-.tile .big{font-family:"Fraunces";font-size:2rem;font-weight:600;line-height:1;display:flex;align-items:baseline;gap:8px}
+.tile .lbl{font-size:.74rem;color:var(--doux)}
+.tile .big{font-family:var(--police);font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;display:flex;align-items:baseline;gap:8px}
 .tile .big small{font-size:.8rem;font-family:"Inter";color:var(--dim);font-weight:400}
-.tile .sub{font-size:.76rem;color:var(--dim)}
+.tile .sub{font-size:.68rem;color:var(--faible)}
 .tile .accent{position:absolute;right:0;top:0;bottom:0;width:5px}
 .tile.a1 .accent{background:var(--mint)} .tile.a2 .accent{background:var(--amber)}
 .tile.a3 .accent{background:var(--sky)} .tile.a4 .accent{background:var(--violet)}
@@ -363,8 +374,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 
 /* ── section headers ─────────────────────────────────────── */
 .sec{margin:26px 0 12px;display:flex;align-items:center;gap:11px}
-.sec h2{font-family:"Fraunces";font-size:1.3rem;font-weight:600;margin:0}
-.sec .rule{flex:1;height:1px;background:var(--line)} .sec .n{font-family:"JetBrains Mono";font-size:.7rem;color:var(--dim)}
+.sec h2{font-family:var(--police);font-size:1.15rem;font-weight:700;margin:0}
+.sec .rule{flex:1;height:1px;background:var(--trait)} .sec .n{font-size:.7rem;color:var(--faible)}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:15px}
 /* MOSAÏQUE (#1239) — les cartes n'ont PAS la même hauteur, et n'ont aucune
@@ -387,9 +398,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 @media (max-width:760px){.grid.feat{columns:1}}
 
 /* ── featured card (principal) ───────────────────────────── */
-.fcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
+.fcard{background:var(--carte);border:1px solid var(--trait);border-radius:var(--r);box-shadow:var(--shadow);
   padding:15px 16px;display:flex;flex-direction:column;gap:10px;transition:.18s}
-.fcard:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--line-2)}
+.fcard:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--trait2)}
 /* NON CONNECTÉ (#1237) : on masque les cartes a auth reelle — inutile de
    montrer « Récupérer ma session » a un invite. */
 .non-connecte .fcard[data-auth]{display:none}
@@ -406,7 +417,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .non-connecte #who-identites{display:none !important}
 .fcard .hd{display:flex;align-items:center;gap:11px}
 .fcard .ic{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:1.3rem;flex:0 0 auto;color:#fff}
-.fcard .nm{flex:1;min-width:0} .fcard .nm b{font-family:"Fraunces";font-size:1.12rem;display:block;line-height:1.1}
+.fcard .nm{flex:1;min-width:0} .fcard .nm b{font-family:var(--police);font-size:1.12rem;display:block;line-height:1.1}
 .fcard .nm .host{font-family:"JetBrains Mono";font-size:.62rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .state{display:inline-flex;align-items:center;gap:5px;font-family:"JetBrains Mono";font-size:.6rem;color:var(--dim);white-space:nowrap}
 .led{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
@@ -416,11 +427,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .led.unknown{background:var(--dim);box-shadow:0 0 0 3px var(--line)}
 .fcard .desc{color:var(--dim);font-size:.85rem;line-height:1.45;flex:1}
 .fcard .foot{display:flex;align-items:center;gap:8px}
-.fcard .open{margin-left:auto;padding:7px 15px;border-radius:9px;background:var(--sky);color:#fff;font-size:.8rem;font-weight:600;border:none}
-.fcard .open.ghost{background:var(--soft);color:var(--sky);border:1px solid var(--line)}
+.fcard .open{margin-left:auto;padding:7px 15px;border-radius:9px;background:var(--btn);color:#fff;font-size:.8rem;font-weight:600;border:none}
+.fcard .open.ghost{background:var(--sky-s);color:var(--cyan);border:1px solid var(--trait2)}
 
 /* ── compact card (système) ──────────────────────────────── */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);
+.card{background:var(--carte);border:1px solid var(--trait);border-radius:12px;box-shadow:var(--shadow);
   padding:12px 14px;display:flex;flex-direction:column;gap:7px;transition:.16s}
 .card:hover{box-shadow:var(--lift);transform:translateY(-1px)}
 .card.off{opacity:.7}
@@ -431,19 +442,19 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .card .cd{color:var(--dim);font-size:.76rem;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2em}
 
 /* ── radio cardlet (réf. brief §6) ───────────────────────── */
-.cardlet{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--lift);padding:16px;
+.cardlet{background:var(--carte);border:1px solid var(--trait);border-radius:var(--r);box-shadow:var(--shadow);padding:16px;
   display:flex;flex-direction:column;gap:12px}
-.cardlet .clh{display:flex;align-items:center;gap:8px;font-family:"Fraunces";font-size:1.05rem}
+.cardlet .clh{display:flex;align-items:center;gap:8px;font-family:var(--police);font-size:1.05rem}
 .cardlet .clh .tag{margin-left:auto;font-family:"JetBrains Mono";font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;
   color:var(--violet);background:color-mix(in srgb,var(--violet) 12%,transparent);padding:3px 8px;border-radius:20px}
 .cardlet .bar{display:flex;align-items:center;gap:9px}
 .cardlet .bar button{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--line-2);background:var(--panel);
   display:grid;place-items:center;font-size:.9rem;color:var(--ink)}
-.cardlet .bar .play{width:42px;height:42px;background:var(--violet);color:#fff;border-color:var(--violet);font-size:1rem}
+.cardlet .bar .play{width:42px;height:42px;background:var(--violet);color:#0a0620;border-color:var(--violet);font-size:1rem}
 .cardlet .np{display:flex;gap:12px}
 .cardlet .cover{width:74px;height:74px;border-radius:12px;flex:0 0 auto;background:linear-gradient(135deg,var(--sky),var(--cyan));
   display:grid;place-items:center;font-size:1.9rem;color:#fff}
-.cardlet .meta b{font-family:"Fraunces";font-size:1.15rem;display:block}
+.cardlet .meta b{font-family:var(--police);font-size:1.15rem;display:block}
 .cardlet .meta .art{color:var(--dim);font-size:.82rem}
 .cardlet .meta .live{display:inline-flex;align-items:center;gap:6px;margin-top:4px;font-family:"JetBrains Mono";font-size:.58rem;
   text-transform:uppercase;letter-spacing:.1em;color:var(--coral)}
@@ -545,7 +556,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    toutes. */
 .dockmaitre{position:fixed;left:0;right:0;bottom:var(--dock-b,30px);pointer-events:auto;
   z-index:59;display:flex;align-items:center;gap:10px;justify-content:center;
-  padding:5px 12px;background:var(--nav);border-top:1px solid var(--nav-line);
+  padding:5px 12px;background:var(--nav);border-top:1px solid var(--trait2);
   color:var(--nav-ink);font-size:.78rem}
 .dockmaitre[hidden]{display:none!important}
 .dm-et{color:var(--nav-dim);letter-spacing:.02em}
@@ -608,7 +619,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .flux-pastilles{display:flex;align-items:center;gap:6px}
 .flux-pastilles:empty{display:none}
 .fpast{position:relative;width:28px;height:28px;border-radius:50%;flex:0 0 auto;
-  border:1px solid var(--line-2);background:var(--panel);color:var(--ink);
+  border:1px solid var(--trait2);background:var(--sky-s);color:var(--texte);
   display:grid;place-items:center;font-size:.82rem;cursor:pointer;padding:0}
 .fpast:hover{border-color:var(--violet)}
 .fpast[data-joue="1"]{border-color:var(--violet);
@@ -776,7 +787,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 @media (prefers-reduced-motion:reduce){.carte-bulle{transition:opacity .12s}}
 .carte-bulle .cb-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .carte-bulle .cb-ic{font-size:1.15rem}
-.carte-bulle .cb-nom{font-family:"Fraunces",Georgia,serif;font-size:1rem;font-weight:700;flex:1;min-width:0;
+.carte-bulle .cb-nom{font-family:var(--police);font-size:1rem;font-weight:700;flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .carte-bulle .cb-k{font-family:"JetBrains Mono";font-size:.54rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sky)}
 .carte-bulle .cb-spec{font-size:.82rem;color:var(--ink);margin:6px 0 9px;line-height:1.42}
@@ -810,8 +821,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .carte-bulle .cb-dot.on{background:var(--sky);width:15px;border-radius:4px}
 .carte-bulle .cb-x{border:1px solid var(--line-2);background:none;color:var(--dim);border-radius:8px;padding:6px 12px;font-size:.78rem;cursor:pointer}
 .carte-bulle .cb-x:hover{color:var(--ink);border-color:var(--ink)}
-.carte-bulle .cb-nx{border:none;background:var(--sky);color:#fff;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:600;cursor:pointer}
-.carte-bulle .cb-nx:hover{background:var(--nav)}
+.carte-bulle .cb-nx{border:none;background:var(--btn);color:#fff;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:600;cursor:pointer}
+.carte-bulle .cb-nx:hover{background:var(--bleu)}
 /* OVERLAY SURF (#1337) */
 .surf-ov{position:fixed;left:0;right:0;bottom:0;z-index:52;display:flex;flex-direction:column;
   background:var(--bg);top:var(--mast-h,56px)}
@@ -938,16 +949,16 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    gagne une colonne de cartes au passage. */
 .accueil{display:block}
 
-.side .info{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:15px 17px;margin-bottom:16px}
-.side .info h3{font-family:"Fraunces";margin:0 0 9px;font-size:1.05rem;display:flex;align-items:center;gap:7px}
+.side .info{background:var(--carte);border:1px solid var(--trait);border-radius:var(--r);box-shadow:var(--shadow);padding:15px 17px;margin-bottom:16px}
+.side .info h3{font-family:var(--police);margin:0 0 9px;font-size:1.05rem;display:flex;align-items:center;gap:7px}
 .side .info li{list-style:none;display:flex;align-items:center;gap:8px;padding:3px 0;font-size:.84rem;color:var(--dim)}
 .side .info li::before{content:"✓";color:var(--mint);font-weight:700}
 
 .hidden{display:none}
 /* Barre de STATUT bas (« où suis-je ») — fil d'Ariane + URL de l'embed. */
 .statusbar{position:fixed;bottom:0;left:0;right:0;z-index:44;height:30px;display:flex;align-items:center;gap:10px;
-  padding:0 16px;background:color-mix(in srgb,var(--panel) 92%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
-  border-top:1px solid var(--line);font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim)}
+  padding:0 16px;background:var(--bande);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border-top:1px solid var(--trait2);font-family:var(--police);font-size:.68rem;color:var(--doux)}
 .statusbar b{color:var(--ink)} .statusbar .grow{flex:1} .statusbar .sep{opacity:.6}
 .statusbar .crumb{color:var(--sky);cursor:pointer} .statusbar .crumb:hover{text-decoration:underline}
 .statusbar .sb-url{color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
@@ -959,7 +970,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .embed-bar{display:flex;align-items:center;gap:11px;padding:10px 4px 12px}
 .embed-bar .eb-back{padding:7px 13px;border-radius:9px;background:var(--soft);color:var(--sky);font-size:.82rem;font-weight:600;border:1px solid var(--line)}
 .embed-bar .eb-ic{font-size:1.35rem}
-.embed-bar b{font-family:"Fraunces";font-size:1.2rem}
+.embed-bar b{font-family:var(--police);font-size:1.2rem}
 .embed-bar .grow{flex:1}
 .embed-bar .eb-btn{padding:7px 13px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font-size:.8rem;text-decoration:none}
 .embed-bar .eb-btn:hover{border-color:var(--cyan);color:var(--cyan)}
@@ -995,7 +1006,7 @@ body:has(#view-embed:not(.hidden)) .embed-hint{margin:6px 10px}
    trouvait aucun parent flex et le cadre retombait à sa hauteur de contenu. */
 body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;flex-direction:column}
 .embed-wrap iframe{width:100%;height:100%;border:0;display:block;background:var(--panel)}
-.aide-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;max-width:820px;line-height:1.6}
+.aide-card{background:var(--carte);border:1px solid var(--trait);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;max-width:820px;line-height:1.6}
 .aide-card ul{margin:8px 0} .aide-card li{margin:4px 0}
 .aide-h{font-family:inherit;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);
   margin:22px 0 4px;padding-top:16px;border-top:1px solid var(--line)}
@@ -1041,12 +1052,12 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
   -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px)}
 .bienv-scrim.hidden{display:none}
 .bienv{width:min(680px,100%);max-height:calc(100vh - 44px);overflow-y:auto;
-  background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:var(--lift)}
+  background:linear-gradient(160deg,var(--panel),var(--bg));border:1px solid var(--trait2);border-radius:16px;box-shadow:var(--lift)}
 .bienv-hd{padding:24px 28px 18px;border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg,var(--sky-s),transparent);border-radius:20px 20px 0 0}
-.bienv-eb{font-family:"JetBrains Mono";font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;
-  color:var(--sky);font-weight:700}
-.bienv-hd h2{font-family:"Fraunces","Cinzel",Georgia,serif;font-size:1.7rem;font-weight:700;
+  background:linear-gradient(180deg,var(--sky-s),transparent);border-radius:16px 16px 0 0}
+.bienv-eb{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--cyan);font-weight:700}
+.bienv-hd h2{font-family:var(--police);font-size:1.6rem;font-weight:800;
   letter-spacing:-.01em;margin:8px 0 7px;line-height:1.1;text-wrap:balance}
 .bienv-lede{font-size:.95rem;color:var(--dim);max-width:56ch;margin:0}
 .bienv-bd{padding:20px 28px 6px}
@@ -1079,8 +1090,8 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
   border-radius:20px;padding:2px 8px;color:var(--dim)}
 .bienv-ft{display:flex;align-items:center;gap:11px;flex-wrap:wrap;padding:16px 28px 24px}
 .bienv-ft button{border-radius:11px;padding:11px 20px;font-size:.9rem;font-weight:600;font-family:inherit;cursor:pointer}
-.bienv-entrer{border:0;background:var(--sky);color:#fff;box-shadow:var(--shadow)}
-.bienv-entrer:hover{background:var(--nav)}
+.bienv-entrer{border:0;background:var(--btn);color:#fff;box-shadow:var(--shadow)}
+.bienv-entrer:hover{background:var(--bleu)}
 .bienv-aide{border:1px solid var(--line-2);background:none;color:var(--dim)}
 .bienv-aide:hover{color:var(--ink);border-color:var(--ink)}
 .bienv-note{font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim);margin-left:auto}
@@ -1121,7 +1132,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 .tour-tip .dot{width:6px;height:6px;border-radius:50%;background:var(--line-2)}
 .tour-tip .dot.on{background:var(--sky);width:16px;border-radius:4px}
 .tour-tip .sk{border:none;background:none;color:var(--dim);font-size:.78rem;cursor:pointer}
-.tour-tip .nx{border:none;background:var(--sky);color:#fff;border-radius:9px;padding:7px 15px;font-size:.82rem;font-weight:600;cursor:pointer}
+.tour-tip .nx{border:none;background:var(--btn);color:#fff;border-radius:9px;padding:7px 15px;font-size:.82rem;font-weight:600;cursor:pointer}
 @media(prefers-reduced-motion:reduce){.tour-hole,.tour-tip{transition:none}}
 </style>
 
