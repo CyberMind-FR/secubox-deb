@@ -1,3 +1,13 @@
+secubox-nextcloud (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /nextcloud/ refaite au profil Aurora (#2612) : une page autonome (plus de police ni de script externes, plus de peau CRT), tuiles Conteneur, Comptes, Données, Stockage, Version, panneaux Conteneur, Stockage, Adresses de connexion, Configuration, Comptes, Sauvegardes, Journal, Console occ et Zone dangereuse ; modes ?demo=1 (données fictives, actions inertes) et ?embed=1.
+  * Bogues de l'ancienne page corrigés : tous les confirm() et prompt() (arrêt, désactivation, mot de passe, quota, console occ, suppressions) sont remplacés par une confirmation dans la page, car le navigateur du viewer les ignore et les actions ne partaient jamais ; une session absente ou refusée affiche un bandeau et des tirets au lieu de rediriger vers la connexion ; les valeurs d'API étaient échappées puis posées en textContent (double échappement) ; stockage jamais mesuré et comptes non relevés (cache froid) s'affichaient 0 au lieu de « — » ; un détail d'erreur structuré (422) s'affichait « [object Object] » ; les liens d'applications mobiles ne sont posés que s'ils sont en https ; plus de remplissage innerHTML avec des données d'API.
+  * Orages occ évités : mêmes sept lectures que l'ancienne page (état, stockage, connexions, comptes, sauvegardes, journal, configuration), jamais en parallèle d'elles-mêmes ; l'actualisation automatique (45 s, onglet visible, sans saisie ni confirmation ouverte) ne relit que l'état et le stockage, deux lectures en cache ; après une action sur le conteneur, seuls ces deux-là sont relus.
+  * Appels d'écriture inchangés (mêmes routes, méthodes et corps). Confirmation ajoutée avant redémarrage, démarrage, installation et sauvegarde ; saisie du nom pour supprimer un compte ou une sauvegarde, restaurer, désinstaller, et pour une commande occ qui coupe ou efface.
+  * Non repris : le bouton d'actualisation automatique à bascule (remplacé par l'actualisation automatique lente) ; le journal reste celui d'installation, seul fourni par l'API, et s'intitule désormais ainsi ; aucune action ajoutée (ni mise à jour, ni SSL).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 09:00:00 +0200
+
 secubox-nextcloud (1.8.10-1~bookworm1) bookworm; urgency=medium
 
   * Dossiers photo : le groupe des dossiers d'usagers devient 100995 (utilisateur photoprism du conteneur, uid 995) et non 100000 : sans cela PhotoPrism ne les aurait pas lus (#1516). Mode 2750 100033:100995.

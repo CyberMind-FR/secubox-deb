@@ -4,726 +4,592 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Nextcloud au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Nextcloud</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Nextcloud</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(0,130,201,0.1); border-color: var(--nextcloud); color: var(--nextcloud); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--nextcloud); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
-        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
-        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.75rem; word-break: break-all; }
-        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
-        .storage-bar { width: 100%; height: 24px; background: var(--bg-dark); border-radius: 6px; overflow: hidden; margin-top: 0.5rem; }
-        .storage-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--nextcloud)); display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 0.75rem; }
-        .app-links { display: flex; gap: 1rem; margin-top: 1rem; }
-        .app-link { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--bg-dark); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.9rem; }
-        .app-link:hover { background: var(--border); }
-
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        /* #429 hardening: pill status, toasts, bars, forms, danger zone */
-        .pill { display: inline-flex; align-items: center; gap: .4rem; padding: 4px 12px; border-radius: 12px; font-size: .8rem; border: 1px solid var(--border); }
-        .pill.ok { background: rgba(51,255,102,0.15); color: var(--green); border-color: var(--green); }
-        .pill.warn { background: rgba(255,179,71,0.15); color: var(--p31-decay); border-color: var(--p31-decay); }
-        .pill.error { background: rgba(255,68,102,0.15); color: var(--red); border-color: var(--red); }
-        .pill.muted { background: rgba(107,107,122,0.1); color: var(--text-dim); border-color: var(--border); }
-        .toast{position:fixed;bottom:1.2rem;right:1.2rem;padding:.7rem 1.1rem;border-radius:10px;
-          background:var(--bg-card);border:1px solid var(--border);color:var(--text);opacity:0;
-          transform:translateY(8px);transition:all .2s;z-index:50;max-width:min(90vw,360px)}
-        .toast.show{opacity:1;transform:none}
-        .toast.success{border-color:var(--green)} .toast.error{border-color:var(--red)}
-        .err{color:var(--red);font-size:.8rem} .muted{color:var(--text-dim);font-size:.8rem}
-        .copy-btn { padding: 2px 8px; font-size: .7rem; }
-        pre.log-out { background: var(--tube-light); border: 1px solid var(--border); border-radius: 6px; padding: .75rem; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: .78rem; margin: 0; }
-        .danger-zone { border: 1px solid var(--red); }
-        .danger-zone h2 { color: var(--red); }
-        .form-row { display: flex; gap: .5rem; margin-bottom: .6rem; flex-wrap: wrap; align-items: center; }
-        .form-row input, .form-row select { flex: 1; min-width: 120px; }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block;overflow-wrap:anywhere}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.vert{border-color:var(--vert);color:var(--vert)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .pan.dang{border-color:rgba(255,77,94,.5)}
+        .large{grid-column:1/-1}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{min-width:150px}
+        td.act .grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .barre{height:8px;border-radius:6px;background:rgba(159,179,214,.16);overflow:hidden;margin:6px 0 4px}
+        .barre>i{display:block;height:100%;background:var(--cyan)} .barre>i.att{background:var(--orange)} .barre>i.hors{background:var(--rouge)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie.nu{background:none;border:none;padding:0}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select,.champ{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus,.champ:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.08);border-radius:10px;padding:9px 12px;margin:0 0 10px;display:grid;gap:8px;font-size:.8rem}
+        .conf.dang{border-color:var(--rouge);background:rgba(255,77,94,.08)}
+        .conf p{margin:0;overflow-wrap:anywhere} .conf label{display:grid;gap:3px;font-size:.72rem;color:var(--doux)}
+        .conf .bout{display:flex;gap:6px;flex-wrap:wrap}
+        pre.sortie{margin:8px 0 0;background:rgba(4,10,22,.8);border:1px solid var(--trait);border-radius:8px;padding:8px 10px;max-height:260px;overflow:auto;font-size:.72rem;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--doux)}
+        .url{display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--trait);border-radius:8px;padding:5px 9px;margin:3px 0 7px;background:rgba(8,18,38,.6)}
+        .url span{min-width:0;overflow-wrap:anywhere}
+        .lib{color:var(--doux);font-size:.74rem}
+        .ligne{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+        .ligne .champ{flex:1 1 200px;width:auto}
+        .liens{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
     </style>
 </head>
-<body class="crt-light">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>☁️ Nextcloud</h1>
-            <div>
-                <span class="pill muted" id="status-pill">Loading…</span>
-                <button class="btn success" id="btn-start" onclick="startService()" style="display:none">Start</button>
-                <button class="btn danger" id="btn-stop" onclick="stopService()" style="display:none">Stop</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn" onclick="toggleAuto()">Auto ⟳</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5 4.25 4.25 0 0 1 17.5 18z"/></svg>
+                <div><h1>Nextcloud</h1><small id="sousTitre">Synchronisation de fichiers, agendas et contacts (LXC)</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
-        <div class="muted" style="margin:-0.75rem 0 1.25rem">
-            v<span id="nc-version">—</span> · <span id="nc-url">—</span>
-        </div>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
 
-        <div class="stats-row">
-            <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
-            <div class="stat-card"><div class="value" id="data-size">-</div><div class="label">Data Size</div></div>
-            <div class="stat-card"><div class="value" id="storage-pct">-</div><div class="label">Storage Used</div></div>
-            <div class="stat-card"><div class="value" id="version">-</div><div class="label">Version</div></div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cEtat" title="État du conteneur LXC Nextcloud. Joignable : l’API juge la marche du conteneur par la réponse de son port."><span class="l">Conteneur</span><span class="v" id="tEtat">—</span><span class="s" id="sEtat">LXC</span></div>
+            <div class="tuile cy" title="Nombre de comptes Nextcloud, relevé par occ et gardé en cache par l’API (rafraîchi chaque minute). « — » si le conteneur est arrêté ou si le cache est encore froid."><span class="l">Comptes</span><span class="v" id="tComptes">—</span><span class="s">usagers Nextcloud</span></div>
+            <div class="tuile cy" title="Taille du volume de données, mesurée dans le conteneur par l’API toutes les 10 minutes (jamais à la demande). « — » tant qu’aucune mesure n’a abouti."><span class="l">Données</span><span class="v" id="tDonnees">—</span><span class="s" id="sDonnees">volume de données</span></div>
+            <div class="tuile cy" id="cStock" title="Part du disque occupée, même mesure que la tuile Données. « — » tant qu’aucune mesure n’a abouti."><span class="l">Stockage utilisé</span><span class="v" id="tStock">—</span><span class="s" id="sStock">du disque</span></div>
+            <div class="tuile cy" title="Version de Nextcloud relevée par occ (cache de l’API)."><span class="l">Version</span><span class="v" id="tVersion">—</span><span class="s" id="sUrl">&nbsp;</span></div>
+        </section>
 
-        <div class="card">
-            <h2>Storage</h2>
-            <div class="storage-bar">
-                <div class="storage-fill" id="storage-fill" style="width:0%">0%</div>
+        <section class="grille">
+            <div class="pan"><h3>Conteneur</h3>
+                <div id="r-conteneur" class="retour" hidden></div>
+                <div id="z-conteneur"></div>
+                <div class="ligne">
+                    <button class="btn vert" id="bDemarrer" type="button" hidden>Démarrer</button>
+                    <button class="btn danger" id="bArreter" type="button" hidden>Arrêter</button>
+                    <button class="btn" id="bRedemarrer" type="button">Redémarrer le conteneur</button>
+                    <button class="btn prim" id="bInstaller" type="button" hidden>Installer Nextcloud</button>
+                </div>
+                <p class="note">Arrêter ou redémarrer le conteneur coupe Nextcloud pour tous les usagers le temps de l’opération.</p>
             </div>
-            <p style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-dim)">
-                <span id="disk-used">-</span> used of <span id="disk-total">-</span>
-            </p>
-        </div>
 
-        <div class="card">
-            <h2>Connection URLs</h2>
-            <div id="connections-body" class="muted">Loading…</div>
-            <div class="app-links">
-                <a href="#" id="ios-link" class="app-link" target="_blank" rel="noopener">📱 iOS App</a>
-                <a href="#" id="android-link" class="app-link" target="_blank" rel="noopener">🤖 Android App</a>
+            <div class="pan"><h3>Stockage <i id="nStock"></i></h3>
+                <div class="barre" title="Part du disque occupée"><i id="bStock" style="width:0%"></i></div>
+                <dl class="kv"><dt>Occupé</dt><dd id="kUsed">—</dd><dt>Total</dt><dd id="kTotal">—</dd><dt>Données</dt><dd id="kData">—</dd><dt>Mesuré</dt><dd id="kTs">—</dd></dl>
+                <p class="note">Mesure faite par l’API toutes les 10 minutes dans le conteneur ; cette page ne la déclenche jamais.</p>
             </div>
-        </div>
 
-        <div class="card">
-            <h2>Users</h2>
-            <div class="form-row">
-                <input type="text" id="nu-uid" placeholder="uid">
-                <input type="text" id="nu-name" placeholder="display name (optional)">
-                <input type="password" id="nu-pass" placeholder="password">
-                <button class="btn primary" onclick="addUser()">Add user</button>
+            <div class="pan"><h3>Adresses de connexion</h3>
+                <div id="bConn" class="vide">—</div>
+                <div class="liens"><a id="lIos" class="btn sm" href="#" target="_blank" rel="noopener" hidden>Application iOS</a><a id="lAndroid" class="btn sm" href="#" target="_blank" rel="noopener" hidden>Application Android</a></div>
             </div>
-            <table>
-                <thead><tr><th>User</th><th>Name</th><th>State</th><th>Quota</th><th>Actions</th></tr></thead>
-                <tbody id="users-body"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
-            </table>
-        </div>
 
-        <div class="card">
-            <h2>Backups</h2>
-            <table>
-                <thead><tr><th>Name</th><th>Size</th><th>Date</th><th></th></tr></thead>
-                <tbody id="backup-list"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
-            </table>
-            <button class="btn primary" onclick="createBackup()" style="margin-top:1rem">Create Backup</button>
-        </div>
-
-        <div class="card">
-            <h2>Logs
-                <span>
-                    <select id="log-lines">
-                        <option value="50">50</option>
-                        <option value="100" selected>100</option>
-                        <option value="300">300</option>
-                        <option value="1000">1000</option>
-                    </select>
-                    <button class="btn" onclick="loadLogs()">Refresh</button>
-                </span>
-            </h2>
-            <pre class="log-out" id="log-out">Loading…</pre>
-        </div>
-
-        <div class="card">
-            <h2>OCC Console</h2>
-            <div class="form-row">
-                <input type="text" id="occ-cmd" placeholder="e.g. status, config:list, files:scan --all">
-                <button class="btn primary" onclick="runOcc()">Run</button>
+            <div class="pan"><h3>Configuration</h3>
+                <div id="r-config" class="retour" hidden></div>
+                <form class="saisie nu" id="fConfig" hidden>
+                    <label>Port HTTP<input name="http_port" type="number" min="1" max="65535"></label>
+                    <label>Domaine<input name="domain"></label>
+                    <label>Limite mémoire<input name="memory_limit"></label>
+                    <label>Envoi maximal<input name="upload_max"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Enregistrer</button></div>
+                </form>
+                <dl class="kv" id="kConfig"><dt>Compte admin</dt><dd>—</dd></dl>
+                <p class="note" id="nConfig">—</p>
             </div>
-            <pre class="log-out" id="occ-out">—</pre>
-        </div>
 
-        <div class="card">
-            <h2>Config</h2>
-            <div id="config-body" class="muted">Loading…</div>
-        </div>
+            <div class="pan large"><h3>Comptes <i id="nComptes"></i><button class="btn prim sm" id="addUser" type="button">+ Ajouter un compte</button></h3>
+                <div id="r-comptes" class="retour" hidden></div>
+                <div id="z-comptes"></div>
+                <form class="saisie" id="fUser" hidden>
+                    <label>Identifiant<input name="uid" autocomplete="off" required></label>
+                    <label>Nom affiché (facultatif)<input name="display_name" autocomplete="off"></label>
+                    <label>Mot de passe<input name="password" type="password" autocomplete="new-password" required></label>
+                    <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fUser">Annuler</button></div>
+                </form>
+                <form class="saisie" id="fQuota" hidden>
+                    <label id="lQuota">Quota<input name="quota" autocomplete="off" placeholder="5GB, none ou default" required></label>
+                    <div class="bout"><button class="btn prim" type="submit">Appliquer</button><button class="btn" type="button" data-ferme="fQuota">Annuler</button></div>
+                </form>
+                <form class="saisie" id="fMdp" hidden>
+                    <label id="lMdp">Nouveau mot de passe<input name="password" type="password" autocomplete="new-password" required></label>
+                    <div class="bout"><button class="btn prim" type="submit">Réinitialiser</button><button class="btn" type="button" data-ferme="fMdp">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Compte</th><th>Nom</th><th>État</th><th>Quota</th><th>Actions</th></tr></thead><tbody id="bComptes"></tbody></table></div></div>
 
-        <div class="card danger-zone">
-            <h2>Danger Zone</h2>
-            <div class="form-row">
-                <button class="btn danger" onclick="doUninstall()">Uninstall</button>
+            <div class="pan large"><h3>Sauvegardes <i id="nSauv"></i><button class="btn prim sm" id="bSauvegarder" type="button">Créer une sauvegarde</button></h3>
+                <div id="r-sauv" class="retour" hidden></div>
+                <div id="z-sauv"></div>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Taille</th><th>Date</th><th>Actions</th></tr></thead><tbody id="bSauv"></tbody></table></div></div>
+
+            <div class="pan"><h3>Journal d’installation</h3>
+                <div class="ligne"><label class="lib" for="nbLignes">Lignes</label>
+                    <select id="nbLignes" class="champ" style="width:auto;flex:0 0 auto"><option value="50">50</option><option value="100" selected>100</option><option value="300">300</option><option value="1000">1000</option></select>
+                    <button class="btn sm" id="bJournal" type="button">Actualiser</button></div>
+                <pre class="sortie" id="sJournal">—</pre>
+                <p class="note">L’API ne fournit que le journal d’installation du conteneur, pas les journaux d’exécution de Nextcloud.</p>
             </div>
-            <p class="muted">Uninstall removes the container (data on disk is preserved) — type "nextcloud" to confirm.</p>
-        </div>
 
-        <div class="card">
-            <h2>Actions</h2>
-            <button class="btn" onclick="restartService()">Restart Container</button>
-            <button class="btn primary" id="btn-install" onclick="installNextcloud()" style="display:none">Install Nextcloud</button>
-        </div>
-    </main>
+            <div class="pan"><h3>Console occ</h3>
+                <div id="r-occ" class="retour" hidden></div>
+                <div id="z-occ"></div>
+                <form class="ligne" id="fOcc">
+                    <input class="champ" id="cmdOcc" autocomplete="off" placeholder="status, config:list, files:scan --all" aria-label="Commande occ">
+                    <button class="btn prim" type="submit">Exécuter</button>
+                </form>
+                <pre class="sortie" id="sOcc">—</pre>
+                <p class="note">Chaque exécution demande une confirmation. Les commandes qui coupent ou effacent (mode maintenance, suppression…) demandent de saisir « occ ».</p>
+            </div>
 
+            <div class="pan large dang"><h3>Zone dangereuse</h3>
+                <div id="r-danger" class="retour" hidden></div>
+                <div id="z-danger"></div>
+                <div class="ligne"><button class="btn danger" id="bDesinstaller" type="button">Désinstaller</button></div>
+                <p class="note">Désinstaller supprime le conteneur ; les données sur le disque sont conservées. Il faut saisir « nextcloud » pour confirmer.</p>
+            </div>
+        </section>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/nextcloud';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        // --- #429 hardening helpers -------------------------------------
-        function esc(s) {
-            return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
-                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
-        function toast(msg, kind) {
-            let t = document.getElementById('toast');
-            if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
-            t.textContent = msg;
-            t.className = 'toast ' + (kind || 'info') + ' show';
-            clearTimeout(window.__toastT);
-            window.__toastT = setTimeout(() => t.classList.remove('show'), 3500);
-        }
-        function confirmTyped(word) {
-            return prompt('Type "' + word + '" to confirm this irreversible action:') === word;
-        }
+        let ETAT = null, SESSION_KO = false, CONFIRM = null, OCCUPE = false;
 
-        // --- fail-safe fetch: never throws to the UI, 401 -> login -------
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(json) {
+            const h = { Accept: 'application/json' };
+            if (json) h['Content-Type'] = 'application/json';
+            const t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+            return h;
+        }
+        function texteErreur(corps, statut) {
+            const d = corps && corps.detail;
+            if (typeof d === 'string' && d) return d;
+            if (Array.isArray(d) && d.length) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + statut);
+            return 'HTTP ' + statut;
+        }
+        // Accès unique à l'API : ne lève jamais. En démonstration, toute écriture est inerte.
         async function api(path, opts = {}) {
+            if (DEMO && (opts.method || 'GET') !== 'GET') return { __error: 'Démonstration : action inerte.', __demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
-                const body = res.headers.get('content-type')?.includes('json') ? await res.json() : await res.text();
-                if (!res.ok) throw new Error((body && body.detail) || ('HTTP ' + res.status));
-                return body;
+                const res = await fetch(API + path, { ...opts, credentials: 'same-origin', cache: 'no-store', headers: entetes(opts.body !== undefined) });
+                if (res.status === 401 || res.status === 403) { SESSION_KO = true; return { __error: 'Session requise.', __statut: res.status }; }
+                const type = res.headers.get('content-type') || '';
+                const corps = type.includes('json') ? await res.json() : await res.text();
+                if (!res.ok) return { __error: texteErreur(corps, res.status), __statut: res.status };
+                return corps;
             } catch (e) {
-                return { __error: e.message || 'request failed' };
+                return { __error: 'Serveur injoignable.' };
             }
         }
+        const echec = r => !r || r.__error;
 
-        // --- status ------------------------------------------------------
-        async function loadStatus() {
-            const s = await api('/status');
-            const pill = document.getElementById('status-pill');
-            if (!s || s.__error) { pill.textContent = 'error'; pill.className = 'pill error'; return; }
-            let label = 'not installed', cls = 'muted';
-            if (s.installed && s.running && s.reachable) { label = 'running'; cls = 'ok'; }
-            else if (s.installed && s.running) { label = 'running (unreachable)'; cls = 'warn'; }
-            else if (s.installed) { label = 'stopped'; cls = 'error'; }
-            pill.textContent = label; pill.className = 'pill ' + cls;
-            document.getElementById('nc-version').textContent = esc(s.version || '—');
-            const webUrl = s.web_url || '';
-            document.getElementById('nc-url').innerHTML = /^https?:\/\//i.test(webUrl)
-                ? `<a href="${esc(webUrl)}" target="_blank" rel="noopener">${esc(webUrl)}</a>` : (esc(webUrl) || '—');
-            document.getElementById('user-count').textContent = s.user_count != null ? s.user_count : '-';
-            document.getElementById('version').textContent = esc(s.version || '-');
-            document.getElementById('btn-install').style.display = s.installed ? 'none' : '';
-            document.getElementById('btn-start').style.display = (s.installed && !s.running) ? '' : 'none';
-            document.getElementById('btn-stop').style.display = s.running ? '' : 'none';
+        function retour(zone, ok, msg) { const r = $('r-' + zone); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function bilan(zone, r, msgOk, msgKo) {
+            if (!echec(r)) { retour(zone, true, msgOk); return true; }
+            retour(zone, false, (r && r.__demo) ? r.__error : msgKo + ' : ' + ((r && r.__error) || 'échec') + '.');
+            return false;
+        }
+        function quand(ts) {
+            const n = Number(ts);
+            if (!n) return '—';
+            const d = new Date(n < 1e12 ? n * 1000 : n);
+            if (isNaN(d)) return '—';
+            const s = Math.round((Date.now() - d.getTime()) / 1000);
+            if (s >= 0 && s < 90) return 'il y a ' + s + ' s';
+            if (s >= 0 && s < 5400) return 'il y a ' + Math.round(s / 60) + ' min';
+            return d.toLocaleString('fr-FR');
         }
 
-        // --- storage -------------------------------------------------------
-        async function loadStorage() {
-            const d = await api('/storage');
-            const fill = document.getElementById('storage-fill');
-            if (!d || d.__error) {
-                fill.style.width = '0%'; fill.textContent = '—';
-                document.getElementById('disk-used').textContent = '—';
-                document.getElementById('disk-total').textContent = '—';
-                document.getElementById('data-size').textContent = '—';
-                document.getElementById('storage-pct').textContent = '—';
+        // ----- Confirmation intégrée : jamais de dialogue natif -----
+        function annule() { if (CONFIRM) { CONFIRM.remove(); CONFIRM = null; annoncer(); } }
+        function demande(zone, o) {
+            annule();
+            const b = el('div', 'conf' + (o.danger ? ' dang' : ''));
+            b.setAttribute('role', 'alertdialog');
+            b.appendChild(el('p', null, o.texte));
+            let champ = null;
+            if (o.mot) {
+                const l = el('label', null, 'Saisir « ' + o.mot + ' » pour confirmer');
+                champ = el('input', 'champ'); champ.autocomplete = 'off'; champ.setAttribute('aria-label', 'Confirmation : saisir ' + o.mot);
+                l.appendChild(champ); b.appendChild(l);
+            }
+            const bout = el('div', 'bout');
+            const ok = el('button', 'btn ' + (o.danger ? 'danger' : 'prim'), 'Confirmer'); ok.type = 'button';
+            const non = el('button', 'btn', 'Annuler'); non.type = 'button';
+            if (champ) { ok.disabled = true; champ.addEventListener('input', () => { ok.disabled = champ.value !== o.mot; }); }
+            ok.addEventListener('click', async () => { if (champ && champ.value !== o.mot) return; annule(); await o.action(); });
+            non.addEventListener('click', annule);
+            bout.append(ok, non); b.appendChild(bout);
+            $(zone).appendChild(b); CONFIRM = b;
+            (champ || ok).focus(); annoncer();
+        }
+
+        // ----- État, stockage (lectures légères, seules rafraîchies automatiquement) -----
+        const DEMO_STATUS = { installed: true, running: true, reachable: true, version: '29.0.7', user_count: 4, web_url: 'http://192.0.2.10:8080', ssl_enabled: false };
+        const DEMO_STORAGE = { used: '41G', total: '220G', used_pct: 19, data: '37G', ts: Date.now() / 1000 - 240 };
+
+        function rendEtat(s) {
+            const pastille = $('etat');
+            const pose = (cls, txt) => { pastille.className = 'actif ' + cls; pastille.textContent = txt; };
+            const tuile = $('cEtat');
+            if (!s) {
+                pose(SESSION_KO ? 'neutre' : 'hors', SESSION_KO ? 'SESSION REQUISE' : 'INDISPONIBLE');
+                tuile.className = 'tuile cy'; $('tEtat').textContent = '—'; $('sEtat').textContent = 'LXC';
+                $('tComptes').textContent = '—'; $('tVersion').textContent = '—'; $('sUrl').textContent = ' ';
+                $('sousTitre').textContent = 'Synchronisation de fichiers, agendas et contacts (LXC)';
+                for (const id of ['bDemarrer', 'bArreter', 'bInstaller']) $(id).hidden = true;
                 return;
             }
-            const pct = Math.max(0, Math.min(100, parseInt(d.used_pct, 10) || 0));
-            fill.style.width = pct + '%';
-            fill.textContent = pct + '%';
-            document.getElementById('disk-used').textContent = esc(d.used || '-');
-            document.getElementById('disk-total').textContent = esc(d.total || '-');
-            document.getElementById('data-size').textContent = esc(d.data || '-');
-            document.getElementById('storage-pct').textContent = pct + '%';
+            let lib = 'NON INSTALLÉ', cls = 'neutre', tc = 'cy';
+            if (s.installed && s.running && s.reachable) { lib = 'EN MARCHE'; cls = ''; tc = 'ok'; }
+            else if (s.installed && s.running) { lib = 'EN MARCHE (INJOIGNABLE)'; cls = 'att'; tc = 'att'; }
+            else if (s.installed) { lib = 'ARRÊTÉ'; cls = 'hors'; tc = 'hors'; }
+            pose(cls, lib);
+            tuile.className = 'tuile ' + tc; $('tEtat').textContent = s.installed ? (s.running ? (s.reachable ? 'En marche' : 'Injoignable') : 'Arrêté') : 'Absent';
+            $('sEtat').textContent = s.installed ? 'LXC installé' : 'LXC non installé';
+            // Le cache de l'API vaut 0 et « » quand il est froid ou que le conteneur est arrêté : ce n'est pas une mesure.
+            const mesure = !!(s.running && s.version);
+            $('tComptes').textContent = mesure && s.user_count != null ? String(s.user_count) : '—';
+            $('tVersion').textContent = tiret(s.version);
+            const url = /^https?:\/\//i.test(s.web_url || '') ? s.web_url : '';
+            $('sUrl').textContent = url || ' ';
+            $('sousTitre').textContent = url ? url : 'Synchronisation de fichiers, agendas et contacts (LXC)';
+            $('bInstaller').hidden = !!s.installed;
+            $('bDemarrer').hidden = !(s.installed && !s.running);
+            $('bArreter').hidden = !s.running;
+        }
+        async function loadStatus() {
+            const s = DEMO ? DEMO_STATUS : await api('/status');
+            if (echec(s)) { ETAT = null; rendEtat(null); return; }
+            ETAT = { installed: !!s.installed, running: !!s.running, reachable: !!s.reachable };
+            rendEtat(s);
         }
 
-        // --- connections ----------------------------------------------------
+        function rendStockage(d) {
+            const mesure = !!(d && Number(d.ts) > 0);
+            const pct = mesure ? Math.max(0, Math.min(100, parseInt(d.used_pct, 10) || 0)) : null;
+            $('tDonnees').textContent = mesure ? tiret(d.data) : '—';
+            $('sDonnees').textContent = mesure ? 'volume de données' : (d ? 'pas encore mesuré' : 'volume de données');
+            $('tStock').textContent = pct === null ? '—' : pct + ' %';
+            $('cStock').className = 'tuile ' + (pct === null ? 'cy' : pct >= 90 ? 'hors' : pct >= 75 ? 'att' : 'ok');
+            const b = $('bStock'); b.style.width = (pct || 0) + '%'; b.className = pct === null ? '' : pct >= 90 ? 'hors' : pct >= 75 ? 'att' : '';
+            $('kUsed').textContent = mesure ? tiret(d.used) : '—';
+            $('kTotal').textContent = mesure ? tiret(d.total) : '—';
+            $('kData').textContent = mesure ? tiret(d.data) : '—';
+            $('kTs').textContent = mesure ? quand(d.ts) : '—';
+            $('nStock').textContent = pct === null ? '' : pct + ' % occupé';
+        }
+        async function loadStorage() {
+            const d = DEMO ? DEMO_STORAGE : await api('/storage');
+            if (echec(d)) { rendStockage(null); return; }
+            rendStockage({ used: d.used, total: d.total, used_pct: d.used_pct, data: d.data, ts: d.ts });
+        }
+
+        // ----- Connexions -----
+        const DEMO_CONN = { base_url: 'http://192.0.2.10:8080', webdav: 'http://192.0.2.10:8080/remote.php/dav/files/<username>/', caldav: 'http://192.0.2.10:8080/remote.php/dav/calendars/<username>/',
+            carddav: 'http://192.0.2.10:8080/remote.php/dav/addressbooks/users/<username>/contacts/', davx5_url: 'http://192.0.2.10:8080/remote.php/dav',
+            ios_app: 'https://apps.apple.com/app/nextcloud/id1125420102', android_app: 'https://play.google.com/store/apps/details?id=com.nextcloud.client' };
+        function copie(texte) {
+            if (!texte) return;
+            const ok = () => retour('conteneur', true, 'Adresse copiée.'), ko = () => retour('conteneur', false, 'Copie impossible dans ce navigateur.');
+            try { navigator.clipboard.writeText(texte).then(ok).catch(ko); } catch (e) { ko(); }
+        }
+        function lienApp(id, url) { const a = $(id); const bon = /^https:\/\//i.test(url || ''); a.hidden = !bon; a.href = bon ? url : '#'; }
         async function loadConnections() {
-            const el = document.getElementById('connections-body');
-            const d = await api('/connections');
-            if (!d || d.__error) { el.innerHTML = `<span class="err">${esc(d && d.__error || 'error')}</span>`; return; }
-            const rows = [
-                ['Web / Desktop', d.base_url || d.desktop_url],
-                ['WebDAV', d.webdav],
-                ['CalDAV', d.caldav],
-                ['CardDAV', d.carddav],
-                ['DAVx5', d.davx5_url],
-            ];
-            el.innerHTML = rows.map(([label, url]) => `
-                <div class="url-label">${esc(label)}</div>
-                <div class="url-box" style="display:flex;justify-content:space-between;gap:.5rem;align-items:center">
-                    <span>${esc(url || '-')}</span>
-                    <button class="btn copy-btn c-act" data-url="${esc(url || '')}">Copy</button>
-                </div>`).join('');
-            el.querySelectorAll('.c-act').forEach(b => b.addEventListener('click', () => copyText(b.dataset.url)));
-            document.getElementById('ios-link').href = d.ios_app || '#';
-            document.getElementById('android-link').href = d.android_app || '#';
-        }
-        function copyText(text) {
-            if (!text) return;
-            navigator.clipboard.writeText(text).then(() => toast('Copied', 'success')).catch(() => toast('Copy failed', 'error'));
+            const c = DEMO ? DEMO_CONN : await api('/connections');
+            const z = $('bConn'); z.textContent = '';
+            if (echec(c)) { z.className = 'vide'; z.textContent = SESSION_KO ? '—' : 'Adresses indisponibles.'; lienApp('lIos', ''); lienApp('lAndroid', ''); return; }
+            z.className = '';
+            [['Web / Bureau', c.base_url || c.desktop_url], ['WebDAV', c.webdav], ['CalDAV', c.caldav], ['CardDAV', c.carddav], ['DAVx5', c.davx5_url]].forEach(([nom, url]) => {
+                z.appendChild(el('div', 'lib', nom));
+                const l = el('div', 'url'); l.appendChild(el('span', 'mono', tiret(url)));
+                const b = el('button', 'btn sm', 'Copier'); b.type = 'button'; b.addEventListener('click', () => copie(url)); l.appendChild(b);
+                z.appendChild(l);
+            });
+            lienApp('lIos', c.ios_app); lienApp('lAndroid', c.android_app);
         }
 
-        // --- users: real CRUD -------------------------------------------
-        async function loadUsers() {
-            const d = await api('/users');
-            const el = document.getElementById('users-body');
-            if (!d || d.__error) { el.innerHTML = `<tr><td colspan="5" class="err">${esc(d && d.__error || 'error')}</td></tr>`; return; }
-            const rows = (d.users || []).map(u => `<tr>
-                <td><strong>${esc(u.uid)}</strong></td>
-                <td>${esc(u.displayname || '')}</td>
-                <td>${u.enabled === false ? '<span class="err">disabled</span>' : 'enabled'}</td>
-                <td>${esc(u.quota || 'default')}</td>
-                <td>
-                  ${u.enabled === false
-                    ? `<button class="btn u-act" data-uid="${esc(u.uid)}" data-op="enable">Enable</button>`
-                    : `<button class="btn u-act" data-uid="${esc(u.uid)}" data-op="disable">Disable</button>`}
-                  <button class="btn u-act" data-uid="${esc(u.uid)}" data-op="quota">Quota</button>
-                  <button class="btn u-act" data-uid="${esc(u.uid)}" data-op="reset">Reset pw</button>
-                  <button class="btn danger u-act" data-uid="${esc(u.uid)}" data-op="delete">Delete</button>
-                </td></tr>`).join('');
-            el.innerHTML = rows || '<tr><td colspan="5" class="muted">No users.</td></tr>';
-            el.querySelectorAll('.u-act').forEach(b => b.addEventListener('click', () => {
-                const uid = b.dataset.uid, op = b.dataset.op;
-                if (op === 'enable' || op === 'disable') userOp(uid, op);
-                else if (op === 'quota') userQuota(uid);
-                else if (op === 'reset') userReset(uid);
-                else if (op === 'delete') userDelete(uid);
-            }));
+        // ----- Comptes -----
+        const DEMO_USERS = { users: [
+            { uid: 'admin', displayname: 'Administrateur', enabled: true, quota: 'none' },
+            { uid: 'alice', displayname: 'Alice Exemple', enabled: true, quota: '10 GB' },
+            { uid: 'bob', displayname: 'Bob Exemple', enabled: false, quota: '' },
+            { uid: 'camille', displayname: 'Camille Exemple', enabled: true, quota: '5 GB' }] };
+        let COMPTES = [];
+        function ouvreForm(id) { for (const f of ['fUser', 'fQuota', 'fMdp']) $(f).hidden = f !== id; annule(); annoncer(); }
+        function rendComptes() {
+            const tb = $('bComptes'); tb.textContent = '';
+            $('nComptes').textContent = COMPTES === null ? '' : COMPTES.length + ' compte' + (COMPTES.length > 1 ? 's' : '');
+            if (COMPTES === null) { const tr = el('tr'), td = el('td', 'vide', SESSION_KO ? '—' : 'Liste indisponible.'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            if (!COMPTES.length) { const tr = el('tr'), td = el('td', 'vide', 'Aucun compte (ou conteneur arrêté).'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            COMPTES.forEach(u => {
+                const tr = el('tr');
+                tr.appendChild(el('td', null, u.uid)); tr.children[0].style.fontWeight = '700';
+                tr.appendChild(el('td', null, tiret(u.displayname)));
+                const te = el('td'); te.appendChild(el('span', 'pill ' + (u.enabled === false ? 'hors' : 'ok'), u.enabled === false ? 'DÉSACTIVÉ' : 'ACTIF')); tr.appendChild(te);
+                tr.appendChild(el('td', null, u.quota || 'défaut'));
+                const ta = el('td', 'act'), g = el('div', 'grp');
+                const btn = (txt, cls, f) => { const b = el('button', 'btn sm ' + cls, txt); b.type = 'button'; b.addEventListener('click', f); g.appendChild(b); };
+                if (u.enabled === false) btn('Activer', '', () => userOp(u.uid, 'enable'));
+                else btn('Désactiver', '', () => demande('z-comptes', { texte: 'Désactiver le compte ' + u.uid + ' ? Il ne pourra plus se connecter.', action: () => userOp(u.uid, 'disable') }));
+                btn('Quota', '', () => { ouvreForm('fQuota'); $('fQuota').dataset.uid = u.uid; $('lQuota').firstChild.textContent = 'Quota de ' + u.uid; $('fQuota').quota.value = u.quota || 'default'; $('fQuota').quota.focus(); });
+                btn('Mot de passe', '', () => { ouvreForm('fMdp'); $('fMdp').dataset.uid = u.uid; $('lMdp').firstChild.textContent = 'Nouveau mot de passe de ' + u.uid; $('fMdp').password.focus(); });
+                btn('Supprimer', 'danger', () => demande('z-comptes', { texte: 'Supprimer définitivement le compte ' + u.uid + ' et ses fichiers ?', mot: u.uid, danger: true, action: () => userDelete(u.uid) }));
+                ta.appendChild(g); tr.appendChild(ta); tb.appendChild(tr);
+            });
         }
-        async function addUser() {
-            const uid = document.getElementById('nu-uid').value.trim();
-            const dn = document.getElementById('nu-name').value.trim();
-            const pw = document.getElementById('nu-pass').value;
-            if (!uid || !pw) { toast('uid and password required', 'error'); return; }
+        async function loadUsers() {
+            const d = DEMO ? DEMO_USERS : await api('/users');
+            COMPTES = echec(d) ? null : (Array.isArray(d.users) ? d.users : []);
+            rendComptes();
+        }
+        async function addUser(f) {
+            const uid = f.uid.value.trim(), dn = f.display_name.value.trim(), pw = f.password.value;
+            if (!uid || !pw) { retour('comptes', false, 'Identifiant et mot de passe obligatoires.'); return; }
             const r = await api('/user', { method: 'POST', body: JSON.stringify({ uid, display_name: dn, password: pw }) });
-            if (r && !r.__error) {
-                toast('User created', 'success');
-                document.getElementById('nu-uid').value = '';
-                document.getElementById('nu-name').value = '';
-                document.getElementById('nu-pass').value = '';
-                loadUsers();
-            } else { toast((r && r.__error) || 'failed', 'error'); }
+            f.password.value = '';
+            if (bilan('comptes', r, 'Compte créé.', 'Création impossible')) { f.reset(); f.hidden = true; loadUsers(); }
         }
         async function userOp(uid, op) {
-            if (op === 'disable' && !confirm('Disable user ' + uid + '?')) return;
             const r = await api('/user/' + encodeURIComponent(uid) + '/' + op, { method: 'POST' });
-            toast(r && !r.__error ? op + 'd' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            loadUsers();
+            if (bilan('comptes', r, op === 'enable' ? 'Compte activé.' : 'Compte désactivé.', 'Opération impossible')) loadUsers();
         }
-        async function userQuota(uid) {
-            const q = prompt('Quota (e.g. 5GB, none, default):', 'default');
-            if (q == null) return;
-            const r = await api('/user/' + encodeURIComponent(uid) + '/quota', { method: 'POST', body: JSON.stringify({ quota: q }) });
-            toast(r && !r.__error ? 'Quota set' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            loadUsers();
+        async function userQuota(uid, quota) {
+            const r = await api('/user/' + encodeURIComponent(uid) + '/quota', { method: 'POST', body: JSON.stringify({ quota }) });
+            if (bilan('comptes', r, 'Quota appliqué.', 'Quota refusé')) { $('fQuota').hidden = true; loadUsers(); }
         }
-        async function userReset(uid) {
-            if (!confirm('Reset password for ' + uid + '?')) return;
-            const pw = prompt('New password for ' + uid + ':');
-            if (!pw) return;
+        async function userReset(uid, pw) {
             const r = await api('/user/password', { method: 'POST', body: JSON.stringify({ uid, password: pw }) });
-            toast(r && !r.__error ? 'Password reset' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
+            bilan('comptes', r, 'Mot de passe réinitialisé.', 'Réinitialisation impossible');
         }
         async function userDelete(uid) {
-            if (!confirmTyped(uid)) return;
             const r = await api('/user/' + encodeURIComponent(uid), { method: 'DELETE' });
-            toast(r && !r.__error ? 'User deleted' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            loadUsers();
+            if (bilan('comptes', r, 'Compte supprimé.', 'Suppression impossible')) loadUsers();
         }
 
-        // --- backups (existing, hardened) --------------------------------
+        // ----- Sauvegardes -----
+        const DEMO_BACKUPS = { backups: [{ name: '20261012-0300', size: '1840M', timestamp: Math.floor(Date.now() / 1000) - 90000 }, { name: '20261005-0300', size: '1795M', timestamp: Math.floor(Date.now() / 1000) - 700000 }] };
+        function rendSauv(list) {
+            const tb = $('bSauv'); tb.textContent = '';
+            $('nSauv').textContent = list === null ? '' : list.length + ' sauvegarde' + (list.length > 1 ? 's' : '');
+            if (list === null || !list.length) { const tr = el('tr'), td = el('td', 'vide', list === null ? (SESSION_KO ? '—' : 'Liste indisponible.') : 'Aucune sauvegarde.'); td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); return; }
+            list.forEach(b => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', b.name)); tr.appendChild(el('td', null, tiret(b.size)));
+                tr.appendChild(el('td', null, b.timestamp ? new Date(b.timestamp * 1000).toLocaleString('fr-FR') : '—'));
+                const ta = el('td', 'act'), g = el('div', 'grp');
+                const r = el('button', 'btn sm', 'Restaurer'); r.type = 'button';
+                r.addEventListener('click', () => demande('z-sauv', { texte: 'Restaurer la sauvegarde ' + b.name + ' ? Les données actuelles seront remplacées.', mot: b.name, danger: true, action: () => restoreBackup(b.name) }));
+                const s = el('button', 'btn sm danger', 'Supprimer'); s.type = 'button';
+                s.addEventListener('click', () => demande('z-sauv', { texte: 'Supprimer définitivement la sauvegarde ' + b.name + ' ?', mot: b.name, danger: true, action: () => deleteBackup(b.name) }));
+                g.append(r, s); ta.appendChild(g); tr.appendChild(ta); tb.appendChild(tr);
+            });
+        }
         async function loadBackups() {
-            const d = await api('/backups');
-            const list = document.getElementById('backup-list');
-            if (!d || d.__error) { list.innerHTML = `<tr><td colspan="4" class="err">${esc(d && d.__error || 'error')}</td></tr>`; return; }
-            const backups = d.backups || [];
-            if (!backups.length) {
-                list.innerHTML = '<tr><td colspan="4" class="muted">No backups</td></tr>';
-                return;
-            }
-            list.innerHTML = backups.map(b => `<tr>
-                <td><strong>${esc(b.name)}</strong></td>
-                <td>${esc(b.size)}</td>
-                <td>${esc(b.timestamp ? new Date(b.timestamp * 1000).toLocaleDateString() : '-')}</td>
-                <td>
-                    <button class="btn b-act" data-name="${esc(b.name)}" data-op="restore" style="padding:2px 8px;font-size:0.7rem">Restore</button>
-                    <button class="btn danger b-act" data-name="${esc(b.name)}" data-op="delete" style="padding:2px 8px;font-size:0.7rem">Delete</button>
-                </td>
-            </tr>`).join('');
-            list.querySelectorAll('.b-act').forEach(b => b.addEventListener('click', () => {
-                const name = b.dataset.name, op = b.dataset.op;
-                if (op === 'restore') restoreBackup(name);
-                else if (op === 'delete') deleteBackup(name);
-            }));
+            const d = DEMO ? DEMO_BACKUPS : await api('/backups');
+            rendSauv(echec(d) ? null : (Array.isArray(d.backups) ? d.backups : []));
         }
         async function createBackup() {
             const r = await api('/backup', { method: 'POST' });
-            toast(r && !r.__error ? 'Backup created' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            if (r && !r.__error) loadBackups();
+            if (bilan('sauv', r, 'Sauvegarde créée.', 'Sauvegarde impossible')) loadBackups();
         }
         async function deleteBackup(name) {
-            if (!confirmTyped(name)) return;
             const r = await api('/backup/' + encodeURIComponent(name), { method: 'DELETE' });
-            toast(r && !r.__error ? 'Backup deleted' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            loadBackups();
+            if (bilan('sauv', r, 'Sauvegarde supprimée.', 'Suppression impossible')) loadBackups();
         }
         async function restoreBackup(name) {
-            if (!confirmTyped(name)) return;
             const r = await api('/restore/' + encodeURIComponent(name), { method: 'POST' });
-            toast(r && !r.__error ? 'Restore started in background' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
+            bilan('sauv', r, 'Restauration lancée en arrière-plan.', 'Restauration impossible');
         }
 
-        // --- logs ------------------------------------------------------
+        // ----- Journal d'installation, console occ -----
         async function loadLogs() {
-            const el = document.getElementById('log-out');
-            el.textContent = 'Loading…';
-            const n = parseInt(document.getElementById('log-lines').value, 10) || 100;
+            const p = $('sJournal');
+            const n = parseInt($('nbLignes').value, 10) || 100;
+            if (DEMO) { p.textContent = '[2026-10-12 03:00:01] Démonstration : journal fictif.\n[2026-10-12 03:00:02] Conteneur nextcloud démarré.'; return; }
             const d = await api('/logs?lines=' + n);
-            if (!d || d.__error) { el.innerHTML = `<span class="err">${esc((d && d.__error) || 'error')}</span>`; return; }
-            const lines = d.logs || [];
-            el.innerHTML = lines.length ? lines.map(esc).join('\n') : '<span class="muted">No logs.</span>';
+            if (echec(d)) { p.textContent = SESSION_KO ? '—' : 'Journal indisponible.'; return; }
+            const lignes = Array.isArray(d.logs) ? d.logs.filter(x => x !== '') : [];
+            p.textContent = lignes.length ? lignes.join('\n') : 'Aucune ligne.';
         }
-
-        // --- occ console -------------------------------------------------
-        async function runOcc() {
-            const cmd = document.getElementById('occ-cmd').value.trim();
-            if (!cmd) return;
-            if (!confirm('Run occ command: ' + cmd + ' ?')) return;
-            const out = document.getElementById('occ-out');
-            out.textContent = 'Running…';
+        const OCC_GRAVE = /maintenance|delete|remove|reset|uninstall|encryption|db:|repair|--all|disable/i;
+        async function runOcc(cmd) {
+            const sortie = $('sOcc'); sortie.textContent = 'Exécution…';
             const r = await api('/occ', { method: 'POST', body: JSON.stringify({ command: cmd }) });
-            if (!r || r.__error) { out.innerHTML = `<span class="err">${esc((r && r.__error) || 'error')}</span>`; toast('occ failed', 'error'); return; }
-            out.innerHTML = esc(r.output || '(no output)');
-            toast('occ ran', 'success');
+            if (echec(r)) { sortie.textContent = '—'; bilan('occ', r, '', 'Commande refusée'); return; }
+            sortie.textContent = r.output || '(aucune sortie)';
+            retour('occ', true, 'Commande exécutée.');
         }
 
-        // --- config --------------------------------------------------------
+        // ----- Configuration -----
+        const DEMO_CONFIG = { http_port: 8080, domain: 'cloud.example.org', memory_limit: '1G', upload_max: '512M', admin_user: 'admin', redis_enabled: true, ssl_enabled: false, ssl_domain: '', backup_enabled: true, backup_keep: 7 };
         async function loadConfig() {
-            const el = document.getElementById('config-body');
-            const d = await api('/config');
-            if (!d || d.__error) { el.innerHTML = `<span class="err">${esc((d && d.__error) || 'error')}</span>`; return; }
-            el.innerHTML = `
-                <div class="form-row">
-                    <label class="muted" style="min-width:110px">HTTP port</label>
-                    <input type="number" id="cfg-port" value="${esc(d.http_port)}">
-                </div>
-                <div class="form-row">
-                    <label class="muted" style="min-width:110px">Domain</label>
-                    <input type="text" id="cfg-domain" value="${esc(d.domain)}">
-                </div>
-                <div class="form-row">
-                    <label class="muted" style="min-width:110px">Memory limit</label>
-                    <input type="text" id="cfg-mem" value="${esc(d.memory_limit)}">
-                </div>
-                <div class="form-row">
-                    <label class="muted" style="min-width:110px">Upload max</label>
-                    <input type="text" id="cfg-upload" value="${esc(d.upload_max)}">
-                </div>
-                <div class="muted" style="margin:.5rem 0">
-                    Admin: ${esc(d.admin_user)} · Redis: ${d.redis_enabled ? 'on' : 'off'} ·
-                    SSL: ${d.ssl_enabled ? 'on (' + esc(d.ssl_domain || '') + ')' : 'off'} ·
-                    Backups: ${d.backup_enabled ? 'on, keep ' + esc(d.backup_keep) : 'off'}
-                </div>
-                <button class="btn primary" onclick="saveConfig()">Save</button>`;
+            const c = DEMO ? DEMO_CONFIG : await api('/config');
+            const f = $('fConfig'), kv = $('kConfig'); kv.textContent = '';
+            if (echec(c)) { f.hidden = true; kv.appendChild(el('dt', null, 'Compte admin')); kv.appendChild(el('dd', null, '—')); $('nConfig').textContent = SESSION_KO ? '—' : 'Configuration indisponible.'; return; }
+            f.http_port.value = c.http_port == null ? '' : c.http_port; f.domain.value = c.domain || ''; f.memory_limit.value = c.memory_limit || ''; f.upload_max.value = c.upload_max || '';
+            f.hidden = false;
+            [['Compte admin', tiret(c.admin_user)], ['Redis', c.redis_enabled ? 'activé' : 'désactivé'], ['SSL', c.ssl_enabled ? 'activé (' + tiret(c.ssl_domain) + ')' : 'désactivé'],
+             ['Sauvegardes', c.backup_enabled ? 'activées, ' + tiret(c.backup_keep) + ' conservées' : 'désactivées']].forEach(([k, v]) => { kv.appendChild(el('dt', null, k)); kv.appendChild(el('dd', null, v)); });
+            $('nConfig').textContent = 'Les quatre champs sont enregistrés ensemble ; un champ vidé est laissé inchangé.';
         }
-        async function saveConfig() {
+        async function saveConfig(f) {
             const body = {
-                http_port: parseInt(document.getElementById('cfg-port').value, 10) || undefined,
-                domain: document.getElementById('cfg-domain').value.trim() || undefined,
-                memory_limit: document.getElementById('cfg-mem').value.trim() || undefined,
-                upload_max: document.getElementById('cfg-upload').value.trim() || undefined,
+                http_port: parseInt(f.http_port.value, 10) || undefined,
+                domain: f.domain.value.trim() || undefined,
+                memory_limit: f.memory_limit.value.trim() || undefined,
+                upload_max: f.upload_max.value.trim() || undefined,
             };
             const r = await api('/config', { method: 'POST', body: JSON.stringify(body) });
-            toast(r && !r.__error ? 'Config saved' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            if (r && !r.__error) loadConfig();
+            if (bilan('config', r, 'Configuration enregistrée.', 'Enregistrement impossible')) loadConfig();
         }
 
-        // --- danger zone -----------------------------------------------
-        async function doUninstall() {
-            if (!confirmTyped('nextcloud')) return;
-            const r = await api('/uninstall', { method: 'POST' });
-            toast(r && !r.__error ? 'Uninstalled (data preserved)' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            setTimeout(refresh, 1500);
-        }
-
-        // --- lifecycle actions -------------------------------------------
+        // ----- Cycle de vie du conteneur -----
+        // Après une action, seuls l'état et le stockage (en cache) sont relus : jamais la liste des comptes.
+        const relit = ms => setTimeout(() => { loadStatus(); loadStorage(); }, ms);
         async function startService() {
             const r = await api('/start', { method: 'POST' });
-            toast(r && !r.__error ? 'Starting…' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            setTimeout(refresh, 2000);
+            bilan('conteneur', r, 'Démarrage demandé.', 'Démarrage impossible'); relit(2000);
         }
         async function stopService() {
-            if (!confirm('Stop Nextcloud?')) return;
             const r = await api('/stop', { method: 'POST' });
-            toast(r && !r.__error ? 'Stopping…' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            setTimeout(refresh, 1000);
+            bilan('conteneur', r, 'Arrêt demandé.', 'Arrêt impossible'); relit(1000);
         }
         async function restartService() {
             const r = await api('/restart', { method: 'POST' });
-            toast(r && !r.__error ? 'Restarting…' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            setTimeout(refresh, 3000);
+            bilan('conteneur', r, 'Redémarrage demandé.', 'Redémarrage impossible'); relit(3000);
         }
         async function installNextcloud() {
             const r = await api('/install', { method: 'POST' });
-            toast(r && !r.__error ? 'Installation started in background' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
-            setTimeout(refresh, 10000);
+            bilan('conteneur', r, 'Installation lancée en arrière-plan.', 'Installation impossible'); relit(10000);
+        }
+        async function doUninstall() {
+            const r = await api('/uninstall', { method: 'POST' });
+            bilan('danger', r, 'Désinstallé (données conservées).', 'Désinstallation impossible'); relit(1500);
         }
 
-        // --- refresh / auto-refresh ---------------------------------------
-        let __autoRefresh = null;
-        function refresh() { loadStatus(); loadStorage(); loadConnections(); loadUsers(); loadBackups(); loadLogs(); loadConfig(); }
-        function toggleAuto() {
-            if (__autoRefresh) { clearInterval(__autoRefresh); __autoRefresh = null; toast('Auto-refresh off'); }
-            else { __autoRefresh = setInterval(() => { loadStatus(); loadStorage(); }, 15000); toast('Auto-refresh on'); }
+        // ----- Branchements -----
+        $('bDemarrer').addEventListener('click', () => demande('z-conteneur', { texte: 'Démarrer le conteneur Nextcloud ?', action: startService }));
+        $('bArreter').addEventListener('click', () => demande('z-conteneur', { texte: 'Arrêter le conteneur Nextcloud ? Le service sera coupé pour tous les usagers.', danger: true, action: stopService }));
+        $('bRedemarrer').addEventListener('click', () => demande('z-conteneur', { texte: 'Redémarrer le conteneur Nextcloud ? Le service sera interrompu quelques instants.', action: restartService }));
+        $('bInstaller').addEventListener('click', () => demande('z-conteneur', { texte: 'Installer Nextcloud dans un nouveau conteneur ? L’opération est longue et se poursuit en arrière-plan.', action: installNextcloud }));
+        $('bDesinstaller').addEventListener('click', () => demande('z-danger', { texte: 'Désinstaller Nextcloud : le conteneur est supprimé, les données du disque sont conservées.', mot: 'nextcloud', danger: true, action: doUninstall }));
+        $('bSauvegarder').addEventListener('click', () => demande('z-sauv', { texte: 'Créer une sauvegarde maintenant ? L’opération peut être longue.', action: createBackup }));
+        $('addUser').addEventListener('click', () => { ouvreForm($('fUser').hidden ? 'fUser' : ''); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+        $('fUser').addEventListener('submit', ev => { ev.preventDefault(); addUser(ev.target); });
+        $('fQuota').addEventListener('submit', ev => { ev.preventDefault(); userQuota(ev.target.dataset.uid, ev.target.quota.value.trim()); });
+        $('fMdp').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const f = ev.target, uid = f.dataset.uid, pw = f.password.value;
+            if (!uid || !pw) return;
+            f.password.value = ''; f.hidden = true;
+            demande('z-comptes', { texte: 'Réinitialiser le mot de passe de ' + uid + ' ?', action: () => userReset(uid, pw) });
+        });
+        $('fConfig').addEventListener('submit', ev => { ev.preventDefault(); saveConfig(ev.target); });
+        $('bJournal').addEventListener('click', loadLogs);
+        $('fOcc').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const cmd = $('cmdOcc').value.trim();
+            if (!cmd) return;
+            const grave = OCC_GRAVE.test(cmd);
+            demande('z-occ', { texte: 'Exécuter la commande occ « ' + cmd + ' » ?' + (grave ? ' Elle peut couper le service ou modifier des données.' : ''), mot: grave ? 'occ' : null, danger: grave, action: () => runOcc(cmd) });
+        });
+
+        // ----- Actualisation -----
+        function majHeure() { $('maj').textContent = new Date().toLocaleTimeString('fr-FR'); }
+        // Actualisation manuelle : les mêmes sept lectures que l'ancienne page, jamais en parallèle d'elles-mêmes.
+        async function charger() {
+            if (OCCUPE) return;
+            OCCUPE = true; $('rafraichir').disabled = true; SESSION_KO = false;
+            try {
+                await Promise.all([loadStatus(), loadStorage(), loadConnections(), loadUsers(), loadBackups(), loadLogs(), loadConfig()]);
+            } finally {
+                OCCUPE = false; $('rafraichir').disabled = false; majHeure();
+                $('session').hidden = !SESSION_KO; annoncer();
+            }
         }
-        document.addEventListener('DOMContentLoaded', refresh);
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'nextcloud' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        if (DEMO) $('demo').hidden = false;
+        charger();
+        // Seuls l'état et le stockage (deux lectures en cache) sont relus : jamais occ, jamais la liste des comptes.
+        // Rien pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        function saisieEnCours() {
+            const a = document.activeElement;
+            if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && a.id !== 'nbLignes') return true;
+            return ['fUser', 'fQuota', 'fMdp'].some(f => !$(f).hidden);
+        }
+        setInterval(async () => {
+            if (document.hidden || DEMO || OCCUPE || CONFIRM || saisieEnCours()) return;
+            SESSION_KO = false;
+            await Promise.all([loadStatus(), loadStorage()]);
+            $('session').hidden = !SESSION_KO; majHeure();
+        }, 45000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
