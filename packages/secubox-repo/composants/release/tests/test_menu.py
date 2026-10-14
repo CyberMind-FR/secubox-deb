@@ -34,9 +34,11 @@ def test_panel_has_no_inline_onclick_or_innerhtml():
 def test_panel_has_promote_demote_assign_hooks():
     html = (ROOT / "www" / "releases" / "index.html").read_text()
     # promote/demote rows are built per-evolution via createElement + dataset
-    # (no innerHTML allowed), so the hook shows as a dataset.act assignment;
+    # (no innerHTML allowed) : btn(libellé, classe, 'promote'|'demote', evo) pose
+    # b.dataset.act (page Aurora #2681, assertion équivalente à l'ancienne) ;
     # assign/publish are static buttons with a literal data-act attribute.
-    assert "dataset.act = 'promote'" in html
-    assert "dataset.act = 'demote'" in html
+    assert "b.dataset.act = act" in html
+    assert "'prim', 'promote'" in html
+    assert "'warn', 'demote'" in html
     assert 'data-act="assign"' in html
     assert 'data-act="publish"' in html

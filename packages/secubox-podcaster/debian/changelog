@@ -1,3 +1,11 @@
+secubox-podcaster (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Portail d'écoute /podcaster/portal/ refait au profil Aurora (ref #2686) : page d'usager en lecture seule, mêmes appels qu'avant (GET /public/library, /media/<id>, /share/feed.xml, /public/feed/<id>/zip), gardes de l'API inchangées, aucune écriture. Tuiles avec infobulle (épisodes, flux, dernière parution, volume, partiel annoncé), liste des épisodes, filtre par flux, copie de l'adresse du flux, ?demo=1 (épisodes fictifs, aucun média lu, aucun appel), ?embed=1, hauteur annoncée, 420 px sans débordement. Jeton sbx_token envoyé en Bearer s'il existe.
+  * Contrats du Hall conservés tels quels : mégabarre contextuelle des officines (#1238b), bus média et commandes de la barre (#1238c), reprise depuis la carte micro (#1266b), masquage de l'en-tête en cadre. Le menu commun n'est injecté que sous /podcaster/portal/ (le vhost public ne sert pas /shared/), hors cadre et hors démonstration. micro.html n'est pas touchée.
+  * Non repris : textes passés en français ; session absente ou refusée annoncée par un bandeau au lieu de « Portal unavailable. » ; plus de gestionnaires onclick en ligne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 16:00:00 +0200
+
 secubox-podcaster (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /podcaster/ refaite au profil Aurora (ref #2637) : tuiles (flux, épisodes, téléchargés, file, service, worker) lues dans GET /status, liste des flux et épisodes, mêmes appels d'API qu'avant (ajout, auto-téléchargement, réimport, suppression, import OPML, audiolivre ZIP, téléchargement d'un épisode, configuration), menu commun hors ?embed=1 et hors démonstration, ?demo=1 (données fictives, aucune écriture), session absente annoncée par un bandeau, hauteur annoncée à l'hôte. Conservés de #2635 : erreur par flux, date de dernière vérification, copie de l'adresse, réimport.

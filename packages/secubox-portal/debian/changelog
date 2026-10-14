@@ -1,3 +1,11 @@
+secubox-portal (2.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page de connexion /login.html au profil Aurora (#2687) : page autonome (plus de police distante), textes en francais, sans menu commun ni mode demonstration. Flux, routes, corps, en-tetes, attributs autocomplete et stockage du jeton (sbx_token, secubox_token, secubox_user, secubox_role) inchanges ; ajout d'attributs name sur les champs.
+  * Securite : la validation de ?redirect= refuse en plus les caracteres de controle. Le navigateur retire tabulations et sauts de ligne d'une adresse : /<TAB>/hote devenait //hote, une redirection ouverte apres connexion.
+  * innerHTML et gestionnaires en ligne (onsubmit, onclick) supprimes : codes de secours et formulaires passent par textContent et addEventListener. Le test qui exigeait login.html inchange (#2382) est retire. 19 tests (dont 8 cas de redirection ouverte, TOTP, inscription, deconnexion, elevation, 420 px).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-portal (2.4.1-1~bookworm1) bookworm; urgency=medium
 
   * fix: la marge de la barre laterale tombe aussi sur ecran tactile et en mode mobile : plus de colonne vide a gauche sur iPhone (ref #2400)

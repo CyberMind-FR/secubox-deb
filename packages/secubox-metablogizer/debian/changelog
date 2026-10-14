@@ -1,3 +1,21 @@
+secubox-metablogizer (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Aurora vague 7 (#2678) : index.html (console des sites) et site.html (detail d'un site) passent au profil Aurora
+    (.claude/AURORA-REFERENCE.md) : pages autonomes, aucune police ni feuille distante, tuiles a infobulle de definition,
+    mesure absente = « — », bandeau de session requise (plus de redirection brutale vers /login.html), ?demo=1 (donnees
+    fictives, actions inertes), ?embed=1, 420 px sans debordement, hauteur annoncee a l'hote (sbxVue, onglet metablogizer).
+  * Memes fonctions, memes appels d'API (routes, methodes, corps, en-tetes ; jeton sbx_token, repli secubox_token, en Bearer
+    dans un try/catch ; nouvel essai par cookie seul sur 401). ?vue=mosaique (vue « Mes sites » du Hall) et ?edit=1 conserves.
+  * Plus aucun confirm()/alert()/innerHTML : « Depublier » et « Supprimer » se confirment dans la page (Confirmer/Annuler).
+    Changement : la Depublication depuis le tableau des sites se confirme desormais comme celle de la mosaique.
+  * index.html lit aussi GET /deploys au chargement (et non plus a l'ouverture de l'onglet) pour la tuile « Deploiements / 24 h ».
+  * Non repris : l'ancienne fenetre modale « Creer un site » devient un panneau integre ; site.html est traduit en francais.
+  * empty-site.html n'est PAS modifiee : servie aux visiteurs par nginx (error_page 404), c'est du contenu publie dont le style
+    n'est pas celui de la console d'administration.
+  * Tests : tests/test_metablogizer_aurora_2678.py (statiques + Playwright route-mocke).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-metablogizer (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-publish (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

@@ -1,3 +1,11 @@
+secubox-ytsas (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Torrent au profil Aurora (ref #2686) : page d'administration (composants/torrent/www/torrent/index.html, servie sur le hub) ET page du lecteur public du conteneur (composants/torrent/lxc/www/index.html, servie sur torrent.<domaine>, sans menu ni /shared/). Pages autonomes, tuiles avec infobulle (actifs, disque libre, WebRTC, torrents, à purger), mesure absente = « — », bandeau de session requise, état « moteur endormi » lu dans /status, ?demo=1 (données fictives, aucune écriture, aucun flux lu), ?embed=1, hauteur annoncée à l'hôte, 420 px sans débordement. Menu commun injecté hors ?embed=1 et hors démonstration (administration seulement).
+  * Même contrat qu'avant : mêmes routes, méthodes, corps et en-têtes (status, list, files, add, add-file en application/x-bittorrent, resume, conserve, keep, ephemeral, remove, zip ; jeton sbx_token en Bearer ; pas de Content-Type sans corps). Le lecteur est identique : balise video native sur /stream/<infohash>/<index>. La variante du conteneur garde ses particularités (conservation vers PeerTube seulement, pas de Lyrion).
+  * Non repris : la suppression d'un torrent ne passe plus par confirm() (confirmation dans la ligne) ; les retours (toasts) deviennent des messages dans la page ; plus de dépendance à hybrid-skin.css ni à la police Courier ; un lien PeerTube qui n'est pas en http(s) n'est plus rendu cliquable ; « WebRTC actif » n'est plus affiché quand l'API ne dit rien (« — »). public.html n'est pas touchée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 16:00:00 +0200
+
 secubox-ytsas (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page d'administration au profil Aurora (page autonome, menu commun hors ?embed=1 et ?demo=1, ?demo=1 avec données fictives et actions inertes) : mêmes appels d'API qu'avant (status, cookies, list, add, keep, conserve, remove, retry, ephemeral, stream ; jeton sbx_token en Bearer), routes inchangées.

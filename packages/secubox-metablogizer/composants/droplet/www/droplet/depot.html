@@ -4,8 +4,13 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
+  Espace de dépôt au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  PAGE PUBLIQUE, servie à des inconnus (vhost depot.<domaine>, nginx/depot-vhost.conf) : ni menu d'administration, ni jeton,
+  aucune ressource distante. Contrat inchangé : GET /api/v1/droplet/depot/reglages, puis POST /api/v1/droplet/depot
+  en multipart (champs « fichiers » répété et « mot »). Sans script, le formulaire dépose quand même.
+  ?demo=1 : réglages fictifs, aucun envoi. ?embed=1 : marges réduites.
+-->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -14,160 +19,129 @@
 <meta name="color-scheme" content="dark">
 <title>Dépôt — SecuBox</title>
 <style>
-/* Charte panneau SecuBox : cyan sur fond sombre, Courier Prime.
-   AUCUNE RESSOURCE DISTANTE. Cette page est servie à des inconnus, souvent
-   depuis des réseaux qu'on ne choisit pas : une police ou un script tiers
-   ferait dépendre le dépôt d'un serveur que nous ne tenons pas, et
-   renseignerait ce tiers sur qui vient déposer. */
-:root {
-  --fond: #0b1014; --carte: #121a20; --carte-2: #16232b; --bord: #1e2d36;
-  --cyan: #00d4ff; --texte: #cfe3ea; --doux: #7a94a0;
-  --ambre: #f0b429; --rouge: #e05263; --vert: #57c98a;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { color-scheme: dark; }
-body {
-  font-family: 'Courier Prime', 'Courier New', ui-monospace, monospace;
-  background: var(--fond); color: var(--texte);
-  min-height: 100dvh; display: grid; place-items: center;
-  padding: 2rem 1rem; line-height: 1.6;
-}
-.boite { max-width: 42rem; width: 100%; }
-.chapeau { color: var(--cyan); letter-spacing: .18em; text-transform: uppercase;
-           font-size: .72rem; margin-bottom: .5rem; }
-h1 { font-size: clamp(1.3rem, 4vw, 1.7rem); margin-bottom: .35rem;
-     text-wrap: balance; font-weight: 700; }
-.resume { color: var(--doux); margin-bottom: 1.5rem; }
+/* AUCUNE RESSOURCE DISTANTE. Cette page est servie à des inconnus, souvent depuis des réseaux qu'on ne choisit pas : une
+   police ou un script tiers ferait dépendre le dépôt d'un serveur que nous ne tenons pas, et renseignerait ce tiers sur qui
+   vient déposer. */
+:root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+  --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+     color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.4}
+.cadre{container-type:inline-size;container-name:a;padding:10px;max-width:46rem;margin:0 auto}
+body:not(.emb) .cadre{padding-top:max(10px,4vh)}
+.app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+.app>*{min-width:0}
+.tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800;text-wrap:balance} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+.actif{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;margin-left:auto}
+.actif.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+.demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+[hidden]{display:none!important}
+.resume{color:var(--doux);margin:0;font-size:.85rem}
+.tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+@container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+.tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+.tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:var(--cyan)} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+.tuile.trop .v{color:var(--orange)}
+.pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+.pan h3{margin:0 0 8px;font-size:.88rem}
 
-/* LA ZONE EST UN <label> — donc `display: inline` par défaut, et c'est
-   exactement ce qui cassait la première version : bordure et remplissage d'un
-   élément en ligne se replient sur les lignes de texte au lieu de dessiner un
-   cadre. Un `display` explicite n'est pas une précaution de style ici, c'est
-   ce qui fait exister le cadre. */
-.zone {
-  display: grid; place-items: center; position: relative;
-  border: 2px dashed var(--bord); border-radius: 12px;
-  padding: 2.4rem 1.4rem; text-align: center; cursor: pointer;
-  background: var(--carte); transition: border-color .15s, background .15s;
-  min-height: 9rem;
-}
-.zone:hover, .zone.survol { border-color: var(--cyan); background: var(--carte-2); }
-.zone:focus-within { outline: 2px solid var(--cyan); outline-offset: 3px; }
-.zone .goutte { font-size: 2.4rem; line-height: 1; margin-bottom: .5rem; }
-.zone .titre { font-weight: 700; }
-.zone .indice { color: var(--doux); font-size: .84rem; margin-top: .35rem; }
-/* L'input est CONTENU dans la zone (position: relative ci-dessus) et non
-   renvoyé au coin du document : `clip-path` le rend invisible sans le sortir
-   du flux d'accessibilité, contrairement à `display: none` qui le retirerait
-   du parcours clavier. */
-.zone input[type=file] {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  opacity: 0; cursor: pointer;
-}
+/* LA ZONE EST UN <label> : display explicite obligatoire, sinon bordure et remplissage se replient sur les lignes de texte. */
+.zone{display:grid;place-items:center;position:relative;border:2px dashed var(--trait2);border-radius:12px;padding:1.6rem 1rem;text-align:center;cursor:pointer;
+      background:rgba(8,18,38,.5);transition:border-color .15s,background .15s;min-height:8rem;overflow-wrap:anywhere}
+.zone:hover,.zone.survol{border-color:var(--cyan);background:rgba(41,182,246,.08)}
+.zone:focus-within{outline:2px solid var(--cyan);outline-offset:3px}
+.zone .goutte{font-size:2.2rem;line-height:1;margin-bottom:.4rem}
+.zone .titre{font-weight:700}
+.zone .indice{color:var(--faible);font-size:.8rem;margin-top:.3rem}
+/* L'input est CONTENU dans la zone et rendu transparent (pas display:none, qui le sortirait du parcours clavier). */
+.zone input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.zone.ferme{opacity:.5;cursor:not-allowed}
 
-ul.liste { list-style: none; margin: 1rem 0 0; }
-ul.liste li {
-  display: flex; align-items: center; gap: .8rem;
-  padding: .5rem .55rem .5rem .8rem; border: 1px solid var(--bord);
-  border-radius: 8px; margin-bottom: .4rem; background: var(--carte);
-}
-ul.liste .nom { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-ul.liste .poids { color: var(--doux); flex: 0 0 auto;
-                  font-variant-numeric: tabular-nums; }
-ul.liste .retirer {
-  flex: 0 0 auto; background: none; border: 1px solid transparent;
-  color: var(--doux); border-radius: 6px; padding: .1rem .5rem;
-  font: inherit; cursor: pointer; line-height: 1.3;
-}
-ul.liste .retirer:hover { color: var(--rouge); border-color: var(--rouge); }
-ul.liste .retirer:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+ul.liste{list-style:none;margin:10px 0 0;padding:0}
+ul.liste li{display:flex;align-items:center;gap:.7rem;padding:.4rem .5rem .4rem .75rem;border:1px solid var(--trait);border-radius:8px;margin-bottom:.35rem;background:rgba(8,18,38,.6)}
+ul.liste .nom{flex:1;min-width:0;overflow-wrap:anywhere}
+ul.liste .poids{color:var(--doux);flex:0 0 auto;font-variant-numeric:tabular-nums;font-size:.8rem}
+ul.liste .retirer{flex:0 0 auto;background:none;border:1px solid transparent;color:var(--doux);border-radius:6px;padding:.1rem .5rem;font:inherit;cursor:pointer;line-height:1.3;min-height:28px}
+ul.liste .retirer:hover{color:var(--rouge);border-color:var(--rouge)}
+ul.liste .retirer:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+.total{color:var(--doux);font-size:.8rem;margin:.5rem 0 0;font-variant-numeric:tabular-nums}
+.total.trop{color:var(--orange)}
 
-.total { color: var(--doux); font-size: .84rem; margin-top: .5rem;
-         font-variant-numeric: tabular-nums; }
-.total.trop { color: var(--ambre); }
+textarea{display:block;width:100%;margin-top:10px;min-height:4.5rem;resize:vertical;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:.6rem;font:inherit;font-size:.85rem}
+textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
 
-textarea {
-  width: 100%; margin-top: 1rem; min-height: 4.5rem; resize: vertical;
-  background: var(--carte); color: var(--texte);
-  border: 1px solid var(--bord); border-radius: 8px; padding: .7rem;
-  font: inherit;
-}
-textarea:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.pied{margin-top:12px;display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
+button.action{background:rgba(41,182,246,.18);color:var(--texte);border:1px solid var(--cyan);border-radius:8px;padding:.5rem 1.4rem;font:inherit;font-size:.85rem;cursor:pointer;min-height:36px}
+button.action:hover:not(:disabled){background:var(--cyan);color:var(--fond)}
+button.action:disabled{opacity:.4;cursor:not-allowed}
+button.action:focus-visible{outline:2px solid var(--texte);outline-offset:2px}
+progress{width:100%;height:.45rem;margin-top:.8rem;accent-color:var(--cyan)}
+.note{color:var(--doux);font-size:.8rem;font-variant-numeric:tabular-nums}
 
-.pied { margin-top: 1.1rem; display: flex; gap: .9rem; align-items: center;
-        flex-wrap: wrap; }
-button.action {
-  background: transparent; color: var(--cyan); border: 1px solid var(--cyan);
-  border-radius: 6px; padding: .6rem 1.4rem; font: inherit; cursor: pointer;
-}
-button.action:hover:not(:disabled) { background: var(--cyan); color: var(--fond); }
-button.action:disabled { opacity: .4; cursor: not-allowed; }
-button.action:focus-visible { outline: 2px solid var(--texte); outline-offset: 2px; }
+.message{margin-top:12px;padding:.8rem 1rem;border-radius:10px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+.message.bien{border-color:var(--vert)} .message.mal{border-color:var(--rouge)} .message.demo-msg{border-color:var(--orange)}
+.message p{margin:.3rem 0 0}
+.message .ref{color:var(--cyan);display:inline-block;margin-top:.3rem}
 
-progress { width: 100%; height: .45rem; margin-top: .9rem;
-           accent-color: var(--cyan); }
-.note { color: var(--doux); font-size: .84rem;
-        font-variant-numeric: tabular-nums; }
-
-.message { margin-top: 1.2rem; padding: .95rem 1.1rem; border-radius: 8px;
-           border: 1px solid var(--bord); background: var(--carte); }
-.message.bien { border-color: var(--vert); }
-.message.mal  { border-color: var(--rouge); }
-.message .ref { color: var(--cyan); overflow-wrap: anywhere;
-                display: inline-block; margin-top: .3rem; }
-
-@media (prefers-reduced-motion: reduce) {
-  .zone { transition: none; }
-}
+@media (prefers-reduced-motion:reduce){.zone{transition:none}}
 </style>
 </head>
 <body>
-<div class="boite">
+<div class="cadre"><div class="app">
 
-  <p class="chapeau">SecuBox · Dépôt</p>
-  <h1>Laissez vos fichiers ici</h1>
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4.1 6 7.2 6 10.4a6 6 0 0 1-12 0c0-3.2 2.4-6.3 6-10.4z"/><path d="M9.3 14.2a2.8 2.8 0 0 0 2.4 2.5"/></svg>
+      <div><small>SecuBox · Dépôt</small><h1>Laissez vos fichiers ici</h1></div>
+    </div>
+    <span class="actif" id="ouverture" aria-live="polite">—</span>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, réglages fictifs, aucun envoi</div>
+
   <p class="resume">
-    Ils partent directement sur la box, et une alerte prévient son
-    propriétaire. Rien de ce qui est déposé n'est publié, ni relisible depuis
-    cette page.
+    Ils partent directement sur la box, et une alerte prévient son propriétaire.
+    Rien de ce qui est déposé n'est publié, ni relisible depuis cette page.
   </p>
 
-  <!-- `action`, `method` et `enctype` sont posés MEME si le script les
-       remplace : sans script, la page reste un formulaire qui dépose
-       réellement. La réponse est alors du JSON brut — c'est brut, mais le
-       fichier est arrivé, ce qui vaut infiniment mieux qu'un bouton inerte. -->
-  <form id="f" method="post" enctype="multipart/form-data"
-        action="/api/v1/droplet/depot">
+  <section class="tuiles" aria-label="Plafonds du dépôt">
+    <div class="tuile" title="Taille maximale d'un fichier, telle que la box l'annonce (réglage taille_max). « — » : la box n'a pas répondu, elle tranchera à la réception."><span class="l">Par fichier</span><span class="v" id="tTaille">—</span><span class="s">taille maximale</span></div>
+    <div class="tuile" title="Nombre maximal de fichiers dans un même dépôt (réglage fichiers_max). « — » : la box n'a pas répondu."><span class="l">Par dépôt</span><span class="v" id="tMax">—</span><span class="s">fichiers au plus</span></div>
+    <div class="tuile" id="cSel" title="Ce que vous avez choisi pour l'instant : nombre de fichiers et poids cumulé. Rien n'est envoyé avant d'avoir cliqué sur Déposer."><span class="l">Sélection</span><span class="v" id="tSel">0</span><span class="s" id="sSel">aucun fichier choisi</span></div>
+  </section>
 
+  <!-- `action`, `method` et `enctype` sont posés MEME si le script les remplace : sans script, la page reste un formulaire qui
+       dépose réellement. La réponse est alors du JSON brut, mais le fichier est arrivé. -->
+  <form id="f" method="post" enctype="multipart/form-data" action="/api/v1/droplet/depot" class="pan">
     <label class="zone" id="zone">
       <span class="goutte" aria-hidden="true">💧</span>
       <span class="titre" id="titrezone">Glissez vos fichiers, ou cliquez pour les choisir</span>
       <span class="indice" id="indice">Archives, images, documents — peu importe</span>
-      <input type="file" id="fichiers" name="fichiers" multiple
-             aria-labelledby="titrezone" aria-describedby="indice">
+      <input type="file" id="fichiers" name="fichiers" multiple aria-labelledby="titrezone" aria-describedby="indice">
     </label>
 
     <ul class="liste" id="liste" hidden aria-label="Fichiers à déposer"></ul>
     <p class="total" id="total" hidden></p>
 
-    <textarea id="mot" name="mot" maxlength="2000"
-              placeholder="Un mot pour accompagner le dépôt (facultatif)"
-              aria-label="Message accompagnant le dépôt"></textarea>
+    <textarea id="mot" name="mot" maxlength="2000" placeholder="Un mot pour accompagner le dépôt (facultatif)" aria-label="Message accompagnant le dépôt"></textarea>
 
     <div class="pied">
       <button type="submit" class="action" id="envoyer" disabled>Déposer</button>
       <span class="note" id="etat" role="status" aria-live="polite"></span>
     </div>
-    <progress id="jauge" hidden max="100" value="0"
-              aria-label="Progression du dépôt"></progress>
+    <progress id="jauge" hidden max="100" value="0" aria-label="Progression du dépôt"></progress>
   </form>
 
   <div id="message" class="message" hidden role="status" aria-live="polite"></div>
 
-</div>
+</div></div>
 <script>
 (function () {
   'use strict';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if (Q.get('embed')) document.body.classList.add('emb');
   var API = '/api/v1/droplet';
   var zone = document.getElementById('zone');
   var champ = document.getElementById('fichiers');
@@ -177,6 +151,7 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
   var etat = document.getElementById('etat');
   var jauge = document.getElementById('jauge');
   var msg = document.getElementById('message');
+  var ouverture = document.getElementById('ouverture');
   var choisis = [];
   var reglages = { actif: true, taille_max: 0, fichiers_max: 20 };
 
@@ -187,25 +162,41 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
     return n + ' o';
   }
 
-  // LES PLAFONDS SONT DEMANDES AU SERVEUR, jamais recopiés ici. Deux valeurs
-  // écrites à deux endroits divergent au premier ajustement — et c'est le
-  // déposant qui découvre l'écart après dix minutes de téléversement.
-  fetch(API + '/depot/reglages').then(function (r) { return r.json(); })
-    .then(function (r) {
-      reglages = r;
-      if (!r.actif) {
-        zone.style.opacity = .5;
-        champ.disabled = true;
-        etat.textContent = "L'espace de dépôt est fermé.";
-        return;
-      }
-      if (r.taille_max) {
-        document.getElementById('indice').textContent =
-          'Jusqu’à ' + poids(r.taille_max) + ' par fichier, ' +
-          r.fichiers_max + ' fichiers par dépôt';
-      }
-    })
-    .catch(function () { /* la page reste utilisable : le serveur tranchera */ });
+  function applique(r) {
+    reglages = r;
+    document.getElementById('tTaille').textContent = r.taille_max ? poids(r.taille_max) : '—';
+    document.getElementById('tMax').textContent = r.fichiers_max ? r.fichiers_max : '—';
+    if (!r.actif) {
+      zone.classList.add('ferme');
+      champ.disabled = true;
+      ouverture.className = 'actif hors'; ouverture.textContent = 'FERMÉ';
+      etat.textContent = "L'espace de dépôt est fermé.";
+      return;
+    }
+    ouverture.className = 'actif ok'; ouverture.textContent = 'OUVERT';
+    if (r.taille_max) {
+      document.getElementById('indice').textContent =
+        'Jusqu’à ' + poids(r.taille_max) + ' par fichier, ' + r.fichiers_max + ' fichiers par dépôt';
+    }
+  }
+
+  // LES PLAFONDS SONT DEMANDES AU SERVEUR, jamais recopiés ici : deux valeurs écrites à deux endroits divergent au premier
+  // ajustement, et c'est le déposant qui découvre l'écart après dix minutes de téléversement.
+  if (DEMO) {
+    document.getElementById('demo').hidden = false;
+    applique({ actif: true, taille_max: 2147483648, fichiers_max: 20 });
+  } else {
+    fetch(API + '/depot/reglages').then(function (r) { return r.json(); })
+      // Une réponse sans « actif » booléen (404, erreur du proxy) n'est pas un réglage : on ne ferme pas la zone pour autant.
+      .then(function (r) { if (r && typeof r.actif === 'boolean') applique(r); })
+      .catch(function () { /* la page reste utilisable : le serveur tranchera */ });
+  }
+
+  function annonce() {
+    try {
+      parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'depot' }, location.origin);
+    } catch (e) { /* hors iframe */ }
+  }
 
   function montre() {
     liste.textContent = '';
@@ -218,8 +209,7 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
       var li = document.createElement('li');
       var n = document.createElement('span');
       n.className = 'nom';
-      // textContent et non innerHTML : le nom vient du système de fichiers du
-      // visiteur, donc d'ailleurs. Un nom peut contenir du balisage.
+      // textContent, jamais de balisage injecté : le nom vient du système de fichiers du visiteur, donc d'ailleurs.
       n.textContent = f.name;
       var p = document.createElement('span');
       p.className = 'poids';
@@ -228,13 +218,9 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
       b.type = 'button';
       b.className = 'retirer';
       b.textContent = '✕';
-      // POUVOIR RETIRER UN FICHIER SANS TOUT RECOMMENCER. Sans cela, un clic de
-      // trop oblige à refaire la sélection entière — et sur un dépôt de dix
-      // fichiers, on renonce.
+      // POUVOIR RETIRER UN FICHIER SANS TOUT RECOMMENCER.
       b.setAttribute('aria-label', 'Retirer ' + f.name);
-      b.addEventListener('click', function () {
-        choisis.splice(i, 1); montre();
-      });
+      b.addEventListener('click', function () { choisis.splice(i, 1); montre(); });
       li.append(n, p, b);
       liste.append(li);
     });
@@ -242,31 +228,29 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
     total.className = 'total' + (trop ? ' trop' : '');
     total.textContent = choisis.length + ' fichier(s), ' + poids(somme) +
       (trop ? ' — un fichier dépasse le plafond, le serveur le refusera' : '');
+    document.getElementById('tSel').textContent = choisis.length;
+    document.getElementById('sSel').textContent = choisis.length ? poids(somme) + ' au total' : 'aucun fichier choisi';
+    document.getElementById('cSel').className = 'tuile' + (trop ? ' trop' : '');
     etat.textContent = '';
+    annonce();
   }
 
   function ajoute(fs) {
     var max = reglages.fichiers_max || 20;
     Array.prototype.forEach.call(fs, function (f) {
-      // On ne dépasse pas le nombre annoncé, et on le DIT plutôt que de
-      // laisser tomber les fichiers en trop en silence.
+      // On ne dépasse pas le nombre annoncé, et on le DIT plutôt que de laisser tomber les fichiers en trop en silence.
       if (choisis.length < max) choisis.push(f);
     });
-    if (fs.length && choisis.length >= max) {
-      etat.textContent = 'Maximum ' + max + ' fichiers par dépôt.';
-    }
     montre();
-    // Le champ est vidé pour qu'un même fichier puisse être re-choisi après
-    // avoir été retiré : sans cela, `change` ne se déclenche pas deux fois.
+    if (fs.length && choisis.length >= max) etat.textContent = 'Maximum ' + max + ' fichiers par dépôt.';
+    // Le champ est vidé pour qu'un même fichier puisse être re-choisi après avoir été retiré.
     champ.value = '';
   }
 
   champ.addEventListener('change', function (e) { ajoute(e.target.files); });
 
   ['dragenter', 'dragover'].forEach(function (t) {
-    zone.addEventListener(t, function (e) {
-      e.preventDefault(); zone.classList.add('survol');
-    });
+    zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.add('survol'); });
   });
   ['dragleave', 'dragend'].forEach(function (t) {
     zone.addEventListener(t, function () { zone.classList.remove('survol'); });
@@ -275,9 +259,7 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
     e.preventDefault(); zone.classList.remove('survol');
     if (e.dataTransfer && e.dataTransfer.files) ajoute(e.dataTransfer.files);
   });
-  // Le document entier absorbe les dépôts manqués : sans cela, un fichier
-  // lâché à côté de la zone est OUVERT par le navigateur, et le visiteur perd
-  // la page qu'il était en train de remplir.
+  // Le document entier absorbe les dépôts manqués : sinon un fichier lâché à côté de la zone est OUVERT par le navigateur.
   ['dragover', 'drop'].forEach(function (t) {
     document.addEventListener(t, function (e) { e.preventDefault(); });
   });
@@ -285,6 +267,13 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
   document.getElementById('f').addEventListener('submit', function (e) {
     e.preventDefault();
     if (!choisis.length) return;
+
+    if (DEMO) {
+      msg.hidden = false; msg.className = 'message demo-msg';
+      msg.textContent = 'Démonstration : le dépôt est inerte, rien n’est envoyé.';
+      annonce();
+      return;
+    }
 
     var corps = new FormData();
     choisis.forEach(function (f) { corps.append('fichiers', f, f.name); });
@@ -294,9 +283,8 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
     jauge.hidden = false; jauge.value = 0;
     msg.hidden = true;
 
-    // XHR plutôt que fetch : c'est le seul moyen d'avoir une progression de
-    // téléversement. Sur une archive d'un gigaoctet, une page sans progression
-    // paraît figée — et l'on recharge, ce qui recommence tout.
+    // XHR plutôt que fetch : seul moyen d'avoir une progression de téléversement. Sur une archive d'un gigaoctet, une page
+    // sans progression paraît figée, et l'on recharge, ce qui recommence tout.
     var x = new XMLHttpRequest();
     x.open('POST', API + '/depot');
     x.upload.addEventListener('progress', function (ev) {
@@ -317,18 +305,12 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
         t.textContent = 'Dépôt reçu.';
         var r = document.createElement('span');
         r.className = 'ref';
-        // ON REND L'IDENTIFIANT. C'est la seule prise du déposant sur ce qu'il
-        // vient d'envoyer : sans lui, il ne peut rien demander à personne.
+        // ON REND L'IDENTIFIANT : c'est la seule prise du déposant sur ce qu'il vient d'envoyer.
         r.textContent = 'Référence : ' + d.depot;
         var s = document.createElement('p');
-        // ON NE PROMET PAS CE QU'ON N'A PAS CONSTATE (#1030). L'alerte part en
-        // tache de fond, apres la reponse : au moment ou l'on ecrit cette
-        // ligne, personne ne sait encore si le courrier passera. Annoncer
-        // « a ete prevenu » serait une promesse invérifiable ; annoncer un
-        // echec le serait tout autant.
+        // ON NE PROMET PAS CE QU'ON N'A PAS CONSTATE (#1030) : l'alerte part en tâche de fond, après la réponse.
         s.textContent = (d.alerte && d.alerte.ok === false)
-          ? "Le propriétaire n'a pas pu être prévenu par courrier, mais vos " +
-            'fichiers sont bien arrivés.'
+          ? "Le propriétaire n'a pas pu être prévenu par courrier, mais vos fichiers sont bien arrivés."
           : 'Le propriétaire de la box va en être averti.';
         msg.append(t, document.createElement('br'), r, s);
         choisis = []; montre();
@@ -339,12 +321,14 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
         msg.textContent = d.detail || ('Le dépôt a été refusé (' + x.status + ').');
         bouton.disabled = false;
       }
+      annonce();
     });
     x.addEventListener('error', function () {
       jauge.hidden = true; msg.hidden = false;
       msg.className = 'message mal';
       msg.textContent = 'La connexion a été interrompue. Rien n’a été déposé.';
       bouton.disabled = false;
+      annonce();
     });
     x.addEventListener('abort', function () {
       jauge.hidden = true; bouton.disabled = false;
@@ -352,6 +336,10 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
     });
     x.send(corps);
   });
+
+  if (window.ResizeObserver) new ResizeObserver(annonce).observe(document.body);
+  addEventListener('resize', annonce);
+  annonce();
 })();
 </script>
 </body>

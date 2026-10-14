@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#1960 : cartes « Destinations non classées » et « Appareils du LAN (vue DNS) » de la page du DPI, dans un vrai navigateur, API simulée."""
+"""#1960 (page au profil Aurora, #2677 : lignes `.lg`, titres `h3`, mêmes ids et mêmes textes) : cartes « Destinations non classées » et « Appareils du LAN (vue DNS) » de la page du DPI, dans un vrai navigateur, API simulée."""
 import json
 import re
 from pathlib import Path
@@ -60,22 +60,22 @@ def mes_erreurs(erreurs):
 
 def test_destinations_non_classees_etiquetees_d_abord_avec_la_source(navigateur):
     ctx, p, erreurs = _page(navigateur)
-    p.wait_for_selector("#adg-unknown .app-item")
-    lignes = p.locator("#adg-unknown .app-item")
+    p.wait_for_selector("#adg-unknown .lg")
+    lignes = p.locator("#adg-unknown .lg")
     assert lignes.count() == 3
     assert "7cd77.v.fwmrm.net" in lignes.nth(0).inner_text() or "cloudreplay.ftven.fr" in lignes.nth(0).inner_text()      # les étiquetées d'abord
     assert "82.67.100.75" in lignes.nth(2).inner_text() and "non étiquetée" in lignes.nth(2).inner_text()
-    fw = p.locator("#adg-unknown .app-item", has_text="7cd77.v.fwmrm.net").inner_text()
+    fw = p.locator("#adg-unknown .lg", has_text="7cd77.v.fwmrm.net").inner_text()
     assert "FreeWheel" in fw and "publicité" in fw and "d’après ad-guard" in fw
     pied = p.inner_text("#adg-unknown-foot")
     assert "3 destination(s) non classée(s)" in pied and "2 étiquetée(s)" in pied and "mesurés par le DPI" in pied
-    assert "mesurés par le DPI" in p.inner_text("#adg-unknown-card h2") and not mes_erreurs(erreurs)
+    assert "mesurés par le DPI" in p.inner_text("#adg-unknown-card h3") and not mes_erreurs(erreurs)
     ctx.close()
 
 
 def test_appareils_du_lan_vus_au_dns_sans_aucun_volume(navigateur):
     ctx, p, erreurs = _page(navigateur)
-    p.wait_for_selector("#adg-lan .app-item")
+    p.wait_for_selector("#adg-lan .lg")
     t = p.inner_text("#adg-lan-card")
     assert "TV fb5b" in t and "192.168.1.128" in t and "auto" in t.lower() and "50 requêtes" in t and "10 bloquées (20 %)" in t and "3 noms" in t
     assert "France Télévisions (contenu) 40" in t and "FreeWheel (publicité) 10" in t
@@ -90,7 +90,7 @@ def test_texte_piege_inoffensif_dans_les_deux_cartes(navigateur):
     lan = {"disponible": True, "age_s": 1, "fenetre": PIEGE, "appareils": [{"nom": PIEGE, "adresses": [PIEGE], "mode": PIEGE, "requetes": 1, "bloquees": 0, "domaines": 1,
                                                                            "services": [{"organisation": PIEGE, "type": PIEGE, "requetes": 1, "bloquees": 0}], "types": {}}]}
     ctx, p, erreurs = _page(navigateur, usage, lan)
-    p.wait_for_selector("#adg-lan .app-item")
+    p.wait_for_selector("#adg-lan .lg")
     assert PIEGE in p.inner_text("#adg-unknown") and PIEGE in p.inner_text("#adg-lan")             # affiché en TEXTE
     assert p.evaluate("window.__pwn === undefined")
     assert p.evaluate("document.querySelectorAll('#adg-unknown-card img, #adg-lan-card img').length") == 0
@@ -101,7 +101,7 @@ def test_texte_piege_inoffensif_dans_les_deux_cartes(navigateur):
 def test_donnees_ad_guard_absentes_ou_perimees_message_explicite(navigateur):
     for lan, mot in (({"disponible": False, "raison": "périmé", "age_s": 5000}, "périmé"), ({"disponible": False, "raison": "absent"}, "absent"), ({}, "absentes")):
         ctx, p, erreurs = _page(navigateur, lan=lan)
-        p.wait_for_selector("#adg-lan .empty")
+        p.wait_for_selector("#adg-lan .vide")
         assert "absentes ou périmées" in p.inner_text("#adg-lan") and mot in p.inner_text("#adg-lan") and "indisponible" in p.inner_text("#adg-lan-badge").lower()
         assert not mes_erreurs(erreurs)
         ctx.close()
@@ -109,14 +109,14 @@ def test_donnees_ad_guard_absentes_ou_perimees_message_explicite(navigateur):
 
 def test_api_usage_en_erreur_ne_leve_aucune_exception(navigateur):
     ctx, p, erreurs = _page(navigateur, usage_html=True)
-    p.wait_for_selector("#adg-unknown .empty")
+    p.wait_for_selector("#adg-unknown .vide")
     assert "indisponibles" in p.inner_text("#adg-unknown") and not mes_erreurs(erreurs)
     ctx.close()
 
 
 def test_sans_liste_non_classee_message_et_sessions_mentionne_la_mesure_du_dpi(navigateur):
     ctx, p, erreurs = _page(navigateur, usage={"usages": [], "unknown": []})
-    p.wait_for_selector("#adg-unknown .empty")
+    p.wait_for_selector("#adg-unknown .vide")
     assert "Aucune destination non classée" in p.inner_text("#adg-unknown")
-    assert "mesuré par le DPI" in p.locator(".card:has(#dpi-sessions) h2").inner_text()
+    assert "mesuré par le DPI" in p.locator(".pan:has(#dpi-sessions) h3").inner_text()
     ctx.close()

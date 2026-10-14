@@ -25,11 +25,10 @@ def test_aucune_ressource_externe_ni_secret():
 
 
 def test_routes_ecriture_identiques_a_l_ancienne_page():
+    # #2677 : l'ancienne coque index.html portait, masquée, une copie de ces écritures ; elle n'écrit plus (seul Réglages écrit).
+    # Les routes attendues sont donc figées ici : celles qu'appelait l'ancienne page.
     assert "const API_BASE = '/api/v1/ndpid'" in ANCIEN and "API_BASE='/api/v1/ndpid'" in PAGE
-    # l'ancienne page écrit via POST sur ces seules routes
-    anciennes = set(re.findall(r"apiFetch\(`(/[^`$]+?)(?:\$\{action\})?`, \{ method: 'POST' \}", ANCIEN))
-    assert "/mirred/setup" in anciennes and "/mirred/remove" in anciennes
-    assert "/control/${action}" in ANCIEN
+    assert "'POST'" not in ANCIEN
     for action in ("start", "restart", "stop"):
         assert f"chemin:'/control/{action}'" in PAGE
     for r in ("/mirred/setup", "/mirred/remove"):

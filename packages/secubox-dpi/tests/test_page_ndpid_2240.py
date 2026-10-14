@@ -50,7 +50,7 @@ def ouvre(navigateur, jeton, exige_jeton=True):
 
 def test_la_page_parle_a_la_bonne_route_et_presente_le_jeton(navigateur):
     ctx, p, appels, entetes = ouvre(navigateur, "jeton-admin")
-    p.wait_for_function("document.getElementById('flows-table').innerText.includes('93.184.216.34')", timeout=10000)
+    p.wait_for_function("document.getElementById('flows-active').innerText === '1'", timeout=10000)   # #2677 : la coque affiche le nombre de flux (le tableau est dans l'onglet Flux)
     assert appels and all(a.startswith("/api/v1/ndpid/") for a in appels), appels            # jamais /api/ndpid/…
     assert any(e == "Bearer jeton-admin" for e in entetes)
     ctx.close()

@@ -29,6 +29,12 @@ from secubox_toolbox.app import app
 PKG = Path(__file__).resolve().parents[1]
 PAGES = {
     "toolbox": PKG / "www" / "toolbox" / "index.html",
+    # #2684 : la coque index.html ne porte plus que des lectures de situation ; les appels
+    # (écritures comprises) vivent dans les pages d'onglet, contrôlés ici avec les mêmes extracteurs.
+    "toolbox-tor": PKG / "www" / "toolbox" / "tor.html",
+    "toolbox-filtres": PKG / "www" / "toolbox" / "filtres.html",
+    "toolbox-sentinelle": PKG / "www" / "toolbox" / "sentinelle.html",
+    "toolbox-pubs": PKG / "www" / "toolbox" / "pubs.html",
     "rlevel": PKG / "www" / "rlevel" / "index.html",
     "tor": PKG.parent / "secubox-tor" / "www" / "tor" / "index.html",
 }
@@ -36,11 +42,15 @@ PAGES = {
 # Fonctions d'appel qui visent l'API toolbox, par page. Les autres helpers
 # (exposureApi, nacApi, Xj, Jhub…) visent d'autres modules : ignorés.
 _CALLERS = {
-    "toolbox": r"(?:\bJ|\bTj|\b_splicePost|\bfetch)\(\s*(?:API\s*\+\s*)?",
+    "toolbox": r"(?:\blire|\bJ|\bTj|\b_splicePost|\bfetch)\(\s*(?:API\s*\+\s*)?",
     "rlevel": r"\bapi\(\s*",
     "tor": r"(?:\btoolboxApi|\bfetch)\(\s*(?:TOOLBOX_API\s*\+\s*)?",
 }
 _API_VARS = {"toolbox": "API", "rlevel": "API", "tor": "TOOLBOX_API"}
+for _k in ("toolbox-tor", "toolbox-filtres", "toolbox-sentinelle", "toolbox-pubs"):
+    # les pages d'onglet appellent via fetch(API+…), Tj, jget ou post(url, corps) (POST systématique)
+    _CALLERS[_k] = r"(?:\bJ|\bTj|\bjget|\bpost|\b_splicePost|\bfetch)\(\s*(?:API\s*\+\s*)?"
+    _API_VARS[_k] = "API"
 _PREFIXES = ("/admin", "/rlevel", "/exit_country", "/vpn", "/tor", "/__toolbox")
 
 
@@ -91,9 +101,12 @@ def _calls(page: str) -> set[tuple[str, str]]:
         # littéral de l'expression compte.
         meth = re.search(r"method\s*:\s*([^,}\n]+)", args)
         methods = [x.upper() for x in re.findall(r"['\"](\w+)['\"]", meth.group(1))] if meth else []
-        if m.group(0).lstrip().startswith("_splicePost"):
+        if m.group(0).lstrip().startswith(("_splicePost", "post(")):
             methods = ["POST"]  # helper qui POSTe toujours
-        for p in _expand(path):
+        # `'/admin/tor/'+(on?'on':'off')` : les deux littéraux de la parenthèse comptent
+        alt = re.match(r"""\s*(['"])/[^'"]*\1\s*\+\s*\(\s*\w+\s*\?\s*'(\w+)'\s*:\s*'(\w+)'\s*\)""", args) if lit else None
+        paths = [path[:-2] + a for a in alt.groups()[1:]] if alt else _expand(path)
+        for p in paths:
             p = p.split("?", 1)[0]  # après l'expansion : un `?` ternaire n'est pas une requête
             for method in methods or ["GET"]:
                 found.add((method, p))
@@ -129,7 +142,7 @@ def test_page_calls_resolve_to_routes(page):
 def test_extractor_sees_the_restored_routes():
     """L'extracteur doit voir les appels restaurés — sinon le test ci-dessus
     passerait à vide sur une page réécrite."""
-    got = _calls("toolbox") | _calls("rlevel")
+    got = _calls("toolbox") | _calls("rlevel") | _calls("toolbox-tor") | _calls("toolbox-filtres") | _calls("toolbox-sentinelle") | _calls("toolbox-pubs")
     for want in [("GET", "/rlevel/peers"), ("POST", "/rlevel/peer"),
                  ("GET", "/rlevel/me"), ("POST", "/rlevel/me"),
                  ("GET", "/exit_country"), ("POST", "/exit_country"),

@@ -1,3 +1,12 @@
+secubox-bbs (0.37.10-1~bookworm1) bookworm; urgency=medium
+
+  * Console sysop (www/bbs/index.html) au profil Aurora : page autonome, six tuiles avec infobulle de définition (fils, messages, membres, fichiers, billets, intégrité), trois onglets (Exploitation, Sysop, Salons), ?embed=1 sans menu, ?demo=1 (données fictives, actions inertes), 420 px sans débordement, mesure absente affichée « — », bandeau « session requise » au lieu de la redirection vers la connexion (#2674).
+  * Mêmes routes, méthodes et corps qu'avant ; le jeton sbx_token n'est plus envoyé en Bearer que s'il existe.
+  * Les deux dialogues natifs (confirm de la reconstruction, confirm puis prompt de la suppression d'un compte) deviennent une confirmation intégrée à la page ; la suppression exige toujours de retaper le pseudonyme (bouton inactif tant qu'il diffère).
+  * Non touchés : la gazette publique (internal/web) et les maquettes www/mockup*.html.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 14 Oct 2026 13:00:00 +0200
+
 secubox-bbs (0.37.9-1~bookworm1) bookworm; urgency=high
 
   * API : une signature valide ne suffit plus — un jeton portant un jti doit être une session VIVANTE du registre de secubox-auth (déconnexion et révocation prises en compte), un jeton d'intention (scope) est refusé, un jeton sans session n'est admis que d'un service de la flotte (iss connu, 10 min au plus) (#1814).

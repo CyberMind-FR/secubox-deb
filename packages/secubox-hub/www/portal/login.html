@@ -4,55 +4,47 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  /portal/login.html au profil Aurora (.claude/AURORA-REFERENCE.md) : simple relais vers /login.html, page de connexion
+  que possède secubox-portal (#1064). Ce fichier ne porte ni formulaire ni jeton. La cible est FIXE (/login.html) : seuls
+  la requête (?redirect=…) et le fragment (#elevation=…) sont reportés, tels quels ; la validation de ?redirect= se fait
+  dans /login.html, au moment de la redirection.
+-->
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox Login</title>
-    <script>
-        // Transparent redirect to /login.html preserving query params
-        (function() {
-            var params = window.location.search;
-            var hash = window.location.hash;
-            var target = '/login.html' + params + hash;
-            window.location.replace(target);
-        })();
-    </script>
-    <style>
-        body {
-            background: #0a0a0f;
-            color: #e8e6d9;
-            font-family: 'JetBrains Mono', monospace;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .loading {
-            text-align: center;
-        }
-        .spinner {
-            font-size: 32px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-        }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Connexion</title>
+<script>
+// Redirection transparente vers /login.html en conservant requête et fragment.
+(function () {
+  window.location.replace('/login.html' + window.location.search + window.location.hash);
+})();
+</script>
+<noscript><meta http-equiv="refresh" content="0;url=/login.html"></noscript>
+<style>
+:root{--fond:#060d1b;--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--cyan:#29b6f6}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+  color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
+.cadre{padding:10px;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.app{width:100%;max-width:400px;min-width:0;border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:22px 18px;text-align:center;display:grid;gap:8px}
+.app h1{margin:0;font-size:1.5rem;font-weight:800} .app h1 span{color:var(--cyan)}
+.app p{margin:0;color:var(--doux)} .app a{color:var(--cyan)}
+.roue{width:26px;height:26px;border:3px solid var(--trait2);border-top-color:var(--cyan);border-radius:50%;margin:4px auto 0;animation:tour 1s linear infinite}
+@keyframes tour{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.roue{animation:none}}
+</style>
 </head>
 <body>
-    <div class="loading">
-        <div class="spinner">⚙️</div>
-        <p>Redirecting to login...</p>
-    </div>
-    <noscript>
-        <meta http-equiv="refresh" content="0;url=/login.html">
-        <p>JavaScript is disabled. <a href="/login.html">Click here to login</a>.</p>
-    </noscript>
+<div class="cadre">
+  <main class="app">
+    <h1>Secu<span>Box</span></h1>
+    <div class="roue" aria-hidden="true"></div>
+    <p>Redirection vers la connexion…</p>
+    <noscript><p>JavaScript est désactivé. <a href="/login.html">Ouvrir la page de connexion</a>.</p></noscript>
+  </main>
+</div>
 </body>
 </html>

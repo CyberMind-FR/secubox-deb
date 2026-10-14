@@ -54,7 +54,7 @@ def test_ouverte_directement_elle_porte_le_menu_et_decale_son_contenu(navigateur
     ctx, p, demandes = ouvre(navigateur, "http://sbx.test/identite/")
     assert p.locator("nav#sidebar.sidebar").count() == 1
     assert any(u.endswith("/shared/sidebar.js") for u in demandes)
-    assert p.evaluate("getComputedStyle(document.querySelector('.wrap')).marginLeft") == "220px"
+    assert p.evaluate("getComputedStyle(document.querySelector('.cadre')).marginLeft") == "220px"
     ctx.close()
 
 
@@ -62,14 +62,14 @@ def test_avec_embed_ni_menu_ni_decalage(navigateur):
     ctx, p, demandes = ouvre(navigateur, "http://sbx.test/identite/?embed=1")
     assert p.locator("nav#sidebar").count() == 0
     assert not any(u.endswith("/shared/sidebar.js") for u in demandes)
-    assert p.evaluate("getComputedStyle(document.querySelector('.wrap')).marginLeft") != "220px"
+    assert p.evaluate("getComputedStyle(document.querySelector('.cadre')).marginLeft") != "220px"
     ctx.close()
 
 
 def test_encadree_dans_une_iframe_ni_menu_ni_decalage(navigateur):
     ctx, p, demandes = ouvre(navigateur, "http://sbx.test/parent")
     f = p.frame_locator("#f")
-    f.locator(".wrap").wait_for()
+    f.locator(".cadre").wait_for()
     assert f.locator("nav#sidebar").count() == 0
     assert not any(u.endswith("/shared/sidebar.js") for u in demandes)
     ctx.close()
@@ -77,6 +77,6 @@ def test_encadree_dans_une_iframe_ni_menu_ni_decalage(navigateur):
 
 def test_sur_telephone_le_menu_ne_decale_plus_le_contenu(navigateur):
     ctx, p, _ = ouvre(navigateur, "http://sbx.test/identite/", taille={"width": 420, "height": 800})
-    assert p.evaluate("getComputedStyle(document.querySelector('.wrap')).marginLeft") != "220px"
+    assert p.evaluate("getComputedStyle(document.querySelector('.cadre')).marginLeft") != "220px"
     assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     ctx.close()

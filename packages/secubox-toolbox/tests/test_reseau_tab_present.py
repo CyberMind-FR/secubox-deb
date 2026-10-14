@@ -7,10 +7,10 @@ HTML = Path(__file__).resolve().parents[1] / "www" / "toolbox" / "index.html"
 
 
 def test_reseau_tab_button_panel_and_loader():
+    """#2684 : la coque Aurora déclare l'onglet Réseau (page SOC encadrée) ; les routes netstats vivent dans l'onglet Vue d'ensemble."""
     t = HTML.read_text()
-    assert 'data-tab="reseau"' in t
-    assert 'id="panel-reseau"' in t
-    assert "loadNetstats" in t
-    # talks to the hub netstats endpoints
-    assert "/api/v1/hub/netstats/summary" in t
-    assert "/api/v1/hub/netstats/series" in t
+    assert "['reseau'," in t and "reseau: '/soc/reseau.html'" in t
+    assert 'role", "tab"' in t.replace("'", '"') or "setAttribute('role', 'tab')" in t
+    apercu = (HTML.parent / "apercu.html").read_text()
+    assert "netstats/summary" in apercu
+    assert "netstats/series" in apercu

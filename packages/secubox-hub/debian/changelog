@@ -1,10 +1,16 @@
-secubox-hub (1.11.1-1~bookworm1) bookworm; urgency=medium
+secubox-hub (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Pages /soc.html et /soc/ au profil Aurora (#2675) : HTML autonome (plus de police distante ni de design-tokens.css), tuiles avec infobulles de definition, courbes et donuts en SVG ecrits a la main, ?demo=1 (donnees fictives, aucune requete), ?embed=1, 420 px sans debordement, onglets Tous/Menaces/Systeme (role tab, fleches/Debut/Fin).
   * Memes appels qu'avant, tous en GET avec le jeton sbx_token en Bearer : hub/health, waf/stats, waf/alerts?limit=100&aggregate=true, hub/public/firewall_summary, metrics/overview, hub/dashboard, metrics/connections, hub/network_summary, plus hub/module-health/summary pour /soc/ seulement. Aucune route ni API modifiee. Les deux pages restent deux variantes (pas des doublons stricts) : /soc.html exige un jeton et trace les paquets du pare-feu, /soc/ lit les routes publiques sans jeton et ajoute les capteurs par continent.
   * Ce qui change a l'ecran : sans jeton, /soc.html affiche un bandeau « session requise » au lieu de rediriger ; la tuile « MB/s » etait un nombre de connexions TCP et porte maintenant son vrai nom ; plus de courbe 24 h tiree au hasard quand l'API ne fournit pas hourly_blocks (message a la place) ; plus de « 1 service » ni de 100 % reseau inventes ; mesure absente = « — ». Lecture corrigee de top_vhosts (liste) et de client_ip dans les alertes agregees.
   * Non repris : l'ancien « +% vs hier » (jamais calcule), les histogrammes de 12 relevés animes (remplaces par des courbes).
   * Tests : test_soc_aurora_2675.py (statique + navigateur).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
+secubox-hub (1.11.1-1~bookworm1) bookworm; urgency=medium
+
+  * /portal/login.html au profil Aurora (#2687) : le relais vers /login.html (page de connexion que possede secubox-portal, #1064) prend la feuille Aurora autonome et le francais. Cible fixe, requete (?redirect=) et fragment (#elevation=) reportes a l'identique ; aucun formulaire, aucun jeton. 7 tests, dont un qui interdit au hub de livrer un login.html a la racine.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
 
