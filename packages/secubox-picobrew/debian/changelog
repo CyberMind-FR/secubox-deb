@@ -1,3 +1,26 @@
+secubox-picobrew (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /picobrew/ refaite au profil Aurora (ref #2612) : un seul fichier
+    autonome, tuiles (conteneur, version, session de brassage, mémoire),
+    panneaux Pilotage, Accès et Journal, modes ?demo=1 et ?embed=1,
+    bandeau « session requise » sur 401/403, « — » pour toute mesure absente.
+  * Corrigé : le jeton sbx_token n'était jamais envoyé (Authorization: Bearer
+    ajouté en lecture et en écriture) ; le lien « Ouvrir » ne pointait que
+    vers picobrew.gk2.secubox.in, il est déduit du nom d'hôte de la page ;
+    démarrage, arrêt et redémarrage partaient sans confirmation, ils passent
+    par une confirmation intégrée (avec avertissement si une session de
+    brassage est en cours) ; la sous-ligne d'état était construite en
+    innerHTML avec le texte d'erreur de l'API, tout est désormais en
+    textContent ; l'ancienne page chargeait une police distante.
+  * Inchangé : routes GET /status et /logs, POST /start, /stop, /restart
+    (même méthode, aucun corps). Aucun changement d'API, de nginx ni de menu.d.
+  * Non repris : les notifications volantes (remplacées par un retour dans la
+    page) ; la page n'affiche toujours que ce que l'API fournit (pas de
+    courbe de mémoire, aucun historique de session).
+  * Tests : test_picobrew_aurora_2612.py (statique + Playwright).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 07:20:57 +0200
+
 secubox-picobrew (2.0.5-1~bookworm1) bookworm; urgency=medium
 
   * Provision : Restart=on-failure toutes les 15 min — un premier
