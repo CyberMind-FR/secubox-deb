@@ -1,3 +1,11 @@
+secubox-media (1.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * La page /media/ passe au profil Aurora (#2645) : page autonome (CSS et JS en ligne, sans police ni feuille distante), tuiles avec infobulles de definition, supports, deux volets de transfert et file inchanges, mode demonstration (?demo=1, actions inertes) et ?embed=1.
+  * Memes routes, methodes, corps et en-tetes (jeton sbx_token en Bearer, lu sous try/catch) ; aucun changement d'API.
+  * Non repris : la redirection automatique vers la connexion sur 401 (remplacee par le bandeau Aucune mesure : session requise, avec lien de connexion) ; le bouton Copier retour reste inactif, comme il l'etait (aucun appel ne lui a jamais ete associe).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-media (1.8.1-1~bookworm1) bookworm; urgency=medium
 
   * La gestion systemd de l'unite freeboxtv n'est plus declaree deux fois (dh la detecte deja dans l'arbre).
