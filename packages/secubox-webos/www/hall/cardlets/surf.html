@@ -4,10 +4,15 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SURF — un mini-navigateur dans le Hall (#1337).
+  SURF — un mini-navigateur dans le Hall (#1337). Profil Aurora (.claude/AURORA-REFERENCE.md, #2660).
   Une barre d'adresse, et ce qu'on y tape s'ouvre A TRAVERS le proxy de la box :
   pisteurs coupes, pubs retirees, contenu servi. On ne fabrique pas un vrai
   navigateur — on genere l'origine par-site du relais et on la cadre.
+
+  Cette carte REMPLIT sa fenêtre (overlay du Hall ou carte) : c'est un navigateur, pas un tableau de bord. Elle n'annonce donc
+  PAS de hauteur à l'hôte. Son protocole postMessage (surf-hote, surf-catch, surf-close, surf-vide, broadcast-on ; en écoute :
+  surf-stats, surf-nav, surf-back), la sandbox de son cadre et la liste d'URL sont ceux de l'ancienne page, à l'identique.
+  ?demo=1 : aucune page n'est ouverte, aucun message n'est envoyé, aucune diffusion (compteurs fictifs annoncés).
 -->
 <!doctype html>
 <html lang="fr">
@@ -15,108 +20,107 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Surf</title>
-<link rel="stylesheet" href="../spicy.css">
 <style>
-  :root{ --fond:#0a0a0f; --carte:#14141c; --ink:#e8e6d9; --muted:#8a8a99;
-         --ligne:#2a2a36; --cyan:#00d4ff; --violet:#6e40c9; }
-  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]){
-         --fond:#f6f5f0; --carte:#fff; --ink:#1a1a22; --muted:#5b5b6a;
-         --ligne:#e2e0d6; --cyan:#0a7ea4; --violet:#6e40c9; }}
-  :root[data-theme="light"]{ --fond:#f6f5f0; --carte:#fff; --ink:#1a1a22;
-         --muted:#5b5b6a; --ligne:#e2e0d6; --cyan:#0a7ea4; --violet:#6e40c9; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:var(--fond);color:var(--ink);
-       font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
-       display:flex;flex-direction:column}
-  .barre{display:flex;align-items:center;gap:.35rem;padding:.22rem .5rem;
-         background:var(--carte);border-bottom:1px solid var(--ligne);flex:0 0 auto}
-  .barre .ic{font-size:.95rem;flex:0 0 auto;opacity:.8}
-  .barre input{flex:1;min-width:0;padding:.26rem .55rem;border-radius:7px;
-         border:1px solid var(--ligne);background:var(--fond);color:var(--ink);
-         font-size:.8rem;font-family:"JetBrains Mono",ui-monospace,monospace}
-  .barre input:focus{outline:none;border-color:var(--cyan);
-         box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 22%,transparent)}
-  .barre button{flex:0 0 auto;border:none;border-radius:7px;cursor:pointer;
-         background:var(--cyan);color:#04222a;font-weight:700;font-size:.74rem;
-         padding:.26rem .6rem}
-  .barre button.ghost{background:transparent;color:var(--muted);
-         border:1px solid var(--ligne);font-weight:600;padding:.24rem .45rem}
-  .barre button.ghost:hover{color:var(--ink);border-color:var(--cyan)}
-  .barre .barstats{display:inline-flex;align-items:center;gap:.5rem;flex:0 0 auto;
-        font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.62rem;color:var(--muted);
-        white-space:nowrap;margin-left:.3rem}
-  .barre .barstats.hidden{display:none}
-  .barre .barstats .s{display:inline-flex;align-items:center;gap:.15rem}
-  .barre .barstats .s b{color:var(--ink)} .barre .barstats .s.z{opacity:.35}
-  .barre .barstats .cam{color:var(--cyan);font-weight:700}
-  .jarpanel{padding:.5rem .6rem;background:var(--carte);border-bottom:1px solid var(--ligne)}
-  .jarpanel.hidden{display:none}
-  .jarpanel .jt{font-size:.66rem;color:var(--muted);line-height:1.4;margin-bottom:.35rem}
-  .jarpanel .jt code{font-family:"JetBrains Mono",ui-monospace,monospace;color:var(--cyan)}
-  .jarpanel textarea{width:100%;min-height:56px;resize:vertical;border-radius:7px;
-    border:1px solid var(--ligne);background:var(--fond);color:var(--ink);
-    font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;padding:.4rem .5rem}
-  .jarpanel .jbtns{display:flex;gap:.4rem;margin-top:.4rem}
-  .jarpanel .jbtns button{border:none;border-radius:7px;cursor:pointer;font-size:.72rem;
-    font-weight:700;padding:.3rem .7rem;background:var(--cyan);color:#04222a}
-  .jarpanel .jbtns button.ghost{background:transparent;color:var(--muted);border:1px solid var(--ligne);font-weight:600}
-  .barre .xbtn{font-weight:700}
-  .barre .xbtn:hover{border-color:var(--coral);color:var(--coral)}
-  @media(max-width:760px){.barre .barstats{display:none}}
-  .stats{display:flex;align-items:center;gap:.7rem;flex-wrap:nowrap;overflow:hidden;
-        padding:.05rem .6rem .12rem;background:var(--carte);
-        border-bottom:1px solid var(--ligne);font-size:.6rem;
-        font-family:"JetBrains Mono",ui-monospace,monospace;color:var(--muted)}
-  .stats.hidden{display:none}
-  .stats .s{display:inline-flex;align-items:center;gap:.2rem}
-  .stats .s b{color:var(--ink);font-weight:700}
-  .stats .cam{color:var(--cyan);font-weight:700}
-  .stats .etatr{margin-left:auto;color:var(--muted);white-space:nowrap;
-        overflow:hidden;text-overflow:ellipsis;min-width:0}
-  .stats .s.z{opacity:.4}
-  .etat{font-size:.6rem;color:var(--muted);padding:.15rem .6rem;flex:0 0 auto;
-        background:var(--carte);border-bottom:1px solid var(--ligne);
-        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-        font-family:"JetBrains Mono",ui-monospace,monospace}
-  .vue{flex:1;position:relative;min-height:0;background:var(--fond)}
-  .vue iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-  .accueil{position:absolute;inset:0;display:flex;flex-direction:column;
-        align-items:center;justify-content:center;gap:.7rem;text-align:center;
-        padding:1.2rem;color:var(--muted)}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;overflow-wrap:anywhere}
+  .actif i{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:1px}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover:not(:disabled){border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible,.act:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;overflow-wrap:anywhere}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  body.emb .tuiles,body.dans .tuiles{display:none}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.hors .v{color:var(--rouge)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.emb .pan,body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .msg{padding:12px;margin-top:10px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg b{color:var(--texte)} .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  html,body{height:100%}
+  .cadre{height:100%}
+  .app{display:flex;flex-direction:column;gap:6px;height:100%;padding:8px;overflow:hidden}
+  body.dans .cadre{padding:0} body.dans .app{border:0;border-radius:0;box-shadow:none;padding:6px 8px;gap:5px}
+  .barre{display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:0 0 auto}
+  .barre .ic{font-size:1rem;flex:0 0 auto}
+  .barre input{flex:1 1 11rem;min-width:0;min-height:36px;padding:.3rem .65rem;border-radius:9px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);color:var(--texte);font-size:.82rem;font-family:ui-monospace,"JetBrains Mono",monospace}
+  .barre input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(41,182,246,.22)}
+  .barre .btn{flex:0 0 auto;min-width:36px;font-weight:600}
+  .barre .btn.p{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .barre .xbtn:hover{border-color:var(--rouge);color:var(--rouge)}
+  .jarpanel{padding:8px 10px;border:1px solid var(--trait);border-radius:10px;background:rgba(10,22,46,.6);flex:0 0 auto}
+  .jarpanel.hidden,.stats.hidden{display:none}
+  .jarpanel .jt{font-size:.72rem;color:var(--doux);line-height:1.4;margin-bottom:6px;overflow-wrap:anywhere}
+  .jarpanel .jt code{font-family:ui-monospace,monospace;color:var(--cyan)}
+  .jarpanel textarea{width:100%;min-height:56px;resize:vertical;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);color:var(--texte);font-family:ui-monospace,monospace;font-size:.72rem;padding:.4rem .5rem}
+  .jarpanel .jbtns{display:flex;gap:6px;margin-top:6px}
+  .stats{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;flex:0 0 auto;font-size:.7rem;color:var(--doux)}
+  .stats .s{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--trait);border-radius:999px;padding:1px 9px;background:rgba(18,40,78,.45);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .stats .s b{color:var(--texte);font-weight:700} .stats .s.z{opacity:.45}
+  .stats .cam{color:var(--vert);font-weight:700;border:1px solid var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:1px 9px;white-space:nowrap}
+  .stats .etatr{margin-left:auto;color:var(--faible);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .etat{flex:0 0 auto;font-size:.72rem;color:var(--doux);padding:5px 10px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .vue{flex:1;position:relative;min-height:140px;border:1px solid var(--trait);border-radius:10px;overflow:hidden;background:rgba(8,18,38,.7)}
+  .vue iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+  .accueil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7rem;text-align:center;padding:1rem;color:var(--doux);overflow:auto}
+  .accueil[hidden]{display:none}
   .accueil .grand{font-size:1.7rem}
-  .accueil b{color:var(--ink)}
-  .accueil .ex{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-top:.3rem}
-  .accueil .ex button{border:1px solid var(--ligne);background:var(--carte);
-        color:var(--cyan);border-radius:20px;padding:.3rem .7rem;cursor:pointer;
-        font-size:.72rem;font-family:"JetBrains Mono",ui-monospace,monospace}
+  .accueil b{color:var(--texte)}
+  .accueil .ex{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:.3rem}
+  .accueil .ex button{border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--cyan);border-radius:999px;padding:.35rem .8rem;min-height:34px;cursor:pointer;font-size:.74rem;font-family:ui-monospace,"JetBrains Mono",monospace}
   .accueil .ex button:hover{border-color:var(--cyan)}
-  .accueil small{font-size:.68rem;max-width:26rem;line-height:1.5}
+  .accueil small{font-size:.72rem;max-width:26rem;line-height:1.5;color:var(--faible)}
 </style>
 </head>
 <body>
+<div class="cadre"><div class="app">
   <div class="barre">
     <span class="ic">🛰️</span>
     <input id="adr" type="text" inputmode="url" autocomplete="off" spellcheck="false"
            placeholder="adresse à surfer — ex. www.lemonde.fr, mbasic.facebook.com…"
            aria-label="Adresse à surfer">
-    <button id="dos" class="ghost" type="button" title="Page précédente" hidden>◄</button>
-    <button id="home" class="ghost" type="button" title="Accueil surf" hidden>🏠</button>
-    <button id="jar" class="ghost" type="button" title="Apprendre les cookies de ce site (les coller une fois, rejoués toujours)" hidden>🍪</button>
-    <button id="diff" class="ghost" type="button" title="Diffuser cette page au parc (📡 direct)" hidden>📡</button>
-    <button id="voir" class="ghost" type="button" title="Voir en souverain dans le lecteur du Hall (rapatrie + garde le temps de son cache)" hidden>🎬</button>
-    <button id="go" type="button">Surfer</button>
-    <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
-    <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
-    <button id="fermer" class="ghost xbtn" type="button" title="Fermer le surf" hidden>✕</button>
+    <button id="dos" class="btn" type="button" title="Page précédente" hidden>◄</button>
+    <button id="home" class="btn" type="button" title="Accueil surf" hidden>🏠</button>
+    <button id="jar" class="btn" type="button" title="Apprendre les cookies de ce site (les coller une fois, rejoués toujours)" hidden>🍪</button>
+    <button id="diff" class="btn" type="button" title="Diffuser cette page au parc (📡 direct)" hidden>📡</button>
+    <button id="voir" class="btn" type="button" title="Voir en souverain dans le lecteur du Hall (rapatrie + garde le temps de son cache)" hidden>🎬</button>
+    <button id="go" class="btn p" type="button">Surfer</button>
+    <button id="rech" class="btn" type="button" title="Recharger" hidden>⟳</button>
+    <button id="onglet" class="btn" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
+    <button id="fermer" class="btn xbtn" type="button" title="Fermer le surf" hidden>✕</button>
   </div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — aucune page n'est ouverte ni diffusée, compteurs fictifs</div>
   <div class="jarpanel hidden" id="jarpanel">
     <div class="jt">🍪 Apprendre les cookies de <b id="jarhote"></b> — collez-les
       (depuis un navigateur où le site marche : DevTools → Cookies, format
       <code>nom=valeur; nom2=valeur2</code>). Rejoués perpétuellement, jamais partagés hors box.</div>
     <textarea id="jarval" placeholder="didomi_token=…; euconsent-v2=…; …" spellcheck="false"></textarea>
-    <div class="jbtns"><button id="jarok" type="button">Apprendre & recharger</button>
-      <button id="jarno" class="ghost" type="button">Annuler</button></div>
+    <div class="jbtns"><button id="jarok" class="btn p" type="button">Apprendre &amp; recharger</button>
+      <button id="jarno" class="btn" type="button">Annuler</button></div>
   </div>
   <div class="stats hidden" id="stats" title="Ce que le relais a coupé ou masqué sur cette page"></div>
   <div class="etat" id="etat" hidden></div>
@@ -125,24 +129,28 @@
       <div class="grand">🛰️</div>
       <div>Tapez une adresse : elle s'ouvre <b>à travers la box</b>.</div>
       <div class="ex">
-        <button data-u="mbasic.facebook.com">mbasic.facebook.com</button>
-        <button data-u="www.lemonde.fr">lemonde.fr</button>
-        <button data-u="lite.cnn.com">lite.cnn.com</button>
-        <button data-u="check.torproject.org">torproject</button>
+        <button type="button" data-u="mbasic.facebook.com">mbasic.facebook.com</button>
+        <button type="button" data-u="www.lemonde.fr">lemonde.fr</button>
+        <button type="button" data-u="lite.cnn.com">lite.cnn.com</button>
+        <button type="button" data-u="check.torproject.org">torproject</button>
       </div>
       <small>Pisteurs coupés, pubs retirées, contenu servi. C'est de la
         <b>lecture</b> : les sites qui montent tout en JavaScript vivront mal —
         visez leur version sobre (<b>mbasic</b>, <b>m.</b>, <b>lite</b>, RSS).</small>
     </div>
   </div>
+</div></div>
 
 <script src="/api/v1/webos/public/hotes.js"></script>
 <script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script>
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo') && Q.get('demo') !== '0';
+  if (Q.get('embed')) document.body.classList.add('emb');
+  try { if (window.top !== window) document.body.classList.add('dans'); } catch (e) { document.body.classList.add('dans'); }
   var $ = function (id) { return document.getElementById(id); };
-  var esc = function (t) { return String(t == null ? '' : t)
-      .replace(/[&<>"]/g, function (c) { return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
+  function el(tag, cls, texte) { var e = document.createElement(tag); if (cls) e.className = cls; if (texte != null) e.textContent = texte; return e; }
+  function dit(t) { var e = $('etat'); if (e) { e.hidden = false; e.textContent = t; } }
 
   // MEME APLATISSEMENT QUE relais.py / MetaNews : '-' double, '.' en '-'. Une
   // seule regle partout, sinon les origines divergent et le proxy ne route plus.
@@ -261,7 +269,6 @@
 
   var courant = null;
   var pile = [];   // historique des adresses visitees, pour reculer
-  var ACCUEIL_HTML = $('vue').innerHTML;   // pour le bouton Home
 
   function majDos() {
     var d = $('dos'); if (d) d.hidden = pile.length < 1;
@@ -274,10 +281,15 @@
     if (parent === window) return;
     try { parent.postMessage({ sbx: 'surf-hote', hote: h }, HALL); } catch (e) {}
   }
+  // Le cadre du relais, s'il y en a un. Une carte n'a jamais plus d'un cadre.
+  function cadre() { return document.querySelector('#vue iframe'); }
+  function fermeCadre() { var f = cadre(); if (f) f.parentNode.removeChild(f); }
 
   function surfe(saisie, sansEmpiler) {
     var n = normalise(saisie);
     if (!n) { $('etat').hidden = false; $('etat').textContent = 'adresse invalide'; return; }
+    // Démonstration : rien n'est ouvert, rien n'est annoncé au Hall.
+    if (DEMO) { dit('Démonstration : action inerte, ' + n.host + ' n’est pas ouvert à travers la box.'); return; }
     // On empile l'adresse QU'ON QUITTE, pour pouvoir y revenir.
     if (!sansEmpiler && courant) pile.push(courant);
     majDos();
@@ -293,9 +305,16 @@
     // pas nous faire quitter le Hall. `allow-same-origin` est indispensable :
     // sans lui, plus de cookies ni de stockage — et le correctif de boucle
     // DataDome (cookies sur notre origine) tomberait avec.
-    vue.innerHTML = '<iframe title="Surf" src="' + esc(n.surf)
-      + '" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups-to-escape-sandbox"'
-      + ' allow="fullscreen" referrerpolicy="no-referrer"></iframe>';
+    // Le cadre est CONSTRUIT par le DOM (jamais par du HTML assemblé) : la sandbox est posée AVANT l'adresse.
+    fermeCadre();
+    var fr = document.createElement('iframe');
+    fr.setAttribute('title', 'Surf');
+    fr.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups-to-escape-sandbox');
+    fr.setAttribute('allow', 'fullscreen');
+    fr.setAttribute('referrerpolicy', 'no-referrer');
+    fr.setAttribute('src', n.surf);
+    vue.appendChild(fr);
+    $('accueil').hidden = true;
     $('etat').hidden = false;
     $('etat').textContent = '🛰️ ' + n.host + ' — relayé, pisteurs coupés';
     $('rech').hidden = false;
@@ -330,7 +349,6 @@
     // LE SORT RÉEL DE LA DIFFUSION (#1609). La box rend l'état qu'elle a posé :
     // seul un 2xx qui dit `actif` est une diffusion. 401/403 : la diffusion au
     // parc est réservée aux personnes connectées.
-    function dit(t) { var el = $('etat'); if (el) { el.hidden = false; el.textContent = t; } }
     fetch('/api/v1/webos/public/broadcast', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: real, titre: (($('surf-ov-h') || {}).textContent || host || '') })
@@ -371,6 +389,9 @@
   }
   $('dos').addEventListener('click', recule);
 
+  // Le panneau des cookies (🍪) se referme avec l'accueil.
+  function fermeJar() { var p = $('jarpanel'); if (p) p.classList.add('hidden'); }
+
   // HOME : retour a l'ecran de depart. On coupe le relais (le cadre repart a
   // vide) et on oublie l'historique — c'est un vrai retour au point de depart.
   function accueil() {
@@ -384,10 +405,8 @@
     var vb=$('voir'); if(vb) vb.hidden = true;
     var st=$('stats'); if(st) st.classList.add('hidden');
     fermeJar();
-    $('vue').innerHTML = ACCUEIL_HTML;
-    document.querySelectorAll('.accueil .ex button').forEach(function (b) {
-      b.addEventListener('click', function () { surfe(b.dataset.u); });
-    });
+    fermeCadre();
+    $('accueil').hidden = false;
     if (parent !== window) { try { parent.postMessage({ sbx: 'surf-hote', hote: 'accueil' }, HALL); } catch (e) {} }
   }
   $('home').addEventListener('click', accueil);
@@ -404,6 +423,7 @@
   if (CHROME_HALL) {
     var xf = $('fermer'); if (xf) { xf.hidden = false;
       xf.addEventListener('click', function () {
+        if (DEMO) { dit('Démonstration : action inerte, le Hall n’est pas sollicité.'); return; }
         try { parent.postMessage({ sbx: 'surf-close' }, HALL); } catch (e) {}
       }); }
   }
@@ -417,16 +437,13 @@
     });
     return o;
   }
-  function metricsHTML(S) {
-    S = nombres(S);
-    var total = S.total || 0, pct = total ? Math.min(100, Math.round((S.trackers||0) / total * 100)) : 0;
-    function pic(ic, n, l){ return '<span class="s'+((n||0)?'':' z')+'" title="'+l+'">'+ic+' <b>'+(n||0)+'</b></span>'; }
-    return pic('🎯', S.trackers, 'traqueurs') + pic('📢', S.pubs, 'pubs')
-      + pic('🍪', S.cookies, 'cookies réécrits') + pic('🔔', S.notifs, 'notifications bloquées')
-      + pic('🚫', S.popups, 'popups coupées')
-      + '<span class="cam" title="part de pistage">🛡️ '+pct+'%</span>';
+  // Une pastille de compteur : icône + entier, jamais de HTML.
+  function pic(ic, n, lib) {
+    var s = el('span', 's' + ((n || 0) ? '' : ' z')); s.title = lib;
+    s.appendChild(document.createTextNode(ic + ' ')); s.appendChild(el('b', null, String(n || 0)));
+    return s;
   }
-  function poseStats(S) {
+  function poseStats(S, hote) {
     if (!S) return;
     // DOUBLE LIGNE (#1362) : la barre #stats (ligne 2) porte les metrics, en
     // overlay comme en standalone. L'entete du Hall etant masquee, il n'y a
@@ -435,16 +452,15 @@
     S = nombres(S);
     var total = S.total || 0;
     var pct = total ? Math.min(100, Math.round((S.trackers||0) / total * 100)) : 0;
-    function pic(ic, n, lib){ return '<span class="s'+((n||0)?'':' z')+'" title="'+lib+'">'+ic+' <b>'+(n||0)+'</b></span>'; }
-    z.innerHTML =
-        pic('🎯', S.trackers, 'traqueurs référencés')
-      + pic('📢', S.pubs,     'pubs cachées')
-      + pic('🧩', S.tiers,    'contenus tiers masqués')
-      + pic('🍪', S.cookies,  'cookies réécrits (SameSite=None)')
-      + pic('🔔', S.notifs,   'popups de notification bloquées')
-      + pic('🚫', S.popups,   'popups/popunders coupés')
-      + '<span class="cam" title="part de pistage sur les ressources de la page">🛡️ '+pct+'% pisté</span>'
-      + '<span class="etatr">🛰️ ' + esc((courant && courant.host) || '') + ' — relayé, pisteurs coupés</span>';
+    z.textContent = '';
+    z.appendChild(pic('🎯', S.trackers, 'traqueurs référencés'));
+    z.appendChild(pic('📢', S.pubs,     'pubs cachées'));
+    z.appendChild(pic('🧩', S.tiers,    'contenus tiers masqués'));
+    z.appendChild(pic('🍪', S.cookies,  'cookies réécrits (SameSite=None)'));
+    z.appendChild(pic('🔔', S.notifs,   'popups de notification bloquées'));
+    z.appendChild(pic('🚫', S.popups,   'popups/popunders coupés'));
+    var cam = el('span', 'cam', '🛡️ ' + pct + '% pisté'); cam.title = 'part de pistage sur les ressources de la page'; z.appendChild(cam);
+    z.appendChild(el('span', 'etatr', '🛰️ ' + (hote != null ? hote : ((courant && courant.host) || '')) + ' — relayé, pisteurs coupés'));
     z.classList.remove('hidden');
     var e2 = $('etat'); if (e2) e2.hidden = true;
   }
@@ -512,23 +528,17 @@
     b.addEventListener('click', function () { surfe(b.dataset.u); });
   });
 
-  // Adresse de depart possible par le parametre ?u=, pour un lien direct.
-  try {
-    var u0 = new URLSearchParams(location.search).get('u');
-    if (u0) surfe(u0);
-  } catch (e) {}
-
-  // Theme herite du Hall — parametre d'arrivee, puis messages.
-  try {
-    var t = new URLSearchParams(location.search).get('theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-  } catch (e) {}
-  addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (d && d.sbx === 'theme' && (d.theme === 'dark' || d.theme === 'light')) {
-      document.documentElement.setAttribute('data-theme', d.theme);
-    }
-  });
+  // Démonstration : bandeau orange et compteurs fictifs, sans page ouverte ni message.
+  if (DEMO) {
+    $('demo').hidden = false;
+    poseStats({ trackers: 12, pubs: 7, tiers: 3, cookies: 4, notifs: 1, popups: 2, total: 48 }, 'exemple.test');
+  } else {
+    // Adresse de depart possible par le parametre ?u=, pour un lien direct.
+    try {
+      var u0 = new URLSearchParams(location.search).get('u');
+      if (u0) surfe(u0);
+    } catch (e) {}
+  }
 </script>
 </body>
 </html>

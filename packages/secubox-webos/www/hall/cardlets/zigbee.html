@@ -2,9 +2,10 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1365 — carte « Zigbee » : la liste des appareils, et un bouton par
-  appareil.
+  SecuBox #1365 — carte « Zigbee » : la liste des appareils, et un bouton par appareil. Profil Aurora (.claude/AURORA-REFERENCE.md, #2660).
 
   CE QU'ELLE REMPLACE. Allumer une lampe demandait d'ouvrir zigbee.gk2, d'attendre
   le chargement de l'interface zigbee2mqtt — une application complète, avec sa
@@ -21,86 +22,110 @@
   ($lan_client). Le premier est du confort d'affichage ; le second est la
   garantie — sans lui, il suffirait d'appeler l'API à la main depuis l'extérieur
   pour éteindre les lumières de quelqu'un.
+
+  Page autonome. ?demo=1 : appareils fictifs, bascule inerte (aucune commande envoyée). ?embed=1 : sans en-tête, hauteur annoncée
+  au parent. Mesure absente = « — » (une lampe éteinte n'a pas de luminosité). Tout texte du pont passe par textContent.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Zigbee — vue micro</title>
-<link rel="stylesheet" href="../spicy.css">
 <style>
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
-          --accent:#c8791f; --ok:#3d6b4a; --froid:#8a8a99; --alerte:#c0392b; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#e0a45c; --ok:#6db38a; --froid:#6b6b7a; --alerte:#ef6b5c; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#e0a45c; --ok:#6db38a; --froid:#6b6b7a; --alerte:#ef6b5c; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
-  body { background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
-  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .72rem; gap:.4rem; }
-  .tete { display:flex; align-items:center; gap:.45rem; }
-  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
-              font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
-  .tete b { font-size:.88rem; }
-  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em;
-             text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
-
-  /* La liste : une ligne par appareil, serrée — six lignes doivent tenir sans
-     que la carte ait besoin de défiler. */
-  .liste { display:flex; flex-direction:column; gap:.2rem; overflow-y:auto; scrollbar-width:none; }
-  .liste::-webkit-scrollbar { width:0; display:none; }
-  .app { display:flex; align-items:center; gap:.42rem; padding:.16rem .12rem;
-         border-radius:7px; }
-  .app:hover { background:color-mix(in srgb, var(--border) 45%, transparent); }
-  .app .k { flex:0 0 auto; font-size:.82rem; width:17px; text-align:center; line-height:1; }
-  .app .nom { flex:1; min-width:0; font-size:.71rem; overflow:hidden;
-              text-overflow:ellipsis; white-space:nowrap; }
-  .app .det { flex:0 0 auto; font-size:.55rem; color:var(--muted);
-              font-variant-numeric:tabular-nums; }
-
-  /* LE BOUTON. Petit, rond, emoji — et il PORTE l'état : allumé il est en
-     accent, éteint il est sourd. Le même objet dit et fait, il n'y a donc rien
-     à lire pour savoir sur quoi on appuie. */
-  .b { flex:0 0 auto; width:23px; height:23px; border-radius:50%;
-       border:1px solid var(--border); background:transparent; cursor:pointer;
-       display:grid; place-items:center; font-size:.76rem; line-height:1;
-       padding:0; transition:background .12s, border-color .12s, opacity .12s; }
-  .b:hover:not(:disabled) { border-color:var(--accent); }
-  .b:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .b.on { background:color-mix(in srgb, var(--accent) 22%, transparent);
-          border-color:var(--accent); }
-  .b.off { opacity:.4; filter:grayscale(1); }
-  .b:disabled { cursor:not-allowed; opacity:.3; }
-  .b.attente { animation:pulse .9s ease-in-out infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
-  @media (prefers-reduced-motion: reduce){ .b.attente{animation:none;opacity:.6} }
-
-  .msg { color:var(--muted); font-size:.7rem; text-align:center; margin:auto 0;
-         padding:0 .4rem; line-height:1.5; }
-  .msg b { color:var(--texte); font-weight:600; }
-
-  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
-          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
-          text-transform:uppercase; color:var(--muted); text-decoration:none; }
-  .pied .grow { flex:1; } .pied:hover { color:var(--accent); }
-  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
-           animation:bat 2.4s ease-in-out infinite; }
-  .pouls.mort { background:var(--alerte); animation:none; }
-  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
-  @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;overflow-wrap:anywhere}
+  .actif i{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:1px}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover:not(:disabled){border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible,.act:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;overflow-wrap:anywhere}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  body.emb .tuiles,body.dans .tuiles{display:none}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.hors .v{color:var(--rouge)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.emb .pan,body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .msg{padding:12px;margin-top:10px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg b{color:var(--texte)} .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .liste{display:grid;gap:5px;margin-top:2px}
+  .app2{display:flex;align-items:center;gap:9px;padding:5px 9px;border:1px solid var(--trait);border-radius:10px;background:rgba(18,40,78,.45);min-width:0}
+  .app2:hover{border-color:rgba(41,182,246,.5)}
+  .app2 .k{flex:0 0 auto;font-size:1.05rem;width:22px;text-align:center;line-height:1}
+  .app2 .nom{flex:1;min-width:0;font-size:.84rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .app2 .det{flex:0 0 auto;font-size:.7rem;color:var(--faible);font-variant-numeric:tabular-nums}
+  .app2 .det.inj{color:var(--orange)}
+  /* Le bouton PORTE l'état : allumé il est cyan, éteint il est sourd. Le même objet dit et fait. */
+  .b{flex:0 0 auto;width:36px;height:36px;border-radius:50%;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:grid;place-items:center;font-size:1rem;line-height:1;padding:0}
+  .b:hover:not(:disabled){border-color:var(--cyan)}
+  .b:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .b.on{background:rgba(41,182,246,.22);border-color:var(--cyan);color:var(--cyan)}
+  .b.off{opacity:.55}
+  .b:disabled{cursor:not-allowed;opacity:.35}
+  .b.attente{animation:pulse .9s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){.b.attente{animation:none;opacity:.6}}
+  .pied{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(86,150,255,.12);font-size:.72rem;color:var(--doux);text-decoration:none;min-height:34px}
+  .pied:hover{color:var(--cyan)} .pied:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .pouls{width:7px;height:7px;border-radius:50%;background:var(--vert);animation:bat 2.4s ease-in-out infinite}
+  .pouls.mort{background:var(--rouge);animation:none}
+  @keyframes bat{0%,100%{opacity:.3}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.pouls{animation:none;opacity:.7}}
 </style>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffd23f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>
+      <div><h1>Zigbee</h1><small>Allumer, éteindre — le geste d'une seconde</small></div>
+    </div>
+    <span class="actif neutre" id="pont" aria-live="polite">Chargement…</span>
+    <span class="actif neutre" id="n" hidden></span>
+    <div class="droite"><span id="maj">—</span></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — appareils fictifs, aucune commande n'est envoyée</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
 
-<div class="mw">
-  <div class="tete"><span class="ic">💡</span><b>Zigbee</b><span class="n" id="n"></span></div>
-  <div class="liste" id="liste"></div>
-  <div class="msg" id="msg" hidden></div>
-  <a class="pied" href="https://zigbee.gk2.secubox.in/" title="Ouvrir la console zigbee2mqtt">
-    <span class="pouls" id="pouls"></span><span>console zigbee2mqtt</span>
-    <span class="grow"></span><span id="pont"></span></a>
-</div>
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Appareils que le pont Zigbee déclare."><span class="l">Appareils</span><span class="v" id="tApps">—</span><span class="s">déclarés par le pont</span></div>
+    <div class="tuile ok" title="Appareils joignables qui sont allumés."><span class="l">Allumés</span><span class="v" id="tOn">—</span><span class="s">sur les joignables</span></div>
+    <div class="tuile" id="cInj" title="Appareils qui n'ont pas répondu : hors de portée, ce n'est pas la même chose qu'éteints."><span class="l">Injoignables</span><span class="v" id="tInj">—</span><span class="s">ne répondent pas</span></div>
+    <div class="tuile cy" title="État du pont Zigbee (zigbee2mqtt) tel que l'API le rapporte."><span class="l">Pont</span><span class="v long" id="tPont">—</span><span class="s">zigbee2mqtt</span></div>
+  </section>
+
+  <div class="pan"><h3>Appareils <i>GET /api/v1/zigbee/devices</i></h3>
+    <div class="retour" id="retour" role="status" hidden></div>
+    <div class="liste" id="liste"></div>
+    <div class="msg" id="msg" role="status" hidden></div>
+    <a class="pied" href="https://zigbee.gk2.secubox.in/" title="Ouvrir la console zigbee2mqtt">
+      <span class="pouls" id="pouls"></span><span>console zigbee2mqtt (appairage, réseau maillé)</span></a>
+  </div>
+</div></div>
 
 <script src="/api/v1/webos/public/hotes.js"></script>
 <script src="../domaine.js"></script>
@@ -108,10 +133,24 @@
 <script>
 (function () {
   "use strict";
-  var el = function (id) { return document.getElementById(id); };
-  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
-      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
-
+  var ONGLET = 'zigbee';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo') && Q.get('demo') !== '0';
+  if(Q.get('embed')) document.body.classList.add('emb');
+  try{ if(window.top !== window) document.body.classList.add('dans'); }catch(e){ document.body.classList.add('dans'); }
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  /* Texte avec des passages en gras, sans jamais passer par du HTML : parts = ['texte', {b:'gras'}, 'suite']. */
+  function gras(cont, parts){
+    cont.textContent = '';
+    parts.forEach(function(p){ cont.appendChild(typeof p === 'string' ? document.createTextNode(p) : el('b', null, p.b)); });
+  }
+  /* Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7). */
+  function annoncer(){
+    if(parent === window) return;
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: ONGLET}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
   function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
 
   function api(chemin, opts) {
@@ -147,74 +186,101 @@
 
   var enVol = {};   // appareils dont une commande est en cours
 
+  function pastille(cls, texte) { var e = $('pont'); e.className = 'actif ' + cls; e.textContent = texte; $('tPont').textContent = texte; }
+  function tuiles(n, on, inj) {
+    $('tApps').textContent = n == null ? '—' : n;
+    $('tOn').textContent = on == null ? '—' : on;
+    $('tInj').textContent = inj == null ? '—' : inj;
+    $('cInj').className = 'tuile ' + (inj ? 'att' : 'cy');
+  }
+  function montre(parts, cls) {
+    gras($('msg'), parts); $('msg').hidden = false; $('msg').className = 'msg' + (cls ? ' ' + cls : '');
+    $('liste').textContent = ''; $('n').hidden = true; annoncer();
+  }
+  function cache() { $('msg').hidden = true; }
+
+  function ligne(a) {
+    var inj = !a.joignable;
+    var on = a.etat === 'ON';
+    var r = el('div', 'app2');
+    // Le détail dit ce qu'on SAIT : la luminosité d'une lampe allumée, ou
+    // rien. Afficher « 0 % » pour une lampe éteinte inventerait une mesure.
+    var det = inj ? 'injoignable'
+            : (on && a.luminosite != null ? Math.round(a.luminosite / 254 * 100) + ' %' : '');
+    r.title = inj ? a.nom + ' — ne répond pas'
+            : a.nom + ' — ' + (on ? 'allumé' : 'éteint') + (a.qualite != null ? ' · signal ' + a.qualite : '');
+    r.appendChild(el('span', 'k', icone(a)));
+    r.appendChild(el('span', 'nom', joli(a.nom)));
+    r.appendChild(el('span', 'det' + (inj ? ' inj' : ''), det));
+    var b = el('button', 'b' + (inj ? '' : (on ? ' on' : ' off')) + (enVol[a.nom] ? ' attente' : ''), inj ? '⚠️' : '⏻');
+    b.type = 'button';
+    b.setAttribute('data-nom', a.nom);
+    if (inj) b.disabled = true;
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.setAttribute('aria-label', (on ? 'Éteindre ' : 'Allumer ') + joli(a.nom));
+    r.appendChild(b);
+    return r;
+  }
+
   function rend(d) {
     var apps = (d && d.appareils) || [];
     var pont = (d && d.pont) || 'inconnu';
-    el('pont').textContent = pont === 'online' ? '' : pont;
-    el('pouls').classList.toggle('mort', pont !== 'online');
+    pastille(pont === 'online' ? '' : 'hors', pont === 'online' ? 'PONT EN LIGNE' : 'PONT ' + String(pont).toUpperCase());
+    $('tPont').textContent = pont === 'online' ? 'En ligne' : String(pont);
+    $('pouls').classList.toggle('mort', pont !== 'online');
+    $('session').hidden = true;
 
     if (!apps.length) {
-      el('liste').innerHTML = '';
+      tuiles(0, 0, 0);
       montre(pont === 'online'
-        ? 'Le pont ne déclare aucun appareil.'
-        : 'Le pont Zigbee est <b>' + esc(pont) + '</b>.');
+        ? ['Le pont ne déclare aucun appareil.']
+        : ['Le pont Zigbee est ', {b: pont}, '.']);
       return;
     }
     cache();
     var allumes = apps.filter(function (a) { return a.etat === 'ON'; }).length;
-    el('n').textContent = allumes + '/' + apps.length + ' allumés';
-
-    el('liste').innerHTML = apps.map(function (a) {
-      var inj = !a.joignable;
-      var on = a.etat === 'ON';
-      var cls = inj ? '' : (on ? ' on' : ' off');
-      // Le détail dit ce qu'on SAIT : la luminosité d'une lampe allumée, ou
-      // rien. Afficher « 0 % » pour une lampe éteinte inventerait une mesure.
-      var det = inj ? 'injoignable'
-              : (on && a.luminosite != null
-                 ? Math.round(a.luminosite / 254 * 100) + '&#8239;%' : '');
-      var titre = inj ? a.nom + ' — ne répond pas'
-                : a.nom + ' — ' + (on ? 'allumé' : 'éteint')
-                  + (a.qualite != null ? ' · signal ' + a.qualite : '');
-      return '<div class="app" title="' + esc(titre) + '">'
-        + '<span class="k">' + icone(a) + '</span>'
-        + '<span class="nom">' + esc(joli(a.nom)) + '</span>'
-        + '<span class="det">' + det + '</span>'
-        + '<button class="b' + cls + (enVol[a.nom] ? ' attente' : '') + '"'
-        + ' data-nom="' + esc(a.nom) + '"'
-        + (inj ? ' disabled' : '')
-        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
-        + ' aria-label="' + esc((on ? 'Éteindre ' : 'Allumer ') + joli(a.nom)) + '">'
-        + (inj ? '⚠️' : '⏻') + '</button>'
-        + '</div>';
-    }).join('');
+    var injoignables = apps.filter(function (a) { return !a.joignable; }).length;
+    $('n').hidden = false; $('n').textContent = allumes + '/' + apps.length + ' allumés';
+    tuiles(apps.length, allumes, injoignables);
+    var z = $('liste'); z.textContent = '';
+    apps.forEach(function (a) { z.appendChild(ligne(a)); });
+    annoncer();
   }
 
-  function montre(html) { el('msg').innerHTML = html; el('msg').hidden = false;
-                          el('liste').innerHTML = ''; el('n').textContent = ''; }
-  function cache() { el('msg').hidden = true; }
-
+  function refus(r) {
+    if (r.code === 403) { pastille('neutre', 'RÉSEAU LOCAL'); tuiles(null, null, null); montre(['Le pilotage Zigbee est réservé au ', {b: 'réseau local'}, '.']); return true; }
+    if (r.code === 401) { pastille('neutre', 'SESSION REQUISE'); $('session').hidden = false; tuiles(null, null, null); montre(['Ouvrez votre session pour piloter les appareils.']); return true; }
+    return false;
+  }
   function charge() {
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
     api('/devices').then(function (r) {
-      if (r.code === 403) {
-        return montre('Le pilotage Zigbee est réservé au <b>réseau local</b>.');
-      }
-      if (r.code === 401) {
-        return montre('Ouvrez votre session pour piloter les appareils.');
-      }
-      if (r.code >= 400) { return montre('Le pont Zigbee est injoignable.'); }
+      if (refus(r)) return;
+      if (r.code >= 400) { pastille('hors', 'HORS LIGNE'); tuiles(null, null, null); return montre(['Le pont Zigbee est injoignable.'], 'err'); }
       rend(r.corps);
-    }).catch(function () { montre('Le pont Zigbee est injoignable.'); });
+    }).catch(function () { pastille('hors', 'HORS LIGNE'); tuiles(null, null, null); montre(['Le pont Zigbee est injoignable.'], 'err'); });
   }
+
+  // Appareils fictifs (démonstration) : noms inventés, aucune requête.
+  function demoAppareils() {
+    return { pont: 'online', appareils: [
+      { nom: 'INTER-BUREAU', genre: 'switch', etat: 'ON', joignable: true, qualite: 92 },
+      { nom: 'LIGHT-SALON', genre: 'light', etat: 'ON', joignable: true, luminosite: 180, qualite: 120 },
+      { nom: 'GUIRLANDE-JARDIN', genre: 'light', etat: 'OFF', joignable: true, qualite: 64 },
+      { nom: 'LIGHT-CAVE', genre: 'light', etat: 'OFF', joignable: false }
+    ] };
+  }
+  function inerte() { var r = $('retour'); r.hidden = false; r.textContent = 'Démonstration : action inerte, aucune commande n’est envoyée.'; annoncer(); }
 
   // BASCULER SANS SAVOIR L'ÉTAT COURANT, c'est le pont qui le fait : on envoie
   // TOGGLE plutôt que de calculer ON ou OFF depuis ce qu'on affiche. Entre notre
   // dernier rafraîchissement et le clic, quelqu'un a pu toucher l'interrupteur
   // mural — envoyer « ON » parce qu'on croit la lampe éteinte ne ferait rien de
   // visible, et passerait pour une panne.
-  el('liste').addEventListener('click', function (ev) {
+  $('liste').addEventListener('click', function (ev) {
     var b = ev.target && ev.target.closest ? ev.target.closest('button.b') : null;
     if (!b || b.disabled) return;
+    if (DEMO) { inerte(); return; }
     var nom = b.getAttribute('data-nom');
     if (!nom || enVol[nom]) return;
     enVol[nom] = true;
@@ -223,8 +289,7 @@
         { method: 'POST', body: JSON.stringify({ etat: 'TOGGLE' }) })
       .then(function (r) {
         delete enVol[nom];
-        if (r.code === 403) return montre('Le pilotage Zigbee est réservé au <b>réseau local</b>.');
-        if (r.code === 401) return montre('Ouvrez votre session pour piloter les appareils.');
+        if (refus(r)) return;
         // On RECHARGE au lieu de peindre l'état qu'on espérait : la réponse
         // vient de l'appareil, et lui seul sait s'il a obéi.
         charge();
@@ -232,38 +297,35 @@
       .catch(function () { delete enVol[nom]; charge(); });
   });
 
-  charge();
-  // Les appareils bougent quand on les touche — ici ou au mur. Dix secondes
-  // gardent la carte honnête sans interroger six appareils en permanence.
-  var tic = setInterval(function () { if (!document.hidden) charge(); }, 10000);
-  addEventListener('pagehide', function () { clearInterval(tic); });
+  if (DEMO) {
+    $('demo').hidden = false; $('maj').textContent = 'Démonstration'; rend(demoAppareils());
+    pastille('att', 'DÉMONSTRATION'); $('tPont').textContent = 'En ligne'; $('pouls').classList.remove('mort');
+  } else {
+    charge();
+    // Les appareils bougent quand on les touche — ici ou au mur. Dix secondes
+    // gardent la carte honnête sans interroger six appareils en permanence.
+    var tic = setInterval(function () { if (!document.hidden) charge(); }, 10000);
+    addEventListener('pagehide', function () { clearInterval(tic); });
+  }
 
   // RESTER DANS LE HALL : le lien du pied ne doit pas emporter tout le Hall.
   document.addEventListener('click', function (ev) {
     if (parent === window) return;
-    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a.pied') : null;   // le seul lien de la carte qui ouvre la console
     if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
     ev.preventDefault();
+    if (DEMO) { inerte(); return; }
     try { parent.postMessage({ sbx: 'ouvre', id: 'zigbee', url: a.href }, '*'); } catch (e) {}
   }, true);
-
-  (function () {
-    var t = new URLSearchParams(location.search).get('theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-  })();
-  addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.sbx !== 'theme') return;
-    if (d.theme === 'dark' || d.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', d.theme);
-    }
-  });
+  annoncer();
 })();
 </script>
 
 <script src="../aide.js"></script>
 <script>window.SBXAide&&SBXAide({zones:function(){return [
-  {el:document.querySelector('.tete'),label:'En-tête — Zigbee et le nombre d’appareils allumés'},
+  {el:document.querySelector('.tete'),label:'En-tête — Zigbee, l’état du pont et le nombre d’appareils allumés'},
   {el:document.getElementById('liste'),label:'Appareils — un par ligne ; le bouton ⏻ bascule, ⚠️ signale un appareil qui ne répond pas'},
   {el:document.querySelector('.pied'),label:'Pied — ouvre la console zigbee2mqtt (appairage, réseau maillé)'}
 ].filter(function(z){return z.el;});}});</script>
+</body>
+</html>

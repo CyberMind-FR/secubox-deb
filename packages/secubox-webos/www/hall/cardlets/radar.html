@@ -5,145 +5,299 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — « Radar des acteurs » (Actor Intelligence 2.0, phase 5, #2240).
+  SecuBox — « Radar des acteurs » (Actor Intelligence 2.0, phase 5, #2240), au profil Aurora (.claude/AURORA-REFERENCE.md, #2660).
 
   Le RISQUE (ce que l'acteur pourrait faire) et la CONFIANCE (ce que les preuves permettent d'affirmer) sont deux mesures SÉPARÉES : le plan les met sur
   deux axes. Un acteur très risqué mais peu documenté se « confirme » ; il ne se bloque pas sur un seul capteur. La décision proposée (OBSERVE · MITIGATE ·
-  BLOCK) vient du moteur, avec les raisons ET les refus. Le moteur PROPOSE : cette vue n'applique rien.
+  BLOCK) vient du moteur, avec les raisons ET les refus. Le moteur PROPOSE : cette vue n'applique rien (LECTURE SEULE).
 
   DONNÉES RÉELLES UNIQUEMENT via /api/v1/actor/radar (sbx-actord, vue réduite du Hall : ni adresse, ni cible, ni référence de preuve). Sans session, ou moteur
-  absent, un état honnête — jamais de valeur inventée.
+  absent, un état honnête — jamais de valeur inventée. Mesure absente = « — ». Tout texte venu du serveur passe par textContent.
+  Page autonome, servie par le Hall (carte). ?demo=1 : acteurs fictifs, aucune requête. ?embed=1 : sans en-tête, hauteur annoncée au parent.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Radar des acteurs</title>
 <style>
-  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0; --panel:#ffffff; --soft:#f5f7fc;
-         --cyan:#0784a8; --ok:#0f9d54; --warn:#c87832; --hot:#d64545; --sky:#1655a0; }
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b; --panel:#141a26; --soft:#10151f;
-    --cyan:#28d6ff; --ok:#35d07f; --warn:#e0b46a; --hot:#ff6a6a; --sky:#6aa8e6; } }
-  :root[data-theme="dark"]{ --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b; --panel:#141a26; --soft:#10151f;
-    --cyan:#28d6ff; --ok:#35d07f; --warn:#e0b46a; --hot:#ff6a6a; --sky:#6aa8e6; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px;overflow-y:auto;scrollbar-width:none}
-  body::-webkit-scrollbar{display:none}
-  .mw{display:flex;flex-direction:column;gap:.5rem;padding:.55rem .65rem}
-  .h{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:3px solid transparent;
-     border-image:linear-gradient(90deg,var(--ok),var(--warn),var(--hot)) 1}
-  .h .tt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
-  .h b{font-size:.98rem;letter-spacing:.03em;text-transform:uppercase;font-weight:800}
-  .h small{font-size:.6rem;color:var(--muted)}
-  .h .mode{margin-left:auto;font-size:.54rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);font-weight:700;border:1px solid var(--line);border-radius:20px;padding:2px 9px;white-space:nowrap}
-  #radar{width:100%;max-height:260px;aspect-ratio:1/0.78;background:var(--soft);border:1px solid var(--line);border-radius:10px}
-  #radar text{fill:var(--faint);font-size:3px;font-family:inherit}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;overflow-wrap:anywhere}
+  .actif i{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:1px}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover:not(:disabled){border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible,.act:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;overflow-wrap:anywhere}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  body.emb .tuiles,body.dans .tuiles{display:none}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.hors .v{color:var(--rouge)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.emb .pan,body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .msg{padding:12px;margin-top:10px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg b{color:var(--texte)} .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  #radar{width:100%;max-height:300px;aspect-ratio:1/0.78;background:rgba(8,18,38,.7);border:1px solid var(--trait);border-radius:10px;display:block}
+  #radar text{fill:var(--faible);font-size:3px;font-family:inherit}
   #radar .zone{font-weight:700;letter-spacing:.2px}
-  #radar .grille{stroke:var(--line);stroke-width:.3}
-  #radar .seuil{stroke:var(--hot);stroke-width:.35;stroke-dasharray:1.4 1.2;opacity:.65}
-  #radar circle.pt{stroke:var(--fond);stroke-width:.5;cursor:pointer;transition:r .15s}
+  #radar .grille{stroke:rgba(86,150,255,.22);stroke-width:.3}
+  #radar .seuil{stroke:var(--rouge);stroke-width:.35;stroke-dasharray:1.4 1.2;opacity:.65}
+  #radar circle.pt{stroke:var(--fond);stroke-width:.5;cursor:pointer}
   #radar circle.pt.on{stroke:var(--texte);stroke-width:.8}
-  .n-OBSERVE{fill:var(--sky)} .n-MITIGATE{fill:var(--warn)} .n-BLOCK{fill:var(--hot)}
-  .legende{display:flex;gap:10px;flex-wrap:wrap;font-size:.6rem;color:var(--muted)}
+  .n-OBSERVE{fill:var(--bleu)} .n-MITIGATE{fill:var(--orange)} .n-BLOCK{fill:var(--rouge)}
+  .legende{display:flex;gap:6px 12px;flex-wrap:wrap;font-size:.68rem;color:var(--doux);margin-top:8px}
   .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:-1px}
-  .acteur{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:9px;padding:5px 8px;background:var(--soft);cursor:pointer;margin-bottom:4px}
-  .acteur.on{border-color:var(--cyan)}
-  .acteur b{font-family:ui-monospace,monospace;font-size:.78rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-  .mesure{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;color:var(--muted);white-space:nowrap}
+  .acteur{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;border:1px solid var(--trait);border-radius:10px;padding:6px 9px;background:rgba(18,40,78,.45);cursor:pointer;margin-bottom:5px;min-height:36px}
+  .acteur:hover{border-color:var(--cyan)} .acteur.on{border-color:var(--cyan);background:rgba(41,182,246,.12)}
+  .acteur b{font-family:ui-monospace,"JetBrains Mono",monospace;font-size:.78rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 7rem}
+  .mesure{font-size:.7rem;color:var(--doux);font-variant-numeric:tabular-nums}
   .mesure em{font-style:normal;font-weight:800;color:var(--texte)}
-  .badge{font-size:.54rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:5px;padding:2px 6px;color:#fff}
-  .b-OBSERVE{background:var(--sky)} .b-MITIGATE{background:var(--warn)} .b-BLOCK{background:var(--hot)}
-  #fiche{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel);font-size:.72rem}
-  #fiche h4{margin:6px 0 3px;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .pastille{border:1px solid currentColor;border-radius:999px;padding:1px 9px;font-size:.62rem;font-weight:800;letter-spacing:.05em;white-space:nowrap}
+  .b-OBSERVE{color:var(--bleu);background:rgba(59,130,246,.12)} .b-MITIGATE{color:var(--orange);background:rgba(255,159,28,.12)} .b-BLOCK{color:var(--rouge);background:rgba(255,77,94,.12)}
+  .mesure-en-cours{border:1px solid var(--rouge);color:var(--rouge);background:rgba(255,77,94,.1);border-radius:999px;padding:1px 8px;font-size:.62rem;font-weight:700;white-space:nowrap}
+  #fiche{font-size:.78rem;overflow-wrap:anywhere}
+  #fiche h4{margin:10px 0 4px;font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faible)}
   #fiche ul{margin:0;padding:0;list-style:none}
-  #fiche li{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dashed var(--line)}
-  #fiche li b{font-family:ui-monospace,monospace;color:var(--ok)}
-  .refus{color:var(--warn)}
-  .mesure-en-cours{font-size:.54rem;font-weight:800;letter-spacing:.05em;border:1px solid var(--hot);color:var(--hot);border-radius:5px;padding:1px 5px;white-space:nowrap}
-  .etapes{display:flex;gap:4px;flex-wrap:wrap}
-  .etape{border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:.62rem;background:var(--soft)}
-  .vide{color:var(--faint);font-size:.72rem;padding:12px;text-align:center;border:1px dashed var(--line);border-radius:9px}
-  .note{font-size:.58rem;color:var(--faint);line-height:1.4}
+  #fiche li{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid rgba(86,150,255,.12)}
+  #fiche li b{font-family:ui-monospace,monospace;color:var(--vert);font-variant-numeric:tabular-nums}
+  #fiche .id{font-family:ui-monospace,"JetBrains Mono",monospace;font-weight:700}
+  .refus{color:var(--orange)}
+  .etapes{display:flex;gap:5px;flex-wrap:wrap}
+  .etape{border:1px solid var(--trait);border-radius:8px;padding:2px 8px;font-size:.7rem;background:rgba(18,40,78,.45)}
+  .vide{color:var(--faible);font-size:.8rem;padding:12px;text-align:center;border:1px dashed var(--trait2);border-radius:10px;overflow-wrap:anywhere}
+  .grille2{display:grid;gap:10px}
+  @container a (min-width:700px){.grille2{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}}
 </style>
-<div class="mw">
-  <div class="h"><span style="font-size:1.25rem">📡</span><div class="tt"><b>Radar des acteurs</b><small>risque et confiance, séparés</small></div><span class="mode" id="mode">shadow · propose</span></div>
-  <svg id="radar" viewBox="0 0 100 78" role="img" aria-label="Acteurs placés selon la confiance (horizontal) et le risque (vertical)"></svg>
-  <div class="legende"><span><i style="background:var(--sky)"></i>OBSERVE</span><span><i style="background:var(--warn)"></i>MITIGATE</span><span><i style="background:var(--hot)"></i>BLOCK</span><span>— — seuil de blocage (risque ≥ 75, confiance ≥ 80, 2 capteurs)</span></div>
-  <div id="liste"><div class="vide">Chargement…</div></div>
-  <div id="fiche"><div class="vide">Sélectionne un acteur.</div></div>
-  <div class="note">Le moteur <b>propose</b>, il n'applique rien. Une mesure d'un seul capteur ne suffit jamais à bloquer : la confiance le dit.</div>
-</div>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12 18 6"/><circle cx="12" cy="12" r="1" fill="#29b6f6"/></svg>
+      <div><h1>Radar des acteurs</h1><small>Risque et confiance, séparés</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <span class="actif neutre" id="mode" title="Le moteur propose une décision, il n'applique rien : cette vue est en lecture seule.">shadow · propose</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — acteurs fictifs, aucune lecture réelle</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
 
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Acteurs évalués par le moteur dans la dernière lecture (30 au plus)."><span class="l">Acteurs</span><span class="v" id="tActeurs">—</span><span class="s">évalués par le moteur</span></div>
+    <div class="tuile" id="cBloc" title="Acteurs dont la décision proposée est BLOCK (risque et confiance suffisants, plusieurs capteurs)."><span class="l">À bloquer</span><span class="v" id="tBloc">—</span><span class="s">décision proposée</span></div>
+    <div class="tuile cy" title="Acteurs sous une mesure réversible en cours (elle expire seule)."><span class="l">Mesures en cours</span><span class="v" id="tMesures">—</span><span class="s">réversibles</span></div>
+    <div class="tuile cy" title="Le plus haut risque parmi les acteurs de la lecture, de 0 à 100."><span class="l">Risque maximal</span><span class="v" id="tRisque">—</span><span class="s">sur 100</span></div>
+  </section>
+
+  <div class="grille2">
+    <div class="pan"><h3>Plan risque × confiance <i>GET /api/v1/actor/radar</i></h3>
+      <svg id="radar" viewBox="0 0 100 78" role="img" aria-label="Acteurs placés selon la confiance (horizontal) et le risque (vertical)"></svg>
+      <div class="legende"><span><i style="background:var(--bleu)"></i>OBSERVE</span><span><i style="background:var(--orange)"></i>MITIGATE</span><span><i style="background:var(--rouge)"></i>BLOCK</span><span>— — seuil de blocage (risque ≥ 75, confiance ≥ 80, 2 capteurs)</span></div>
+      <p class="note">Le moteur <b>propose</b>, il n'applique rien. Une mesure d'un seul capteur ne suffit jamais à bloquer : la confiance le dit.</p>
+    </div>
+    <div style="display:grid;gap:10px;align-content:start;min-width:0">
+      <div class="pan"><h3>Acteurs <i>un clic = la fiche</i></h3><div id="liste"><div class="vide">Chargement…</div></div></div>
+      <div class="pan"><h3>Fiche <i>pourquoi cette décision</i></h3><div id="fiche"><div class="vide">Sélectionne un acteur.</div></div></div>
+    </div>
+  </div>
+</div></div>
 <script src="../sonde.js"></script>
 <script>
 (function(){
-  "use strict";
-  var el=function(id){return document.getElementById(id);};
-  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
-  function num(x){x=Number(x);return isFinite(x)?x:0;}
-  function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
-  function sessionOk(){return jget('/api/v1/acces/session/etat').then(function(s){return !!(s&&s.session);});}
-  var L=[],CUR=null;
+  'use strict';
+  var ONGLET = 'radar';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo') && Q.get('demo') !== '0';
+  if(Q.get('embed')) document.body.classList.add('emb');
+  try{ if(window.top !== window) document.body.classList.add('dans'); }catch(e){ document.body.classList.add('dans'); }
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  /* Texte avec des passages en gras, sans jamais passer par du HTML : parts = ['texte', {b:'gras'}, 'suite']. */
+  function gras(cont, parts){
+    cont.textContent = '';
+    parts.forEach(function(p){ cont.appendChild(typeof p === 'string' ? document.createTextNode(p) : el('b', null, p.b)); });
+  }
+  /* Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7). */
+  function annoncer(){
+    if(parent === window) return;
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: ONGLET}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+  function num(x){ x = Number(x); return isFinite(x) ? x : 0; }
+  function jget(u){ return fetch(u, {headers:{'Accept':'application/json'}, credentials:'same-origin', cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }); }
+  function sessionOk(){ return jget('/api/v1/acces/session/etat').then(function(s){ return !!(s && s.session); }); }
+  function pastille(cls, texte){ var e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
+
+  var L = [], CUR = null;
+  var NS = $('radar').namespaceURI;           // l'espace de noms SVG vient du document : aucune adresse écrite ici
+  function s(tag, attrs, texte){
+    var e = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach(function(k){ e.setAttribute(k, attrs[k]); });
+    if(texte != null) e.textContent = texte;
+    return e;
+  }
   // Plan 100 × 78 : x = confiance (marge gauche 9), y = risque (haut = risqué).
-  var X0=9,X1=97,Y0=4,Y1=70;
-  function px(c){return X0+(X1-X0)*Math.max(0,Math.min(100,num(c)))/100;}
-  function py(r){return Y1-(Y1-Y0)*Math.max(0,Math.min(100,num(r)))/100;}
-  function niveau(a){return /^(OBSERVE|MITIGATE|BLOCK)$/.test(a.niveau)?a.niveau:'OBSERVE';}
+  var X0 = 9, X1 = 97, Y0 = 4, Y1 = 70;
+  function px(c){ return X0 + (X1 - X0) * Math.max(0, Math.min(100, num(c))) / 100; }
+  function py(r){ return Y1 - (Y1 - Y0) * Math.max(0, Math.min(100, num(r))) / 100; }
+  function niveau(a){ return /^(OBSERVE|MITIGATE|BLOCK)$/.test(a.niveau) ? a.niveau : 'OBSERVE'; }
+
+  function tuiles(){
+    var ok = L.length > 0 || $('tActeurs').dataset.mesure === '1';
+    $('tActeurs').textContent = ok ? L.length : '—';
+    var bloc = L.filter(function(a){ return niveau(a) === 'BLOCK'; }).length;
+    $('tBloc').textContent = ok ? bloc : '—';
+    $('cBloc').className = 'tuile ' + (ok && bloc ? 'hors' : 'cy');
+    $('tMesures').textContent = ok ? L.filter(function(a){ return a.mesure; }).length : '—';
+    $('tRisque').textContent = L.length ? Math.max.apply(null, L.map(function(a){ return num(a.risque.valeur); })) : '—';
+  }
   function plan(){
-    var h='<line class="grille" x1="'+X0+'" y1="'+py(50)+'" x2="'+X1+'" y2="'+py(50)+'"/><line class="grille" x1="'+px(50)+'" y1="'+Y0+'" x2="'+px(50)+'" y2="'+Y1+'"/>'
-      +'<line class="seuil" x1="'+X0+'" y1="'+py(75)+'" x2="'+X1+'" y2="'+py(75)+'"/><line class="seuil" x1="'+px(80)+'" y1="'+Y0+'" x2="'+px(80)+'" y2="'+Y1+'"/>'
-      +'<text class="zone" x="'+(X0+2)+'" y="'+(Y0+4)+'">Confirmer</text><text class="zone" text-anchor="end" x="'+(X1-2)+'" y="'+(Y0+4)+'">Agir</text>'
-      +'<text class="zone" x="'+(X0+2)+'" y="'+(Y1-2)+'">Ignorer</text><text class="zone" text-anchor="end" x="'+(X1-2)+'" y="'+(Y1-2)+'">Surveiller</text>'
-      +'<text x="'+((X0+X1)/2)+'" y="76" text-anchor="middle">Confiance →</text><text transform="rotate(-90)" x="-'+((Y0+Y1)/2)+'" y="5" text-anchor="middle">Risque →</text>';
-    L.forEach(function(a,i){
-      var dx=((i*37)%7-3)*.35;   // léger écart déterministe : deux acteurs de mêmes mesures ne se masquent pas
-      h+='<circle class="pt n-'+niveau(a)+(a.id===CUR?' on':'')+'" data-i="'+i+'" cx="'+(px(a.confiance.valeur)+dx).toFixed(1)+'" cy="'+py(a.risque.valeur).toFixed(1)+'" r="'+(1.6+Math.min(2.2,num(a.evenements)/20)).toFixed(1)+'"><title>'+esc(a.id)+' — risque '+num(a.risque.valeur)+', confiance '+num(a.confiance.valeur)+'</title></circle>';
+    var r = $('radar'); r.textContent = '';
+    r.appendChild(s('line', {'class':'grille', x1:X0, y1:py(50), x2:X1, y2:py(50)}));
+    r.appendChild(s('line', {'class':'grille', x1:px(50), y1:Y0, x2:px(50), y2:Y1}));
+    r.appendChild(s('line', {'class':'seuil', x1:X0, y1:py(75), x2:X1, y2:py(75)}));
+    r.appendChild(s('line', {'class':'seuil', x1:px(80), y1:Y0, x2:px(80), y2:Y1}));
+    r.appendChild(s('text', {'class':'zone', x:X0 + 2, y:Y0 + 4}, 'Confirmer'));
+    r.appendChild(s('text', {'class':'zone', 'text-anchor':'end', x:X1 - 2, y:Y0 + 4}, 'Agir'));
+    r.appendChild(s('text', {'class':'zone', x:X0 + 2, y:Y1 - 2}, 'Ignorer'));
+    r.appendChild(s('text', {'class':'zone', 'text-anchor':'end', x:X1 - 2, y:Y1 - 2}, 'Surveiller'));
+    r.appendChild(s('text', {x:(X0 + X1) / 2, y:76, 'text-anchor':'middle'}, 'Confiance →'));
+    r.appendChild(s('text', {transform:'rotate(-90)', x:-((Y0 + Y1) / 2), y:5, 'text-anchor':'middle'}, 'Risque →'));
+    L.forEach(function(a, i){
+      var dx = ((i * 37) % 7 - 3) * .35;   // léger écart déterministe : deux acteurs de mêmes mesures ne se masquent pas
+      var c = s('circle', {'class':'pt n-' + niveau(a) + (a.id === CUR ? ' on' : ''), 'data-i':i, cx:(px(a.confiance.valeur) + dx).toFixed(1), cy:py(a.risque.valeur).toFixed(1), r:(1.6 + Math.min(2.2, num(a.evenements) / 20)).toFixed(1)});
+      c.appendChild(s('title', null, a.id + ' — risque ' + num(a.risque.valeur) + ', confiance ' + num(a.confiance.valeur)));
+      r.appendChild(c);
     });
-    el('radar').innerHTML=h;
   }
+  function mn(sec){ sec = Math.max(0, num(sec)); return sec >= 3600 ? Math.floor(sec / 3600) + ' h ' + Math.floor(sec % 3600 / 60) + ' min' : Math.max(1, Math.ceil(sec / 60)) + ' min'; }
   function liste(){
-    var z=el('liste');
-    if(!L.length){z.innerHTML='<div class="vide">Aucun acteur à évaluer pour l’instant.</div>';return;}
-    z.innerHTML=L.map(function(a,i){
-      return '<div class="acteur'+(a.id===CUR?' on':'')+'" data-i="'+i+'"><b>'+esc(a.id)+'</b><span class="mesure">risque <em>'+num(a.risque.valeur)+'</em> · confiance <em>'+num(a.confiance.valeur)+'</em></span>'
-        +'<span class="badge b-'+niveau(a)+'">'+niveau(a)+'</span>'+(a.mesure?'<span class="mesure-en-cours" title="mesure en cours">'+esc(a.mesure.niveau)+' · '+mn(a.mesure.reste_s)+'</span>':'')+'</div>';}).join('');
+    var z = $('liste'); z.textContent = '';
+    if(!L.length){ z.appendChild(el('div', 'vide', 'Aucun acteur à évaluer pour l’instant.')); return; }
+    L.forEach(function(a, i){
+      var d = el('div', 'acteur' + (a.id === CUR ? ' on' : '')); d.dataset.i = i;
+      d.appendChild(el('b', null, a.id));
+      var m = el('span', 'mesure', 'risque '); m.appendChild(el('em', null, num(a.risque.valeur)));
+      m.appendChild(document.createTextNode(' · confiance ')); m.appendChild(el('em', null, num(a.confiance.valeur)));
+      d.appendChild(m);
+      d.appendChild(el('span', 'pastille b-' + niveau(a), niveau(a)));
+      if(a.mesure){ var p = el('span', 'mesure-en-cours', a.mesure.niveau + ' · ' + mn(a.mesure.reste_s)); p.title = 'mesure en cours'; d.appendChild(p); }
+      z.appendChild(d);
+    });
   }
-  function mn(s){s=Math.max(0,num(s));return s>=3600?Math.floor(s/3600)+' h '+Math.floor(s%3600/60)+' min':Math.max(1,Math.ceil(s/60))+' min';}
-  function facteurs(titre,s){
-    var fs=(s&&s.facteurs)||[];
-    return '<h4>'+esc(titre)+' — '+num(s&&s.valeur)+'</h4>'+(fs.length?'<ul>'+fs.map(function(f){
-      return '<li><span>'+esc(f.libelle)+'</span><b>'+(num(f.points)>=0?'+':'')+num(f.points)+'</b></li>';}).join('')+'</ul>':'<div class="note">aucun facteur</div>');
+  function facteurs(z, titre, sc){
+    var fs = (sc && sc.facteurs) || [];
+    z.appendChild(el('h4', null, titre + ' — ' + num(sc && sc.valeur)));
+    if(!fs.length){ z.appendChild(el('div', 'note', 'aucun facteur')); return; }
+    var ul = el('ul');
+    fs.forEach(function(f){ var li = el('li'); li.appendChild(el('span', null, f.libelle)); li.appendChild(el('b', null, (num(f.points) >= 0 ? '+' : '') + num(f.points))); ul.appendChild(li); });
+    z.appendChild(ul);
   }
   function fiche(){
-    var a=L.filter(function(x){return x.id===CUR;})[0],z=el('fiche');
-    if(!a){z.innerHTML='<div class="vide">Sélectionne un acteur.</div>';return;}
-    var etapes=(a.etapes||[]).map(function(e){return '<span class="etape">'+esc(e.libelle)+' · '+num(e.evenements)+(e.capteurs&&e.capteurs.length?' · '+esc(e.capteurs.join('+')):'')+'</span>';}).join('');
-    z.innerHTML='<div><span class="badge b-'+niveau(a)+'">'+niveau(a)+'</span> <b style="font-family:ui-monospace,monospace">'+esc(a.id)+'</b></div>'
-      +'<div class="note" style="margin-top:3px">'+esc(a.action_proposee||'')+' · '+num(a.evenements)+' événement(s) · capteurs : '+esc((a.capteurs||[]).join(', ')||'—')+'</div>'
-      +(a.mesure?'<h4>Mesure en cours</h4><div class="note"><b>'+esc(a.mesure.niveau)+'</b> — encore '+mn(a.mesure.reste_s)+' (réversible, expire seule)</div>':'')
-      +facteurs('Risque',a.risque)+facteurs('Confiance',a.confiance)
-      +'<h4>Scénario</h4>'+(etapes?'<div class="etapes">'+etapes+'</div>':'<div class="note">pas encore de scénario</div>')
-      +((a.refus&&a.refus.length)?'<h4>Pourquoi pas plus dur</h4><ul>'+a.refus.map(function(r){return '<li class="refus">'+esc(r)+'</li>';}).join('')+'</ul>':'');
+    var a = L.filter(function(x){ return x.id === CUR; })[0], z = $('fiche');
+    z.textContent = '';
+    if(!a){ z.appendChild(el('div', 'vide', 'Sélectionne un acteur.')); return; }
+    var t = el('div'); t.appendChild(el('span', 'pastille b-' + niveau(a), niveau(a))); t.appendChild(document.createTextNode(' ')); t.appendChild(el('span', 'id', a.id)); z.appendChild(t);
+    z.appendChild(el('div', 'note', (a.action_proposee || '') + ' · ' + num(a.evenements) + ' événement(s) · capteurs : ' + ((a.capteurs || []).join(', ') || '—')));
+    if(a.mesure){
+      z.appendChild(el('h4', null, 'Mesure en cours'));
+      var n = el('div', 'note'); n.appendChild(el('b', null, a.mesure.niveau)); n.appendChild(document.createTextNode(' — encore ' + mn(a.mesure.reste_s) + ' (réversible, expire seule)')); z.appendChild(n);
+    }
+    facteurs(z, 'Risque', a.risque); facteurs(z, 'Confiance', a.confiance);
+    z.appendChild(el('h4', null, 'Scénario'));
+    if((a.etapes || []).length){
+      var et = el('div', 'etapes');
+      a.etapes.forEach(function(e){ et.appendChild(el('span', 'etape', e.libelle + ' · ' + num(e.evenements) + (e.capteurs && e.capteurs.length ? ' · ' + e.capteurs.join('+') : ''))); });
+      z.appendChild(et);
+    } else z.appendChild(el('div', 'note', 'pas encore de scénario'));
+    if(a.refus && a.refus.length){
+      z.appendChild(el('h4', null, 'Pourquoi pas plus dur'));
+      var ur = el('ul'); a.refus.forEach(function(r){ ur.appendChild(el('li', 'refus', r)); }); z.appendChild(ur);
+    }
   }
-  function choisit(i){var a=L[num(i)];if(!a)return;CUR=a.id;plan();liste();fiche();}
-  el('liste').addEventListener('click',function(e){var d=e.target.closest&&e.target.closest('.acteur');if(d)choisit(d.getAttribute('data-i'));});
-  el('radar').addEventListener('click',function(e){var c=e.target.closest&&e.target.closest('circle.pt');if(c)choisit(c.getAttribute('data-i'));});
+  function rendu(){ tuiles(); plan(); liste(); fiche(); annoncer(); }
+  function choisit(i){ var a = L[num(i)]; if(!a) return; CUR = a.id; rendu(); }
+  $('liste').addEventListener('click', function(e){ var d = e.target.closest && e.target.closest('.acteur'); if(d) choisit(d.getAttribute('data-i')); });
+  $('radar').addEventListener('click', function(e){ var c = e.target.closest && e.target.closest('circle.pt'); if(c) choisit(c.getAttribute('data-i')); });
+
+  function sansMesure(texte){
+    L = []; CUR = null; $('tActeurs').dataset.mesure = '';
+    $('radar').textContent = ''; $('liste').textContent = ''; $('liste').appendChild(el('div', 'vide', texte));
+    $('fiche').textContent = ''; tuiles(); annoncer();
+  }
+  // Données fictives (démonstration) : identifiants de documentation, aucune requête.
+  function demoActeurs(){
+    return [
+      {id:'ACT-D001', niveau:'BLOCK', action_proposee:'mesure réversible de 30 min', capteurs:['waf','pare-feu'], evenements:42,
+       risque:{valeur:88, facteurs:[{libelle:'balayage de ports', points:30},{libelle:'sondes de chemins sensibles', points:35}]},
+       confiance:{valeur:86, facteurs:[{libelle:'événements observés', points:40},{libelle:'deux capteurs concordants', points:30}]},
+       etapes:[{libelle:'balayage', evenements:18, capteurs:['pare-feu']},{libelle:'sondage', evenements:24, capteurs:['waf']}],
+       refus:[], mesure:{niveau:'DELAI', reste_s:1500}},
+      {id:'ACT-D002', niveau:'MITIGATE', action_proposee:'défi avant accès', capteurs:['waf'], evenements:9,
+       risque:{valeur:78, facteurs:[{libelle:'tentatives de connexion répétées', points:28}]},
+       confiance:{valeur:42, facteurs:[{libelle:'événements observés', points:25}]},
+       etapes:[{libelle:'tentatives de connexion', evenements:9, capteurs:['waf']}],
+       refus:['BLOCK refusé : un seul capteur (2 requis)']},
+      {id:'ACT-D003', niveau:'OBSERVE', action_proposee:'aucune', capteurs:['dns'], evenements:3,
+       risque:{valeur:22, facteurs:[]}, confiance:{valeur:64, facteurs:[]}, etapes:[], refus:[]}
+    ];
+  }
+
   function tick(){
-    if(document.hidden)return;
+    if(document.hidden) return;
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
     sessionOk().then(function(ok){
-      if(!ok){L=[];el('radar').innerHTML='';el('liste').innerHTML='<div class="vide">Ouvre une session pour voir le radar des acteurs.</div>';el('fiche').innerHTML='';return null;}
+      if(!ok){
+        pastille('neutre', 'SESSION REQUISE'); $('session').hidden = false;
+        sansMesure('Ouvre une session pour voir le radar des acteurs.'); return null;
+      }
+      $('session').hidden = true;
       return jget('/api/v1/actor/radar?limit=30').then(function(r){
-        if(!r){el('liste').innerHTML='<div class="vide">Moteur Actor Intelligence en démarrage ou injoignable — nouvel essai automatique.</div>';return;}
-        L=(r.acteurs||[]).filter(function(a){return a&&a.risque&&a.confiance;});
-        if(CUR&&!L.some(function(x){return x.id===CUR;}))CUR=null;
-        if(!CUR&&L.length)CUR=L[0].id;
-        plan();liste();fiche();
+        if(!r){ pastille('hors', 'HORS LIGNE'); sansMesure('Moteur Actor Intelligence en démarrage ou injoignable — nouvel essai automatique.'); return; }
+        L = (r.acteurs || []).filter(function(a){ return a && a.risque && a.confiance; });
+        $('tActeurs').dataset.mesure = '1';
+        if(CUR && !L.some(function(x){ return x.id === CUR; })) CUR = null;
+        if(!CUR && L.length) CUR = L[0].id;
+        pastille('', L.length + (L.length > 1 ? ' ACTEURS' : ' ACTEUR'));
+        rendu();
       });
     });
   }
-  tick();setInterval(tick,20000);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)tick();});
-  (function(){var t=new URLSearchParams(location.search).get('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);})();
-  addEventListener('message',function(ev){var d=ev.data;if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light'))document.documentElement.setAttribute('data-theme',d.theme);});
+  $('rafraichir').onclick = function(){ if(DEMO) return; tick(); };
+  if(DEMO){
+    $('demo').hidden = false; L = demoActeurs(); CUR = L[0].id; $('tActeurs').dataset.mesure = '1';
+    $('maj').textContent = 'Démonstration'; pastille('att', 'DÉMONSTRATION'); rendu();
+  } else {
+    tick(); setInterval(tick, 20000);
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) tick(); });
+  }
+  annoncer();
 })();
 </script>
+</body>
+</html>

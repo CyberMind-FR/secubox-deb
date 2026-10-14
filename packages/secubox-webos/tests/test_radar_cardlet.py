@@ -34,15 +34,19 @@ def test_le_niveau_de_decision_et_les_refus_sont_affiches():
 
 
 def test_les_valeurs_serveur_sont_echappees():
-    assert "function esc(" in HTML and "&#39;" in HTML
+    # #2660 (profil Aurora) : l'échappement à la main (esc) est remplacé par la construction par le DOM — une valeur du serveur n'est
+    # jamais interprétée comme du HTML. L'exigence est la même (un identifiant hostile n'exécute rien), la garantie est plus forte.
+    assert "innerHTML" not in HTML and "insertAdjacentHTML" not in HTML and "function esc(" not in HTML
     for brut in ("'+a.id+'", "'+f.libelle+'", "'+r+'</"):
         assert brut not in HTML
-    assert "esc(a.id)" in HTML and "esc(f.libelle)" in HTML
+    assert "el('b', null, a.id)" in HTML and "el('span', null, f.libelle)" in HTML and "el('li', 'refus', r)" in HTML
 
 
-def test_aucune_ressource_externe_et_themes_clair_sombre():
+def test_aucune_ressource_externe_et_theme_aurora_unique():
+    # #2660 : le thème clair/sombre (prefers-color-scheme, data-theme) cède la place au thème unique sombre du profil Aurora.
     assert "http://" not in HTML and "https://" not in HTML
-    assert "prefers-color-scheme: dark" in HTML and 'data-theme="dark"' in HTML
+    assert "--fond:#060d1b" in HTML and "container-type:inline-size" in HTML
+    assert "prefers-color-scheme" not in HTML and "data-theme" not in HTML
 
 
 def test_le_hall_declare_la_carte_et_le_relais_laisse_passer_le_radar():
