@@ -4,682 +4,189 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  nDPId au profil Aurora (.claude/AURORA-REFERENCE.md) : coque à cinq onglets (Flux, Protocoles, Empreintes, Risques, Réglages),
+  chaque onglet étant une page autonome du même dossier, encadrée en iframe de même origine (#2363).
+  Page autonome, aucune dépendance. Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
+  La coque lit seulement /status et /flows ; les écritures (contrôle du service, TC mirred) vivent dans l'onglet Réglages.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox nDPId - Deep Packet Inspection</title>
-    <link rel="stylesheet" href="/static/css/secubox.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — nDPId</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .stat-card {
-            background: var(--card-bg, #1e1e1e);
-            border-radius: 8px;
-            padding: 1.5rem;
-        }
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--primary, #00d4aa);
-        }
-        .stat-label {
-            color: var(--text-muted, #888);
-            font-size: 0.9rem;
-        }
-        .section {
-            background: var(--card-bg, #1e1e1e);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .section h2 {
-            margin-top: 0;
-            border-bottom: 1px solid var(--border, #333);
-            padding-bottom: 0.5rem;
-        }
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid var(--border, #333);
-        }
-        .tab {
-            padding: 0.75rem 1.5rem;
-            cursor: pointer;
-            border: none;
-            background: none;
-            color: var(--text-muted, #888);
-            border-bottom: 2px solid transparent;
-        }
-        .tab.active {
-            color: var(--primary, #00d4aa);
-            border-bottom-color: var(--primary, #00d4aa);
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            text-align: left;
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border, #333);
-        }
-        th {
-            color: var(--text-muted, #888);
-            font-weight: 500;
-        }
-        .flow-row {
-            cursor: pointer;
-        }
-        .flow-row:hover {
-            background: var(--bg-hover, #2a2a2a);
-        }
-        .risk-high {
-            color: #ff4444;
-        }
-        .risk-medium {
-            color: #ffaa00;
-        }
-        .risk-low {
-            color: #00d4aa;
-        }
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-        }
-        .badge-protocol {
-            background: #2a4a6a;
-            color: #6ab0ff;
-        }
-        .badge-app {
-            background: #4a2a6a;
-            color: #b06aff;
-        }
-        .fingerprint-code {
-            font-family: monospace;
-            font-size: 0.8rem;
-            background: var(--bg-secondary, #2a2a2a);
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            word-break: break-all;
-        }
-        .chart-container {
-            height: 200px;
-            display: flex;
-            align-items: flex-end;
-            gap: 4px;
-            padding: 1rem 0;
-        }
-        .bar {
-            flex: 1;
-            background: var(--primary, #00d4aa);
-            border-radius: 4px 4px 0 0;
-            min-height: 4px;
-            position: relative;
-        }
-        .bar:hover::after {
-            content: attr(data-label);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #333;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            white-space: nowrap;
-        }
-        .status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 0.5rem;
-        }
-        .status-running {
-            background: #00d4aa;
-        }
-        .status-stopped {
-            background: #ff4444;
-        }
-        .mirred-status {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem;
-            background: var(--bg-secondary, #2a2a2a);
-            border-radius: 8px;
-        }
-        .btn {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-        .btn-primary {
-            background: var(--primary, #00d4aa);
-            color: #000;
-        }
-        .btn-danger {
-            background: #ff4444;
-            color: white;
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        #ndpid-erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;margin:0}
+        #ndpid-source{border:1px solid var(--orange);background:rgba(255,159,28,.08);border-radius:10px;padding:8px 12px;font-size:.8rem;margin:0}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:6px 16px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)}
+        .onglets button[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.2);color:var(--cyan);font-weight:700}
+        #pageCard{min-width:0}
+        #pageFrame{width:100%;height:1200px;border:0;display:block;background:transparent}
+        .note{color:var(--faible);font-size:.72rem;margin:0}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <div class="container main" style="margin-left: 220px;">
-        <div id="ndpid-erreur" role="alert" hidden style="margin:10px 0;padding:10px 14px;border:1px solid #b3261e;border-radius:8px;color:#ff7a70"></div>
-        <div id="ndpid-source" hidden style="margin:10px 0;padding:10px 14px;border:1px solid rgba(255,255,255,.2);border-radius:8px;opacity:.85"></div>
-        <h1>nDPId - Deep Packet Inspection</h1>
-        <p class="subtitle">JA3/JA4 Fingerprinting, Protocol Detection & Risk Analysis</p>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3" fill="rgba(41,182,246,.12)"/><path d="M8 15h8"/></svg>
+                <div><h1>nDPId</h1><small>Inspection de paquets : empreintes JA3/JA4, protocoles et risques</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="ndpid-erreur" role="alert" hidden></div>
+        <div id="ndpid-source" hidden></div>
 
-        <!-- Status Cards -->
-        <div class="dashboard-grid">
-            <div class="stat-card">
-                <div id="daemon-status">
-                    <span class="status-dot status-stopped"></span>
-                    <span>Checking...</span>
-                </div>
-                <div class="stat-label">Daemon Status</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="flows-active">-</div>
-                <div class="stat-label">Active Flows</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="fingerprints-count">-</div>
-                <div class="stat-label">JA3/JA4 Fingerprints</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="risks-24h">-</div>
-                <div class="stat-label">Risks (24h)</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cDaemon" title="État du moteur d’inspection : « Actif » si le démon nDPId (ou la source de repli ndpiReader) tourne. Source : /status, champ daemon.running."><span class="l">Moteur</span><span class="v" id="daemon-status">—</span><span class="s" id="daemon-src">état du démon</span></div>
+            <div class="tuile cy" title="Nombre de flux réseau actifs renvoyés par /flows (limité aux 50 plus récents par cet appel)."><span class="l">Flux actifs</span><span class="v" id="flows-active">—</span><span class="s">50 derniers au plus</span></div>
+            <div class="tuile vi" title="Nombre d’empreintes TLS JA3 et JA4 enregistrées en base. Vide tant que le moteur nDPId n’est pas actif (le repli ndpiReader ne les produit pas)."><span class="l">Empreintes JA3/JA4</span><span class="v" id="fingerprints-count">—</span><span class="s">en base</span></div>
+            <div class="tuile att" title="Événements de risque relevés par le moteur sur les dernières 24 heures (/status, database.risks_24h)."><span class="l">Risques (24 h)</span><span class="v" id="risks-24h">—</span><span class="s">événements</span></div>
+        </section>
+
+        <!-- #2363 : chaque onglet est une page autonome du profil Aurora, encadrée de même origine -->
+        <div class="onglets" role="tablist" aria-label="Sections nDPId">
+            <button type="button" role="tab" class="tab" id="tab-flows" data-tab="flows" aria-selected="true" aria-controls="pageFrame">Flux</button>
+            <button type="button" role="tab" class="tab" id="tab-protocols" data-tab="protocols" aria-selected="false" aria-controls="pageFrame">Protocoles</button>
+            <button type="button" role="tab" class="tab" id="tab-fingerprints" data-tab="fingerprints" aria-selected="false" aria-controls="pageFrame">Empreintes</button>
+            <button type="button" role="tab" class="tab" id="tab-risks" data-tab="risks" aria-selected="false" aria-controls="pageFrame">Risques</button>
+            <button type="button" role="tab" class="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="pageFrame">Réglages</button>
         </div>
+        <div id="pageCard"><iframe id="pageFrame" title="nDPId" role="tabpanel"></iframe></div>
+        <p class="note">Lecture seule, sauf l’onglet Réglages (contrôle du service et miroir TC). Une mesure absente reste « — ».</p>
+    </div></div></main>
 
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab active" data-tab="flows">Flux</button>
-            <button class="tab" data-tab="protocols">Protocoles</button>
-            <button class="tab" data-tab="fingerprints">Empreintes</button>
-            <button class="tab" data-tab="risks">Risques</button>
-            <button class="tab" data-tab="settings">Réglages</button>
-        </div>
-
-        <!-- #2363 : chaque onglet est une page autonome du profil projet reference Aurora, encadree ; l'ancien contenu reste dans le DOM (masque) pour le reste du script -->
-        <div id="pageCard"><iframe id="pageFrame" title="nDPId" style="width:100%;height:1200px;border:0;display:block;background:transparent"></iframe></div>
-
-        <!-- Flows Tab -->
-        <div id="flows" class="tab-content active">
-            <div class="section">
-                <h2>Active Network Flows</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Source</th>
-                            <th>Destination</th>
-                            <th>Protocol</th>
-                            <th>Application</th>
-                            <th>Bytes</th>
-                            <th>Risk</th>
-                        </tr>
-                    </thead>
-                    <tbody id="flows-table">
-                        <tr><td colspan="6">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Protocols Tab -->
-        <div id="protocols" class="tab-content">
-            <div class="section">
-                <h2>Top Protocols (24h)</h2>
-                <div class="chart-container" id="protocols-chart"></div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Protocol</th>
-                            <th>Flows</th>
-                            <th>Traffic</th>
-                        </tr>
-                    </thead>
-                    <tbody id="protocols-table">
-                        <tr><td colspan="3">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="section">
-                <h2>Top Applications (24h)</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Application</th>
-                            <th>Flows</th>
-                            <th>Traffic</th>
-                        </tr>
-                    </thead>
-                    <tbody id="apps-table">
-                        <tr><td colspan="3">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Fingerprints Tab -->
-        <div id="fingerprints" class="tab-content">
-            <div class="section">
-                <h2>JA3 Client Fingerprints</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Fingerprint</th>
-                            <th>Known App</th>
-                            <th>Hits</th>
-                            <th>Last Seen</th>
-                            <th>Threat Intel</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ja3-table">
-                        <tr><td colspan="5">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="section">
-                <h2>JA4 Fingerprints</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Fingerprint</th>
-                            <th>Known App</th>
-                            <th>Hits</th>
-                            <th>Last Seen</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ja4-table">
-                        <tr><td colspan="4">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Risks Tab -->
-        <div id="risks" class="tab-content">
-            <div class="section">
-                <h2>Risk Events (24h)</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Source IP</th>
-                            <th>Dest IP</th>
-                            <th>Risk Type</th>
-                            <th>Score</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody id="risks-table">
-                        <tr><td colspan="6">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div id="settings" class="tab-content">
-            <div class="section">
-                <h2>TC Mirred Status</h2>
-                <div class="mirred-status">
-                    <div>
-                        <strong>Interface:</strong> <span id="mirred-iface">eth0</span>
-                    </div>
-                    <div>
-                        <strong>Active:</strong> <span id="mirred-active">Checking...</span>
-                    </div>
-                    <button class="btn btn-primary" id="btn-setup-mirred">Setup Mirred</button>
-                    <button class="btn btn-danger" id="btn-remove-mirred">Remove Mirred</button>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>Service Control</h2>
-                <div style="display: flex; gap: 1rem;">
-                    <button class="btn btn-primary" onclick="controlService('start')">Start</button>
-                    <button class="btn btn-primary" onclick="controlService('restart')">Restart</button>
-                    <button class="btn btn-danger" onclick="controlService('stop')">Stop</button>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>Realtime Statistics</h2>
-                <div id="realtime-stats">Loading...</div>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+    (function () {
+        'use strict';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) document.body.classList.add('emb');
         // L'API vit sous /api/v1/ndpid/ (l'ancienne base /api/ndpid/ répondait 404 : toute la page restait vide en silence).
         const API_BASE = '/api/v1/ndpid';
+        const $ = id => document.getElementById(id);
+        const est = x => x !== null && x !== undefined && x !== '' && isFinite(Number(x));
+        const tiret = x => est(x) ? String(Math.round(Number(x))) : '—';
 
+        function montrerErreur(msg) { const e = $('ndpid-erreur'); e.textContent = msg; e.hidden = false; annoncer(); }
         // Appel authentifié : jeton `sbx_token` (comme tous les panneaux) + cookie de session ; un refus est AFFICHÉ, jamais avalé.
-        function montrerErreur(msg) {
-            const e = document.getElementById('ndpid-erreur');
-            e.textContent = msg;
-            e.hidden = false;
-        }
+        let REFUS = false, OKANY = false;
         async function apiFetch(path, opts = {}) {
             let token = null;
             try { token = localStorage.getItem('sbx_token'); } catch (e) { /* stockage indisponible */ }
-            const headers = Object.assign({}, opts.headers || {}, token ? { 'Authorization': 'Bearer ' + token } : {});
-            const res = await fetch(`${API_BASE}${path}`, Object.assign({ credentials: 'same-origin' }, opts, { headers }));
-            if (res.status === 401 || res.status === 403) {
-                montrerErreur('Connexion requise : ouvrez une session administrateur pour afficher les flux, protocoles et risques.');
-            } else if (!res.ok) {
-                montrerErreur('Le service nDPId répond ' + res.status + ' pour ' + path + '.');
-            }
+            const headers = Object.assign({ Accept: 'application/json' }, opts.headers || {}, token ? { 'Authorization': 'Bearer ' + token } : {});
+            const res = await fetch(`${API_BASE}${path}`, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts, { headers }));
+            if (res.status === 401 || res.status === 403) { REFUS = true; montrerErreur('Connexion requise : ouvrez une session administrateur pour afficher les flux, protocoles et risques.'); }
+            else if (!res.ok) montrerErreur('Le service nDPId répond ' + res.status + ' pour ' + path + '.');
+            else { OKANY = true; $('ndpid-erreur').hidden = true; }
             return res;
+        }
+        async function lire(path) {
+            if (DEMO) return path.indexOf('/status') === 0 ? DEMO_STATUS : DEMO_FLOWS;
+            try { const r = await apiFetch(path); return r.ok ? await r.json() : null; } catch (e) { return null; }
+        }
+        const DEMO_STATUS = { daemon: { running: true, source: 'nDPId' }, database: { total_fingerprints: 38, risks_24h: 5 } };
+        const DEMO_FLOWS = { count: 27, flows: [] };
+
+        async function charger() {
+            REFUS = false; OKANY = false;
+            const [st, fl] = await Promise.all([lire('/status'), lire('/flows?limit=50')]);
+            const src = $('ndpid-source');
+            if (st && st.daemon && st.daemon.source === 'ndpiReader/dpi') {
+                src.textContent = 'Source des données : ndpiReader (fenêtres de 60 s sur wg-toolbox). Le moteur nDPId n’est pas actif : les empreintes JA3/JA4 et les événements de risque restent donc vides.';
+                src.hidden = false;
+            } else src.hidden = true;
+            const run = st && st.daemon ? !!st.daemon.running : null;
+            $('daemon-status').textContent = run === null ? '—' : run ? 'Actif' : 'Arrêté';
+            $('cDaemon').className = 'tuile ' + (run === null ? 'cy' : run ? 'ok' : 'hors');
+            $('daemon-src').textContent = st && st.daemon && st.daemon.source ? 'source : ' + st.daemon.source : 'état du démon';
+            $('fingerprints-count').textContent = st && st.database ? tiret(st.database.total_fingerprints) : '—';
+            $('risks-24h').textContent = st && st.database ? tiret(st.database.risks_24h) : '—';
+            $('flows-active').textContent = fl ? tiret(fl.count !== undefined ? fl.count : (Array.isArray(fl.flows) ? fl.flows.length : null)) : '—';
+            const sansSession = !DEMO && REFUS && !OKANY;
+            $('session').hidden = !sansSession; $('demo').hidden = !DEMO;
+            const e = $('etat');
+            if (sansSession) { e.className = 'actif neutre'; e.textContent = 'SESSION REQUISE'; }
+            else if (!st) { e.className = 'actif hors'; e.textContent = 'HORS LIGNE'; }
+            else if (src.hidden === false) { e.className = 'actif att'; e.textContent = 'REPLI ndpiReader'; }
+            else if (run) { e.className = 'actif'; e.textContent = 'ACTIF'; }
+            else { e.className = 'actif hors'; e.textContent = 'ARRÊTÉ'; }
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
         // Onglets -> pages autonomes (#2363)
         const NDPID_PAGES = { flows: 'flux', protocols: 'protocoles', fingerprints: 'empreintes', risks: 'risques', settings: 'reglages' };
         function ouvrirOnglet(nom) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === nom));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const page = NDPID_PAGES[nom], f = document.getElementById('pageFrame');
-            if (f && page && f.dataset.p !== page) { f.dataset.p = page; f.style.height = '1200px'; f.src = page + '.html?embed=1'; }
+            document.querySelectorAll('.tab').forEach(t => { const on = t.dataset.tab === nom; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; });
+            const page = NDPID_PAGES[nom], f = $('pageFrame');
+            const params = ['embed=1'].concat(DEMO ? ['demo=1'] : []).join('&');
+            if (f && page && f.dataset.p !== page) { f.dataset.p = page; f.style.height = '1200px'; f.src = page + '.html?' + params; }
         }
-        document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => ouvrirOnglet(tab.dataset.tab)));
+        const onglets = Array.from(document.querySelectorAll('.tab'));
+        onglets.forEach((tab, i) => {
+            tab.addEventListener('click', () => ouvrirOnglet(tab.dataset.tab));
+            tab.addEventListener('keydown', ev => {
+                const d = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0; if (!d) return;
+                const n = onglets[(i + d + onglets.length) % onglets.length]; n.focus(); ouvrirOnglet(n.dataset.tab); ev.preventDefault();
+            });
+        });
         window.addEventListener('message', (e) => {
             if (e.origin !== location.origin || !e.data || !e.data.sbxNdpidVue) return;
-            const f = document.getElementById('pageFrame');
+            const f = $('pageFrame');
             if (f && f.dataset.p === e.data.onglet) f.style.height = Math.min(4000, Math.max(300, +e.data.sbxNdpidVue + 4)) + 'px';
         });
+
+        // Hauteur annoncée à l'hôte (iframes)
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'ndpid' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        $('rafraichir').addEventListener('click', charger);
         ouvrirOnglet('flows');
-
-        function formatBytes(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
-        }
-
-        function riskClass(score) {
-            if (score >= 70) return 'risk-high';
-            if (score >= 40) return 'risk-medium';
-            return 'risk-low';
-        }
-
-        async function fetchStatus() {
-            try {
-                const res = await apiFetch(`/status`);
-                const data = await res.json();
-                const src = document.getElementById('ndpid-source');
-                if (data.daemon?.source === 'ndpiReader/dpi') {
-                    src.textContent = 'Source des données : ndpiReader (fenêtres de 60 s sur wg-toolbox). Le moteur nDPId n\u2019est pas actif : les empreintes JA3/JA4 et les événements de risque restent donc vides.';
-                    src.hidden = false;
-                } else { src.hidden = true; }
-
-                const daemonEl = document.getElementById('daemon-status');
-                if (data.daemon?.running) {
-                    daemonEl.innerHTML = '<span class="status-dot status-running"></span>Running';
-                } else {
-                    daemonEl.innerHTML = '<span class="status-dot status-stopped"></span>Stopped';
-                }
-
-                document.getElementById('fingerprints-count').textContent = data.database?.total_fingerprints || 0;
-                document.getElementById('risks-24h').textContent = data.database?.risks_24h || 0;
-            } catch (e) {
-                console.error('Status fetch failed:', e);
-            }
-        }
-
-        async function fetchFlows() {
-            try {
-                const res = await apiFetch(`/flows?limit=50`);
-                const data = await res.json();
-                const tbody = document.getElementById('flows-table');
-
-                document.getElementById('flows-active').textContent = data.count || 0;
-
-                if (!data.flows?.length) {
-                    tbody.innerHTML = '<tr><td colspan="6">No active flows</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.flows.map(f => `
-                    <tr class="flow-row">
-                        <td>${f.src_ip || '-'}:${f.src_port || '-'}</td>
-                        <td>${f.dst_ip || '-'}:${f.dst_port || '-'}</td>
-                        <td><span class="badge badge-protocol">${f.l7_protocol || f.protocol || '-'}</span></td>
-                        <td><span class="badge badge-app">${f.application || '-'}</span></td>
-                        <td>${formatBytes((f.bytes_sent || 0) + (f.bytes_recv || 0))}</td>
-                        <td class="${riskClass(f.risk_score || 0)}">${f.risk_score || 0}</td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                console.error('Flows fetch failed:', e);
-            }
-        }
-
-        async function fetchProtocols() {
-            try {
-                const res = await apiFetch(`/top/protocols?hours=24`);
-                const data = await res.json();
-                const tbody = document.getElementById('protocols-table');
-                const chart = document.getElementById('protocols-chart');
-
-                if (!data.protocols?.length) {
-                    tbody.innerHTML = '<tr><td colspan="3">No data</td></tr>';
-                    chart.innerHTML = '';
-                    return;
-                }
-
-                const maxBytes = Math.max(...data.protocols.map(p => p.bytes_total));
-
-                tbody.innerHTML = data.protocols.map(p => `
-                    <tr>
-                        <td><span class="badge badge-protocol">${p.protocol}</span></td>
-                        <td>${p.flow_count}</td>
-                        <td>${formatBytes(p.bytes_total)}</td>
-                    </tr>
-                `).join('');
-
-                chart.innerHTML = data.protocols.slice(0, 10).map(p => `
-                    <div class="bar" style="height: ${(p.bytes_total / maxBytes * 100)}%"
-                         data-label="${p.protocol}: ${formatBytes(p.bytes_total)}"></div>
-                `).join('');
-
-                // Fetch apps too
-                const appsRes = await apiFetch(`/top/applications?hours=24`);
-                const appsData = await appsRes.json();
-                const appsTbody = document.getElementById('apps-table');
-
-                if (!appsData.applications?.length) {
-                    appsTbody.innerHTML = '<tr><td colspan="3">No data</td></tr>';
-                    return;
-                }
-
-                appsTbody.innerHTML = appsData.applications.map(a => `
-                    <tr>
-                        <td><span class="badge badge-app">${a.application}</span></td>
-                        <td>${a.flow_count}</td>
-                        <td>${formatBytes(a.bytes_total)}</td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                console.error('Protocols fetch failed:', e);
-            }
-        }
-
-        async function fetchFingerprints() {
-            try {
-                const [ja3Res, ja4Res] = await Promise.all([
-                    apiFetch(`/fingerprints/ja3`),
-                    apiFetch(`/fingerprints/ja4`)
-                ]);
-                const ja3Data = await ja3Res.json();
-                const ja4Data = await ja4Res.json();
-
-                const ja3Tbody = document.getElementById('ja3-table');
-                const ja4Tbody = document.getElementById('ja4-table');
-
-                if (!ja3Data.fingerprints?.length) {
-                    ja3Tbody.innerHTML = '<tr><td colspan="5">No JA3 fingerprints recorded</td></tr>';
-                } else {
-                    ja3Tbody.innerHTML = ja3Data.fingerprints.map(f => `
-                        <tr>
-                            <td><code class="fingerprint-code">${f.fingerprint}</code></td>
-                            <td>${f.known_app || '-'}</td>
-                            <td>${f.hit_count}</td>
-                            <td>${new Date(f.last_seen).toLocaleString()}</td>
-                            <td class="${f.threat_intel ? 'risk-high' : ''}">${f.threat_intel || '-'}</td>
-                        </tr>
-                    `).join('');
-                }
-
-                if (!ja4Data.fingerprints?.length) {
-                    ja4Tbody.innerHTML = '<tr><td colspan="4">No JA4 fingerprints recorded</td></tr>';
-                } else {
-                    ja4Tbody.innerHTML = ja4Data.fingerprints.map(f => `
-                        <tr>
-                            <td><code class="fingerprint-code">${f.fingerprint}</code></td>
-                            <td>${f.known_app || '-'}</td>
-                            <td>${f.hit_count}</td>
-                            <td>${new Date(f.last_seen).toLocaleString()}</td>
-                        </tr>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error('Fingerprints fetch failed:', e);
-            }
-        }
-
-        async function fetchRisks() {
-            try {
-                const res = await apiFetch(`/risks?hours=24`);
-                const data = await res.json();
-                const tbody = document.getElementById('risks-table');
-
-                if (!data.risks?.length) {
-                    tbody.innerHTML = '<tr><td colspan="6">No risk events in the last 24 hours</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.risks.map(r => `
-                    <tr>
-                        <td>${new Date(r.timestamp).toLocaleString()}</td>
-                        <td>${r.src_ip}</td>
-                        <td>${r.dst_ip}</td>
-                        <td>${r.risk_type}</td>
-                        <td class="${riskClass(r.risk_score)}">${r.risk_score}</td>
-                        <td>${r.description}</td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                console.error('Risks fetch failed:', e);
-            }
-        }
-
-        async function fetchMirredStatus() {
-            try {
-                const res = await apiFetch(`/mirred/status`);
-                const data = await res.json();
-
-                document.getElementById('mirred-iface').textContent = data.interface || 'eth0';
-                document.getElementById('mirred-active').textContent = data.active ? 'Yes' : 'No';
-                document.getElementById('mirred-active').className = data.active ? 'risk-low' : 'risk-medium';
-            } catch (e) {
-                console.error('Mirred status fetch failed:', e);
-            }
-        }
-
-        async function fetchRealtimeStats() {
-            try {
-                const res = await apiFetch(`/stats/realtime`);
-                const data = await res.json();
-
-                document.getElementById('realtime-stats').innerHTML = `
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
-                        <div><strong>RX:</strong> ${formatBytes(data.rx_bytes)} (${data.rx_packets} pkts)</div>
-                        <div><strong>TX:</strong> ${formatBytes(data.tx_bytes)} (${data.tx_packets} pkts)</div>
-                        <div><strong>RX Errors:</strong> ${data.rx_errors}</div>
-                        <div><strong>TX Errors:</strong> ${data.tx_errors}</div>
-                    </div>
-                `;
-            } catch (e) {
-                document.getElementById('realtime-stats').textContent = 'Failed to load';
-            }
-        }
-
-        async function controlService(action) {
-            try {
-                await apiFetch(`/control/${action}`, { method: 'POST' });
-                setTimeout(fetchStatus, 1000);
-            } catch (e) {
-                alert('Service control failed: ' + e.message);
-            }
-        }
-
-        document.getElementById('btn-setup-mirred').addEventListener('click', async () => {
-            try {
-                await apiFetch(`/mirred/setup`, { method: 'POST' });
-                fetchMirredStatus();
-            } catch (e) {
-                alert('Setup failed: ' + e.message);
-            }
-        });
-
-        document.getElementById('btn-remove-mirred').addEventListener('click', async () => {
-            try {
-                await apiFetch(`/mirred/remove`, { method: 'POST' });
-                fetchMirredStatus();
-            } catch (e) {
-                alert('Remove failed: ' + e.message);
-            }
-        });
-
-        // Initial load
-        fetchStatus();
-        fetchFlows();
-        fetchProtocols();
-        fetchFingerprints();
-        fetchRisks();
-        fetchMirredStatus();
-        fetchRealtimeStats();
-
-        // Auto-refresh
-        setInterval(() => {
-            fetchStatus();
-            fetchFlows();
-        }, 10000);
-
-        setInterval(fetchRealtimeStats, 5000);
+        charger();
+        // Actualisation sans objet pendant que l'onglet est masqué ou en démonstration.
+        setInterval(() => { if (!document.hidden && !DEMO) charger(); }, 15000);
+    })();
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>
