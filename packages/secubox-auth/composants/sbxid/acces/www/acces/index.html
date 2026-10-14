@@ -4,6 +4,11 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
 
+  Au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, CSS et JS en ligne ; seuls appareil.js et
+  moi.js (modules du même dossier) sont importés. Mesure absente = « — ». ?embed=1 (ou page encadrée) : sans
+  menu commun ; ?demo=1 : données fictives, AUCUNE écriture ni signature, bandeau orange.
+  Mêmes routes /api/v1/acces, mêmes méthodes, mêmes corps que l'ancienne page. Aucune empreinte en QR.
+
   SecuBox :: ACCÈS — le webui du vhost (#1344).
 
   POURQUOI CETTE PAGE EXISTE À PART. Le parcours d'admission vivait dans le
@@ -28,305 +33,184 @@
   QR de secret est un canal. Scanner une empreinte au lieu de la comparer
   supprimerait la vérification en croyant l'automatiser.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Accès</title>
 <style>
-  /* ═══════════════════════════════════════════════════════════════════════
-     PALETTE À TROIS ÉTATS. Clair par défaut — une réception est un lieu
-     éclairé —, et le sombre se redéfinit pour les deux états où il s'applique :
-     le choix explicite, et l'état « système » où aucun attribut n'est posé.
-
-     L'ACCENT EST UN LAITON, pas un cyan. Le cyan est la couleur de SecuBox en
-     général ; ici on est à une PORTE, et le laiton d'une plaque ou d'une clé
-     dit ce lieu-là. La sémantique reste séparée de l'accent : vert admis, ambre
-     en attente, rouge refusé, violet administrateur.
-     ═══════════════════════════════════════════════════════════════════════ */
-  :root {
-    --fond:#f4f2ee; --surface:#ffffff; --surface-2:#faf8f4; --sunk:#efece6;
-    --ink:#1b1814; --ink-soft:#453f37; --muted:#6b6358; --faint:#968c7e;
-    --line:#e2ddd3; --line-soft:#eeeae2;
-    --laiton:#a06a1c; --laiton-ink:#8a5a14;
-    --vert:#1f8f57; --ambre:#b7810a; --rouge:#c0392b; --violet:#6b46c9;
-    --halo:rgba(160,106,28,.07);
-    --ombre:0 1px 2px rgba(60,45,20,.06), 0 8px 24px rgba(60,45,20,.07);
-    --ombre-h:0 2px 6px rgba(60,45,20,.08), 0 20px 50px rgba(60,45,20,.12);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --fond:#12100d; --surface:#1c1915; --surface-2:#171410; --sunk:#100e0b;
-      --ink:#f0ebe2; --ink-soft:#cfc7ba; --muted:#9b9184; --faint:#6e6558;
-      --line:#2e2922; --line-soft:#241f1a;
-      --laiton:#e0a33c; --laiton-ink:#f0c47a;
-      --vert:#35d07f; --ambre:#f0b429; --rouge:#ff6b5d; --violet:#b39aff;
-      --halo:rgba(224,163,60,.10);
-      --ombre:0 1px 2px rgba(0,0,0,.45), 0 10px 30px rgba(0,0,0,.4);
-      --ombre-h:0 2px 8px rgba(0,0,0,.5), 0 26px 60px rgba(0,0,0,.55);
-    }
-  }
-  :root[data-theme="dark"] {
-    --fond:#12100d; --surface:#1c1915; --surface-2:#171410; --sunk:#100e0b;
-    --ink:#f0ebe2; --ink-soft:#cfc7ba; --muted:#9b9184; --faint:#6e6558;
-    --line:#2e2922; --line-soft:#241f1a;
-    --laiton:#e0a33c; --laiton-ink:#f0c47a;
-    --vert:#35d07f; --ambre:#f0b429; --rouge:#ff6b5d; --violet:#b39aff;
-    --halo:rgba(224,163,60,.10);
-    --ombre:0 1px 2px rgba(0,0,0,.45), 0 10px 30px rgba(0,0,0,.4);
-    --ombre-h:0 2px 8px rgba(0,0,0,.5), 0 26px 60px rgba(0,0,0,.55);
-  }
-
-  /* `hidden` DOIT GAGNER SUR NOS PROPRES RÈGLES. `[hidden]{display:none}` vient
-     du NAVIGATEUR, donc cède devant toute règle d'auteur posant `display`. SBX
-     OS y a laissé un écran noir (#1356) : un `.theatre` en `position:fixed;
-     inset:0; display:flex` restait affiché malgré `hidden` et couvrait tout.
-     Une ligne ici rend la bascule par `el.hidden` fiable pour de bon. */
-  [hidden] { display: none !important; }
-
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0; background: var(--fond); color: var(--ink);
-    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
-    font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
-    background-image: radial-gradient(1100px 580px at 84% -12%, var(--halo), transparent 70%);
-    background-attachment: fixed;
-  }
-  h1, h2, h3 { font-family: "Chivo", sans-serif; margin: 0; letter-spacing: -.015em; }
-  a { color: inherit; }
-  :focus-visible { outline: 2px solid var(--laiton); outline-offset: 2px; border-radius: 4px; }
-  .cadre { max-width: 74rem; margin: 0 auto; padding: 26px 22px 72px;
-           display: grid; gap: 18px; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+    /* alias des anciens noms, encore cités par quelques styles en ligne et par moi.js */
+    --line:rgba(86,150,255,.22);--line-1:rgba(86,150,255,.12);--line-2:rgba(86,150,255,.22);--surface-2:rgba(8,18,38,.7);--ink:#eaf1ff}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  /* `hidden` DOIT GAGNER SUR NOS PROPRES RÈGLES (#1356) : un élément en display:flex restait affiché malgré `hidden`. */
+  [hidden]{display:none!important}
+  a{color:var(--cyan)}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
   /* Navigation systeme commune (#2613) : barre du haut + menu de gauche, comme les autres panneaux d'administration. Absente en mode
      encadre (iframe du Hall) ou avec ?embed=1 : deux menus imbriques seraient pires que pas de menu. */
-  body.avec-menu .cadre { margin-left: 220px; max-width: none; padding-top: 74px; }
-  @media (max-width: 900px), (hover: none) and (pointer: coarse) { body.avec-menu .cadre { margin-left: 0; } }
-  body.mobile-mode.avec-menu .cadre { margin-left: 0; }
+  body.avec-menu .cadre{margin-left:220px;padding-top:58px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body.avec-menu .cadre{margin-left:0}}
+  body.mobile-mode.avec-menu .cadre{margin-left:0}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .lede{color:var(--doux);font-size:.8rem;max-width:75ch;margin:0} .lede b{color:var(--texte);font-weight:600}
 
-  /* ── MASTHEAD ─────────────────────────────────────────────────────────── */
-  .mast { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .sceau { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
-           flex: 0 0 auto; font-size: 1.25rem; position: relative; overflow: hidden;
-           background: linear-gradient(150deg, color-mix(in srgb, var(--laiton) 28%, var(--surface)), var(--surface));
-           border: 1px solid var(--line); box-shadow: var(--ombre); }
-  .sceau::after { content:""; position:absolute; inset:-40% -40% auto auto; width:90%; height:180%;
-                  background: linear-gradient(transparent, color-mix(in srgb, var(--laiton) 30%, transparent));
-                  transform: rotate(25deg); opacity:.5; }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .wm { display: flex; flex-direction: column; line-height: 1.05; }
-  .wm b { font-family:"Chivo", system-ui, sans-serif; font-weight:900; font-size:1.42rem; letter-spacing:-.02em; }
-  .wm b i { font-style: normal; color: var(--laiton-ink); }
-  .wm span { font-size:.66rem; letter-spacing:.24em; text-transform:uppercase;
-             color: var(--faint); font-weight:600; }
-  .espace { flex: 1 1 40px; }
-  .maj { font-size:.7rem; color: var(--faint); font-family:"IBM Plex Mono", ui-monospace, monospace; }
-  .lede { color: var(--muted); font-size:.94rem; max-width: 66ch; margin: 0; text-wrap: pretty; }
-  .lede b { color: var(--ink-soft); font-weight: 600; }
+  /* ── TUILES ── */
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:var(--cyan)} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.violet .v{color:var(--violet)}
 
-  /* ── TUILES ───────────────────────────────────────────────────────────── */
-  .tuiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr)); gap:14px; }
-  .tuile { background:var(--surface); border:1px solid var(--line); border-radius:16px;
-           box-shadow:var(--ombre); padding:16px; position:relative; overflow:hidden; }
-  .tuile::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--laiton); }
-  .tuile.k-ambre::before { background:var(--ambre); }
-  .tuile.k-vert::before  { background:var(--vert); }
-  .tuile.k-violet::before{ background:var(--violet); }
-  .tuile .lib { font-size:.72rem; color:var(--muted); font-weight:600; }
-  .tuile .val { font-family:"Chivo", system-ui, sans-serif; font-size:2.05rem; font-weight:800; line-height:1;
-                letter-spacing:-.03em; font-variant-numeric:tabular-nums; margin-top:10px; }
-  .tuile .note { font-size:.68rem; color:var(--faint); margin-top:8px; }
+  /* ── PANNEAUX ── */
+  .duo{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+  @container a (min-width:900px){.duo{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);align-items:start}}
+  #admin,#moi{display:grid;gap:10px;min-width:0}
+  #moi{margin-top:0}
+  .carte{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .sec-h{display:flex;align-items:center;gap:10px;margin:0 0 8px}
+  .sec-h .k{font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faible);font-weight:600;white-space:nowrap}
+  .sec-h .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--trait),transparent)}
+  h2{font-size:.95rem;font-weight:700;margin:0 0 .25rem}
+  .sous{color:var(--doux);font-size:.76rem;margin:0 0 .7rem}
 
-  /* ── CARTES ───────────────────────────────────────────────────────────── */
-  /* minmax(0,…) : sans lui, une colonne prend la largeur de son plus long
-     contenu (une liste déroulante, une empreinte) et la page déborde (#1381). */
-  .duo { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:18px; align-items:start; }
-  #admin { display:grid; gap:18px; min-width:0; }
-  .carte, .tuile { min-width:0; }
-  @media (max-width: 900px) { .duo { grid-template-columns:1fr; } }
-  .carte { background:var(--surface); border:1px solid var(--line); border-radius:16px;
-           box-shadow:var(--ombre); padding:20px; }
-  .sec-h { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
-  .sec-h .k { font-size:.62rem; letter-spacing:.18em; text-transform:uppercase;
-              color:var(--faint); font-weight:700; white-space:nowrap; }
-  .sec-h .rule { flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent); }
-  h2 { font-size:1.06rem; font-weight:800; margin:0 0 .3rem; }
-  .sous { color:var(--muted); font-size:.8rem; margin:0 0 1rem; text-wrap:pretty; }
+  /* ── L'INVITATION ── */
+  .inviter{display:flex;align-items:center;gap:14px;padding:12px;border:1px dashed var(--trait2);border-radius:12px;background:rgba(8,18,38,.5);flex-wrap:wrap}
+  .inviter img{width:104px;height:104px;flex:0 0 auto;border-radius:8px;background:#fff;padding:5px;image-rendering:pixelated}
+  .inviter .t{display:flex;flex-direction:column;gap:.3rem;min-width:0}
+  .inviter .h{font-size:.82rem;font-weight:700}
+  .inviter .u{font-size:.72rem;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--cyan);text-decoration:none;overflow-wrap:anywhere}
+  .inviter .u:hover{text-decoration:underline}
+  .inviter .p{font-size:.68rem;color:var(--faible);margin:0}
 
-  /* ── L'INVITATION ─────────────────────────────────────────────────────── */
-  .inviter { display:flex; align-items:center; gap:14px; padding:14px;
-             border:1px dashed color-mix(in srgb, var(--laiton) 40%, var(--line));
-             border-radius:14px; background:var(--surface-2); }
-  .inviter img { width:104px; height:104px; flex:0 0 auto; border-radius:8px;
-                 background:#fff; padding:5px; image-rendering:pixelated; }
-  .inviter .t { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
-  .inviter .h { font-size:.8rem; font-weight:800; font-family:"Chivo", system-ui, sans-serif; }
-  .inviter .u { font-size:.72rem; font-family:"IBM Plex Mono", ui-monospace, monospace; color:var(--laiton-ink);
-                text-decoration:none; overflow-wrap:anywhere; }
-  .inviter .u:hover { text-decoration:underline; }
-  .inviter .p { font-size:.68rem; color:var(--faint); margin:0; }
+  /* ── UNE DEMANDE / UN ACCÈS ── */
+  .bloc{border:1px solid var(--trait);border-radius:10px;padding:10px 12px;background:rgba(8,18,38,.5);margin-bottom:8px}
+  .bloc:last-child{margin-bottom:0}
+  .qui{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+  .qui .nom{font-weight:700;font-size:.9rem;overflow-wrap:anywhere} .qui .appar{font-size:.72rem;color:var(--doux)}
+  .mot{font-size:.78rem;color:var(--doux);font-style:italic;margin:.4rem 0 0;overflow-wrap:anywhere}
+  /* L'EMPREINTE EST BORNÉE EN LARGEUR : étirée sur toute la page elle devient illisible au moment où il faut la comparer signe à signe. */
+  .empreinte{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:.86rem;font-weight:500;letter-spacing:.06em;
+             display:block;width:max-content;max-width:100%;margin:.6rem auto;padding:.5rem .8rem;border-radius:9px;
+             background:rgba(41,182,246,.08);border:1px solid rgba(41,182,246,.3);color:var(--texte);text-align:center;overflow-wrap:anywhere}
+  .empreinte.zoom{font-size:1.06rem;letter-spacing:.1em;padding:.7rem 1rem}
+  .gestes{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.6rem;align-items:center}
+  button{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;min-height:30px}
+  button:hover{border-color:var(--cyan)}
+  button[disabled]{opacity:.5;cursor:progress}
+  button.oui{color:var(--vert);border-color:var(--vert)} button.non{color:var(--rouge);border-color:var(--rouge)} button.non:hover{background:rgba(255,77,94,.14)}
+  button.fort,a.fort{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte)}
+  a.fort{display:inline-block;text-decoration:none;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--cyan)}
 
-  /* ── UNE DEMANDE / UN ACCÈS ───────────────────────────────────────────── */
-  .bloc { border:1px solid var(--line-soft); border-radius:13px; padding:13px 14px;
-          background:var(--surface-2); margin-bottom:10px; }
-  .bloc:last-child { margin-bottom:0; }
-  .qui { display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap; }
-  .qui .nom { font-family:"Chivo", system-ui, sans-serif; font-weight:800; font-size:.95rem; }
-  .qui .app { font-size:.72rem; color:var(--muted); }
-  .mot { font-size:.8rem; color:var(--ink-soft); font-style:italic; margin:.4rem 0 0; }
-
-  /* L'EMPREINTE EST BORNÉE EN LARGEUR, et c'est une correction, pas un détail :
-     étirée sur toute la page elle finissait alignée à droite, illisible au
-     moment précis où il faut la comparer signe à signe. */
-  .empreinte { font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums;
-               font-size:.86rem; font-weight:500; letter-spacing:.06em;
-               display:block; width:max-content; max-width:100%;
-               margin:.6rem auto; padding:.5rem .8rem; border-radius:9px;
-               background:color-mix(in srgb, var(--laiton) 9%, transparent);
-               border:1px solid color-mix(in srgb, var(--laiton) 24%, transparent);
-               color:var(--ink); text-align:center; overflow-wrap:anywhere; }
-  .empreinte.zoom { font-size:1.06rem; letter-spacing:.1em; padding:.7rem 1rem; }
-
-  .gestes { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.7rem; }
-  button { font:inherit; font-size:.78rem; font-weight:600; cursor:pointer;
-           padding:.42rem .85rem; border-radius:9px; border:1px solid var(--line);
-           background:var(--surface); color:var(--ink); }
-  button:hover { border-color:var(--laiton); }
-  button[disabled] { opacity:.5; cursor:progress; }
-  button.oui { color:var(--vert); border-color:color-mix(in srgb,var(--vert) 40%,var(--line)); }
-  button.non { color:var(--rouge); border-color:color-mix(in srgb,var(--rouge) 40%,var(--line)); }
-  button.fort { background:var(--laiton); color:#fff; border-color:var(--laiton); }
-
-  /* ── LE PROFILEUR ─────────────────────────────────────────────────────── */
-  .rang { display:flex; align-items:center; gap:.4rem; margin-top:.6rem; flex-wrap:wrap; }
-  .rang .lab { font-size:.66rem; letter-spacing:.1em; text-transform:uppercase;
-               color:var(--faint); font-weight:700; margin-right:.2rem; }
-  .cran { font-size:.72rem; font-weight:700; padding:.3rem .7rem; border-radius:999px;
-          border:1px solid var(--line); background:var(--surface); color:var(--muted); cursor:pointer; }
-  .cran[aria-pressed="true"] { color:#fff; border-color:transparent; }
-  .cran[data-p="guest"][aria-pressed="true"]  { background:var(--muted); }
-  .cran[data-p="user"][aria-pressed="true"]   { background:var(--vert); }
-  .cran[data-p="admin"][aria-pressed="true"]  { background:var(--violet); }
-  .etat-session { font-size:.68rem; color:var(--faint); margin-top:.5rem; }
-  /* Rattachement a un compte SecuBox et etat BBS (#1369). */
-  .compte { display:flex; align-items:center; gap:.4rem; margin-top:.6rem; flex-wrap:wrap; }
-  .compte .lab { font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
-  .compte select { font:inherit; font-size:.78rem; padding:.3rem .5rem; border-radius:8px;
-    border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:100%; }
-  .compte .lie { font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.76rem; font-weight:600; }
-  .bbs { display:inline-flex; align-items:center; gap:.35rem; font-size:.7rem; font-weight:600;
-    border-radius:999px; padding:.15rem .6rem; border:1px solid currentColor; }
-  .bbs.ok { color:var(--vert); } .bbs.att { color:var(--ambre); } .bbs.ko { color:var(--rouge); }
-  .qui input.choix { width:1rem; height:1rem; accent-color:var(--vert); align-self:center; }
-  .bbs-barre select { font:inherit; font-size:.78rem; padding:.3rem .5rem; border-radius:8px;
-    border:1px solid var(--line); background:var(--surface); color:var(--ink); }
-  .bbs-barre { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.8rem;
-    font-size:.74rem; color:var(--muted); }
-  .etat-session.jamais { color:var(--ambre); font-weight:600; }
-
-  /* ── PROFILEUR EN LISTE DENSE (#1381) ─────────────────────────────────── */
-  .outils { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin-bottom:12px; }
-  .filtres { display:inline-flex; flex-wrap:wrap; gap:4px; padding:3px; border-radius:11px;
-             background:var(--sunk); border:1px solid var(--line-soft); }
-  .filtres button { border:0; background:transparent; color:var(--muted); padding:.3rem .7rem;
-                    border-radius:8px; font-size:.74rem; }
-  .filtres button[aria-pressed="true"] { background:var(--surface); color:var(--ink);
-                    box-shadow:0 1px 2px rgba(0,0,0,.12); }
-  .filtres button .n { font-variant-numeric:tabular-nums; color:var(--faint); margin-left:.3rem; }
-  .lot { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-left:auto; font-size:.74rem; color:var(--muted); }
-  .lot select, .cpt select { font:inherit; font-size:.74rem; padding:.28rem .45rem; border-radius:8px;
-    border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:11rem; }
-  .liste { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
-  .ligne, .ligne-tete { display:grid; align-items:center; gap:6px 14px; padding:9px 12px;
-    grid-template-columns: 22px minmax(9rem,1.3fr) minmax(9rem,1fr) minmax(8.5rem,.9fr) minmax(8rem,.9fr) auto; }
-  .ligne-tete { background:var(--sunk); font-size:.62rem; letter-spacing:.12em; text-transform:uppercase;
-                color:var(--faint); font-weight:700; padding-top:7px; padding-bottom:7px; }
-  .ligne { border-top:1px solid var(--line-soft); background:var(--surface); }
-  .ligne:hover { background:var(--surface-2); }
-  .ligne .choix { width:1rem; height:1rem; accent-color:var(--laiton); margin:0; }
-  .ident { min-width:0; }
-  .ident .nom { font-family:"Chivo", system-ui, sans-serif; font-weight:800; font-size:.9rem; }
-  .ident .app { font-size:.72rem; color:var(--muted); margin-left:.35rem; }
-  .ident .emp { display:block; font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.66rem; color:var(--faint);
-                letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .cpt { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
-  .badge { display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; font-weight:700;
-           padding:.14rem .55rem; border-radius:999px; border:1px solid currentColor; white-space:nowrap; }
-  .badge.lie { color:var(--violet); } .badge.seul { color:var(--faint); border-style:dashed; }
-  .raccourci { font-size:.7rem; padding:.18rem .5rem; border-radius:999px; }
-  .seg { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
-  .seg .cran { border:0; border-radius:0; padding:.22rem .55rem; font-size:.68rem; }
-  .seg .cran + .cran { border-left:1px solid var(--line); }
-  .suit { font-size:.72rem; color:var(--muted); }
-  .suit b { color:var(--violet); }
-  .vu { font-size:.74rem; min-width:0; }
-  .vu { display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
-  .vu .quand { font-variant-numeric:tabular-nums; }
-  .vu .quand.jamais { color:var(--ambre); font-weight:700; }
-  .vu .ou { display:block; font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.64rem; color:var(--faint); }
-  .vu .bbs { font-size:.62rem; padding:.05rem .45rem; }
-  .act { display:flex; gap:6px; justify-content:flex-end; }
-  .act button { font-size:.7rem; padding:.28rem .6rem; }
-  .ligne.vide { display:block; color:var(--muted); font-size:.8rem; }
-  @media (max-width: 900px) {
-    .duo { grid-template-columns:minmax(0,1fr); }
-    .ligne-tete { display:none; }
-    .ligne { grid-template-columns:22px minmax(0,1fr) auto;
-             grid-template-areas:"c i a" ". k k" ". p v"; }
-    .ligne > .choix { grid-area:c; } .ident { grid-area:i; } .act { grid-area:a; }
-    .cpt { grid-area:k; } .prof { grid-area:p; } .vu { grid-area:v; align-items:flex-end; }
-    .lot { margin-left:0; }
+  /* ── LE PROFILEUR ── */
+  .cran{font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);cursor:pointer;min-height:26px}
+  .cran[aria-pressed="true"]{color:#06101f;border-color:transparent}
+  .cran[data-p="guest"][aria-pressed="true"]{background:var(--doux)}
+  .cran[data-p="user"][aria-pressed="true"]{background:var(--vert)}
+  .cran[data-p="admin"][aria-pressed="true"]{background:var(--violet)}
+  .bbs{display:inline-flex;align-items:center;gap:.35rem;font-size:.68rem;font-weight:600;border-radius:999px;padding:.1rem .55rem;border:1px solid currentColor}
+  .bbs.ok{color:var(--vert)} .bbs.att{color:var(--orange)} .bbs.ko{color:var(--rouge)}
+  .outils{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-bottom:10px}
+  .filtres{display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px;border-radius:11px;background:rgba(8,18,38,.7);border:1px solid var(--trait)}
+  .filtres button{border:0;background:transparent;color:var(--doux);padding:3px 10px;border-radius:8px;font-size:.72rem}
+  .filtres button[aria-pressed="true"]{background:rgba(41,182,246,.18);color:var(--texte)}
+  .filtres button .n{font-variant-numeric:tabular-nums;color:var(--faible);margin-left:.3rem}
+  .lot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-left:auto;font-size:.74rem;color:var(--doux);min-width:0}
+  select,input[type=text],input:not([type]),textarea{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;max-width:100%}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--cyan)}
+  input[type=checkbox]{accent-color:var(--cyan);width:15px;height:15px;margin:0}
+  .lot select,.cpt select{max-width:11rem;font-size:.74rem;padding:3px 7px}
+  .liste{border:1px solid var(--trait);border-radius:12px;overflow:hidden}
+  .ligne,.ligne-tete{display:grid;align-items:center;gap:6px 14px;padding:9px 12px;grid-template-columns:22px minmax(8rem,1.3fr) minmax(8rem,1fr) minmax(7.5rem,.9fr) minmax(7rem,.9fr) auto}
+  .ligne-tete{background:rgba(8,18,38,.7);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faible);font-weight:600;padding-top:7px;padding-bottom:7px}
+  .ligne{border-top:1px solid rgba(86,150,255,.12)}
+  .ligne:hover{background:rgba(41,182,246,.07)}
+  .ident{min-width:0}
+  .ident .nom{font-weight:700;font-size:.88rem;overflow-wrap:anywhere} .ident .appar{font-size:.72rem;color:var(--doux);margin-left:.35rem}
+  .ident .emp{display:block;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.66rem;color:var(--faible);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cpt{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0}
+  .badge{display:inline-flex;align-items:center;gap:.25rem;font-size:.7rem;font-weight:700;padding:.1rem .55rem;border-radius:999px;border:1px solid currentColor;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .badge.lie{color:var(--violet)} .badge.seul{color:var(--faible);border-style:dashed}
+  .raccourci{font-size:.68rem;padding:2px 8px;border-radius:999px;min-height:24px}
+  .seg{display:inline-flex;border:1px solid var(--trait2);border-radius:999px;overflow:hidden}
+  .seg .cran{border:0;border-radius:0;padding:3px 9px;font-size:.68rem}
+  .seg .cran+.cran{border-left:1px solid var(--trait2)}
+  .suit{font-size:.72rem;color:var(--doux)} .suit b{color:var(--violet)}
+  .vu{font-size:.74rem;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+  .vu .quand{font-variant-numeric:tabular-nums} .vu .quand.jamais{color:var(--orange);font-weight:700}
+  .vu .ou{display:block;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.64rem;color:var(--faible)}
+  .act{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;align-items:center;min-width:0}
+  .act button{font-size:.7rem;padding:3px 9px;min-height:26px}
+  .ligne.vide{display:block;color:var(--doux);font-size:.8rem}
+  @container a (max-width:900px){
+    .ligne-tete{display:none}
+    .ligne{grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:"c i a" ". k k" ". p v"}
+    .ligne>.choix{grid-area:c} .ident{grid-area:i} .ligne>.act{grid-area:a} .ligne>.cpt{grid-area:k} .prof{grid-area:p} .ligne>.vu{grid-area:v;align-items:flex-end}
+    .lot{margin-left:0}
   }
+  @container a (max-width:560px){
+    .ligne{grid-template-columns:22px minmax(0,1fr);grid-template-areas:"c i" ". a" ". k" ". p" ". v"}
+    .ligne>.act{justify-content:flex-start} .ligne>.vu{align-items:flex-start}
+  }
+  .vide{color:var(--faible);font-size:.8rem;padding:.5rem 0}
+  .err{color:var(--rouge);font-size:.76rem;margin:.5rem 0 0;overflow-wrap:anywhere}
 
-  .vide { color:var(--muted); font-size:.82rem; padding:.6rem 0; }
-  .err { color:var(--rouge); font-size:.78rem; margin-top:.6rem; }
+  /* ── LE VISAGE DU DEMANDEUR ── */
+  .etat{display:inline-flex;align-items:center;gap:.4rem;font-size:.74rem;font-weight:700;padding:3px 12px;border-radius:999px;border:1px solid var(--faible);background:rgba(159,179,214,.12);color:var(--doux)}
+  .etat.acceptee{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)}
+  .etat.en_attente{color:var(--orange);border-color:var(--orange);background:rgba(255,159,28,.12)}
+  .etat.refusee,.etat.expiree{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+  .champ{display:flex;flex-direction:column;gap:.25rem;margin-bottom:.6rem}
+  .champ label{font-size:.7rem;color:var(--doux)}
+  .champ input,.champ textarea{width:100%;font-size:.84rem;padding:.45rem .65rem}
+  .champ textarea{min-height:4.2rem;resize:vertical}
+  #moi .ligne{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:none} #moi .ligne>.act,#moi .ligne>.qui{grid-area:auto}
+  @container a (max-width:560px){#moi .ligne{grid-template-columns:minmax(0,1fr)} #moi .ligne>.act{justify-content:flex-start}}
+  #moi .qui{flex-direction:column;align-items:flex-start;gap:4px}
+  #moi .qui .nom{font-weight:700;font-size:.88rem}
+  #moi .qui .sous{margin:0}
+  #moi .liste{display:flex;flex-wrap:wrap;gap:6px;border:0;overflow:visible}
+  #moi section .liste:has(.ligne){display:block;border:1px solid var(--trait);overflow:hidden}
+  #moi .carte>.liste:first-of-type .ligne:first-child{border-top:0}
 
-  /* ── LE VISAGE DU DEMANDEUR ───────────────────────────────────────────── */
-  .etat { display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem;
-          font-weight:700; padding:.32rem .75rem; border-radius:999px;
-          border:1px solid var(--line); background:var(--surface); }
-  .etat.acceptee { color:var(--vert); border-color:color-mix(in srgb,var(--vert) 40%,var(--line)); }
-  .etat.en_attente { color:var(--ambre); border-color:color-mix(in srgb,var(--ambre) 40%,var(--line)); }
-  .etat.refusee, .etat.expiree { color:var(--rouge); border-color:color-mix(in srgb,var(--rouge) 40%,var(--line)); }
-  .champ { display:flex; flex-direction:column; gap:.25rem; margin-bottom:.7rem; }
-  .champ label { font-size:.7rem; letter-spacing:.08em; text-transform:uppercase;
-                 color:var(--faint); font-weight:700; }
-  .champ input, .champ textarea {
-    font:inherit; font-size:.86rem; padding:.5rem .65rem; border-radius:9px;
-    border:1px solid var(--line); background:var(--surface); color:var(--ink); }
-  .champ textarea { min-height:4.2rem; resize:vertical; }
-  /* L'onglet « Moi » (#1829) : des cartes empilées, une ligne par appareil. */
-  #moi { display:grid; gap:14px; margin-top:14px; }
-  #moi .ligne { grid-template-columns:minmax(0,1fr) auto; }
-  #moi .qui { flex-direction:column; align-items:flex-start; gap:4px; }
-  #moi .qui .nom { font-family:"Chivo", system-ui, sans-serif; font-weight:800; font-size:.9rem; }
-  #moi .qui .sous { margin:0; }
-  #moi .liste { display:flex; flex-wrap:wrap; gap:6px; border:0; overflow:visible; }
-  #moi .carte > .liste:first-of-type .ligne:first-child { border-top:0; }
-  #moi section .liste:has(.ligne) { display:block; border:1px solid var(--line); overflow:hidden; }
+  /* Confirmation intégrée à la page (jamais de dialogue natif) : barre collée en bas du cadre. */
+  #confirmation{position:sticky;bottom:8px;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:9px 12px;border-radius:10px;border:1px solid var(--rouge);background:rgba(20,10,18,.97);font-size:.8rem}
+  #confirmation .conf{flex:1 1 16rem;color:var(--texte);overflow-wrap:anywhere}
+  .tab{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:.78rem;font-variant-numeric:tabular-nums}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap;border-bottom:1px solid var(--trait)}
+  td{padding:6px 8px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap}
+  tbody tr:hover{background:rgba(41,182,246,.07)}
+  code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.74rem;overflow-wrap:anywhere}
+  .lien{width:100%;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem}
 </style>
+</head>
+<body>
 
-<script>
-  // Menu commun (#2613) : seulement hors mode encadre. try/catch : window.top peut lever entre origines.
-  document.addEventListener('DOMContentLoaded', function () {
-    var encadre = false;
-    try { encadre = new URLSearchParams(location.search).get('embed') || window.top !== window.self; } catch (e) { encadre = true; }
-    if (encadre) return;
-    document.body.classList.add('avec-menu');
-    var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/shared/sidebar-light.css'; document.head.appendChild(css);
-    var nav = document.createElement('nav'); nav.className = 'sidebar'; nav.id = 'sidebar'; document.body.insertBefore(nav, document.body.firstChild);
-    var js = document.createElement('script'); js.src = '/shared/sidebar.js'; document.body.appendChild(js);
-  });
-</script>
+<div class="cadre"><div class="app">
 
-<div class="cadre">
-
-  <header class="mast">
-    <div class="brand">
-      <div class="sceau">🎟️</div>
-      <div class="wm"><b>ACC<i>ÈS</i></b><span>Qui entre, et comment</span></div>
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="14.6" cy="12" r="1"/><path d="M5 3l7 2.2V21"/></svg>
+      <div><h1>Accès</h1><small>Qui entre, et comment</small></div>
     </div>
-    <span class="espace"></span>
-    <span class="maj" id="maj">…</span>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span><button id="rafraichir" type="button">⟳ Actualiser</button></div>
   </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
 
   <p class="lede" id="lede">
     Une invitation n'ouvre pas un compte : elle ouvre une <b>session</b> à un
@@ -339,8 +223,7 @@
     <div class="tuiles" id="tuiles"></div>
 
     <!-- MISE EN PAGE (#1381) : ce qui attend et l'invitation côte à côte, puis
-         le Profileur sur toute la largeur. En deux colonnes égales, le
-         Profileur étouffait, et la grille débordait de la page. -->
+         le Profileur sur toute la largeur. -->
     <div class="duo">
       <section class="carte">
         <div class="sec-h"><span class="k">Ce qui attend</span><div class="rule"></div><span>⏳</span></div>
@@ -363,18 +246,16 @@
       <div id="profils"><p class="vide">Chargement…</p></div>
     </section>
 
-      <!-- INVENTAIRE COMPLET (#1313). Le profileur au-dessus sert a DECIDER :
-           il ne montre que ce qui attend et ce qui vit. Cette section sert a
-           AUDITER, et les deux besoins ne se recouvrent pas — un appareil
-           refuse ou expire n'apparait nulle part ailleurs, alors que « a qui
-           avons-nous dit non, et quand » est une question legitime. -->
-      <section class="carte" id="audit-carte">
-        <div class="sec-h"><span class="k">Inventaire</span><div class="rule"></div><span>📋</span></div>
-        <h2>Tous les accès, tous les états</h2>
-        <p class="sous">Ce que le profileur ne montre pas : les refus, les
-          expirations, et ce que chaque profil autorise réellement.</p>
-        <div id="audit"><p class="vide">Chargement…</p></div>
-      </section>
+    <!-- INVENTAIRE COMPLET (#1313). Le profileur au-dessus sert a DECIDER ; cette
+         section sert a AUDITER : un appareil refuse ou expire n'apparait nulle
+         part ailleurs. -->
+    <section class="carte" id="audit-carte">
+      <div class="sec-h"><span class="k">Inventaire</span><div class="rule"></div><span>📋</span></div>
+      <h2>Tous les accès, tous les états</h2>
+      <p class="sous">Ce que le profileur ne montre pas : les refus, les
+        expirations, et ce que chaque profil autorise réellement.</p>
+      <div id="audit"><p class="vide">Chargement…</p></div>
+    </section>
   </div>
 
   <!-- DEMANDEUR / INCONNU -->
@@ -386,12 +267,33 @@
   <!-- MOI (#1829) : Accès est l'écran unique. Un appareil admis, session
        ouverte, y retrouve ses appareils, ses services, « Administrer la box ». -->
   <div id="moi" hidden></div>
-</div>
+
+  <div id="confirmation" role="alertdialog" aria-live="assertive" hidden></div>
+</div></div>
+
+<script>
+  // Menu commun (#2613) : seulement hors mode encadre (et hors démonstration). try/catch : window.top peut lever entre origines.
+  document.addEventListener('DOMContentLoaded', function () {
+    var encadre = false;
+    try { encadre = new URLSearchParams(location.search).get('embed') || window.top !== window.self; } catch (e) { encadre = true; }
+    if (encadre) { document.body.classList.add('emb'); return; }
+    if (new URLSearchParams(location.search).get('demo')) return;
+    document.body.classList.add('avec-menu');
+    var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/shared/sidebar-light.css'; document.head.appendChild(css);
+    var nav = document.createElement('nav'); nav.className = 'sidebar'; nav.id = 'sidebar'; document.body.insertBefore(nav, document.body.firstChild);
+    var js = document.createElement('script'); js.src = '/shared/sidebar.js'; document.body.appendChild(js);
+  });
+</script>
 
 <script type="module">
 import { apercuInvitation, rejoins } from './appareil.js';
 import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, suitLeLien,
          oublie, jetonGarde, renouvelle } from './appareil.js';
+
+const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+const INERTE = 'Démonstration : action inerte, rien n’est écrit ni signé.';
+let ATTENTE = false;   // confirmation ouverte : aucune actualisation tant qu'elle l'est
+let SAISIE = false;    // champ en cours de saisie dans « vue » : l'actualisation ne doit pas l'effacer
 
 // LA DESTINATION DU PARCOURS. Ce module n'ouvre pas « un accès à la box » : il
 // fait entrer quelqu'un dans SON SBX OS. La session posée vaut pour tous les
@@ -407,7 +309,7 @@ import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, s
 // Le repli reste relatif parce qu'il est juste sur admin.gk2, là où SBX OS
 // est réellement servi ; ailleurs, seule la valeur du serveur vaut.
 let DESTINATION = '/sbxos/';
-const _destinationPrete = fetch(API + '/invitation/url', { credentials: 'same-origin' })
+const _destinationPrete = (DEMO ? Promise.reject(new Error('démonstration')) : fetch(API + '/invitation/url', { credentials: 'same-origin' }))
   .then(r => (r.ok && (r.headers.get('content-type') || '').indexOf('json') >= 0)
     ? r.json() : null)
   .then(j => { if (j && j.sbxos) DESTINATION = j.sbxos; })
@@ -433,6 +335,22 @@ function bouton(txt, cls, action) {
   };
   return b;
 }
+// Confirmation DANS la page (jamais de dialogue natif) : barre collée en bas du cadre, Promise<boolean>.
+let _finConfirmation = null;
+function confirmer(question, oui) {
+  if (_finConfirmation) _finConfirmation(false);
+  return new Promise(resolve => {
+    const zone = $('confirmation');
+    const y = el('button', 'non', oui || 'Confirmer'), n = el('button', null, 'Annuler');
+    y.type = n.type = 'button';
+    const fin = v => { _finConfirmation = null; ATTENTE = false; zone.hidden = true; zone.replaceChildren(); annoncer(); resolve(v); };
+    _finConfirmation = fin;
+    y.onclick = () => fin(true); n.onclick = () => fin(false);
+    zone.replaceChildren(el('span', 'conf', question), y, n);
+    zone.hidden = false; ATTENTE = true; annoncer();
+    zone.scrollIntoView({ block: 'nearest' }); n.focus();
+  });
+}
 function alerte(txt) {
   const p = $('vue') || document.body;
   const n = el('p', 'err', txt);
@@ -441,6 +359,10 @@ function alerte(txt) {
 }
 
 async function api(chemin, options) {
+  if (DEMO) {
+    if (options && options.method && options.method !== 'GET') throw new Error(INERTE);
+    return demoGet(chemin);
+  }
   const r = await fetch(API + chemin, Object.assign({ credentials: 'same-origin' }, options));
   if (!r.ok) {
     const j = await r.json().catch(() => ({}));
@@ -455,9 +377,32 @@ async function api(chemin, options) {
   if (ct.indexOf('json') < 0) throw new Error('route indisponible sur cet hôte');
   return r.json();
 }
-const poste = (chemin, corps) => api(chemin, {
+const poste = (chemin, corps) => DEMO ? Promise.reject(new Error(INERTE)) : api(chemin, {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(corps) });
+
+// ── Données de démonstration (adresses RFC 5737, noms fictifs) ────────────────
+function demoGet(chemin) {
+  const t = Math.floor(Date.now() / 1000);
+  const admis = [
+    { did: 'did:sbx:dev:z6MkDemoA', nom: 'cedre83', appareil: 'Firefox · Android', empreinte: '4F2A 91C8 03DE 7B65', compte: 'cedre83', compte_appareil: 'cedre83', profil: 'admin', derniere_connexion: t - 600, rattache_le: t - 86400 * 5 },
+    { did: 'did:sbx:dev:z6MkDemoB', nom: 'ana', appareil: 'Chromium · Linux', empreinte: '9B07 D2E4 5A1C 38F0', compte: null, compte_appareil: 'ana', profil: 'user', derniere_connexion: t - 86400 * 2 },
+    { did: 'did:sbx:dev:z6MkDemoC', nom: 'Tablette atelier', appareil: 'Safari · iPadOS', empreinte: '17C3 6E8A B4D9 0F52', compte: null, compte_appareil: 'atelier', profil: 'guest' },
+  ];
+  const P = chemin.split('?')[0];
+  if (P === '/file') return { en_attente: [{ did: 'did:sbx:dev:z6MkDemoD', nom: 'Visiteur de démo', appareil: 'Firefox · Linux', message: 'Bonjour, je rejoins l’atelier.', empreinte: 'E5A1 7C09 B3F6 24D8' }] };
+  if (P === '/profils') return { admis, profils: ['guest', 'user', 'admin'], compte_par_defaut: 'ana',
+    comptes: [{ handle: 'cedre83', role: 'admin' }, { handle: 'ana', role: 'user' }, { handle: 'atelier', role: 'guest' }],
+    bbs: { cedre83: { existe: true, source: 'secubox', role: 'admin' }, ana: { existe: true, source: 'local', role: 'user' } } };
+  if (P === '/invitation/url') return { url: 'https://acces.example.org/acces/', sbxos: '/sbxos/' };
+  if (P === '/profils/inventaire') return { resume: { total: 4, par_etat: { acceptee: 3, en_attente: 1 } }, profils: ['guest', 'user', 'admin'],
+    privileges: { guest: { effectif: false, nombre_routes: 0, remarque: 'Entre et voit ce qui est public.', routes: [] },
+      user: { effectif: false, nombre_routes: 0, remarque: 'N’accorde aujourd’hui rien de plus que guest.', routes: [] },
+      admin: { effectif: true, nombre_routes: 2, routes: [{ methodes: ['GET'], chemin: '/api/v1/acces/file', resume: 'file des demandes' }, { methodes: ['POST'], chemin: '/api/v1/acces/profils/revoquer', resume: 'révoquer un accès' }] } },
+    appareils: admis.map(a => Object.assign({ etat: 'acceptee', demandee_le: t - 86400 * 8, traitee_le: t - 86400 * 7, traitee_par: 'cedre83' }, a))
+      .concat([{ did: 'did:sbx:dev:z6MkDemoD', nom: 'Visiteur de démo', appareil: 'Firefox · Linux', etat: 'en_attente', demandee_le: t - 900 }]) };
+  throw new Error('HTTP 404');
+}
 
 // ── VISAGE ADMIN ────────────────────────────────────────────────────────────
 
@@ -466,16 +411,20 @@ function tuiles(attente, admis) {
   // accordés dont personne n'a jamais rien fait.
   const jamais = admis.filter(a => !(a.derniere_connexion || a.session_le)).length;
   const items = [
-    ['⏳ En attente', attente.length, 'demandes à trancher', 'k-ambre'],
-    ['🎟️ Accès accordés', admis.length, 'appareils admis', 'k-vert'],
-    ['🚪 Jamais entré', jamais, 'admis sans session ouverte', jamais ? 'k-ambre' : ''],
-    ['👑 Administrateurs', admis.filter(a => a.profil === 'admin').length,
-     'profil le plus doté', 'k-violet'],
+    ['⏳ En attente', attente.length, 'demandes à trancher', attente.length ? 'att' : '',
+     'Demandes d’appareils inconnus en attente de décision : comparez l’empreinte, puis admettez ou refusez.'],
+    ['🎟️ Accès accordés', admis.length, 'appareils admis', 'ok',
+     'Appareils admis, c’est-à-dire dont l’empreinte a été validée par un administrateur.'],
+    ['🚪 Jamais entré', jamais, 'admis sans session ouverte', jamais ? 'att' : '',
+     'Accès accordés dont personne n’a jamais rien fait : aucune connexion ni session enregistrée.'],
+    ['👑 Administrateurs', admis.filter(a => a.profil === 'admin').length, 'profil propre « admin »', 'violet',
+     'Appareils admis avec le profil admin propre. Un appareil rattaché à un compte suit le rôle de ce compte et n’est pas compté ici.'],
   ];
   $('tuiles').textContent = '';
-  for (const [lib, val, note, k] of items) {
+  for (const [lib, val, note, k, def] of items) {
     const t = el('div', 'tuile ' + (k || ''));
-    t.append(el('div', 'lib', lib), el('div', 'val', String(val)), el('div', 'note', note));
+    t.title = def;
+    t.append(el('span', 'l', lib), el('span', 'v', String(val)), el('span', 's', note));
     $('tuiles').appendChild(t);
   }
 }
@@ -487,7 +436,7 @@ function rendFile(liste) {
   for (const d of liste) {
     const b = el('div', 'bloc');
     const q = el('div', 'qui');
-    q.append(el('span', 'nom', d.nom || '(sans nom)'), el('span', 'app', d.appareil || 'appareil inconnu'));
+    q.append(el('span', 'nom', d.nom || '(sans nom)'), el('span', 'appar', d.appareil || 'appareil inconnu'));
     b.appendChild(q);
     if (d.message) b.appendChild(el('div', 'mot', '« ' + d.message + ' »'));
 
@@ -558,8 +507,8 @@ function depuis(ts) {
 
 function rattache(did, compte, avant) {
   const quoi = compte ? 'rattacher cet appareil à « ' + compte + ' »' : 'le détacher (retour à son propre compte, profil invité)';
-  if (!confirm('Voulez-vous ' + quoi + ' ? Ses sessions ouvertes seront fermées.')) return Promise.resolve(false);
-  return poste('/profils/rattacher', { did, compte }).then(() => true);
+  return confirmer('Voulez-vous ' + quoi + ' ? Ses sessions ouvertes seront fermées.')
+    .then(oui => oui ? poste('/profils/rattacher', { did, compte }).then(() => true) : false);
 }
 
 function rendProfils(admis, profils, p) {
@@ -603,7 +552,7 @@ function rendProfils(admis, profils, p) {
   const lancer = bouton('Rattacher la sélection', 'oui', async () => {
     const dids = [...c.querySelectorAll('input.choix:checked')].map(i => i.value);
     if (!dids.length) throw new Error('Cochez au moins un appareil.');
-    if (!confirm('Rattacher ' + dids.length + ' appareil(s) à « ' + cible.value + ' » ? Leurs sessions ouvertes seront fermées.')) return;
+    if (!(await confirmer('Rattacher ' + dids.length + ' appareil(s) à « ' + cible.value + ' » ? Leurs sessions ouvertes seront fermées.'))) return;
     for (const did of dids) await poste('/profils/rattacher', { did, compte: cible.value });
   });
   lot.append(compteur, el('span', null, '→'), cible, lancer,
@@ -639,7 +588,7 @@ function rendProfils(admis, profils, p) {
     coche.setAttribute('aria-label', 'Choisir ' + (a.nom || 'cet appareil'));
 
     const ident = el('div', 'ident');
-    ident.append(el('span', 'nom', a.nom || '(sans nom)'), el('span', 'app', a.appareil || ''));
+    ident.append(el('span', 'nom', a.nom || '(sans nom)'), el('span', 'appar', a.appareil || ''));
     const emp = el('span', 'emp', a.empreinte || '');
     emp.title = 'Empreinte : ' + (a.empreinte || '—');
     ident.appendChild(emp);
@@ -717,7 +666,7 @@ function rendProfils(admis, profils, p) {
 
     const act = el('div', 'act');
     act.appendChild(bouton('Révoquer', 'non', async () => {
-      if (!confirm('Révoquer l’accès de « ' + (a.nom || a.did) + ' » ? Ses sessions seront fermées.')) return;
+      if (!(await confirmer('Révoquer l’accès de « ' + (a.nom || a.did) + ' » ? Ses sessions seront fermées.'))) return;
       await poste('/profils/revoquer', { did: a.did });
     }));
 
@@ -771,7 +720,8 @@ function rendInviter(j) {
   const d = el('div', 'inviter');
   const img = document.createElement('img');
   img.alt = "QR de l'adresse du formulaire de demande d'accès";
-  img.src = API + '/invitation/qr';
+  if (!DEMO) img.src = API + '/invitation/qr';
+  else img.hidden = true;
   img.loading = 'lazy';
   img.onerror = () => img.remove();   // pas de cadre vide : l'adresse suffit
   const t = el('div', 't');
@@ -1071,6 +1021,7 @@ async function rendInvitation(code) {
   const c = $('vue');
   c.textContent = '';
   $('vk').textContent = 'Invitation';
+  pastille('INVITATION', 'actif att');
   let a;
   try {
     a = await apercuInvitation(code);
@@ -1113,18 +1064,22 @@ async function rendInvitation(code) {
 }
 
 async function rafraichis() {
-  if (_invitation) return rendInvitation(_invitation);
+  SAISIE = false;
+  if (_invitation && !DEMO) return rendInvitation(_invitation);
   // Même règle qu'en carlette : l'ouverture ne dépend pas du visage affiché.
   // LE LIEN PASSE EN PREMIER : il vient d'être cliqué, et il est à usage
   // unique — le consommer plus tard, ou pas du tout, le gaspillerait.
-  try {
-    if (await suitLeLien()) { location.href = DESTINATION; return; }
-  } catch (e) { return panne(e); }
+  // En démonstration : ni lecture du lien, ni signature, ni ouverture de session.
+  if (!DEMO) {
+    try {
+      if (await suitLeLien()) { location.href = DESTINATION; return; }
+    } catch (e) { return panne(e); }
 
-  try {
-    const ouvert = await ouvreSiAdmis();
-    if (ouvert) { await _destinationPrete; location.href = DESTINATION; return; }
-  } catch (e) { /* signature refusée : on affiche, on ne boucle pas */ }
+    try {
+      const ouvert = await ouvreSiAdmis();
+      if (ouvert) { await _destinationPrete; location.href = DESTINATION; return; }
+    } catch (e) { /* signature refusée : on affiche, on ne boucle pas */ }
+  }
 
   try {
     const [f, p, u] = await Promise.all([
@@ -1139,6 +1094,7 @@ async function rafraichis() {
       .catch(() => { $('audit-carte').hidden = true; });
     $('admin').hidden = false;
     $('visiteur').hidden = true;
+    pastille('ADMINISTRATION', 'actif');
     tuiles(f.en_attente, p.admis);
     rendFile(f.en_attente);
     rendProfils(p.admis, p.profils, p);
@@ -1152,6 +1108,9 @@ async function rafraichis() {
     // visiteur. On montre ce que CET appareil peut faire, et d'abord demander.
     const v = jetonGarde() ? await suivi().catch(() => null) : null;
     if (v) await rendMienne(v); else await rendFormulaire();
+    const PV = { en_attente: ['EN ATTENTE', 'actif att'], acceptee: ['ADMIS', 'actif'], refusee: ['REFUSÉ', 'actif hors'], expiree: ['EXPIRÉ', 'actif hors'] };
+    const pv = v && PV[v.etat];
+    pastille(pv ? pv[0] : 'NON ADMIS', pv ? pv[1] : 'actif neutre');
     // « Moi » ne se redessine PAS au tour de 30 s : un code OTP ou un nom en
     // cours de saisie y serait effacé. Il se redessine après chaque geste.
     if (v && v.etat === 'acceptee' && !$('moi').dataset.rendu) {
@@ -1161,7 +1120,19 @@ async function rafraichis() {
   }
   $('maj').textContent = 'relevé à ' + new Date().toLocaleTimeString('fr-FR',
     { hour: '2-digit', minute: '2-digit' });
+  annoncer();
 }
+
+// Pastille d'état de l'en-tête, démonstration annoncée, hauteur annoncée à l'hôte (iframes).
+function pastille(txt, cls) { const e = $('etat'); e.className = cls; e.textContent = txt; }
+function annoncer() {
+  $('demo').hidden = !DEMO;
+  try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'acces' }, location.origin); } catch (e) { /* hors iframe */ }
+}
+if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+addEventListener('resize', annoncer);
+$('vue').addEventListener('input', () => { SAISIE = true; });
+$('profils').addEventListener('change', () => { SAISIE = true; });
 
 // UN SEUL ENDROIT RATTRAPE TOUT. Sans ce filet, la moindre erreur laissait la
 // page muette — et une page muette se lit comme un service mort, alors que la
@@ -1170,6 +1141,8 @@ function panne(e) {
   $('admin').hidden = true;
   $('visiteur').hidden = false;
   $('vk').textContent = 'Indisponible';
+  pastille('INDISPONIBLE', 'actif hors');
+  annoncer();
   const c = $('vue');
   c.textContent = '';
   c.appendChild(el('span', 'etat refusee', '⚠ Accès indisponible'));
@@ -1189,11 +1162,16 @@ function capacites() {
   }
 }
 
-function tour() {
-  Promise.resolve().then(capacites).then(rafraichis).catch(panne);
+function tour(force) {
+  // Jamais d'actualisation pendant une confirmation ouverte ni une saisie en cours (sauf geste explicite).
+  if (!force && (ATTENTE || SAISIE)) return;
+  Promise.resolve().then(DEMO ? () => {} : capacites).then(rafraichis).catch(panne);
 }
-tour();
+$('rafraichir').onclick = () => { if (!ATTENTE) tour(true); };
+tour(true);
 // Trente secondes : assez pour que l'attente paraisse vivante — côté admin une
 // demande qui arrive, côté demandeur une validation — sans marteler la box.
-setInterval(tour, 30000);
+if (!DEMO) setInterval(tour, 30000);
 </script>
+</body>
+</html>

@@ -1,3 +1,14 @@
+secubox-auth (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pages /identite/ (Identity Manager) et /acces/ au profil Aurora (ref #2685) : page autonome, en-tete d'etat, tuiles a infobulle de definition, mesure absente = « — », bandeau « session requise », ?demo=1 (donnees fictives, bandeau orange, AUCUNE requete d'ecriture ni signature), ?embed=1, 420 px sans debordement, hauteur annoncee a l'hote (sbxVue, onglet identite / acces). Meme contrat qu'avant : memes routes, methodes, corps et en-tetes (identite : seulement Content-Type, comme l'ancienne page).
+  * Plus aucun dialogue natif : les trois confirm() de /acces/ (rattacher, rattachement groupe, revoquer) et les deux de /identite/ (reserver un salon, archiver une communaute) deviennent des confirmations dans la page ; aucune actualisation pendant une confirmation ou une saisie.
+  * /identite/ : plus aucun innerHTML ; un gabarit interne ne pose les donnees que comme texte ou attributs (lien et QR verifies : http(s) et data:image seulement). Aucun secret affiche de plus qu'avant.
+  * Navigation commune inchangee : ouverte directement, barre du haut et menu de gauche ; encadree (iframe /i/acces/) ou ?embed=1, sans menu (en demonstration aussi sans menu). /identite/ : le conteneur s'appelle desormais .cadre (et non .wrap) ; assertions de test_identite_navigation_2631 mises a jour en consequence.
+  * Non repris : l'actualisation periodique de /identite/ (elle n'en avait pas, bouton Actualiser seulement) ; /sbxid/ (simple renvoi), acces/micro.html et acces/maquette.html non touches.
+  * 31 tests ajoutes (statiques + navigateur, API simulee).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 14:00:00 +0200
+
 secubox-auth (1.6.2-1~bookworm1) bookworm; urgency=medium
 
   * /identite/ : barre du haut et menu de gauche communs hors mode encadre
