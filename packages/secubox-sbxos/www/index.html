@@ -21,6 +21,13 @@
 
   MOBILE D'ABORD, sans point de rupture à maintenir : le damier est une grille
   `auto-fill`, la barre du bas est fixe, et le théâtre occupe tout l'écran.
+
+  PROFIL AURORA (#2647, .claude/AURORA-REFERENCE.md) : jetons, cadre, bandeaux et
+  tuiles d'Aurora, dans ui/styles.css. Ce qui reste hors d'une « page autonome »
+  est voulu : SBX OS est une PWA hors ligne dont la coquille (modules ES, composants
+  du damier, service worker) est mise en cache fichier par fichier.
+  ?embed=1 : sans bandeau de marque ; ?demo=1 : bureau fictif, rien n'est lu ni
+  écrit (ni réseau, ni stockage local, ni service worker).
 -->
 <html lang="fr">
 <head>
@@ -48,15 +55,26 @@
 </script>
 
 <header class="mast">
-  <span class="marque">▲ SBX&nbsp;OS</span>
+  <span class="marque">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg>
+    <span class="marque-txt"><b>SBX&nbsp;OS</b><small>Le Hall qui tient dans la poche</small></span>
+  </span>
   <span class="bonjour" id="bonjour"></span>
   <span class="profil" id="profil" hidden></span>
 </header>
 
-<main id="scene">
+<div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — bureau fictif, rien n'est lu ni enregistré</div>
+
+<main id="scene" class="cadre"><div class="app">
   <!-- HALL : le damier -->
   <section class="ecran" id="ecran-hall">
     <h2 class="titre-ecran" id="titre-hall">Votre Hall</h2>
+    <section class="tuiles" aria-label="Indicateurs du Hall">
+      <div class="tuile" title="Identité sous laquelle ce bureau est composé : invité, usager ou administrateur. Elle décide des modules que la box autorise."><span class="l">Profil</span><span class="v" id="tProfil">—</span><span class="s">décidé par la box</span></div>
+      <div class="tuile" title="Modules que la box autorise pour ce profil (la Mine). Masquer un module le retire du Hall sans retirer le droit."><span class="l">Modules autorisés</span><span class="v" id="tAutorises">—</span><span class="s">selon le profil</span></div>
+      <div class="tuile" title="Modules effectivement montrés dans le damier, une fois retirés ceux que vous avez masqués sur cet appareil."><span class="l">Affichés</span><span class="v" id="tAffiches">—</span><span class="s">dans le Hall</span></div>
+      <div class="tuile" title="Modules mis en favori sur cet appareil (appui long sur une vignette). Ce choix ne quitte jamais l'appareil."><span class="l">Favoris</span><span class="v" id="tFavoris">—</span><span class="s">sur cet appareil</span></div>
+    </section>
     <sbx-damier id="damier" rangeable>
       <span slot="vide">Votre bureau se compose… Si rien n'apparaît, c'est que
       la box n'est pas joignable et qu'aucun manifeste n'a encore été mémorisé.</span>
@@ -134,7 +152,7 @@
             allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
     <p class="note" id="theatre-note"></p>
   </section>
-</main>
+</div></main>
 
 <nav class="barre" id="barre">
   <button data-ecran="hall"     class="on"><span>🏠</span>Hall</button>
@@ -151,8 +169,37 @@ import './ui/sbx-damier.js';
 
 const $ = (id) => document.getElementById(id);
 
-const mine = new Mine({ source: './mine/manifeste.json' });
-const hall = new Hall();
+const DEMO = !!new URLSearchParams(location.search).get('demo');
+
+// En démonstration, rien ne touche le stockage de l'appareil : une mémoire jetable remplace localStorage.
+function memoire() {
+  const m = new Map();
+  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); } };
+}
+const mine = new Mine(DEMO ? { source: './mine/manifeste.json', stockage: memoire() } : { source: './mine/manifeste.json' });
+const hall = new Hall(DEMO ? { stockage: memoire() } : {});
+
+// Bureau fictif (adresses de documentation, aucun appel réseau).
+const MANIFESTE_DEMO = {
+  version: 1, nom: 'SBX OS', profil: 'user', invitation: null,
+  carlettes: [
+    { id: 'cinema', titre: 'Cinéma', icone: '🎬', couleur: '#7c3aed', url: 'https://cinema.example.org/', profil_min: 'user', description: 'Salle de projection (démonstration).' },
+    { id: 'radio', titre: 'Radio', icone: '📻', couleur: '#f97316', url: 'https://radio.example.org/', profil_min: 'guest', description: 'Direct et podcasts (démonstration).' },
+    { id: 'billets', titre: 'Billets', icone: '📰', couleur: '#0ea5e9', url: 'https://billets.example.org/', profil_min: 'guest', description: 'Fil de billets (démonstration).' },
+    { id: 'cloud', titre: 'Cloud', icone: '☁️', couleur: '#38bdf8', url: 'https://cloud.example.org/', profil_min: 'user', description: 'Photos et documents (démonstration).' },
+    { id: 'forum', titre: 'Forum', icone: '💬', couleur: '#a855f7', url: 'https://forum.example.org/', profil_min: 'user' },
+    { id: 'reglages', titre: 'Réglages', icone: '⚙️', couleur: '#64748b', theatre: 'reglages', profil_min: 'guest' },
+  ],
+};
+
+// Hauteur annoncée à l'hôte quand la page est encadrée (même origine uniquement).
+function annoncer() {
+  try {
+    parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'sbxos' }, location.origin);
+  } catch (e) { /* hors iframe */ }
+}
+if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+addEventListener('resize', annoncer);
 
 appliqueTheme(hall.theme);
 
@@ -176,6 +223,8 @@ function appliqueDamier() {
   }
 }
 
+let sessionRequise = false;
+
 function compose() {
   const autorisees = mine.carlettesAutorisees();
   const visibles = hall.compose(autorisees);
@@ -194,9 +243,21 @@ function compose() {
   $('bonjour').textContent = p === 'guest'
     ? 'Bienvenue' : 'Votre Hall est prêt.';
 
-  $('note').textContent = autorisees.length === 0
-    ? "Aucun module autorisé pour ce profil."
-    : '';
+  // Tuiles : mesure absente = « — » (pas de manifeste, ni mémorisé ni reçu).
+  const connu = !!mine.manifeste;
+  $('tProfil').textContent = connu ? p : '—';
+  $('tAutorises').textContent = connu ? autorisees.length : '—';
+  $('tAffiches').textContent = connu ? visibles.length : '—';
+  $('tFavoris').textContent = connu ? visibles.filter(c => c.favori).length : '—';
+
+  // Le message « session requise » n'est pas écrasé par une recomposition qui arrive après lui.
+  if (!sessionRequise) {
+    $('note').className = 'note';
+    $('note').textContent = autorisees.length === 0 && connu
+      ? "Aucun module autorisé pour ce profil."
+      : '';
+  }
+  annoncer();
 }
 
 // ── APERÇUS VIVANTS ─────────────────────────────────────────────────────────
@@ -207,7 +268,7 @@ function compose() {
 //
 // Les trois damiers sont servis : celui du Hall, celui des favoris, et celui des
 // réglages. Une vignette qui dit ce qu'elle contient le dit partout où elle est.
-suitLesApercus(
+if (!DEMO) suitLesApercus(
   () => mine.carlettesAutorisees(),
   (id, texte) => {
     for (const d of ['damier', 'damier-favoris', 'damier-modules']) {
@@ -230,6 +291,7 @@ function montre(nom) {
     b.classList.toggle('on', b.dataset.ecran === nom);
   }
   window.scrollTo({ top: 0, behavior: 'instant' });
+  annoncer();
 }
 
 $('barre').addEventListener('click', (ev) => {
@@ -252,7 +314,8 @@ function entre(c) {
   lieuCourant = c;
   $('theatre-titre').textContent = c.titre;
   $('theatre-cadre').title = c.titre;
-  $('theatre-cadre').src = c.url;
+  // En démonstration, aucun lieu n'est chargé : l'adresse est fictive.
+  if (!DEMO) $('theatre-cadre').src = c.url;
   $('theatre-fav').textContent = hall.estFavori(c.id) ? '★' : '☆';
   // CERTAINS LIEUX NE S'ENCADRENT PAS, et il faut le dire plutôt que d'afficher
   // un cadre vide : Nextcloud et Gitea posent des cookies `SameSite=Lax`, que
@@ -276,7 +339,8 @@ function entre(c) {
   // Un LIEN PERMANENT résout les deux : il sert quand le cadre a échoué, et il
   // sert aussi à qui veut simplement une vraie fenêtre. Il n'affirme rien
   // qu'on ne sache.
-  $('theatre-note').textContent = '';
+  $('theatre-note').textContent = DEMO ? 'Démonstration : ce lieu est fictif et n\'est pas chargé.' : '';
+  if (DEMO) return;
   const onglet = document.createElement('a');
   onglet.href = c.url;
   onglet.target = '_blank';
@@ -397,7 +461,11 @@ async function composeLeBureau(profil) {
   compose();
 }
 
-entreSansMotDePasse().then((r) => {
+if (DEMO) {
+  $('demo').hidden = false;
+  mine.adopte(MANIFESTE_DEMO);
+  compose();
+} else entreSansMotDePasse().then((r) => {
   if (r === 'ouverte' || r === 'deja') {
     if (r === 'ouverte') $('note').textContent = 'Session ouverte sur cet appareil.';
     return composeLeBureau('user');
@@ -405,9 +473,11 @@ entreSansMotDePasse().then((r) => {
   if (r === 'aucun') {
     // ON MONTRE LA PORTE PLUTÔT QU'UN BUREAU VIDE. « Rien n'apparaît » sans
     // rien proposer laisse croire à une panne ; ici, il manque juste un accès.
+    sessionRequise = true;
     $('note').textContent = '';
+    $('note').className = 'info';
     const p = document.createElement('span');
-    p.textContent = "Cet appareil n'a pas encore d'accès. ";
+    p.textContent = "Aucune mesure : session requise. Cet appareil n'a pas encore d'accès. ";
     const a = document.createElement('a');
     a.href = '/acces/';
     a.textContent = 'En demander un';
@@ -415,7 +485,7 @@ entreSansMotDePasse().then((r) => {
   }
 }).catch(() => { /* l'ouverture est un confort : son échec n'arrête rien */ });
 
-composeLeBureau(mine.profil || 'guest').then(() => {
+if (!DEMO) composeLeBureau(mine.profil || 'guest').then(() => {
   if (mine.manifeste?.invitation === 'en_attente') mine.sondeInvitation();
 }).catch(() => {
   $('note').textContent = mine.manifeste
@@ -472,7 +542,7 @@ async function entreSansMotDePasse() {
 }
 
 // ── Service worker ──────────────────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !DEMO) {
   // Après le chargement : l'enregistrer plus tôt entre en concurrence avec les
   // requêtes qui ouvrent l'application.
   addEventListener('load', () => {

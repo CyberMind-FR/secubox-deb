@@ -7,28 +7,40 @@
    TROIS ÉTATS DE THÈME, pas deux. Le réglage « automatique » ne pose AUCUN
    attribut : c'est `prefers-color-scheme` qui tranche. Un choix explicite pose
    `data-theme`, et doit gagner dans les DEUX sens — d'où la redéfinition sous
-   `[data-theme]` en plus de la requête média. */
+   `[data-theme]` en plus de la requête média.
+
+   PROFIL AURORA (#2647, .claude/AURORA-REFERENCE.md) : le thème sombre porte les
+   jetons d'Aurora (fond, traits, texte, cyan) et son cadre dégradé ; le thème
+   clair, propre à SBX OS, garde sa palette et un cadre uni. */
 
 :root {
-  --fond:#0f172a; --carte:#172033; --bord:rgba(148,163,184,.20);
-  --encre:#e8eefb; --encre-terne:#94a3b8;
-  --accent:#38bdf8; --alerte:#ef4444;
+  --fond:#060d1b; --carte:#0d1a33; --bord:rgba(86,150,255,.22); --trait2:rgba(86,150,255,.38);
+  --encre:#eaf1ff; --encre-terne:#9fb3d6; --faible:#6f84a8;
+  --accent:#29b6f6; --alerte:#ff4d5e; --orange:#ff9f1c; --vert:#2ecc71;
+  --app-fond:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
+  --tuile-fond:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));
+  --ciel:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%);
   --min:5.5rem; --ecart:.7rem;
   --barre-h:3.6rem;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0;
-    --encre:#0f172a; --encre-terne:#64748b; --accent:#0284c7;
+    --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0; --trait2:#cbd5e1;
+    --encre:#0f172a; --encre-terne:#64748b; --faible:#64748b; --accent:#0284c7;
+    --app-fond:#fff; --tuile-fond:#f1f5f9; --ciel:none;
   }
 }
 :root[data-theme="light"] {
-  --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0;
-  --encre:#0f172a; --encre-terne:#64748b; --accent:#0284c7;
+  --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0; --trait2:#cbd5e1;
+  --encre:#0f172a; --encre-terne:#64748b; --faible:#64748b; --accent:#0284c7;
+  --app-fond:#fff; --tuile-fond:#f1f5f9; --ciel:none;
 }
 :root[data-theme="dark"] {
-  --fond:#0f172a; --carte:#172033; --bord:rgba(148,163,184,.20);
-  --encre:#e8eefb; --encre-terne:#94a3b8; --accent:#38bdf8;
+  --fond:#060d1b; --carte:#0d1a33; --bord:rgba(86,150,255,.22); --trait2:rgba(86,150,255,.38);
+  --encre:#eaf1ff; --encre-terne:#9fb3d6; --faible:#6f84a8; --accent:#29b6f6;
+  --app-fond:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
+  --tuile-fond:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));
+  --ciel:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%);
 }
 
 * { box-sizing: border-box; }
@@ -51,8 +63,8 @@
 [hidden] { display: none !important; }
 
 body {
-  margin:0; background:var(--fond); color:var(--encre);
-  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  margin:0; background:var(--ciel),var(--fond); background-repeat:no-repeat; background-attachment:fixed; color:var(--encre);
+  font:15px/1.45 "IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   /* La barre du bas est fixe : on réserve sa hauteur, plus l'encoche. */
   padding-bottom: calc(var(--barre-h) + env(safe-area-inset-bottom,0px));
   -webkit-tap-highlight-color: transparent;
@@ -62,7 +74,9 @@ body {
   display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
   padding: calc(.7rem + env(safe-area-inset-top,0px)) .9rem .5rem;
 }
-.marque { font-weight:800; letter-spacing:.02em; color:var(--accent); }
+.marque { display:flex; align-items:center; gap:.6rem; font-weight:800; letter-spacing:.02em; color:var(--encre); }
+.marque-txt b { display:block; font-size:1.3rem; line-height:1.1; }
+.marque-txt small { display:block; color:var(--accent); font-size:.72rem; font-weight:500; letter-spacing:0; }
 
 /* ENCADRE DANS LE HALL (#1293) : la mégabarre porte déjà le nom, l'identité
    et la sortie. Garder notre bandeau mettrait DEUX chromes l'un sous l'autre —
@@ -84,6 +98,28 @@ body[data-encadre] .mast .profil { margin-left:0; }
 .profil[data-p="user"]  { color:var(--accent); }
 
 main { padding: 0 .8rem 1rem; }
+
+/* Cadre Aurora : un seul panneau dégradé qui porte tous les écrans. Aucune
+   « container-type » ici : elle ferait du cadre le bloc contenant du théâtre
+   (position:fixed) et le théâtre cesserait de couvrir l'écran. */
+.cadre { min-width:0; }
+.app { border:1px solid var(--trait2); border-radius:16px; background:var(--app-fond);
+  box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);
+  padding:14px; display:grid; gap:12px; min-width:0; }
+.app > * { min-width:0; }
+.demo { margin:0 .8rem .6rem; background:var(--orange); color:#1a1000; text-align:center;
+  font-weight:700; border-radius:8px; padding:3px 8px; font-size:.78rem; }
+.info { margin:.7rem 0 0; border:1px solid var(--accent); background:rgba(41,182,246,.1);
+  border-radius:10px; padding:8px 12px; font-size:.8rem; line-height:1.4; }
+.info a { color:var(--accent); }
+.tuiles { display:grid; gap:8px; grid-template-columns:repeat(2,1fr); margin:0 0 .8rem; }
+@media (min-width: 700px) { .tuiles { grid-template-columns:repeat(4,1fr); } }
+.tuile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--bord);
+  border-radius:12px; padding:9px 11px; background:var(--tuile-fond); min-width:0; }
+.tuile .v { font-size:1.45rem; font-weight:700; line-height:1; color:var(--accent);
+  font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.tuile .l { color:var(--encre-terne); font-size:.74rem; }
+.tuile .s { color:var(--faible); font-size:.68rem; }
 .titre-ecran { font-size:1.05rem; margin:.3rem 0 .8rem; }
 .sous-titre { font-size:.82rem; margin:1.2rem 0 .3rem; color:var(--encre-terne);
   text-transform:uppercase; letter-spacing:.08em; }

@@ -1,3 +1,12 @@
+secubox-sbxos (0.6.0~aurora17-2~bookworm1) bookworm; urgency=medium
+
+  * La coquille PWA /sbxos/ passe au profil Aurora (ref #2647) : jetons, fond, cadre dégradé, en-tête de marque, bandeaux et tuiles d'Aurora dans ui/styles.css ; tuiles Profil, Modules autorisés, Affichés et Favoris (chacune avec sa définition en infobulle, « — » tant qu'aucun bureau n'est connu) ; mode ?demo=1 (bureau fictif, aucun réseau, aucun stockage local, aucun service worker, lieux non chargés) ; message « session requise » en bandeau ; hauteur annoncée à l'hôte (sbxVue, onglet sbxos) ; cache du service worker passé à sbxos-v7.
+  * Corrigé : le message « Cet appareil n'a pas encore d'accès » pouvait être effacé par une recomposition du bureau arrivée juste après lui.
+  * Non repris : la page n'est pas rendue autonome (modules ES, composants du damier et service worker restent des fichiers distincts, mis en cache fichier par fichier pour l'usage hors ligne) ; le menu latéral d'administration n'est pas chargé (SBX OS est une porte publique, avec sa propre barre) ; le thème clair propre à SBX OS est conservé (réglage Thème : automatique, clair, sombre).
+  * Aucun appel d'API ni route modifié ; le front Aurora (dist/) est inchangé, seule la révision Debian monte. Tests Playwright ajoutés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 11:00:00 +0200
+
 secubox-sbxos (0.6.0~aurora17-1~bookworm1) bookworm; urgency=medium
 
   * Les widgets du Hall dans SBX OS et l'APK (ref #2351) : section Widgets de chaque Espace, cartes encadrees (hors d'un Hall qui les montre deja), une colonne sur telephone. Curation regeneree (widgets).

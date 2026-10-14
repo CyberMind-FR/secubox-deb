@@ -4,627 +4,495 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Relais SaaS au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret n'est affiché : une clé d'API saisie part dans la requête puis le champ est vidé ;
+  seul l'aperçu masqué (quatre derniers caractères) renvoyé par l'API est montré.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - SaaS Relay Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Relais SaaS</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1a1a2e;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            --cyan: var(--p31-mid);
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-        .header h1 { font-size: 1.5rem; color: var(--p31-hot); text-shadow: var(--bloom-text); }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.85rem; font-family: inherit; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .btn.primary { border-color: var(--p31-peak); color: var(--p31-peak); background: rgba(51,255,102,0.1); }
-        .btn.primary:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); }
-        .btn.danger { border-color: var(--red); color: var(--red); background: rgba(255,68,102,0.1); }
-        .btn.danger:hover { background: rgba(255,68,102,0.2); }
-        .btn-group { display: flex; gap: 0.5rem; }
-        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.25rem; letter-spacing: 0.15em; text-transform: uppercase; }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: var(--red); }
-        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
-        .card:hover { border-color: var(--p31-dim); }
-        .card h2 { margin-bottom: 1rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.85rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
-        th { color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.15em; font-size: 0.75rem; text-transform: uppercase; }
-        td { color: var(--p31-mid); }
-        tr:hover { background: rgba(51,255,102,0.03); }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
-        .badge.healthy { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge.degraded { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge.unhealthy { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
-        .badge.unknown { background: rgba(139,148,158,0.2); border-color: var(--text-dim); color: var(--text-dim); }
-        .badge.rest { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge.graphql { background: rgba(163,113,247,0.1); border-color: var(--purple); color: var(--purple); }
-        .badge.webhook { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge.enabled { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge.disabled { background: rgba(139,148,158,0.2); border-color: var(--text-dim); color: var(--text-dim); }
-        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); background: var(--tube-pale); }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active { color: var(--p31-peak); text-shadow: var(--bloom-soft); border-bottom-color: var(--p31-peak); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        input, select, textarea { font-family: 'Courier Prime', monospace; background: var(--tube-light); border: 1px solid var(--tube-soft); color: var(--p31-mid); padding: 0.5rem; border-radius: 4px; width: 100%; }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.1); }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .key-preview { font-family: monospace; background: var(--tube-light); padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); }
-        .progress-bar { height: 8px; background: var(--tube-light); border-radius: 4px; overflow: hidden; margin-top: 0.5rem; }
-        .progress-bar .fill { height: 100%; background: var(--p31-peak); transition: width 0.3s; }
-        .progress-bar.warning .fill { background: var(--p31-decay); }
-        .progress-bar.danger .fill { background: var(--red); }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; min-width: 500px; max-width: 90vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 0 30px rgba(51,255,102,0.1); }
-        .modal-title { color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; margin-bottom: 1rem; }
-        .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
-        .empty { text-align: center; padding: 2rem; color: var(--p31-dim); }
-        .health-indicator { display: inline-flex; align-items: center; gap: 0.5rem; }
-        .health-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .health-dot.healthy { background: var(--p31-peak); box-shadow: 0 0 8px var(--p31-peak); }
-        .health-dot.degraded { background: var(--p31-decay); }
-        .health-dot.unhealthy { background: var(--red); }
-        .health-dot.unknown { background: var(--text-dim); }
-        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; } .form-row { grid-template-columns: 1fr; } .modal-content { min-width: auto; } }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar,body.nomenu #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb):not(.nomenu) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.nomenu) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.ja .v{color:var(--jaune)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+        .onglet{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglet:hover{border-color:var(--cyan)} .onglet[aria-selected="true"]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.18)}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:600px} td.mono{white-space:nowrap}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td small{display:block;color:var(--faible);font-size:.7rem}
+        td.act{white-space:nowrap}
+        .actions{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .url{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select,form.saisie textarea,select.filtre{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        select.filtre{width:auto;min-width:180px;max-width:100%}
+        form.saisie input:focus,form.saisie select:focus,form.saisie textarea:focus,select.filtre:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .large{grid-column:1/-1}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden;margin-top:4px;min-width:80px} .barre i{display:block;height:100%;background:var(--cyan)} .barre.att i{background:var(--orange)} .barre.hors i{background:var(--rouge)}
+        .outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <h1>SaaS Relay Dashboard</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="showAddService()">Add Service</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.7"/><path d="M20 4v4.7h-4.7"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.3"/><path d="M4 20v-4.7h4.7"/></svg>
+                <div><h1>Relais SaaS</h1><small>Relais d’API externes, clés chiffrées, quotas et journal</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="btnAjout" type="button">+ Ajouter un service</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="stats-row">
-            <div class="stat-card">
-                <div class="value" id="services-count">-</div>
-                <div class="label">Services</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="healthy-count">-</div>
-                <div class="label">Healthy</div>
-            </div>
-            <div class="stat-card yellow">
-                <div class="value" id="requests-today">-</div>
-                <div class="label">Requests Today</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="requests-total">-</div>
-                <div class="label">Total Requests</div>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre de services SaaS configurés dans le relais (activés ou non)."><span class="l">Services</span><span class="v" id="tServices">—</span><span class="s">configurés</span></div>
+            <div class="tuile cy" title="Services dont l’interrupteur est sur « activé » : seuls ceux-là acceptent du trafic via /proxy."><span class="l">Activés</span><span class="v" id="tActifs">—</span><span class="s">acceptent du trafic</span></div>
+            <div class="tuile ok" id="cSains" title="Services dont le dernier contrôle de santé est « sain ». Le contrôle tourne en tâche de fond, ou à la demande avec « Contrôler »."><span class="l">Sains</span><span class="v" id="tSains">—</span><span class="s">dernier contrôle</span></div>
+            <div class="tuile ja" title="Requêtes relayées aujourd’hui, tous services confondus (compteur du jour tenu par le relais)."><span class="l">Requêtes aujourd’hui</span><span class="v" id="tJour">—</span><span class="s">tous services</span></div>
+            <div class="tuile cy" title="Requêtes relayées depuis la création des compteurs (remis à zéro par « Remettre à zéro » côté API uniquement)."><span class="l">Requêtes totales</span><span class="v" id="tTotal">—</span><span class="s">cumul</span></div>
+        </section>
 
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" data-tab="services" onclick="switchTab('services')">Services</div>
-                <div class="tab" data-tab="keys" onclick="switchTab('keys')">API Keys</div>
-                <div class="tab" data-tab="stats" onclick="switchTab('stats')">Statistics</div>
-                <div class="tab" data-tab="logs" onclick="switchTab('logs')">Request Logs</div>
-            </div>
-
-            <!-- Services Tab -->
-            <div id="services" class="tab-content active">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Service</th>
-                            <th>Type</th>
-                            <th>Base URL</th>
-                            <th>Health</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="services-list">
-                        <tr><td colspan="6" class="empty">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- API Keys Tab -->
-            <div id="keys" class="tab-content">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Service</th>
-                            <th>API Key</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="keys-list">
-                        <tr><td colspan="3" class="empty">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Statistics Tab -->
-            <div id="stats" class="tab-content">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Service</th>
-                            <th>Today / Quota</th>
-                            <th>Total</th>
-                            <th>Avg Response</th>
-                            <th>Error Rate</th>
-                            <th>Last Request</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stats-list">
-                        <tr><td colspan="6" class="empty">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Request Logs Tab -->
-            <div id="logs" class="tab-content">
-                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                    <select id="log-filter" onchange="loadLogs()" style="width: auto; min-width: 200px;">
-                        <option value="">All Services</option>
-                    </select>
-                    <button class="btn danger" onclick="clearLogs()">Clear Logs</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Timestamp</th>
-                            <th>Service</th>
-                            <th>Method</th>
-                            <th>Path</th>
-                            <th>Status</th>
-                            <th>Response Time</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logs-list">
-                        <tr><td colspan="6" class="empty">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </main>
-
-    <!-- Add Service Modal -->
-    <div class="modal" id="add-service-modal">
-        <div class="modal-content">
-            <h3 class="modal-title">Add SaaS Service</h3>
-            <form id="add-service-form" onsubmit="addService(event)">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Service Name (ID)</label>
-                        <input type="text" id="svc-name" required placeholder="my-api" pattern="[a-zA-Z0-9_-]+">
-                    </div>
-                    <div class="form-group">
-                        <label>Display Name</label>
-                        <input type="text" id="svc-display-name" required placeholder="My API Service">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Base URL</label>
-                    <input type="url" id="svc-base-url" required placeholder="https://api.example.com">
-                </div>
-                <div class="form-group">
-                    <label>API Key</label>
-                    <input type="password" id="svc-api-key" required placeholder="Your API key (will be encrypted)">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Service Type</label>
-                        <select id="svc-type">
-                            <option value="rest">REST API</option>
-                            <option value="graphql">GraphQL</option>
-                            <option value="webhook">Webhook</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Health Endpoint</label>
-                        <input type="text" id="svc-health" placeholder="/health (optional)">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Auth Header</label>
-                        <input type="text" id="svc-auth-header" value="Authorization">
-                    </div>
-                    <div class="form-group">
-                        <label>Auth Prefix</label>
-                        <input type="text" id="svc-auth-prefix" value="Bearer ">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Rate Limit (req/min)</label>
-                        <input type="number" id="svc-rate-limit" value="100" min="1">
-                    </div>
-                    <div class="form-group">
-                        <label>Daily Quota</label>
-                        <input type="number" id="svc-quota" value="10000" min="1">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea id="svc-description" rows="2" placeholder="Optional description"></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn" onclick="hideModal('add-service-modal')">Cancel</button>
-                    <button type="submit" class="btn primary">Add Service</button>
-                </div>
+        <div class="pan" id="pAjout" hidden><h3>Ajouter un service SaaS <i>POST /service/add</i></h3>
+            <form class="saisie" id="fAjout" autocomplete="off">
+                <label>Identifiant du service<input id="sNom" required placeholder="mon-api" pattern="[a-zA-Z0-9_\-]+"></label>
+                <label>Nom affiché<input id="sAffiche" required placeholder="Mon service"></label>
+                <label class="large">URL de base<input id="sUrl" type="url" required placeholder="https://api.example.com"></label>
+                <label class="large">Clé d’API (chiffrée côté serveur, jamais réaffichée)<input id="sCle" type="password" required autocomplete="new-password" placeholder="Clé d’API"></label>
+                <label>Type<select id="sType"><option value="rest">REST</option><option value="graphql">GraphQL</option><option value="webhook">Webhook</option></select></label>
+                <label>Point de santé<input id="sSante" placeholder="/health (facultatif)"></label>
+                <label>En-tête d’authentification<input id="sEntete" value="Authorization"></label>
+                <label>Préfixe<input id="sPrefixe" value="Bearer "></label>
+                <label>Limite (requêtes/min)<input id="sLimite" type="number" value="100" min="1"></label>
+                <label>Quota quotidien<input id="sQuota" type="number" value="10000" min="1"></label>
+                <label class="large">Description<textarea id="sDesc" rows="2" placeholder="Facultatif"></textarea></label>
+                <div class="bout large" style="margin:0"><button class="btn prim" id="btnAjouter" type="submit">Ajouter</button><button class="btn" id="btnAjoutAnnule" type="button">Annuler</button></div>
             </form>
+            <div id="rAjout" class="retour" hidden></div>
         </div>
-    </div>
 
-    <!-- Edit Key Modal -->
-    <div class="modal" id="edit-key-modal">
-        <div class="modal-content">
-            <h3 class="modal-title">Update API Key</h3>
-            <form id="edit-key-form" onsubmit="updateKey(event)">
-                <input type="hidden" id="edit-key-service">
-                <div class="form-group">
-                    <label>Service</label>
-                    <input type="text" id="edit-key-service-display" disabled>
-                </div>
-                <div class="form-group">
-                    <label>New API Key</label>
-                    <input type="password" id="edit-key-value" required placeholder="Enter new API key">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn" onclick="hideModal('edit-key-modal')">Cancel</button>
-                    <button type="submit" class="btn primary">Update Key</button>
-                </div>
-            </form>
-        </div>
-    </div>
+        <div class="pan">
+            <div class="onglets" role="tablist" aria-label="Sections du relais">
+                <button class="onglet" role="tab" id="o-services" data-tab="services" aria-selected="true" type="button">Services</button>
+                <button class="onglet" role="tab" id="o-keys" data-tab="keys" aria-selected="false" type="button">Clés d’API</button>
+                <button class="onglet" role="tab" id="o-stats" data-tab="stats" aria-selected="false" type="button">Statistiques</button>
+                <button class="onglet" role="tab" id="o-logs" data-tab="logs" aria-selected="false" type="button">Journal des requêtes</button>
+            </div>
 
-    <!-- Service Details Modal -->
-    <div class="modal" id="service-details-modal">
-        <div class="modal-content">
-            <h3 class="modal-title">Service Details</h3>
-            <div id="service-details-content"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn" onclick="hideModal('service-details-modal')">Close</button>
+            <div id="services" role="tabpanel">
+                <div id="rServices" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Service</th><th>Type</th><th>URL de base</th><th>Santé</th><th>État</th><th>Actions</th></tr></thead><tbody id="bServices"></tbody></table></div>
+                <div id="detail" hidden style="margin-top:10px">
+                    <h3 style="margin:0 0 8px;font-size:.88rem">Détail du service <i style="font-style:normal;color:var(--faible);font-size:.7rem">GET /service/{nom}</i></h3>
+                    <dl class="kv" id="dlDetail"></dl>
+                    <div class="bout"><button class="btn" id="btnDetailFerme" type="button">Fermer</button></div>
+                </div>
+            </div>
+
+            <div id="keys" role="tabpanel" hidden>
+                <div id="rKeys" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Service</th><th>Clé d’API</th><th>Actions</th></tr></thead><tbody id="bKeys"></tbody></table></div>
+                <div id="pCle" hidden style="margin-top:10px">
+                    <h3 style="margin:0 0 8px;font-size:.88rem">Mettre à jour la clé <i style="font-style:normal;color:var(--faible);font-size:.7rem">PUT /keys/{nom}</i></h3>
+                    <form class="saisie" id="fCle" autocomplete="off">
+                        <label>Service<input id="kService" disabled></label>
+                        <label>Nouvelle clé d’API<input id="kValeur" type="password" required autocomplete="new-password" placeholder="Nouvelle clé"></label>
+                        <div class="bout" style="margin:0"><button class="btn prim" id="btnCle" type="submit">Mettre à jour</button><button class="btn" id="btnCleAnnule" type="button">Annuler</button></div>
+                    </form>
+                    <div id="rCle" class="retour" hidden></div>
+                </div>
+                <p class="note">Les clés sont chiffrées côté serveur. Seuls les quatre derniers caractères sont montrés, masqués par des étoiles.</p>
+            </div>
+
+            <div id="stats" role="tabpanel" hidden>
+                <div class="tab"><table><thead><tr><th>Service</th><th>Aujourd’hui / quota</th><th>Total</th><th>Réponse moyenne</th><th>Taux d’erreur</th><th>Dernière requête</th></tr></thead><tbody id="bStats"></tbody></table></div>
+                <p class="note">Un service sans aucune requête n’a pas de temps de réponse mesuré : « — » plutôt que 0 ms.</p>
+            </div>
+
+            <div id="logs" role="tabpanel" hidden>
+                <div class="outils">
+                    <select class="filtre" id="filtre" aria-label="Filtrer par service"><option value="">Tous les services</option></select>
+                    <span class="actions" id="zoneVide"><button class="btn danger" id="btnVide" type="button">Vider le journal</button></span>
+                </div>
+                <div id="rLogs" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Horodatage</th><th>Service</th><th>Méthode</th><th>Chemin</th><th>Statut</th><th>Durée</th></tr></thead><tbody id="bLogs"></tbody></table></div>
+                <p class="note" id="nLogs"></p>
             </div>
         </div>
-    </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) document.body.classList.add('emb');
+        if (DEMO) document.body.classList.add('nomenu');
+        // Menu commun hors ?embed=1 et hors démonstration.
+        if (!EMB && !DEMO) { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s); }
         const API = '/api/v1/saas-relay';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nb = v => (v === null || v === undefined || isNaN(v)) ? '—' : Number(v).toLocaleString('fr-FR');
 
-        async function api(path, opts = {}) {
+        let STATUT = null, SERVICES = [], CLES = [], STATS = [], LOGS = [], LOGS_TOTAL = null;
+        let SESSION_OK = true, CHARGE = false, ONGLET = 'services', FILTRE = '';
+        let CONFIRM = null;       // 'svc:nom' | 'cle:nom' | 'logs' : confirmation en attente, dans la page, jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json', 'Content-Type': 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch (e) { console.error(e); return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes() };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !(data && data.success === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            if (res.statut === 401 || res.statut === 403) return 'session requise';
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function date(ts) { if (!ts) return '—'; const d = new Date(ts); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+        const SANTE = { healthy: ['Sain', 'ok'], degraded: ['Dégradé', 'att'], unhealthy: ['Défaillant', 'hors'], unknown: ['Inconnu', ''] };
+        function pastilleSante(st) { const [txt, cls] = SANTE[st] || [tiret(st), '']; return el('span', 'pill ' + cls, txt); }
+
+        function demoData() {
+            const t = new Date(), il = m => new Date(t.getTime() - m * 60000).toISOString();
+            SERVICES = [
+                { name: 'meteo-api', display_name: 'Météo (démo)', base_url: 'https://api.example.com/meteo', service_type: 'rest', enabled: true, health_status: 'healthy' },
+                { name: 'carto-graphql', display_name: 'Cartographie (démo)', base_url: 'https://graphql.example.net', service_type: 'graphql', enabled: true, health_status: 'degraded' },
+                { name: 'alerte-hook', display_name: 'Alertes (démo)', base_url: 'https://hooks.example.org/in', service_type: 'webhook', enabled: false, health_status: 'unknown' }];
+            STATUT = { services_count: 3, enabled_count: 2, healthy_services: 1, requests_today: 1342, total_requests: 48210 };
+            CLES = [{ service: 'meteo-api', display_name: 'Météo (démo)', has_key: true, key_preview: '****a1b2' },
+                    { service: 'carto-graphql', display_name: 'Cartographie (démo)', has_key: true, key_preview: '****9f3c' },
+                    { service: 'alerte-hook', display_name: 'Alertes (démo)', has_key: false, key_preview: null }];
+            STATS = [{ service: 'meteo-api', display_name: 'Météo (démo)', requests_today: 1100, requests_total: 40100, quota_daily: 10000, quota_used_percent: 11, avg_response_time_ms: 182, error_rate: 0.4, last_request: il(2) },
+                     { service: 'carto-graphql', display_name: 'Cartographie (démo)', requests_today: 242, requests_total: 8110, quota_daily: 300, quota_used_percent: 80.7, avg_response_time_ms: 640, error_rate: 7.2, last_request: il(9) },
+                     { service: 'alerte-hook', display_name: 'Alertes (démo)', requests_today: 0, requests_total: 0, quota_daily: 10000, quota_used_percent: 0, avg_response_time_ms: 0, error_rate: 0, last_request: null }];
+            LOGS = [{ timestamp: il(2), service: 'meteo-api', method: 'GET', path: '/previsions/73', status_code: 200, response_time_ms: 176 },
+                    { timestamp: il(9), service: 'carto-graphql', method: 'POST', path: '/graphql', status_code: 502, response_time_ms: 1250 }];
+            LOGS_TOTAL = 2;
         }
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-            document.getElementById(tabName).classList.add('active');
+        async function essayer(chemin) { try { return { v: await lire(chemin) }; } catch (e) { return { e }; } }
 
-            if (tabName === 'logs') loadLogs();
-            if (tabName === 'stats') loadStats();
-            if (tabName === 'keys') loadKeys();
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const demandes = [essayer('/status'), essayer('/services')];
+            if (ONGLET === 'keys') demandes.push(essayer('/keys'));
+            if (ONGLET === 'stats') demandes.push(essayer('/stats'));
+            if (ONGLET === 'logs') demandes.push(essayer('/logs' + (FILTRE ? '?service=' + encodeURIComponent(FILTRE) : '')));
+            const res = await Promise.all(demandes);
+            const refus = res.some(r => r.e && (r.e.statut === 401 || r.e.statut === 403));
+            const tous = res.every(r => r.e);
+            SESSION_OK = !refus;
+            STATUT = res[0].v || null;
+            SERVICES = res[1].v && Array.isArray(res[1].v.services) ? res[1].v.services : [];
+            const x = res[2] && res[2].v;
+            if (ONGLET === 'keys') CLES = x && Array.isArray(x.keys) ? x.keys : [];
+            if (ONGLET === 'stats') STATS = x && Array.isArray(x.stats) ? x.stats : [];
+            if (ONGLET === 'logs') { LOGS = x && Array.isArray(x.logs) ? x.logs : []; LOGS_TOTAL = x && x.total != null ? x.total : null; }
+            CHARGE = true;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le relais SaaS (service arrêté ou injoignable).';
+            rendre();
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-
-        async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('services-count').textContent = d.services_count || 0;
-            document.getElementById('healthy-count').textContent = d.healthy_services || 0;
-            document.getElementById('requests-today').textContent = (d.requests_today || 0).toLocaleString();
-            document.getElementById('requests-total').textContent = (d.total_requests || 0).toLocaleString();
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s.enabled_count > 0 && s.healthy_services < s.enabled_count) { etat.className = 'actif att'; etat.textContent = s.healthy_services > 0 ? 'DÉGRADÉ' : 'SERVICES DÉFAILLANTS'; }
+            else { etat.className = 'actif'; etat.textContent = 'ACTIF'; }
+            const v = k => s && s[k] != null ? nb(s[k]) : '—';
+            $('tServices').textContent = v('services_count'); $('tActifs').textContent = v('enabled_count');
+            $('tSains').textContent = v('healthy_services'); $('tJour').textContent = v('requests_today'); $('tTotal').textContent = v('total_requests');
+            $('cSains').className = 'tuile ' + (s && s.enabled_count > 0 && s.healthy_services < s.enabled_count ? 'att' : 'ok');
+            rendreFiltre(); rendreServices(); rendreCles(); rendreStats(); rendreLogs();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadServices() {
-            const d = await api('/services');
-            const services = d.services || [];
-            const list = document.getElementById('services-list');
-            const filter = document.getElementById('log-filter');
-
-            // Update filter options
-            filter.innerHTML = '<option value="">All Services</option>' +
-                services.map(s => `<option value="${s.name}">${s.display_name}</option>`).join('');
-
-            if (!services.length) {
-                list.innerHTML = '<tr><td colspan="6" class="empty">No services configured</td></tr>';
-                return;
-            }
-
-            list.innerHTML = services.map(s => `
-                <tr>
-                    <td>
-                        <strong>${s.display_name}</strong><br>
-                        <span style="font-size:0.75rem;color:var(--p31-dim)">${s.name}</span>
-                    </td>
-                    <td><span class="badge ${s.service_type}">${s.service_type.toUpperCase()}</span></td>
-                    <td style="font-size:0.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${s.base_url}</td>
-                    <td>
-                        <span class="health-indicator">
-                            <span class="health-dot ${s.health_status}"></span>
-                            <span class="badge ${s.health_status}">${s.health_status}</span>
-                        </span>
-                    </td>
-                    <td><span class="badge ${s.enabled ? 'enabled' : 'disabled'}">${s.enabled ? 'Enabled' : 'Disabled'}</span></td>
-                    <td>
-                        <div class="btn-group">
-                            <button class="btn" onclick="viewService('${s.name}')">View</button>
-                            <button class="btn" onclick="toggleService('${s.name}')">${s.enabled ? 'Disable' : 'Enable'}</button>
-                            <button class="btn" onclick="checkHealth('${s.name}')">Check</button>
-                            <button class="btn danger" onclick="removeService('${s.name}')">Remove</button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function videLigne(tb, n, msg) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : CHARGE ? msg : '—'); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        // Bloc d'actions avec confirmation intégrée à la ligne.
+        function actionsConfirmables(cle, libelle, question, faire) {
+            const b = el('div', 'actions');
+            if (CONFIRM === cle) {
+                b.appendChild(el('span', 'note', question));
+                b.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; faire(); }));
+                b.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else b.appendChild(btn(libelle, 'danger', () => { CONFIRM = cle; rendre(); }));
+            return b;
         }
 
-        async function loadKeys() {
-            const d = await api('/keys');
-            const keys = d.keys || [];
-            const list = document.getElementById('keys-list');
-
-            if (!keys.length) {
-                list.innerHTML = '<tr><td colspan="3" class="empty">No API keys configured</td></tr>';
-                return;
-            }
-
-            list.innerHTML = keys.map(k => `
-                <tr>
-                    <td><strong>${k.display_name}</strong></td>
-                    <td>
-                        ${k.has_key ? `<span class="key-preview">${k.key_preview}</span>` : '<span style="color:var(--red)">No key</span>'}
-                    </td>
-                    <td>
-                        <div class="btn-group">
-                            <button class="btn" onclick="showEditKey('${k.service}', '${k.display_name}')">Update</button>
-                            ${k.has_key ? `<button class="btn danger" onclick="deleteKey('${k.service}')">Delete</button>` : ''}
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+        function rendreFiltre() {
+            const f = $('filtre'); f.replaceChildren();
+            const o0 = el('option', '', 'Tous les services'); o0.value = ''; f.appendChild(o0);
+            SERVICES.forEach(s => { const o = el('option', '', tiret(s.display_name || s.name)); o.value = s.name; f.appendChild(o); });
+            f.value = FILTRE;
         }
 
-        async function loadStats() {
-            const d = await api('/stats');
-            const stats = d.stats || [];
-            const list = document.getElementById('stats-list');
-
-            if (!stats.length) {
-                list.innerHTML = '<tr><td colspan="6" class="empty">No statistics available</td></tr>';
-                return;
-            }
-
-            list.innerHTML = stats.map(s => {
-                const quotaPercent = s.quota_used_percent || 0;
-                const progressClass = quotaPercent > 90 ? 'danger' : (quotaPercent > 70 ? 'warning' : '');
-                return `
-                    <tr>
-                        <td><strong>${s.display_name}</strong></td>
-                        <td>
-                            ${s.requests_today.toLocaleString()} / ${s.quota_daily.toLocaleString()}
-                            <div class="progress-bar ${progressClass}">
-                                <div class="fill" style="width: ${Math.min(quotaPercent, 100)}%"></div>
-                            </div>
-                        </td>
-                        <td>${s.requests_total.toLocaleString()}</td>
-                        <td>${s.avg_response_time_ms.toFixed(0)} ms</td>
-                        <td style="color: ${s.error_rate > 5 ? 'var(--red)' : 'inherit'}">${s.error_rate.toFixed(1)}%</td>
-                        <td style="font-size:0.8rem">${s.last_request ? new Date(s.last_request).toLocaleString() : '-'}</td>
-                    </tr>
-                `;
-            }).join('');
+        function rendreServices() {
+            const tb = $('bServices'); tb.replaceChildren();
+            if (!SERVICES.length) { videLigne(tb, 6, 'Aucun service configuré'); return; }
+            SERVICES.forEach(s => {
+                const tr = el('tr');
+                const n = el('td'); n.appendChild(el('strong', '', tiret(s.display_name))); n.appendChild(el('small', 'mono', tiret(s.name))); tr.appendChild(n);
+                const t = el('td'); t.appendChild(el('span', 'pill cy', tiret(s.service_type).toUpperCase())); tr.appendChild(t);
+                const u = el('td'); const us = el('div', 'url mono', tiret(s.base_url)); us.title = tiret(s.base_url); u.appendChild(us); tr.appendChild(u);
+                const h = el('td'); h.appendChild(pastilleSante(s.health_status)); tr.appendChild(h);
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (s.enabled ? 'ok' : ''), s.enabled ? 'Activé' : 'Désactivé')); tr.appendChild(e);
+                const a = el('td', 'act');
+                if (CONFIRM === 'svc:' + s.name) {
+                    a.appendChild(actionsConfirmables('svc:' + s.name, 'Retirer', 'Retirer « ' + s.name + ' » : toute sa configuration et ses statistiques seront supprimées, sans retour possible ?', () => retirer(s.name)));
+                } else {
+                    const b = el('div', 'actions');
+                    b.appendChild(btn('Voir', '', () => voir(s.name)));
+                    b.appendChild(btn(s.enabled ? 'Désactiver' : 'Activer', '', () => basculer(s.name)));
+                    b.appendChild(btn('Contrôler', '', () => controler(s.name)));
+                    b.appendChild(btn('Retirer', 'danger', () => { CONFIRM = 'svc:' + s.name; rendre(); }));
+                    a.appendChild(b);
+                }
+                tr.appendChild(a); tb.appendChild(tr);
+            });
         }
 
-        async function loadLogs() {
-            const service = document.getElementById('log-filter').value;
-            const d = await api('/logs' + (service ? `?service=${service}` : ''));
-            const logs = d.logs || [];
-            const list = document.getElementById('logs-list');
-
-            if (!logs.length) {
-                list.innerHTML = '<tr><td colspan="6" class="empty">No request logs</td></tr>';
-                return;
-            }
-
-            list.innerHTML = logs.map(l => `
-                <tr>
-                    <td style="font-size:0.8rem">${new Date(l.timestamp).toLocaleString()}</td>
-                    <td>${l.service}</td>
-                    <td>${l.method}</td>
-                    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${l.path}</td>
-                    <td><span class="badge ${l.status_code < 400 ? 'healthy' : 'unhealthy'}">${l.status_code || 'ERR'}</span></td>
-                    <td>${l.response_time_ms.toFixed(0)} ms</td>
-                </tr>
-            `).join('');
+        function rendreCles() {
+            const tb = $('bKeys'); tb.replaceChildren();
+            if (!CLES.length) { videLigne(tb, 3, 'Aucune clé d’API configurée'); return; }
+            CLES.forEach(k => {
+                const tr = el('tr');
+                const n = el('td'); n.appendChild(el('strong', '', tiret(k.display_name))); tr.appendChild(n);
+                const c = el('td');
+                if (k.has_key) c.appendChild(el('span', 'mono', tiret(k.key_preview))); else c.appendChild(el('span', 'pill hors', 'Aucune clé'));
+                tr.appendChild(c);
+                const a = el('td', 'act');
+                if (CONFIRM === 'cle:' + k.service) {
+                    a.appendChild(actionsConfirmables('cle:' + k.service, 'Supprimer', 'Supprimer la clé d’API de « ' + k.service + ' » ?', () => supprimerCle(k.service)));
+                } else {
+                    const b = el('div', 'actions');
+                    b.appendChild(btn('Mettre à jour', '', () => editerCle(k.service, k.display_name)));
+                    if (k.has_key) b.appendChild(btn('Supprimer', 'danger', () => { CONFIRM = 'cle:' + k.service; rendre(); }));
+                    a.appendChild(b);
+                }
+                tr.appendChild(a); tb.appendChild(tr);
+            });
         }
 
-        function showAddService() { showModal('add-service-modal'); }
+        function rendreStats() {
+            const tb = $('bStats'); tb.replaceChildren();
+            if (!STATS.length) { videLigne(tb, 6, 'Aucune statistique disponible'); return; }
+            STATS.forEach(s => {
+                const tr = el('tr');
+                const n = el('td'); n.appendChild(el('strong', '', tiret(s.display_name))); tr.appendChild(n);
+                const q = Number(s.quota_used_percent), cl = q > 90 ? 'hors' : q > 70 ? 'att' : '';
+                const j = el('td'); j.appendChild(el('span', '', nb(s.requests_today) + ' / ' + nb(s.quota_daily)));
+                const bar = el('div', 'barre ' + cl); const f = el('i'); f.style.width = Math.max(0, Math.min(isNaN(q) ? 0 : q, 100)) + '%'; bar.appendChild(f); j.appendChild(bar); tr.appendChild(j);
+                tr.appendChild(el('td', '', nb(s.requests_total)));
+                const sans = !s.requests_total;
+                tr.appendChild(el('td', '', sans || s.avg_response_time_ms == null ? '—' : Math.round(s.avg_response_time_ms) + ' ms'));
+                const er = el('td', '', sans || s.error_rate == null ? '—' : Number(s.error_rate).toFixed(1).replace('.', ',') + ' %');
+                if (!sans && s.error_rate > 5) er.style.color = 'var(--rouge)';
+                tr.appendChild(er);
+                tr.appendChild(el('td', '', date(s.last_request)));
+                tb.appendChild(tr);
+            });
+        }
 
-        async function addService(e) {
-            e.preventDefault();
+        function rendreLogs() {
+            const tb = $('bLogs'); tb.replaceChildren();
+            $('nLogs').textContent = LOGS.length && LOGS_TOTAL != null ? LOGS.length + ' ligne(s) affichée(s) sur ' + nb(LOGS_TOTAL) + ' (les plus récentes d’abord, 100 au plus).' : '';
+            const z = $('zoneVide'); z.replaceChildren();
+            if (CONFIRM === 'logs') {
+                z.appendChild(el('span', 'note', FILTRE ? 'Vider le journal de « ' + FILTRE + ' » ?' : 'Vider tout le journal ?'));
+                z.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; viderJournal(); }));
+                z.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else { const v = btn('Vider le journal', 'danger', () => { CONFIRM = 'logs'; rendre(); }); v.id = 'btnVide'; z.appendChild(v); }
+            if (!LOGS.length) { videLigne(tb, 6, 'Aucune requête journalisée'); return; }
+            LOGS.forEach(l => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', date(l.timestamp)));
+                tr.appendChild(el('td', '', tiret(l.service)));
+                tr.appendChild(el('td', '', tiret(l.method)));
+                const p = el('td'); const ps = el('div', 'url mono', tiret(l.path)); ps.title = tiret(l.path); p.appendChild(ps); tr.appendChild(p);
+                const st = el('td'); st.appendChild(el('span', 'pill ' + (l.status_code && l.status_code < 400 ? 'ok' : 'hors'), l.status_code || 'ERR')); tr.appendChild(st);
+                tr.appendChild(el('td', '', l.response_time_ms == null ? '—' : Math.round(l.response_time_ms) + ' ms'));
+                tb.appendChild(tr);
+            });
+        }
+
+        // ----- Onglets -----
+        function onglet(nom) {
+            ONGLET = nom; CONFIRM = null;
+            document.querySelectorAll('.onglet').forEach(o => o.setAttribute('aria-selected', o.dataset.tab === nom ? 'true' : 'false'));
+            ['services', 'keys', 'stats', 'logs'].forEach(i => { $(i).hidden = i !== nom; });
+            charger();
+        }
+        document.querySelectorAll('.onglet').forEach(o => o.addEventListener('click', () => onglet(o.dataset.tab)));
+        $('filtre').addEventListener('change', () => { FILTRE = $('filtre').value; CONFIRM = null; charger(); });
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        $('btnAjout').addEventListener('click', () => { $('pAjout').hidden = false; $('rAjout').hidden = true; $('sNom').focus(); annoncer(); });
+        $('btnAjoutAnnule').addEventListener('click', () => { $('pAjout').hidden = true; $('fAjout').reset(); $('sCle').value = ''; annoncer(); });
+        $('fAjout').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const b = $('btnAjouter'); b.disabled = true;
             const service = {
-                name: document.getElementById('svc-name').value,
-                display_name: document.getElementById('svc-display-name').value,
-                base_url: document.getElementById('svc-base-url').value,
-                api_key: document.getElementById('svc-api-key').value,
-                service_type: document.getElementById('svc-type').value,
-                health_endpoint: document.getElementById('svc-health').value || null,
-                auth_header: document.getElementById('svc-auth-header').value,
-                auth_prefix: document.getElementById('svc-auth-prefix').value,
-                rate_limit: parseInt(document.getElementById('svc-rate-limit').value),
-                quota_daily: parseInt(document.getElementById('svc-quota').value),
-                description: document.getElementById('svc-description').value || null
+                name: $('sNom').value, display_name: $('sAffiche').value, base_url: $('sUrl').value, api_key: $('sCle').value,
+                service_type: $('sType').value, health_endpoint: $('sSante').value || null,
+                auth_header: $('sEntete').value, auth_prefix: $('sPrefixe').value,
+                rate_limit: parseInt($('sLimite').value, 10), quota_daily: parseInt($('sQuota').value, 10),
+                description: $('sDesc').value || null
             };
+            const r = await ecrire('POST', '/service/add', service);
+            b.disabled = false; $('sCle').value = '';
+            if (r.ok) { $('fAjout').reset(); $('pAjout').hidden = true; toast('Service « ' + service.name + ' » ajouté.'); charger(); }
+            else retour('rAjout', false, 'Ajout impossible : ' + detail(r));
+        });
 
-            const d = await api('/service/add', { method: 'POST', body: JSON.stringify(service) });
-            if (d.success) {
-                hideModal('add-service-modal');
-                document.getElementById('add-service-form').reset();
-                refresh();
-            } else {
-                alert('Failed to add service: ' + (d.detail || 'Unknown error'));
-            }
+        async function voir(nom) {
+            if (DEMO) { retour('rServices', false, 'Démonstration : action inerte.'); return; }
+            let d = null;
+            try { d = await lire('/service/' + encodeURIComponent(nom)); } catch (e) { retour('rServices', false, 'Service introuvable ou lecture refusée (' + (e.statut ? 'HTTP ' + e.statut : 'injoignable') + ').'); return; }
+            if (!d || !d.name) { retour('rServices', false, 'Service introuvable.'); return; }
+            const dl = $('dlDetail'); dl.replaceChildren();
+            const lignes = [['Identifiant', d.name], ['Nom affiché', d.display_name], ['URL de base', d.base_url], ['Type', d.service_type], ['En-tête d’authentification', d.auth_header],
+                ['Point de santé', d.health_endpoint || 'Non configuré'], ['Limite', d.rate_limit != null ? d.rate_limit + ' requêtes/min' : '—'], ['Quota quotidien', nb(d.quota_daily)],
+                ['État', d.enabled ? 'Activé' : 'Désactivé'], ['Clé d’API présente', d.has_api_key ? 'Oui' : 'Non'], ['Santé', (SANTE[d.health_status] || [tiret(d.health_status)])[0]],
+                ['Description', d.description || '—'], ['Créé le', date(d.created_at)]];
+            lignes.forEach(([k, v]) => { dl.appendChild(el('dt', '', k)); dl.appendChild(el('dd', '', tiret(v))); });
+            $('detail').hidden = false; annoncer();
+        }
+        $('btnDetailFerme').addEventListener('click', () => { $('detail').hidden = true; annoncer(); });
+
+        async function basculer(nom) {
+            const r = await ecrire('POST', '/service/' + encodeURIComponent(nom) + '/toggle');
+            if (r.ok) charger(); else retour('rServices', false, 'Bascule impossible : ' + detail(r));
+        }
+        async function controler(nom) {
+            const r = await ecrire('POST', '/service/' + encodeURIComponent(nom) + '/check');
+            if (r.ok && r.data && r.data.health) {
+                const h = r.data.health;
+                retour('rServices', true, 'Santé de « ' + nom + ' » : ' + (SANTE[h.status] || [tiret(h.status)])[0] + (h.message ? ' — ' + h.message : ''));
+                charger();
+            } else retour('rServices', false, 'Contrôle impossible : ' + detail(r));
+        }
+        async function retirer(nom) {
+            const r = await ecrire('DELETE', '/service/' + encodeURIComponent(nom));
+            if (r.ok) { $('detail').hidden = true; retour('rServices', true, 'Service « ' + nom + ' » retiré.'); charger(); }
+            else { retour('rServices', false, 'Retrait impossible : ' + detail(r)); rendre(); }
         }
 
-        async function viewService(name) {
-            const d = await api(`/service/${name}`);
-            if (!d.name) {
-                alert('Service not found');
-                return;
-            }
-
-            const content = `
-                <div style="display:grid;gap:1rem;">
-                    <div><strong>Name:</strong> ${d.name}</div>
-                    <div><strong>Display Name:</strong> ${d.display_name}</div>
-                    <div><strong>Base URL:</strong> ${d.base_url}</div>
-                    <div><strong>Type:</strong> ${d.service_type}</div>
-                    <div><strong>Auth Header:</strong> ${d.auth_header}</div>
-                    <div><strong>Health Endpoint:</strong> ${d.health_endpoint || 'Not configured'}</div>
-                    <div><strong>Rate Limit:</strong> ${d.rate_limit} req/min</div>
-                    <div><strong>Daily Quota:</strong> ${d.quota_daily}</div>
-                    <div><strong>Status:</strong> ${d.enabled ? 'Enabled' : 'Disabled'}</div>
-                    <div><strong>Has API Key:</strong> ${d.has_api_key ? 'Yes' : 'No'}</div>
-                    <div><strong>Health:</strong> <span class="badge ${d.health_status}">${d.health_status}</span></div>
-                    ${d.description ? `<div><strong>Description:</strong> ${d.description}</div>` : ''}
-                    <div><strong>Created:</strong> ${d.created_at ? new Date(d.created_at).toLocaleString() : '-'}</div>
-                </div>
-            `;
-            document.getElementById('service-details-content').innerHTML = content;
-            showModal('service-details-modal');
+        function editerCle(service, affiche) {
+            $('kService').value = service; $('kService').dataset.service = service; $('kService').title = tiret(affiche);
+            $('kValeur').value = ''; $('rCle').hidden = true; $('pCle').hidden = false; $('kValeur').focus(); annoncer();
         }
-
-        async function toggleService(name) {
-            await api(`/service/${name}/toggle`, { method: 'POST' });
-            loadServices();
+        $('btnCleAnnule').addEventListener('click', () => { $('pCle').hidden = true; $('kValeur').value = ''; annoncer(); });
+        $('fCle').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const service = $('kService').dataset.service, b = $('btnCle'); b.disabled = true;
+            const r = await ecrire('PUT', '/keys/' + encodeURIComponent(service), { api_key: $('kValeur').value });
+            b.disabled = false; $('kValeur').value = '';
+            if (r.ok) { $('pCle').hidden = true; toast('Clé de « ' + service + ' » mise à jour.'); charger(); }
+            else retour('rCle', false, 'Mise à jour impossible : ' + detail(r));
+        });
+        async function supprimerCle(nom) {
+            const r = await ecrire('DELETE', '/keys/' + encodeURIComponent(nom));
+            if (r.ok) { retour('rKeys', true, 'Clé de « ' + nom + ' » supprimée.'); charger(); }
+            else { retour('rKeys', false, 'Suppression impossible : ' + detail(r)); rendre(); }
         }
-
-        async function checkHealth(name) {
-            const d = await api(`/service/${name}/check`, { method: 'POST' });
-            if (d.health) {
-                alert(`Health: ${d.health.status}\n${d.health.message || ''}`);
-                loadServices();
-            }
+        async function viderJournal() {
+            const r = await ecrire('DELETE', '/logs' + (FILTRE ? '?service=' + encodeURIComponent(FILTRE) : ''));
+            if (r.ok) { retour('rLogs', true, 'Journal vidé.'); charger(); }
+            else { retour('rLogs', false, 'Impossible de vider le journal : ' + detail(r)); rendre(); }
         }
+        $('rafraichir').addEventListener('click', charger);
 
-        async function removeService(name) {
-            if (!confirm(`Remove service "${name}"? This will delete all configuration and statistics.`)) return;
-            await api(`/service/${name}`, { method: 'DELETE' });
-            refresh();
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'saas-relay' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        function showEditKey(service, displayName) {
-            document.getElementById('edit-key-service').value = service;
-            document.getElementById('edit-key-service-display').value = displayName;
-            document.getElementById('edit-key-value').value = '';
-            showModal('edit-key-modal');
-        }
-
-        async function updateKey(e) {
-            e.preventDefault();
-            const service = document.getElementById('edit-key-service').value;
-            const apiKey = document.getElementById('edit-key-value').value;
-
-            const d = await api(`/keys/${service}`, { method: 'PUT', body: JSON.stringify({ api_key: apiKey }) });
-            if (d.success) {
-                hideModal('edit-key-modal');
-                loadKeys();
-            } else {
-                alert('Failed to update key: ' + (d.detail || 'Unknown error'));
-            }
-        }
-
-        async function deleteKey(name) {
-            if (!confirm(`Delete API key for "${name}"?`)) return;
-            await api(`/keys/${name}`, { method: 'DELETE' });
-            loadKeys();
-        }
-
-        async function clearLogs() {
-            const service = document.getElementById('log-filter').value;
-            if (!confirm(service ? `Clear logs for "${service}"?` : 'Clear all logs?')) return;
-            await api('/logs' + (service ? `?service=${service}` : ''), { method: 'DELETE' });
-            loadLogs();
-        }
-
-        function refresh() {
-            loadStatus();
-            loadServices();
-        }
-
-        refresh();
-        setInterval(refresh, 30000);
+        charger();
+        // Pas d'actualisation onglet masqué, en démonstration, ni pendant une saisie ou une confirmation ouverte.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || !$('pAjout').hidden || !$('pCle').hidden) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
