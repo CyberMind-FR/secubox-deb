@@ -4,767 +4,807 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Inspection de paquets (DPI) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Données réelles uniquement (API /api/v1/dpi, plus /api/v1/ndpid et /api/v1/mediaflow du même paquet) : une mesure absente s'affiche « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives (adresses RFC 5737), aucune écriture.
+  Tout texte venu de l'API passe par textContent : aucune donnée n'est injectée comme HTML.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — DPI (R3 Exfil Engine)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — Inspection DPI</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row: rgba(20, 30, 45, 0.6);
-            --border: rgba(100, 150, 200, 0.2);
-            --text: #e8e6d9;
-            --text-dim: #6b7b8b;
-            --red: #ff4466;
-            --orange: #ff9944;
-            --yellow: #ffcc00;
-            --green: #00dd44;
-            --blue: #4488ff;
-            --purple: #a371f7;
-            --cyan: #00d4ff;
-            --amber: #ffb347;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
-        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
-        .live-dot.idle { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: none; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.25rem 0.5rem; font-size: 0.72rem; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-        .badge { padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border); }
-        .badge-green { background: rgba(0,221,68,0.12); border-color: var(--green); color: var(--green); }
-        .badge-red { background: rgba(255,68,102,0.12); border-color: var(--red); color: var(--red); }
-        .badge-amber, .badge-yellow { background: rgba(255,179,71,0.12); border-color: var(--amber); color: var(--amber); }
-        .badge-cyan { background: rgba(0,212,255,0.12); border-color: var(--cyan); color: var(--cyan); }
-        .badge-blue { background: rgba(68,136,255,0.12); border-color: var(--blue); color: var(--blue); }
-        .badge-purple { background: rgba(163,113,247,0.12); border-color: var(--purple); color: var(--purple); }
-
-        .status-bar { display: flex; gap: 1.5rem; margin-bottom: 1rem; padding: 0.7rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; flex-wrap: wrap; font-size: 0.8rem; }
-        .status-item { display: flex; align-items: center; gap: 0.5rem; }
-        .status-item .k { color: var(--text-dim); }
-        .status-item .v { color: var(--cyan); }
-
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; }
-        .stat-card .value { font-size: 1.6rem; font-weight: bold; text-shadow: 0 0 10px currentColor; color: var(--cyan); }
-        .stat-card .label { font-size: 0.62rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
-        .stat-card.yellow .value { color: var(--amber); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.red .value { color: var(--red); }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.4rem; }
-        .card-header h2 { font-size: 0.9rem; color: var(--cyan); }
-        .card-header h2 .sub { color: var(--text-dim); font-size: 0.7rem; }
-        .app-list { max-height: 300px; overflow-y: auto; }
-        .app-item { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
-        .app-item:last-child { border-bottom: none; }
-        .app-item:hover { background: rgba(0,212,255,0.04); }
-        .bytes { font-family: 'Courier Prime', monospace; color: var(--green); font-size: 0.75rem; }
-        .empty { color: var(--p31-dim); padding: 0.6rem; }
-
-        .media-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; margin-top: 0.5rem; }
-        .media-card { background: var(--bg-row); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
-        .media-card:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.08); }
-        .media-card.expired { opacity: 0.55; filter: grayscale(70%); }
-        .media-card-head { display: flex; justify-content: space-between; align-items: center; font-size: 1.15rem; }
-        .media-host { font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--cyan); word-break: break-all; }
-        .media-meta-row { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); }
-        .media-actions { display: flex; gap: 0.5rem; margin-top: 0.35rem; }
-        .media-actions .btn { flex: 1; padding: 0.35rem 0.5rem; font-size: 0.7rem; text-align: center; text-decoration: none; display: inline-block; }
-        .media-expired-label { font-size: 0.7rem; color: var(--text-dim); font-style: italic; }
-        .media-note { font-size: 0.66rem; color: var(--text-dim); font-style: italic; margin-top: 0.15rem; }
-        .media-note.warn { color: var(--red); }
-        .media-actions .btn.disabled { opacity: 0.45; pointer-events: none; cursor: default; }
-
-        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.7rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; box-shadow: 0 0 20px rgba(0,212,255,0.4); }
-        .toast.error { background: var(--red); color: #fff; }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-        @media (max-width: 768px) { .main { margin-left: 0; } }
-
-        /* ── Langage de lecture partage avec Renseignement (#1240) ────────────
-           Le terminal est lu comme un acteur : glyphe = ce qu'il fait,
-           bloc plein = combien il pese, tampon = ce qu'il a declenche. */
-        .app-item.acteur { display: grid; grid-template-columns: auto 1fr auto auto;
-            align-items: center; gap: 0.55rem; }
-        .acteur .nat { font-size: 1rem; line-height: 1; }
-        .acteur .ident { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
-        .acteur .ident code { font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .acteur .ident small { font-size: 0.63rem; color: var(--text-dim);
-            font-family: 'Courier Prime', monospace; }
-        .multi { display: inline-flex; flex-direction: column; align-items: center;
-            justify-content: center; min-width: 62px; padding: 0.18rem 0.45rem;
-            border-radius: 7px; line-height: 1.05; color: var(--cyan);
-            background: rgba(0,212,255,0.10); border: 1px solid rgba(0,212,255,0.32); }
-        .multi b { font-size: 0.82rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-        .multi i { font-style: normal; font-size: 0.5rem; letter-spacing: 0.09em;
-            text-transform: uppercase; opacity: 0.72; }
-        .multi.n2 { background: rgba(0,212,255,0.16); }
-        .multi.n3 { color: var(--orange); background: rgba(255,153,68,0.14);
-            border-color: rgba(255,153,68,0.45); }
-        .multi.n4 { color: var(--red); background: rgba(255,68,102,0.16);
-            border-color: rgba(255,68,102,0.55); box-shadow: 0 0 12px rgba(255,68,102,0.16); }
-        /* Le tampon est appose : la detection a deja eu lieu. */
-        .tampon { display: inline-block; transform: rotate(-7deg); padding: 0.1rem 0.4rem;
-            border: 2px solid currentColor; border-radius: 4px; white-space: nowrap;
-            font-weight: 800; font-size: 0.55rem; letter-spacing: 0.09em; }
-        .tampon.exfil { color: var(--red); background: rgba(255,68,102,0.10); }
-        .tampon.ras { color: var(--text-dim); opacity: 0.5; }
-        @media (max-width: 560px) {
-            .app-item.acteur { grid-template-columns: auto 1fr auto; row-gap: 0.25rem; }
-            .acteur .tampon { grid-column: 2 / -1; justify-self: start; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled,.btn.off{opacity:.45;cursor:default;pointer-events:none}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .btn[aria-pressed="true"]{border-color:var(--cyan);background:rgba(41,182,246,.22);color:var(--cyan)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        [hidden]{display:none!important}
+        .sections{display:flex;flex-wrap:wrap;gap:6px}
+        .sections a{border:1px solid var(--trait);border-radius:999px;padding:3px 12px;font-size:.74rem;color:var(--doux);text-decoration:none;background:rgba(10,22,46,.5)}
+        .sections a:hover{border-color:var(--cyan);color:var(--texte)}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.jn .v{color:var(--jaune)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .fen{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0;overflow-wrap:anywhere}
+        .vide{color:var(--faible);padding:10px 4px;font-size:.8rem}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.66rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.rouge{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.vert{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+        .pill.orange{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.violet{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)} .pill.jaune{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)} .pill.bleu{border-color:var(--bleu);color:var(--bleu);background:rgba(59,130,246,.12)}
+        .lg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:6px 2px;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem;align-items:center;min-width:0}
+        .lg:first-child{border-top:0} .lg:hover{background:rgba(41,182,246,.05)}
+        .lg.alerte{border-left:3px solid var(--rouge);padding-left:8px}
+        .lg .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .lg .n.mono,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .lg .v{color:var(--doux);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+        .lg .sous{grid-column:1/-1;color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .lg .sous.mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .lg .corps{grid-column:1/-1;min-width:0;overflow-wrap:anywhere}
+        .barre{grid-column:1/-1;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px;background:var(--cyan)}
+        .liste{max-height:340px;overflow-y:auto}
+        .liste.libre{max-height:none}
+        .voir-plus{display:block;width:100%;margin-top:6px;padding:4px;background:transparent;border:1px dashed var(--faible);border-radius:8px;color:var(--cyan);font:inherit;font-size:.74rem;cursor:pointer}
+        .voir-plus:hover{border-style:solid}
+        .fen2{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:.72rem;color:var(--doux)}
+        svg.gr{width:100%;height:auto;display:block;overflow:visible}
+        svg.gr text{fill:var(--faible);font-size:10px;font-variant-numeric:tabular-nums}
+        svg.gr .axe{stroke:rgba(86,150,255,.16);stroke-width:1}
+        svg.gr path.tr{fill:none;stroke-width:2;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+        svg.gr path.ai{stroke:none;fill-opacity:.14}
+        .legende{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.72rem;color:var(--doux);margin-top:4px}
+        .legende b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+        .repart{display:grid;gap:12px;grid-template-columns:1fr;align-items:center}
+        @container a (min-width:700px){.repart{grid-template-columns:150px 1fr}}
+        svg.donut{width:150px;height:150px;display:block;margin:0 auto}
+        svg.donut text{fill:var(--texte);text-anchor:middle;font-size:7px} svg.donut .t2{fill:var(--doux);font-size:3.6px}
+        .leg2{min-width:0}
+        .leg2 .lg{grid-template-columns:12px minmax(0,1fr) auto}
+        .leg2 .pt{width:10px;height:10px;border-radius:3px}
+        .kv{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:.78rem;color:var(--doux);margin:0}
+        .kv b{color:var(--texte);font-weight:600;overflow-wrap:anywhere}
+        details.dev{border:1px solid var(--trait);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.4)}
+        details.dev summary{cursor:pointer;padding:6px 10px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:.8rem;list-style-position:inside}
+        details.dev .corps{padding:0 10px 6px}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .confirme{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--rouge);background:rgba(255,77,94,.08);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .galerie{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        .cmedia{border:1px solid var(--trait);border-radius:10px;padding:9px;background:rgba(8,18,38,.5);display:flex;flex-direction:column;gap:4px;min-width:0}
+        .cmedia.expire{opacity:.55;filter:grayscale(70%)}
+        .cmedia .tt{display:flex;justify-content:space-between;font-size:1.05rem}
+        .cmedia .hote{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;color:var(--cyan);overflow-wrap:anywhere}
+        .cmedia .mt{display:flex;justify-content:space-between;gap:6px;font-size:.7rem;color:var(--faible);flex-wrap:wrap}
+        .cmedia .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+        .cmedia .nt{font-size:.66rem;color:var(--faible);font-style:italic} .cmedia .nt.warn{color:var(--rouge)}
+        .multi{display:inline-flex;flex-direction:column;align-items:center;min-width:62px;padding:2px 7px;border-radius:7px;line-height:1.05;color:var(--cyan);background:rgba(41,182,246,.10);border:1px solid rgba(41,182,246,.32)}
+        .multi b{font-size:.8rem;font-variant-numeric:tabular-nums} .multi i{font-style:normal;font-size:.5rem;letter-spacing:.09em;text-transform:uppercase;opacity:.72}
+        .multi.n2{background:rgba(41,182,246,.16)} .multi.n3{color:var(--orange);background:rgba(255,159,28,.14);border-color:rgba(255,159,28,.45)} .multi.n4{color:var(--rouge);background:rgba(255,77,94,.16);border-color:rgba(255,77,94,.55)}
+        .tampon{display:inline-block;transform:rotate(-7deg);padding:1px 6px;border:2px solid currentColor;border-radius:4px;white-space:nowrap;font-weight:800;font-size:.55rem;letter-spacing:.09em}
+        .tampon.exfil{color:var(--rouge);background:rgba(255,77,94,.10)} .tampon.ras{color:var(--faible);opacity:.6}
+        .acteur{grid-template-columns:auto minmax(0,1fr) auto auto}
+        .acteur .nat{font-size:1rem}
+        @media (max-width:560px){.acteur{grid-template-columns:auto minmax(0,1fr) auto}.acteur .tampon{grid-column:2/-1;justify-self:start}}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <!-- #2293 : la vue d'ensemble DPI (tableau de bord), page encadrée de même origine ; le contenu historique reste dessous -->
-        <div id="vueDpi" style="margin-bottom:1rem"><iframe id="vueDpiFrame" src="vue.html" title="SecuBox DPI — vue d'ensemble" style="width:100%;height:1300px;border:0;display:block;background:transparent"></iframe></div>
-
-        <header class="header">
-            <h1><span class="live-dot" id="engine-dot"></span>🔍 Deep Packet Inspection</h1>
-            <div class="btn-group">
-                <span class="badge" id="engine-badge">—</span>
-                <button class="btn" onclick="refreshAll()">↻ Refresh</button>
-                <button class="btn primary" onclick="restartEngine()">♻️ Restart R3 Engine</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="rgba(41,182,246,.14)"/><path d="m15.5 15.5 5 5"/><path d="M7.5 10.5h6M10.5 7.5v6" opacity=".6"/></svg>
+                <div><h1>Inspection DPI</h1><small>Flux, volumes et exfiltration vus par le moteur R3 (ndpiReader)</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="btnRestart" type="button">♻ Redémarrer le moteur R3</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div class="confirme" id="confirmeRestart" hidden><span>Redémarrer le moteur DPI R3 (secubox-dpi-flowcap) ? La capture est interrompue quelques secondes.</span><button class="btn sm danger" id="okRestart" type="button">Confirmer</button><button class="btn sm" id="noRestart" type="button">Annuler</button></div>
+        <div class="retour" id="rRestart" hidden></div>
+        <nav class="sections" aria-label="Sections de la page">
+            <a href="#vue">Vue d’ensemble</a><a href="#stats">Statistiques</a><a href="#evolution">Évolution</a><a href="#exfil">Exfiltration</a><a href="#terminaux">Terminaux</a><a href="#destinations">Destinations</a><a href="#medias">Médias</a><a href="#apprentissage">Apprentissage</a>
+        </nav>
 
-        <div class="status-bar">
-            <div class="status-item"><span class="k">🛰️ Engine:</span><span class="v" id="engine-name">ndpiReader · R3 exfil</span></div>
-            <div class="status-item"><span class="k">⚙️ Service:</span><span class="v" id="engine-service">secubox-dpi-flowcap</span></div>
-            <div class="status-item"><span class="k">🔌 Source:</span><span class="v">wg-toolbox tunnel (R3)</span></div>
-            <div class="status-item"><span class="k">⏱️ Last window:</span><span class="v" id="engine-window">—</span></div>
-        </div>
+        <!-- #2293 : la vue d'ensemble DPI (tableau de bord), page encadrée de même origine -->
+        <section id="vue"><iframe id="vueDpiFrame" src="vue.html" title="SecuBox DPI — vue d'ensemble" style="width:100%;height:1300px;border:0;display:block;background:transparent"></iframe></section>
 
-        <!-- headline metrics from the R3 exfil engine (/exfil) -->
-        <div class="grid">
-            <div class="stat-card yellow"><div class="value" id="exfil-devices-count">0</div><div class="label">📟 R3 Devices</div></div>
-            <div class="stat-card"><div class="value" id="exfil-flows-count">0</div><div class="label">🌐 Flows</div></div>
-            <div class="stat-card green"><div class="value" id="exfil-cats-count">0</div><div class="label">🏷️ Categories</div></div>
-            <div class="stat-card red"><div class="value" id="exfil-alert-count">0</div><div class="label">🛰️ Exfil Alerts</div></div>
-        </div>
-
-        <!-- per-device cloud exfiltration watch -->
-        <div class="card" id="exfil-card">
-            <div class="card-header">
-                <h2>🛰️ Cloud Exfiltration Watch <span class="sub">— per-device egress on R3 (wg-toolbox)</span></h2>
-                <span class="badge" id="exfil-badge">—</span>
+        <!-- ===== Statistiques agrégées ===== -->
+        <section class="pan" id="stats"><h3>Statistiques de trafic <i id="srcCumul">cumul du collecteur — fenêtre : —</i></h3>
+            <div class="tuiles">
+                <div class="tuile cy" title="Nombre de flux comptés par le collecteur pour tous les terminaux, sur la fenêtre du cumul (jours indiqués au-dessus). Somme des flux par terminal de /exfil."><span class="l">Flux</span><span class="v" id="tFlux">—</span><span class="s">cumul tous terminaux</span></div>
+                <div class="tuile jn" title="Octets émis vers l’extérieur par les terminaux (up_bytes), cumul du collecteur. Somme des octets sortants par terminal."><span class="l">Sortant</span><span class="v" id="tUp">—</span><span class="s">octets émis</span></div>
+                <div class="tuile cy" title="Octets reçus depuis l’extérieur par les terminaux (down_bytes), cumul du collecteur."><span class="l">Entrant</span><span class="v" id="tDown">—</span><span class="s">octets reçus</span></div>
+                <div class="tuile vi" title="Sortant + entrant, tels que mesurés. Seuls les flux classés par le moteur sont comptés."><span class="l">Volume total</span><span class="v" id="tTotal">—</span><span class="s">entrant + sortant</span></div>
+                <div class="tuile" title="Rapport entre le sortant et le volume total, calculé sur les deux valeurs mesurées ci-dessus. Une part sortante élevée est un signe à regarder pour l’exfiltration."><span class="l">Part sortante</span><span class="v" id="tPart">—</span><span class="s">sortant ÷ total</span></div>
+                <div class="tuile cy" title="Terminaux (appareils du parc) observés sur R3 dans le cumul du collecteur."><span class="l">Terminaux R3</span><span class="v" id="tTerm">—</span><span class="s">observés sur le tunnel</span></div>
+                <div class="tuile ok" title="Catégories de services distinctes (cloud, média, jeux…) classées pour les flux de tous les terminaux. Déduit de /exfil."><span class="l">Catégories</span><span class="v" id="tCat">—</span><span class="s">services classés</span></div>
+                <div class="tuile hors" title="Alertes d’exfiltration du cumul : envoi massif, nouvelle destination, balisage, destination non classée."><span class="l">Alertes d’exfiltration</span><span class="v" id="tAlert">—</span><span class="s">cumul du collecteur</span></div>
             </div>
-            <div id="exfil-alerts" style="margin-bottom:1rem;"></div>
-            <div id="exfil-devices"><p class="empty">Loading…</p></div>
-            <p id="exfil-foot" style="color:var(--text-dim);font-size:0.7rem;margin-top:0.75rem;"></p>
-        </div>
+            <p class="note" id="noteCumul">Les octets viennent de /api/v1/dpi/exfil (cumul du collecteur, pas de paramètre de fenêtre) ; seuls les flux classés par le moteur sont comptés.</p>
+        </section>
 
-        <div class="card">
-            <div class="card-header"><h2>📈 Timeline <span class="sub">— flux/jour (14 j)</span></h2></div>
-            <div id="dpi-timeline" style="display:flex;align-items:flex-end;gap:4px;height:90px;padding-top:8px;"><p class="empty">Loading…</p></div>
-        </div>
-
-        <div class="grid-2">
-            <div class="card"><div class="card-header"><h2>📊 Top Applications</h2></div><div class="app-list" id="top-apps"><p class="empty">Loading…</p></div></div>
-            <div class="card"><div class="card-header"><h2>📡 Top Protocols</h2></div><div class="app-list" id="top-protocols"><p class="empty">Loading…</p></div></div>
-        </div>
-
-        <div class="grid-2">
-            <div class="card"><div class="card-header"><h2>💻 Débit par terminal <span class="sub">— qui parle, combien, et vers quoi</span></h2></div><div class="app-list" id="bandwidth-devices"><p class="empty">Loading…</p></div></div>
-            <div class="card"><div class="card-header"><h2>🌐 Active Flows <span class="sub">— live window</span></h2></div><div class="app-list" id="active-flows"><p class="empty">Loading…</p></div></div>
-        </div>
-
-        <div class="card">
-            <div class="card-header"><h2>🧭 Sessions d'usage <span class="sub">— flux corrélés par terminal + usage (sbxdpi) · mesuré par le DPI</span></h2></div>
-            <div id="dpi-sessions"><p class="empty">Loading…</p></div>
-        </div>
-
-        <div class="card">
-            <div class="card-header"><h2>🌍 Pays des destinations <span class="sub">— géo des IP réelles (GeoLite2) · top 5</span></h2></div>
-            <div id="dpi-countries"><p class="empty">Loading…</p></div>
-        </div>
-
-        <div class="grid-2">
-            <div class="card">
-                <div class="card-header"><h2>🏷️ Types de services captés <span class="sub">— octets par catégorie (SNI)</span></h2></div>
-                <div class="app-list" id="svc-categories"><p class="empty">Loading…</p></div>
+        <section class="pan"><h3>Fenêtre live <i id="srcLive">dernière fenêtre de capture du collecteur</i></h3>
+            <div class="tuiles">
+                <div class="tuile jn" title="Octets sortants des flux actifs de la dernière fenêtre de capture (active_flows de /exfil). Volume de la fenêtre, pas un débit : la durée exacte de la fenêtre n’est pas fournie par l’API."><span class="l">Sortant (fenêtre)</span><span class="v" id="tLUp">—</span><span class="s">octets</span></div>
+                <div class="tuile cy" title="Octets entrants des flux actifs de la dernière fenêtre de capture."><span class="l">Entrant (fenêtre)</span><span class="v" id="tLDown">—</span><span class="s">octets</span></div>
+                <div class="tuile cy" title="Nombre de flux actifs listés dans la dernière fenêtre de capture."><span class="l">Flux actifs</span><span class="v" id="tLFlux">—</span><span class="s">fenêtre courante</span></div>
+                <div class="tuile" id="cFen" title="Âge de la dernière fenêtre de capture. Au-delà de quelques minutes, le collecteur est probablement arrêté ou le tunnel au repos."><span class="l">Dernière fenêtre</span><span class="v" id="tFen">—</span><span class="s">il y a</span></div>
             </div>
-            <div class="card">
-                <div class="card-header"><h2>🎬 Types de médias captés <span class="sub">— Content-Type réels (MITM R4)</span></h2></div>
-                <div class="app-list" id="media-types"><p class="empty">Loading…</p></div>
+        </section>
+
+        <section class="pan" id="evolution"><h3>Évolution dans le temps <i id="srcHist">historique quotidien du collecteur</i>
+            <span class="fen" role="group" aria-label="Fenêtre de temps"><button class="btn sm" type="button" data-j="7" aria-pressed="false">7 j</button><button class="btn sm" type="button" data-j="14" aria-pressed="true">14 j</button><button class="btn sm" type="button" data-j="30" aria-pressed="false">30 j</button></span></h3>
+            <div id="courbe" title="Octets sortants et entrants par jour, tous terminaux (route /history?days=). Seuls les jours mesurés figurent sur l’axe."></div>
+            <div class="legende" id="legCourbe"></div>
+            <h3 style="margin-top:12px">Flux par jour <i>rouge : jour avec alerte d’exfiltration</i></h3>
+            <div id="dpi-timeline"><p class="vide">Chargement…</p></div>
+            <p class="note" id="noteHist">L’API ne fournit qu’un historique quotidien : pas de courbe à l’heure ni à la minute.</p>
+        </section>
+
+        <div class="grille">
+            <section class="pan"><h3>Répartition par catégorie <i>octets (sortant + entrant) · cumul</i></h3>
+                <div class="repart"><div id="donut" title="Part de chaque catégorie de service dans le volume mesuré (somme des services classés de tous les terminaux)."></div><div class="leg2" id="svc-categories"><p class="vide">Chargement…</p></div></div>
+                <p class="note">Catégorie = classement du moteur sur le SNI ; les flux non classés n’y figurent pas.</p>
+            </section>
+            <section class="pan"><h3>Pays des destinations <i>géo des IP réelles (GeoLite2) · top 5</i></h3>
+                <div id="dpi-countries"><p class="vide">Chargement…</p></div>
+            </section>
+        </div>
+
+        <div class="grille">
+            <section class="pan"><h3>Protocoles les plus volumineux <i>cumul du collecteur</i></h3><div id="top-protocols" class="liste libre"><p class="vide">Chargement…</p></div></section>
+            <section class="pan"><h3>Applications les plus volumineuses <i>cumul du collecteur</i></h3><div id="top-apps" class="liste libre"><p class="vide">Chargement…</p></div></section>
+        </div>
+
+        <section class="pan" id="nd"><h3>nDPId — protocoles et applications <i id="srcNd">route /api/v1/ndpid/top/…</i>
+            <span class="fen" role="group" aria-label="Fenêtre nDPId"><button class="btn sm" type="button" data-h="1" aria-pressed="false">1 h</button><button class="btn sm" type="button" data-h="6" aria-pressed="false">6 h</button><button class="btn sm" type="button" data-h="24" aria-pressed="true">24 h</button><button class="btn sm" type="button" data-h="168" aria-pressed="false">7 j</button></span></h3>
+            <div class="grille"><div><div class="note" style="margin:0 0 4px">Protocoles</div><div id="ndProto"><p class="vide">Chargement…</p></div></div><div><div class="note" style="margin:0 0 4px">Applications</div><div id="ndApps"><p class="vide">Chargement…</p></div></div></div>
+            <p class="note" id="noteNd">La fenêtre s’applique à la base nDPId ; quand elle est vide, l’API se replie sur sbxdpi/ndpiReader qui ignore la fenêtre (les listes sont alors celles du cumul).</p>
+        </section>
+
+        <!-- ===== Exfiltration cloud ===== -->
+        <section class="pan" id="exfil"><h3>Surveillance de l’exfiltration cloud <i>sortant par terminal sur R3 (wg-toolbox)</i> <span class="pill" id="exfil-badge">—</span></h3>
+            <div class="kv"><span>Moteur : <b id="engine-name">ndpiReader · R3 exfil</b></span><span>Service : <b id="engine-service">secubox-dpi-flowcap</b></span><span>Source : <b>tunnel wg-toolbox (R3)</b></span><span>Dernière fenêtre : <b id="engine-window">—</b></span></div>
+            <div id="exfil-alerts" style="margin-top:8px"></div>
+            <div id="exfil-devices"><p class="vide">Chargement…</p></div>
+            <p class="note" id="exfil-foot"></p>
+        </section>
+
+        <div class="grille" id="terminaux">
+            <section class="pan"><h3>Débit par terminal <i>qui parle, combien, et vers quoi</i></h3><div id="bandwidth-devices" class="liste libre"><p class="vide">Chargement…</p></div></section>
+            <section class="pan"><h3>Flux actifs <i>fenêtre live</i></h3><div id="active-flows" class="liste libre"><p class="vide">Chargement…</p></div></section>
+        </div>
+
+        <section class="pan"><h3>Sessions d’usage <i>flux corrélés par terminal + usage (sbxdpi) · mesuré par le DPI</i></h3><div id="dpi-sessions"><p class="vide">Chargement…</p></div></section>
+
+        <div class="grille" id="destinations">
+            <section class="pan"><h3>Destinations les plus volumineuses <i>services agrégés, tous terminaux</i></h3><div id="topDest" class="liste libre"><p class="vide">Chargement…</p></div><p class="note">Agrégation des services classés de /exfil ; le nombre de terminaux est celui des terminaux qui ont contacté la destination.</p></section>
+            <section class="pan" id="adg-unknown-card"><h3>Destinations non classées <i>étiquetées d’après ad-guard · volumes mesurés par le DPI</i></h3><div id="adg-unknown"><p class="vide">Chargement…</p></div><p class="note" id="adg-unknown-foot"></p></section>
+        </div>
+
+        <section class="pan" id="adg-lan-card"><h3>Appareils du LAN <i>vue DNS (ad-guard) : noms demandés, pas de volumes</i> <span class="pill" id="adg-lan-badge">—</span></h3>
+            <div id="adg-lan"><p class="vide">Chargement…</p></div><p class="note" id="adg-lan-foot"></p></section>
+
+        <!-- ===== Médias ===== -->
+        <section class="pan" id="medias"><h3>Flux médias <i>paquet mediaflow : flux classés « média » dans la fenêtre live</i></h3>
+            <div class="tuiles">
+                <div class="tuile ok" title="Flux vidéo en cours dans la fenêtre live (catégorie média, hors services audio). Compté par /api/v1/mediaflow/status."><span class="l">Flux vidéo</span><span class="v" id="tVid">—</span><span class="s">fenêtre live</span></div>
+                <div class="tuile vi" title="Flux audio en cours dans la fenêtre live (services audio reconnus par nom ou par hôte)."><span class="l">Flux audio</span><span class="v" id="tAud">—</span><span class="s">fenêtre live</span></div>
+                <div class="tuile cy" title="Débit des flux médias : octets de la fenêtre ÷ durée de fenêtre supposée par le paquet mediaflow (60 s par défaut). Estimation, pas une mesure instantanée."><span class="l">Débit médias</span><span class="v" id="tMbps">—</span><span class="s">Mbit/s, estimé</span></div>
+                <div class="tuile cy" title="Terminaux distincts qui lisent un flux média dans la fenêtre live."><span class="l">Clients médias</span><span class="v" id="tCli">—</span><span class="s">terminaux distincts</span></div>
             </div>
+        </section>
+        <div class="grille">
+            <section class="pan"><h3>Types de médias captés <i>Content-Type réels (MITM R4)</i></h3><div id="media-types"><p class="vide">Chargement…</p></div></section>
+            <section class="pan"><h3>Tampon média <i>captures live, replay avant expiration (admin)</i> <span class="pill" id="media-buffer-badge">—</span></h3><div class="galerie" id="media-buffer-gallery"><p class="vide">Chargement…</p></div></section>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>🎥 Media Buffer <span class="sub">— captures live, replay avant expiration (admin)</span></h2>
-                <span class="badge" id="media-buffer-badge">—</span>
-            </div>
-            <div class="media-gallery" id="media-buffer-gallery"><p class="empty">Loading…</p></div>
-        </div>
+        <section class="pan" id="apprentissage"><h3>Apprentissage <i>suggestions de règles DPI (learner) · valider = créer la règle (rechargement à chaud)</i></h3>
+            <div id="dpi-learning"><p class="vide">Chargement…</p></div><div class="retour" id="rLearn" hidden></div></section>
+        <p class="note">Mesures réelles uniquement : une valeur absente de l’API reste « — ». Les actualisations sont suspendues quand l’onglet est masqué ou qu’une confirmation est ouverte.</p>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- Données d'ad-guard (#1960) : étiquettes des destinations non classées et vue DNS des appareils du LAN. Tout texte venu de l'API passe par textContent. -->
-        <div class="card" id="adg-unknown-card">
-            <div class="card-header"><h2>🏷️ Destinations non classées <span class="sub">— étiquetées d'après ad-guard · volumes mesurés par le DPI</span></h2></div>
-            <div id="adg-unknown"><p class="empty">Loading…</p></div>
-            <p id="adg-unknown-foot" style="color:var(--text-dim);font-size:0.7rem;margin-top:0.5rem;"></p>
-        </div>
-
-        <div class="card" id="adg-lan-card">
-            <div class="card-header">
-                <h2>🏠 Appareils du LAN <span class="sub">— vue DNS (ad-guard) : noms demandés, pas de volumes</span></h2>
-                <span class="badge" id="adg-lan-badge">—</span>
-            </div>
-            <div id="adg-lan"><p class="empty">Loading…</p></div>
-            <p id="adg-lan-foot" style="color:var(--text-dim);font-size:0.7rem;margin-top:0.5rem;"></p>
-        </div>
-
-        <div class="card">
-            <div class="card-header"><h2>🎓 Learning <span class="sub">— suggestions de règles DPI (learner) · valider = créer la règle (hot-reload)</span></h2></div>
-            <div id="dpi-learning"><p class="empty">Loading…</p></div>
-        </div>
-
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
-        window.addEventListener('message', (e) => {
-            if (e.origin === location.origin && e.data && e.data.sbxdpiVue) {
-                const f = document.getElementById('vueDpiFrame'); if (f) f.style.height = Math.min(4000, Math.max(600, +e.data.sbxdpiVue + 4)) + 'px';
-            }
-        });
-        const API = '/api/v1/dpi';
+    (function () {
+        'use strict';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) document.body.classList.add('emb');
+        const API = '/api/v1/dpi', API_ND = '/api/v1/ndpid', API_MF = '/api/v1/mediaflow';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in (attrs || {})) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; return e; };
+        const est = x => x !== null && x !== undefined && x !== '' && isFinite(Number(x));
+        const nombre = x => est(x) ? Number(x) : null;
+        const somme = (liste, f) => { let s = 0, vu = false; liste.forEach(x => { const v = nombre(f(x)); if (v !== null) { s += v; vu = true; } }); return vu ? s : null; };
+        const entier = n => n === null || n === undefined ? '—' : Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
-        // ── Affichage progressif : top-N par défaut + « Voir plus » ──────────
-        // Les listes DPI (sessions, apps, protocoles, pays, learning…) débordent
-        // vite sur données réelles. On n'en montre que les N premières, le reste
-        // se déplie à la demande. `after(el)` re-câble les handlers après chaque
-        // (re)peinture — indispensable pour les boutons Accept/Ignore du learner.
-        (function () {
-            const s = document.createElement('style');
-            s.textContent = '.voir-plus{display:block;width:100%;margin-top:.35rem;padding:.3rem;'
-                + 'background:transparent;border:1px dashed var(--text-dim,#556);border-radius:6px;'
-                + 'color:var(--cyber-cyan,#00d4ff);font:inherit;font-size:.74rem;cursor:pointer;opacity:.8}'
-                + '.voir-plus:hover{opacity:1;border-style:solid}';
-            document.head.appendChild(s);
-        })();
-        function topProg(el, rows, render, empty, lim, after) {
-            if (!el) return;
-            rows = rows || []; lim = lim || 5;
-            if (el._all === undefined) el._all = false; // garde l'état déplié entre rafraîchissements
-            function paint() {
-                if (!rows.length) { el.innerHTML = '<p class="empty">' + empty + '</p>'; return; }
-                const shown = el._all ? rows : rows.slice(0, lim);
-                let html = shown.map(render).join('');
-                if (rows.length > lim) {
-                    html += '<button class="voir-plus" type="button">'
-                        + (el._all ? '▲ Voir moins' : '▾ Voir plus (+' + (rows.length - lim) + ')') + '</button>';
-                }
-                el.innerHTML = html;
-                const b = el.querySelector('.voir-plus');
-                if (b) b.addEventListener('click', function () { el._all = !el._all; paint(); });
-                if (after) after(el);
-            }
-            paint();
-        }
-
-        function toast(msg, err) {
-            const t = document.createElement('div');
-            t.className = 'toast' + (err ? ' error' : '');
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-        async function api(endpoint, method = 'GET', data = null) {
-            const opts = { method, headers: { 'Content-Type': 'application/json' } };
-            if (data) opts.body = JSON.stringify(data);
-            try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
-        }
-        function formatBytes(bytes) {
-            if (bytes == null || !isFinite(Number(bytes)) || Number(bytes) < 0) return '—'; // inconnu (octets absents ou négatifs) : jamais « NaN undefined »
-            if (!bytes) return '0 B';
-            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
-        }
-        function shortDev(d) { return d ? d.slice(0, 8) + '…' : 'unknown'; }
-        function agoStr(ts) {
-            if (!ts) return '';
-            const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
-            if (s < 90) return s + 's ago';
-            if (s < 5400) return Math.round(s / 60) + 'm ago';
-            return Math.round(s / 3600) + 'h ago';
-        }
-
-        const EXFIL_KINDS = {
-            exfil_volume:          { label: 'BULK UPLOAD', cls: 'badge-red',    icon: '⬆️' },
-            new_cloud:             { label: 'NEW DEST',    cls: 'badge-yellow', icon: '☁️' },
-            beaconing:             { label: 'BEACONING',   cls: 'badge-purple', icon: '📡' },
-            unclassified_external: { label: 'UNCLASSIFIED',cls: 'badge-amber',  icon: '❔' },
-        };
-        const CATEGORY = {
-            cloud:     { icon: '☁️', cls: 'badge-red',    exfil: true  },
-            filehost:  { icon: '📦', cls: 'badge-red',    exfil: true  },
-            messaging: { icon: '💬', cls: 'badge-amber',  exfil: true  },
-            ai:        { icon: '🤖', cls: 'badge-purple', exfil: true  },
-            media:     { icon: '🎬', cls: 'badge-cyan',   exfil: false },
-            game:      { icon: '🎮', cls: 'badge-green',  exfil: false },
-            social:    { icon: '👥', cls: 'badge-blue',   exfil: false },
-            adult:     { icon: '🔞', cls: 'badge-purple', exfil: false },
-        };
-        function catMeta(c) { return CATEGORY[c] || { icon: '🌐', cls: 'badge-cyan', exfil: false }; }
-
-        function updateEngine(engine, generated_at, deviceCount, alertCount) {
-            const dot = document.getElementById('engine-dot');
-            const badge = document.getElementById('engine-badge');
-            const win = document.getElementById('engine-window');
-            const e = engine || {};
-            const alive = !!e.alive;
-            dot.className = 'live-dot' + (alive ? '' : ' idle');
-            badge.textContent = alive ? '● R3 LIVE' : '○ R3 IDLE';
-            badge.className = 'badge ' + (alive ? 'badge-green' : 'badge-amber');
-            document.getElementById('engine-name').textContent = e.name || 'ndpiReader · R3 exfil';
-            document.getElementById('engine-service').textContent = e.service || 'secubox-dpi-flowcap';
-            win.textContent = (e.last_window_s != null) ? (e.last_window_s + 's ago')
-                : (generated_at ? agoStr(generated_at) : 'no capture yet');
-        }
-
-        async function loadExfil() {
-            const data = await api('/exfil');
-            const alertsBox = document.getElementById('exfil-alerts');
-            const devBox = document.getElementById('exfil-devices');
-            const badge = document.getElementById('exfil-badge');
-            const foot = document.getElementById('exfil-foot');
-            const card = document.getElementById('exfil-card');
-
-            const alerts = Array.isArray(data.alerts) ? data.alerts : [];
-            const devices = Array.isArray(data.devices) ? data.devices : [];
-            const count = data.alert_count || alerts.length;
-
-            updateEngine(data.engine, data.generated_at, devices.length, count);
-
-            badge.textContent = count > 0 ? (count + ' ALERT' + (count > 1 ? 'S' : '')) : 'CLEAR';
-            badge.className = 'badge ' + (count > 0 ? 'badge-red' : 'badge-green');
-            card.style.borderColor = count > 0 ? 'var(--red)' : 'var(--border)';
-
-            const totalFlows = devices.reduce((n, d) => n + (d.flows || 0), 0);
-            const cats = new Set();
-            devices.forEach(d => Object.keys(d.by_category || {}).forEach(c => cats.add(c)));
-            const setCard = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-            setCard('exfil-devices-count', devices.length);
-            setCard('exfil-flows-count', totalFlows);
-            setCard('exfil-cats-count', cats.size);
-            setCard('exfil-alert-count', count);
-
-            alertsBox.innerHTML = alerts.length ? alerts.map(a => {
-                const k = EXFIL_KINDS[a.kind] || { label: (a.kind || '?').toUpperCase(), cls: 'badge-amber', icon: '⚠️' };
-                const svc = a.service || a.cloud;
-                const cm = catMeta(a.category);
-                const dest = svc ? `${cm.icon} ${svc} (${a.dst})` : a.dst;
-                return `<div class="app-item" style="border-left:3px solid var(--red);padding-left:0.6rem;">
-                    <span><span class="badge ${k.cls}" style="margin-right:0.5rem;">${k.icon} ${k.label}</span>
-                        <span style="font-family:monospace;">${shortDev(a.device)}</span> → ${dest}
-                        <span style="color:var(--text-dim);"> · ${a.detail || ''}</span></span>
-                    <span class="bytes">↑${formatBytes(a.up_bytes)} ${agoStr(a.ts)}</span></div>`;
-            }).join('') : '<p class="empty" style="color:var(--green);">✓ No exfiltration detected</p>';
-
-            devBox.innerHTML = devices.length ? devices.map(d => {
-                const svcs = d.services || d.clouds || [];
-                const rows = svcs.map(c => {
-                    const m = catMeta(c.category);
-                    const name = c.service || c.cloud || c.dst;
-                    return `<div class="app-item" style="padding:0.35rem 0.6rem;font-size:0.82rem;${m.exfil ? 'border-left:2px solid var(--red);padding-left:0.5rem;' : ''}">
-                        <span><span title="${c.category || 'other'}">${m.icon}</span> ${name} <span style="color:var(--text-dim);">${c.proto || ''}</span></span>
-                        <span class="bytes">↑${formatBytes(c.up_bytes)} ↓${formatBytes(c.down_bytes)}</span></div>`;
-                }).join('') || '<p class="empty" style="padding:0.35rem 0.6rem;">no classified egress</p>';
-                const bycat = d.by_category || {};
-                const chips = Object.keys(bycat).sort((a, b) => bycat[b] - bycat[a]).map(c => {
-                    const m = catMeta(c);
-                    return `<span class="badge ${m.cls}" style="margin-left:0.3rem;font-size:0.62rem;">${m.icon} ${c} ${bycat[c]}</span>`;
-                }).join('');
-                const hot = (d.alerts && d.alerts.length) ? `<span class="badge badge-red" style="margin-left:0.5rem;">${d.alerts.length}⚠️</span>` : '';
-                return `<div style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:6px;">
-                    <div class="app-item" style="background:rgba(255,179,71,0.06);flex-wrap:wrap;">
-                        <span style="font-family:monospace;color:var(--amber);">📟 ${shortDev(d.device)}${hot} ${chips}</span>
-                        <span class="bytes">${d.flows} flows · ↑${formatBytes(d.up_bytes)}</span></div>
-                    ${rows}</div>`;
-            }).join('') : '<p class="empty">No devices observed on R3 yet (tunnel idle, or first capture window pending).</p>';
-
-            foot.textContent = data.generated_at
-                ? `Last rollup: ${agoStr(data.generated_at)} · ${devices.length} device(s) · ${alerts.length} alert(s)`
-                : (data.note || 'no capture window completed yet');
-
-            // service categories (bytes board-wide)
-            const byCat = {};
-            devices.forEach(d => (d.services || d.clouds || []).forEach(c => {
-                const cat = c.category || 'other';
-                const e = byCat[cat] || (byCat[cat] = { up: 0, down: 0, flows: 0 });
-                e.up += c.up_bytes || 0; e.down += c.down_bytes || 0; e.flows += (c.flows || 1);
-            }));
-            const svcBox = document.getElementById('svc-categories');
-            if (svcBox) {
-                const catRows = Object.keys(byCat).sort((a, b) => (byCat[b].up + byCat[b].down) - (byCat[a].up + byCat[a].down));
-                svcBox.innerHTML = catRows.length ? catRows.map(cat => {
-                    const m = catMeta(cat); const e = byCat[cat];
-                    return `<div class="app-item"${m.exfil ? ' style="border-left:2px solid var(--red);padding-left:0.5rem;"' : ''}>
-                        <span><span class="badge ${m.cls}" style="margin-right:0.4rem;">${m.icon} ${cat}</span>
-                            <span style="color:var(--text-dim);">${e.flows}f</span></span>
-                        <span class="bytes">↑${formatBytes(e.up)} ↓${formatBytes(e.down)}</span></div>`;
-                }).join('') : '<p class="empty">no classified egress yet</p>';
-            }
-
-            const fillList = (id, rows, render, empty) => {
-                topProg(document.getElementById(id), rows, render, empty, 5);
-            };
-            fillList('top-apps', data.top_apps, a => `<div class="app-item"><span>${a.name}</span><span class="bytes">${formatBytes(a.bytes)} · ${a.flows}f</span></div>`, 'No data');
-            fillList('top-protocols', data.top_protocols, p => `<div class="app-item"><span>${p.name}</span><span class="bytes">${formatBytes(p.bytes)} · ${p.flows}f</span></div>`, 'No data');
-            // MEME LANGAGE DE LECTURE QUE LA PAGE RENSEIGNEMENT (#1240), applique
-            // au terminal : ici l'acteur n'est pas une adresse qui attaque, c'est
-            // une machine du parc qui parle vers l'exterieur. Trois signes, les
-            // memes : le GLYPHE dit ce qu'elle fait (sa categorie dominante, lue
-            // dans ce qui a REELLEMENT ete classe), le BLOC PLEIN dit combien elle
-            // pese, le TAMPON dit si elle a declenche quelque chose.
-            const volMax = devices.reduce((m, d) =>
-                Math.max(m, (d.up_bytes || 0) + (d.down_bytes || 0)), 1);
-            fillList('bandwidth-devices', devices, d => {
-                const vol = (d.up_bytes || 0) + (d.down_bytes || 0);
-                const part = Math.min(1, vol / volMax);
-                const cls = part >= .6 ? 'n4' : part >= .3 ? 'n3' : part >= .1 ? 'n2' : '';
-                // Categorie dominante = celle qui porte le plus de flux, pas la
-                // premiere venue : c'est elle qui caracterise le terminal.
-                const bc = d.by_category || {};
-                const dom = Object.keys(bc).sort((a, b) => bc[b] - bc[a])[0];
-                const m = dom ? catMeta(dom) : { icon: '📟' };
-                const na = (d.alerts && d.alerts.length) || 0;
-                return `<div class="app-item acteur">
-                    <span class="nat" title="${esc(dom || 'aucune categorie classee')}">${m.icon}</span>
-                    <span class="ident"><code>${esc(shortDev(d.device))}</code>
-                        <small>${d.flows || 0} flux · ↑${formatBytes(d.up_bytes)} ↓${formatBytes(d.down_bytes || 0)}</small></span>
-                    <span class="multi ${cls}"><b>${formatBytes(vol)}</b><i>total</i></span>
-                    ${na ? `<span class="tampon exfil" title="${na} alerte(s) d'exfiltration sur ce terminal">EXFIL ×${na}</span>`
-                         : '<span class="tampon ras" title="aucune alerte d\'exfiltration">RAS</span>'}
-                </div>`;
-            }, 'Aucun terminal observ\u00e9');
-            fillList('active-flows', data.active_flows, f => {
-                const m = catMeta(f.category); const name = f.service || f.dst;
-                return `<div class="app-item"><span><span title="${f.category || 'other'}">${m.icon}</span> ${name} <span style="color:var(--text-dim);">${f.proto || ''}</span></span><span class="bytes">↑${formatBytes(f.up_bytes)} ↓${formatBytes(f.down_bytes)}</span></div>`;
-            }, 'No active flows (live window idle)');
-        }
-
-        async function restartEngine() {
-            if (!confirm('Restart the R3 DPI engine (secubox-dpi-flowcap)?')) return;
-            toast('Restarting R3 engine…');
-            const r = await api('/restart', 'POST');
-            toast(r.success ? '♻️ R3 engine restarted' : ('Failed: ' + (r.error || 'permission?')), !r.success);
-            setTimeout(loadExfil, 2500);
-        }
-
-        async function loadMediaTypes() {
-            const data = await api('/media_types');
-            const box = document.getElementById('media-types');
-            if (!box) return;
-            const KIND_ICON = { video: '📺', audio: '🎵', manifest: '🎞️', page: '▶️' };
-            const kinds = (data && data.kinds) || [];
-            const ctypes = (data && data.ctypes) || [];
-            const hosts = (data && data.top_hosts) || [];
-            if (!kinds.length && !ctypes.length) {
-                box.innerHTML = '<p class="empty">Aucun média capté (tunnel R3/R4 requis + lecture vidéo/audio).</p>';
-                return;
-            }
-            const kindRows = kinds.map(k => `<div class="app-item"><span>${KIND_ICON[k.label] || '🎬'} ${k.label}</span><span class="bytes">${k.count}</span></div>`).join('');
-            const ctypeRows = ctypes.slice(0, 6).map(c => `<div class="app-item"><span style="font-family:monospace;font-size:0.76rem;">${c.label}</span><span class="bytes">${c.count}</span></div>`).join('');
-            const hostRows = hosts.slice(0, 6).map(h => `<div class="app-item"><span>${KIND_ICON[h.kind] || '🎬'} <span style="font-family:monospace;font-size:0.76rem;">${(h.host || '').slice(0, 32)}</span></span><span class="bytes">${formatBytes(h.bytes)}</span></div>`).join('');
-            box.innerHTML =
-                `<div style="color:var(--text-dim);font-size:0.68rem;margin-bottom:0.3rem;">Types</div>${kindRows}` +
-                `<div style="color:var(--text-dim);font-size:0.68rem;margin:0.5rem 0 0.3rem;">Content-Type (MIME)</div>${ctypeRows}` +
-                (hostRows ? `<div style="color:var(--text-dim);font-size:0.68rem;margin:0.5rem 0 0.3rem;">Top hôtes</div>${hostRows}` : '');
-        }
-
-        // #812 — Media Buffer: host/url/mac_hash are ATTACKER-CONTROLLED (captured
-        // live traffic). Every card is built with createElement + textContent (or
-        // the .title IDL property, never HTML-parsed) — never innerHTML of these
-        // fields — so a captured `<img onerror=...>` renders as inert text.
-        const MEDIA_KIND_ICON = { video: '📺', audio: '🎵', manifest: '🎞️', file: '📄' };
-        function mediaKindIcon(k) { return MEDIA_KIND_ICON[k] || '📄'; }
-        function mediaDirArrow(d) { return d === 'up' ? '⬆' : (d === 'down' ? '⬇' : '↔'); }
-
-        async function apiAuthed(path) {
-            const token = localStorage.getItem('sbx_token');
-            const opts = { headers: {} };
-            if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+        // ───── jeton, lecture, écriture ─────
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        let REFUS = false, OKANY = false;
+        async function lecture(url, opts) {
+            if (DEMO) return demo(url);
             try {
-                const res = await fetch(path, opts);
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                if (!res.ok) return null;
-                return await res.json();
+                const r = await fetch(url, Object.assign({ credentials: 'same-origin', cache: 'no-store', headers: entetes() }, opts || {}));
+                if (r.status === 401 || r.status === 403) { REFUS = true; return null; }
+                if (!r.ok) return null;
+                const j = await r.json(); OKANY = true; return j;
             } catch (e) { return null; }
         }
-
-        function buildMediaCard(item) {
-            const card = document.createElement('div');
-            card.className = 'media-card' + (item.expired ? ' expired' : '');
-            const head = document.createElement('div');
-            head.className = 'media-card-head';
-            const kindSpan = document.createElement('span'); kindSpan.textContent = mediaKindIcon(item.kind);
-            const dirSpan = document.createElement('span'); dirSpan.textContent = mediaDirArrow(item.direction);
-            head.appendChild(kindSpan); head.appendChild(dirSpan); card.appendChild(head);
-            const hostEl = document.createElement('div'); hostEl.className = 'media-host';
-            hostEl.textContent = item.host || '(unknown host)';
-            if (item.url) hostEl.title = item.url;
-            card.appendChild(hostEl);
-            const m1 = document.createElement('div'); m1.className = 'media-meta-row';
-            const dev = document.createElement('span'); dev.textContent = '📟 ' + shortDev(item.mac_hash);
-            const kl = document.createElement('span'); kl.textContent = item.kind || 'file';
-            m1.appendChild(dev); m1.appendChild(kl); card.appendChild(m1);
-            const m2 = document.createElement('div'); m2.className = 'media-meta-row';
-            const sz = document.createElement('span'); sz.textContent = formatBytes(item.bytes || 0);
-            const ag = document.createElement('span'); ag.textContent = agoStr(item.first_ts);
-            m2.appendChild(sz); m2.appendChild(ag); card.appendChild(m2);
-            if (item.kind === 'manifest' && typeof item.segments === 'number' && item.segments > 0) {
-                const seg = document.createElement('div'); seg.className = 'media-meta-row';
-                const ss = document.createElement('span'); ss.textContent = '🧩 ' + item.segments + ' segment' + (item.segments === 1 ? '' : 's');
-                seg.appendChild(ss); card.appendChild(seg);
-            }
-            const actions = document.createElement('div'); actions.className = 'media-actions';
-            if (item.expired) {
-                const label = document.createElement('span'); label.className = 'media-expired-label';
-                label.textContent = 'métatag seul (expiré)'; actions.appendChild(label);
-            } else if (item.id) {
-                const replayUrl = API + '/media/replay/' + encodeURIComponent(item.id);
-                if (item.kind === 'manifest') { buildManifestActions(card, actions, replayUrl); }
-                else {
-                    const play = document.createElement('a'); play.className = 'btn primary'; play.href = replayUrl; play.target = '_blank'; play.rel = 'noopener'; play.textContent = '▶ Play';
-                    const dl = document.createElement('a'); dl.className = 'btn'; dl.href = replayUrl; dl.setAttribute('download', ''); dl.textContent = '⬇ Download';
-                    actions.appendChild(play); actions.appendChild(dl);
-                }
-            }
-            card.appendChild(actions);
-            return card;
+        // mêmes noms et mêmes appels que l'ancienne page (la garde de page des tests les lit)
+        async function api(endpoint, method = 'GET', data = null) {
+            if (method === 'GET') return lecture(API + endpoint);
+            const opts = { method, headers: entetes({ 'Content-Type': 'application/json' }) };
+            if (data) opts.body = JSON.stringify(data);
+            return lecture(API + endpoint, opts);
         }
-
-        function buildManifestActions(card, actions, replayUrl) {
-            const play = document.createElement('a'); play.className = 'btn primary'; play.href = replayUrl; play.target = '_blank'; play.rel = 'noopener'; play.textContent = '🎞️ Ouvrir (Safari/HLS)';
-            const dl = document.createElement('a'); dl.className = 'btn'; dl.href = replayUrl; dl.setAttribute('download', ''); dl.textContent = '⬇ Download';
-            const note = document.createElement('div'); note.className = 'media-note';
-            note.textContent = 'Lecture HLS native limitée à Safari — sinon, téléchargez le manifeste réécrit.';
-            let checked = false;
-            play.addEventListener('click', function (ev) {
-                if (checked) return; ev.preventDefault(); checked = true;
-                fetch(replayUrl).then(function (res) {
-                    if (res.headers.get('X-SecuBox-Media') === 'unsupported-variant') {
-                        play.classList.add('disabled'); play.removeAttribute('href');
-                        note.classList.add('warn');
-                        note.textContent = 'Flux non réassemblable (ABR/chiffré) — téléchargement du manifeste brut uniquement.';
-                    } else { window.open(replayUrl, '_blank', 'noopener'); }
-                }).catch(function () { window.open(replayUrl, '_blank', 'noopener'); });
-            });
-            actions.appendChild(play); actions.appendChild(dl); card.appendChild(note);
-        }
-
-        async function loadMediaBuffer() {
-            const box = document.getElementById('media-buffer-gallery');
-            const badge = document.getElementById('media-buffer-badge');
-            if (!box) return;
-            const data = await apiAuthed(API + '/media/buffer');
-            const allItems = (data && Array.isArray(data.items)) ? data.items : [];
-            const items = allItems.filter(item => item.kind !== 'segment');
-            if (badge) badge.textContent = (data && typeof data.count === 'number') ? (data.count + ' capture' + (data.count === 1 ? '' : 's')) : '—';
-            box.innerHTML = '';
-            if (!items.length) {
-                const p = document.createElement('p'); p.className = 'empty';
-                p.textContent = 'Aucune capture média en tampon (R3/R4 requis, admin uniquement).';
-                box.appendChild(p); return;
-            }
-            items.forEach(item => box.appendChild(buildMediaCard(item)));
-        }
-
-        async function loadTimeline() {
-            const data = await api('/history?days=14');
-            const box = document.getElementById('dpi-timeline');
-            const days = (data && data.days) || [];
-            if (!days.length) { box.innerHTML = '<p class="empty">Pas encore d\'historique (≥1 jour de capture).</p>'; return; }
-            const max = Math.max(1, ...days.map(d => d.flows || 0));
-            box.innerHTML = days.map(d => {
-                const h = Math.round(6 + 78 * (d.flows || 0) / max);
-                const dd = (d.day || '').slice(5);
-                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:0;">
-                    <span style="font-size:0.6rem;color:var(--cyan);">${d.flows || 0}</span>
-                    <span title="${d.day}: ${d.flows || 0} flux · ${d.alerts || 0} alertes" style="display:block;width:100%;max-width:18px;height:${h}px;border-radius:3px 3px 0 0;background:${(d.alerts || 0) > 0 ? 'var(--red)' : 'var(--cyan)'};"></span>
-                    <span style="font-size:0.55rem;color:var(--text-dim);white-space:nowrap;">${dd}</span></div>`;
-            }).join('');
-        }
-
-        // ── LEARNING (#DPI-sémantique) : suggestions du learner sbxdpi (proxifiées
-        //    par la FastAPI sous JWT). Valider CRÉE la règle (POST /rules/accept →
-        //    rules.json → sbxdpi hot-reload). Rien n'est promu sans ce clic humain.
-        function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+        async function apiAuthed(path) { return lecture(path); }
         async function postJwt(path, data) {
-            const token = localStorage.getItem('sbx_token');
-            const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
-            if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+            if (DEMO) throw new Error('démonstration : action inerte');
+            const opts = { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
             if (data) opts.body = JSON.stringify(data);
             const res = await fetch(path, opts);
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.status);
             return res.json();
         }
-        async function loadLearning() {
-            const box = document.getElementById('dpi-learning'); if (!box) return;
-            const sug = await apiAuthed(API + '/suggestions');
-            sug && sug.forEach && sug.forEach((s, i) => { s._i = i; });
-            topProg(box, sug, function (s) {
-                return `<div class="app-item" data-i="${s._i}" style="align-items:center;gap:10px;">
-                    <span style="font-family:monospace;color:var(--cyber-cyan);flex:0 0 auto;">${esc(s.domain)}</span>
-                    <span style="flex:1;color:var(--text-dim);font-size:.8rem;">${esc(s.reason || '')}</span>
-                    <span style="font-family:monospace;color:var(--matrix-green);">${Math.round(s.confidence || 0)}%</span>
-                    <button class="btn-accept" data-i="${s._i}" style="cursor:pointer;">✓ Créer la règle</button>
-                    <button class="btn-ignore" data-dom="${esc(s.domain)}" style="cursor:pointer;">Ignorer</button></div>`;
-            }, 'Aucune suggestion — rien de neuf à apprendre.', 5, function (el) {
-                el.querySelectorAll('.btn-accept').forEach(function (b) {
-                    b.addEventListener('click', async function () {
-                        const s = sug[+b.dataset.i]; if (!s || !s.proposed_rule) return;
-                        try { const r = await postJwt(API + '/rules/accept', s.proposed_rule); toast('Règle créée (' + r.count + ' au total)'); loadLearning(); }
-                        catch (e) { toast('Refus : ' + e.message, true); }
-                    });
-                });
-                el.querySelectorAll('.btn-ignore').forEach(function (b) {
-                    b.addEventListener('click', async function () {
-                        try { await postJwt(API + '/rules/ignore?domain=' + encodeURIComponent(b.dataset.dom), null); toast('Domaine ignoré'); loadLearning(); }
-                        catch (e) { toast('Erreur : ' + e.message, true); }
-                    });
-                });
+
+        // ───── formats ─────
+        function oct(b) {
+            if (!est(b) || Number(b) < 0) return '—';
+            b = Number(b); if (b === 0) return '0 o';
+            const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0;
+            while (b >= 1024 && i < 4) { b /= 1024; i++; }
+            return (i ? b.toFixed(b < 10 ? 2 : 1).replace('.', ',') : Math.round(b)) + ' ' + u[i];
+        }
+        const shortDev = d => d ? String(d).slice(0, 8) + '…' : 'inconnu';
+        function depuis(ts) {
+            if (!est(ts) || Number(ts) <= 0) return '—';
+            const s = Math.max(0, Math.floor(Date.now() / 1000 - Number(ts)));
+            if (s < 90) return s + ' s'; if (s < 5400) return Math.round(s / 60) + ' min'; return Math.round(s / 3600) + ' h';
+        }
+        function secondes(s) { if (!est(s)) return '—'; s = Number(s); if (s < 90) return s + ' s'; if (s < 5400) return Math.round(s / 60) + ' min'; return Math.round(s / 3600) + ' h'; }
+        function durStr(a, b) { const s = Math.max(0, (b || 0) - (a || 0)); if (s < 90) return s + ' s'; if (s < 5400) return Math.round(s / 60) + ' min'; return (s / 3600).toFixed(1).replace('.', ',') + ' h'; }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3000); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        const set = (id, v) => { const e = $(id); if (e) { e.textContent = v; e.classList.toggle('long', String(v).length > 11); } };
+
+        // ───── catégories ─────
+        const KIND = { exfil_volume: ['ENVOI MASSIF', 'rouge', '⬆️'], new_cloud: ['NOUVELLE DESTINATION', 'jaune', '☁️'], beaconing: ['BALISAGE', 'violet', '📡'], unclassified_external: ['NON CLASSÉ', 'orange', '❔'] };
+        const CATEGORY = {
+            cloud: { icon: '☁️', cls: 'rouge', exfil: true, col: '#ff4d5e' }, filehost: { icon: '📦', cls: 'rouge', exfil: true, col: '#ff9f1c' },
+            messaging: { icon: '💬', cls: 'orange', exfil: true, col: '#ffd23f' }, ai: { icon: '🤖', cls: 'violet', exfil: true, col: '#a78bfa' },
+            media: { icon: '🎬', cls: 'cyan', exfil: false, col: '#29b6f6' }, game: { icon: '🎮', cls: 'vert', exfil: false, col: '#2ecc71' },
+            social: { icon: '👥', cls: 'bleu', exfil: false, col: '#3b82f6' }, adult: { icon: '🔞', cls: 'violet', exfil: false, col: '#f472b6' }
+        };
+        const catMeta = c => CATEGORY[c] || { icon: '🌐', cls: 'cyan', exfil: false, col: '#6f84a8' };
+        const pill = (txt, cls) => el('span', 'pill ' + (cls || ''), txt);
+
+        // ───── listes : barre, « voir plus » ─────
+        function ligne(nom, valeur, part, opts) {
+            opts = opts || {};
+            const l = el('div', 'lg' + (opts.alerte ? ' alerte' : ''));
+            const n = el('span', 'n' + (opts.mono ? ' mono' : ''), nom); n.title = nom; l.appendChild(n);
+            l.appendChild(el('span', 'v', valeur));
+            if (opts.sous) l.appendChild(el('span', 'sous', opts.sous));
+            if (part !== null && part !== undefined) { const b = el('div', 'barre'); const i = el('i'); i.style.width = Math.max(2, Math.min(100, part)) + '%'; if (opts.couleur) i.style.background = opts.couleur; b.appendChild(i); l.appendChild(b); }
+            return l;
+        }
+        // Affichage progressif : N premières lignes, le reste se déplie à la demande ; l'état déplié survit aux rafraîchissements.
+        function topProg(box, rows, render, vide, lim) {
+            if (!box) return;
+            rows = Array.isArray(rows) ? rows : []; lim = lim || 5;
+            if (box._all === undefined) box._all = false;
+            function peindre() {
+                box.replaceChildren();
+                if (!rows.length) { box.appendChild(el('p', 'vide', vide)); annoncer(); return; }
+                (box._all ? rows : rows.slice(0, lim)).forEach((r, i) => box.appendChild(render(r, i)));
+                if (rows.length > lim) {
+                    const b = el('button', 'voir-plus', box._all ? '▲ Voir moins' : '▾ Voir plus (+' + (rows.length - lim) + ')'); b.type = 'button';
+                    b.addEventListener('click', () => { box._all = !box._all; peindre(); });
+                    box.appendChild(b);
+                }
+                annoncer();
+            }
+            peindre();
+        }
+        const vide = (box, msg) => { box.replaceChildren(el('p', 'vide', msg)); };
+
+        // ───── graphiques SVG écrits à la main ─────
+        const LW = 480;
+        function courbe(holder, jours) {
+            holder.replaceChildren();
+            if (!jours.length) { holder.appendChild(el('p', 'vide', 'Pas encore d’historique (au moins 1 jour de capture).')); return; }
+            const H = 170, g = 44, d = 8, b = 24, pw = LW - g - d, ph = H - d - b;
+            const up = jours.map(j => nombre(j.up_bytes)), dn = jours.map(j => nombre(j.down_bytes));
+            const mx = Math.max(1, ...up.concat(dn).filter(v => v !== null));
+            const s = svg('svg', { class: 'gr', viewBox: '0 0 ' + LW + ' ' + H, role: 'img', 'aria-label': 'Octets sortants et entrants par jour' });
+            for (let k = 0; k <= 4; k++) {
+                const y = d + ph - ph * k / 4;
+                s.appendChild(svg('line', { class: 'axe', x1: g, x2: LW - d, y1: y, y2: y }));
+                s.appendChild(svg('text', { x: g - 5, y: y + 3, 'text-anchor': 'end' }, oct(mx * k / 4)));
+            }
+            const X = i => g + (jours.length === 1 ? pw / 2 : pw * i / (jours.length - 1)), Y = v => d + ph - ph * v / mx;
+            [[up, '#ffd23f', 'sortant'], [dn, '#29b6f6', 'entrant']].forEach(([serie, col, nom]) => {
+                let p = '', prem = null, der = null;
+                serie.forEach((v, i) => { if (v === null) return; p += (p ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); if (prem === null) prem = i; der = i; });
+                if (!p) return;
+                s.appendChild(svg('path', { class: 'ai', d: p + 'L' + X(der).toFixed(1) + ' ' + (d + ph) + 'L' + X(prem).toFixed(1) + ' ' + (d + ph) + 'Z', fill: col }));
+                s.appendChild(svg('path', { class: 'tr', d: p, stroke: col }));
+                serie.forEach((v, i) => { if (v === null) return; const c = svg('circle', { cx: X(i), cy: Y(v), r: 3, fill: col }); c.appendChild(svg('title', {}, (jours[i].day || '—') + ' · ' + nom + ' ' + oct(v))); s.appendChild(c); });
             });
+            const pas = Math.max(1, Math.ceil(jours.length / 6));
+            jours.forEach((j, i) => { if (i % pas === 0 || i === jours.length - 1) s.appendChild(svg('text', { x: X(i), y: H - 6, 'text-anchor': 'middle' }, (j.day || '').slice(5) || '—')); });
+            holder.appendChild(s);
+        }
+        function barresFlux(holder, jours) {
+            holder.replaceChildren();
+            if (!jours.length) { holder.appendChild(el('p', 'vide', 'Pas encore d’historique (au moins 1 jour de capture).')); return; }
+            const H = 110, g = 30, d = 14, b = 20, pw = LW - g - 6, ph = H - d - b;
+            const mx = Math.max(1, ...jours.map(j => nombre(j.flows) || 0));
+            const s = svg('svg', { class: 'gr', viewBox: '0 0 ' + LW + ' ' + H, role: 'img', 'aria-label': 'Flux par jour' });
+            s.appendChild(svg('line', { class: 'axe', x1: g, x2: LW - 6, y1: d + ph, y2: d + ph }));
+            s.appendChild(svg('text', { x: g - 5, y: d + 4, 'text-anchor': 'end' }, entier(mx)));
+            const w = pw / jours.length, bw = Math.min(26, w * .7);
+            jours.forEach((j, i) => {
+                const f = nombre(j.flows); if (f === null) return;
+                const h = Math.max(2, ph * f / mx), x = g + w * i + (w - bw) / 2;
+                const r = svg('rect', { x: x, y: d + ph - h, width: bw, height: h, rx: 3, fill: (nombre(j.alerts) || 0) > 0 ? '#ff4d5e' : '#29b6f6' });
+                r.appendChild(svg('title', {}, (j.day || '—') + ' : ' + entier(f) + ' flux · ' + entier(nombre(j.alerts) || 0) + ' alerte(s)'));
+                s.appendChild(r);
+            });
+            const pas = Math.max(1, Math.ceil(jours.length / 7));
+            jours.forEach((j, i) => { if (i % pas === 0 || i === jours.length - 1) s.appendChild(svg('text', { x: g + w * i + w / 2, y: H - 5, 'text-anchor': 'middle' }, (j.day || '').slice(5) || '—')); });
+            holder.appendChild(s);
+        }
+        function donut(holder, parts, total) {
+            holder.replaceChildren();
+            if (!parts.length || !total) return;
+            const s = svg('svg', { class: 'donut', viewBox: '0 0 42 42', role: 'img', 'aria-label': 'Répartition par catégorie' });
+            s.appendChild(svg('circle', { cx: 21, cy: 21, r: 15.9155, fill: 'none', stroke: 'rgba(159,179,214,.16)', 'stroke-width': 5 }));
+            let acc = 0;
+            parts.forEach(p => {
+                const pc = p.v / total * 100;
+                const c = svg('circle', { cx: 21, cy: 21, r: 15.9155, fill: 'none', stroke: p.col, 'stroke-width': 5, 'stroke-dasharray': pc.toFixed(2) + ' ' + (100 - pc).toFixed(2), 'stroke-dashoffset': (25 - acc).toFixed(2) });
+                c.appendChild(svg('title', {}, p.nom + ' : ' + oct(p.v) + ' (' + Math.round(pc) + ' %)'));
+                s.appendChild(c); acc += pc;
+            });
+            s.appendChild(svg('text', { x: 21, y: 21.5 }, oct(total)));
+            s.appendChild(svg('text', { class: 't2', x: 21, y: 26.5 }, 'total mesuré'));
+            holder.appendChild(s);
         }
 
-        // ── SESSIONS D'USAGE (#DPI-sémantique L3) : device → usage → app → volume·durée
-        const USAGE_ICON = { streaming:'🎬', gaming:'🎮', cloud:'☁️', social:'💬', updates:'⬇️', web:'🌐', development:'🐙', advertising:'📢', mail:'✉️' };
-        function durStr(a, b) { const s = Math.max(0, (b||0) - (a||0)); if (s < 90) return s + 's'; if (s < 5400) return Math.round(s/60) + ' min'; return (s/3600).toFixed(1) + ' h'; }
-        async function loadSessions() {
-            const box = document.getElementById('dpi-sessions'); if (!box) return;
+        // ───── état ─────
+        let EX = null, JOURS = 14, HEURES = 24, CONFIRM = false;
+        function pastille(texte, cls) { const e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
+
+        function rendreEtat(d) {
+            const eng = (d && d.engine) || {};
+            if (!d) pastille(REFUS && !OKANY ? 'SESSION REQUISE' : 'HORS LIGNE', REFUS && !OKANY ? 'neutre' : 'hors');
+            else if (eng.alive) pastille('● R3 ACTIF', '');
+            else pastille('DONNÉES PÉRIMÉES — COLLECTEUR ARRÊTÉ ?', 'att');
+            set('engine-name', eng.name || 'ndpiReader · R3 exfil'); set('engine-service', eng.service || 'secubox-dpi-flowcap');
+            const age = est(eng.last_window_s) ? Number(eng.last_window_s) : (d && d.generated_at ? Math.max(0, Math.floor(Date.now() / 1000 - d.generated_at)) : null);
+            $('engine-window').textContent = age === null ? 'aucune capture' : 'il y a ' + secondes(age);
+            set('tFen', age === null ? '—' : secondes(age));
+            $('cFen').className = 'tuile ' + (age === null ? '' : eng.alive ? 'ok' : 'att');
+        }
+
+        function agrege(devs) {
+            const cat = {}, dest = {};
+            devs.forEach(d => (d.services || d.clouds || []).forEach(c => {
+                const k = c.category || 'autre', e = cat[k] || (cat[k] = { up: 0, down: 0, flows: 0 });
+                e.up += nombre(c.up_bytes) || 0; e.down += nombre(c.down_bytes) || 0; e.flows += nombre(c.flows) || 1;
+                const nom = c.service || c.cloud || c.dst; if (!nom) return;
+                const t = dest[nom] || (dest[nom] = { nom, cat: c.category, up: 0, down: 0, devs: new Set() });
+                t.up += nombre(c.up_bytes) || 0; t.down += nombre(c.down_bytes) || 0; t.devs.add(d.device);
+            }));
+            return { cat, dest };
+        }
+
+        function rendreExfil(d) {
+            EX = d; rendreEtat(d);
+            const obj = d && typeof d === 'object';
+            const devs = obj && Array.isArray(d.devices) ? d.devices : [], alerts = obj && Array.isArray(d.alerts) ? d.alerts : [];
+            const mesure = obj && (devs.length > 0 || !!d.generated_at);
+            const nAlert = obj ? (nombre(d.alert_count) || alerts.length) : null;
+            const ag = agrege(devs);
+            const up = mesure ? somme(devs, x => x.up_bytes) : null, dn = mesure ? somme(devs, x => x.down_bytes) : null;
+            const tot = up === null && dn === null ? null : (up || 0) + (dn || 0);
+            set('tFlux', mesure ? entier(somme(devs, x => x.flows)) : '—');
+            set('tUp', oct(up)); set('tDown', oct(dn)); set('tTotal', oct(tot));
+            set('tPart', up !== null && dn !== null && tot > 0 ? Math.round(up / tot * 100) + ' %' : '—');
+            set('tTerm', mesure ? entier(devs.length) : '—'); set('tCat', mesure ? entier(Object.keys(ag.cat).length) : '—');
+            set('tAlert', mesure ? entier(nAlert) : '—');
+            const wd = obj && nombre(d.window_days);
+            $('srcCumul').textContent = 'cumul du collecteur — fenêtre : ' + (wd ? wd + ' jours' : '7 jours (rétention du collecteur)') + ', non réglable (/exfil n’a pas de paramètre)';
+            const af = obj && Array.isArray(d.active_flows) ? d.active_flows : [];
+            set('tLFlux', obj && mesure ? entier(af.length) : '—');
+            set('tLUp', obj && mesure ? oct(somme(af, x => x.up_bytes)) : '—'); set('tLDown', obj && mesure ? oct(somme(af, x => x.down_bytes)) : '—');
+
+            // badge + alertes
+            const badge = $('exfil-badge');
+            if (!mesure) { badge.textContent = '—'; badge.className = 'pill'; } else { badge.textContent = nAlert > 0 ? nAlert + (nAlert > 1 ? ' ALERTES' : ' ALERTE') : 'RAS'; badge.className = 'pill ' + (nAlert > 0 ? 'rouge' : 'vert'); }
+            const ab = $('exfil-alerts'); ab.replaceChildren();
+            if (mesure && !alerts.length) ab.appendChild(el('p', 'vide', '✓ Aucune exfiltration détectée'));
+            alerts.forEach(a => {
+                const k = KIND[a.kind] || [String(a.kind || '?').toUpperCase(), 'orange', '⚠️'], svc = a.service || a.cloud, cm = catMeta(a.category);
+                const l = el('div', 'lg alerte'); const corps = el('div', 'corps');
+                corps.appendChild(pill(k[2] + ' ' + k[0], k[1])); corps.appendChild(document.createTextNode(' '));
+                corps.appendChild(el('span', 'mono', shortDev(a.device))); corps.appendChild(document.createTextNode(' → ' + (svc ? cm.icon + ' ' + svc + ' (' + (a.dst || '—') + ')' : (a.dst || '—'))));
+                if (a.detail) corps.appendChild(el('span', 'sous', ' · ' + a.detail));
+                l.appendChild(corps); l.appendChild(el('span', 'v', '↑' + oct(a.up_bytes) + (a.ts ? ' · ' + depuis(a.ts) : '')));
+                ab.appendChild(l);
+            });
+
+            // terminaux (détail repliable)
+            const db = $('exfil-devices');
+            if (!devs.length) vide(db, mesure ? 'Aucun terminal observé sur R3 pour l’instant (tunnel au repos, ou première fenêtre en attente).' : '—');
+            else {
+                const ouverts = db._ouverts || (db._ouverts = new Set());
+                db.replaceChildren();
+                devs.forEach(dv => {
+                    const det = el('details', 'dev'); const id = String(dv.device);
+                    det.open = ouverts.has(id) || !!(dv.alerts && dv.alerts.length);
+                    det.addEventListener('toggle', () => { if (det.open) ouverts.add(id); else ouverts.delete(id); annoncer(); });
+                    const sm = el('summary'); sm.appendChild(el('span', 'mono', '📟 ' + shortDev(dv.device)));
+                    if (dv.alerts && dv.alerts.length) sm.appendChild(pill(dv.alerts.length + ' ⚠️', 'rouge'));
+                    const bc = dv.by_category || {};
+                    Object.keys(bc).sort((a, b) => bc[b] - bc[a]).forEach(c => sm.appendChild(pill(catMeta(c).icon + ' ' + c + ' ' + bc[c], catMeta(c).cls)));
+                    sm.appendChild(el('span', 'note', entier(nombre(dv.flows)) + ' flux · ↑' + oct(dv.up_bytes) + ' ↓' + oct(dv.down_bytes)));
+                    det.appendChild(sm);
+                    const cp = el('div', 'corps'); const svcs = dv.services || dv.clouds || [];
+                    if (!svcs.length) cp.appendChild(el('p', 'vide', 'Aucun trafic sortant classé.'));
+                    svcs.forEach(c => { const m = catMeta(c.category); const l = ligne(m.icon + ' ' + (c.service || c.cloud || c.dst || '—') + (c.proto ? ' · ' + c.proto : ''), '↑' + oct(c.up_bytes) + ' ↓' + oct(c.down_bytes), null, { alerte: m.exfil }); l.firstChild.title = c.category || 'autre'; cp.appendChild(l); });
+                    det.appendChild(cp); db.appendChild(det);
+                });
+            }
+            $('exfil-foot').textContent = obj && d.generated_at ? 'Dernier cumul : il y a ' + depuis(d.generated_at) + ' · ' + devs.length + ' terminal(aux) · ' + alerts.length + ' alerte(s)' : (obj && d.note ? d.note : 'Aucune fenêtre de capture terminée pour l’instant.');
+
+            // répartition par catégorie (donut + légende détaillée)
+            const cats = Object.keys(ag.cat).map(k => ({ nom: k, v: ag.cat[k].up + ag.cat[k].down, up: ag.cat[k].up, down: ag.cat[k].down, flows: ag.cat[k].flows, col: catMeta(k).col })).sort((a, b) => b.v - a.v);
+            const totC = cats.reduce((s, c) => s + c.v, 0);
+            donut($('donut'), cats.filter(c => c.v > 0), totC);
+            const lb = $('svc-categories'); lb.replaceChildren();
+            if (!cats.length) lb.appendChild(el('p', 'vide', mesure ? 'Aucun trafic classé pour l’instant.' : '—'));
+            cats.forEach(c => {
+                const l = el('div', 'lg' + (catMeta(c.nom).exfil ? ' alerte' : '')); const pt = el('span', 'pt'); pt.style.background = c.col; l.appendChild(pt);
+                l.appendChild(el('span', 'n', catMeta(c.nom).icon + ' ' + c.nom)); l.appendChild(el('span', 'v', (totC ? Math.round(c.v / totC * 100) + ' % · ' : '') + oct(c.v)));
+                l.appendChild(el('span', 'sous', '↑' + oct(c.up) + ' ↓' + oct(c.down) + ' · ' + entier(c.flows) + ' flux'));
+                l.lastChild.style.gridColumn = '2/-1'; lb.appendChild(l);
+            });
+
+            // tops protocoles / applications (cumul)
+            const top = (rows) => { rows = Array.isArray(rows) ? rows.filter(r => r && r.name) : []; const mx = Math.max(1, ...rows.map(r => nombre(r.bytes) || 0)); return { rows, mx }; };
+            const tp = top(d && d.top_protocols), ta = top(d && d.top_apps);
+            topProg($('top-protocols'), tp.rows, r => ligne(r.name, oct(r.bytes) + ' · ' + entier(nombre(r.flows)) + ' f', (nombre(r.bytes) || 0) / tp.mx * 100, { couleur: '#a78bfa' }), mesure ? 'Aucune donnée' : '—', 8);
+            topProg($('top-apps'), ta.rows, r => ligne(r.name, oct(r.bytes) + ' · ' + entier(nombre(r.flows)) + ' f', (nombre(r.bytes) || 0) / ta.mx * 100), mesure ? 'Aucune donnée' : '—', 8);
+
+            // terminaux : même langage de lecture que la page Renseignement (glyphe, bloc plein, tampon)
+            const volMax = devs.reduce((m, x) => Math.max(m, (nombre(x.up_bytes) || 0) + (nombre(x.down_bytes) || 0)), 1);
+            const tri = devs.slice().sort((a, b) => ((nombre(b.up_bytes) || 0) + (nombre(b.down_bytes) || 0)) - ((nombre(a.up_bytes) || 0) + (nombre(a.down_bytes) || 0)));
+            topProg($('bandwidth-devices'), tri, x => {
+                const vol = (nombre(x.up_bytes) || 0) + (nombre(x.down_bytes) || 0), part = Math.min(1, vol / volMax);
+                const cl = part >= .6 ? 'n4' : part >= .3 ? 'n3' : part >= .1 ? 'n2' : '';
+                const bc = x.by_category || {}, dom = Object.keys(bc).sort((a, b) => bc[b] - bc[a])[0], na = (x.alerts && x.alerts.length) || 0;
+                const l = el('div', 'lg acteur'); const nat = el('span', 'nat', dom ? catMeta(dom).icon : '📟'); nat.title = dom || 'aucune catégorie classée'; l.appendChild(nat);
+                const id = el('span', 'n'); const i1 = el('span', 'mono', shortDev(x.device)), i2 = el('span', 'note', entier(nombre(x.flows) || 0) + ' flux · ↑' + oct(x.up_bytes) + ' ↓' + oct(x.down_bytes));
+                i1.style.display = i2.style.display = 'block'; i2.style.margin = '0'; id.appendChild(i1); id.appendChild(i2);
+                l.appendChild(id);
+                const m = el('span', 'multi ' + cl); m.appendChild(el('b', '', oct(vol))); m.appendChild(el('i', '', 'total')); l.appendChild(m);
+                const tp2 = el('span', 'tampon ' + (na ? 'exfil' : 'ras'), na ? 'EXFIL ×' + na : 'RAS'); tp2.title = na ? na + ' alerte(s) d’exfiltration sur ce terminal' : 'aucune alerte d’exfiltration'; l.appendChild(tp2);
+                return l;
+            }, mesure ? 'Aucun terminal observé' : '—', 5);
+            topProg($('active-flows'), af, f => { const m = catMeta(f.category); const l = ligne(m.icon + ' ' + (f.service || f.dst || '—') + (f.proto ? ' · ' + f.proto : ''), '↑' + oct(f.up_bytes) + ' ↓' + oct(f.down_bytes), null); l.firstChild.title = f.category || 'autre'; return l; }, mesure ? 'Aucun flux actif (fenêtre live au repos)' : '—', 5);
+
+            // destinations les plus volumineuses
+            const dest = Object.keys(ag.dest).map(k => ag.dest[k]).sort((a, b) => (b.up + b.down) - (a.up + a.down));
+            const dmx = Math.max(1, ...dest.map(x => x.up + x.down));
+            topProg($('topDest'), dest, x => ligne(catMeta(x.cat).icon + ' ' + x.nom, oct(x.up + x.down), (x.up + x.down) / dmx * 100, { couleur: catMeta(x.cat).col, sous: '↑' + oct(x.up) + ' ↓' + oct(x.down) + ' · ' + x.devs.size + ' terminal(aux)' }), mesure ? 'Aucune destination classée' : '—', 8);
+            annoncer();
+        }
+
+        async function chargerExfil() { rendreExfil(await api('/exfil')); }
+
+        async function chargerHistorique() {
+            const d = await api('/history?days=' + JOURS);
+            const jours = d && Array.isArray(d.days) ? d.days.filter(j => j && j.day) : [];
+            courbe($('courbe'), jours); barresFlux($('dpi-timeline'), jours);
+            const lg = $('legCourbe'); lg.replaceChildren();
+            [['#ffd23f', 'Sortant'], ['#29b6f6', 'Entrant']].forEach(([c, n]) => { const s = el('span'); const b = el('b'); b.style.background = c; s.appendChild(b); s.appendChild(document.createTextNode(n)); lg.appendChild(s); });
+            $('srcHist').textContent = 'historique quotidien · ' + (jours.length ? jours.length + ' jour(s) mesuré(s) sur ' + JOURS + ' demandés' : 'aucun jour mesuré sur ' + JOURS + ' demandés');
+        }
+
+        async function chargerNd() {
+            const [p, a] = await Promise.all([lecture(API_ND + '/top/protocols?hours=' + HEURES + '&limit=10'), lecture(API_ND + '/top/applications?hours=' + HEURES + '&limit=10')]);
+            const norm = (rows, cle) => (Array.isArray(rows) ? rows : []).map(r => ({ nom: r[cle] || r.name || r.protocol || r.application, bytes: nombre(r.bytes_total !== undefined ? r.bytes_total : r.bytes), flows: nombre(r.flow_count !== undefined ? r.flow_count : r.flows) })).filter(r => r.nom);
+            const rp = norm(p && p.protocols, 'protocol'), ra = norm(a && a.applications, 'application');
+            const liste = (box, rows, col) => { const mx = Math.max(1, ...rows.map(r => r.bytes || 0)); topProg(box, rows, r => ligne(String(r.nom), oct(r.bytes) + ' · ' + entier(r.flows) + ' f', (r.bytes || 0) / mx * 100, { couleur: col }), p === null && a === null ? '—' : 'Aucune donnée sur cette fenêtre', 6); };
+            liste($('ndProto'), rp, '#a78bfa'); liste($('ndApps'), ra, '#29b6f6');
+            $('srcNd').textContent = 'route /api/v1/ndpid/top/… · fenêtre ' + (HEURES === 168 ? '7 jours' : HEURES + ' h');
+        }
+
+        async function chargerMedias() {
+            const s = await lecture(API_MF + '/status');
+            const ok = s && typeof s === 'object' && !s.error && s.running !== false;
+            set('tVid', ok && est(s.video_streams) ? entier(s.video_streams) : '—'); set('tAud', ok && est(s.audio_streams) ? entier(s.audio_streams) : '—');
+            set('tMbps', ok && est(s.bandwidth_mbps) ? Number(s.bandwidth_mbps).toFixed(2).replace('.', ',') : '—'); set('tCli', ok && est(s.active_clients) ? entier(s.active_clients) : '—');
+            const data = await apiAuthed(API + '/media_types');
+            const box = $('media-types'); box.replaceChildren();
+            const ICON = { video: '📺', audio: '🎵', manifest: '🎞️', page: '▶️' };
+            const kinds = (data && Array.isArray(data.kinds)) ? data.kinds : [], ctypes = (data && Array.isArray(data.ctypes)) ? data.ctypes : [], hosts = (data && Array.isArray(data.top_hosts)) ? data.top_hosts : [];
+            if (!kinds.length && !ctypes.length) { box.appendChild(el('p', 'vide', data ? 'Aucun média capté (tunnel R3/R4 requis + lecture vidéo/audio).' : '—')); return; }
+            const bloc = (titre, rows) => { if (!rows.length) return; box.appendChild(el('div', 'note', titre)); rows.forEach(r => box.appendChild(r)); };
+            bloc('Types', kinds.map(k => ligne((ICON[k.label] || '🎬') + ' ' + k.label, entier(nombre(k.count)), null)));
+            bloc('Content-Type (MIME)', ctypes.slice(0, 6).map(c => ligne(String(c.label), entier(nombre(c.count)), null, { mono: true })));
+            bloc('Top hôtes', hosts.slice(0, 6).map(h => ligne((ICON[h.kind] || '🎬') + ' ' + String(h.host || '').slice(0, 32), oct(h.bytes), null, { mono: true })));
+            annoncer();
+        }
+
+        // ───── tampon média : host/url/mac_hash sont contrôlés par un tiers (trafic capturé) → textContent uniquement ─────
+        const MEDIA_ICON = { video: '📺', audio: '🎵', manifest: '🎞️', file: '📄' };
+        function carteMedia(item) {
+            const card = el('div', 'cmedia' + (item.expired ? ' expire' : ''));
+            const tt = el('div', 'tt'); tt.appendChild(el('span', '', MEDIA_ICON[item.kind] || '📄')); tt.appendChild(el('span', '', item.direction === 'up' ? '⬆' : item.direction === 'down' ? '⬇' : '↔')); card.appendChild(tt);
+            const h = el('div', 'hote', item.host || '(hôte inconnu)'); if (item.url) h.title = item.url; card.appendChild(h);
+            const m1 = el('div', 'mt'); m1.appendChild(el('span', '', '📟 ' + shortDev(item.mac_hash))); m1.appendChild(el('span', '', item.kind || 'file')); card.appendChild(m1);
+            const m2 = el('div', 'mt'); m2.appendChild(el('span', '', oct(item.bytes))); m2.appendChild(el('span', '', item.first_ts ? 'il y a ' + depuis(item.first_ts) : '—')); card.appendChild(m2);
+            if (item.kind === 'manifest' && typeof item.segments === 'number' && item.segments > 0) { const sg = el('div', 'mt'); sg.appendChild(el('span', '', '🧩 ' + item.segments + ' segment' + (item.segments === 1 ? '' : 's'))); card.appendChild(sg); }
+            const acts = el('div', 'acts');
+            if (item.expired) acts.appendChild(el('span', 'nt', 'métadonnées seules (expiré)'));
+            else if (item.id) {
+                const replay = API + '/media/replay/' + encodeURIComponent(item.id);
+                const lien = (cls, txt, dl) => { const a = el('a', 'btn sm ' + cls, txt); a.href = replay; if (dl) a.setAttribute('download', ''); else { a.target = '_blank'; a.rel = 'noopener'; } return a; };
+                if (item.kind === 'manifest') {
+                    const play = lien('prim', '🎞️ Ouvrir (Safari/HLS)'), dl = lien('', '⬇ Télécharger', true);
+                    const note = el('div', 'nt', 'Lecture HLS native limitée à Safari — sinon, téléchargez le manifeste réécrit.');
+                    let verifie = false;
+                    play.addEventListener('click', ev => {
+                        if (verifie) return; ev.preventDefault(); verifie = true;
+                        fetch(replay, { credentials: 'same-origin', headers: entetes() }).then(res => {
+                            if (res.headers.get('X-SecuBox-Media') === 'unsupported-variant') { play.classList.add('off'); play.removeAttribute('href'); note.classList.add('warn'); note.textContent = 'Flux non réassemblable (ABR/chiffré) — téléchargement du manifeste brut uniquement.'; }
+                            else window.open(replay, '_blank', 'noopener');
+                        }).catch(() => window.open(replay, '_blank', 'noopener'));
+                    });
+                    acts.appendChild(play); acts.appendChild(dl); card.appendChild(acts); card.appendChild(note); return card;
+                }
+                acts.appendChild(lien('prim', '▶ Lire')); acts.appendChild(lien('', '⬇ Télécharger', true));
+            }
+            card.appendChild(acts); return card;
+        }
+        async function chargerTampon() {
+            const box = $('media-buffer-gallery'), badge = $('media-buffer-badge');
+            const data = await apiAuthed(API + '/media/buffer');
+            const items = (data && Array.isArray(data.items) ? data.items : []).filter(i => i.kind !== 'segment');
+            badge.textContent = data && typeof data.count === 'number' ? data.count + ' capture' + (data.count === 1 ? '' : 's') : '—';
+            box.replaceChildren();
+            if (!items.length) { box.appendChild(el('p', 'vide', data ? 'Aucune capture média en tampon (R3/R4 requis, administrateur uniquement).' : '—')); return; }
+            items.forEach(i => box.appendChild(carteMedia(i)));
+            annoncer();
+        }
+
+        // ───── apprentissage : valider CRÉE la règle (POST /rules/accept) ; rien n'est promu sans ce clic humain ─────
+        async function chargerApprentissage() {
+            const box = $('dpi-learning');
+            const sug = await apiAuthed(API + '/suggestions');
+            const liste = Array.isArray(sug) ? sug : [];
+            topProg(box, liste, s => {
+                const l = el('div', 'lg'); const corps = el('div', 'corps');
+                corps.appendChild(el('b', 'mono', String(s.domain || '—'))); corps.appendChild(el('span', 'note', ' ' + (s.reason || '') + ' · ' + Math.round(s.confidence || 0) + ' %'));
+                l.appendChild(corps);
+                const acts = el('div', 'corps'); acts.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+                const ok = el('button', 'btn sm prim', '✓ Créer la règle'); ok.type = 'button';
+                ok.addEventListener('click', async () => {
+                    if (!s.proposed_rule) return;
+                    if (DEMO) { retour('rLearn', false, 'Démonstration : action inerte.'); return; }
+                    try { const r = await postJwt(API + '/rules/accept', s.proposed_rule); retour('rLearn', true, 'Règle créée (' + r.count + ' au total)'); chargerApprentissage(); }
+                    catch (e) { retour('rLearn', false, 'Refus : ' + e.message); }
+                });
+                const ig = el('button', 'btn sm', 'Ignorer'); ig.type = 'button';
+                ig.addEventListener('click', async () => {
+                    if (DEMO) { retour('rLearn', false, 'Démonstration : action inerte.'); return; }
+                    try { await postJwt(API + '/rules/ignore?domain=' + encodeURIComponent(s.domain), null); retour('rLearn', true, 'Domaine ignoré'); chargerApprentissage(); }
+                    catch (e) { retour('rLearn', false, 'Erreur : ' + e.message); }
+                });
+                acts.appendChild(ok); acts.appendChild(ig); l.appendChild(acts); return l;
+            }, sug ? 'Aucune suggestion — rien de neuf à apprendre.' : '—', 5);
+        }
+
+        const USAGE_ICON = { streaming: '🎬', gaming: '🎮', cloud: '☁️', social: '💬', updates: '⬇️', web: '🌐', development: '🐙', advertising: '📢', mail: '✉️' };
+        async function chargerSessions() {
             const ss = await apiAuthed(API + '/sessions');
-            topProg(box, ss, function (s) {
-                const ic = USAGE_ICON[s.usage] || '🧭';
-                const hosts = (s.hosts || []).slice(0, 3).map(esc).join(' · ');
-                return `<div class="app-item" style="align-items:center;gap:10px;">
-                    <span style="font-family:monospace;color:var(--text-dim);flex:0 0 auto;">${esc(shortDev(s.device))}</span>
-                    <span style="flex:0 0 auto;">${ic}</span>
-                    <span style="flex:1;min-width:0;"><b>${esc(s.application || s.usage)}</b>
-                        <span style="color:var(--text-dim);font-size:.78rem;"> ${esc(s.usage)}${s.infra ? ' · ' + esc(s.infra) : ''}</span>
-                        <div style="color:var(--text-dim);font-size:.7rem;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hosts}</div></span>
-                    <span style="font-family:monospace;text-align:right;flex:0 0 auto;"><b style="color:var(--cyber-cyan);">${formatBytes(s.bytes)}</b>
-                        <div style="color:var(--text-dim);font-size:.7rem;">${durStr(s.start, s.last)} · ${s.flows||0} flux</div></span></div>`;
-            }, 'Aucune session — sbxdpi inactif ou pas de trafic classifié.', 5);
+            topProg($('dpi-sessions'), Array.isArray(ss) ? ss : [], s => {
+                const l = el('div', 'lg');
+                l.appendChild(el('span', 'n', (USAGE_ICON[s.usage] || '🧭') + ' ' + (s.application || s.usage || '—') + ' · ' + shortDev(s.device)));
+                l.appendChild(el('span', 'v', oct(s.bytes) + ' · ' + durStr(s.start, s.last) + ' · ' + (s.flows || 0) + ' flux'));
+                l.appendChild(el('span', 'sous mono', (s.usage || '') + (s.infra ? ' · ' + s.infra : '') + ((s.hosts || []).length ? ' · ' + s.hosts.slice(0, 3).join(' · ') : '')));
+                return l;
+            }, ss ? 'Aucune session — sbxdpi inactif ou pas de trafic classifié.' : '—', 5);
         }
-
-        // ── PAYS DES DESTINATIONS : géo des IP réelles (GeoLite2) · top 5 ─────
-        async function loadCountries() {
-            const box = document.getElementById('dpi-countries'); if (!box) return;
+        async function chargerPays() {
             const cs = await apiAuthed(API + '/countries');
-            const max = (Array.isArray(cs) && cs.length) ? Math.max(1, cs[0].bytes || 1) : 1;
-            topProg(box, cs, function (c) {
-                const w = Math.round((c.bytes || 0) / max * 100);
-                return `<div class="app-item" style="align-items:center;gap:10px;">
-                    <span style="flex:0 0 auto;font-size:1.05rem;">${c.flag || '🏳️'}</span>
-                    <span style="flex:0 0 auto;min-width:2.2rem;font-family:monospace;color:var(--cyber-cyan);">${esc(c.cc)}</span>
-                    <span style="flex:1;min-width:0;"><b>${esc(c.name)}</b>
-                        <div style="height:5px;margin-top:3px;background:var(--cyber-cyan,#00d4ff);opacity:.55;border-radius:3px;width:${w}%;"></div></span>
-                    <span style="font-family:monospace;text-align:right;flex:0 0 auto;"><b style="color:var(--cyber-cyan);">${formatBytes(c.bytes)}</b>
-                        <div style="color:var(--text-dim);font-size:.7rem;">${c.hosts||0} hôtes · ${c.devices||0} term.</div></span></div>`;
-            }, 'Aucune destination géolocalisée (base GeoLite2 absente ?).', 5);
+            const liste = Array.isArray(cs) ? cs : [], mx = Math.max(1, ...liste.map(c => nombre(c.bytes) || 0));
+            topProg($('dpi-countries'), liste, c => ligne((c.flag || '🏳️') + ' ' + (c.cc || '') + ' · ' + (c.name || '—'), oct(c.bytes), (nombre(c.bytes) || 0) / mx * 100, { sous: (c.hosts || 0) + ' hôtes · ' + (c.devices || 0) + ' term.' }), cs ? 'Aucune destination géolocalisée (base GeoLite2 absente ?).' : '—', 5);
         }
 
-
-        // ── données d'ad-guard (#1960) : destinations non classées étiquetées, appareils du LAN vus au DNS ──────────────
-        function adgEl(tag, texte, classe, style) { const e = document.createElement(tag); if (texte != null) e.textContent = String(texte); if (classe) e.className = classe; if (style) e.style.cssText = style; return e; }
-        const ADG_TYPE = { publicite: 'publicité', contenu: 'contenu', mesure_audience: 'mesure d\u2019audience', analytique: 'analytique', qualite_video: 'qualité vidéo', cdn: 'CDN', connectivite: 'connectivité', systeme: 'système', inconnu: 'inconnu' };
-        const ADG_CAT = { advertising: 'publicité', tracking: 'pistage', telemetry: 'télémétrie', social: 'réseaux sociaux' };           // libellés locaux, jamais ceux de l'API
-        async function loadAdgUnknown() {
-            const box = document.getElementById('adg-unknown'), foot = document.getElementById('adg-unknown-foot'); if (!box) return;
+        // ───── données d'ad-guard (#1960) ─────
+        const ADG_TYPE = { publicite: 'publicité', contenu: 'contenu', mesure_audience: 'mesure d’audience', analytique: 'analytique', qualite_video: 'qualité vidéo', cdn: 'CDN', connectivite: 'connectivité', systeme: 'système', inconnu: 'inconnu' };
+        const ADG_CAT = { advertising: 'publicité', tracking: 'pistage', telemetry: 'télémétrie', social: 'réseaux sociaux' };   // libellés locaux, jamais ceux de l'API
+        async function chargerNonClasses() {
+            const box = $('adg-unknown'), foot = $('adg-unknown-foot');
             const u = await apiAuthed(API + '/usage');
-            box.textContent = ''; foot.textContent = '';
-            if (!u || typeof u !== 'object') { box.appendChild(adgEl('p', 'Données DPI indisponibles.', 'empty')); return; }
+            box.replaceChildren(); foot.textContent = '';
+            if (!u || typeof u !== 'object') { box.appendChild(el('p', 'vide', 'Données DPI indisponibles.')); return; }
             const inc = Array.isArray(u.unknown) ? u.unknown.filter(x => x && typeof x.name === 'string') : [];
-            if (!inc.length) { box.appendChild(adgEl('p', 'Aucune destination non classée.', 'empty')); return; }
+            if (!inc.length) { box.appendChild(el('p', 'vide', 'Aucune destination non classée.')); return; }
             inc.slice().sort((a, b) => (b.etiquette ? 1 : 0) - (a.etiquette ? 1 : 0) || (b.bytes || 0) - (a.bytes || 0)).slice(0, 20).forEach(x => {
                 const et = x.etiquette && typeof x.etiquette === 'object' ? x.etiquette : null;
-                const ligne = adgEl('div', null, 'app-item', 'align-items:center;gap:10px;');
-                ligne.appendChild(adgEl('span', x.name, null, 'flex:1;min-width:0;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'));
-                const lab = adgEl('span', null, null, 'flex:0 0 auto;font-size:.78rem;');
+                const l = el('div', 'lg'); l.appendChild(el('span', 'n mono', x.name)); l.lastChild.title = x.name; l.appendChild(el('span', 'v', oct(x.bytes || 0)));
+                const lab = el('span', 'corps note');
                 if (et) {
-                    lab.appendChild(adgEl('b', et.organisation || '—'));
-                    lab.appendChild(adgEl('span', ' ' + (ADG_TYPE[et.type] || (et.type ? 'autre' : '')), null, 'color:var(--text-dim);'));
-                    if (ADG_CAT[et.categorie]) lab.appendChild(adgEl('span', ADG_CAT[et.categorie], 'badge badge-red', 'margin-left:.4rem;'));
-                    lab.appendChild(adgEl('span', ' d\u2019après ad-guard', null, 'color:var(--text-dim);font-size:.68rem;'));
-                } else { lab.appendChild(adgEl('span', 'non étiquetée', null, 'color:var(--text-dim);')); }
-                ligne.appendChild(lab);
-                ligne.appendChild(adgEl('span', formatBytes(x.bytes || 0), null, 'flex:0 0 auto;font-family:monospace;color:var(--cyber-cyan);'));
-                box.appendChild(ligne);
+                    lab.appendChild(el('b', '', et.organisation || '—')); lab.appendChild(document.createTextNode(' ' + (ADG_TYPE[et.type] || (et.type ? 'autre' : ''))));
+                    if (ADG_CAT[et.categorie]) { lab.appendChild(document.createTextNode(' ')); lab.appendChild(pill(ADG_CAT[et.categorie], 'rouge')); }
+                    lab.appendChild(document.createTextNode(' d’après ad-guard'));
+                } else lab.appendChild(document.createTextNode('non étiquetée'));
+                l.appendChild(lab); box.appendChild(l);
             });
             const ag = u.adguard && typeof u.adguard === 'object' ? u.adguard : null;
-            foot.textContent = inc.length + ' destination(s) non classée(s) par le DPI' + (ag ? ' · ' + (ag.etiquetes || 0) + ' étiquetée(s) d\u2019après ad-guard' : ' · données ad-guard absentes') + ' · les octets sont mesurés par le DPI.';
+            foot.textContent = inc.length + ' destination(s) non classée(s) par le DPI' + (ag ? ' · ' + (ag.etiquetes || 0) + ' étiquetée(s) d’après ad-guard' : ' · données ad-guard absentes') + ' · les octets sont mesurés par le DPI.';
+            annoncer();
         }
-        async function loadAdgLan() {
-            const box = document.getElementById('adg-lan'), foot = document.getElementById('adg-lan-foot'), badge = document.getElementById('adg-lan-badge'); if (!box) return;
+        async function chargerLan() {
+            const box = $('adg-lan'), foot = $('adg-lan-foot'), badge = $('adg-lan-badge');
             const d = await apiAuthed(API + '/lan_dns');
-            box.textContent = ''; foot.textContent = '';
+            box.replaceChildren(); foot.textContent = '';
             if (!d || d.disponible !== true || !Array.isArray(d.appareils)) {
-                badge.textContent = '○ indisponible'; badge.className = 'badge badge-amber';
-                box.appendChild(adgEl('p', 'Données ad-guard absentes ou périmées' + (d && d.raison ? ' (' + d.raison + ')' : '') + '.', 'empty'));
-                return;
+                badge.textContent = '○ indisponible'; badge.className = 'pill orange';
+                box.appendChild(el('p', 'vide', 'Données ad-guard absentes ou périmées' + (d && d.raison ? ' (' + d.raison + ')' : '') + '.')); return;
             }
-            badge.textContent = '● vu au DNS'; badge.className = 'badge badge-green';
-            if (!d.appareils.length) box.appendChild(adgEl('p', 'Aucun appareil du LAN sur la période.', 'empty'));
+            badge.textContent = '● vu au DNS'; badge.className = 'pill vert';
+            if (!d.appareils.length) box.appendChild(el('p', 'vide', 'Aucun appareil du LAN sur la période.'));
             d.appareils.slice(0, 30).forEach(a => {
-                const bloc = adgEl('div', null, 'app-item', 'display:block;padding:.5rem 0;border-bottom:1px solid var(--border);');
-                const tete = adgEl('div', null, null, 'display:flex;gap:.8rem;align-items:baseline;flex-wrap:wrap;');
-                tete.appendChild(adgEl('b', a.nom));
-                tete.appendChild(adgEl('span', (a.adresses || []).join(', '), null, 'font-family:monospace;font-size:.72rem;color:var(--text-dim);'));
-                tete.appendChild(adgEl('span', a.mode || '—', 'badge'));
-                bloc.appendChild(tete);
+                const l = el('div', 'lg'); l.appendChild(el('b', 'n', a.nom)); l.lastChild.title = String(a.nom); l.appendChild(pill(a.mode || '—'));
+                l.appendChild(el('span', 'sous mono', (a.adresses || []).join(', ')));
                 const taux = a.requetes ? Math.round(100 * (a.bloquees || 0) / a.requetes) : 0;
-                bloc.appendChild(adgEl('div', (a.requetes || 0) + ' requêtes · ' + (a.bloquees || 0) + ' bloquées (' + taux + ' %) · ' + (a.domaines || 0) + ' noms', null, 'font-size:.8rem;'));
+                l.appendChild(el('span', 'corps', (a.requetes || 0) + ' requêtes · ' + (a.bloquees || 0) + ' bloquées (' + taux + ' %) · ' + (a.domaines || 0) + ' noms'));
                 const svc = (a.services || []).slice(0, 5).map(s => (s.organisation || '—') + ' (' + (ADG_TYPE[s.type] || 'autre') + ') ' + (s.requetes || 0)).join(' · ');
-                if (svc) bloc.appendChild(adgEl('div', svc, null, 'font-size:.74rem;color:var(--text-dim);'));
-                box.appendChild(bloc);
+                if (svc) l.appendChild(el('span', 'sous', svc));
+                box.appendChild(l);
             });
-            foot.textContent = 'Vu au DNS (ad-guard), ' + (d.fenetre || '') + ' · données de ' + Math.round((d.age_s || 0) / 60) + ' min · aucun volume : le DNS n\u2019en donne pas.';
+            foot.textContent = 'Vu au DNS (ad-guard), ' + (d.fenetre || '') + ' · données de ' + Math.round((d.age_s || 0) / 60) + ' min · aucun volume : le DNS n’en donne pas.';
+            annoncer();
         }
 
-        function refreshAll() {
-            loadAdgUnknown();  // #1960 : étiquettes d'ad-guard
-            loadAdgLan();      // #1960 : appareils du LAN vus au DNS
-            loadExfil();       // engine status + devices + stats + top apps/protocols/bw/flows + service cats
-            loadMediaTypes();
-            loadMediaBuffer();
-            loadTimeline();
-            loadSessions();
-            loadLearning();
-            loadCountries();
+        // ───── redémarrage du moteur : POST /restart, confirmation dans la page ─────
+        $('btnRestart').addEventListener('click', () => { CONFIRM = true; $('confirmeRestart').hidden = false; annoncer(); });
+        $('noRestart').addEventListener('click', () => { CONFIRM = false; $('confirmeRestart').hidden = true; annoncer(); });
+        $('okRestart').addEventListener('click', async () => {
+            CONFIRM = false; $('confirmeRestart').hidden = true;
+            if (DEMO) { retour('rRestart', false, 'Démonstration : action inerte.'); return; }
+            toast('Redémarrage du moteur R3…');
+            const r = await api('/restart', 'POST');
+            if (r && r.success) retour('rRestart', true, 'Moteur R3 redémarré.');
+            else if (r && r.retired) retour('rRestart', false, 'Contrôle de service retiré par l’API : aucun redémarrage effectué.');
+            else retour('rRestart', false, 'Échec : ' + (r && r.error ? r.error : 'refusé ou service injoignable'));
+            setTimeout(chargerExfil, 2500);
+        });
+
+        // ───── fenêtres de temps ─────
+        document.querySelectorAll('[data-j]').forEach(b => b.addEventListener('click', () => { JOURS = +b.dataset.j; document.querySelectorAll('[data-j]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); chargerHistorique(); }));
+        document.querySelectorAll('[data-h]').forEach(b => b.addEventListener('click', () => { HEURES = +b.dataset.h; document.querySelectorAll('[data-h]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); chargerNd(); }));
+
+        async function tout() {
+            REFUS = false; OKANY = false;
+            await Promise.allSettled([chargerExfil(), chargerHistorique(), chargerNd(), chargerMedias(), chargerTampon(), chargerApprentissage(), chargerSessions(), chargerPays(), chargerNonClasses(), chargerLan()]);
+            $('demo').hidden = !DEMO;
+            $('session').hidden = DEMO || !(REFUS && !OKANY);
+            if (!DEMO && REFUS && !OKANY) rendreEtat(null);
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
-        refreshAll();
-        setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); loadSessions(); loadCountries(); }, 10000);
-        setInterval(loadMediaBuffer, 15000);
-        setInterval(loadLearning, 30000);
-        setInterval(() => { loadAdgUnknown(); loadAdgLan(); }, 30000);
+        $('rafraichir').addEventListener('click', tout);
+
+        // ───── vue d'ensemble encadrée : hauteur annoncée par la page encadrée ─────
+        window.addEventListener('message', e => {
+            if (e.origin === location.origin && e.data && e.data.sbxdpiVue) {
+                const f = $('vueDpiFrame'); if (f) f.style.height = Math.min(4000, Math.max(600, +e.data.sbxdpiVue + 4)) + 'px';
+            }
+        });
+        if (DEMO || EMB) { const p = []; if (DEMO) p.push('demo=1'); if (EMB) p.push('embed=1'); $('vueDpiFrame').src = 'vue.html?' + p.join('&'); }
+
+        // ───── hauteur annoncée à l'hôte (iframes) ─────
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'dpi' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        // ───── données de démonstration (adresses RFC 5737, noms fictifs) ─────
+        function demo(url) {
+            const t = Math.floor(Date.now() / 1000), chemin = url.split('?')[0], q = new URLSearchParams(url.split('?')[1] || '');
+            const Mo = 1048576;
+            if (chemin === API + '/exfil') return {
+                generated_at: t - 20, window_days: 7, alert_count: 2,
+                engine: { name: 'ndpiReader · R3 exfil', service: 'secubox-dpi-flowcap', alive: true, last_window_s: 20 },
+                devices: [
+                    { device: 'a1b2c3d4e5f60718', flows: 412, up_bytes: 820 * Mo, down_bytes: 2100 * Mo, by_category: { cloud: 120, media: 210, social: 82 }, alerts: [{}], services: [
+                        { service: 'Stockage nuage', category: 'cloud', dst: '198.51.100.20', proto: 'TLS', up_bytes: 640 * Mo, down_bytes: 40 * Mo, flows: 120 },
+                        { service: 'Vidéo à la demande', category: 'media', dst: '203.0.113.15', proto: 'QUIC', up_bytes: 12 * Mo, down_bytes: 1900 * Mo, flows: 210 },
+                        { service: 'Réseau social démo', category: 'social', dst: '192.0.2.80', proto: 'TLS', up_bytes: 40 * Mo, down_bytes: 160 * Mo, flows: 82 }] },
+                    { device: 'b7c8d9e0f1a21324', flows: 188, up_bytes: 95 * Mo, down_bytes: 610 * Mo, by_category: { game: 90, messaging: 98 }, alerts: [], services: [
+                        { service: 'Jeu en ligne démo', category: 'game', dst: '203.0.113.40', proto: 'UDP', up_bytes: 55 * Mo, down_bytes: 420 * Mo, flows: 90 },
+                        { service: 'Messagerie démo', category: 'messaging', dst: '192.0.2.99', proto: 'TLS', up_bytes: 40 * Mo, down_bytes: 190 * Mo, flows: 98 }] },
+                    { device: 'c3d4e5f607182930', flows: 64, up_bytes: 310 * Mo, down_bytes: 12 * Mo, by_category: { ai: 40, filehost: 24 }, alerts: [{}], services: [
+                        { service: 'Assistant IA démo', category: 'ai', dst: '198.51.100.77', proto: 'TLS', up_bytes: 120 * Mo, down_bytes: 8 * Mo, flows: 40 },
+                        { service: 'Dépôt de fichiers démo', category: 'filehost', dst: '198.51.100.90', proto: 'TLS', up_bytes: 190 * Mo, down_bytes: 4 * Mo, flows: 24 }] }],
+                alerts: [{ kind: 'exfil_volume', device: 'a1b2c3d4e5f60718', service: 'Stockage nuage', category: 'cloud', dst: '198.51.100.20', detail: 'envoi de 640 Mo en 1 h', up_bytes: 640 * Mo, ts: t - 900 },
+                         { kind: 'new_cloud', device: 'c3d4e5f607182930', service: 'Dépôt de fichiers démo', category: 'filehost', dst: '198.51.100.90', detail: 'première destination vue', up_bytes: 190 * Mo, ts: t - 3200 }],
+                top_apps: [{ name: 'Vidéo démo', bytes: 1900 * Mo, flows: 210 }, { name: 'Stockage nuage', bytes: 680 * Mo, flows: 120 }, { name: 'Jeu démo', bytes: 475 * Mo, flows: 90 }, { name: 'Assistant IA démo', bytes: 128 * Mo, flows: 40 }],
+                top_protocols: [{ name: 'TLS', bytes: 2500 * Mo, flows: 480 }, { name: 'QUIC', bytes: 1912 * Mo, flows: 210 }, { name: 'UDP', bytes: 475 * Mo, flows: 90 }],
+                active_flows: [{ service: 'Vidéo à la demande', category: 'media', dst: '203.0.113.15', proto: 'QUIC', up_bytes: 1 * Mo, down_bytes: 42 * Mo },
+                               { service: 'Stockage nuage', category: 'cloud', dst: '198.51.100.20', proto: 'TLS', up_bytes: 18 * Mo, down_bytes: 1 * Mo }] };
+            if (chemin === API + '/history') {
+                const n = Math.min(30, Math.max(1, +q.get('days') || 14)), jours = [];
+                for (let i = n - 1; i >= 0; i--) {
+                    const dt = new Date((t - i * 86400) * 1000), k = n - i;
+                    jours.push({ day: dt.toISOString().slice(0, 10), flows: Math.round(500 + 220 * Math.sin(k / 2.3) + 40 * (k % 4)), up_bytes: Math.round((300 + 160 * Math.sin(k / 1.7 + 1)) * Mo), down_bytes: Math.round((1300 + 520 * Math.sin(k / 2.1)) * Mo), alerts: k % 6 === 0 ? 2 : 0, devices: 3 });
+                }
+                return { device: '', days: jours };
+            }
+            if (chemin === API_ND + '/top/protocols') return { protocols: [{ protocol: 'TLS', flow_count: 480, bytes_total: 2500 * Mo }, { protocol: 'QUIC', flow_count: 210, bytes_total: 1912 * Mo }, { protocol: 'DNS', flow_count: 900, bytes_total: 3 * Mo }] };
+            if (chemin === API_ND + '/top/applications') return { applications: [{ application: 'Vidéo démo', flow_count: 210, bytes_total: 1900 * Mo }, { application: 'Stockage nuage', flow_count: 120, bytes_total: 680 * Mo }] };
+            if (chemin === API_MF + '/status') return { running: true, video_streams: 3, audio_streams: 1, bandwidth_mbps: 14.6, active_clients: 2 };
+            if (chemin === API + '/media_types') return { present: true, kinds: [{ label: 'video', count: 14 }, { label: 'audio', count: 5 }, { label: 'manifest', count: 3 }], ctypes: [{ label: 'video/mp4', count: 12 }, { label: 'audio/mpeg', count: 5 }], top_hosts: [{ host: 'cdn.exemple.test', kind: 'video', bytes: 800 * Mo }] };
+            if (chemin === API + '/media/buffer') return { count: 1, items: [{ id: 'demo0001', kind: 'video', direction: 'down', host: 'cdn.exemple.test', url: 'https://cdn.exemple.test/v.mp4', mac_hash: 'a1b2c3d4e5f6', bytes: 24 * Mo, first_ts: t - 600, expired: false }] };
+            if (chemin === API + '/suggestions') return [{ domain: 'api.exemple.test', reason: '42 flux TLS vers un service non classé', confidence: 78, proposed_rule: {} }];
+            if (chemin === API + '/sessions') return [{ device: 'a1b2c3d4e5f60718', usage: 'streaming', application: 'Vidéo démo', infra: 'CDN', hosts: ['cdn.exemple.test'], bytes: 1900 * Mo, start: t - 5400, last: t - 60, flows: 210 }];
+            if (chemin === API + '/countries') return [{ cc: 'FR', name: 'France', flag: '🇫🇷', bytes: 2600 * Mo, hosts: 34, devices: 3 }, { cc: 'DE', name: 'Allemagne', flag: '🇩🇪', bytes: 900 * Mo, hosts: 11, devices: 2 }, { cc: 'US', name: 'États-Unis', flag: '🇺🇸', bytes: 400 * Mo, hosts: 9, devices: 2 }];
+            if (chemin === API + '/usage') return { unknown: [{ name: 'tracker.exemple.test', bytes: 5 * Mo, etiquette: { organisation: 'Régie démo', type: 'publicite', categorie: 'advertising' } }, { name: '198.51.100.250', bytes: 90 * Mo }], adguard: { etiquetes: 1, total: 2 } };
+            if (chemin === API + '/lan_dns') return { disponible: true, age_s: 180, fenetre: 'jour courant (UTC)', appareils: [{ nom: 'Téléviseur salon', adresses: ['192.0.2.31', '2001:db8::31'], mode: 'auto', requetes: 320, bloquees: 40, domaines: 12, services: [{ organisation: 'Vidéo démo', type: 'contenu', requetes: 200 }, { organisation: 'Régie démo', type: 'publicite', requetes: 40 }] }] };
+            return null;
+        }
+
+        tout();
+        // Pas d'actualisation onglet masqué, en démonstration, ni pendant une confirmation ouverte.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM) return; tout(); }, 30000);
+    })();
     </script>
 </body>
 </html>

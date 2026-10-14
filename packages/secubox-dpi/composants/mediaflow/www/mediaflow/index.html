@@ -4,467 +4,299 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Media Flow au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Données réelles uniquement (API /api/v1/mediaflow). Mesure absente = « — » ; 0 est une mesure.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives (adresses RFC 5737), aucune écriture (clonage, suppression inertes).
+  Les URL et hôtes découverts viennent de trafic capturé (contrôlé par un tiers) : textContent uniquement, liens http(s) seulement.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Media Flow</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Media Flow</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.video .value { color: var(--red); }
-        .stat-card.audio .value { color: var(--green); }
-        .stat-card.bandwidth .value { color: var(--cyan); }
-        .stat-card.streams .value { color: var(--purple); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
-        .badge.video { background: rgba(248,81,73,0.2); color: var(--red); }
-        .badge.audio { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.live { background: rgba(163,113,247,0.2); color: var(--purple); }
-        .progress { background: var(--bg-dark); border-radius: 4px; height: 6px; overflow: hidden; }
-        .progress-bar { height: 100%; background: var(--cyan); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover{border-color:var(--cyan)} :focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.45;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem} .info a{color:var(--cyan)}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.rg .v{color:var(--rouge)} .tuile.vt .v{color:var(--vert)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0;overflow-wrap:anywhere}
+        .tab{overflow-x:auto} .tab table{min-width:520px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.mono,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        td.url{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} td.url a{color:var(--cyan);text-decoration:none}
+        td.act{white-space:nowrap}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;white-space:nowrap}
+        .pill.rouge{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.vert{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.violet{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)} .pill.orange{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden;min-width:70px} .barre i{display:block;height:100%;border-radius:3px;background:var(--cyan)}
+        .outils{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+        input[type=search]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%;max-width:340px}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>📺 Media Flow</h1>
-            <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2.5" fill="rgba(41,182,246,.12)"/><path d="m10.5 8.8 4 2.2-4 2.2z"/><path d="M8 20h8"/></svg>
+                <div><h1>Media Flow</h1><small>Flux vidéo et audio vus par le DPI, médias découverts et bibliothèque clonée</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
 
-        <div class="grid">
-            <div class="stat-card video">
-                <div class="value" id="videoStreams">-</div>
-                <div class="label">Video Streams</div>
-            </div>
-            <div class="stat-card audio">
-                <div class="value" id="audioStreams">-</div>
-                <div class="label">Audio Streams</div>
-            </div>
-            <div class="stat-card bandwidth">
-                <div class="value" id="bandwidth">-</div>
-                <div class="label">Bandwidth (Mbps)</div>
-            </div>
-            <div class="stat-card streams">
-                <div class="value" id="activeClients">-</div>
-                <div class="label">Active Clients</div>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile rg" title="Flux vidéo en cours dans la dernière fenêtre de capture du DPI (catégorie « média », hors services audio). Source : /status."><span class="l">Flux vidéo</span><span class="v" id="videoStreams">—</span><span class="s">fenêtre live</span></div>
+            <div class="tuile vt" title="Flux audio en cours dans la dernière fenêtre de capture (services audio reconnus par nom ou par hôte). Source : /status."><span class="l">Flux audio</span><span class="v" id="audioStreams">—</span><span class="s">fenêtre live</span></div>
+            <div class="tuile cy" title="Débit des flux médias en Mbit/s : octets de la fenêtre divisés par la durée de fenêtre supposée du collecteur (60 s par défaut). Estimation, pas une mesure instantanée."><span class="l">Débit</span><span class="v" id="bandwidth">—</span><span class="s">Mbit/s, estimé sur la fenêtre</span></div>
+            <div class="tuile vi" title="Terminaux distincts qui lisent un flux média dans la fenêtre live. Source : /status."><span class="l">Clients actifs</span><span class="v" id="activeClients">—</span><span class="s">terminaux distincts</span></div>
+        </section>
 
-        <div class="card">
-            <h2>Active Streams</h2>
-            <table>
-                <thead><tr><th>Client</th><th>Type</th><th>Service</th><th>Bandwidth</th><th>Duration</th></tr></thead>
-                <tbody id="streamsTable"><tr><td colspan="5">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <section class="pan"><h3>Flux actifs <i id="nStreams"></i></h3>
+            <div class="tab"><table><thead><tr><th>Client</th><th>Type</th><th>Service</th><th>Débit</th><th>Durée</th></tr></thead><tbody id="streamsTable"></tbody></table></div>
+            <p class="note">Triés par volume. La durée n’est pas fournie : les fenêtres de capture n’ont pas de mémoire par flux.</p>
+        </section>
 
-        <div class="card">
-            <h2>Top Media Services</h2>
-            <table>
-                <thead><tr><th>Service</th><th>Streams</th><th>Bandwidth</th><th>Usage %</th></tr></thead>
-                <tbody id="servicesTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <section class="pan"><h3>Principaux services média <i id="nServices"></i></h3>
+            <div class="tab"><table><thead><tr><th>Service</th><th>Flux</th><th>Débit</th><th>Part</th></tr></thead><tbody id="servicesTable"></tbody></table></div>
+        </section>
 
-        <div class="card">
-            <h2>🛰️ Discovered Media <span id="catcherState" style="font-size:.7rem;color:var(--text-dim)"></span></h2>
-            <table>
-                <thead><tr><th>Host</th><th>Kind</th><th>URL</th><th>Hits</th><th></th></tr></thead>
-                <tbody id="discoveredTable"><tr><td colspan="5">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <section class="pan"><h3>🛰️ Médias découverts <i id="catcherState"></i></h3>
+            <div class="outils"><input type="search" id="rech" placeholder="Rechercher un hôte ou une URL…" aria-label="Rechercher dans les médias découverts"></div>
+            <div class="tab"><table><thead><tr><th>Hôte</th><th>Type</th><th>URL</th><th>Occurrences</th><th></th></tr></thead><tbody id="discoveredTable"></tbody></table></div>
+            <div class="retour" id="rClone" hidden></div>
+        </section>
 
-        <div class="card">
-            <h2>📥 Cloned Library</h2>
-            <table>
-                <thead><tr><th>Title</th><th>Status</th><th>Size</th><th></th></tr></thead>
-                <tbody id="libraryTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-        </div>
-    </main>
+        <section class="pan"><h3>📥 Bibliothèque clonée <i id="nLib"></i></h3>
+            <div class="tab"><table><thead><tr><th>Titre</th><th>État</th><th>Taille</th><th></th></tr></thead><tbody id="libraryTable"></tbody></table></div>
+            <div class="retour" id="rLib" hidden></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
+    <script src="/shared/sidebar.js"></script>
     <script>
+    (function () {
+        'use strict';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+        if (EMB) document.body.classList.add('emb');
         const API = '/api/v1/mediaflow';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const est = x => x !== null && x !== undefined && x !== '' && isFinite(Number(x));
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        let DECOUVERTS = [], DOWNLOADER = null, CATCHER = false, CONFIRM = null, REFUS = false, OKANY = false, JOBS = [];
 
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
         async function api(path) {
+            if (DEMO) return demo(path);
             try {
-                const res = await fetch(API + path, { credentials: 'include' });
-                return res.json();
-            } catch { return {}; }
+                const r = await fetch(API + path, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                if (r.status === 401 || r.status === 403) { REFUS = true; return null; }
+                if (!r.ok) return null;
+                const j = await r.json(); OKANY = true; return j;
+            } catch (e) { return null; }
+        }
+        // Écritures : mêmes routes, méthodes et corps que l'ancienne page. Inertes en démonstration.
+        async function ecrire(methode, path, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + path, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        const detail = r => r.demo ? 'Démonstration : action inerte.' : (r.data && r.data.detail ? String(r.data.detail) : (r.statut ? 'HTTP ' + r.statut : 'serveur injoignable'));
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function taille(n) {
+            if (!est(n) || Number(n) <= 0) return '—';
+            n = Number(n); const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0;
+            while (n >= 1024 && i < 4) { n /= 1024; i++; }
+            return (i ? n.toFixed(1).replace('.', ',') : Math.round(n)) + ' ' + u[i];
+        }
+        const urlSure = u => { try { const x = new URL(u); return x.protocol === 'http:' || x.protocol === 'https:'; } catch (e) { return false; } };
+        const pill = (txt, cls) => el('span', 'pill ' + (cls || ''), txt);
+        function vide(tb, cols, msg) { tb.replaceChildren(); const tr = el('tr'), td = el('td', 'vide', msg); td.colSpan = cols; tr.appendChild(td); tb.appendChild(tr); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+
+        function rendreStatut(s) {
+            const ok = s && typeof s === 'object' && !s.error;
+            const v = k => ok && est(s[k]) ? Number(s[k]) : null;
+            $('videoStreams').textContent = v('video_streams') === null ? '—' : v('video_streams');
+            $('audioStreams').textContent = v('audio_streams') === null ? '—' : v('audio_streams');
+            $('bandwidth').textContent = v('bandwidth_mbps') === null ? '—' : v('bandwidth_mbps').toFixed(1).replace('.', ',');
+            $('activeClients').textContent = v('active_clients') === null ? '—' : v('active_clients');
+            const e = $('etat');
+            if (!DEMO && REFUS && !OKANY) { e.className = 'actif neutre'; e.textContent = 'SESSION REQUISE'; }
+            else if (!ok) { e.className = 'actif hors'; e.textContent = 'HORS LIGNE'; }
+            else if (s.running === false) { e.className = 'actif att'; e.textContent = 'DPI ARRÊTÉ'; }
+            else { e.className = 'actif'; e.textContent = 'ACTIF'; }
         }
 
-        async function refresh() {
-            const status = await api('/status');
-            document.getElementById('videoStreams').textContent = status.video_streams || 0;
-            document.getElementById('audioStreams').textContent = status.audio_streams || 0;
-            document.getElementById('bandwidth').textContent = (status.bandwidth_mbps || 0).toFixed(1);
-            document.getElementById('activeClients').textContent = status.active_clients || 0;
-
-            const streams = await api('/streams');
-            const streamsBody = document.getElementById('streamsTable');
-            if (streams.streams && streams.streams.length > 0) {
-                streamsBody.innerHTML = streams.streams.map(s => `
-                    <tr>
-                        <td style="font-family:monospace">${s.client_ip}</td>
-                        <td><span class="badge ${s.type}">${s.type}</span></td>
-                        <td>${s.service || 'Unknown'}</td>
-                        <td>${s.bandwidth || '-'}</td>
-                        <td>${s.duration || '-'}</td>
-                    </tr>
-                `).join('');
-            } else {
-                streamsBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No active streams</td></tr>';
-            }
-
-            const services = await api('/services');
-            const servicesBody = document.getElementById('servicesTable');
-            if (services.services && services.services.length > 0) {
-                servicesBody.innerHTML = services.services.map(s => `
-                    <tr>
-                        <td>${s.name}</td>
-                        <td>${s.streams}</td>
-                        <td>${s.bandwidth}</td>
-                        <td style="width:100px">
-                            <div class="progress"><div class="progress-bar" style="width:${s.percent || 0}%"></div></div>
-                        </td>
-                    </tr>
-                `).join('');
-            } else {
-                servicesBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No media services detected</td></tr>';
-            }
-
-            await renderDiscovered();
-            await renderLibrary();
+        function rendreFlux(d) {
+            const tb = $('streamsTable'), l = d && Array.isArray(d.streams) ? d.streams : null;
+            $('nStreams').textContent = l ? l.length + ' flux' : '';
+            if (!l || !l.length) { vide(tb, 5, l ? 'Aucun flux actif' : '—'); return; }
+            tb.replaceChildren();
+            l.forEach(s => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(s.client_ip)));
+                const t = el('td'); t.appendChild(pill(s.type === 'audio' ? 'audio' : 'vidéo', s.type === 'audio' ? 'vert' : 'rouge')); tr.appendChild(t);
+                tr.appendChild(el('td', '', s.service || 'Inconnu')); tr.appendChild(el('td', '', tiret(s.bandwidth))); tr.appendChild(el('td', '', tiret(s.duration)));
+                tb.appendChild(tr);
+            });
+        }
+        function rendreServices(d) {
+            const tb = $('servicesTable'), l = d && Array.isArray(d.services) ? d.services : null;
+            $('nServices').textContent = l ? l.length + ' service' + (l.length > 1 ? 's' : '') : '';
+            if (!l || !l.length) { vide(tb, 4, l ? 'Aucun service média détecté' : '—'); return; }
+            tb.replaceChildren();
+            l.forEach(s => {
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(s.name))); tr.appendChild(el('td', '', tiret(s.streams))); tr.appendChild(el('td', '', tiret(s.bandwidth)));
+                const td = el('td'); td.style.width = '110px';
+                if (est(s.percent)) { const b = el('div', 'barre'), i = el('i'); i.style.width = Math.max(0, Math.min(100, Number(s.percent))) + '%'; b.appendChild(i); b.title = Math.round(Number(s.percent)) + ' %'; td.appendChild(b); } else td.textContent = '—';
+                tr.appendChild(td); tb.appendChild(tr);
+            });
+        }
+        function rendreDecouverts(d) {
+            $('catcherState').textContent = d ? (d.catcher ? '· cloneur : ' + (d.downloader || 'aucun') : '· capteur inactif') : '';
+            DECOUVERTS = d && Array.isArray(d.discovered) ? d.discovered : null; DOWNLOADER = d ? d.downloader : null; CATCHER = !!(d && d.catcher);
+            peindreDecouverts();
+        }
+        function peindreDecouverts() {
+            const tb = $('discoveredTable');
+            if (!DECOUVERTS) { vide(tb, 5, '—'); return; }
+            const f = $('rech').value.trim().toLowerCase();
+            const rows = DECOUVERTS.map((r, i) => ({ r, i })).filter(x => !f || (String(x.r.host || '') + ' ' + String(x.r.url || '')).toLowerCase().includes(f));
+            if (!rows.length) { vide(tb, 5, DECOUVERTS.length ? 'Aucun résultat pour cette recherche' : 'Aucun média découvert pour l’instant (lisez un flux via R4)'); return; }
+            tb.replaceChildren();
+            rows.forEach(({ r }) => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', String(r.host || '')));
+                const k = el('td'); k.appendChild(pill(r.kind || '—', r.kind === 'audio' ? 'vert' : 'rouge')); tr.appendChild(k);
+                const u = el('td', 'url'); u.title = String(r.url || '');
+                if (urlSure(r.url)) { const a = el('a', '', String(r.url)); a.href = r.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; u.appendChild(a); } else u.textContent = String(r.url || '—');
+                tr.appendChild(u);
+                tr.appendChild(el('td', '', r.kind === 'stream' ? (r.parts || 0) + ' parts' + (r.audio_url ? ' +audio' : '') : tiret(r.hits || 1)));
+                const a = el('td', 'act'); const c = btn('Cloner', '', () => cloner(r, c)); if (!DOWNLOADER && !DEMO) { c.disabled = true; c.title = 'Aucun outil de téléchargement (yt-dlp ou ffmpeg) installé'; } a.appendChild(c); tr.appendChild(a);
+                tb.appendChild(tr);
+            });
+        }
+        async function cloner(r, b) {
+            b.disabled = true; b.textContent = '…';
+            const res = await ecrire('POST', '/clone', { url: r.url, audio_url: r.audio_url || null, kind: r.kind });
+            if (res.ok) retour('rClone', true, 'Clonage mis en file.'); else retour('rClone', false, 'Clonage impossible : ' + detail(res));
+            b.textContent = 'Cloner'; b.disabled = !DOWNLOADER && !DEMO;
+            await chargerBibliotheque();
+        }
+        function rendreBibliotheque(jobs) {
+            const tb = $('libraryTable'); JOBS = jobs;
+            $('nLib').textContent = jobs && jobs.length ? jobs.length + ' élément' + (jobs.length > 1 ? 's' : '') : '';
+            if (!jobs) { vide(tb, 4, '—'); return; }
+            if (!jobs.length) { vide(tb, 4, 'Rien de cloné pour l’instant'); return; }
+            tb.replaceChildren();
+            jobs.forEach(j => {
+                const tr = el('tr'); const t = el('td', '', j.title || ''); t.title = String(j.url || ''); tr.appendChild(t);
+                const st = el('td'); st.appendChild(j.status === 'done' ? pill('✅ terminé', 'vert') : j.status === 'running' ? pill('⏳ en cours', 'cyan') : j.status === 'queued' ? pill('… en file', '') : pill('⚠️ ' + (j.error || 'erreur'), 'orange')); tr.appendChild(st);
+                tr.appendChild(el('td', '', taille(j.bytes)));
+                const a = el('td', 'act');
+                if (j.status === 'done') { const dl = el('a', 'btn sm', 'Télécharger'); dl.href = API + '/download/' + encodeURIComponent(j.id); dl.setAttribute('download', ''); a.appendChild(dl); a.appendChild(document.createTextNode(' ')); }
+                if (j.status === 'done' || j.status === 'error') {
+                    if (CONFIRM === j.id) {
+                        const c = el('span', 'conf'); c.appendChild(el('span', 'note', 'Supprimer ce fichier du serveur, sans retour ?'));
+                        c.appendChild(btn('Confirmer', 'danger', async () => { CONFIRM = null; await supprimer(j.id); })); c.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendreBibliotheque(JOBS); })); a.appendChild(c);
+                    } else a.appendChild(btn('✕ Supprimer', 'danger', () => { CONFIRM = j.id; rendreBibliotheque(JOBS); }));
+                }
+                tr.appendChild(a); tb.appendChild(tr);
+            });
+            annoncer();
+        }
+        async function supprimer(id) {
+            const r = await ecrire('DELETE', '/library/' + encodeURIComponent(id));
+            if (r.ok) retour('rLib', true, 'Élément supprimé.'); else { retour('rLib', false, 'Suppression impossible : ' + detail(r)); rendreBibliotheque(JOBS); return; }
+            await chargerBibliotheque();
+        }
+        async function chargerBibliotheque() {
+            await api('/library');                    // même appel que l'ancienne page ; la liste affichée est celle des tâches
+            const j = await api('/clone/jobs');
+            rendreBibliotheque(j && Array.isArray(j.jobs) ? j.jobs : null);
         }
 
-        function fmtBytes(n) {
-            n = +n || 0; const u = ['B','KB','MB','GB','TB']; let i = 0;
-            while (n >= 1024 && i < u.length-1) { n /= 1024; i++; }
-            return n.toFixed(1) + ' ' + u[i];
+        async function charger() {
+            REFUS = false; OKANY = false;
+            const [s, f, v] = await Promise.all([api('/status'), api('/streams'), api('/services')]);
+            rendreStatut(s); rendreFlux(f); rendreServices(v);
+            rendreDecouverts(await api('/discovered'));
+            await chargerBibliotheque();
+            $('demo').hidden = !DEMO; $('session').hidden = DEMO || !(REFUS && !OKANY);
+            if (!DEMO && REFUS && !OKANY) rendreStatut(null);
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
-        function esc(s) { return (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+        $('rafraichir').addEventListener('click', charger);
+        $('rech').addEventListener('input', peindreDecouverts);
 
-        async function post(path, body) {
-            const res = await fetch(API + path, { method:'POST', credentials:'include',
-                headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-            return res.json();
-        }
-
-        async function cloneStream(idx, btn) {
-            const r = (window._discovered || [])[idx];
-            if (!r) return;
-            if (btn) { btn.disabled = true; btn.textContent = '…'; }
-            await post('/clone', { url: r.url, audio_url: r.audio_url || null, kind: r.kind });
-            await renderLibrary();
-        }
-        window.cloneStream = cloneStream;
-
-        async function delLib(id) {
-            await fetch(API + '/library/' + id, { method:'DELETE', credentials:'include' });
-            await renderLibrary();
-        }
-        window.delLib = delLib;
-
-        async function renderDiscovered() {
-            const d = await api('/discovered');
-            document.getElementById('catcherState').textContent =
-                d.catcher ? ('· cloner: ' + (d.downloader || 'none')) : '· catcher inactive';
-            const body = document.getElementById('discoveredTable');
-            const rows = d.discovered || [];
-            if (!rows.length) { body.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No media discovered yet (stream something over R4)</td></tr>'; return; }
-            window._discovered = rows;
-            body.innerHTML = rows.map((r, i) => {
-                const disabled = d.downloader ? '' : 'disabled';
-                const u = esc(r.url);
-                const isStream = r.kind === 'stream';
-                const badgeCls = r.kind === 'audio' ? 'audio' : 'video';
-                const count = isStream ? ((r.parts || 0) + ' parts' + (r.audio_url ? ' +audio' : '')) : (r.hits || 1);
-                return `<tr>
-                    <td style="font-family:monospace;font-size:.8rem">${esc(r.host||'')}</td>
-                    <td><span class="badge ${badgeCls}">${esc(r.kind||'')}</span></td>
-                    <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${u}"><a href="${u}" target="_blank" rel="noopener noreferrer" style="color:var(--cyan,#00d4ff);text-decoration:none">${u}</a></td>
-                    <td style="white-space:nowrap">${count}</td>
-                    <td><button class="btn" ${disabled} onclick="cloneStream(${i},this)">Clone</button></td>
-                </tr>`;
-            }).join('');
+        function demo(path) {
+            const t = Math.floor(Date.now() / 1000);
+            if (path === '/status') return { running: true, video_streams: 3, audio_streams: 1, bandwidth_mbps: 14.6, active_clients: 2 };
+            if (path === '/streams') return { streams: [{ client_ip: 'a1b2c3d4e5f60718', type: 'video', service: 'Vidéo démo', bandwidth: '9.40 Mbps', duration: '—' }, { client_ip: 'b7c8d9e0f1a21324', type: 'audio', service: 'Musique démo', bandwidth: '0.32 Mbps', duration: '—' }] };
+            if (path === '/services') return { services: [{ name: 'Vidéo démo', streams: 3, bandwidth: '11.10 Mbps', percent: 76 }, { name: 'Musique démo', streams: 1, bandwidth: '0.32 Mbps', percent: 2 }] };
+            if (path === '/discovered') return { catcher: true, downloader: 'yt-dlp', discovered: [{ host: 'cdn.exemple.test', kind: 'video', url: 'https://cdn.exemple.test/v/clip.mp4', hits: 4 }, { host: 'flux.exemple.test', kind: 'stream', url: 'https://flux.exemple.test/hls/index.m3u8', parts: 12, audio_url: 'https://flux.exemple.test/hls/audio.m3u8' }] };
+            if (path === '/library') return { library: [], downloader: 'yt-dlp' };
+            if (path === '/clone/jobs') return { jobs: [{ id: 'demo01', url: 'https://cdn.exemple.test/v/clip.mp4', title: 'clip.mp4', status: 'done', bytes: 48 * 1048576, ts: t - 3600 }, { id: 'demo02', url: 'https://flux.exemple.test/hls/index.m3u8', title: 'index.m3u8', status: 'running', bytes: 0, ts: t - 60 }] };
+            return null;
         }
 
-        async function renderLibrary() {
-            const lib = await api('/library');
-            const jobs = await api('/clone/jobs');
-            const body = document.getElementById('libraryTable');
-            const all = (jobs.jobs || []);
-            if (!all.length) { body.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">Nothing cloned yet</td></tr>'; return; }
-            body.innerHTML = all.map(j => {
-                const st = j.status === 'done' ? '✅ done'
-                    : j.status === 'running' ? '⏳ running'
-                    : j.status === 'queued' ? '… queued'
-                    : '⚠️ ' + esc(j.error || 'error');
-                const act = j.status === 'done'
-                    ? `<a class="btn" href="${API}/download/${j.id}" download>Download</a> <button class="btn" onclick="delLib('${j.id}')">✕</button>`
-                    : (j.status === 'error' ? `<button class="btn" onclick="delLib('${j.id}')">✕</button>` : '');
-                return `<tr>
-                    <td title="${esc(j.url||'')}">${esc(j.title||'')}</td>
-                    <td style="font-size:.8rem">${st}</td>
-                    <td>${j.bytes ? fmtBytes(j.bytes) : '-'}</td>
-                    <td>${act}</td>
-                </tr>`;
-            }).join('');
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'mediaflow' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        refresh();
-        setInterval(refresh, 5000);
+        charger();
+        // Pas d'actualisation onglet masqué, en démonstration, ni pendant une confirmation ou une recherche.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM || $('rech').value) return; charger(); }, 15000);
+    })();
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
