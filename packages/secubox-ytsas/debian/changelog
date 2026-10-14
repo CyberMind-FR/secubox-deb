@@ -1,3 +1,9 @@
+secubox-ytsas (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Flux : le repli sur l'ancien résultat dit sa cause (cookies refusés ou panne YouTube) et marque le panneau périmé (ref #2633).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 11:00:00 +0200
+
 secubox-ytsas (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Flux YouTube : un refus de connexion de YouTube (Login details are needed, Sign in…) repond 401 « cookies perimes » au lieu d'un 502 « YouTube n'a pas repondu ».

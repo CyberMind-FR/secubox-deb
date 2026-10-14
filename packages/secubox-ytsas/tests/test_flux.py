@@ -224,3 +224,43 @@ def test_la_route_repond_401_cookies_perimes_et_non_502(monkeypatch, tmp_path):
     assert r.status_code == 401
     j = r.json()
     assert j["cookies_perimes"] is True and "cookies" in j["error"] and "Login details" not in json.dumps(j)
+
+
+# ── la cause du repli est dite (#2633) ───────────────────────────────────────
+def test_le_repli_perime_dit_que_les_cookies_sont_refuses(tmp_path):
+    ex = Faux([_ligne(ID1, "A"), flux.CookiesRefuses("Login details are needed")])
+    t = [1000.0]
+    f = _flux(tmp_path, ex, ttl=10, horloge=lambda: t[0])
+    asyncio.run(f.lister("abonnements", 24))
+    t[0] += 100
+    r = asyncio.run(f.lister("abonnements", 24))
+    assert r["perime"] is True and r["cause"] == "cookies" and [i["id"] for i in r["items"]] == [ID1]
+    assert "Login details" not in json.dumps(r)
+
+
+def test_le_repli_perime_pour_une_autre_panne_ne_parle_pas_de_cookies(tmp_path):
+    ex = Faux([_ligne(ID1, "A"), flux.ErreurYoutube("HTTP Error 429")])
+    t = [1000.0]
+    f = _flux(tmp_path, ex, ttl=10, horloge=lambda: t[0])
+    asyncio.run(f.lister("abonnements", 24))
+    t[0] += 100
+    r = asyncio.run(f.lister("abonnements", 24))
+    assert r["perime"] is True and r["cause"] == "youtube"
+
+
+def test_les_cookies_refuses_pendant_un_repli_marquent_le_panneau_perime(monkeypatch, tmp_path):
+    calls = {"n": 0}
+
+    async def execut(argv):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _ligne(ID1, "A")
+        raise flux.CookiesRefuses("Login details are needed")
+    c = _client(monkeypatch, tmp_path, execut=execut)
+    main.flux_moteur.ttl = 0
+    h = {"X-Sbx-Flux": "1"}
+    assert c.get("/api/v1/ytsas/flux?type=abonnements", headers=h).status_code == 200
+    main.engine.cookies_stale = False
+    r = c.get("/api/v1/ytsas/flux?type=abonnements", headers=h)
+    assert r.status_code == 200 and r.json()["cause"] == "cookies"
+    assert main.engine.cookies_stale is True

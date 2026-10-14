@@ -184,11 +184,14 @@ class Flux:
                 items = analyser(sortie)
                 if not items:
                     raise ErreurYoutube("flux vide ou illisible")
-            except ErreurYoutube:
+            except ErreurYoutube as e:
                 if ancien and ancien.get("items"):
                     self._retenir(ancien["items"])
+                    # La CAUSE accompagne le repli (#2633) : sans elle, « YouTube n'a pas répondu » cache que le compte
+                    # n'est plus reconnu, et l'utilisateur ne sait pas qu'il doit redéposer ses cookies. Jamais le détail brut.
                     return {"type": type_, "items": self._public(ancien["items"])[:limite], "en_cache": True,
-                            "perime": True, "date": int(ancien["date"])}
+                            "perime": True, "cause": "cookies" if isinstance(e, CookiesRefuses) else "youtube",
+                            "date": int(ancien["date"])}
                 raise
             doc = {"date": maintenant, "limite": limite, "items": items}
             self._ecrire(type_, doc)

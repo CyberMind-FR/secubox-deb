@@ -503,7 +503,10 @@ async def flux_liste(request: Request, type: str = "abonnements", limite: int = 
     # le chemin des cookies n'est transmis que s'ils existent : sans eux, 401 net, jamais un échec yt-dlp opaque
     flux_moteur.cookie_path = COOKIE_PATH if engine._has_cookies() else None
     try:
-        return await flux_moteur.lister(type, limite)
+        resultat = await flux_moteur.lister(type, limite)
+        if resultat.get("cause") == "cookies" and engine._has_cookies():
+            engine.cookies_stale = True      # repli sur l'ancien résultat : le panneau doit quand même dire que les cookies sont périmés (#2633)
+        return resultat
     except _flux.AuthRequise:
         return JSONResponse({"error": "auth requise — dépose tes cookies (panneau Authentification)"}, status_code=401)
     except _flux.CookiesRefuses:
