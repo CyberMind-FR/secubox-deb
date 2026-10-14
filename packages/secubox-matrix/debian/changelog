@@ -1,3 +1,26 @@
+secubox-matrix (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /matrix/ refaite au profil Aurora (#2612) : un seul fichier autonome, tuiles (service, version, disque,
+    utilisateurs, salons, pairs federes), sept onglets (serveur, utilisateurs, salons, federation, medias, inscription,
+    journaux), ?demo=1 (donnees fictives, actions inertes), ?embed=1, hauteur annoncee a l'hote (sbxVue).
+  * Memes routes, methodes et corps pour toutes les ecritures (install, start, stop, restart, config, users,
+    reset-password, federation/block, media/purge, registrations/token, element/install, backup).
+  * Confirmation integree a la page (plus aucun confirm/alert/prompt) pour arret, redemarrage, sauvegarde, installation,
+    Element, blocage d'un serveur, purge du cache et suppression d'un jeton.
+  * Corrige : jeton absent envoye en « Bearer null » ; injection HTML possible (noms, jetons dans innerHTML et onclick) ;
+    jetons d'inscription affiches en clair et montres dans une alerte (desormais masques, copie au presse-papiers) ;
+    cases « jeton obligatoire » et « apercu d'URL » toujours decochees car GET /config ne les renvoie pas (retirees,
+    l'API les ignorait a l'ecriture) ; etat de federation faux quand l'API renvoie une erreur (« Disabled », 0 pair) ;
+    « vide = illimite » pour les jetons alors que l'API met 1 utilisation ; succes annonce quand restart/backup repondent
+    success=false ; dates des utilisateurs jamais affichees ; mesures absentes affichees en 0 ou « undefined MB »
+    (desormais « — ») ; aucun bandeau sur 401/403 ; jetons d'acces masques dans l'affichage des journaux.
+  * Non repris : onglet Ponts (bridges) et installation de ponts (code mort : l'ancienne page n'avait ni onglet ni
+    liste), compteurs users_count/rooms_count de /status (toujours 0 cote API : remplaces par la longueur des listes),
+    reglages « jeton obligatoire » et « apercu d'URL ». Aucune desactivation/suppression de compte ou de salon
+    (l'ancienne page n'en avait pas).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 08:00:00 +0200
+
 secubox-matrix (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-jabber (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),

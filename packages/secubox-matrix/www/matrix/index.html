@@ -4,880 +4,602 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Serveur Matrix (Synapse) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun mot de passe ni jeton n'est affiché : les jetons d'inscription sont masqués, les jetons d'accès des journaux aussi.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matrix Synapse - SecuBox</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Matrix</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            --matrix-green: #0dbd8c;
-            --matrix-light: #4dd2a8;
-            --matrix-dark: #0a9d73;
-        }
-
-        body.dark {
-            --matrix-green: #0dbd8c;
-            --matrix-light: #4dd2a8;
-            --matrix-dark: #0a9d73;
-        }
-
-        .accent { color: var(--matrix-green); }
-        .accent-bg { background-color: var(--matrix-green); }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
-        }
-
-        .header h1 { margin: 0; font-size: 1.5rem; }
-
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.875rem;
-        }
-
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .info-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-            padding: 1rem;
-        }
-
-        .info-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-        }
-
-        .info-value {
-            font-size: 1.25rem;
-            font-weight: 500;
-            margin-top: 0.25rem;
-        }
-
-        .action-bar {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            background: var(--surface);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 0.875rem;
-        }
-
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--matrix-green); color: white; border-color: var(--matrix-green); }
-        .btn.primary:hover { background: var(--matrix-dark); }
-        .btn.danger { background: var(--error); color: white; border-color: var(--error); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
-        }
-
-        .tab {
-            padding: 0.75rem 1rem;
-            border: none;
-            background: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-        }
-
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--matrix-green); border-bottom-color: var(--matrix-green); }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .user-list, .room-list, .bridge-list {
-            display: grid;
-            gap: 0.5rem;
-        }
-
-        .list-item {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 0.75rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-        }
-
-        .item-icon { font-size: 1.5rem; }
-        .item-info { flex: 1; }
-        .item-name { font-weight: 500; }
-        .item-meta { font-size: 0.875rem; color: var(--text-secondary); }
-
-        .log-viewer {
-            background: var(--bg-dark, #1a1a2e);
-            color: var(--text-light, #e0e0e0);
-            font-family: monospace;
-            font-size: 0.75rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-
-        .settings-form {
-            display: grid;
-            gap: 1rem;
-            max-width: 500px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.25rem;
-            font-weight: 500;
-        }
-
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            background: var(--surface);
-            color: var(--text);
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .checkbox-group input { width: auto; }
-
-        .open-app-btn {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            padding: 1rem 1.5rem;
-            background: var(--matrix-green);
-            color: white;
-            border: none;
-            border-radius: 2rem;
-            cursor: pointer;
-            font-size: 1rem;
-            box-shadow: 0 4px 12px rgba(13, 189, 139, 0.4);
-        }
-
-        .open-app-btn:hover { background: var(--matrix-dark); }
-        .hidden { display: none !important; }
-
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: var(--text-secondary);
-        }
-
-        .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
-
-        .install-form {
-            max-width: 400px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-        }
-
-        .install-form h2 { margin-top: 0; text-align: center; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:640px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;min-width:520px;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .btn+.btn{margin-left:5px}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 8px;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.1);font-size:.8rem}
+        .conf span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie label.case{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--texte)}
+        form.saisie input:not([type=checkbox]),form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        form.saisie .large{grid-column:1/-1}
+        .actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        pre.journal{margin:0;max-height:420px;overflow:auto;background:rgba(4,10,22,.85);border:1px solid var(--trait);border-radius:10px;padding:10px;font-size:.72rem;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--doux)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">Matrix</span> Synapse</h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
-        </div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v16M4 4h2M4 20h2M20 4v16M20 4h-2M20 20h-2"/><path d="M8.5 16V9l3.5 4 3.5-4v7"/></svg>
+                <div><h1>Matrix</h1><small>Serveur de messagerie fédéré (Synapse)</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div id="install-section" class="install-form hidden">
-            <h2>Install Matrix Synapse</h2>
-            <form onsubmit="installMatrix(event)">
-                <div class="form-group">
-                    <label>Server Name (domain)</label>
-                    <input type="text" id="install-server-name" placeholder="matrix.example.com" required>
-                    <small style="color: var(--text-secondary);">This cannot be changed later</small>
-                </div>
-                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install Matrix</button>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile ok" id="cEtat" title="État du conteneur LXC secubox-matrix qui héberge Synapse."><span class="l">Service</span><span class="v" id="tEtat">—</span><span class="s" id="sEtat">conteneur LXC</span></div>
+            <div class="tuile cy" title="Version de Synapse lue sur l’API d’administration du serveur (uniquement quand il tourne)."><span class="l">Version Synapse</span><span class="v" id="tVer">—</span><span class="s">API d’administration</span></div>
+            <div class="tuile cy" title="Taille du dossier de données du serveur (du -sh), conteneur arrêté ou non."><span class="l">Disque</span><span class="v" id="tDisque">—</span><span class="s">données Synapse</span></div>
+            <div class="tuile cy" title="Comptes listés dans la base Synapse (les 100 plus récents au plus). Les comptes désactivés ne sont pas distingués."><span class="l">Utilisateurs</span><span class="v" id="tUsers">—</span><span class="s" id="sUsers">comptes listés</span></div>
+            <div class="tuile cy" title="Salons listés dans la base Synapse (100 au plus)."><span class="l">Salons</span><span class="v" id="tRooms">—</span><span class="s" id="sRooms">salons listés</span></div>
+            <div class="tuile cy" id="cFed" title="Serveurs distants connus de la fédération : pairs ayant déjà reçu un flux avec succès sur le total de destinations."><span class="l">Pairs fédérés</span><span class="v" id="tFed">—</span><span class="s">actifs / destinations</span></div>
+        </section>
+
+        <section id="zone-install" class="pan" hidden>
+            <h3>Installer Matrix <i>aucun serveur n’est installé</i></h3>
+            <div class="retour" id="r-install" hidden></div><div class="conf" id="c-install" hidden></div>
+            <form class="saisie" id="fInstall">
+                <label class="large">Nom du serveur (domaine)<input name="server_name" id="iNom" placeholder="matrix.example.com" required maxlength="253" pattern="[A-Za-z0-9.\-]+(:[0-9]+)?" autocomplete="off"></label>
+                <div class="bout"><button class="btn prim" type="submit" id="bInstall">Installer Matrix</button></div>
             </form>
+            <p class="note">Le nom du serveur ne pourra plus être changé ensuite. L’installation crée un conteneur LXC Debian et peut durer plusieurs minutes.</p>
+        </section>
+
+        <section id="zone-service" class="pan">
+            <h3>Service <i>conteneur et client</i></h3>
+            <div class="retour" id="r-service" hidden></div><div class="conf" id="c-service" hidden></div>
+            <div class="actions">
+                <button class="btn prim" id="bStart" type="button">Démarrer</button>
+                <button class="btn" id="bStop" type="button">Arrêter</button>
+                <button class="btn" id="bRestart" type="button">Redémarrer</button>
+                <button class="btn" id="bElement" type="button">Installer Element Web</button>
+                <button class="btn" id="bBackup" type="button">Sauvegarder</button>
+                <a class="btn" id="bOuvrir" href="#" target="_blank" rel="noopener noreferrer" hidden>Ouvrir Element</a>
+            </div>
+            <p class="note">Arrêter ou sauvegarder interrompt Synapse : les clients Matrix sont déconnectés le temps de l’opération.</p>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections Matrix" id="onglets">
+            <button type="button" role="tab" id="o-serveur" data-t="serveur" aria-selected="true" aria-controls="t-serveur">Serveur</button>
+            <button type="button" role="tab" id="o-users" data-t="users" aria-selected="false" aria-controls="t-users">Utilisateurs</button>
+            <button type="button" role="tab" id="o-rooms" data-t="rooms" aria-selected="false" aria-controls="t-rooms">Salons</button>
+            <button type="button" role="tab" id="o-fed" data-t="fed" aria-selected="false" aria-controls="t-fed">Fédération</button>
+            <button type="button" role="tab" id="o-media" data-t="media" aria-selected="false" aria-controls="t-media">Médias</button>
+            <button type="button" role="tab" id="o-reg" data-t="reg" aria-selected="false" aria-controls="t-reg">Inscription</button>
+            <button type="button" role="tab" id="o-logs" data-t="logs" aria-selected="false" aria-controls="t-logs">Journaux</button>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="info-grid">
-                <div class="info-card">
-                    <div class="info-label">Server Name</div>
-                    <div class="info-value" id="server-name">-</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Version</div>
-                    <div class="info-value" id="version">-</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Container IP</div>
-                    <div class="info-value" id="container-ip">-</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Disk Usage</div>
-                    <div class="info-value" id="disk-usage">-</div>
-                </div>
-            </div>
-
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-                <button class="btn" onclick="installElement()">Install Element Web</button>
-                <button class="btn" onclick="createBackup()">Backup</button>
-            </div>
-
-            <div class="tabs">
-                <button class="tab active" data-tab="server">Server</button>
-                <button class="tab" data-tab="users">Users</button>
-                <button class="tab" data-tab="rooms">Rooms</button>
-                <button class="tab" data-tab="federation">Federation</button>
-                <button class="tab" data-tab="media">Media</button>
-                <button class="tab" data-tab="registration">Registration</button>
-                <button class="tab" data-tab="logs">Logs</button>
-            </div>
-
-            <!-- Server Tab -->
-            <div id="tab-server" class="tab-content active">
-                <h3 style="margin-top:0;">Server Configuration</h3>
-                <form class="settings-form" onsubmit="saveSettings(event)">
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="setting-registration">
-                        <label>Enable Public Registration</label>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="setting-token-required">
-                        <label>Require Registration Token</label>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="setting-guests">
-                        <label>Allow Guest Access</label>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="setting-url-preview">
-                        <label>Enable URL Previews</label>
-                    </div>
-                    <div class="form-group">
-                        <label>Max Upload Size</label>
-                        <select id="setting-upload">
-                            <option value="10M">10 MB</option>
-                            <option value="50M">50 MB</option>
-                            <option value="100M">100 MB</option>
-                            <option value="500M">500 MB</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn primary">Save Settings</button>
+        <section id="t-serveur" role="tabpanel" aria-labelledby="o-serveur" class="grille">
+            <div class="pan"><h3>Ce serveur</h3>
+                <dl class="kv"><dt>Nom</dt><dd id="kNom">—</dd><dt>Adresse du conteneur</dt><dd class="mono" id="kIp">—</dd><dt>Port Synapse</dt><dd id="kPort">—</dd><dt>Port fédération</dt><dd id="kFedPort">—</dd></dl>
+                <p class="note">Le nom du serveur est lu dans le fichier de configuration de Synapse ; il n’est connu que lorsque le conteneur tourne.</p></div>
+            <div class="pan"><h3>Réglages <i>homeserver.yaml</i></h3>
+                <div class="retour" id="r-serveur" hidden></div>
+                <form class="saisie" id="fConf" style="grid-template-columns:1fr">
+                    <label class="case"><input type="checkbox" id="cReg"> Inscription publique ouverte</label>
+                    <label class="case"><input type="checkbox" id="cGuest"> Accès invité autorisé</label>
+                    <label>Taille maximale d’un envoi<select id="cUp"><option value="10M">10 Mo</option><option value="50M">50 Mo</option><option value="100M">100 Mo</option><option value="500M">500 Mo</option></select></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="bConf">Enregistrer</button></div>
                 </form>
+                <p class="note">Enregistrer réécrit la configuration et redémarre Synapse. L’API ne lit ni n’applique « inscription sur jeton » ni « aperçu d’URL » : ces deux réglages ne sont pas repris.</p></div>
+        </section>
 
-            </div>
+        <section id="t-users" role="tabpanel" aria-labelledby="o-users" hidden>
+            <div class="pan"><h3>Utilisateurs <i id="nUsers"></i><button class="btn prim sm" id="addUser" type="button">+ Créer un utilisateur</button></h3>
+                <div class="retour" id="r-users" hidden></div><div class="conf" id="c-users" hidden></div>
+                <form class="saisie" id="fUser" hidden>
+                    <label>Nom d’utilisateur<input name="username" required maxlength="64" autocomplete="off" pattern="[a-z0-9._=\-/]+" placeholder="alice"></label>
+                    <label>Mot de passe (8 caractères min.)<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+                    <label class="case"><input type="checkbox" name="admin"> Administrateur</label>
+                    <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fUser">Annuler</button></div>
+                </form>
+                <form class="saisie" id="fMdp" hidden>
+                    <label>Compte<input name="cible" readonly class="mono"></label>
+                    <label>Nouveau mot de passe (8 caractères min.)<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Réinitialiser</button><button class="btn" type="button" data-ferme="fMdp">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Compte</th><th>Rôle</th><th>Créé le</th><th>Actions</th></tr></thead><tbody id="bUsers"></tbody></table></div>
+                <p class="note">Liste des 100 comptes les plus récents. Les mots de passe ne sont jamais affichés. La page ne désactive ni ne supprime de compte (l’ancienne page non plus).</p></div>
+        </section>
 
-            <!-- Users Tab -->
-            <div id="tab-users" class="tab-content">
-                <div class="action-bar">
-                    <button class="btn primary" onclick="showCreateUser()">Create User</button>
-                    <button class="btn" onclick="loadUsers()">Refresh</button>
+        <section id="t-rooms" role="tabpanel" aria-labelledby="o-rooms" hidden>
+            <div class="pan"><h3>Salons <i id="nRooms"></i></h3>
+                <div class="tab"><table><thead><tr><th>Identifiant du salon</th><th>Créateur</th><th>Visibilité</th></tr></thead><tbody id="bRooms"></tbody></table></div>
+                <p class="note">Liste des 100 premiers salons (ordre alphabétique de l’identifiant). Nom, membres et suppression de salon ne sont pas proposés ici.</p></div>
+        </section>
+
+        <section id="t-fed" role="tabpanel" aria-labelledby="o-fed" hidden>
+            <div class="pan"><h3>Serveurs fédérés <i id="nFed"></i><button class="btn sm" id="addBloc" type="button">Bloquer un serveur</button></h3>
+                <div class="retour" id="r-fed" hidden></div><div class="conf" id="c-fed" hidden></div>
+                <form class="saisie" id="fBloc" hidden>
+                    <label>Serveur à bloquer<input name="serveur" required maxlength="253" pattern="[A-Za-z0-9.\-]+(:[0-9]+)?" placeholder="serveur.example.net" autocomplete="off"></label>
+                    <div class="bout"><button class="btn danger" type="submit">Bloquer</button><button class="btn" type="button" data-ferme="fBloc">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Destination</th><th>État</th><th>Dernier échec</th><th>Reprise</th></tr></thead><tbody id="bFed"></tbody></table></div>
+                <p class="note">« Actif » = un flux a déjà été reçu avec succès de cette destination (champ last_successful). Le blocage s’applique après redémarrage de Synapse.</p></div>
+        </section>
+
+        <section id="t-media" role="tabpanel" aria-labelledby="o-media" hidden>
+            <div class="pan"><h3>Stockage des médias <i>/data/media_store</i></h3>
+                <div class="retour" id="r-media" hidden></div><div class="conf" id="c-media" hidden></div>
+                <div class="tuiles" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:10px">
+                    <div class="tuile cy" title="Médias envoyés par les utilisateurs de ce serveur."><span class="l">Médias locaux</span><span class="v" id="mLocal">—</span></div>
+                    <div class="tuile cy" title="Cache des médias de serveurs distants, purgeable."><span class="l">Cache distant</span><span class="v" id="mRemote">—</span></div>
+                    <div class="tuile cy" title="Somme du local et du cache distant."><span class="l">Total</span><span class="v" id="mTotal">—</span></div>
                 </div>
-                <div id="users-list" class="user-list"></div>
-            </div>
+                <form class="saisie" id="fPurge">
+                    <label>Purger le cache distant plus ancien que (jours)<input name="jours" type="number" min="1" max="365" value="30" required></label>
+                    <div class="bout"><button class="btn danger" type="submit">Purger le cache distant</button></div>
+                </form>
+                <p class="note">Seul le cache distant est purgé ; les médias locaux ne sont jamais touchés.</p></div>
+        </section>
 
-            <!-- Rooms Tab -->
-            <div id="tab-rooms" class="tab-content">
-                <div class="action-bar">
-                    <button class="btn" onclick="loadRooms()">Refresh</button>
-                </div>
-                <div id="rooms-list" class="room-list"></div>
-            </div>
+        <section id="t-reg" role="tabpanel" aria-labelledby="o-reg" hidden>
+            <div class="pan"><h3>Jetons d’inscription <i id="nReg"></i></h3>
+                <div class="retour" id="r-reg" hidden></div><div class="conf" id="c-reg" hidden></div>
+                <form class="saisie" id="fTok">
+                    <label>Nombre d’utilisations (vide = 1, valeur par défaut de l’API)<input name="uses" type="number" min="1" max="100000" placeholder="1"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Générer un jeton</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Jeton (masqué)</th><th>Utilisations</th><th>En cours</th><th>Expire</th><th>Actions</th></tr></thead><tbody id="bReg"></tbody></table></div>
+                <p class="note">Les jetons ne sont jamais affichés en entier : « Copier » les place dans le presse-papiers.</p></div>
+        </section>
 
-            <!-- Federation Tab -->
-            <div id="tab-federation" class="tab-content">
-                <div class="info-grid" style="margin-bottom: 1.5rem;">
-                    <div class="info-card">
-                        <div class="info-label">Federation Status</div>
-                        <div class="info-value" id="fed-status">-</div>
-                    </div>
-                    <div class="info-card">
-                        <div class="info-label">Total Peers</div>
-                        <div class="info-value" id="fed-total">0</div>
-                    </div>
-                    <div class="info-card">
-                        <div class="info-label">Active Peers</div>
-                        <div class="info-value" id="fed-active">0</div>
-                    </div>
-                </div>
-                <div class="action-bar">
-                    <button class="btn" onclick="loadFederationPeers()">Refresh Peers</button>
-                    <button class="btn" onclick="showBlockServer()">Block Server</button>
-                </div>
-                <div id="federation-peers" class="user-list"></div>
-            </div>
+        <section id="t-logs" role="tabpanel" aria-labelledby="o-logs" hidden>
+            <div class="pan"><h3>Journal de Synapse <i>200 dernières lignes</i><button class="btn sm" id="bLogs" type="button">Actualiser</button></h3>
+                <pre class="journal" id="journal" tabindex="0">—</pre>
+                <p class="note">Les jetons d’accès éventuels sont masqués dans l’affichage.</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-            <!-- Media Tab -->
-            <div id="tab-media" class="tab-content">
-                <div class="info-grid" style="margin-bottom: 1.5rem;">
-                    <div class="info-card">
-                        <div class="info-label">Local Media</div>
-                        <div class="info-value" id="media-local">0 MB</div>
-                    </div>
-                    <div class="info-card">
-                        <div class="info-label">Remote Cache</div>
-                        <div class="info-value" id="media-remote">0 MB</div>
-                    </div>
-                    <div class="info-card">
-                        <div class="info-label">Total Storage</div>
-                        <div class="info-value" id="media-total">0 MB</div>
-                    </div>
-                </div>
-                <div class="action-bar">
-                    <button class="btn" onclick="loadMediaStats()">Refresh</button>
-                    <button class="btn danger" onclick="purgeMedia()">Purge Remote Cache (30+ days)</button>
-                </div>
-            </div>
-
-            <!-- Registration Tab -->
-            <div id="tab-registration" class="tab-content">
-                <h3 style="margin-top:0;">Registration Tokens</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Generate tokens to allow controlled user registration.
-                </p>
-                <div class="action-bar">
-                    <button class="btn primary" onclick="createToken()">Generate Token</button>
-                    <button class="btn" onclick="loadRegistrations()">Refresh</button>
-                </div>
-                <div id="tokens-list" class="user-list"></div>
-            </div>
-
-            <!-- Logs Tab -->
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar">
-                    <button class="btn" onclick="loadLogs()">Refresh</button>
-                </div>
-                <div id="log-viewer" class="log-viewer">Loading logs...</div>
-            </div>
-        </div>
-    </div>
-
-    <button id="open-app-btn" class="open-app-btn hidden" onclick="openElement()">
-        Open Element
-    </button>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
-        const API_BASE = '/api/v1/matrix';
-        let containerIP = null;
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/matrix';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function apiCall(endpoint, options = {}) {
-            const token = localStorage.getItem('sbx_token');
-            const response = await fetch(API_BASE + endpoint, {
-                ...options,
-                headers: {
-                    'Authorization': 'Bearer ' + token,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
+        let ST = null, USERS = null, ROOMS = null, CONF = null, FEDST = null, FEDP = null, MEDIA = null, REG = null, LOGS = null;
+        let SESSION_OK = true, INJOIGNABLE = false, ONGLET = 'serveur', CONFIRM = false, CONF_SALE = false;
+        const ONGLETS = ['serveur', 'users', 'rooms', 'fed', 'media', 'reg', 'logs'];
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                if (r.status === 401 || r.status === 403) { SESSION_OK = false; rendre(); }
+                return { ok: r.ok && !(data && data.success === false), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(zone, ok, msg) { const r = $('r-' + zone); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (d) return String(typeof d === 'string' ? d : JSON.stringify(d)).slice(0, 200);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const n = typeof ts === 'string' && /^\d+$/.test(ts) ? Number(ts) : ts;
+            const d = typeof n === 'number' ? new Date(n < 1e12 ? n * 1000 : n) : new Date(n);
+            if (isNaN(d)) return '—';
+            return d.toLocaleString('fr-FR');
+        }
+        function octets(o) {
+            if (o === null || o === undefined || isNaN(o)) return '—';
+            const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0, v = Number(o);
+            while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+            return (i === 0 ? String(v) : v.toFixed(v >= 100 ? 0 : 1).replace('.', ',')) + ' ' + u[i];
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function masque(jeton) { const s = String(jeton || ''); return s.length > 4 ? s.slice(0, 4) + '••••••••' : '••••'; }
+        function masquerJournal(l) {
+            return String(l).replace(/(access_token=|Bearer\s+)[^\s&"']+/gi, '$1••••').replace(/\bsyt_[A-Za-z0-9_\-]+/g, 'syt_••••');
+        }
+
+        function demoData() {
+            const t = Math.floor(Date.now() / 1000);
+            ST = { container_exists: true, running: true, container_ip: '192.0.2.50', version: '1.99.0', server_name: 'matrix.example.org', synapse_port: 8008, federation_port: 8448, disk_usage: '1,8G' };
+            USERS = { users: [{ username: '@alice:matrix.example.org', admin: true, created: String(t - 86400 * 90) }, { username: '@bob:matrix.example.org', admin: false, created: String(t - 86400 * 21) }, { username: '@carole:matrix.example.org', admin: false, created: String(t - 86400 * 3) }] };
+            ROOMS = { rooms: [{ room_id: '!abcDEF123:matrix.example.org', creator: '@alice:matrix.example.org', public: true }, { room_id: '!ghiJKL456:matrix.example.org', creator: '@bob:matrix.example.org', public: false }] };
+            CONF = { server_name: 'matrix.example.org', enable_registration: false, allow_guest_access: false, federation_enabled: true, max_upload_size: '50M' };
+            FEDST = { enabled: true, total_peers: 4, active_peers: 3 };
+            FEDP = { peers: [{ destination: 'chat.example.net', retry_last_ts: 0, retry_interval: 0, failure_ts: null, last_successful: true }, { destination: 'matrix.example.com', retry_last_ts: 0, retry_interval: 0, failure_ts: null, last_successful: true }, { destination: 'hors-ligne.example.net', retry_last_ts: (t - 3600) * 1000, retry_interval: 600000, failure_ts: (t - 3700) * 1000, last_successful: false }], total: 4 };
+            MEDIA = { local_media_size_bytes: 412 * 1048576, remote_media_size_bytes: 1280 * 1048576, total_size_mb: 1692 };
+            REG = { enabled: true, tokens: [{ token: 'DemoJeton0001ZzYyXx', uses_allowed: 5, pending: 0, completed: 2, expiry_time: null }, { token: 'DemoJeton0002AaBbCc', uses_allowed: null, pending: 1, completed: 0, expiry_time: (t + 86400 * 7) * 1000 }] };
+            LOGS = { logs: ['oct. 14 10:02:11 synapse[142]: Synapse démarré (démonstration)', 'oct. 14 10:02:12 synapse[142]: Écoute sur [::]:8008', 'oct. 14 10:05:40 synapse[142]: GET /_matrix/client/v3/sync?access_token=secret-fictif 200'] };
+        }
+
+        async function lireOpt(chemin) {   // null si 400 (conteneur arrêté) ; remonte 401/403
+            try { return await lire(chemin); }
+            catch (e) { if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; } return null; }
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            SESSION_OK = true;
+            ST = await lireOpt('/status');
+            INJOIGNABLE = !ST && SESSION_OK;
+            const marche = ST && ST.running;
+            const lots = [];
+            USERS = ROOMS = CONF = FEDST = null;
+            if (marche) {
+                lots.push(lireOpt('/users').then(v => { USERS = v; }), lireOpt('/rooms').then(v => { ROOMS = v; }),
+                          lireOpt('/config').then(v => { CONF = v && !v.error ? v : null; }), lireOpt('/federation/status').then(v => { FEDST = v; }));
+                lots.push(chargerOnglet(ONGLET, true));
+            }
+            await Promise.all(lots);
+            rendre();
+        }
+        // Données propres à un onglet, chargées à l'ouverture et à l'actualisation de cet onglet.
+        async function chargerOnglet(nom, silencieux) {
+            if (DEMO) return;
+            if (nom === 'fed') { FEDP = await lireOpt('/federation/peers?limit=50'); }
+            else if (nom === 'media') { MEDIA = await lireOpt('/media/stats'); }
+            else if (nom === 'reg') { REG = await lireOpt('/registrations'); }
+            else if (nom === 'logs') { LOGS = await lireOpt('/logs?lines=200'); }
+            if (!silencieux) rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire l’état de Matrix (API arrêtée ou injoignable).';
+            const s = SESSION_OK ? ST : null;
+            const installe = !!(s && s.container_exists), absent = !!(s && s.container_exists === false);
+            const marche = installe && s.running;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (absent) { etat.className = 'actif neutre'; etat.textContent = 'NON INSTALLÉ'; }
+            else if (marche) { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            else { etat.className = 'actif att'; etat.textContent = 'ARRÊTÉ'; }
+            $('zone-install').hidden = !absent;
+            $('zone-service').hidden = absent;
+            $('onglets').hidden = absent;
+            ONGLETS.forEach(t => { $('t-' + t).hidden = absent || t !== ONGLET; });
+
+            // Tuiles
+            $('tEtat').textContent = !s ? '—' : absent ? 'Absent' : marche ? 'Actif' : 'Arrêté';
+            $('cEtat').className = 'tuile ' + (!s ? 'cy' : absent ? 'cy' : marche ? 'ok' : 'att');
+            $('tVer').textContent = tiret(marche ? s.version : null);
+            $('tDisque').textContent = tiret(s && s.disk_usage);
+            const lu = USERS && Array.isArray(USERS.users) ? USERS.users.length : null;
+            $('tUsers').textContent = lu === null ? '—' : (lu >= 100 ? '100+' : lu);
+            const lr = ROOMS && Array.isArray(ROOMS.rooms) ? ROOMS.rooms.length : null;
+            $('tRooms').textContent = lr === null ? '—' : (lr >= 100 ? '100+' : lr);
+            const fed = FEDST && FEDST.enabled && FEDST.total_peers != null ? FEDST : null;
+            $('tFed').textContent = fed ? (fed.active_peers != null ? fed.active_peers : '—') + ' / ' + fed.total_peers : '—';
+            $('cFed').className = 'tuile ' + (fed && fed.active_peers < fed.total_peers ? 'att' : 'cy');
+
+            // Service
+            $('bStart').disabled = !s || marche; $('bStop').disabled = !marche; $('bRestart').disabled = !marche;
+            $('bElement').disabled = !marche; $('bBackup').disabled = !s;
+            const ouvrir = $('bOuvrir');
+            if (marche && /^\d{1,3}(\.\d{1,3}){3}$/.test(s.container_ip || '')) { ouvrir.href = 'http://' + s.container_ip + '/'; ouvrir.hidden = false; } else { ouvrir.hidden = true; ouvrir.removeAttribute('href'); }
+
+            // Serveur
+            $('kNom').textContent = tiret(s && s.server_name); $('kIp').textContent = tiret(marche ? s.container_ip : null);
+            $('kPort').textContent = tiret(s && s.synapse_port); $('kFedPort').textContent = tiret(s && s.federation_port);
+            rendreConfig();
+            rendreUsers(); rendreRooms(); rendreFed(); rendreMedia(); rendreReg(); rendreLogs();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreConfig() {
+            if (CONF_SALE) return;     // ne jamais écraser une saisie en cours
+            const c = CONF;
+            $('cReg').checked = !!(c && c.enable_registration); $('cGuest').checked = !!(c && c.allow_guest_access);
+            ['cReg', 'cGuest', 'cUp', 'bConf'].forEach(i => { $(i).disabled = !c; });
+            if (c && c.max_upload_size) {
+                const sel = $('cUp'); const v = String(c.max_upload_size);
+                if (![...sel.options].some(o => o.value === v)) { const o = el('option', '', v); o.value = v; sel.appendChild(o); }
+                sel.value = v;
+            }
+        }
+
+        function ligneVide(tb, n, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+
+        function rendreUsers() {
+            const tb = $('bUsers'); tb.replaceChildren();
+            const l = USERS && Array.isArray(USERS.users) ? USERS.users : null;
+            $('nUsers').textContent = l && l.length ? l.length + ' compte' + (l.length > 1 ? 's' : '') : '';
+            if (!l) { ligneVide(tb, 4, '—'); return; }
+            if (!l.length) { ligneVide(tb, 4, 'Aucun utilisateur'); return; }
+            l.forEach(u => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(u.username)));
+                const r = el('td'); r.appendChild(u.admin ? pastille('cy', 'ADMIN') : pastille('', 'UTILISATEUR')); tr.appendChild(r);
+                tr.appendChild(el('td', '', quand(u.created)));
+                const a = el('td', 'act'); a.appendChild(btn('Réinitialiser le mot de passe', '', () => ouvrirMdp(u.username))); tr.appendChild(a);
+                tb.appendChild(tr);
             });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
+        }
+        function rendreRooms() {
+            const tb = $('bRooms'); tb.replaceChildren();
+            const l = ROOMS && Array.isArray(ROOMS.rooms) ? ROOMS.rooms : null;
+            $('nRooms').textContent = l && l.length ? l.length + ' salon' + (l.length > 1 ? 's' : '') : '';
+            if (!l) { ligneVide(tb, 3, '—'); return; }
+            if (!l.length) { ligneVide(tb, 3, 'Aucun salon'); return; }
+            l.forEach(r => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(r.room_id))); tr.appendChild(el('td', 'mono', tiret(r.creator)));
+                const v = el('td'); v.appendChild(r.public ? pastille('cy', 'PUBLIC') : pastille('', 'PRIVÉ')); tr.appendChild(v); tb.appendChild(tr);
+            });
+        }
+        function rendreFed() {
+            const tb = $('bFed'); tb.replaceChildren();
+            const l = FEDP && Array.isArray(FEDP.peers) ? FEDP.peers : null;
+            $('nFed').textContent = l ? l.length + ' sur ' + tiret(FEDP.total) : '';
+            if (!l) { ligneVide(tb, 4, '—'); return; }
+            if (!l.length) { ligneVide(tb, 4, 'Aucun serveur fédéré pour l’instant'); return; }
+            l.forEach(p => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(p.destination)));
+                const e = el('td'); e.appendChild(p.last_successful ? pastille('ok', 'ACTIF') : pastille('hors', 'ÉCHEC')); tr.appendChild(e);
+                tr.appendChild(el('td', '', quand(p.failure_ts)));
+                tr.appendChild(el('td', '', p.retry_interval ? Math.round(p.retry_interval / 1000) + ' s' : '—'));
+                tb.appendChild(tr);
+            });
+        }
+        function rendreMedia() {
+            const m = MEDIA;
+            const o = (b, mb) => m ? (m[b] != null ? m[b] : (m[mb] != null ? m[mb] * 1048576 : null)) : null;
+            const loc = o('local_media_size_bytes', 'local_media_size_mb'), rem = o('remote_media_size_bytes', 'remote_media_size_mb');
+            $('mLocal').textContent = octets(loc); $('mRemote').textContent = octets(rem);
+            $('mTotal').textContent = loc != null && rem != null ? octets(loc + rem) : (m && m.total_size_mb != null ? octets(m.total_size_mb * 1048576) : '—');
+        }
+        function rendreReg() {
+            const tb = $('bReg'); tb.replaceChildren();
+            const l = REG && Array.isArray(REG.tokens) ? REG.tokens : null;
+            $('nReg').textContent = l && l.length ? l.length + ' jeton' + (l.length > 1 ? 's' : '') : '';
+            if (!l) { ligneVide(tb, 5, '—'); return; }
+            if (!l.length) { ligneVide(tb, 5, 'Aucun jeton d’inscription'); return; }
+            l.forEach(t => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', masque(t.token)));
+                tr.appendChild(el('td', '', (t.completed != null ? t.completed : '—') + ' / ' + (t.uses_allowed ? t.uses_allowed : '∞')));
+                tr.appendChild(el('td', '', tiret(t.pending)));
+                tr.appendChild(el('td', '', t.expiry_time ? quand(t.expiry_time) : 'jamais'));
+                const a = el('td', 'act');
+                a.appendChild(btn('Copier', '', () => copier(t.token)));
+                a.appendChild(btn('Supprimer', 'danger', () => demande('reg', 'Supprimer le jeton ' + masque(t.token) + ' ? Il ne permettra plus de s’inscrire.', 'Supprimer', async () => {
+                    const r = await ecrire('DELETE', '/registrations/token/' + encodeURIComponent(t.token));
+                    if (r.ok) { retour('reg', true, 'Jeton supprimé.'); await chargerOnglet('reg', true); rendre(); } else retour('reg', false, 'Suppression impossible : ' + detail(r));
+                })));
+                tr.appendChild(a); tb.appendChild(tr);
+            });
+        }
+        function rendreLogs() {
+            const l = LOGS && Array.isArray(LOGS.logs) ? LOGS.logs : null;
+            $('journal').textContent = l ? (l.length ? l.map(masquerJournal).join('\n') : 'Aucune ligne de journal') : '—';
         }
 
-        async function loadStatus() {
-            try {
-                const data = await apiCall('/status');
-                const badge = document.getElementById('status-badge');
-                const btnStart = document.getElementById('btn-start');
-                const btnStop = document.getElementById('btn-stop');
-                const btnRestart = document.getElementById('btn-restart');
-                const openBtn = document.getElementById('open-app-btn');
+        // ----- Confirmation intégrée (jamais de dialogue natif) -----
+        function annulerConfirm() {
+            CONFIRM = false;
+            document.querySelectorAll('.conf').forEach(c => { c.hidden = true; c.replaceChildren(); });
+        }
+        function demande(zone, message, libelle, fn) {
+            if (DEMO) { retour(zone, false, 'Démonstration : action inerte.'); return; }
+            annulerConfirm(); CONFIRM = true;
+            const c = $('c-' + zone); c.hidden = false;
+            c.appendChild(el('span', '', message));
+            const ok = btn('Confirmer', 'danger', () => { annulerConfirm(); fn(); });
+            c.appendChild(ok);
+            c.appendChild(btn('Annuler', '', annulerConfirm));
+            try { c.scrollIntoView({ block: 'nearest' }); ok.focus(); } catch (e) { /* sans focus */ }
+            annoncer();
+        }
+        function ouvreForm(id) { const f = $(id); f.hidden = !f.hidden; annoncer(); if (!f.hidden) { const i = f.querySelector('input:not([readonly])'); if (i) i.focus(); } }
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { const f = $(b.dataset.ferme); f.reset(); f.hidden = true; annoncer(); }));
 
-                if (!data.container_exists) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed';
-                    badge.className = 'status-badge stopped';
-                    return;
-                }
-
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-
-                if (data.running) {
-                    badge.textContent = 'Running';
-                    badge.className = 'status-badge running';
-                    btnStart.disabled = true;
-                    btnStop.disabled = false;
-                    btnRestart.disabled = false;
-                    containerIP = data.container_ip;
-                    openBtn.classList.remove('hidden');
-                } else {
-                    badge.textContent = 'Stopped';
-                    badge.className = 'status-badge stopped';
-                    btnStart.disabled = false;
-                    btnStop.disabled = true;
-                    btnRestart.disabled = true;
-                    openBtn.classList.add('hidden');
-                }
-
-                document.getElementById('server-name').textContent = data.server_name || '-';
-                document.getElementById('version').textContent = data.version || '-';
-                document.getElementById('container-ip').textContent = data.container_ip || '-';
-                document.getElementById('disk-usage').textContent = data.disk_usage || '-';
-
-                if (data.running) {
-                    loadUsers();
-                    loadRooms();
-                    loadConfig();
-                }
-            } catch (e) {
-                console.error('Status load failed:', e);
-            }
+        async function copier(valeur) {
+            try { await navigator.clipboard.writeText(valeur); toast('Jeton copié dans le presse-papiers'); } catch (e) { toast('Copie impossible dans ce navigateur'); }
         }
 
-
-        // Federation
-        async function loadFederationStatus() {
-            try {
-                const data = await apiCall('/federation/status');
-                document.getElementById('fed-status').textContent = data.enabled ? 'Enabled' : 'Disabled';
-                document.getElementById('fed-status').style.color = data.enabled ? 'var(--success)' : 'var(--error)';
-                document.getElementById('fed-total').textContent = data.total_peers || 0;
-                document.getElementById('fed-active').textContent = data.active_peers || 0;
-            } catch (e) {
-                console.error('Federation status failed:', e);
-            }
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function actionService(chemin, ok, ko) {
+            const r = await ecrire('POST', chemin);
+            if (r.ok) { retour('service', true, ok(r.data)); await charger(); } else { retour('service', false, ko + ' : ' + detail(r)); rendre(); }
         }
+        $('bStart').addEventListener('click', () => { if (DEMO) { retour('service', false, 'Démonstration : action inerte.'); return; } actionService('/start', () => 'Service démarré.', 'Démarrage impossible'); });
+        $('bStop').addEventListener('click', () => demande('service', 'Arrêter Matrix ? Synapse et le conteneur s’arrêtent, tous les clients sont déconnectés.', 'Arrêter', () => actionService('/stop', () => 'Service arrêté.', 'Arrêt impossible')));
+        $('bRestart').addEventListener('click', () => demande('service', 'Redémarrer Synapse ? Les clients sont déconnectés quelques secondes.', 'Redémarrer', () => actionService('/restart', () => 'Synapse redémarré.', 'Redémarrage impossible')));
+        $('bElement').addEventListener('click', () => demande('service', 'Installer le client Element Web dans le conteneur (téléchargement depuis GitHub) ?', 'Installer', async () => {
+            const r = await ecrire('POST', '/element/install');
+            if (r.ok) retour('service', true, (r.data && r.data.message) || 'Element Web installé.'); else retour('service', false, 'Installation d’Element impossible : ' + detail(r));
+        }));
+        $('bBackup').addEventListener('click', () => demande('service', 'Créer une sauvegarde ? Synapse est arrêté pendant l’opération puis relancé.', 'Sauvegarder', async () => {
+            const r = await ecrire('POST', '/backup');
+            if (r.ok && r.data) retour('service', true, 'Sauvegarde créée : ' + tiret(r.data.file) + ' (' + tiret(r.data.size) + ').'); else retour('service', false, 'Sauvegarde impossible : ' + detail(r));
+        }));
 
-        async function loadFederationPeers() {
-            try {
-                const data = await apiCall('/federation/peers?limit=50');
-                const container = document.getElementById('federation-peers');
-                if (!data.peers || data.peers.length === 0) {
-                    container.innerHTML = '<div class="empty-state"><p>No federated peers yet</p></div>';
-                    return;
-                }
-                container.innerHTML = data.peers.map(p => `
-                    <div class="list-item">
-                        <div class="item-icon">${p.last_successful ? '✅' : '❌'}</div>
-                        <div class="item-info">
-                            <div class="item-name">${p.destination}</div>
-                            <div class="item-meta">${p.last_successful ? 'Active' : 'Failed'}</div>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Federation peers failed:', e);
-            }
-        }
-
-        function showBlockServer() {
-            const server = prompt('Server to block (e.g., evil.example.com):');
-            if (!server) return;
-            blockServer(server);
-        }
-
-        async function blockServer(server) {
-            try {
-                await apiCall('/federation/block', {
-                    method: 'POST',
-                    body: JSON.stringify({ server_name: server })
-                });
-                alert('Server blocked. Restart required to apply.');
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        // Media Management
-        async function loadMediaStats() {
-            try {
-                const data = await apiCall('/media/stats');
-                document.getElementById('media-local').textContent = data.local_media_size_mb + ' MB';
-                document.getElementById('media-remote').textContent = data.remote_media_size_mb + ' MB';
-                document.getElementById('media-total').textContent = data.total_size_mb + ' MB';
-            } catch (e) {
-                console.error('Media stats failed:', e);
-            }
-        }
-
-        async function purgeMedia() {
-            const days = prompt('Purge remote media older than (days):', '30');
-            if (!days) return;
-            try {
-                const data = await apiCall(`/media/purge?before_days=${days}`, { method: 'POST' });
-                alert(`Purged ${data.deleted || 0} files`);
-                loadMediaStats();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        // Registration Tokens
-        async function loadRegistrations() {
-            try {
-                const data = await apiCall('/registrations');
-                const container = document.getElementById('tokens-list');
-                if (!data.tokens || data.tokens.length === 0) {
-                    container.innerHTML = '<div class="empty-state"><p>No registration tokens</p></div>';
-                    return;
-                }
-                container.innerHTML = data.tokens.map(t => `
-                    <div class="list-item">
-                        <div class="item-icon">🎟️</div>
-                        <div class="item-info">
-                            <div class="item-name" style="font-family: monospace;">${t.token}</div>
-                            <div class="item-meta">Uses: ${t.completed}/${t.uses_allowed || '∞'} · Pending: ${t.pending}</div>
-                        </div>
-                        <button class="btn" onclick="copyToken('${t.token}')">Copy</button>
-                        <button class="btn" style="color: var(--error);" onclick="deleteToken('${t.token}')">Delete</button>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Registrations load failed:', e);
-            }
-        }
-
-        async function createToken() {
-            const uses = prompt('Number of uses allowed (leave empty for unlimited):');
-            try {
-                const body = {};
-                if (uses) body.uses_allowed = parseInt(uses);
-                const data = await apiCall('/registrations/token', {
-                    method: 'POST',
-                    body: JSON.stringify(body)
-                });
-                alert(`Token created: ${data.token}`);
-                navigator.clipboard.writeText(data.token);
-                loadRegistrations();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        function copyToken(token) {
-            navigator.clipboard.writeText(token);
-            alert('Token copied to clipboard');
-        }
-
-        async function deleteToken(token) {
-            if (!confirm('Delete this token?')) return;
-            try {
-                await apiCall(`/registrations/token/${token}`, { method: 'DELETE' });
-                loadRegistrations();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function installMatrix(e) {
-            e.preventDefault();
-            const serverName = document.getElementById('install-server-name').value;
-            if (!serverName) return;
-
-            const btn = e.target.querySelector('button');
-            btn.disabled = true;
-            btn.textContent = 'Installing...';
-
-            try {
-                await apiCall(`/install?server_name=${encodeURIComponent(serverName)}`, { method: 'POST' });
-                await loadStatus();
-            } catch (err) {
-                alert('Installation failed: ' + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Install Matrix';
-            }
-        }
-
-        async function startService() {
-            document.getElementById('btn-start').disabled = true;
-            try {
-                await apiCall('/start', { method: 'POST' });
-                await loadStatus();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function stopService() {
-            document.getElementById('btn-stop').disabled = true;
-            try {
-                await apiCall('/stop', { method: 'POST' });
-                await loadStatus();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function restartService() {
-            document.getElementById('btn-restart').disabled = true;
-            try {
-                await apiCall('/restart', { method: 'POST' });
-                await loadStatus();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function loadUsers() {
-            try {
-                const data = await apiCall('/users');
-                const container = document.getElementById('users-list');
-                if (!data.users || data.users.length === 0) {
-                    container.innerHTML = '<div class="empty-state"><p>No users yet</p></div>';
-                    return;
-                }
-                container.innerHTML = data.users.map(u => `
-                    <div class="list-item">
-                        <div class="item-icon">${u.admin ? '👑' : '👤'}</div>
-                        <div class="item-info">
-                            <div class="item-name">${u.username}</div>
-                            <div class="item-meta">${u.admin ? 'Admin' : 'User'}</div>
-                        </div>
-                        <button class="btn" onclick="resetPassword('${u.username}')">Reset Password</button>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Load users failed:', e);
-            }
-        }
-
-        async function loadRooms() {
-            try {
-                const data = await apiCall('/rooms');
-                const container = document.getElementById('rooms-list');
-                if (!data.rooms || data.rooms.length === 0) {
-                    container.innerHTML = '<div class="empty-state"><p>No rooms yet</p></div>';
-                    return;
-                }
-                container.innerHTML = data.rooms.map(r => `
-                    <div class="list-item">
-                        <div class="item-icon">${r.public ? '🌐' : '🔒'}</div>
-                        <div class="item-info">
-                            <div class="item-name">${r.room_id}</div>
-                            <div class="item-meta">${r.public ? 'Public' : 'Private'}</div>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Load rooms failed:', e);
-            }
-        }
-
-        async function loadBridges() {
-            try {
-                const data = await apiCall('/bridges');
-                const container = document.getElementById('bridges-list');
-                container.innerHTML = data.bridges.map(b => `
-                    <div class="list-item">
-                        <div class="item-icon">${getBridgeIcon(b.id)}</div>
-                        <div class="item-info">
-                            <div class="item-name">${b.name}</div>
-                            <div class="item-meta">${b.description}</div>
-                        </div>
-                        <button class="btn ${b.installed ? '' : 'primary'}"
-                                onclick="installBridge('${b.id}')"
-                                ${b.installed ? 'disabled' : ''}>
-                            ${b.installed ? 'Installed' : 'Install'}
-                        </button>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Load bridges failed:', e);
-            }
-        }
-
-        function getBridgeIcon(id) {
-            const icons = {
-                telegram: '📱',
-                discord: '🎮',
-                slack: '💬',
-                signal: '🔐',
-                whatsapp: '📞',
-                irc: '💻'
-            };
-            return icons[id] || '🔗';
-        }
-
-        async function installBridge(bridgeId) {
-            if (!confirm(`Install ${bridgeId} bridge?`)) return;
-            try {
-                await apiCall(`/bridges/${bridgeId}/install`, { method: 'POST' });
-                alert('Bridge installed');
-                loadBridges();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        function showCreateUser() {
-            const username = prompt('Username:');
-            if (!username) return;
-            const password = prompt('Password (min 8 chars):');
-            if (!password || password.length < 8) {
-                alert('Password must be at least 8 characters');
-                return;
-            }
-            const admin = confirm('Make admin?');
-            createUser(username, password, admin);
-        }
-
-        async function createUser(username, password, admin) {
-            try {
-                await apiCall('/users', {
-                    method: 'POST',
-                    body: JSON.stringify({ username, password, admin })
-                });
-                loadUsers();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function resetPassword(username) {
-            const password = prompt(`New password for ${username}:`);
-            if (!password || password.length < 8) {
-                alert('Password must be at least 8 characters');
-                return;
-            }
-            try {
-                await apiCall(`/users/${username}/reset-password?password=${encodeURIComponent(password)}`, { method: 'POST' });
-                alert('Password reset');
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function loadLogs() {
-            try {
-                const data = await apiCall('/logs?lines=200');
-                document.getElementById('log-viewer').textContent = data.logs?.join('\n') || 'No logs';
-            } catch (e) {
-                document.getElementById('log-viewer').textContent = 'Error: ' + e.message;
-            }
-        }
-
-        async function loadConfig() {
-            try {
-                const data = await apiCall('/config');
-                document.getElementById('setting-registration').checked = data.enable_registration || false;
-                document.getElementById('setting-token-required').checked = data.registration_requires_token || false;
-                document.getElementById('setting-guests').checked = data.allow_guest_access || false;
-                document.getElementById('setting-url-preview').checked = data.url_preview_enabled || false;
-                document.getElementById('setting-upload').value = data.max_upload_size || '50M';
-            } catch (e) {
-                console.error('Config load failed:', e);
-            }
-        }
-
-        async function saveSettings(e) {
-            e.preventDefault();
-            try {
-                await apiCall('/config', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        enable_registration: document.getElementById('setting-registration').checked,
-                        registration_requires_token: document.getElementById('setting-token-required').checked,
-                        allow_guest_access: document.getElementById('setting-guests').checked,
-                        url_preview_enabled: document.getElementById('setting-url-preview').checked,
-                        max_upload_size: document.getElementById('setting-upload').value
-                    })
-                });
-                alert('Settings saved. Restart may be required.');
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function installElement() {
-            if (!confirm('Install Element web client?')) return;
-            try {
-                const result = await apiCall('/element/install', { method: 'POST' });
-                alert(result.message || 'Element installed');
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function createBackup() {
-            if (!confirm('Create Matrix backup?')) return;
-            try {
-                const result = await apiCall('/backup', { method: 'POST' });
-                alert(`Backup created: ${result.file} (${result.size})`);
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        function openElement() {
-            if (containerIP) window.open(`http://${containerIP}/`, '_blank');
-        }
-
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-
-                // Load data for each tab
-                switch(tab.dataset.tab) {
-                    case 'server': loadConfig(); break;
-                    case 'users': loadUsers(); break;
-                    case 'rooms': loadRooms(); break;
-                    case 'federation': loadFederationStatus(); loadFederationPeers(); break;
-                    case 'media': loadMediaStats(); break;
-                    case 'registration': loadRegistrations(); break;
-                    case 'logs': loadLogs(); break;
-                }
+        $('fInstall').addEventListener('submit', ev => {
+            ev.preventDefault(); const nom = ev.target.server_name.value.trim(); if (!nom) return;
+            demande('install', 'Installer Matrix pour « ' + nom + ' » ? Ce nom ne pourra plus être changé.', 'Installer', async () => {
+                $('bInstall').disabled = true; $('bInstall').textContent = 'Installation…';
+                const r = await ecrire('POST', '/install?server_name=' + encodeURIComponent(nom));
+                $('bInstall').disabled = false; $('bInstall').textContent = 'Installer Matrix';
+                if (r.ok) { retour('install', true, 'Matrix installé.'); await charger(); } else retour('install', false, 'Installation impossible : ' + detail(r));
             });
         });
 
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-            document.body.classList.add('dark');
-        }
+        $('fConf').addEventListener('input', () => { CONF_SALE = true; });
+        $('fConf').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            if (DEMO) { retour('serveur', false, 'Démonstration : action inerte.'); return; }
+            const r = await ecrire('POST', '/config', { enable_registration: $('cReg').checked, allow_guest_access: $('cGuest').checked, max_upload_size: $('cUp').value });
+            if (r.ok) { CONF_SALE = false; retour('serveur', true, 'Réglages enregistrés ; Synapse a été redémarré par l’API.'); charger(); } else retour('serveur', false, 'Enregistrement impossible : ' + detail(r));
+        });
 
-        loadStatus();
-        setInterval(loadStatus, 30000);
+        $('addUser').addEventListener('click', () => ouvreForm('fUser'));
+        $('fUser').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/users', { username: f.username.value, password: f.password.value, admin: f.admin.checked });
+            f.password.value = '';
+            if (r.ok) { f.reset(); f.hidden = true; retour('users', true, 'Utilisateur créé.'); charger(); } else retour('users', false, 'Création impossible : ' + detail(r));
+        });
+        function ouvrirMdp(compte) { const f = $('fMdp'); f.cible.value = compte; f.password.value = ''; f.hidden = false; annoncer(); f.password.focus(); }
+        $('fMdp').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target; const cible = f.cible.value, mdp = f.password.value;
+            f.password.value = '';
+            const r = await ecrire('POST', '/users/' + encodeURIComponent(cible) + '/reset-password?password=' + encodeURIComponent(mdp));
+            if (r.ok) { f.reset(); f.hidden = true; retour('users', true, 'Mot de passe de ' + cible + ' réinitialisé.'); } else retour('users', false, 'Réinitialisation impossible : ' + detail(r));
+        });
+
+        $('addBloc').addEventListener('click', () => ouvreForm('fBloc'));
+        $('fBloc').addEventListener('submit', ev => {
+            ev.preventDefault(); const f = ev.target; const srv = f.serveur.value.trim(); if (!srv) return;
+            demande('fed', 'Bloquer la fédération avec « ' + srv + ' » ? Le blocage s’applique après redémarrage de Synapse.', 'Bloquer', async () => {
+                const r = await ecrire('POST', '/federation/block', { server_name: srv });
+                if (r.ok) { f.reset(); f.hidden = true; retour('fed', true, 'Serveur ' + srv + ' bloqué. Redémarrage requis pour appliquer.'); } else retour('fed', false, 'Blocage impossible : ' + detail(r));
+            });
+        });
+
+        $('fPurge').addEventListener('submit', ev => {
+            ev.preventDefault(); const j = parseInt(ev.target.jours.value, 10); if (!(j >= 1 && j <= 365)) return;
+            demande('media', 'Purger le cache des médias distants de plus de ' + j + ' jours ? Les fichiers supprimés seront retéléchargés à la demande.', 'Purger', async () => {
+                const r = await ecrire('POST', '/media/purge?before_days=' + j);
+                if (r.ok) { retour('media', true, 'Purge terminée : ' + ((r.data && r.data.deleted) || 0) + ' fichier(s) supprimé(s).'); await chargerOnglet('media'); } else retour('media', false, 'Purge impossible : ' + detail(r));
+            });
+        });
+
+        $('fTok').addEventListener('submit', async ev => {
+            ev.preventDefault(); const u = parseInt(ev.target.uses.value, 10);
+            const corps = {}; if (u) corps.uses_allowed = u;
+            const r = await ecrire('POST', '/registrations/token', corps);
+            if (r.ok && r.data && r.data.token) {
+                let copie = true; try { await navigator.clipboard.writeText(r.data.token); } catch (e) { copie = false; }
+                retour('reg', true, 'Jeton créé' + (copie ? ' et copié dans le presse-papiers' : ' ; utilisez « Copier » dans la liste') + ' (non affiché).');
+                await chargerOnglet('reg', true); rendre();
+            } else retour('reg', false, 'Création impossible : ' + detail(r));
+        });
+
+        // ----- Onglets -----
+        function onglet(nom) {
+            ONGLET = nom; annulerConfirm();
+            document.querySelectorAll('#onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            chargerOnglet(nom, false); annoncer();
+        }
+        document.querySelectorAll('#onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        $('onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('#onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+        $('bLogs').addEventListener('click', () => chargerOnglet('logs', false));
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'matrix' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte.
+        setInterval(() => {
+            const a = document.activeElement, saisie = a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName);
+            const formOuvert = ['fUser', 'fMdp', 'fBloc'].some(i => !$(i).hidden);
+            if (document.hidden || DEMO || CONFIRM || CONF_SALE || saisie || formOuvert) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>
