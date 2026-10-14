@@ -162,6 +162,8 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 | `dns.drift.spike` | domaine connu (≥ 3 jours) demandé ≥ 10× son pic quotidien habituel dans l'heure |
 | `dns.drift.subdomains` | domaine connu qui reçoit ≥ 25 sous-noms jamais vus, à étiquette longue, en 10 min |
 
+**Alertes de dns-guard (#2702).** Chaque constat nouveau est aussi écrit dans `/var/lib/secubox/dns-guard/alerts.jsonl`, le fichier que lit la page `/dns-guard/` (domaines suspects, types d'anomalie, clients concernés). Même règle : le domaine enregistré, l'appareil et la règle, jamais un sous-nom ni le texte libre du constat. Au premier passage, les constats des 24 dernières heures déjà mémorisés par le capteur y sont rattrapés (gravité « moyenne » par défaut, marqués `rattrape` dans `details`). Si dns-guard n'est pas installé (dossier absent), le capteur n'écrit rien et continue.
+
 L'appareil est la source de l'enveloppe ; seul le domaine enregistré est conservé, jamais les sous-noms. Un constat n'est ré-émis qu'au bout de 6 h. `secubox-adguard-dnssensor --dry-run` montre ce que le capteur verrait sans rien envoyer. **Non couvert** : le détournement d'un domaine normal vers une adresse inattendue demande les réponses DNS, que le magasin ne garde pas.
 
 ### Détournement d'un domaine normal (réponses d'Unbound)

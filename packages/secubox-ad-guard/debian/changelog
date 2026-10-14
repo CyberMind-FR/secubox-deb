@@ -1,3 +1,12 @@
+secubox-ad-guard (1.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * Capteur DNS : chaque constat nouveau (DGA, tunnel, dérive, liste de l'opérateur, détournement) est aussi écrit dans les alertes de dns-guard (/var/lib/secubox/dns-guard/alerts.jsonl). La page /dns-guard/ affichait « Aucune anomalie sur 24 h » partout : son module n'était branché sur aucune source (#2702).
+  * Même règle que pour actord : le domaine enregistré, l'appareil et la règle ; jamais un sous-nom ni le texte libre du constat ; une requête ordinaire ne laisse aucune trace. Premier passage : rattrapage des constats des 24 dernières heures déjà mémorisés (gravité moyenne par défaut, marqués « rattrape »). dns-guard absent : rien n'est créé.
+  * Unité du capteur : ReadWritePaths ajoute -/var/lib/secubox/dns-guard (le tiret tolère un dossier absent). Aucune autre ouverture.
+  * Tests : test_dnssensor_dnsguard_2702.py (26).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 17:00:00 +0200
+
 secubox-ad-guard (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: page /ad-guard/ au profil Aurora (tuiles, onglets en pastilles, familles de blocage en pastilles de filtre), libelles en francais, toutes les actions et le balisage gardes ; confirm(), prompt() et alert(), ignores par le navigateur du Hall, remplaces par des dialogues integres ; les noms de domaine, motifs et noms d appareil venus de l API sont echappes avant insertion dans le HTML ; demonstration, ?embed=1 et hauteur annoncee a l hote (ref #2436)
