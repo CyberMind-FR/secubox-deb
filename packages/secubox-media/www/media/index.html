@@ -1,555 +1,533 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
-     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-     SecuBox-Deb :: secubox-media :: www/media/index.html
-     Charte : WEBUI-PANEL-GUIDELINES §2 palette, §3 typographie, §6 comportement,
-     §7 parité des deux facettes. Variante autoportante (vhost de module). -->
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Médias externes au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret affiché. Mêmes routes et mêmes corps que l'ancienne page (/api/v1/media/...).
+-->
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuBox — Médias externes</title>
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
-<link rel="stylesheet" href="/shared/hybrid-dark.css">
-<style>
-:root {
-    --p31-dim: #6b7b8b;
-    --bg-dark: #0d1117;
-    --bg-card: rgba(30, 40, 55, 0.8);
-    --bg-row:  rgba(20, 30, 45, 0.6);
-    --border:  rgba(100, 150, 200, 0.2);
-    --text:    #e8e6d9;
-    --cyan:    #00d4ff;
-    --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
-    --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
-    --gap: 14px;
-}
-* { box-sizing: border-box; }
-body { margin: 0; padding: 18px; background: var(--bg-dark); color: var(--text);
-       font-family: 'Courier Prime', 'Courier New', monospace; font-size: 14px; line-height: 1.5; }
-main.main { margin-left: 220px; }
-@media (max-width: 900px) { .sidebar { display: none; } main.main { margin-left: 0; } }
-.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; text-wrap: balance; }
-.sub { color: var(--p31-dim); font-size: 0.78rem; margin: 4px 0 0; }
-.label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.62rem; color: var(--p31-dim); }
-.card { background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border);
-        border-radius: 8px; padding: 14px; }
-.alert { display: flex; gap: 12px; align-items: flex-start; border-left: 3px solid var(--red); }
-.alert .ico { font-size: 1.1rem; line-height: 1.2; }
-.alert b { color: var(--red); }
-.alert code { background: var(--bg-row); padding: 1px 5px; border-radius: 3px; font-size: 0.82em; }
-.devices { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--gap); }
-.dev { background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px;
-       padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
-.dev:hover { border-color: var(--cyan); }
-.dev.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan) inset; }
-.dev-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.dev-name { color: var(--cyan); font-weight: 700; }
-.mnt.alt { background: transparent; color: var(--p31-dim); margin-left: 6px; }
-.mnt.alt:hover { color: var(--cyan); border-color: var(--cyan); }
-.nav {
-    padding: 2px 8px; font-size: 13px; line-height: 1.5;
-    background: var(--p31-bg2); border: 1px solid var(--p31-line);
-    color: var(--p31-fg); border-radius: 5px; cursor: pointer;
-}
-.nav:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
-.nav:disabled { opacity: .35; cursor: default; }
-.dev-blocked {
-    margin-top: 8px; padding: 7px 9px; border-radius: 6px;
-    background: rgba(255,90,90,.08); border: 1px solid rgba(255,90,90,.25);
-    color: #ff9b9b; font-size: 11.5px; line-height: 1.45;
-}
-.dev-meta { color: var(--p31-dim); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
-.chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip { font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px;
-        border-radius: 999px; border: 1px solid currentColor; }
-.c-green { color: var(--green); } .c-orange { color: var(--orange); }
-.c-dim { color: var(--p31-dim); }  .c-red { color: var(--red); } .c-blue { color: var(--blue); }
-.panes { display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--gap); align-items: stretch; }
-@media (max-width: 860px) { .panes { grid-template-columns: 1fr; } .actions { flex-direction: row !important; justify-content: center; flex-wrap: wrap; } }
-.pane { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.pane-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-select { background: var(--bg-row); color: var(--text); border: 1px solid var(--border); border-radius: 5px;
-         padding: 5px 8px; font-family: inherit; font-size: 0.8rem; max-width: 100%; }
-select:focus-visible, button:focus-visible, .row:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-.crumb { color: var(--p31-dim); font-size: 0.72rem; overflow-x: auto; white-space: nowrap; padding-bottom: 2px; }
-.crumb b { color: var(--text); }
-.list { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; display: flex;
-        flex-direction: column; max-height: 340px; overflow-y: auto; }
-.row { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center;
-       padding: 7px 10px; background: var(--bg-row); border-bottom: 1px solid var(--border);
-       font-size: 0.82rem; cursor: pointer; }
-.row:last-child { border-bottom: none; }
-.row.on { background: rgba(0, 212, 255, 0.09); }
-.row .sz { color: var(--p31-dim); font-variant-numeric: tabular-nums; font-size: 0.74rem; }
-.row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dir .nm { color: var(--blue); }
-.mark { color: var(--cyan); }
-.empty { padding: 26px 12px; text-align: center; color: var(--p31-dim); background: var(--bg-row); font-size: 0.8rem; }
-.empty .big { display: block; font-size: 1.5rem; margin-bottom: 6px; opacity: 0.7; }
-.actions { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
-button { background: var(--bg-row); color: var(--text); font-family: inherit; border: 1px solid var(--border);
-         border-radius: 5px; padding: 7px 12px; font-size: 0.78rem; cursor: pointer; white-space: nowrap; }
-button:hover:not([disabled]) { border-color: var(--cyan); color: var(--cyan); }
-button.primary { border-color: var(--cyan); color: var(--cyan); }
-button.primary:hover:not([disabled]) { background: rgba(0, 212, 255, 0.12); }
-button[disabled] { opacity: 0.4; cursor: not-allowed; }
-.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px;
-        flex-wrap: wrap; font-size: 0.76rem; color: var(--p31-dim); }
-.bar { height: 4px; background: var(--bg-row); border-radius: 999px; overflow: hidden; flex: 1; min-width: 120px; }
-.bar i { display: block; height: 100%; background: var(--cyan); }
-.note { color: var(--p31-dim); font-size: 0.72rem; }
-.note b { color: var(--text); }
-#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column;
-          gap: 8px; z-index: 50; max-width: min(420px, 90vw); }
-.toast { background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border);
-         border-left: 3px solid var(--cyan); border-radius: 6px; padding: 9px 12px; font-size: 0.8rem;
-         display: flex; gap: 10px; align-items: flex-start; }
-.toast.err { border-left-color: var(--red); }
-.toast button { border: none; background: none; color: var(--p31-dim); padding: 0 2px; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-.autos { display:flex; flex-wrap:wrap; gap:.3rem .9rem; margin-top:.35rem; font-size:.8rem; }
-.autos .auto { display:inline-flex; align-items:center; gap:.3rem; cursor:pointer; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Médias externes</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover:not(:disabled){border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.4;cursor:not-allowed}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .alerte{border:1px solid var(--rouge);background:rgba(255,77,94,.08);border-radius:10px;padding:8px 12px;font-size:.8rem;overflow-wrap:anywhere}
+        .alerte b{color:var(--rouge)} .alerte code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0} .note b{color:var(--doux)}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.66rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:18px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .supports{display:grid;gap:8px;grid-template-columns:1fr}
+        @container a (min-width:700px){.supports{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
+        .dev{border:1px solid var(--trait);border-radius:10px;padding:9px 11px;background:rgba(8,18,38,.6);display:grid;gap:6px;min-width:0}
+        .dev.sel{border-color:var(--cyan)}
+        .dev-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px} .dev-name{color:var(--cyan);font-weight:700;overflow-wrap:anywhere} .dev-meta{color:var(--faible);font-size:.72rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+        .pills{display:flex;flex-wrap:wrap;gap:5px}
+        .dev-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .dev-blocked{padding:7px 9px;border-radius:8px;background:rgba(255,77,94,.08);border:1px solid rgba(255,77,94,.3);color:#ffb3bb;font-size:.74rem;line-height:1.4;overflow-wrap:anywhere}
+        .autos{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.76rem;color:var(--doux)}
+        .autos label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;min-height:24px}
+        .volets{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.volets{grid-template-columns:1fr auto 1fr}}
+        .volet{display:grid;gap:8px;min-width:0;align-content:start}
+        .volet-tete{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px} .volet-tete .t{color:var(--doux);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+        .volet-tete select{flex:1 1 140px}
+        select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;max-width:100%}
+        select:focus-visible{outline:2px solid var(--cyan)}
+        .crumb{color:var(--faible);font-size:.72rem;overflow-x:auto;white-space:nowrap;padding-bottom:2px} .crumb b{color:var(--texte);font-weight:600}
+        .liste{border:1px solid var(--trait);border-radius:10px;max-height:340px;overflow-y:auto;background:rgba(8,18,38,.5)}
+        .row{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid rgba(86,150,255,.12);font-size:.8rem;cursor:pointer;min-height:34px}
+        .row:last-child{border-bottom:none} .row:hover{background:rgba(41,182,246,.07)} .row.on{background:rgba(41,182,246,.14)} .row:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+        .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0} .row.dir .nm{color:var(--bleu)} .row .sz{color:var(--faible);font-size:.72rem;font-variant-numeric:tabular-nums} .row .mark{color:var(--cyan)}
+        .pied{color:var(--faible);font-size:.72rem}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-content:center}
+        @container a (min-width:900px){.actions{flex-direction:column;flex-wrap:nowrap}}
+        .jobs{display:grid;gap:6px}
+        .job{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--trait);border-radius:8px;padding:6px 10px;font-size:.78rem;background:rgba(8,18,38,.5)}
+        .job span:first-child{min-width:0;overflow-wrap:anywhere}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-<main class="main">
-<div class="wrap">
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M6 17h.01M10 17h.01"/><path d="M12 3v7m0 0-3-3m3 3 3-3"/></svg>
+                <div><h1>Médias externes</h1><small>Deux volets, transfert et synchronisation entre supports</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="refresh" type="button" title="Relire les supports">⟳ Relire</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a id="lienSession" href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="alerts"></div>
 
-  <header>
-    <h1>💽 Médias externes</h1>
-    <p class="sub">Deux volets, transfert et synchronisation entre supports</p>
-  </header>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Supports externes détectés (les disques système sont exclus)."><span class="l">Supports détectés</span><span class="v" id="tSupports">—</span><span class="s">clés et disques externes</span></div>
+            <div class="tuile cy" id="cMontes" title="Supports externes actuellement montés : seuls ceux-ci peuvent être parcourus."><span class="l">Montés</span><span class="v" id="tMontes">—</span><span class="s">navigables</span></div>
+            <div class="tuile cy" id="cAlertes" title="Ports USB qui déconnectent en boucle. Un support branché dessus peut disparaître en cours de transfert."><span class="l">Ports instables</span><span class="v" id="tAlertes">—</span><span class="s">déconnexions en boucle</span></div>
+            <div class="tuile cy" id="cJobs" title="Transferts de la file qui ne sont ni terminés ni en échec (parmi les six derniers affichés)."><span class="l">Transferts en cours</span><span class="v" id="tJobs">—</span><span class="s">dans la file</span></div>
+        </section>
 
-  <div id="alerts"></div>
-
-  <section class="card">
-    <div class="foot" style="margin-bottom:10px">
-      <span class="label">Supports détectés · <span id="devcount">…</span></span>
-      <button id="refresh" title="Relire les supports">↻ Relire</button>
-    </div>
-    <div class="devices" id="devices"></div>
-  </section>
-
-  <section class="card">
-    <div class="panes">
-      <div class="pane">
-        <div class="pane-head">
-          <span class="label">Source</span>
-          <select id="src-sel" aria-label="Support source"></select>
-          <button class="nav" id="src-up" title="Dossier parent" aria-label="Dossier parent">⬆</button>
-          <button class="nav" id="src-home" title="Revenir à la racine" aria-label="Racine">⌂</button>
+        <div class="pan"><h3>Supports détectés <i>GET /detect, /roots</i></h3>
+            <div class="supports" id="devices"></div>
         </div>
-        <div class="crumb" id="src-crumb">—</div>
-        <div class="list" id="src-list"></div>
-        <div class="foot"><span id="src-foot">—</span></div>
-      </div>
 
-      <div class="actions">
-        <button class="primary" id="act-copy" disabled title="Copier la sélection vers la destination">Copier &nbsp;→</button>
-        <button id="act-copy-back" disabled title="Copier depuis la destination vers la source">←&nbsp; Copier</button>
-        <button id="act-sync" disabled title="Aligner la destination sur la source, sans rien supprimer">Synchroniser ⇄</button>
-        <button id="act-compare" disabled title="Lister les écarts sans rien écrire">Comparer</button>
-        <button id="act-move" disabled title="Indisponible depuis un support amovible">Déplacer →</button>
-      </div>
-
-      <div class="pane">
-        <div class="pane-head">
-          <span class="label">Destination</span>
-          <select id="dst-sel" aria-label="Support destination"></select>
-          <button class="nav" id="dst-up" title="Dossier parent" aria-label="Dossier parent">⬆</button>
-          <button class="nav" id="dst-home" title="Revenir à la racine" aria-label="Racine">⌂</button>
+        <div class="pan"><h3>Transfert entre volets <i>GET /browse</i></h3>
+            <div class="volets">
+                <div class="volet">
+                    <div class="volet-tete"><span class="t">Source</span>
+                        <select id="src-sel" aria-label="Support source"></select>
+                        <button class="btn sm" id="src-up" type="button" title="Dossier parent" aria-label="Dossier parent">⬆</button>
+                        <button class="btn sm" id="src-home" type="button" title="Revenir à la racine" aria-label="Racine">⌂</button></div>
+                    <div class="crumb mono" id="src-crumb">—</div>
+                    <div class="liste" id="src-list"></div>
+                    <div class="pied" id="src-foot">—</div>
+                </div>
+                <div class="actions">
+                    <button class="btn prim" id="act-copy" type="button" disabled title="Copier la sélection vers la destination">Copier →</button>
+                    <button class="btn" id="act-copy-back" type="button" disabled title="Copier depuis la destination vers la source (non disponible)">← Copier</button>
+                    <button class="btn" id="act-sync" type="button" disabled title="Aligner la destination sur la source, sans rien supprimer">Synchroniser ⇄</button>
+                    <button class="btn" id="act-compare" type="button" disabled title="Lister les écarts sans rien écrire">Comparer</button>
+                    <button class="btn" id="act-move" type="button" disabled title="Indisponible depuis un support amovible">Déplacer →</button>
+                </div>
+                <div class="volet">
+                    <div class="volet-tete"><span class="t">Destination</span>
+                        <select id="dst-sel" aria-label="Support destination"></select>
+                        <button class="btn sm" id="dst-up" type="button" title="Dossier parent" aria-label="Dossier parent">⬆</button>
+                        <button class="btn sm" id="dst-home" type="button" title="Revenir à la racine" aria-label="Racine">⌂</button></div>
+                    <div class="crumb mono" id="dst-crumb">—</div>
+                    <div class="liste" id="dst-list"></div>
+                    <div class="pied" id="dst-foot">—</div>
+                </div>
+            </div>
+            <div id="rTransfert" class="retour" hidden></div>
+            <p class="note">Un clic sélectionne dans la source, un double-clic ouvre un dossier. Le montage source reste en <b>lecture seule</b>.</p>
         </div>
-        <div class="crumb" id="dst-crumb">—</div>
-        <div class="list" id="dst-list"></div>
-        <div class="foot"><span id="dst-foot">—</span></div>
-      </div>
-    </div>
-  </section>
 
-  <section class="card">
-    <div class="label" style="margin-bottom:10px">File de transfert</div>
-    <div id="jobs"><div class="note">Aucun transfert en cours.</div></div>
-    <div class="note" style="margin-top:10px">
-      Copie, jamais déplacement, quand la source est amovible : un débranchement
-      en cours de transfert ne doit pas laisser un fichier nulle part. Le montage
-      source reste en <b>lecture seule</b>, et une synchronisation ne supprime
-      jamais à destination.
-    </div>
-  </section>
-</div>
-</main>
-<div id="toasts"></div>
-
-<script>
-'use strict';
-const API = '/api/v1/media';
-// Cache client (WEBUI-PANEL-GUIDELINES §7, double cache) : la dernière réponse
-// reste affichée pendant qu'une nouvelle charge. Sans elle, chaque rafraîchis-
-// sement vide le panneau puis le remplit — un clignotement qui donne
-// l'impression que les supports disparaissent.
-const cache = { detect: null, browse: {} };
-
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
-    c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-const fmt = n => {
-    if (!n && n !== 0) return '';
-    const u = ['o','Ko','Mo','Go','To']; let i = 0, v = Number(n);
-    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
-    return (i ? v.toFixed(1) : v) + ' ' + u[i];
-};
-function tok() { return localStorage.getItem('sbx_token'); }
-function hdrs() {
-    const h = { 'Content-Type': 'application/json' };
-    const t = tok(); if (t) h['Authorization'] = 'Bearer ' + t;
-    return h;
-}
-// §6 : le transitoire s'efface, le fatal reste jusqu'à ce qu'on le ferme.
-function toast(m, err) {
-    const d = document.createElement('div');
-    d.className = 'toast' + (err ? ' err' : '');
-    d.innerHTML = '<span>' + esc(m) + '</span>';
-    if (err) {
-        const b = document.createElement('button');
-        b.textContent = '✕'; b.onclick = () => d.remove();
-        d.appendChild(b);
-    } else { setTimeout(() => d.remove(), 3000); }
-    document.getElementById('toasts').appendChild(d);
-}
-const errorToast = m => toast(m, true);
-
-async function api(path, opts) {
-    const r = await fetch(API + path, opts || {});
-    if (r.status === 401) {
-        // Comme les 83 autres panneaux : on emmène à la connexion au lieu de
-        // dire « connexion requise » et de laisser l'utilisateur devant un
-        // panneau inerte. Le chemin courant est préservé pour revenir ici.
-        errorToast('🔒 Connexion requise — redirection…');
-        setTimeout(() => {
-            if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' +
-                encodeURIComponent(window.location.pathname);
-        }, 900);
-        throw new Error('401');
-    }
-    let d = null;
-    try { d = await r.json(); } catch (e) { /* corps non JSON */ }
-    if (!r.ok) throw new Error((d && d.detail) || ('HTTP ' + r.status));
-    return d;
-}
-
-// ── état ──────────────────────────────────────────────────────────────────
-const st = { devices: [], src: null, dst: null, srcPath: null, dstPath: null,
-             srcRoot: null, dstRoot: null, roots: [], sel: new Set() };
-
-function renderAlerts(alerts) {
-    const el = document.getElementById('alerts');
-    if (!alerts || !alerts.length) { el.innerHTML = ''; return; }
-    el.innerHTML = alerts.map(a => `
-      <div class="card alert">
-        <span class="ico">⚠️</span>
-        <div><b>Le port <code>${esc(a.port)}</code> déconnecte en boucle</b> —
-          ${esc(a.disconnects)} coupures relevées.
-          <div class="note" style="margin-top:6px">Un support branché dessus peut
-          disparaître en cours de transfert. Un hub auto-alimenté, ou un port direct
-          sur la board, lève généralement ce défaut.</div>
+        <div class="pan"><h3>File de transfert <i>GET /jobs</i></h3>
+            <div class="jobs" id="jobs"></div>
+            <p class="note">Copie, jamais déplacement, quand la source est amovible : un débranchement en cours de transfert ne doit pas laisser un fichier nulle part. Une synchronisation ne supprime jamais à destination.</p>
         </div>
-      </div>`).join('');
-}
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-function devChips(d) {
-    const c = [];
-    if (d.system) c.push('<span class="chip c-dim">système</span>');
-    if (d.mounted) c.push(`<span class="chip c-green">monté · ${esc(d.mountpoint)}</span>`);
-    else c.push('<span class="chip c-orange">non monté</span>');
-    if (d.removable) c.push('<span class="chip c-blue">amovible</span>');
-    if (d.readonly) c.push('<span class="chip c-dim">lecture seule</span>');
-    if (d.mountable === false) c.push('<span class="chip c-red">illisible ici</span>');
-    return c.join('');
-}
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/media';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-// Un bouton qui ne peut pas aboutir invite a un echec. Quand le noyau ne sait
-// pas lire le systeme de fichiers, on remplace le bouton par le motif : c'est
-// une limite de la machine, pas une erreur de l'utilisateur, et re-cliquer n'y
-// changera rien.
-function devAction(d) {
-    if (d.mounted) {
-        // Retirer une clé sans démonter perd ce qu'on vient d'y écrire : le
-        // bouton doit être là où le support est affiché.
-        return `<button class="mnt alt" data-unmount="${esc(d.mountpoint)}">Démonter</button>`;
-    }
-    if (d.mountable === false) {
-        return `<div class="dev-blocked">${esc(d.unsupported_reason || 'système de fichiers non pris en charge')}</div>`;
-    }
-    return `<button class="mnt" data-mount="${esc(d.device)}">Monter (lecture seule)</button>` +
-           `<button class="mnt alt" data-mount-rw="${esc(d.device)}" ` +
-           `title="Nécessaire pour copier VERS ce support">Monter en écriture</button>`;
-}
+        const st = { devices: [], roots: [], alerts: [], jobs: null, srcPath: null, dstPath: null, srcRoot: null, dstRoot: null, sel: new Set(), detectOk: false };
+        let SESSION_OK = true, CHARGE = false;
 
-// MONTER AU DÉMARRAGE (#1571). Mémorisé par UUID dans le ctl ; lecture seule
-// sauf « en écriture » coché — la même règle que les boutons de montage.
-function devAuto(d) {
-    if (!d.uuid || d.mountable === false) return '';
-    let h = `<label class="auto"><input type="checkbox" data-auto="${esc(d.device)}"` +
-            `${d.automount ? ' checked' : ''}> Monter au démarrage</label>`;
-    if (d.automount) {
-        h += `<label class="auto"><input type="checkbox" data-auto-rw="${esc(d.device)}"` +
-             `${d.automount_rw ? ' checked' : ''}> en écriture</label>`;
-    }
-    return `<div class="autos">${h}</div>`;
-}
-
-function renderDevices(data) {
-    st.devices = (data.devices || []).filter(d => !d.system);
-    document.getElementById('devcount').textContent = st.devices.length;
-    const el = document.getElementById('devices');
-    if (!st.devices.length) {
-        el.innerHTML = '<div class="empty"><span class="big">🔌</span>' +
-            'Aucun support externe détecté — branchez une clé ou un disque.</div>';
-    } else {
-        el.innerHTML = st.devices.map(d => `
-          <div class="dev" data-dev="${esc(d.device)}" tabindex="0">
-            <div class="dev-top"><span class="dev-name">${esc(d.label)}</span>
-              <span class="dev-meta">${esc(d.size)}</span></div>
-            <div class="dev-meta">${esc(d.device)} · ${esc(d.fstype)} · ${esc(d.transport || 'interne')}</div>
-            <div class="chips">${devChips(d)}</div>
-            ${devAction(d)}
-            ${devAuto(d)}
-          </div>`).join('');
-    }
-    // Les sélecteurs ne proposent que ce qui est MONTÉ : offrir un support non
-    // monté ferait échouer la navigation sans expliquer pourquoi.
-    // Deux familles dans le même sélecteur : les supports externes montés et
-    // les médiathèques déclarées. Elles se naviguent pareil, et c'est tout
-    // l'intérêt — copier d'un disque USB vers Musique, ou l'inverse.
-    const usb = st.devices.filter(d => d.mounted)
-        .map(d => `<option value="${esc(d.mountpoint)}">💽 ${esc(d.label)} — ${esc(d.mountpoint)}</option>`).join('');
-    // Une médiathèque absente du disque n'est pas proposée : la choisir ne
-    // donnerait qu'une erreur de lecture.
-    const libs = (st.roots || []).filter(r => r.exists)
-        .map(r => `<option value="${esc(r.path)}">${r.writable ? '📥' : '📚'} ${esc(r.label)}` +
-                  `${r.writable ? '' : ' (lecture seule)'}</option>`).join('');
-    const opts = (usb ? `<optgroup label="Supports externes">${usb}</optgroup>` : '') +
-                 (libs ? `<optgroup label="Médiathèques">${libs}</optgroup>` : '');
-    for (const id of ['src-sel', 'dst-sel']) {
-        const s = document.getElementById(id);
-        const keep = s.value;
-        s.innerHTML = opts || '<option value="">aucun support monté</option>';
-        if (keep) s.value = keep;
-    }
-}
-
-async function refresh() {
-    try {
-        // Les racines d'abord : renderDevices les affiche dans les sélecteurs,
-        // et un sélecteur reconstruit sans elles perdrait la médiathèque
-        // choisie à chaque rafraîchissement.
-        try {
-            const r = await api('/roots');
-            if (r && r.ok) st.roots = r.roots || [];
-        } catch (e) { /* les supports restent utilisables sans médiathèques */ }
-        const d = await api('/detect');
-        cache.detect = d;
-        renderAlerts(d.alerts); renderDevices(d);
-    } catch (e) {
-        if (cache.detect) { renderAlerts(cache.detect.alerts); renderDevices(cache.detect); }
-        errorToast('Détection impossible : ' + e.message);
-    }
-}
-
-async function browse(side, path) {
-    const listEl = document.getElementById(side + '-list');
-    const crumb = document.getElementById(side + '-crumb');
-    const foot = document.getElementById(side + '-foot');
-    if (!path) { listEl.innerHTML = '<div class="empty">Choisissez un support.</div>';
-                 crumb.textContent = '—'; foot.textContent = '—'; return; }
-    try {
-        const d = await api('/browse?path=' + encodeURIComponent(path));
-        if (!d.ok) throw new Error(d.error || 'lecture impossible');
-        cache.browse[path] = d;
-        st[side + 'Path'] = d.path;
-        crumb.innerHTML = '<b>' + esc(d.path) + '</b>';
-        if (!d.entries.length) {
-            listEl.innerHTML = '<div class="empty"><span class="big">📂</span>Répertoire vide.</div>';
-        } else {
-            listEl.innerHTML = d.entries.map(e => `
-              <div class="row ${e.dir ? 'dir' : ''}" data-side="${side}"
-                   data-name="${esc(e.name)}" data-isdir="${e.dir ? 1 : 0}" tabindex="0">
-                <span class="mark"></span>
-                <span class="nm">${e.dir ? '📁' : '🎵'} ${esc(e.name)}</span>
-                <span class="sz">${e.dir ? '' : esc(fmt(e.size))}</span>
-              </div>`).join('');
+        const fmt = n => {
+            if (n === null || n === undefined || n === '') return '';
+            const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0, v = Number(n);
+            if (isNaN(v)) return '';
+            while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+            return (i ? v.toFixed(1).replace('.', ',') : v) + ' ' + u[i];
+        };
+        function tok() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function hdrs() {
+            const h = { 'Content-Type': 'application/json' };
+            const t = tok(); if (t) h['Authorization'] = 'Bearer ' + t;
+            return h;
         }
-        foot.textContent = d.entries.length + ' éléments' + (d.truncated ? ' (tronqué)' : '');
-    } catch (e) {
-        const c = cache.browse[path];
-        if (!c) listEl.innerHTML = '<div class="empty">Lecture impossible.</div>';
-        errorToast('Navigation : ' + e.message);
-    }
-    updateActions();
-    syncNav(side);
-}
+        function lecture() { const h = { Accept: 'application/json' }; const t = tok(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3000); }
+        function retour(ok, msg) { const r = $('rTransfert'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
 
-function updateActions() {
-    const has = st.sel.size > 0 && st.srcPath && st.dstPath;
-    for (const id of ['act-copy', 'act-sync', 'act-compare'])
-        document.getElementById(id).disabled = !has;
-    document.getElementById('act-copy-back').disabled = !(st.srcPath && st.dstPath);
-    // « Déplacer » reste refusé : la source est amovible et montée en lecture
-    // seule. Un bouton qui ne peut pas aboutir doit le dire, pas échouer.
-    document.getElementById('act-move').disabled = true;
-}
-
-async function transfer(verb) {
-    if (!st.sel.size) return;
-    const names = [...st.sel];
-    let ok = 0;
-    for (const n of names) {
-        try {
-            await api('/' + verb, { method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ src: st.srcPath + '/' + n, dst: st.dstPath }) });
-            ok++;
-        } catch (e) { errorToast(n + ' : ' + e.message); }
-    }
-    if (ok) toast(ok + ' élément(s) mis en file');
-    st.sel.clear();
-    document.querySelectorAll('.row.on').forEach(r => {
-        r.classList.remove('on'); r.querySelector('.mark').textContent = '';
-    });
-    updateActions(); loadJobs();
-}
-
-async function loadJobs() {
-    try {
-        const d = await api('/jobs');
-        const el = document.getElementById('jobs');
-        const jobs = (d.jobs || []).slice(-6).reverse();
-        if (!jobs.length) { el.innerHTML = '<div class="note">Aucun transfert en cours.</div>'; return; }
-        el.innerHTML = jobs.map(j => {
-            const cls = j.state === 'failed' ? 'c-red' : j.state === 'done' ? 'c-green' : 'c-orange';
-            return `<div class="foot" style="margin-bottom:6px">
-              <span>${esc(j.src.split('/').pop())} → ${esc(j.dst.split('/').pop())}</span>
-              <span class="chip ${cls}">${esc(j.state)}</span></div>`;
-        }).join('');
-    } catch (e) { /* la file n'est pas critique pour l'affichage */ }
-}
-
-// ── écouteurs délégués (§6 : jamais d'onclick interpolé) ──────────────────
-document.addEventListener('change', async ev => {
-    const a = ev.target.closest('[data-auto], [data-auto-rw]');
-    if (!a) return;
-    const auto = 'auto' in a.dataset;
-    const dev = auto ? a.dataset.auto : a.dataset.autoRw;
-    const on = auto ? a.checked : true;
-    const rw = auto ? false : a.checked;
-    try {
-        const d = await api('/automount', { method: 'POST', headers: hdrs(),
-            body: JSON.stringify({ path: dev, on, rw }) });
-        if (!d.ok) throw new Error(d.error || 'refusé');
-        toast(!d.automount ? 'Ne sera plus monté au démarrage'
-            : (d.rw ? 'Monté au démarrage, en écriture' : 'Monté au démarrage, en lecture seule'));
-        refresh();
-    } catch (e) { a.checked = !a.checked; errorToast('Démarrage : ' + e.message); }
-});
-document.addEventListener('click', async ev => {
-    const mnt = ev.target.closest('[data-mount], [data-mount-rw]');
-    if (mnt) {
-        ev.stopPropagation();
-        const rw = 'mountRw' in mnt.dataset;
-        const dev = rw ? mnt.dataset.mountRw : mnt.dataset.mount;
-        try {
-            const d = await api('/mount', { method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ path: dev, rw }) });
-            if (!d.ok) throw new Error(d.error || 'montage refusé');
-            toast((rw ? 'Monté en écriture : ' : 'Monté en lecture seule : ') + d.mountpoint);
-            refresh();
-        } catch (e) { errorToast('Montage : ' + e.message); }
-        return;
-    }
-    const um = ev.target.closest('[data-unmount]');
-    if (um) {
-        ev.stopPropagation();
-        try {
-            const d = await api('/unmount', { method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ path: um.dataset.unmount }) });
-            if (!d.ok) throw new Error(d.error || 'démontage refusé');
-            toast('Démonté — le support peut être retiré');
-            refresh();
-        } catch (e) { errorToast('Démontage : ' + e.message); }
-        return;
-    }
-    const row = ev.target.closest('.row');
-    if (row) {
-        const side = row.dataset.side;
-        if (row.dataset.isdir === '1' && ev.detail === 2) {
-            browse(side, st[side + 'Path'] + '/' + row.dataset.name); return;
+        // Une requête : mêmes routes, méthodes, en-têtes et corps que l'ancienne page. Inerte en démonstration.
+        async function api(path, opts) {
+            if (DEMO) return demoApi(path, opts);
+            const o = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts || {});
+            if (!o.headers) o.headers = lecture();
+            const r = await fetch(API + path, o);
+            let d = null; try { d = await r.json(); } catch (e) { /* corps non JSON */ }
+            if (r.status === 401 || r.status === 403) { const e = new Error('session requise'); e.statut = r.status; throw e; }
+            if (!r.ok) { const e = new Error((d && d.detail) || ('HTTP ' + r.status)); e.statut = r.status; throw e; }
+            return d;
         }
-        if (side !== 'src') return;
-        const n = row.dataset.name;
-        if (st.sel.has(n)) { st.sel.delete(n); row.classList.remove('on'); row.querySelector('.mark').textContent = ''; }
-        else { st.sel.add(n); row.classList.add('on'); row.querySelector('.mark').textContent = '✓'; }
-        updateActions();
-    }
-});
-document.getElementById('refresh').onclick = refresh;
-// Le volet retient SA racine : remonter ne doit jamais sortir du support
-// choisi. Le ctl refuserait de toute façon, mais échouer en silence sur un
-// clic de flèche donnerait l'impression d'un panneau cassé.
-function setRoot(side, path) {
-    st[side + 'Root'] = path || null;
-    browse(side, path);
-}
-function parentOf(path, root) {
-    if (!path || !root || path === root) return null;
-    const p = path.replace(/\/+$/, '');
-    const up = p.slice(0, p.lastIndexOf('/'));
-    if (!up || up.length < root.length) return root;
-    return up;
-}
-function syncNav(side) {
-    const up = document.getElementById(side + '-up');
-    const home = document.getElementById(side + '-home');
-    const at = st[side + 'Path'], root = st[side + 'Root'];
-    up.disabled = !parentOf(at, root);
-    home.disabled = !root || at === root;
-}
-for (const side of ['src', 'dst']) {
-    document.getElementById(side + '-up').onclick = () => {
-        const up = parentOf(st[side + 'Path'], st[side + 'Root']);
-        if (up) { if (side === 'src') st.sel.clear(); browse(side, up); }
-    };
-    document.getElementById(side + '-home').onclick = () => {
-        if (side === 'src') st.sel.clear();
-        browse(side, st[side + 'Root']);
-    };
-}
-document.getElementById('src-sel').onchange = e => { st.sel.clear(); setRoot('src', e.target.value); };
-document.getElementById('dst-sel').onchange = e => setRoot('dst', e.target.value);
-document.getElementById('act-copy').onclick = () => transfer('copy');
-document.getElementById('act-sync').onclick = () => transfer('sync');
-document.getElementById('act-compare').onclick = async () => {
-    try {
-        const d = await api('/compare', { method: 'POST', headers: hdrs(),
-            body: JSON.stringify({ src: st.srcPath, dst: st.dstPath }) });
-        toast(d.differences + ' écart(s) entre les deux volets');
-    } catch (e) { errorToast('Comparaison : ' + e.message); }
-};
 
-refresh().then(() => {
-    // setRoot et non browse : sans racine memorisee, les fleches de navigation
-    // resteraient inertes au chargement.
-    const s = document.getElementById('src-sel').value;
-    const t = document.getElementById('dst-sel').value;
-    if (s) setRoot('src', s);
-    if (t) setRoot('dst', t);
-});
-loadJobs();
-setInterval(refresh, 15000);
-setInterval(loadJobs, 5000);
-</script>
+        // ----- Démonstration : adresses et noms fictifs, aucune écriture -----
+        const DEMO_DIRS = {
+            '/media/CLE-DEMO': [{ name: 'Concerts', dir: true }, { name: 'Voyage-2025', dir: true }, { name: 'morceau-01.flac', size: 31457280 }, { name: 'morceau-02.flac', size: 28311552 }],
+            '/media/CLE-DEMO/Concerts': [{ name: 'live-A.flac', size: 52428800 }, { name: 'live-B.flac', size: 49283072 }],
+            '/media/CLE-DEMO/Voyage-2025': [{ name: 'notes.txt', size: 2048 }],
+            '/data/musique': [{ name: 'Albums', dir: true }, { name: 'singles', dir: true }],
+            '/data/musique/Albums': [{ name: 'album-exemple.flac', size: 41943040 }],
+            '/data/musique/singles': []
+        };
+        async function demoApi(path, opts) {
+            if (opts && opts.method === 'POST') return { ok: false, demo: true };
+            if (path === '/detect') return { alerts: [{ port: '1-1.3', disconnects: 7 }], devices: [
+                { device: '/dev/sda1', label: 'CLE-DEMO', size: '58,2G', fstype: 'exfat', transport: 'usb', removable: true, mounted: true, mountpoint: '/media/CLE-DEMO', readonly: true, mountable: true, uuid: 'DEMO-0001', automount: true, automount_rw: false },
+                { device: '/dev/sdb1', label: 'DISQUE-DEMO', size: '931,5G', fstype: 'ext4', transport: 'usb', removable: true, mounted: false, mountable: true, uuid: 'DEMO-0002', automount: false },
+                { device: '/dev/sdc1', label: 'ANCIEN-MAC', size: '465,8G', fstype: 'hfsplus', transport: 'usb', removable: true, mounted: false, mountable: false, unsupported_reason: 'Système de fichiers HFS+ non pris en charge par ce noyau.', uuid: 'DEMO-0003' }] };
+            if (path === '/roots') return { ok: true, roots: [{ label: 'Musique', path: '/data/musique', writable: true, exists: true }, { label: 'Vidéos', path: '/data/videos', writable: false, exists: true }, { label: 'Absente', path: '/data/absent', writable: false, exists: false }] };
+            if (path === '/jobs') return { jobs: [{ src: '/media/CLE-DEMO/morceau-01.flac', dst: '/data/musique', state: 'done' }, { src: '/media/CLE-DEMO/Concerts', dst: '/data/musique', state: 'queued' }, { src: '/media/CLE-DEMO/Voyage-2025', dst: '/data/musique', state: 'failed' }] };
+            if (path.indexOf('/browse?path=') === 0) {
+                const p = decodeURIComponent(path.slice(13)).replace(/\/+$/, '');
+                const entries = DEMO_DIRS[p] || [];
+                return { ok: true, path: p, entries: entries.map(e => ({ name: e.name, dir: !!e.dir, size: e.size })), truncated: false };
+            }
+            return {};
+        }
+
+        // ----- Chargement -----
+        function refus(e) { return e && (e.statut === 401 || e.statut === 403); }
+        async function refresh() {
+            let detect = null, echec = null;
+            try { const r = await api('/roots'); if (r && r.ok) st.roots = r.roots || []; } catch (e) { if (refus(e)) echec = e; }
+            try { detect = await api('/detect'); } catch (e) { echec = echec || e; }
+            CHARGE = true;
+            SESSION_OK = !refus(echec);
+            $('erreur').hidden = !(echec && !refus(echec));
+            if (echec && !refus(echec)) $('erreur').textContent = 'Détection impossible : ' + echec.message;
+            if (detect) { st.detectOk = true; st.alerts = detect.alerts || []; st.devices = (detect.devices || []).filter(d => !d.system); }
+            else if (!SESSION_OK) { st.detectOk = false; st.alerts = []; st.devices = []; }
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            try { $('lienSession').href = '/login.html?redirect=' + encodeURIComponent(location.pathname); } catch (e) { /* lien par défaut */ }
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!CHARGE) { etat.className = 'actif neutre'; etat.textContent = 'Chargement…'; }
+            else if (!st.detectOk) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (st.alerts.length) { etat.className = 'actif att'; etat.textContent = 'PORT INSTABLE'; }
+            else { etat.className = 'actif'; etat.textContent = 'PRÊT'; }
+            const mesure = SESSION_OK && st.detectOk;
+            $('tSupports').textContent = mesure ? st.devices.length : '—';
+            $('tMontes').textContent = mesure ? st.devices.filter(d => d.mounted).length : '—';
+            $('tAlertes').textContent = mesure ? st.alerts.length : '—';
+            $('cAlertes').className = 'tuile ' + (mesure && st.alerts.length ? 'hors' : 'cy');
+            rendreJobsTuile();
+            rendreAlertes(); rendreSupports(); rendreSelecteurs();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreAlertes() {
+            const box = $('alerts'); box.replaceChildren();
+            (st.alerts || []).forEach(a => {
+                const d = el('div', 'alerte');
+                d.appendChild(el('b', '', 'Le port '));
+                d.appendChild(el('code', '', String(a.port)));
+                d.appendChild(el('b', '', ' déconnecte en boucle'));
+                d.appendChild(document.createTextNode(' — ' + a.disconnects + ' coupures relevées. Un support branché dessus peut disparaître en cours de transfert. Un hub auto-alimenté, ou un port direct sur la board, lève généralement ce défaut.'));
+                box.appendChild(d);
+            });
+        }
+
+        function pill(txt, cls) { return el('span', 'pill ' + (cls || ''), txt); }
+        function devPills(d) {
+            const c = el('div', 'pills');
+            if (d.system) c.appendChild(pill('système'));
+            if (d.mounted) c.appendChild(pill('monté · ' + d.mountpoint, 'ok')); else c.appendChild(pill('non monté', 'att'));
+            if (d.removable) c.appendChild(pill('amovible', 'cy'));
+            if (d.readonly) c.appendChild(pill('lecture seule'));
+            if (d.mountable === false) c.appendChild(pill('illisible ici', 'hors'));
+            return c;
+        }
+        // Un bouton qui ne peut pas aboutir invite à un échec : on affiche le motif à sa place (devAction).
+        function devAction(d) {
+            const box = el('div', 'dev-actions');
+            if (d.mounted) {
+                const b = el('button', 'btn sm', 'Démonter'); b.type = 'button'; b.dataset.unmount = d.mountpoint; box.appendChild(b);
+            } else if (d.mountable === false) {
+                return el('div', 'dev-blocked', d.unsupported_reason || 'système de fichiers non pris en charge');
+            } else {
+                const b = el('button', 'btn sm', 'Monter (lecture seule)'); b.type = 'button'; b.dataset.mount = d.device; box.appendChild(b);
+                const w = el('button', 'btn sm', 'Monter en écriture'); w.type = 'button'; w.dataset.mountRw = d.device; w.title = 'Nécessaire pour copier VERS ce support'; box.appendChild(w);
+            }
+            return box;
+        }
+        // MONTER AU DÉMARRAGE (#1571) : mémorisé par UUID ; lecture seule sauf « en écriture » coché.
+        function devAuto(d) {
+            if (!d.uuid || d.mountable === false) return null;
+            const box = el('div', 'autos');
+            const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.dataset.auto = d.device; c.checked = !!d.automount;
+            l.appendChild(c); l.appendChild(document.createTextNode(' Monter au démarrage')); box.appendChild(l);
+            if (d.automount) {
+                const l2 = el('label'); const c2 = el('input'); c2.type = 'checkbox'; c2.dataset.autoRw = d.device; c2.checked = !!d.automountRw || !!d.automount_rw;
+                l2.appendChild(c2); l2.appendChild(document.createTextNode(' en écriture')); box.appendChild(l2);
+            }
+            return box;
+        }
+        function rendreSupports() {
+            const box = $('devices'); box.replaceChildren();
+            if (!SESSION_OK || !st.detectOk) { box.appendChild(el('div', 'vide', '—')); return; }
+            if (!st.devices.length) { box.appendChild(el('div', 'vide', 'Aucun support externe détecté — branchez une clé ou un disque.')); return; }
+            st.devices.forEach(d => {
+                const c = el('div', 'dev'); c.dataset.dev = d.device;
+                const top = el('div', 'dev-top'); top.appendChild(el('span', 'dev-name', d.label || d.device)); top.appendChild(el('span', 'dev-meta', d.size || '—')); c.appendChild(top);
+                c.appendChild(el('div', 'dev-meta', [d.device, d.fstype, d.transport || 'interne'].filter(Boolean).join(' · ')));
+                c.appendChild(devPills(d));
+                c.appendChild(devAction(d));
+                const a = devAuto(d); if (a) c.appendChild(a);
+                box.appendChild(c);
+            });
+        }
+
+        // Les sélecteurs ne proposent que ce qui est MONTÉ (supports externes) et les médiathèques présentes.
+        function rendreSelecteurs() {
+            const usb = st.devices.filter(d => d.mounted);
+            const libs = (st.roots || []).filter(r => r.exists);
+            for (const id of ['src-sel', 'dst-sel']) {
+                const s = $(id), keep = s.value;
+                s.replaceChildren();
+                if (!usb.length && !libs.length) { const o = el('option', '', 'aucun support monté'); o.value = ''; s.appendChild(o); continue; }
+                if (usb.length) {
+                    const g = el('optgroup'); g.label = 'Supports externes';
+                    usb.forEach(d => { const o = el('option', '', '💽 ' + (d.label || d.device) + ' — ' + d.mountpoint); o.value = d.mountpoint; g.appendChild(o); });
+                    s.appendChild(g);
+                }
+                if (libs.length) {
+                    const g = el('optgroup'); g.label = 'Médiathèques';
+                    libs.forEach(r => { const o = el('option', '', (r.writable ? '📥 ' : '📚 ') + r.label + (r.writable ? '' : ' (lecture seule)')); o.value = r.path; g.appendChild(o); });
+                    s.appendChild(g);
+                }
+                if (keep) s.value = keep;
+            }
+        }
+
+        // ----- Navigation -----
+        async function browse(side, path) {
+            const listEl = $(side + '-list'), crumb = $(side + '-crumb'), foot = $(side + '-foot');
+            listEl.replaceChildren();
+            if (!path) { listEl.appendChild(el('div', 'vide', 'Choisissez un support.')); crumb.textContent = '—'; foot.textContent = '—'; st[side + 'Path'] = null; updateActions(); syncNav(side); return; }
+            try {
+                const d = await api('/browse?path=' + encodeURIComponent(path));
+                if (!d.ok) throw new Error(d.error || 'lecture impossible');
+                st[side + 'Path'] = d.path;
+                crumb.textContent = d.path;
+                if (!d.entries.length) listEl.appendChild(el('div', 'vide', 'Répertoire vide.'));
+                d.entries.forEach(e => {
+                    const r = el('div', 'row' + (e.dir ? ' dir' : '')); r.dataset.side = side; r.dataset.name = e.name; r.dataset.isdir = e.dir ? '1' : '0'; r.tabIndex = 0;
+                    r.appendChild(el('span', 'mark'));
+                    r.appendChild(el('span', 'nm', (e.dir ? '📁 ' : '🎵 ') + e.name));
+                    r.appendChild(el('span', 'sz', e.dir ? '' : fmt(e.size)));
+                    listEl.appendChild(r);
+                });
+                foot.textContent = d.entries.length + ' éléments' + (d.truncated ? ' (tronqué)' : '');
+            } catch (e) {
+                listEl.appendChild(el('div', 'vide', refus(e) ? '—' : 'Lecture impossible.'));
+                if (!refus(e)) retour(false, 'Navigation : ' + e.message);
+            }
+            updateActions(); syncNav(side);
+        }
+        function updateActions() {
+            const has = st.sel.size > 0 && st.srcPath && st.dstPath;
+            for (const id of ['act-copy', 'act-sync', 'act-compare']) $(id).disabled = !has;
+            // « ← Copier » n'a jamais eu d'appel associé ; « Déplacer » reste refusé (source amovible, lecture seule).
+            $('act-copy-back').disabled = true;
+            $('act-move').disabled = true;
+        }
+        // Le volet retient SA racine : remonter ne doit jamais sortir du support choisi.
+        function setRoot(side, path) { st[side + 'Root'] = path || null; return browse(side, path); }
+        function parentOf(path, root) {
+            if (!path || !root || path === root) return null;
+            const p = path.replace(/\/+$/, '');
+            const up = p.slice(0, p.lastIndexOf('/'));
+            if (!up || up.length < root.length) return root;
+            return up;
+        }
+        function syncNav(side) {
+            const at = st[side + 'Path'], root = st[side + 'Root'];
+            $(side + '-up').disabled = !parentOf(at, root);
+            $(side + '-home').disabled = !root || at === root;
+        }
+        for (const side of ['src', 'dst']) {
+            $(side + '-up').addEventListener('click', () => {
+                const up = parentOf(st[side + 'Path'], st[side + 'Root']);
+                if (up) { if (side === 'src') st.sel.clear(); browse(side, up); }
+            });
+            $(side + '-home').addEventListener('click', () => { if (side === 'src') st.sel.clear(); browse(side, st[side + 'Root']); });
+        }
+        $('src-sel').addEventListener('change', e => { st.sel.clear(); setRoot('src', e.target.value); });
+        $('dst-sel').addEventListener('change', e => setRoot('dst', e.target.value));
+
+        // ----- Transferts (mêmes appels que l'ancienne page) -----
+        async function transfer(verb) {
+            if (!st.sel.size) return;
+            let ok = 0;
+            for (const n of [...st.sel]) {
+                try {
+                    const r = await api('/' + verb, { method: 'POST', headers: hdrs(), body: JSON.stringify({ src: st.srcPath + '/' + n, dst: st.dstPath }) });
+                    if (r && r.demo) { retour(false, 'Démonstration : action inerte.'); return; }
+                    ok++;
+                } catch (e) { retour(false, n + ' : ' + e.message); }
+            }
+            if (ok) retour(true, ok + ' élément(s) mis en file');
+            st.sel.clear();
+            document.querySelectorAll('.row.on').forEach(r => { r.classList.remove('on'); r.querySelector('.mark').textContent = ''; });
+            updateActions(); loadJobs();
+        }
+        $('act-copy').addEventListener('click', () => transfer('copy'));
+        $('act-sync').addEventListener('click', () => transfer('sync'));
+        $('act-compare').addEventListener('click', async () => {
+            try {
+                const d = await api('/compare', { method: 'POST', headers: hdrs(), body: JSON.stringify({ src: st.srcPath, dst: st.dstPath }) });
+                if (d && d.demo) { retour(false, 'Démonstration : action inerte.'); return; }
+                retour(true, d.differences + ' écart(s) entre les deux volets');
+            } catch (e) { retour(false, 'Comparaison : ' + e.message); }
+        });
+
+        async function loadJobs() {
+            try { const d = await api('/jobs'); st.jobs = (d.jobs || []).slice(-6).reverse(); }
+            catch (e) { if (refus(e)) st.jobs = null; /* la file n'est pas critique pour l'affichage */ }
+            rendreJobs(); rendreJobsTuile();
+        }
+        function rendreJobsTuile() {
+            $('tJobs').textContent = st.jobs ? st.jobs.filter(j => j.state !== 'done' && j.state !== 'failed').length : '—';
+        }
+        function rendreJobs() {
+            const box = $('jobs'); box.replaceChildren();
+            if (!st.jobs) { box.appendChild(el('div', 'vide', '—')); annoncer(); return; }
+            if (!st.jobs.length) { box.appendChild(el('div', 'vide', 'Aucun transfert en cours.')); annoncer(); return; }
+            st.jobs.forEach(j => {
+                const r = el('div', 'job');
+                r.appendChild(el('span', 'mono', String(j.src || '').split('/').pop() + ' → ' + String(j.dst || '').split('/').pop()));
+                r.appendChild(pill(String(j.state), j.state === 'failed' ? 'hors' : j.state === 'done' ? 'ok' : 'att'));
+                box.appendChild(r);
+            });
+            annoncer();
+        }
+
+        // ----- Écouteurs délégués : jamais d'onclick interpolé -----
+        document.addEventListener('change', async ev => {
+            const a = ev.target.closest('[data-auto], [data-auto-rw]');
+            if (!a) return;
+            const auto = 'auto' in a.dataset;
+            const dev = auto ? a.dataset.auto : a.dataset.autoRw;
+            const on = auto ? a.checked : true;
+            const rw = auto ? false : a.checked;
+            try {
+                const d = await api('/automount', { method: 'POST', headers: hdrs(), body: JSON.stringify({ path: dev, on, rw }) });
+                if (d && d.demo) { a.checked = !a.checked; toast('Démonstration : action inerte.'); return; }
+                if (!d.ok) throw new Error(d.error || 'refusé');
+                toast(!d.automount ? 'Ne sera plus monté au démarrage' : (d.rw ? 'Monté au démarrage, en écriture' : 'Monté au démarrage, en lecture seule'));
+                refresh();
+            } catch (e) { a.checked = !a.checked; toast('Démarrage : ' + e.message); }
+        });
+        function basculer(row) {
+            const n = row.dataset.name;
+            if (st.sel.has(n)) { st.sel.delete(n); row.classList.remove('on'); row.querySelector('.mark').textContent = ''; }
+            else { st.sel.add(n); row.classList.add('on'); row.querySelector('.mark').textContent = '✓'; }
+            updateActions();
+        }
+        document.addEventListener('keydown', ev => {
+            if (ev.key !== 'Enter' && ev.key !== ' ') return;
+            const row = ev.target.closest && ev.target.closest('.row');
+            if (!row || row.dataset.side !== 'src') return;
+            ev.preventDefault(); basculer(row);
+        });
+        document.addEventListener('click', async ev => {
+            const mnt = ev.target.closest('[data-mount], [data-mount-rw]');
+            if (mnt) {
+                const rw = 'mountRw' in mnt.dataset;
+                const dev = rw ? mnt.dataset.mountRw : mnt.dataset.mount;
+                try {
+                    const d = await api('/mount', { method: 'POST', headers: hdrs(), body: JSON.stringify({ path: dev, rw }) });
+                    if (d && d.demo) { toast('Démonstration : action inerte.'); return; }
+                    if (!d.ok) throw new Error(d.error || 'montage refusé');
+                    toast((rw ? 'Monté en écriture : ' : 'Monté en lecture seule : ') + d.mountpoint);
+                    refresh();
+                } catch (e) { toast('Montage : ' + e.message); }
+                return;
+            }
+            const um = ev.target.closest('[data-unmount]');
+            if (um) {
+                try {
+                    const d = await api('/unmount', { method: 'POST', headers: hdrs(), body: JSON.stringify({ path: um.dataset.unmount }) });
+                    if (d && d.demo) { toast('Démonstration : action inerte.'); return; }
+                    if (!d.ok) throw new Error(d.error || 'démontage refusé');
+                    toast('Démonté — le support peut être retiré');
+                    refresh();
+                } catch (e) { toast('Démontage : ' + e.message); }
+                return;
+            }
+            const row = ev.target.closest('.row');
+            if (row) {
+                const side = row.dataset.side;
+                if (row.dataset.isdir === '1' && ev.detail === 2) {
+                    if (side === 'src') st.sel.clear();
+                    browse(side, st[side + 'Path'] + '/' + row.dataset.name); return;
+                }
+                if (side !== 'src') return;
+                basculer(row);
+            }
+        });
+        $('refresh').addEventListener('click', refresh);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'media' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        refresh().then(() => {
+            // setRoot et non browse : sans racine mémorisée, les flèches resteraient inertes au chargement.
+            const s = $('src-sel').value, t = $('dst-sel').value;
+            if (s) setRoot('src', s); else updateActions();
+            if (t) setRoot('dst', t);
+        });
+        loadJobs();
+        // Pas d'actualisation onglet masqué, ni en démonstration.
+        setInterval(() => { if (!document.hidden && !DEMO) refresh(); }, 15000);
+        setInterval(() => { if (!document.hidden && !DEMO) loadJobs(); }, 5000);
+    </script>
 </body>
 </html>
