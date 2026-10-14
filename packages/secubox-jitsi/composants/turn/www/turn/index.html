@@ -4,727 +4,498 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Serveur TURN/STUN (coturn) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Routes lues : /status, /stats, /access, /sessions, /users, /config, /logs.
+  Routes d'écriture (inchangées) : /start, /stop, /restart, /config, /users, /users/{nom} (DELETE), /generate_secret, /realm, /credentials.
+  Le secret partagé (static-auth-secret) n'est JAMAIS affiché : masqué dans l'éditeur, champ « mot de passe » pour un nouveau secret.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - TURN/STUN Server</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Serveur TURN/STUN</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Module accent - cyan for TURN */
-            --module-accent: #00bcd4;
-            --module-accent-dim: #0097a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: #1a2e1a;
-            --text-dim: var(--p31-dim);
-            --primary: var(--module-accent);
-            --cyan: var(--module-accent);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-cyan: 0 0 3px var(--module-accent), 0 0 10px rgba(0,188,212,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(0,188,212,0.025) 0%, transparent 70%);
-            color: var(--text);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; color: var(--module-accent); text-shadow: var(--bloom-cyan); }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid; letter-spacing: 0.1em; text-transform: uppercase; }
-        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); border-color: var(--green); }
-        .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); border-color: var(--red); }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: inherit; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); border-color: var(--p31-dim); }
-        .btn.primary { background: rgba(0,188,212,0.1); border-color: var(--module-accent); color: var(--module-accent); }
-        .btn.primary:hover { background: rgba(0,188,212,0.2); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn-group { display: flex; gap: 0.5rem; }
-        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-card); padding: 0 1rem; margin-bottom: 1.5rem; border-radius: 8px 8px 0 0; }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--module-accent); border-bottom-color: var(--module-accent); text-shadow: var(--bloom-cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.15em; }
-        .stat-card.cyan .value { color: var(--module-accent); text-shadow: var(--bloom-cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.yellow .value { color: var(--yellow); }
-        .stat-card.purple .value { color: var(--purple); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 0.9rem; font-weight: 600; color: var(--p31-decay); text-transform: uppercase; letter-spacing: 0.1em; }
-        .table { width: 100%; border-collapse: collapse; }
-        .table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); letter-spacing: 0.15em; }
-        .table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        .table tr:hover { background: rgba(0,188,212,0.03); }
-        .scroll-list { max-height: 400px; overflow-y: auto; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
-        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--tube-light); color: var(--text); border-radius: 6px; font-family: inherit; }
-        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--module-accent); box-shadow: 0 0 8px rgba(0,188,212,0.2); }
-        .form-group textarea { min-height: 200px; font-family: 'Courier Prime', monospace; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
-        .status-dot.inactive { background: var(--red); }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h2 { color: var(--p31-decay); }
-        .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; }
-        .cred-box { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 1rem; font-family: 'Courier Prime', monospace; font-size: 0.85rem; }
-        .cred-box .cred-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); }
-        .cred-box .cred-row:last-child { border-bottom: none; }
-        .cred-box .cred-label { color: var(--text-dim); }
-        .cred-box .cred-value { color: var(--module-accent); word-break: break-all; max-width: 70%; text-align: right; }
-        .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--p31-dim); z-index: 2000; display: none; }
-        .toast.show { display: block; }
-        .toast.success { border-color: var(--green); }
-        .toast.error { border-color: var(--red); }
-        .endpoint-card { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
-        .endpoint-card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text); }
-        .endpoint-card .url { font-family: monospace; color: var(--module-accent); font-size: 0.85rem; }
-        .copy-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0.25rem 0.5rem; }
-        .copy-btn:hover { color: var(--module-accent); }
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.vert{border-color:var(--vert);color:var(--vert)} .btn.vert:hover{background:rgba(46,204,113,.14)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .conf{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:10px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .conf .q{flex:1 1 220px;min-width:0}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.jn .v{color:var(--jaune)} .tuile.vi .v{color:var(--violet)}
+        .tuile .v.petit{font-size:1.05rem}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .large{grid-column:1/-1}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label,.outils label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0;flex:1 1 180px}
+        form.saisie input,form.saisie select,.outils select,.outils input,textarea.editeur{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus,.outils select:focus,.outils input:focus,textarea.editeur:focus{outline:none;border-color:var(--cyan)}
+        .outils{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;margin:0 0 10px}
+        .outils label{flex:0 1 auto} .outils select{width:auto}
+        textarea.editeur{min-height:260px;resize:vertical;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;line-height:1.45;white-space:pre}
+        pre.journal{margin:0;background:rgba(3,8,18,.85);border:1px solid var(--trait);border-radius:10px;padding:10px;font-size:.72rem;line-height:1.45;max-height:360px;overflow:auto;white-space:pre;color:var(--doux);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+        .ep{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 0;border-top:1px solid rgba(86,150,255,.12)}
+        .ep:first-of-type{border-top:0}
+        .ep .n{flex:1 1 120px;min-width:0;font-weight:600} .ep .u{flex:2 1 200px;min-width:0;overflow-wrap:anywhere;color:var(--cyan)}
+        .btns{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>TURN/STUN Server</h1>
-                <span class="badge" id="status-badge">-</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M7.2 11l9.6-4M7.2 13l9.6 4"/></svg>
+                <div><h1>Serveur TURN/STUN</h1><small>coturn : traversée de NAT pour WebRTC (relais média et découverte d’adresse)</small></div>
             </div>
-            <div class="btn-group">
-                <button class="btn" onclick="refreshAll()">Refresh</button>
-                <button class="btn primary" onclick="showCredModal()">Generate Credentials</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="versCred" type="button">Générer des identifiants</button></div>
         </header>
-
-        <div class="tabs">
-            <div class="tab active" data-tab="dashboard">Dashboard</div>
-            <div class="tab" data-tab="sessions">Sessions</div>
-            <div class="tab" data-tab="users">Users</div>
-            <div class="tab" data-tab="config">Config</div>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="conf" id="conf" role="alertdialog" aria-live="assertive" hidden>
+            <span class="q" id="confTexte"></span>
+            <button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button>
         </div>
 
-        <div class="content">
-            <!-- Dashboard Tab -->
-            <div id="tab-dashboard" class="tab-content active">
-                <div class="stats-row">
-                    <div class="stat-card cyan">
-                        <div class="value" id="active-sessions">0</div>
-                        <div class="label">Active Sessions</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="users-count">0</div>
-                        <div class="label">Users</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <div class="value" id="udp-connections">0</div>
-                        <div class="label">UDP Connections</div>
-                    </div>
-                    <div class="stat-card purple">
-                        <div class="value" id="tcp-connections">0</div>
-                        <div class="label">TCP Connections</div>
-                    </div>
-                </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cSvc" title="Le service coturn tourne-t-il (systemctl is-active coturn) ?"><span class="l">Service coturn</span><span class="v petit" id="tSvc">—</span><span class="s" id="sSvc">systemd</span></div>
+            <div class="tuile cy" title="Sockets réseau ouverts par turnserver (lecture de ss -tunp), pas des allocations TURN : un client peut en ouvrir plusieurs."><span class="l">Sessions actives</span><span class="v" id="tSess">—</span><span class="s">sockets turnserver</span></div>
+            <div class="tuile ok" title="Utilisateurs TURN à identifiants durables enregistrés dans la base du module."><span class="l">Utilisateurs</span><span class="v" id="tUsers">—</span><span class="s">comptes enregistrés</span></div>
+            <div class="tuile" title="Ports d’écoute lus dans turnserver.conf : UDP/TCP (STUN, TURN) puis TLS (TURNS)."><span class="l">Ports</span><span class="v petit mono" id="tPorts">—</span><span class="s">UDP/TCP · TLS</span></div>
+            <div class="tuile jn" title="Sockets UDP de turnserver, d’après ss."><span class="l">Connexions UDP</span><span class="v" id="tUdp">—</span><span class="s">sockets</span></div>
+            <div class="tuile vi" title="Sockets TCP de turnserver, d’après ss."><span class="l">Connexions TCP</span><span class="v" id="tTcp">—</span><span class="s">sockets</span></div>
+            <div class="tuile cy" title="Allocations de relais créées, comptées sur les 1000 dernières lignes du journal coturn seulement : un chiffre partiel, pas un cumul depuis le démarrage."><span class="l">Allocations</span><span class="v" id="tAlloc">—</span><span class="s">1000 dernières lignes du journal</span></div>
+            <div class="tuile" id="cAuth" title="Authentifications refusées, comptées sur les 1000 dernières lignes du journal coturn seulement. Une série élevée peut signaler un secret périmé côté client ou un balayage."><span class="l">Échecs d’authentification</span><span class="v" id="tAuth">—</span><span class="s">1000 dernières lignes du journal</span></div>
+        </section>
 
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Service Control</h2>
-                        </div>
-                        <div class="btn-group" style="margin-bottom: 1rem;">
-                            <button class="btn success" onclick="serviceAction('start')">Start</button>
-                            <button class="btn danger" onclick="serviceAction('stop')">Stop</button>
-                            <button class="btn" onclick="serviceAction('restart')">Restart</button>
-                        </div>
-                        <div id="service-info">
-                            <p><strong>Status:</strong> <span id="svc-status">-</span></p>
-                            <p><strong>Realm:</strong> <span id="svc-realm">-</span></p>
-                            <p><strong>Ports:</strong> <span id="svc-ports">-</span></p>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Quick Credentials</h2>
-                        </div>
-                        <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.85rem;">
-                            Generate temporary TURN credentials for WebRTC testing.
-                        </p>
-                        <button class="btn primary" onclick="showCredModal()" style="width: 100%;">
-                            Generate Test Credentials
-                        </button>
-                        <div id="quick-creds" style="margin-top: 1rem;"></div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Server Endpoints</h2>
-                    </div>
-                    <div id="endpoints-list"></div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Bandwidth Usage</h2>
-                    </div>
-                    <div class="stats-row" style="margin-bottom: 0;">
-                        <div class="stat-card">
-                            <div class="value" id="total-allocations">0</div>
-                            <div class="label">Total Allocations</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="value" id="auth-failures">0</div>
-                            <div class="label">Auth Failures</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sessions Tab -->
-            <div id="tab-sessions" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Active Sessions</h2>
-                        <button class="btn" onclick="loadSessions()">Refresh</button>
-                    </div>
-                    <div class="scroll-list">
-                        <table class="table" id="sessions-table">
-                            <thead>
-                                <tr>
-                                    <th>Client IP</th>
-                                    <th>Port</th>
-                                    <th>Protocol</th>
-                                    <th>Local Address</th>
-                                    <th>State</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="5">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Users Tab -->
-            <div id="tab-users" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>TURN Users</h2>
-                        <button class="btn primary" onclick="showAddUserModal()">+ Add User</button>
-                    </div>
-                    <div class="scroll-list">
-                        <table class="table" id="users-table">
-                            <thead>
-                                <tr>
-                                    <th>Username</th>
-                                    <th>Created</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="3">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Realm Settings</h2>
-                    </div>
-                    <div class="form-group">
-                        <label>Realm</label>
-                        <input type="text" id="realm-input" placeholder="turn.example.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Auth Secret</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="password" id="secret-input" placeholder="Click generate to create new secret">
-                            <button class="btn" onclick="generateSecret()">Generate</button>
-                        </div>
-                    </div>
-                    <button class="btn primary" onclick="saveRealm()">Save Realm Settings</button>
-                </div>
-            </div>
-
-            <!-- Config Tab -->
-            <div id="tab-config" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>turnserver.conf</h2>
-                        <div class="btn-group">
-                            <button class="btn" onclick="loadConfig()">Reload</button>
-                            <button class="btn primary" onclick="saveConfig()">Save</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <textarea id="config-editor" placeholder="Loading configuration..."></textarea>
-                    </div>
-                    <p style="color: var(--text-dim); font-size: 0.85rem;">
-                        After saving, restart the service for changes to take effect.
-                    </p>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Server Logs</h2>
-                        <button class="btn" onclick="loadLogs()">Refresh</button>
-                    </div>
-                    <div class="scroll-list" style="background: var(--tube-light); padding: 1rem; border-radius: 6px; font-size: 0.8rem; font-family: monospace;">
-                        <pre id="logs-content" style="margin: 0; white-space: pre-wrap;">Loading logs...</pre>
-                    </div>
-                </div>
-            </div>
+        <div class="onglets" role="tablist" aria-label="Sections TURN">
+            <button type="button" role="tab" id="o-tableau" data-t="tableau" aria-selected="true" aria-controls="t-tableau">Tableau de bord</button>
+            <button type="button" role="tab" id="o-sessions" data-t="sessions" aria-selected="false" aria-controls="t-sessions">Sessions</button>
+            <button type="button" role="tab" id="o-users" data-t="users" aria-selected="false" aria-controls="t-users">Utilisateurs</button>
+            <button type="button" role="tab" id="o-config" data-t="config" aria-selected="false" aria-controls="t-config">Configuration</button>
         </div>
-    </main>
 
-    <!-- Add User Modal -->
-    <div id="add-user-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Add TURN User</h2>
-                <button class="modal-close" onclick="closeAddUserModal()">&times;</button>
-            </div>
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="new-username" placeholder="e.g., webrtc-client">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="new-password" placeholder="Secure password">
-            </div>
-            <button class="btn primary" onclick="addUser()" style="width: 100%;">Add User</button>
-        </div>
-    </div>
+        <section id="t-tableau" role="tabpanel" aria-labelledby="o-tableau" class="grille">
+            <div class="pan"><h3>Contrôle du service <i>coturn</i></h3>
+                <div id="rSvc" class="retour" hidden></div>
+                <div class="btns">
+                    <button class="btn vert" id="bStart" type="button">Démarrer</button>
+                    <button class="btn danger" id="bStop" type="button">Arrêter</button>
+                    <button class="btn" id="bRestart" type="button">Redémarrer</button>
+                </div>
+                <dl class="kv"><dt>État</dt><dd id="iEtat">—</dd><dt>Activé au boot</dt><dd id="iEnabled">—</dd><dt>PID</dt><dd class="mono" id="iPid">—</dd><dt>Démarré depuis</dt><dd id="iUp">—</dd><dt>Domaine (realm)</dt><dd class="mono" id="iRealm">—</dd><dt>Ports relais</dt><dd class="mono" id="iRelais">—</dd></dl>
+                <p class="note">Redémarrer coupe les relais en cours : les appels WebRTC passant par ce serveur se reconnectent.</p></div>
+            <div class="pan"><h3>Identifiants temporaires <i>pour tester WebRTC</i></h3>
+                <div id="rCred" class="retour" hidden></div>
+                <form class="saisie" id="fCred">
+                    <label>Nom de base<input id="credUser" value="webrtc" autocomplete="off"></label>
+                    <label>Durée de vie (secondes)<input id="credTtl" type="number" value="86400" min="60" max="604800"></label>
+                    <button class="btn prim" type="submit">Générer</button>
+                </form>
+                <dl class="kv" id="credRes" hidden style="margin-top:10px"><dt>Utilisateur</dt><dd class="mono" id="cUser">—</dd><dt>Mot de passe</dt><dd class="mono" id="cPass">—</dd><dt>Durée</dt><dd id="cTtl">—</dd><dt>Expire</dt><dd id="cExp">—</dd><dt>URL TURN</dt><dd class="mono" id="cTurn">—</dd><dt>URL STUN</dt><dd class="mono" id="cStun">—</dd></dl>
+                <div class="btns" style="margin:10px 0 0"><button class="btn" id="copieIce" type="button" hidden>Copier la configuration ICE</button></div>
+                <p class="note">Le mot de passe est dérivé du secret partagé par HMAC et expire avec l’identifiant ; le secret partagé lui-même n’est jamais affiché.</p></div>
+            <div class="pan large"><h3>Points d’accès <i>à communiquer aux clients WebRTC</i></h3>
+                <div id="rEp" class="retour" hidden></div>
+                <div id="lEp"></div></div>
+        </section>
 
-    <!-- Credentials Modal -->
-    <div id="cred-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Generate TURN Credentials</h2>
-                <button class="modal-close" onclick="closeCredModal()">&times;</button>
-            </div>
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="cred-username" value="webrtc" placeholder="Base username">
-            </div>
-            <div class="form-group">
-                <label>TTL (seconds)</label>
-                <input type="number" id="cred-ttl" value="86400" min="60" max="604800">
-            </div>
-            <button class="btn primary" onclick="generateCreds()" style="width: 100%;">Generate</button>
-            <div id="cred-result"></div>
-        </div>
-    </div>
+        <section id="t-sessions" role="tabpanel" aria-labelledby="o-sessions" hidden>
+            <div class="pan"><h3>Sessions actives <i>lecture seule</i><button class="btn sm" id="sessRaf" type="button">Actualiser</button></h3>
+                <div class="outils"><label>Filtrer<input id="fSess" type="search" autocomplete="off" placeholder="adresse, protocole, état"></label></div>
+                <div class="tab"><table><thead><tr><th>IP client</th><th>Port</th><th>Protocole</th><th>Adresse locale</th><th>État</th></tr></thead><tbody id="bSess"></tbody></table></div>
+                <p class="note">Sockets de turnserver relevés par ss ; les clients derrière un même NAT partagent une adresse.</p></div>
+        </section>
 
-    <!-- Toast -->
-    <div id="toast" class="toast"></div>
+        <section id="t-users" role="tabpanel" aria-labelledby="o-users" class="grille" hidden>
+            <div class="pan large"><h3>Utilisateurs TURN <i>identifiants durables</i></h3>
+                <div id="rUser" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Utilisateur</th><th>Créé</th><th></th></tr></thead><tbody id="bUsers"></tbody></table></div>
+                <form class="saisie" id="fUser" style="margin-top:10px">
+                    <label>Nom d’utilisateur<input id="nUser" autocomplete="off" placeholder="webrtc-client"></label>
+                    <label>Mot de passe<input id="nPass" type="password" autocomplete="new-password"></label>
+                    <button class="btn prim" type="submit">Ajouter</button>
+                </form></div>
+            <div class="pan large"><h3>Domaine et secret partagé</h3>
+                <div id="rRealm" class="retour" hidden></div>
+                <form class="saisie" id="fRealm">
+                    <label>Domaine (realm)<input id="realm" autocomplete="off" placeholder="turn.example.org"></label>
+                    <label>Nouveau secret partagé<input id="secret" type="password" autocomplete="new-password" placeholder="vide = inchangé"></label>
+                    <button class="btn" id="genSecret" type="button">Générer un secret</button>
+                    <button class="btn prim" type="submit">Enregistrer</button>
+                </form>
+                <p class="note">Le secret reste masqué, y compris juste après sa génération. Le changer invalide tous les identifiants temporaires déjà émis ; redémarrer le service ensuite.</p></div>
+        </section>
 
+        <section id="t-config" role="tabpanel" aria-labelledby="o-config" class="grille" hidden>
+            <div class="pan large"><h3>turnserver.conf <i>secrets masqués</i></h3>
+                <div id="rConf" class="retour" hidden></div>
+                <div class="btns"><button class="btn" id="confRecharger" type="button">Recharger</button><button class="btn prim" id="confSave" type="button">Enregistrer</button></div>
+                <textarea class="editeur" id="editeur" spellcheck="false" aria-label="Contenu de turnserver.conf" placeholder="Chargement de la configuration…"></textarea>
+                <p class="note">Les valeurs secrètes (static-auth-secret, cli-password, user=, bases d’utilisateurs) s’affichent « ••••••••(masqué) » ; laissées telles quelles, elles sont conservées à l’enregistrement. Redémarrer le service pour appliquer.</p></div>
+            <div class="pan large"><h3>Journaux du serveur <i>lecture seule</i></h3>
+                <div class="outils"><label>Lignes<select id="logLines"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option></select></label><button class="btn" id="logRaf" type="button">Actualiser</button></div>
+                <pre class="journal" id="journal">Actualiser pour lire le journal.</pre></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/turn';
+        const MASQUE = '••••••••(masqué)';
+        const RE_SECRET = () => /^(\s*(?:static-auth-secret|cli-password|user|redis-userdb|mongo-userdb|psql-userdb|mysql-userdb)\s*=).*$/gm;
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = v => (typeof v === 'number' && isFinite(v)) ? String(v) : '—';
 
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
-        }
+        let STATUT = null, STATS = null, ACCES = null, SESSIONS = null, USERS = null;
+        let SESSION_OK = true, INJOIGNABLE = false, CONFIRM = null, ICE = null, SECRETS = [], CONF_CHARGEE = false;
 
-        function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine), accepte par
-            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
-            // seule une vraie 401 redirige (gere dans les appels fetch).
-            return true;
-        }
-
-        async function api(endpoint, method = 'GET', data = null) {
-            const opts = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + getToken()
-                }
-            };
-            if (data) opts.body = JSON.stringify(data);
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        // Lecture : renvoie { ok, statut, data } sans jamais lever.
+        async function lire(chemin) {
             try {
-                const res = await fetch(API +  endpoint, opts);
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                    return {};
-                }
-                return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return {};
+                const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes({ 'Content-Type': 'application/json' }) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && (res.data.error || res.data.detail)) ? String(res.data.error || res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        // L'API répond 200 avec { success:false, error } en cas d'échec métier.
+        function reussi(res) { return res.ok && !(res.data && res.data.success === false) && !(res.data && res.data.error); }
+        const date = ts => (typeof ts === 'number' && ts > 0) ? new Date(ts * 1000).toLocaleString('fr-FR') : '—';
+        function duree(s) { if (typeof s !== 'number') return '—'; const j = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (j ? j + ' j ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
+
+        function demoData() {
+            STATUT = { service: { active: true, enabled: true, pid: 1234, uptime_seconds: 93784 }, realm: 'turn.example.org', listening_port: '3478', tls_port: '5349', min_port: '49152', max_port: '65535', config_exists: true, users_count: 2 };
+            STATS = { active_sessions: 6, udp_connections: 4, tcp_connections: 2, total_allocations: 37, auth_failures: 3 };
+            ACCES = { endpoints: [
+                { name: 'STUN UDP', url: 'stun:turn.example.org:3478' }, { name: 'TURN UDP', url: 'turn:turn.example.org:3478' },
+                { name: 'TURN TCP', url: 'turn:turn.example.org:3478?transport=tcp' }, { name: 'TURNS TLS', url: 'turns:turn.example.org:5349' }] };
+            SESSIONS = { sessions: [
+                { client_ip: '198.51.100.20', client_port: '51512', protocol: 'udp', local_addr: '192.0.2.10:3478', state: 'ESTAB' },
+                { client_ip: '198.51.100.21', client_port: '40288', protocol: 'udp', local_addr: '192.0.2.10:3478', state: 'ESTAB' },
+                { client_ip: '203.0.113.7', client_port: '52100', protocol: 'tcp', local_addr: '192.0.2.10:3478', state: 'ESTAB' }] };
+            USERS = { users: [{ username: 'webrtc-demo', created: Math.floor(Date.now() / 1000) - 864000 }, { username: 'visio-equipe', created: Math.floor(Date.now() / 1000) - 86400 }] };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; INJOIGNABLE = false; rendre(); return; }
+            const [st, stats, acc, ses, us] = await Promise.all([lire('/status'), lire('/stats'), lire('/access'), lire('/sessions'), lire('/users')]);
+            const tous = [st, stats, acc, ses, us];
+            const refus = tous.some(r => r.statut === 401 || r.statut === 403);
+            STATUT = st.ok ? st.data : null; STATS = stats.ok ? stats.data : null; ACCES = acc.ok ? acc.data : null;
+            SESSIONS = ses.ok ? ses.data : null; USERS = us.ok ? us.data : null;
+            SESSION_OK = !refus; INJOIGNABLE = !refus && tous.every(r => !r.ok);
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire l’état du serveur TURN (API arrêtée ou injoignable).';
+            const s = STATUT, svc = s && s.service, actif = !!(svc && svc.active);
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (actif ? '' : ' hors'); etat.textContent = actif ? 'EN MARCHE' : 'ARRÊTÉ'; }
+            $('tSvc').textContent = s ? (actif ? 'EN MARCHE' : 'ARRÊTÉ') : '—'; $('cSvc').className = 'tuile ' + (s ? (actif ? 'ok' : 'hors') : '');
+            $('sSvc').textContent = s && svc ? (svc.enabled ? 'activé au démarrage' : 'non activé au démarrage') : 'systemd';
+            $('tUsers').textContent = s ? nombre(s.users_count) : '—';
+            $('tPorts').textContent = s ? tiret(s.listening_port) + ' · ' + tiret(s.tls_port) : '—';
+            const st = STATS;
+            $('tSess').textContent = st ? nombre(st.active_sessions) : '—';
+            $('tUdp').textContent = st ? nombre(st.udp_connections) : '—';
+            $('tTcp').textContent = st ? nombre(st.tcp_connections) : '—';
+            $('tAlloc').textContent = st ? nombre(st.total_allocations) : '—';
+            $('tAuth').textContent = st ? nombre(st.auth_failures) : '—';
+            $('cAuth').className = 'tuile ' + (st && st.auth_failures > 0 ? 'att' : '');
+            // Contrôle
+            $('iEtat').textContent = s ? (actif ? 'actif' : 'inactif') : '—';
+            $('iEnabled').textContent = s && svc ? (svc.enabled ? 'oui' : 'non') : '—';
+            $('iPid').textContent = tiret(svc && svc.pid);
+            $('iUp').textContent = svc && typeof svc.uptime_seconds === 'number' ? duree(svc.uptime_seconds) : '—';
+            $('iRealm').textContent = tiret(s && s.realm);
+            $('iRelais').textContent = s ? tiret(s.min_port) + ' – ' + tiret(s.max_port) : '—';
+            for (const b of ['bStart', 'bStop', 'bRestart']) $(b).disabled = !s;
+            if (s && !$('realm').matches(':focus') && !$('realm').dataset.salie) $('realm').value = s.realm || '';
+            rendreAcces(); rendreSessions(); rendreUsers();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreAcces() {
+            const l = $('lEp'); l.replaceChildren();
+            const eps = ACCES && ACCES.endpoints;
+            if (!eps || !eps.length) { l.appendChild(el('div', 'vide', ACCES ? 'Aucun point d’accès configuré' : '—')); return; }
+            for (const e of eps) {
+                const ligne = el('div', 'ep');
+                ligne.appendChild(el('div', 'n', tiret(e.name)));
+                ligne.appendChild(el('div', 'u mono', tiret(e.url)));
+                ligne.appendChild(bouton('Copier', '', () => copier(String(e.url), 'rEp')));
+                l.appendChild(ligne);
             }
         }
+        function rendreSessions() {
+            const b = $('bSess'); b.replaceChildren();
+            const liste = SESSIONS && SESSIONS.sessions, f = $('fSess').value.trim().toLowerCase();
+            const vide = txt => { const tr = el('tr'), td = el('td', 'vide', txt); td.colSpan = 5; tr.appendChild(td); b.appendChild(tr); };
+            if (!liste) { vide('—'); return; }
+            const rows = liste.filter(x => !f || [x.client_ip, x.client_port, x.protocol, x.local_addr, x.state].join(' ').toLowerCase().includes(f));
+            if (!rows.length) { vide(liste.length ? 'Aucune session ne correspond au filtre' : 'Aucune session active'); return; }
+            for (const x of rows) {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(x.client_ip))); tr.appendChild(el('td', '', tiret(x.client_port)));
+                tr.appendChild(el('td', '', tiret(x.protocol))); tr.appendChild(el('td', 'mono', tiret(x.local_addr)));
+                const t = el('td'); t.appendChild(el('span', 'pill ' + (x.state === 'ESTAB' ? 'ok' : ''), tiret(x.state))); tr.appendChild(t);
+                b.appendChild(tr);
+            }
+        }
+        function rendreUsers() {
+            const b = $('bUsers'); b.replaceChildren();
+            const liste = USERS && USERS.users;
+            const vide = txt => { const tr = el('tr'), td = el('td', 'vide', txt); td.colSpan = 3; tr.appendChild(td); b.appendChild(tr); };
+            if (!liste) { vide('—'); return; }
+            if (!liste.length) { vide('Aucun utilisateur configuré'); return; }
+            for (const u of liste) {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(u.username))); tr.appendChild(el('td', '', date(u.created)));
+                const a = el('td', 'act');
+                a.appendChild(bouton('Supprimer', 'danger', () => demander('Supprimer l’utilisateur ' + u.username + ' ? Ses identifiants cesseront de fonctionner.', () => supprimer(u.username))));
+                tr.appendChild(a); b.appendChild(tr);
+            }
+        }
+        function bouton(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast show ' + type;
-            setTimeout(() => toast.classList.remove('show'), 3000);
+        async function copier(texte, zone) {
+            try { await navigator.clipboard.writeText(texte); toast('Copié dans le presse-papiers'); }
+            catch (e) { retour(zone, false, 'Copie impossible depuis ce navigateur : sélectionner le texte à la main.'); }
         }
 
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        // ----- Confirmation intégrée (jamais de dialogue natif) -----
+        function demander(texte, fn) { CONFIRM = fn; $('confTexte').textContent = texte; $('conf').hidden = false; $('confNon').focus(); annoncer(); }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConf);
+        $('confOui').addEventListener('click', () => { const f = CONFIRM; fermerConf(); if (f) f(); });
+        document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && CONFIRM) fermerConf(); });
+
+        // ----- Service (mêmes appels : POST /start, /stop, /restart) -----
+        async function service(action, libelle) {
+            const r = await ecrire('POST', '/' + action);
+            retour('rSvc', reussi(r), reussi(r) ? 'Service ' + libelle + '.' : 'Échec : ' + detail(r));
+            if (!DEMO) setTimeout(charger, 1000);
+        }
+        $('bStart').addEventListener('click', () => service('start', 'démarré'));
+        $('bStop').addEventListener('click', () => demander('Arrêter coturn ? Les relais en cours sont coupés.', () => service('stop', 'arrêté')));
+        $('bRestart').addEventListener('click', () => demander('Redémarrer coturn ? Les relais en cours sont coupés.', () => service('restart', 'redémarré')));
+
+        // ----- Utilisateurs -----
+        $('fUser').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const username = $('nUser').value.trim(), password = $('nPass').value;
+            if (!username || !password) { retour('rUser', false, 'Nom d’utilisateur et mot de passe requis.'); return; }
+            const r = await ecrire('POST', '/users', { username, password });
+            if (reussi(r)) { $('nUser').value = ''; $('nPass').value = ''; }
+            retour('rUser', reussi(r), reussi(r) ? 'Utilisateur ajouté.' : 'Échec : ' + detail(r));
+            if (!DEMO) charger();
+        });
+        async function supprimer(nom) {
+            const r = await ecrire('DELETE', '/users/' + encodeURIComponent(nom));
+            retour('rUser', reussi(r), reussi(r) ? 'Utilisateur supprimé.' : 'Échec : ' + detail(r));
+            if (!DEMO) charger();
+        }
+
+        // ----- Domaine et secret -----
+        $('realm').addEventListener('input', () => { $('realm').dataset.salie = '1'; });
+        $('genSecret').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/generate_secret');
+            if (r.ok && r.data && r.data.secret) { $('secret').value = r.data.secret; retour('rRealm', true, 'Nouveau secret généré (masqué) : enregistrer pour l’appliquer.'); }
+            else retour('rRealm', false, 'Échec : ' + detail(r));
+        });
+        $('fRealm').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const realm = $('realm').value.trim(), secret = $('secret').value.trim();
+            if (!realm) { retour('rRealm', false, 'Le domaine est requis.'); return; }
+            const run = async () => {
+                const data = { realm }; if (secret) data.secret = secret;
+                const r = await ecrire('POST', '/realm', data);
+                if (reussi(r)) { $('secret').value = ''; delete $('realm').dataset.salie; }
+                retour('rRealm', reussi(r), reussi(r) ? 'Domaine enregistré. Redémarrer le service pour appliquer.' : 'Échec : ' + detail(r));
+                if (!DEMO) charger();
+            };
+            if (secret) demander('Remplacer le secret partagé ? Tous les identifiants temporaires déjà émis cesseront de fonctionner.', run); else run();
+        });
+
+        // ----- Identifiants temporaires (POST /credentials { username, ttl }) -----
+        $('fCred').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const username = $('credUser').value.trim() || 'webrtc', ttl = parseInt($('credTtl').value) || 86400;
+            let res;
+            if (DEMO) {
+                const exp = Math.floor(Date.now() / 1000) + ttl;
+                res = { ok: true, data: { username: exp + ':' + username, password: 'démonstration-sans-valeur', ttl, expires: exp,
+                        turn_urls: ['turn:turn.example.org:3478', 'turn:turn.example.org:3478?transport=tcp', 'turns:turn.example.org:5349'], stun_urls: ['stun:turn.example.org:3478'] } };
+            } else res = await ecrire('POST', '/credentials', { username, ttl });
+            const d = res.data;
+            if (!res.ok || !d || d.error || !d.password) { $('credRes').hidden = true; $('copieIce').hidden = true; ICE = null; retour('rCred', false, 'Échec : ' + detail(res)); return; }
+            $('rCred').hidden = true;
+            $('cUser').textContent = tiret(d.username); $('cPass').textContent = tiret(d.password); $('cTtl').textContent = tiret(d.ttl) + ' s';
+            $('cExp').textContent = date(d.expires); $('cTurn').textContent = (d.turn_urls || []).join('\n') || '—'; $('cStun').textContent = (d.stun_urls || []).join('\n') || '—';
+            $('cTurn').style.whiteSpace = $('cStun').style.whiteSpace = 'pre-line';
+            $('credRes').hidden = false; $('copieIce').hidden = false;
+            ICE = { iceServers: [{ urls: d.stun_urls }, { urls: d.turn_urls, username: d.username, credential: d.password }] };
+            annoncer();
+        });
+        $('copieIce').addEventListener('click', () => { if (ICE) copier(JSON.stringify(ICE, null, 2), 'rCred'); });
+        $('versCred').addEventListener('click', () => { onglet('tableau'); $('credUser').scrollIntoView({ block: 'center' }); $('credUser').focus(); });
+
+        // ----- Configuration : le secret n'est jamais affiché -----
+        const nomCle = c => c.replace(/\s+/g, '').toLowerCase();
+        function masquer(txt) { SECRETS = []; return txt.replace(RE_SECRET(), (m, cle) => { SECRETS.push({ cle: nomCle(cle), ligne: m }); return cle + MASQUE; }); }
+        // Une ligne laissée masquée retrouve sa valeur d'origine (même clé, dans l'ordre) ; une valeur retapée est envoyée telle quelle.
+        function restaurer(txt) {
+            const reste = SECRETS.slice();
+            return txt.replace(RE_SECRET(), (m, cle) => {
+                if (m.slice(cle.length) !== MASQUE) return m;
+                const i = reste.findIndex(x => x.cle === nomCle(cle));
+                return i < 0 ? m : reste.splice(i, 1)[0].ligne;
+            });
+        }
+        async function chargerConf() {
+            if (DEMO) { $('editeur').value = masquer('# Configuration de démonstration\nlistening-port=3478\ntls-listening-port=5349\nrealm=turn.example.org\nuse-auth-secret\nstatic-auth-secret=demo-sans-valeur\nno-cli\nfingerprint\n'); CONF_CHARGEE = true; return; }
+            const r = await lire('/config');
+            if (r.statut === 401 || r.statut === 403) { $('editeur').value = ''; retour('rConf', false, 'Session requise.'); return; }
+            if (!r.ok || !r.data) { retour('rConf', false, 'Lecture impossible : ' + detail(r)); return; }
+            $('editeur').value = masquer(r.data.content || ''); CONF_CHARGEE = true; $('rConf').hidden = true;
+            if (r.data.error) retour('rConf', false, String(r.data.error));
+        }
+        $('confRecharger').addEventListener('click', chargerConf);
+        $('confSave').addEventListener('click', () => {
+            if (!CONF_CHARGEE) { retour('rConf', false, 'Recharger la configuration avant de l’enregistrer.'); return; }
+            demander('Écraser turnserver.conf avec ce contenu ? Une sauvegarde .bak est conservée ; redémarrer le service pour appliquer.', async () => {
+                const r = await ecrire('POST', '/config', { content: restaurer($('editeur').value) });
+                retour('rConf', reussi(r), reussi(r) ? 'Configuration enregistrée. Redémarrer le service pour appliquer.' : 'Échec : ' + detail(r));
             });
         });
 
-        function formatDate(timestamp) {
-            if (!timestamp) return '-';
-            return new Date(timestamp * 1000).toLocaleString();
+        // ----- Journaux (lecture) -----
+        async function journaux() {
+            const lines = $('logLines').value, box = $('journal');
+            if (DEMO) { box.textContent = '2026-10-14 09:12:03 turnserver: allocation created (démonstration)\n2026-10-14 09:12:41 turnserver: session 1 refreshed (démonstration)'; annoncer(); return; }
+            const r = await lire('/logs?lines=' + encodeURIComponent(lines));
+            if (r.ok && r.data) box.textContent = (r.data.lines || []).join('\n') || 'Aucun journal disponible.';
+            else box.textContent = (r.statut === 401 || r.statut === 403) ? '—  (session requise)' : 'Lecture impossible : ' + detail(r);
+            annoncer();
         }
+        $('logRaf').addEventListener('click', journaux);
+        $('sessRaf').addEventListener('click', charger);
+        $('fSess').addEventListener('input', rendreSessions);
 
-        async function loadStatus() {
-            const data = await api('/status');
-            const badge = document.getElementById('status-badge');
-
-            if (data.service?.active) {
-                badge.className = 'badge active';
-                badge.textContent = 'Running';
-            } else {
-                badge.className = 'badge inactive';
-                badge.textContent = 'Stopped';
-            }
-
-            document.getElementById('svc-status').innerHTML =
-                '<span class="status-dot ' + (data.service?.active ? 'active' : 'inactive') + '"></span> ' +
-                (data.service?.active ? 'Active' : 'Inactive');
-            document.getElementById('svc-realm').textContent = data.realm || '-';
-            document.getElementById('svc-ports').textContent =
-                `UDP/TCP: ${data.listening_port || '-'}, TLS: ${data.tls_port || '-'}`;
-            document.getElementById('users-count').textContent = data.users_count || 0;
-            document.getElementById('realm-input').value = data.realm || '';
+        // ----- Onglets -----
+        const TABS = ['tableau', 'sessions', 'users', 'config'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            TABS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'config') { if (!CONF_CHARGEE) chargerConf(); journaux(); }
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-        async function loadStats() {
-            const data = await api('/stats');
-            document.getElementById('active-sessions').textContent = data.active_sessions || 0;
-            document.getElementById('udp-connections').textContent = data.udp_connections || 0;
-            document.getElementById('tcp-connections').textContent = data.tcp_connections || 0;
-            document.getElementById('total-allocations').textContent = data.total_allocations || 0;
-            document.getElementById('auth-failures').textContent = data.auth_failures || 0;
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'turn' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function loadEndpoints() {
-            const data = await api('/access');
-            const container = document.getElementById('endpoints-list');
-            const endpoints = data.endpoints || [];
-
-            container.innerHTML = endpoints.map(e => `
-                <div class="endpoint-card">
-                    <h3>${e.name}</h3>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="url">${e.url}</span>
-                        <button class="copy-btn" onclick="copyToClipboard('${e.url}')">Copy</button>
-                    </div>
-                </div>
-            `).join('') || '<p style="color: var(--text-dim);">No endpoints configured</p>';
-        }
-
-        async function loadSessions() {
-            const data = await api('/sessions');
-            const tbody = document.querySelector('#sessions-table tbody');
-            const sessions = data.sessions || [];
-
-            tbody.innerHTML = sessions.length > 0 ? sessions.map(s => `
-                <tr>
-                    <td style="font-family: monospace;">${s.client_ip || '-'}</td>
-                    <td>${s.client_port || '-'}</td>
-                    <td>${s.protocol || '-'}</td>
-                    <td style="font-family: monospace; font-size: 0.85rem;">${s.local_addr || '-'}</td>
-                    <td>${s.state || '-'}</td>
-                </tr>
-            `).join('') : '<tr><td colspan="5">No active sessions</td></tr>';
-        }
-
-        async function loadUsers() {
-            const data = await api('/users');
-            const tbody = document.querySelector('#users-table tbody');
-            const users = data.users || [];
-
-            tbody.innerHTML = users.length > 0 ? users.map(u => `
-                <tr>
-                    <td>${u.username}</td>
-                    <td>${formatDate(u.created)}</td>
-                    <td>
-                        <button class="btn danger" onclick="deleteUser('${u.username}')">Delete</button>
-                    </td>
-                </tr>
-            `).join('') : '<tr><td colspan="3">No users configured</td></tr>';
-        }
-
-        async function loadConfig() {
-            const data = await api('/config');
-            document.getElementById('config-editor').value = data.content || '';
-        }
-
-        async function saveConfig() {
-            const content = document.getElementById('config-editor').value;
-            const result = await api('/config', 'POST', { content });
-            if (result.success) {
-                showToast('Configuration saved. Restart service to apply.');
-            } else {
-                showToast(result.error || 'Failed to save config', 'error');
-            }
-        }
-
-        async function loadLogs() {
-            const data = await api('/logs?lines=100');
-            const lines = data.lines || [];
-            document.getElementById('logs-content').textContent = lines.join('\n') || 'No logs available';
-        }
-
-        async function serviceAction(action) {
-            const result = await api('/' + action, 'POST');
-            if (result.success) {
-                showToast('Service ' + action + ' successful');
-                setTimeout(loadStatus, 1000);
-            } else {
-                showToast(result.error || 'Action failed', 'error');
-            }
-        }
-
-        // User management
-        function showAddUserModal() {
-            document.getElementById('add-user-modal').classList.add('show');
-        }
-
-        function closeAddUserModal() {
-            document.getElementById('add-user-modal').classList.remove('show');
-        }
-
-        async function addUser() {
-            const username = document.getElementById('new-username').value.trim();
-            const password = document.getElementById('new-password').value;
-
-            if (!username || !password) {
-                showToast('Username and password required', 'error');
-                return;
-            }
-
-            const result = await api('/users', 'POST', { username, password });
-            if (result.success) {
-                showToast('User added successfully');
-                closeAddUserModal();
-                loadUsers();
-                loadStatus();
-            } else {
-                showToast(result.error || 'Failed to add user', 'error');
-            }
-        }
-
-        async function deleteUser(username) {
-            if (!confirm('Delete user ' + username + '?')) return;
-
-            const result = await api('/users/' + username, 'DELETE');
-            if (result.success) {
-                showToast('User deleted');
-                loadUsers();
-                loadStatus();
-            } else {
-                showToast(result.error || 'Failed to delete user', 'error');
-            }
-        }
-
-        // Realm settings
-        async function generateSecret() {
-            const result = await api('/generate_secret', 'POST');
-            if (result.secret) {
-                document.getElementById('secret-input').value = result.secret;
-                document.getElementById('secret-input').type = 'text';
-                showToast('New secret generated');
-            }
-        }
-
-        async function saveRealm() {
-            const realm = document.getElementById('realm-input').value.trim();
-            const secret = document.getElementById('secret-input').value.trim();
-
-            if (!realm) {
-                showToast('Realm is required', 'error');
-                return;
-            }
-
-            const data = { realm };
-            if (secret) data.secret = secret;
-
-            const result = await api('/realm', 'POST', data);
-            if (result.success) {
-                showToast('Realm settings saved. Restart service to apply.');
-                document.getElementById('secret-input').value = '';
-                document.getElementById('secret-input').type = 'password';
-            } else {
-                showToast(result.error || 'Failed to save realm', 'error');
-            }
-        }
-
-        // Credentials
-        function showCredModal() {
-            document.getElementById('cred-modal').classList.add('show');
-            document.getElementById('cred-result').innerHTML = '';
-        }
-
-        function closeCredModal() {
-            document.getElementById('cred-modal').classList.remove('show');
-        }
-
-        async function generateCreds() {
-            const username = document.getElementById('cred-username').value.trim() || 'webrtc';
-            const ttl = parseInt(document.getElementById('cred-ttl').value) || 86400;
-
-            const result = await api('/credentials', 'POST', { username, ttl });
-
-            if (result.error) {
-                document.getElementById('cred-result').innerHTML =
-                    '<p style="color: var(--red); margin-top: 1rem;">' + result.error + '</p>';
-                return;
-            }
-
-            const turnUrls = result.turn_urls || [];
-            const stunUrls = result.stun_urls || [];
-
-            document.getElementById('cred-result').innerHTML = `
-                <div class="cred-box">
-                    <div class="cred-row">
-                        <span class="cred-label">Username:</span>
-                        <span class="cred-value">${result.username}</span>
-                    </div>
-                    <div class="cred-row">
-                        <span class="cred-label">Password:</span>
-                        <span class="cred-value">${result.password}</span>
-                    </div>
-                    <div class="cred-row">
-                        <span class="cred-label">TTL:</span>
-                        <span class="cred-value">${result.ttl}s</span>
-                    </div>
-                    <div class="cred-row">
-                        <span class="cred-label">Expires:</span>
-                        <span class="cred-value">${formatDate(result.expires)}</span>
-                    </div>
-                    <div class="cred-row">
-                        <span class="cred-label">TURN URLs:</span>
-                        <span class="cred-value">${turnUrls.join('<br>')}</span>
-                    </div>
-                    <div class="cred-row">
-                        <span class="cred-label">STUN URLs:</span>
-                        <span class="cred-value">${stunUrls.join('<br>')}</span>
-                    </div>
-                </div>
-                <button class="btn" onclick="copyCredentials()" style="width: 100%; margin-top: 1rem;">
-                    Copy ICE Configuration
-                </button>
-            `;
-
-            // Store for copy
-            window._lastCreds = result;
-        }
-
-        function copyCredentials() {
-            if (!window._lastCreds) return;
-            const c = window._lastCreds;
-            const iceConfig = {
-                iceServers: [
-                    { urls: c.stun_urls },
-                    {
-                        urls: c.turn_urls,
-                        username: c.username,
-                        credential: c.password
-                    }
-                ]
-            };
-            copyToClipboard(JSON.stringify(iceConfig, null, 2));
-            showToast('ICE configuration copied');
-        }
-
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                showToast('Copied to clipboard');
-            }).catch(() => {
-                showToast('Failed to copy', 'error');
-            });
-        }
-
-        function refreshAll() {
-            loadStatus();
-            loadStats();
-            loadEndpoints();
-            loadSessions();
-            loadUsers();
-        }
-
-        // Initial load - check auth first
-        if (checkAuth()) {
-            refreshAll();
-            loadConfig();
-            loadLogs();
-
-            // Auto-refresh every 15 seconds
-            setInterval(() => {
-                loadStatus();
-                loadStats();
-                loadSessions();
-            }, 15000);
-        }
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une confirmation ou une saisie.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA'))) return;
+            charger();
+        }, 15000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

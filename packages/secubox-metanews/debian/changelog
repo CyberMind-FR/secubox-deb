@@ -1,3 +1,19 @@
+secubox-metanews (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pages /devwatch/ et /yacy/ refaites au profil Aurora (ref #2651) : tuiles avec infobulles de definition, ?demo=1, ?embed=1,
+    hauteur annoncee a l'hote, 420 px sans debordement, mesure absente affichee « - », jeton sbx_token en Bearer, bandeau
+    session requise au lieu d'un silence. admin.html et micro.html de devwatch ne changent pas.
+  * DevWatch : memes lectures (GET /summary, GET /issues), toujours en lecture seule. Cadence sur une seule echelle avec
+    graduations, flèches de tendance seulement quand l'API en calcule une (latence de revue et cadence de release : « tendance non
+    calculee » au lieu d'un « stable » invente), estimations marquees comme telles, hauteur des barres de versions expliquee,
+    adresses non https jamais mises en lien, innerHTML remplace par du texte. Non repris : bascule de theme clair/sombre (le profil
+    n'a qu'un theme), polices Google, animations decoratives, avatars devines d'apres le nom d'auteur.
+  * YaCy : memes lectures (GET /components, /status, /access). Interface native toujours encadree (adresse publique d'abord,
+    jamais sous http depuis une page https), lien « Interface native », composants et acces listes, adresses non http(s) refusees.
+  * 22 tests (statique + navigateur) sous composants/devwatch/tests et composants/yacy/tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-metanews (0.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Billets ephemeres : la vignette du sujet (image du flux, https) part avec le billet (ref #2343). Les sites d'actualite refusent les robots de billets : l'apercu par capture de page ne donnait rien. 2 tests.
