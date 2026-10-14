@@ -4,397 +4,257 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Forge d'applications Streamlit au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Streamlit Forge</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Forge Streamlit</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
-        .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .app-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
-        .app-card h3 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--purple); }
-        .app-card .meta { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.75rem; }
-        .app-card .actions { display: flex; gap: 0.5rem; }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
-        .badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.stopped { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb,body.sansmenu{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar,body.sansmenu #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb):not(.sansmenu) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.sansmenu) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.veille{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.ok{border-color:var(--vert);color:var(--vert)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .parc{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+        .carte{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));display:grid;gap:6px;min-width:0}
+        .carte h4{margin:0;font-size:.95rem;color:var(--violet);display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;overflow-wrap:anywhere}
+        .meta{font-size:.76rem;color:var(--doux);overflow-wrap:anywhere}
+        .actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem;grid-column:1/-1}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-    <header class="header">
-        <h1>Streamlit Forge</h1>
-        <div><button class="btn" onclick="refresh()">Refresh</button></div>
-    </header>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16M7 20v-4h10v4M9 16v-3a3 3 0 0 1 6 0v3"/><path d="M12 4v6M9 7h6"/></svg>
+                <div><h1>Forge Streamlit</h1><small>Créer et piloter des applications Streamlit</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-    <div class="stats-row">
-        <div class="stat-card"><div class="value" id="app-count">-</div><div class="label">Total Apps</div></div>
-        <div class="stat-card"><div class="value" id="running-count">-</div><div class="label">Running</div></div>
-        <div class="stat-card"><div class="value" id="templates-count">-</div><div class="label">Templates</div></div>
-    </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre d’applications présentes dans le dossier des applis de la forge (/status)."><span class="l">Applis</span><span class="v" id="tApps">—</span><span class="s">dans la forge</span></div>
+            <div class="tuile ok" title="Applis dont le port répond maintenant. Zéro est possible : une appli créée n’est pas démarrée d’office."><span class="l">En marche</span><span class="v" id="tMarche">—</span><span class="s">port à l’écoute</span></div>
+            <div class="tuile vi" title="Modèles disponibles pour créer une appli (/templates). Le modèle « basic » reste proposé même si la liste est vide."><span class="l">Modèles</span><span class="v" id="tModeles">—</span><span class="s">dossiers de modèles</span></div>
+        </section>
 
-    <div class="card">
-        <h2>Create New App</h2>
-        <div class="form-row">
-            <div class="form-group"><label>App Name</label><input type="text" id="new-name" placeholder="my-app"></div>
-            <div class="form-group"><label>Template</label><select id="new-template"><option value="basic">Basic</option></select></div>
+        <div class="pan"><h3>Créer une appli <i>POST /app</i></h3>
+            <form class="saisie" id="fCree">
+                <label>Nom de l’appli<input id="nom" placeholder="mon-appli" autocomplete="off" required></label>
+                <label>Modèle<select id="modele"><option value="basic">Basic</option></select></label>
+                <div><button class="btn prim" id="btnCree" type="submit">Créer l’appli</button></div>
+            </form>
+            <div id="rCree" class="retour" hidden></div>
         </div>
-        <button class="btn primary" onclick="createApp()">Create App</button>
-    </div>
 
-    <div class="card">
-        <h2>Applications</h2>
-        <div class="app-grid" id="app-list">Loading...</div>
-    </div>
+        <div class="pan"><h3>Applications <i id="nCount"></i></h3>
+            <div id="rParc" class="retour" hidden></div>
+            <div class="parc" id="parc"><div class="vide">Chargement…</div></div>
+            <p class="note">« Ouvrir » ouvre le port de l’appli sur cet hôte, comme l’ancienne page.</p>
+        </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+        if (EMBED) document.body.classList.add('emb');
+        if (DEMO) document.body.classList.add('sansmenu');
+        // Menu commun : hors ?embed=1 et hors démonstration.
+        if (!EMBED && !DEMO) { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s); }
+
         const API = '/api/v1/streamforge';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : String(v);
 
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        const headers = () => { const t = jeton(); return Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, t ? { Authorization: 'Bearer ' + t } : {}); };
+        let SESSION_OK = true, CHARGE = false, STATUT = null, APPS = null, MODELES = null, SUPPR = null;
+        let REFUS = 0, ECHECS = 0, APPELS = 0;
+
+        const DEMO_DATA = {
+            '/status': { app_count: 3, running_count: 1 },
+            '/templates': { templates: [{ name: 'basic' }, { name: 'tableau-de-bord' }] },
+            '/apps': { apps: [
+                { name: 'demo-graphiques', status: 'running', port: 8601, entrypoint: 'app.py' },
+                { name: 'demo-formulaire', status: 'stopped', port: 0, entrypoint: 'app.py' },
+                { name: 'demo-carte', status: 'stopped', port: 0, entrypoint: 'main.py' }] }
+        };
+
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2800); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        const inerte = () => toast('Démonstration : action inerte.');
+
+        // Mêmes en-têtes que l'ancienne page : Content-Type JSON + Bearer sbx_token.
         async function api(path, opts = {}) {
+            if (DEMO) return (opts.method && opts.method !== 'GET') ? { demo: true } : (DEMO_DATA[path] || {});
+            APPELS++;
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch { return {}; }
+                const res = await fetch(API + path, { ...opts, headers: headers(), credentials: 'same-origin', cache: 'no-store' });
+                if (res.status === 401 || res.status === 403) { REFUS++; SESSION_OK = false; return { erreur: res.status }; }
+                let data = {}; try { data = await res.json(); } catch (e) { data = {}; }
+                if (!res.ok) { ECHECS++; const d = data && data.detail; return { erreur: res.status, detail: Array.isArray(d) ? d.map(x => (x && x.msg) || '').join(' ; ') : (d ? String(d) : '') }; }
+                return data;
+            } catch (e) { ECHECS++; return { erreur: 0 }; }
         }
+        const ko = d => !d || d.erreur !== undefined;
+        const motif = r => r.detail || (r.erreur ? 'HTTP ' + r.erreur : 'serveur injoignable');
 
-        async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('app-count').textContent = d.app_count || 0;
-            document.getElementById('running-count').textContent = d.running_count || 0;
-        }
-
-        async function loadTemplates() {
-            const d = await api('/templates');
-            const sel = document.getElementById('new-template');
-            const tpls = d.templates || [];
-            document.getElementById('templates-count').textContent = tpls.length || 1;
-            if (tpls.length) {
-                sel.innerHTML = tpls.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+        async function chargerStatut() { const d = await api('/status'); STATUT = ko(d) ? null : d; }
+        async function chargerModeles() {
+            const d = await api('/templates'); MODELES = ko(d) ? null : (d.templates || []);
+            const sel = $('modele'), courant = sel.value;
+            if (MODELES && MODELES.length) {
+                sel.replaceChildren();
+                MODELES.forEach(t => { const o = el('option', '', t.name); o.value = t.name; sel.appendChild(o); });
+                if (MODELES.some(t => t.name === courant)) sel.value = courant;
             }
         }
+        async function chargerApps() { const d = await api('/apps'); APPS = ko(d) ? null : (d.apps || []); }
 
-        async function loadApps() {
-            const d = await api('/apps');
-            const grid = document.getElementById('app-list');
-            const apps = d.apps || [];
-            if (!apps.length) { grid.innerHTML = '<p style="color:var(--text-dim)">No apps yet. Create one above!</p>'; return; }
-            grid.innerHTML = apps.map(a => `
-                <div class="app-card">
-                    <h3>${a.name} <span class="badge ${a.status}">${a.status}</span></h3>
-                    <div class="meta">Port: ${a.port || '-'} | ${a.entrypoint}</div>
-                    <div class="actions">
-                        ${a.status === 'running' 
-                            ? `<button class="btn danger" onclick="stopApp('${a.name}')">Stop</button>`
-                            : `<button class="btn success" onclick="startApp('${a.name}')">Start</button>`}
-                        <button class="btn" onclick="openApp('${a.name}', ${a.port})">Open</button>
-                        <button class="btn danger" onclick="deleteApp('${a.name}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const tous = !DEMO && APPELS > 0 && ECHECS >= APPELS && REFUS === 0;
+            $('erreur').hidden = !tous; if (tous) $('erreur').textContent = 'Impossible de lire le service StreamForge (arrêté ou injoignable).';
+            // Mesure absente = « — » (l'ancienne page affichait 0).
+            $('tApps').textContent = STATUT ? nb(STATUT.app_count) : '—';
+            $('tMarche').textContent = STATUT ? nb(STATUT.running_count) : '—';
+            $('tModeles').textContent = MODELES ? MODELES.length : '—';
+            const e = $('etat');
+            if (!SESSION_OK) { e.className = 'actif neutre'; e.textContent = 'SESSION REQUISE'; }
+            else if (!STATUT && !APPS) { e.className = CHARGE ? 'actif hors' : 'actif neutre'; e.textContent = CHARGE ? 'HORS LIGNE' : 'Chargement…'; }
+            else if (STATUT && Number(STATUT.running_count) === 0) { e.className = 'actif veille'; e.textContent = 'AUCUNE APPLI EN MARCHE'; }
+            else { e.className = 'actif'; e.textContent = 'EN SERVICE'; }
+            rendreParc();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function createApp() {
-            const name = document.getElementById('new-name').value.trim();
-            const template = document.getElementById('new-template').value;
-            if (!name) { alert('Name required'); return; }
+        const bouton = (txt, cls, fn) => { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; };
+        function rendreParc() {
+            const z = $('parc'); z.replaceChildren();
+            $('nCount').textContent = APPS && APPS.length ? APPS.length + ' appli' + (APPS.length > 1 ? 's' : '') : '';
+            if (!APPS) { z.appendChild(el('div', 'vide', '—')); return; }
+            if (!APPS.length) { z.appendChild(el('div', 'vide', 'Aucune appli pour l’instant. Créez-en une ci-dessus.')); return; }
+            APPS.forEach(a => {
+                const c = el('div', 'carte'), h = el('h4', '', tiret(a.name) + ' ');
+                h.appendChild(el('span', 'pill ' + (a.status === 'running' ? 'ok' : ''), a.status === 'running' ? 'En marche' : a.status === 'stopped' ? 'Arrêtée' : tiret(a.status)));
+                c.appendChild(h);
+                c.appendChild(el('div', 'meta', 'Port : ' + (a.port ? a.port : '—') + ' | ' + tiret(a.entrypoint)));
+                const act = el('div', 'actions');
+                if (SUPPR === a.name) {
+                    act.append(el('span', 'note', 'Supprimer « ' + a.name + ' » et ses fichiers ?'), bouton('Confirmer', 'danger', () => supprimer(a.name)), bouton('Annuler', '', () => { SUPPR = null; rendreParc(); }));
+                } else {
+                    act.appendChild(a.status === 'running' ? bouton('Arrêter', 'danger', () => arreter(a.name)) : bouton('Démarrer', 'ok', () => demarrer(a.name)));
+                    act.appendChild(bouton('Ouvrir', '', () => ouvrir(a.port)));
+                    act.appendChild(bouton('Supprimer', 'danger', () => { SUPPR = a.name; rendreParc(); }));
+                }
+                c.appendChild(act); z.appendChild(c);
+            });
+        }
+
+        // ───── Actions : mêmes routes, méthodes et corps que l'ancienne page ─────
+        $('fCree').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const name = $('nom').value.trim(), template = $('modele').value;
+            if (!name) { retour('rCree', false, 'Le nom est requis.'); return; }
+            if (DEMO) { retour('rCree', true, 'Démonstration : action inerte.'); return; }
+            const b = $('btnCree'); b.disabled = true;
             const r = await api('/app', { method: 'POST', body: JSON.stringify({ name, template }) });
-            if (r.success) { refresh(); document.getElementById('new-name').value = ''; }
-            else alert('Failed: ' + JSON.stringify(r));
+            b.disabled = false;
+            if (r.success) { retour('rCree', true, 'Appli « ' + name + ' » créée.'); $('nom').value = ''; rafraichir(); }
+            else retour('rCree', false, 'Création impossible : ' + (ko(r) ? motif(r) : JSON.stringify(r)));
+        });
+        async function demarrer(name) {
+            if (DEMO) { inerte(); return; }
+            const r = await api('/app/' + encodeURIComponent(name) + '/start', { method: 'POST' });
+            if (ko(r)) retour('rParc', false, 'Démarrage impossible : ' + motif(r)); else retour('rParc', true, 'Démarrage de « ' + name + ' » demandé.');
+            setTimeout(rafraichir, 1000);
+        }
+        async function arreter(name) {
+            if (DEMO) { inerte(); return; }
+            const r = await api('/app/' + encodeURIComponent(name) + '/stop', { method: 'POST' });
+            if (ko(r)) retour('rParc', false, 'Arrêt impossible : ' + motif(r)); else retour('rParc', true, '« ' + name + ' » arrêtée.');
+            rafraichir();
+        }
+        async function supprimer(name) {
+            SUPPR = null;
+            if (DEMO) { rendreParc(); inerte(); return; }
+            const r = await api('/app/' + encodeURIComponent(name), { method: 'DELETE' });
+            if (ko(r)) retour('rParc', false, 'Suppression impossible : ' + motif(r)); else retour('rParc', true, '« ' + name + ' » supprimée.');
+            rafraichir();
+        }
+        function ouvrir(port) {
+            if (DEMO) { inerte(); return; }
+            if (port) window.open('http://' + location.hostname + ':' + port, '_blank', 'noopener'); else toast('Appli non démarrée : aucun port à ouvrir.');
         }
 
-        async function startApp(name) {
-            await api(`/app/${name}/start`, { method: 'POST' });
-            setTimeout(refresh, 1000);
+        function rafraichir() {
+            REFUS = 0; ECHECS = 0; APPELS = 0; SESSION_OK = true;
+            return Promise.all([chargerStatut(), chargerApps(), chargerModeles()]).then(() => { CHARGE = true; rendre(); });
         }
+        $('rafraichir').addEventListener('click', rafraichir);
 
-        async function stopApp(name) {
-            await api(`/app/${name}/stop`, { method: 'POST' });
-            refresh();
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'streamforge' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        async function deleteApp(name) {
-            if (!confirm(`Delete app "${name}"?`)) return;
-            await api(`/app/${name}`, { method: 'DELETE' });
-            refresh();
-        }
-
-        function openApp(name, port) {
-            if (port) window.open(`http://${location.hostname}:${port}`, '_blank');
-            else alert('App not running');
-        }
-
-        function refresh() { loadStatus(); loadApps(); loadTemplates(); }
-        refresh();
+        rafraichir();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte, ni en démonstration.
+        setInterval(() => { if (document.hidden || DEMO || SUPPR || $('nom').value) return; rafraichir(); }, 30000);
     </script>
-</main>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
