@@ -161,13 +161,13 @@ def attend_liste(p):
 def test_quatre_listes_et_actions_de_chaque_video(navigateur):
     ctx, p, err, appels = ouvre(navigateur, "", FLUX_OK)
     attend_liste(p)
-    assert p.locator("#onglets [role=tab]").all_inner_texts() == ["À regarder plus tard", "Proposées", "Abonnements", "Historique"]
+    assert p.locator("#onglets [role=tab]").all_inner_texts() == ["À regarder plus tard", "Proposées", "Abonnements", "Historique", "Mes chaînes", "Playlists", "Favoris"]   # #2708 : trois onglets ajoutés
     assert p.get_attribute("#onglets [data-type=envie]", "aria-selected") == "true"
     assert p.locator("#grille .video").count() == 3
     v = p.locator("#grille .video").first
     assert "Vidéo numéro 0" in v.inner_text() and "Chaîne test" in v.inner_text() and "3:33" in v.inner_text()
     assert v.locator("img").get_attribute("src") == "/api/v1/ytsas/flux/vignette/abcdefghi00"
-    assert [b.inner_text() for b in v.locator(".act").all()] == ["▶ YouTube", "⬇ SAS", "⧉", "☆", "🧭"]
+    assert [b.inner_text() for b in v.locator(".act").all()] == ["▶ YouTube", "⬇ SAS", "⧉", "☆", "🧭", "📡"]   # #2708 : 📡 ajouté en dernier
     lien = v.locator("a.act")
     assert lien.get_attribute("href") == "https://www.youtube.com/watch?v=abcdefghi00" and lien.get_attribute("rel") == "noopener noreferrer"
     assert p.inner_text("#tVideos") == "3" and p.inner_text("#etat") == "À JOUR"

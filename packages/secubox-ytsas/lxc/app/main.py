@@ -67,7 +67,7 @@ _MIME = {
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 library = Library(DB_PATH)
 engine = Engine(DOWNLOAD_DIR, library, COOKIE_PATH, max_active=MAX_ACTIVE)
-# Flux du compte YouTube (à regarder plus tard, propositions, abonnements, historique) : lecture seule, avec les cookies du
+# Flux du compte YouTube (à regarder plus tard, propositions, abonnements, historique, chaînes, playlists) : lecture seule, avec les cookies du
 # coffre. Le moteur reçoit le chemin des cookies À CHAQUE appel (un dépôt de cookies prend effet sans redémarrage).
 flux_moteur = _flux.Flux(DOWNLOAD_DIR, COOKIE_PATH, ttl=int(os.environ.get("YTSAS_FLUX_TTL", "900")))
 
@@ -493,17 +493,12 @@ def _flux_refuse(request: Request):
     return None
 
 
-@app.get(API + "/flux")
-async def flux_liste(request: Request, type: str = "abonnements", limite: int = 24):
-    refus = _flux_refuse(request)
-    if refus:
-        return refus
-    if type not in _flux.TYPES:
-        return JSONResponse({"error": "type inconnu", "types": sorted(_flux.TYPES)}, status_code=400)
+async def _flux_repondre(appel):
+    """Exécute une lecture du flux et traduit les erreurs de la même façon pour les listes ET les détails (#2708)."""
     # le chemin des cookies n'est transmis que s'ils existent : sans eux, 401 net, jamais un échec yt-dlp opaque
     flux_moteur.cookie_path = COOKIE_PATH if engine._has_cookies() else None
     try:
-        resultat = await flux_moteur.lister(type, limite)
+        resultat = await appel()
         if resultat.get("cause") == "cookies" and engine._has_cookies():
             engine.cookies_stale = True      # repli sur l'ancien résultat : le panneau doit quand même dire que les cookies sont périmés (#2633)
         return resultat
@@ -517,6 +512,38 @@ async def flux_liste(request: Request, type: str = "abonnements", limite: int = 
                                        "connecté à YouTube (panneau Authentification)", "cookies_perimes": True}, status_code=401)
     except _flux.ErreurYoutube as e:
         return JSONResponse({"error": "YouTube n'a pas rendu ce flux", "detail": str(e)}, status_code=502)
+
+
+@app.get(API + "/flux")
+async def flux_liste(request: Request, type: str = "abonnements", limite: int = 24):
+    refus = _flux_refuse(request)
+    if refus:
+        return refus
+    if type not in _flux.TYPES:
+        return JSONResponse({"error": "type inconnu", "types": sorted(_flux.TYPES)}, status_code=400)
+    return await _flux_repondre(lambda: flux_moteur.lister(type, limite))
+
+
+# Dernières vidéos d'une chaîne / contenu d'une playlist (#2708). L'identifiant suit un motif STRICT (jamais une URL) ;
+# l'adresse transmise à yt-dlp est construite ici. Lecture seule, mêmes cache, repli périmé et erreurs que la liste.
+@app.get(API + "/flux/chaine/{ident}")
+async def flux_chaine(ident: str, request: Request, limite: int = 24):
+    refus = _flux_refuse(request)
+    if refus:
+        return refus
+    if not _flux.chaine_valide(ident):
+        return JSONResponse({"error": "identifiant de chaîne invalide"}, status_code=400)
+    return await _flux_repondre(lambda: flux_moteur.detail("chaine", ident, limite))
+
+
+@app.get(API + "/flux/playlist/{ident}")
+async def flux_playlist(ident: str, request: Request, limite: int = 24):
+    refus = _flux_refuse(request)
+    if refus:
+        return refus
+    if not _flux.playlist_valide(ident):
+        return JSONResponse({"error": "identifiant de playlist invalide"}, status_code=400)
+    return await _flux_repondre(lambda: flux_moteur.detail("playlist", ident, limite))
 
 
 @app.get(API + "/flux/vignette/{vid}")

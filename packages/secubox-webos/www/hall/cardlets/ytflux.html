@@ -7,10 +7,14 @@
 
   SecuBox — carte « Flux YouTube » du Hall (secubox-ytsas), au profil Aurora (.claude/AURORA-REFERENCE.md).
 
-  Les listes que YouTube tient pour le compte de la personne — à regarder plus tard, propositions, abonnements, historique —
-  lues par YouTube SAS avec les cookies du coffre. LECTURE SEULE. Chaque vidéo : vignette (servie par la box), titre, chaîne,
-  durée ; « ▶ » ouvre YouTube, « ⬇ » l'ajoute au SAS (bibliothèque de la box), « ⧉ » copie le lien, « ★ » le met en favori du Hall,
-  « 🧭 » l'ouvre dans Surf.
+  Les listes que YouTube tient pour le compte de la personne — à regarder plus tard, propositions, abonnements, historique,
+  mes chaînes, playlists — lues par YouTube SAS avec les cookies du coffre. LECTURE SEULE. Chaque vidéo : vignette (servie par la
+  box), titre, chaîne, durée ; « ▶ » ouvre YouTube, « ⬇ » l'ajoute au SAS (bibliothèque de la box), « ⧉ » copie le lien, « ★ » le met
+  en favori du Hall, « 🧭 » l'ouvre dans Surf, « 📡 » la diffuse dans le Hall (message {sbx:'diffuser'} du protocole existant).
+  Une chaîne ou une playlist s'ouvre DANS la carte (fil d'Ariane, Retour, état conservé) ; on peut aussi les mettre en favori ★ et
+  les diffuser (le Hall ne prend qu'UNE adresse : c'est alors la première vidéo de la liste). Onglet Favoris : vidéos, chaînes et
+  playlists favorites. Stockage : sbx_favoris reste la liste d'adresses du Hall (inchangée) ; le type et le nom vivent dans
+  sbx_favoris_meta (adresse -> {type, titre…}), jamais lu par le Hall.
   Page autonome, servie par le Hall ET encadrée (?embed=1) par la page d'administration de YouTube SAS.
   ?demo=1 : données fictives, actions inertes. Mesure absente = « — ». Tout texte venu du serveur passe par textContent.
 -->
@@ -61,6 +65,27 @@
   .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
   .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
   .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+  .grille.fiches{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+  .sect{margin:12px 0 0;font-size:.8rem;color:var(--doux);font-weight:700}
+  .sect+.grille{margin-top:6px}
+  .fil{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0 0;padding:6px 8px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.7)}
+  .fil ol{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;list-style:none;margin:0;padding:0;min-width:0;flex:1 1 140px;font-size:.8rem}
+  .fil li{min-width:0;overflow-wrap:anywhere} .fil li+li::before{content:"›";color:var(--faible);margin-right:6px}
+  .fil li[aria-current]{font-weight:700;outline:none}
+  .miette{font:inherit;color:var(--cyan);background:none;border:0;padding:4px 2px;cursor:pointer;min-height:30px;text-align:left}
+  .miette:hover{text-decoration:underline} .miette:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .fil .fact{display:flex;flex-wrap:wrap;gap:5px;margin-left:auto}
+  .fil .fact .act{flex:0 0 auto;min-width:40px;padding:0 10px}
+  .filtres{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+  .filtre{min-height:32px;padding:2px 12px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);font:inherit;font-size:.74rem;cursor:pointer}
+  .filtre[aria-pressed="true"]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.14)} .filtre:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .fiche{display:flex;flex-direction:column;border:1px solid var(--trait);border-radius:12px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0;padding:9px}
+  .fiche:hover{border-color:var(--cyan)}
+  .fiche .haut{display:flex;gap:10px;align-items:center;min-width:0}
+  .avat{position:relative;flex:0 0 46px;width:46px;height:46px;border-radius:50%;overflow:hidden;background:linear-gradient(160deg,rgba(41,182,246,.3),rgba(8,18,38,.9));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.1rem;color:var(--texte)}
+  .avat img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .fiche .qui{min-width:0;display:flex;flex-direction:column;gap:2px} .fiche .stat{font-size:.7rem;color:var(--doux);overflow-wrap:anywhere}
+  .badge{position:absolute;left:4px;top:4px;background:rgba(0,0,0,.78);color:#fff;font-size:.64rem;padding:0 .35rem;border-radius:4px}
   .video{display:flex;flex-direction:column;border:1px solid var(--trait);border-radius:12px;overflow:hidden;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
   .video:hover{border-color:var(--cyan)}
   .vign{position:relative;aspect-ratio:16/9;background:linear-gradient(160deg,rgba(41,182,246,.16),rgba(8,18,38,.9));display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--faible)}
@@ -70,11 +95,11 @@
   .titre{font-size:.8rem;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
   .chaine{font-size:.7rem;color:var(--doux);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
-  .act{flex:1 1 0;min-width:0;min-height:34px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;padding:0 4px;white-space:nowrap}
+  .act{flex:1 1 34px;min-width:0;min-height:34px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;padding:0 4px;white-space:nowrap}
   .act:hover{border-color:var(--cyan)}
-  .act.lien{flex:1 1 100%;color:var(--cyan)} .act.sas{flex:2 1 0}
+  .act.lien{flex:1 1 100%;color:var(--cyan)} .act.sas{flex:2 1 68px} .act.ouvre{flex:1 1 100%;color:var(--cyan)}
   /* Encadrée par l'administration (?embed=1), la carte n'a pas le Hall pour parent : le message « surf » n'aurait personne à qui parler. */
-  body.emb .surf{display:none}
+  body.emb .surf,body.emb .diff{display:none}
   .act[disabled]{opacity:.6;cursor:default}
   .msg{padding:12px;margin-top:10px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
   .msg.err{color:var(--rouge);border-color:var(--rouge)}
@@ -95,7 +120,7 @@
   <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
 
   <section class="tuiles" id="tuiles" aria-label="Indicateurs">
-    <div class="tuile cy" title="Nombre de vidéos de la liste affichée (24 au plus par lecture)."><span class="l">Vidéos</span><span class="v" id="tVideos">—</span><span class="s">dans la liste affichée</span></div>
+    <div class="tuile cy" title="Nombre de vidéos de la liste affichée (24 au plus par lecture)."><span class="l" id="lVideos">Vidéos</span><span class="v" id="tVideos">—</span><span class="s">dans la liste affichée</span></div>
     <div class="tuile cy" title="Heure de la lecture des listes par YouTube SAS (pas celle de cette page)."><span class="l">Dernière lecture</span><span class="v long" id="tLecture">—</span><span class="s">par YouTube SAS</span></div>
     <div class="tuile cy" title="Oui : la box a répondu avec sa copie gardée plutôt que de réinterroger YouTube."><span class="l">Copie de la box</span><span class="v" id="tCache">—</span><span class="s">cache de lecture</span></div>
     <div class="tuile cy" id="cDonnees" title="Périmées : YouTube n'a pas répondu, la box montre sa dernière lecture (la cause est dite sous les onglets)."><span class="l">Données</span><span class="v" id="tDonnees">—</span><span class="s">fraîcheur de la liste</span></div>
@@ -103,6 +128,12 @@
 
   <div class="pan"><h3>Mes listes <i>GET /api/v1/ytsas/flux</i></h3>
     <div class="onglets" role="tablist" aria-label="Flux du compte" id="onglets"></div>
+    <nav class="fil" id="fil" aria-label="Fil d’Ariane" hidden>
+      <button class="btn" id="fRetour" type="button">← Retour</button>
+      <ol><li><button class="miette" id="fListe" type="button"></button></li><li id="fNom" tabindex="-1" aria-current="page"></li></ol>
+      <div class="fact" id="fActs"></div>
+    </nav>
+    <div class="filtres" id="filtres" role="group" aria-label="Type de favori" hidden></div>
     <p class="note" id="lecture" aria-live="polite" hidden></p>
     <div class="retour" id="retour" role="status" hidden></div>
     <div class="msg" id="msg" role="status" hidden></div>
@@ -114,13 +145,21 @@
 (function(){
   'use strict';
   var API = '/api/v1/ytsas/';
-  var TYPES = [ ['envie','À regarder plus tard'], ['propositions','Proposées'], ['abonnements','Abonnements'], ['historique','Historique'] ];
+  var TYPES = [ ['envie','À regarder plus tard'], ['propositions','Proposées'], ['abonnements','Abonnements'], ['historique','Historique'],
+                ['chaines','Mes chaînes'], ['playlists','Playlists'], ['favoris','Favoris'] ];
+  var GENRE = { chaines: 'chaine', playlists: 'playlist' };            // le genre des éléments d'un onglet (sinon : vidéo)
+  var UNITES = { video: ['vidéo','vidéos'], chaine: ['chaîne','chaînes'], playlist: ['playlist','playlists'] };
   var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
   if(Q.get('embed')) document.body.classList.add('emb');
   try{ if(window.top !== window) document.body.classList.add('dans'); }catch(e){ document.body.classList.add('dans'); }
   var $ = function(id){ return document.getElementById(id); };
   var courant = 'envie';
   var jeton = 0;
+  var memo = {};            // onglet -> dernière réponse 200 : « Retour » rend la liste telle qu'on l'a quittée, sans relire YouTube
+  var memoDetail = {};      // 'chaine:UC…' -> dernière réponse 200 du détail
+  var detail = null;        // { genre, id, nom, url, retour, y, cle } quand une chaîne / playlist est ouverte dans la carte
+  var filtreFav = 'tout';
+  var attente = {};         // adresse diffusée -> { btn, texte, suffixe, minuteur } : le Hall répond par diffuser-resultat
 
   function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
   function duree(s){
@@ -130,8 +169,11 @@
     return h ? h+':'+p2(m)+':'+p2(c) : m+':'+p2(c);
   }
   function date(t){ try{ return new Date(t*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return '—'; } }
+  function nombre(n){ try{ return Number(n).toLocaleString('fr-FR'); }catch(e){ return String(n); } }
+  function compte(n, genre){ return n + ' ' + UNITES[genre][n > 1 ? 1 : 0]; }
   function pastille(cls, texte){ var e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
-  function tuiles(n, lecture, cache, donnees){
+  function tuiles(n, lecture, cache, donnees, genre){
+    $('lVideos').textContent = genre === 'chaine' ? 'Chaînes' : genre === 'playlist' ? 'Playlists' : genre === 'favoris' ? 'Favoris' : 'Vidéos';
     $('tVideos').textContent = n == null ? '—' : n;
     $('tLecture').textContent = lecture ? date(lecture) : '—';
     $('tCache').textContent = cache == null ? '—' : (cache ? 'Oui' : 'Non');
@@ -139,10 +181,10 @@
     $('cDonnees').className = 'tuile ' + (donnees === 'Fraîches' ? 'ok' : donnees === 'Périmées' ? 'att' : 'cy');
   }
   function retour(texte){ var r = $('retour'); r.hidden = false; r.textContent = texte; annoncer(); }
-  function message(texte, erreur, avecReessai){
+  function message(texte, erreur, reessai){
     var m = $('msg'); m.hidden = false; m.className = 'msg' + (erreur ? ' err' : '');
     m.textContent = texte;
-    if(avecReessai){ var b = el('button','btn','Réessayer'); b.type = 'button'; b.onclick = function(){ charger(courant); }; m.appendChild(b); }
+    if(reessai){ var b = el('button','btn','Réessayer'); b.type = 'button'; b.onclick = reessai; m.appendChild(b); }
   }
   function inerte(){ retour('Démonstration : action inerte, rien n’est écrit ni envoyé.'); }
   function ajouter(btn, url){
@@ -152,17 +194,61 @@
       .then(function(r){ btn.textContent = r.ok ? '✓ Au SAS' : '⚠'; if(!r.ok) btn.disabled = false; })
       .catch(function(){ btn.textContent = '⚠'; btn.disabled = false; });
   }
-  // Favoris du Hall (sbx_favoris, liste d'adresses) : cette carte est de la MÊME origine que le Hall, même localStorage.
+
+  // ── Adresses reconnues : le TYPE d'un favori se déduit de son adresse (le Hall ne connaît que des adresses) ─────────
+  var RE_VIDEO = /^https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})$/;
+  var RE_CHAINE = /^https:\/\/www\.youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})$/;
+  var RE_PLAYLIST = /^https:\/\/www\.youtube\.com\/playlist\?list=((?:PL|UU|LL|FL|OL)[A-Za-z0-9_-]{10,40})$/;
+  var RE_VIGNETTE = /^\/api\/v1\/ytsas\/flux\/vignette\/[A-Za-z0-9_-]{11}$/;
+  function typeDe(u){
+    var m;
+    if(typeof u !== 'string') return null;
+    if((m = RE_VIDEO.exec(u))) return { genre: 'video', id: m[1] };
+    if((m = RE_CHAINE.exec(u))) return { genre: 'chaine', id: m[1] };
+    if((m = RE_PLAYLIST.exec(u))) return { genre: 'playlist', id: m[1] };
+    return null;
+  }
+
+  // ── Favoris du Hall : sbx_favoris = liste d'adresses (format INCHANGÉ, lu par le Hall et Surf & Viewer). Cette carte est de la
+  //    MÊME origine que le Hall, même localStorage. Le type et le nom d'un favori vivent à côté, dans sbx_favoris_meta. ──────────
+  var DEMO_FAV = [];        // rempli plus bas : favoris fictifs de la démonstration (jamais écrits)
   function lireFavoris(){ try{ var l = JSON.parse(localStorage.getItem('sbx_favoris') || '[]'); return Array.isArray(l) ? l : []; }catch(e){ return []; } }
-  function favori(u){ return lireFavoris().indexOf(u) >= 0; }
-  function basculerFavori(btn, u){
+  function lireMeta(){ try{ var m = JSON.parse(localStorage.getItem('sbx_favoris_meta') || '{}'); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; }catch(e){ return {}; } }
+  function favori(u){
+    if(DEMO) return DEMO_FAV.some(function(f){ return f.url === u; });
+    return lireFavoris().indexOf(u) >= 0;
+  }
+  function fiche(genre, e){          // ce qu'on retient d'un élément pour l'afficher plus tard sans le relire
+    var f = { type: genre, titre: String(e.titre || e.nom || '').slice(0, 200) };
+    if(e.chaine) f.chaine = String(e.chaine).slice(0, 200);
+    if(genre === 'video' && e.duree != null && !isNaN(e.duree)) f.duree = Number(e.duree);
+    if(genre === 'chaine'){
+      if(e.abonnes != null) f.abonnes = Number(e.abonnes);
+      if(e.videos != null) f.videos = Number(e.videos);
+      if(e.handle) f.handle = String(e.handle).slice(0, 80);
+    }
+    if(genre === 'playlist' && e.videos != null) f.videos = Number(e.videos);
+    if(typeof e.vignette === 'string' && RE_VIGNETTE.test(e.vignette)) f.vignette = e.vignette;
+    return f;
+  }
+  function basculerFavori(btn, u, genre, e){
     if(DEMO){ inerte(); return; }
     try{
-      var l = lireFavoris(), i = l.indexOf(u);
-      if(i >= 0) l.splice(i, 1); else l.push(u);
+      var l = lireFavoris(), meta = lireMeta(), i = l.indexOf(u);
+      if(i >= 0){ l.splice(i, 1); delete meta[u]; } else { l.push(u); meta[u] = fiche(genre || 'video', e || {}); }
+      Object.keys(meta).forEach(function(k){ if(l.indexOf(k) < 0) delete meta[k]; });      // pas d'orphelin
       localStorage.setItem('sbx_favoris', JSON.stringify(l));
+      localStorage.setItem('sbx_favoris_meta', JSON.stringify(meta));
       btn.textContent = i >= 0 ? '☆' : '★';
-    }catch(e){ btn.textContent = '⚠'; }
+      btn.setAttribute('aria-pressed', i >= 0 ? 'false' : 'true');
+      if(courant === 'favoris' && !detail) charger('favoris');      // l'onglet Favoris reflète aussitôt le retrait
+    }catch(x){ btn.textContent = '⚠'; }
+  }
+  function boutonFavori(u, genre, e){
+    var fav = el('button','act', favori(u) ? '★' : '☆'); fav.type = 'button'; fav.title = 'Ajouter aux favoris du Hall'; fav.setAttribute('aria-label','Favori');
+    fav.setAttribute('aria-pressed', favori(u) ? 'true' : 'false');
+    fav.onclick = function(){ basculerFavori(fav, u, genre, e); };
+    return fav;
   }
   function copier(btn, u){
     if(DEMO){ inerte(); return; }
@@ -170,6 +256,58 @@
     var ko = function(){ btn.textContent = '⚠'; setTimeout(function(){ btn.textContent = '⧉'; }, 1500); };
     try{ navigator.clipboard.writeText(u).then(ok, ko); }catch(e){ ko(); }
   }
+
+  // ── Diffusion dans le Hall : PROTOCOLE EXISTANT, tel quel (cf. Surf & Viewer) — {sbx:'diffuser', url, titre} adressé à
+  //    l'origine du parent ; le Hall résout vers la source souveraine, pousse le broadcast, puis répond {sbx:'diffuser-resultat'}.
+  //    Le Hall ne prend qu'UNE adresse à la fois : pas de file. Une chaîne / playlist diffuse donc sa première vidéo. ───────────
+  function finAttente(url, etat){
+    var a = attente[url]; if(!a) return;
+    clearTimeout(a.minuteur); delete attente[url];
+    a.btn.disabled = false; a.btn.textContent = '📡';
+    retour(etat);
+  }
+  function diffuser(btn, v, suffixe){
+    if(DEMO){ inerte(); return; }
+    if(!v || !v.url){ retour('Rien à diffuser.'); return; }
+    if(attente[v.url]) return;
+    btn.disabled = true; btn.textContent = '…';
+    attente[v.url] = { btn: btn, titre: v.titre || '', suffixe: suffixe || '',
+      minuteur: setTimeout(function(){ finAttente(v.url, 'Le Hall n’a pas répondu : la diffusion n’est pas confirmée.'); }, 10000) };
+    try{ parent.postMessage({ sbx: 'diffuser', url: v.url, titre: v.titre || '' }, location.origin); }
+    catch(e){ finAttente(v.url, 'Diffusion impossible : le Hall est injoignable.'); }
+  }
+  addEventListener('message', function(ev){
+    var d = ev.data;
+    if(!d || d.sbx !== 'diffuser-resultat' || ev.source !== parent || ev.origin !== location.origin) return;
+    var a = attente[d.url]; if(!a) return;
+    if(d.ok) finAttente(d.url, 'Diffusé dans le Hall' + (a.titre ? ' : ' + a.titre : '') + a.suffixe + '.');
+    else if(d.statut === 401 || d.statut === 403) finAttente(d.url, 'Diffusion réservée aux personnes connectées.');
+    else finAttente(d.url, 'Diffusion impossible (' + (d.statut >= 300 ? 'HTTP ' + d.statut : d.statut ? 'adresse refusée' : 'box injoignable') + ').');
+  });
+  function boutonDiffuser(action, titre){
+    var b = el('button','act diff','📡'); b.type = 'button'; b.title = titre || 'Diffuser dans le Hall'; b.setAttribute('aria-label','Diffuser dans le Hall');
+    b.onclick = function(){ action(b); };
+    return b;
+  }
+  // Chaîne / playlist : on lit sa liste (cache de la box), puis on diffuse la première vidéo.
+  function diffuserListe(btn, genre, id, nom){
+    if(DEMO){ inerte(); return; }
+    var suite = function(d){
+      var v = d && d.items && d.items[0];
+      if(!v){ btn.disabled = false; btn.textContent = '📡'; retour('Rien à diffuser : cette liste est vide.'); return; }
+      btn.disabled = false; btn.textContent = '📡';
+      diffuser(btn, v, ' (première vidéo de « ' + nom + ' » : le Hall ne diffuse qu’une adresse à la fois)');
+    };
+    var m = memoDetail[genre + ':' + id];
+    if(m){ suite(m); return; }
+    btn.disabled = true; btn.textContent = '…';
+    lireJson(urlDetail(genre, id)).then(function(x){
+      if(x.st === 200){ memoDetail[genre + ':' + id] = x.d; suite(x.d); }
+      else { btn.disabled = false; btn.textContent = '📡'; retour('Impossible de lire cette liste (' + (x.st || 'injoignable') + ') : rien n’est diffusé.'); }
+    });
+  }
+
+  // ── Éléments ─────────────────────────────────────────────────────────────────────────────────────────────────────────
   function carte(v){
     var c = el('div','video');
     var vg = el('div','vign');
@@ -190,15 +328,94 @@
     sas.onclick = function(){ ajouter(sas, v.url); };
     var cop = el('button','act','⧉'); cop.type = 'button'; cop.title = 'Copier le lien'; cop.setAttribute('aria-label','Copier le lien');
     cop.onclick = function(){ copier(cop, v.url); };
-    var fav = el('button','act', favori(v.url) ? '★' : '☆'); fav.type = 'button'; fav.title = 'Ajouter aux favoris du Hall'; fav.setAttribute('aria-label','Favori');
-    fav.onclick = function(){ basculerFavori(fav, v.url); };
+    var fav = boutonFavori(v.url, 'video', v);
     var surf = el('button','act surf','🧭'); surf.type = 'button'; surf.title = 'Voir dans Surf (navigation web)'; surf.setAttribute('aria-label','Voir dans Surf');
     surf.onclick = function(){ if(DEMO){ inerte(); return; } try{ parent.postMessage({ sbx: 'surf', url: v.url }, location.origin); }catch(e){} };
-    ac.appendChild(lien); ac.appendChild(sas); ac.appendChild(cop); ac.appendChild(fav); ac.appendChild(surf); co.appendChild(ac); c.appendChild(co);
+    var diff = boutonDiffuser(function(b){ diffuser(b, v, ''); }, 'Diffuser cette vidéo dans le Hall');
+    ac.appendChild(lien); ac.appendChild(sas); ac.appendChild(cop); ac.appendChild(fav); ac.appendChild(surf); ac.appendChild(diff); co.appendChild(ac); c.appendChild(co);
     return c;
   }
+  function avatar(nom, vignette){
+    var a = el('div','avat');
+    if(!DEMO && vignette){
+      var img = document.createElement('img'); img.loading = 'lazy'; img.alt = ''; img.src = vignette;
+      img.onerror = function(){ img.style.display = 'none'; };
+      a.appendChild(img);
+    }
+    a.appendChild(el('span', null, (nom || '?').trim().charAt(0).toUpperCase() || '?'));
+    return a;
+  }
+  function ouvreurCle(genre, id){ return genre + ':' + id; }
+  function ouvrirDepuis(btn, genre, e){
+    var y = 0; try{ y = scrollY; }catch(x){}
+    detail = { genre: genre, id: e.id, nom: e.nom || e.titre || '', url: e.url, retour: courant, y: y, cle: ouvreurCle(genre, e.id) };
+    chargerDetail();
+  }
+  function ficheChaine(ch){
+    var c = el('div','fiche');
+    var haut = el('div','haut');
+    haut.appendChild(avatar(ch.nom, ch.vignette));
+    var qui = el('div','qui');
+    qui.appendChild(el('div','titre', ch.nom || '—'));
+    if(ch.handle) qui.appendChild(el('div','chaine', ch.handle));
+    var st = [];
+    if(ch.abonnes != null) st.push(nombre(ch.abonnes) + ' abonnés');
+    if(ch.videos != null) st.push(compte(ch.videos, 'video'));
+    qui.appendChild(el('div','stat', st.length ? st.join(' · ') : '—'));
+    haut.appendChild(qui); c.appendChild(haut);
+    c.appendChild(actionsListe('chaine', ch));
+    return c;
+  }
+  function fichePlaylist(p){
+    var c = el('div','video');
+    var vg = el('div','vign');
+    if(DEMO){ vg.appendChild(el('span', null, '🎞️')); }
+    else if(p.vignette){
+      var img = document.createElement('img'); img.loading = 'lazy'; img.alt = ''; img.src = p.vignette;
+      img.onerror = function(){ img.style.display = 'none'; };
+      vg.appendChild(img);
+    }
+    vg.appendChild(el('span','badge','PLAYLIST'));
+    c.appendChild(vg);
+    var co = el('div','corps');
+    co.appendChild(el('div','titre', p.titre || '—'));
+    co.appendChild(el('div','chaine', (p.chaine || '—') + (p.videos != null ? ' · ' + compte(p.videos, 'video') : '')));
+    co.appendChild(actionsListe('playlist', p));
+    c.appendChild(co);
+    return c;
+  }
+  function actionsListe(genre, e){
+    var nom = e.nom || e.titre || '';
+    var ac = el('div','actions');
+    var ouvre = el('button','act ouvre','Ouvrir ›'); ouvre.type = 'button'; ouvre.dataset.cle = ouvreurCle(genre, e.id);
+    ouvre.title = genre === 'chaine' ? 'Voir les dernières vidéos de cette chaîne' : 'Voir les vidéos de cette playlist';
+    ouvre.onclick = function(){ ouvrirDepuis(ouvre, genre, e); };
+    var lien = el('a','act','↗'); lien.href = e.url; lien.target = '_blank'; lien.rel = 'noopener noreferrer'; lien.title = 'Ouvrir sur YouTube'; lien.setAttribute('aria-label','Ouvrir sur YouTube');
+    var diff = boutonDiffuser(function(b){ diffuserListe(b, genre, e.id, nom); }, 'Diffuser dans le Hall la première vidéo de cette liste (le Hall ne diffuse qu’une adresse à la fois)');
+    ac.appendChild(ouvre); ac.appendChild(boutonFavori(e.url, genre, e)); ac.appendChild(diff); ac.appendChild(lien);
+    return ac;
+  }
 
-  // Données fictives (démonstration) : adresses de documentation, chaînes inventées, aucune requête.
+  // ── Données fictives (démonstration) : adresses de documentation, chaînes inventées, aucune requête ───────────────────────
+  var DEMO_CH = [['Atelier Réseau', '@atelier-reseau', 48200, 312], ['Cryptologie pour tous', '@crypto-pour-tous', 12750, 96], ['Géographie Vivante', '@geo-vivante', 6400, null], ['Atelier Sonore', null, null, null]];
+  var DEMO_PL = [['Réseaux, de la prise au routeur', 'Atelier Réseau', 18], ['Cartes et territoires', 'Géographie Vivante', 9], ['Ma sélection musique', 'Atelier Sonore', null]];
+  function demoIdChaine(i){ return 'UCdemo' + i + 'xxxxxxxxxxxxxxxxx'; }
+  function demoIdPlaylist(i){ return 'PLdemo' + i + 'xxxxxxxxxx'; }
+  function demoChaine(i){
+    var x = DEMO_CH[i], id = demoIdChaine(i);
+    return { id: id, nom: x[0], handle: x[1], abonnes: x[2], videos: x[3], url: 'https://www.youtube.com/channel/' + id, vignette: null };
+  }
+  function demoPlaylist(i){
+    var x = DEMO_PL[i], id = demoIdPlaylist(i);
+    return { id: id, titre: x[0], chaine: x[1], videos: x[2], url: 'https://www.youtube.com/playlist?list=' + id, vignette: null };
+  }
+  function demoVideo(id, titre, chaine, sec){ return { id: id, titre: titre, chaine: chaine, duree: sec, url: 'https://www.youtube.com/watch?v=' + id }; }
+  (function(){
+    DEMO_FAV = [ { genre: 'video', e: demoVideo('demo-fav-0', 'Comprendre WireGuard en 15 minutes', 'Cours Libres', 905) },
+                 { genre: 'chaine', e: demoChaine(0) }, { genre: 'playlist', e: demoPlaylist(0) },
+                 { genre: 'video', e: demoVideo('demo-fav-1', 'Les arbres de Merkle', 'Cryptologie pour tous', 2210) } ]
+      .map(function(f){ f.url = f.e.url; return f; });
+  })();
   function demoListe(type){
     var base = {
       envie: [['Montage d’une baie de brassage', 'Atelier Réseau', 1325], ['Comprendre WireGuard en 15 minutes', 'Cours Libres', 905], ['Souder des câbles RJ45', 'Atelier Réseau', 412], ['Les arbres de Merkle', 'Cryptologie pour tous', 2210], ['Installer une box à la maison', 'Cours Libres', 1780]],
@@ -206,21 +423,43 @@
       abonnements: [['Nouveautés du mois', 'Atelier Réseau', 540], ['Entretien avec un cryptologue', 'Cryptologie pour tous', 3180], ['Randonnée en Maurienne', 'Géographie Vivante', 1215], ['Session de mixage', 'Atelier Sonore', 4020]],
       historique: [['Documentaire : les câbles sous-marins', 'Cours Libres', 3300], ['Tutoriel nftables', 'Atelier Réseau', 1675], ['Podcast : la vie privée', 'Scène Ouverte', 2480], ['Bande-annonce', 'Cinéma Libre', 132], ['Conférence sur la souveraineté numérique', 'Cours Libres', 3590]]
     };
-    var l = base[type] || [];
-    return { type: type, en_cache: false, perime: false, date: Math.floor(Date.now()/1000) - 300,
-      items: l.map(function(x, i){ var id = 'demo-' + type.slice(0,3) + i; return { id: id, titre: x[0], chaine: x[1], duree: x[2], url: 'https://www.youtube.com/watch?v=' + id }; }) };
+    var d = { type: type, en_cache: false, perime: false, date: Math.floor(Date.now()/1000) - 300 };
+    if(type === 'chaines') d.items = DEMO_CH.map(function(x, i){ return demoChaine(i); });
+    else if(type === 'playlists') d.items = DEMO_PL.map(function(x, i){ return demoPlaylist(i); });
+    else d.items = (base[type] || []).map(function(x, i){ return demoVideo('demo-' + type.slice(0,3) + i, x[0], x[1], x[2]); });
+    return d;
+  }
+  function demoDetail(genre, id){
+    var nom = '', l = [];
+    if(genre === 'chaine'){
+      var i = DEMO_CH.map(function(x, k){ return demoIdChaine(k); }).indexOf(id); i = i < 0 ? 0 : i;
+      nom = DEMO_CH[i][0];
+      l = [['Nouveautés du mois', 540], ['Épisode 12 : le brassage', 1320], ['Épisode 11 : le routage', 1710], ['Questions de la semaine', 905]];
+    } else {
+      var j = DEMO_PL.map(function(x, k){ return demoIdPlaylist(k); }).indexOf(id); j = j < 0 ? 0 : j;
+      nom = DEMO_PL[j][0];
+      l = [['Partie 1 : la prise', 600], ['Partie 2 : le câble', 780], ['Partie 3 : le commutateur', 1010], ['Partie 4 : le routeur', 1450]];
+    }
+    return { type: genre, id: id, titre: nom, en_cache: false, perime: false, date: Math.floor(Date.now()/1000) - 240,
+      items: l.map(function(x, k){ return demoVideo('demo-' + genre.slice(0,3) + k, x[0], nom, x[1]); }) };
   }
 
-  function afficher(x){
+  // ── Rendu ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  function genreDe(type){ return GENRE[type] || 'video'; }
+  function remplir(g, items, genre){
+    items.forEach(function(v){ g.appendChild(genre === 'chaine' ? ficheChaine(v) : genre === 'playlist' ? fichePlaylist(v) : carte(v)); });
+    g.className = 'grille' + (genre === 'chaine' ? ' fiches' : '');
+  }
+  function afficher(x, genre){
     var d = x.d, g = $('grille'), items = d.items || [];
     $('retour').hidden = true;
     var lec = $('lecture');
     if(!items.length){
-      pastille('neutre', 'LISTE VIDE'); tuiles(0, d.date, !!d.en_cache, d.perime ? 'Périmées' : 'Fraîches');
+      pastille('neutre', 'LISTE VIDE'); tuiles(0, d.date, !!d.en_cache, d.perime ? 'Périmées' : 'Fraîches', genre);
       message('Rien dans cette liste pour l’instant.', false); return;
     }
     lec.hidden = false; lec.textContent = '';
-    lec.appendChild(el('span', null, items.length + ' vidéos'));
+    lec.appendChild(el('span', null, compte(items.length, genre)));
     if(d.date) lec.appendChild(el('span', null, ' · lu ' + date(d.date)));
     if(d.perime){
       lec.appendChild(el('b', null, x.d.cause === 'cookies'
@@ -228,36 +467,168 @@
         : ' · données anciennes (YouTube n’a pas répondu)'));
       pastille('att', x.d.cause === 'cookies' ? 'DONNÉES PÉRIMÉES — COOKIES' : 'DONNÉES PÉRIMÉES');
     } else pastille('', 'À JOUR');
-    tuiles(items.length, d.date, !!d.en_cache, d.perime ? 'Périmées' : 'Fraîches');
-    items.forEach(function(v){ g.appendChild(carte(v)); });
+    tuiles(items.length, d.date, !!d.en_cache, d.perime ? 'Périmées' : 'Fraîches', genre);
+    remplir(g, items, genre);
+  }
+
+  // Favoris : vidéos, chaînes et playlists reconnues par leur adresse ; les autres favoris du Hall ne sont pas touchés.
+  function entiteFavorite(u, t, m){
+    m = (m && typeof m === 'object') ? m : {};
+    var txt = function(v){ return typeof v === 'string' ? v : ''; };
+    var num = function(v){ return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : null; };
+    var vig = (typeof m.vignette === 'string' && RE_VIGNETTE.test(m.vignette)) ? m.vignette : null;
+    if(t.genre === 'video') return { id: t.id, url: u, titre: txt(m.titre), chaine: txt(m.chaine), duree: num(m.duree), vignette: '/api/v1/ytsas/flux/vignette/' + t.id };
+    if(t.genre === 'chaine') return { id: t.id, url: u, nom: txt(m.titre), handle: txt(m.handle) || null, abonnes: num(m.abonnes), videos: num(m.videos), vignette: vig };
+    return { id: t.id, url: u, titre: txt(m.titre), chaine: txt(m.chaine), videos: num(m.videos), vignette: vig };
+  }
+  function listeFavoris(){
+    if(DEMO) return { entites: DEMO_FAV.map(function(f){ return { genre: f.genre, e: f.e }; }), autres: 0 };
+    var l = lireFavoris(), meta = lireMeta(), out = [], autres = 0;
+    for(var i = l.length - 1; i >= 0; i--){                  // le plus récent d'abord
+      var t = typeDe(l[i]);
+      if(t) out.push({ genre: t.genre, e: entiteFavorite(l[i], t, meta[l[i]]) }); else autres++;
+    }
+    return { entites: out, autres: autres };
+  }
+  function afficherFavoris(){
+    var g = $('grille'), lf = listeFavoris(), n = lf.entites.length;
+    $('retour').hidden = true;
+    pastille(n ? '' : 'neutre', n ? 'FAVORIS' : 'AUCUN FAVORI');
+    tuiles(n, null, null, null, 'favoris');
+    var fl = $('filtres'); fl.hidden = false; fl.textContent = '';
+    [['tout','Tout'],['video','Vidéos'],['chaine','Chaînes'],['playlist','Playlists']].forEach(function(f){
+      var b = el('button','filtre',f[1]); b.type = 'button'; b.dataset.filtre = f[0]; b.setAttribute('aria-pressed', filtreFav === f[0] ? 'true' : 'false');
+      b.onclick = function(){ filtreFav = f[0]; afficherFavoris(); var nb = fl.querySelector('[data-filtre="' + f[0] + '"]'); if(nb) nb.focus(); };
+      fl.appendChild(b);
+    });
+    g.textContent = ''; g.className = ''; $('msg').hidden = true;
+    var lec = $('lecture'); lec.hidden = false; lec.textContent = '';
+    lec.appendChild(el('span', null, n + (n > 1 ? ' favoris' : ' favori')));
+    lec.appendChild(el('span', null, (DEMO ? ' · favoris fictifs, rien n’est mémorisé' : ' · mémorisés dans ce navigateur (liste du Hall)') + (lf.autres ? ' · ' + lf.autres + ' autre' + (lf.autres > 1 ? 's' : '') + ' adresse' + (lf.autres > 1 ? 's' : '') + ' du Hall non listée' + (lf.autres > 1 ? 's' : '') : '')));
+    var vus = 0;
+    [['video','Vidéos'],['chaine','Chaînes'],['playlist','Playlists']].forEach(function(s){
+      if(filtreFav !== 'tout' && filtreFav !== s[0]) return;
+      var els = lf.entites.filter(function(x){ return x.genre === s[0]; });
+      if(!els.length) return;
+      vus += els.length;
+      var h = el('h4','sect', s[1] + ' (' + els.length + ')');
+      var sg = el('div','grille' + (s[0] === 'chaine' ? ' fiches' : ''));
+      els.forEach(function(x){ sg.appendChild(s[0] === 'chaine' ? ficheChaine(x.e) : s[0] === 'playlist' ? fichePlaylist(x.e) : carte(x.e)); });
+      g.appendChild(h); g.appendChild(sg);
+    });
+    if(!vus) message(n ? 'Aucun favori de ce type.' : 'Aucun favori pour l’instant : touche ☆ sur une vidéo, une chaîne ou une playlist.', false);
+  }
+
+  // ── Lecture réseau, commune aux listes et aux détails ─────────────────────────────────────────────────────────────────
+  function lireJson(chemin){
+    var entetes = {Accept:'application/json'};
+    try{ var tok = localStorage.getItem('sbx_token'); if(tok) entetes.Authorization = 'Bearer ' + tok; }catch(e){}
+    return fetch(API + chemin, {credentials:'same-origin', cache:'no-store', headers:entetes})
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {st:r.status, d:d}; }); })
+      .catch(function(){ return {st:0, d:{}}; });
+  }
+  function urlDetail(genre, id){ return 'flux/' + genre + '/' + encodeURIComponent(id) + '?limite=24'; }
+  function traiter(x, genre, reessai, ok){
+    if(x.st === 401 && x.d && x.d.cookies_perimes){ pastille('att', 'COOKIES PÉRIMÉS'); message('YouTube ne reconnaît plus ton compte : tes cookies sont périmés (ou exportés d’un navigateur non connecté). Réexporte cookies.txt depuis un navigateur connecté à YouTube, puis dépose-le dans YouTube SAS (panneau Authentification).', false); }
+    else if(x.st === 401 && x.d && /cookies/i.test(x.d.error||'')){ pastille('att', 'COOKIES ABSENTS'); message('Dépose ton cookies.txt dans YouTube SAS (panneau Authentification) pour lire les listes de ton compte.', false); }
+    else if(x.st === 401 || x.st === 403){ pastille('neutre', 'SESSION REQUISE'); $('session').hidden = false; message('Connexion requise : ouvre une session SecuBox pour voir tes listes.', false); }
+    else if(x.st === 502 || x.st === 504){ pastille('hors', 'HORS LIGNE'); message('YouTube n’a pas répondu' + (x.d && x.d.detail ? ' (' + x.d.detail + ')' : '') + '.', true, reessai); }
+    else if(x.st === 0){ pastille('hors', 'HORS LIGNE'); message('Flux injoignable.', true, reessai); }
+    else if(x.st === 400 || x.st === 404){ pastille('hors', 'INTROUVABLE'); message('Cette liste n’existe pas ou n’est pas lisible avec ce compte.', true, reessai); }
+    else if(x.st !== 200){ pastille('hors', 'HORS LIGNE'); message('Flux indisponible (' + x.st + ').', true, reessai); }
+    else { ok(); }
+    annoncer();
+  }
+  function remiseAZero(){
+    var g = $('grille'); g.textContent = ''; g.className = 'grille'; $('msg').hidden = true; $('lecture').hidden = true; $('retour').hidden = true;
+    $('filtres').hidden = true; $('session').hidden = true;
+  }
+  function marquerOnglet(type){
+    Array.prototype.forEach.call($('onglets').children, function(b){
+      var sel = b.dataset.type === type; b.setAttribute('aria-selected', sel ? 'true' : 'false'); b.tabIndex = sel ? 0 : -1;
+      if(sel) $('grille').setAttribute('aria-labelledby', b.id);
+    });
   }
 
   function charger(type){
-    courant = type; var mon = ++jeton;
-    var g = $('grille'); g.textContent = ''; $('msg').hidden = true; $('lecture').hidden = true; $('retour').hidden = true;
-    pastille('neutre', 'Lecture…'); tuiles(null, null, null, null); $('session').hidden = true;
+    courant = type; detail = null; var mon = ++jeton;
+    $('fil').hidden = true;
+    remiseAZero();
+    marquerOnglet(type);
+    var genre = genreDe(type);
+    if(type === 'favoris'){
+      $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+      if(DEMO) $('demo').hidden = false;
+      afficherFavoris(); annoncer(); return;
+    }
+    pastille('neutre', 'Lecture…'); tuiles(null, null, null, null, genre);
     $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
-    Array.prototype.forEach.call($('onglets').children, function(b){
-      var sel = b.dataset.type === type; b.setAttribute('aria-selected', sel ? 'true' : 'false'); b.tabIndex = sel ? 0 : -1;
-      if(sel) g.setAttribute('aria-labelledby', b.id);
+    if(DEMO){ $('demo').hidden = false; var dd = demoListe(type); memo[type] = dd; afficher({d: dd}, genre); annoncer(); return; }
+    lireJson('flux?type=' + encodeURIComponent(type) + '&limite=24').then(function(x){
+      if(mon !== jeton) return;
+      traiter(x, genre, function(){ charger(type); }, function(){ memo[type] = x.d; afficher(x, genre); });
     });
-    if(DEMO){ $('demo').hidden = false; afficher({d: demoListe(type)}); annoncer(); return; }
-    var entetes = {Accept:'application/json'};
-    try{ var tok = localStorage.getItem('sbx_token'); if(tok) entetes.Authorization = 'Bearer ' + tok; }catch(e){}
-    fetch(API + 'flux?type=' + encodeURIComponent(type) + '&limite=24', {credentials:'same-origin', cache:'no-store', headers:entetes})
-      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {st:r.status, d:d}; }); })
-      .then(function(x){
-        if(mon !== jeton) return;
-        if(x.st === 401 && x.d && x.d.cookies_perimes){ pastille('att', 'COOKIES PÉRIMÉS'); message('YouTube ne reconnaît plus ton compte : tes cookies sont périmés (ou exportés d’un navigateur non connecté). Réexporte cookies.txt depuis un navigateur connecté à YouTube, puis dépose-le dans YouTube SAS (panneau Authentification).', false); }
-        else if(x.st === 401 && x.d && /cookies/i.test(x.d.error||'')){ pastille('att', 'COOKIES ABSENTS'); message('Dépose ton cookies.txt dans YouTube SAS (panneau Authentification) pour lire les listes de ton compte.', false); }
-        else if(x.st === 401 || x.st === 403){ pastille('neutre', 'SESSION REQUISE'); $('session').hidden = false; message('Connexion requise : ouvre une session SecuBox pour voir tes listes.', false); }
-        else if(x.st === 502 || x.st === 504){ pastille('hors', 'HORS LIGNE'); message('YouTube n’a pas répondu' + (x.d && x.d.detail ? ' (' + x.d.detail + ')' : '') + '.', true, true); }
-        else if(x.st !== 200){ pastille('hors', 'HORS LIGNE'); message('Flux indisponible (' + x.st + ').', true, true); }
-        else afficher(x);
-        annoncer();
-      })
-      .catch(function(){ if(mon !== jeton) return; pastille('hors', 'HORS LIGNE'); message('Flux injoignable.', true, true); annoncer(); });
   }
+
+  // Une chaîne / playlist s'ouvre DANS la carte : fil d'Ariane, focus sur le titre, Retour rend la liste d'origine telle quelle.
+  function montrerFil(){
+    var lib = (TYPES.filter(function(t){ return t[0] === detail.retour; })[0] || ['', 'Liste'])[1];
+    $('fListe').textContent = lib;
+    $('fListe').setAttribute('aria-label', 'Retour à ' + lib);
+    $('fNom').textContent = detail.nom || '—';
+    var a = $('fActs'); a.textContent = '';
+    var e = { id: detail.id, url: detail.url, nom: detail.nom, titre: detail.nom };
+    a.appendChild(boutonFavori(detail.url, detail.genre, e));
+    a.appendChild(boutonDiffuser(function(b){ diffuserListe(b, detail.genre, detail.id, detail.nom); }, 'Diffuser dans le Hall la première vidéo de cette liste (le Hall ne diffuse qu’une adresse à la fois)'));
+    var lien = el('a','act','↗'); lien.href = detail.url; lien.target = '_blank'; lien.rel = 'noopener noreferrer'; lien.title = 'Ouvrir sur YouTube'; lien.setAttribute('aria-label','Ouvrir sur YouTube');
+    a.appendChild(lien);
+    $('fil').hidden = false;
+  }
+  function chargerDetail(){
+    var dt = detail, mon = ++jeton;
+    remiseAZero();
+    marquerOnglet(dt.retour);
+    montrerFil();
+    $('fNom').focus();
+    pastille('neutre', 'Lecture…'); tuiles(null, null, null, null, 'video');
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    if(DEMO){
+      $('demo').hidden = false;
+      var dd = demoDetail(dt.genre, dt.id); if(!dt.nom){ dt.nom = dd.titre; $('fNom').textContent = dd.titre; }
+      memoDetail[dt.genre + ':' + dt.id] = dd; afficher({d: dd}, 'video'); annoncer(); return;
+    }
+    lireJson(urlDetail(dt.genre, dt.id)).then(function(x){
+      if(mon !== jeton) return;
+      traiter(x, 'video', function(){ chargerDetail(); }, function(){
+        memoDetail[dt.genre + ':' + dt.id] = x.d;
+        if(!dt.nom && x.d.titre){ dt.nom = x.d.titre; $('fNom').textContent = x.d.titre; }
+        afficher(x, 'video');
+      });
+    });
+  }
+  function retourListe(){
+    if(!detail) return;
+    var d = detail, type = d.retour, mon = ++jeton;
+    detail = null; $('fil').hidden = true;
+    remiseAZero(); marquerOnglet(type); courant = type;
+    var apres = function(){
+      var cible = null;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-cle]'), function(b){ if(b.dataset.cle === d.cle) cible = b; });
+      try{ scrollTo(0, d.y || 0); }catch(e){}
+      if(cible) cible.focus(); else { var o = $('o-' + type); if(o) o.focus(); }
+      annoncer();
+    };
+    if(type === 'favoris'){ courant = 'favoris'; afficherFavoris(); apres(); return; }
+    if(memo[type]){
+      afficher({d: memo[type]}, genreDe(type)); apres(); return;
+    }
+    charger(type);      // pas de copie en mémoire (ex. ouverte depuis les favoris puis onglet vidé) : on relit
+  }
+  $('fRetour').onclick = retourListe;
+  $('fListe').onclick = retourListe;
+  addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && detail && !e.defaultPrevented){ retourListe(); e.preventDefault(); }
+  });
 
   TYPES.forEach(function(t){
     var b = el('button','onglet',t[1]); b.type = 'button'; b.id = 'o-' + t[0]; b.setAttribute('role','tab'); b.dataset.type = t[0];
@@ -269,7 +640,7 @@
     };
     $('onglets').appendChild(b);
   });
-  $('rafraichir').onclick = function(){ charger(courant); };
+  $('rafraichir').onclick = function(){ if(detail) chargerDetail(); else charger(courant); };
 
   // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
   // Le parent est soit le Hall (même origine : location.origin), soit l'administration de YouTube SAS (admin.<domaine du Hall>, ?embed=1) :
