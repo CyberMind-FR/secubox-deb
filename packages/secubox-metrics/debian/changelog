@@ -1,3 +1,12 @@
+secubox-metrics (1.23.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: page /grafana/ au profil Aurora (page autonome, tuiles statut / composants / acces, ?demo=1 et ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l hote) (ref #2649)
+  * Lectures inchangees : GET /components, /status, /access ; meme tableau de bord Grafana en iframe (meme URL). Le bouton « interface native » prefere l adresse publique puis la LAN ; un lien n est pose que si l adresse est en http(s). Plus d innerHTML alimente par l API, plus de « Bearer null », plus d appel force a /api-utils.js ni de theme CRT.
+  * Non repris : theme CRT/hybrid-dark, script /shared/api-utils.js. Aucune action d ecriture (l ancienne page n en avait pas).
+  * Tests : tests/test_grafana_aurora_2649.py (statique + navigateur Playwright).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 11:30:00 +0200
+
 secubox-metrics (1.22.1-1~bookworm1) bookworm; urgency=medium
 
   * feat: page /reporter/ au profil Aurora (page autonome, tuiles, onglets Rapports / Générer / Planification, ?demo=1 et ?embed=1, hauteur annoncée à l hôte, confirmation de suppression dans la page, plus aucun confirm()) (ref #2584)
