@@ -4,231 +4,332 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Mémoire locale LocalRecall : recherche, ingestion, souvenirs récents.
+  Au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret n'est affiché ni stocké.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - LocalRecall</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — LocalRecall</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root { --p31-peak: #00dd44; --p31-mid: #009933; --p31-dim: #006622; --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --bg-card: var(--tube-pale); --border: var(--tube-soft); --text: #1b3d1c; --text-dim: var(--p31-dim); --primary: var(--p31-peak); --danger: #ff4466; --warning: #ffb347; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; background: var(--tube-light); border: 1px solid var(--border); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
-        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; }
-        .btn:hover { background: var(--tube-light); }
-        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
-        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-        .search-box { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .search-box input { flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: var(--tube-light); color: var(--text); font-family: inherit; font-size: 1rem; }
-        .result-card { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
-        .result-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
-        .result-title { font-weight: 600; }
-        .result-meta { font-size: 0.75rem; color: var(--text-dim); }
-        .result-snippet { font-size: 0.9rem; margin-top: 0.5rem; }
-        .result-snippet mark { background: rgba(0,221,68,0.3); padding: 0 0.2rem; }
-        .tag { display: inline-block; padding: 0.15rem 0.4rem; background: var(--bg-card); border-radius: 4px; font-size: 0.7rem; margin-right: 0.25rem; }
-        .empty-state { text-align: center; padding: 2rem; color: var(--text-dim); }
-        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nt,4),1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:560px} td.mono{white-space:nowrap}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)} tbody tr.sel{background:rgba(41,182,246,.12)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .verdict{display:flex;gap:10px;align-items:center;margin-top:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--trait2)}
+        .verdict b{font-size:1rem} .verdict.ok{border-color:var(--vert);color:var(--vert)} .verdict.ko{border-color:var(--rouge);color:var(--rouge)}
+        .sortie{margin:8px 0 0;max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        ol.etapes{margin:6px 0 0;padding-left:1.3rem;font-size:.8rem;color:var(--doux);display:grid;gap:4px} ol.etapes b{color:var(--texte)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px}
+        .onglets button{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button[aria-selected=true]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.18)}
+        .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .liste{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+        .elt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border:1px solid var(--trait);border-radius:10px;padding:8px 11px;background:rgba(8,18,38,.55);min-width:0}
+        .elt .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .elt .desc{color:var(--doux);font-size:.78rem;flex-basis:100%;overflow-wrap:anywhere}
+        .elt .act{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .elt .meta{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .journal{margin:0;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .sel-fichier{font:inherit;font-size:.8rem;color:var(--texte);min-width:0;max-width:100%}
+        form.saisie .coche{display:flex;align-items:center;gap:6px;color:var(--doux);font-size:.78rem}
+        form.saisie .coche input{width:auto}
+        .rech{display:flex;gap:8px;flex-wrap:wrap} .rech input{flex:1 1 200px;font:inherit;font-size:.85rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 10px;min-width:0}
+        .rech input:focus{outline:none;border-color:var(--cyan)}
+        .cadre-graf{width:100%;height:560px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.7)}
+        @media (max-width:600px){.cadre-graf{height:420px}}
+        a.lien{color:var(--cyan);overflow-wrap:anywhere}
+        .tuiles{--nt:4}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <div class="main">
-        <div class="header">
-            <h1>🧠 LocalRecall</h1>
-            <span class="badge">v1.0.0</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 1.5 5 3 3 0 0 0 5.5 1.5V4.5A1.5 1.5 0 0 0 9.5 3z"/><path d="M14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-1.5 5 3 3 0 0 1-5.5 1.5"/></svg>
+                <div><h1>LocalRecall</h1><small>Mémoire locale et base de connaissances</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre de souvenirs indexés dans la mémoire locale (total_memories de GET /status). Remplace l'ancien compteur « Documents »."><span class="l">Souvenirs</span><span class="v" id="tSouv">—</span><span class="s">dans l'index</span></div>
+            <div class="tuile cy" title="Nombre de catégories contenant au moins un souvenir (by_category de GET /stats)."><span class="l">Catégories</span><span class="v" id="tCat">—</span><span class="s">non vides</span></div>
+            <div class="tuile cy" title="Taille du fichier de stockage des souvenirs sur disque (storage_bytes de GET /stats)."><span class="l">Stockage</span><span class="v" id="tStock">—</span><span class="s">fichier des souvenirs</span></div>
+            <div class="tuile cy" title="L'API ne compte pas les recherches sur 24 h : la valeur reste à « — » plutôt qu'inventée."><span class="l">Requêtes (24 h)</span><span class="v" id="tReq">—</span><span class="s">non fourni par l'API</span></div>
+        </section>
+
+        <div class="pan"><h3>Recherche <i>POST /search</i></h3>
+            <form class="rech" id="fRech">
+                <input id="q" type="text" placeholder="Poser une question ou chercher une information…" autocomplete="off" aria-label="Recherche dans la mémoire locale">
+                <button class="btn prim" type="submit" id="btnRech">Rechercher</button>
+            </form>
+            <ul class="liste" id="lRech" style="margin-top:10px"></ul>
+            <p class="note" id="nRech">Saisissez une requête pour interroger la base de connaissances locale.</p>
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">📚</div>
-                <div class="stat-value" id="total-docs">-</div>
-                <div class="stat-label">Documents</div>
+        <div class="grille">
+            <div class="pan"><h3>Ingérer des documents <i>POST /ingest</i></h3>
+                <div class="rech"><input class="sel-fichier" id="fichiers" type="file" multiple aria-label="Fichiers à ingérer"><button class="btn prim" id="btnIng" type="button">Ingérer</button></div>
+                <div id="rIng" class="retour" hidden></div>
+                <p class="note">Les fichiers sont envoyés tels quels au service, jamais conservés par la page. Attention : l'API actuelle n'expose pas de route /ingest ; l'envoi échouera tant qu'elle n'existe pas.</p>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon">📝</div>
-                <div class="stat-value" id="total-chunks">-</div>
-                <div class="stat-label">Chunks</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🔍</div>
-                <div class="stat-value" id="queries-24h">-</div>
-                <div class="stat-label">Queries (24h)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">💾</div>
-                <div class="stat-value" id="index-size">-</div>
-                <div class="stat-label">Index Size</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h2>🔎 Semantic Search</h2>
-            </div>
-            <div class="search-box">
-                <input type="text" id="search-input" placeholder="Ask a question or search for information..." onkeypress="if(event.key==='Enter')search()">
-                <button class="btn btn-primary" onclick="search()">Search</button>
-            </div>
-            <div id="search-results">
-                <div class="empty-state">Enter a query to search your local knowledge base</div>
+            <div class="pan"><h3>Catégories <i>GET /stats</i></h3>
+                <ul class="liste" id="lCat"></ul>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>📥 Ingest Documents</h2>
-            </div>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <input type="file" id="file-input" multiple style="flex: 1; padding: 0.5rem;">
-                <button class="btn btn-primary" onclick="ingestFiles()">Ingest</button>
-            </div>
-            <div id="ingest-status" style="margin-top: 0.5rem; font-size: 0.85rem;"></div>
+        <div class="pan"><h3>Souvenirs récents <i id="nSouv">GET /memories?limit=10</i></h3>
+            <div id="rSup" class="retour" hidden></div>
+            <ul class="liste" id="lSouv"></ul>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>📋 Recent Documents</h2>
-                <button class="btn btn-sm" onclick="loadDocuments()">Refresh</button>
-            </div>
-            <div id="documents-list">
-                <div class="empty-state">No documents indexed</div>
-            </div>
-        </div>
-    </div>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
+
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/localrecall';
-
-        async function api(path, method = 'GET', data = null) {
-            const token = localStorage.getItem('sbx_token');
-            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : inerte en démonstration. Les routes, méthodes et corps sont ceux de l'ancienne page.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { method, headers, body: data ? JSON.stringify(data) : null });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch { return null; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function taille(o) {
+            if (o === null || o === undefined || o === '' || isNaN(Number(o))) return '—';
+            o = Number(o);
+            if (o < 1024) return o + ' o';
+            if (o < 1048576) return (o / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            if (o < 1073741824) return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+            return (o / 1073741824).toFixed(1).replace('.', ',') + ' Go';
+        }
+        function date(ts) { if (!ts) return '—'; const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'localrecall' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        const refus = es => es.some(e => e.status === 'rejected' && e.reason && (e.reason.statut === 401 || e.reason.statut === 403));
+
+
+        let STATUT = null, STATS = null, SOUV = [], SESSION_OK = true, CHARGE = false, CONFIRM = null, RECH = null;
+
+        function demoData() {
+            const t = Date.now();
+            STATUT = { module: 'localrecall', status: 'ok', total_memories: 3 };
+            STATS = { total_memories: 3, by_category: { threats: 1, decisions: 1, general: 1 }, top_tags: { demo: 3 }, storage_bytes: 5120 };
+            SOUV = [
+                { id: 'demo-1', category: 'threats', content: 'Scan de ports répété depuis 198.51.100.7 : adresse bloquée par le pare-feu (démonstration).', importance: 8, tags: ['demo', 'pare-feu'], source: 'journal-demo', timestamp: new Date(t - 3600000).toISOString() },
+                { id: 'demo-2', category: 'decisions', content: 'Passage du pare-feu en politique DROP par défaut (démonstration).', importance: 6, tags: ['demo'], source: null, timestamp: new Date(t - 86400000).toISOString() },
+                { id: 'demo-3', category: 'general', content: 'Note libre fictive.', importance: 3, tags: ['demo'], source: null, timestamp: new Date(t - 172800000).toISOString() }];
         }
 
-        async function loadStatus() {
-            const data = await api('/status');
-            if (!data) return;
-            document.getElementById('total-docs').textContent = data.total_documents || 0;
-            document.getElementById('total-chunks').textContent = (data.total_chunks || 0).toLocaleString();
-            document.getElementById('queries-24h').textContent = data.queries_24h || 0;
-            document.getElementById('index-size').textContent = formatBytes(data.index_size_bytes || 0);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const es = await Promise.allSettled([lire('/status'), lire('/stats'), lire('/memories?limit=10')]);
+            const val = i => es[i].status === 'fulfilled' ? es[i].value : null;
+            SESSION_OK = !refus(es);
+            STATUT = val(0); STATS = val(1);
+            const m = val(2); SOUV = m && Array.isArray(m.memories) ? m.memories : [];
+            CHARGE = true;
+            const tous = es.every(e => e.status === 'rejected');
+            $('erreur').hidden = !(tous && SESSION_OK);
+            if (tous && SESSION_OK) $('erreur').textContent = 'Impossible de lire LocalRecall (service arrêté ou injoignable).';
+            rendre();
         }
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUT && !STATS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            const total = STATS && STATS.total_memories != null ? STATS.total_memories : (STATUT ? STATUT.total_memories : null);
+            $('tSouv').textContent = nb(total);
+            const bc = STATS && STATS.by_category ? Object.entries(STATS.by_category).filter(e => e[1] > 0) : null;
+            $('tCat').textContent = bc ? bc.length : '—';
+            $('tStock').textContent = STATS ? taille(STATS.storage_bytes) : '—';
+            $('tReq').textContent = '—';
+            rendreCategories(bc); rendreSouvenirs();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function search() {
-            const query = document.getElementById('search-input').value.trim();
+        function rendreCategories(bc) {
+            const ul = $('lCat'); ul.replaceChildren();
+            if (!bc || !bc.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : 'Aucune catégorie')); return; }
+            const max = Math.max.apply(null, bc.map(e => e[1]));
+            bc.sort((a, b) => b[1] - a[1]).forEach(([nom, n]) => {
+                const li = el('li', 'elt'); li.appendChild(el('span', 'nom', nom)); li.appendChild(el('span', 'meta', n + ' souvenir' + (n > 1 ? 's' : '')));
+                const b = el('div'); b.style.cssText = 'flex-basis:100%;height:6px;border-radius:3px;background:rgba(159,179,214,.16)';
+                const i = el('div'); i.style.cssText = 'height:6px;border-radius:3px;background:var(--cyan);width:' + Math.round(n / max * 100) + '%'; b.appendChild(i); li.appendChild(b);
+                ul.appendChild(li);
+            });
+        }
+
+        function carte(m, avecSuppression) {
+            const li = el('li', 'elt');
+            li.appendChild(el('span', 'nom', m.title || m.source || m.category || 'Sans titre'));
+            if (m.importance != null) li.appendChild(el('span', 'pill', 'Importance ' + m.importance + '/10'));
+            if (m.score != null) li.appendChild(el('span', 'pill', 'Score ' + Math.round(m.score * 100) + ' %'));
+            if (avecSuppression) {
+                const act = el('span', 'act');
+                if (CONFIRM === m.id) {
+                    act.appendChild(el('span', 'note', 'Supprimer ce souvenir, sans retour possible ?'));
+                    act.appendChild(btn('Confirmer', 'danger', () => { const id = CONFIRM; CONFIRM = null; supprimer(id); }));
+                    act.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                } else act.appendChild(btn('Supprimer', 'danger', () => { CONFIRM = m.id; rendre(); }));
+                li.appendChild(act);
+            }
+            const meta = [];
+            if (m.category) meta.push('Catégorie : ' + m.category);
+            if (m.source && m.source !== (m.title || '')) meta.push('Source : ' + m.source);
+            if (m.timestamp) meta.push(date(m.timestamp));
+            if (meta.length) li.appendChild(el('span', 'meta', meta.join(' · ')));
+            if (Array.isArray(m.tags)) m.tags.forEach(t => li.appendChild(el('span', 'pill', t)));
+            const c = m.content ? String(m.content) : '';
+            li.appendChild(el('span', 'desc', c.length > 300 ? c.slice(0, 300) + '…' : (c || '—')));
+            return li;
+        }
+
+        function rendreSouvenirs() {
+            const ul = $('lSouv'); ul.replaceChildren();
+            if (!SOUV.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : 'Aucun souvenir indexé')); }
+            else SOUV.forEach(m => ul.appendChild(carte(m, true)));
+            const r = $('lRech'); r.replaceChildren();
+            if (RECH) { if (!RECH.length) r.appendChild(el('li', 'vide', 'Aucun résultat')); else RECH.forEach(m => r.appendChild(carte(m, false))); }
+        }
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        $('fRech').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const query = $('q').value.trim();
             if (!query) return;
-
-            const results = document.getElementById('search-results');
-            results.innerHTML = '<div class="empty-state">Searching...</div>';
-
-            const data = await api('/search', 'POST', { query, limit: 10 });
-            if (!data?.results?.length) {
-                results.innerHTML = '<div class="empty-state">No results found</div>';
-                return;
-            }
-
-            results.innerHTML = data.results.map(r => `
-                <div class="result-card">
-                    <div class="result-header">
-                        <div class="result-title">${r.title || r.source || 'Untitled'}</div>
-                        <span style="font-size: 0.75rem; color: var(--text-dim);">Score: ${(r.score * 100).toFixed(0)}%</span>
-                    </div>
-                    <div class="result-meta">
-                        ${r.source ? `Source: ${r.source}` : ''}
-                        ${r.tags?.map(t => `<span class="tag">${t}</span>`).join('') || ''}
-                    </div>
-                    <div class="result-snippet">${r.content?.substring(0, 300) || ''}...</div>
-                </div>
-            `).join('');
-        }
-
-        async function loadDocuments() {
-            const data = await api('/documents?limit=10');
-            const container = document.getElementById('documents-list');
-            if (!data?.documents?.length) {
-                container.innerHTML = '<div class="empty-state">No documents indexed</div>';
-                return;
-            }
-            container.innerHTML = data.documents.map(d => `
-                <div class="result-card">
-                    <div class="result-header">
-                        <div class="result-title">${d.title || d.filename || 'Untitled'}</div>
-                        <button class="btn btn-sm" onclick="deleteDoc('${d.id}')">Delete</button>
-                    </div>
-                    <div class="result-meta">
-                        ${d.chunks || 0} chunks | ${formatBytes(d.size || 0)} | ${d.created_at ? new Date(d.created_at).toLocaleDateString() : '-'}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function ingestFiles() {
-            const files = document.getElementById('file-input').files;
-            if (!files.length) return;
-
-            const status = document.getElementById('ingest-status');
-            status.textContent = 'Ingesting...';
-
-            const formData = new FormData();
-            for (const file of files) formData.append('files', file);
-
+            const n = $('nRech');
+            if (DEMO) { RECH = SOUV.filter(m => String(m.content).toLowerCase().includes(query.toLowerCase())); n.textContent = 'Démonstration : recherche locale sur des données fictives, aucun appel.'; rendreSouvenirs(); annoncer(); return; }
+            n.textContent = 'Recherche en cours…';
+            const r = await ecrire('POST', '/search', { query, limit: 10 });
+            if (r.ok && r.data && Array.isArray(r.data.results)) { RECH = r.data.results; n.textContent = r.data.results.length + ' résultat' + (r.data.results.length > 1 ? 's' : '') + '.'; }
+            else { RECH = null; n.textContent = 'Recherche impossible : ' + detail(r); }
+            rendreSouvenirs(); annoncer();
+        });
+        $('btnIng').addEventListener('click', async () => {
+            const f = $('fichiers').files;
+            if (!f.length) { retour('rIng', false, 'Choisissez au moins un fichier.'); return; }
+            if (DEMO) { retour('rIng', false, 'Démonstration : action inerte.'); return; }
+            const b = $('btnIng'); b.disabled = true; b.textContent = 'Envoi…';
+            const fd = new FormData(); for (const x of f) fd.append('files', x);
             try {
-                const token = localStorage.getItem('sbx_token');
-                const res = await fetch(API + '/ingest', {
-                    method: 'POST',
-                    headers: token ? { 'Authorization': 'Bearer ' + token } : {},
-                    body: formData
-                });
-                const data = await res.json();
-                status.textContent = `Ingested ${data.ingested || 0} documents`;
-                loadStatus();
-                loadDocuments();
-            } catch (e) {
-                status.textContent = 'Ingest failed: ' + e.message;
-            }
+                const h = {}; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+                const r = await fetch(API + '/ingest', { method: 'POST', credentials: 'same-origin', headers: h, body: fd });
+                let d = null; try { d = await r.json(); } catch (e) { /* corps vide */ }
+                if (r.ok) { retour('rIng', true, (d && d.ingested != null ? d.ingested : 0) + ' document(s) ingéré(s).'); charger(); }
+                else retour('rIng', false, 'Ingestion impossible : ' + detail({ statut: r.status, data: d }));
+            } catch (e) { retour('rIng', false, 'Ingestion impossible : serveur injoignable'); }
+            b.disabled = false; b.textContent = 'Ingérer';
+        });
+        async function supprimer(id) {
+            const r = await ecrire('DELETE', '/memories/' + encodeURIComponent(id));
+            if (r.ok) { RECH = RECH ? RECH.filter(m => m.id !== id) : RECH; retour('rSup', true, 'Souvenir supprimé.'); charger(); }
+            else { retour('rSup', false, 'Suppression impossible : ' + detail(r)); rendre(); }
         }
 
-        async function deleteDoc(id) {
-            if (!confirm('Delete this document?')) return;
-            await api(`/documents/${id}`, 'DELETE');
-            loadStatus();
-            loadDocuments();
-        }
+        $('rafraichir').addEventListener('click', charger);
+        charger();
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM || $('q').value) return; charger(); }, 30000);
 
-        loadStatus();
-        loadDocuments();
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

@@ -1,3 +1,21 @@
+secubox-ai-gateway (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pages /mcp-server/ et /localrecall/ refaites au profil Aurora (#2649) : pages autonomes, ?demo=1 (donnees fictives, actions
+    inertes) et ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue), aucune police ni feuille
+    distante, aucun dialogue natif, plus aucune donnee d'API injectee par innerHTML, mesure absente en « — ».
+  * Corrige : l'ancienne page MCP lisait des champs et la route /requests qui n'existent pas (tuiles a 0) et redirigeait sur 401 ;
+    la nouvelle lit /status, /stats, /tools et /requests?limit=10 (404 dit dans la page, rien d'invente). Les outils n'ont pas d'etat
+    actif/desactive dans l'API : non affiche.
+  * Corrige : l'ancienne page LocalRecall lisait /documents et des champs (total_documents, total_chunks, index_size_bytes) qui
+    n'existent pas ; elle lit /status, /stats et /memories?limit=10 et supprime par DELETE /memories/{id} (confirmation dans la
+    page). Recherche inchangee : POST /search {query, limit: 10}. Envoi de fichiers inchange : POST /ingest (multipart), route
+    toujours absente de l'API, l'echec est affiche dans la page.
+  * Non repris : « Chunks », « Requetes (24 h) » et latence (non fournis par l'API : « — »), liste des clients MCP (seul le nombre
+    de sessions est fourni), badge de version fige v1.0.0, theme CRT.
+  * Tests : tests/test_mcp_server_aurora_2649.py et tests/test_localrecall_aurora_2649.py (statique + navigateur Playwright).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 11:30:00 +0200
+
 secubox-ai-gateway (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /ai-gateway/ refaite au profil Aurora (#2597) : page autonome, lecture seule, ?demo=1 et ?embed=1, bandeau « session

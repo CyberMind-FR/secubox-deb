@@ -4,162 +4,279 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  Grafana : composants, état global, accès et tableau de bord des services.
+  Au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret n'est affiché ni stocké.
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — Grafana</title>
-<link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-<style>
-  html, body { margin: 0; padding: 0; height: 100%; }
-  .layout {
-    display: grid;
-    grid-template-columns: 260px 1fr;
-    height: 100vh;
-  }
-  .grafana-frame {
-    border: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--bg-1, #0f1320);
-  }
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 1rem;
-    background: var(--bg-2, #181c2c);
-    border-bottom: 1px solid var(--border, #2a3354);
-    color: var(--root-main, #00d49b);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
-  }
-  .topbar .actions a {
-    color: var(--root-main, #00d49b);
-    margin-left: 1rem;
-    text-decoration: none;
-  }
-  .topbar .actions a:hover { text-decoration: underline; }
-  .threefold {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--bg-1);
-  }
-  .threefold article {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    padding: 0.75rem 1rem;
-    border-radius: 4px;
-  }
-  .threefold h3 {
-    margin: 0 0 0.5rem 0;
-    color: var(--root-main);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-  }
-  .threefold .v { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
-  .container { display: flex; flex-direction: column; height: 100vh; }
-  .iframe-wrap { flex: 1; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Grafana</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nt,4),1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:560px} td.mono{white-space:nowrap}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)} tbody tr.sel{background:rgba(41,182,246,.12)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .verdict{display:flex;gap:10px;align-items:center;margin-top:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--trait2)}
+        .verdict b{font-size:1rem} .verdict.ok{border-color:var(--vert);color:var(--vert)} .verdict.ko{border-color:var(--rouge);color:var(--rouge)}
+        .sortie{margin:8px 0 0;max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        ol.etapes{margin:6px 0 0;padding-left:1.3rem;font-size:.8rem;color:var(--doux);display:grid;gap:4px} ol.etapes b{color:var(--texte)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px}
+        .onglets button{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button[aria-selected=true]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.18)}
+        .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .liste{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+        .elt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border:1px solid var(--trait);border-radius:10px;padding:8px 11px;background:rgba(8,18,38,.55);min-width:0}
+        .elt .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .elt .desc{color:var(--doux);font-size:.78rem;flex-basis:100%;overflow-wrap:anywhere}
+        .elt .act{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .elt .meta{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .journal{margin:0;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .sel-fichier{font:inherit;font-size:.8rem;color:var(--texte);min-width:0;max-width:100%}
+        form.saisie .coche{display:flex;align-items:center;gap:6px;color:var(--doux);font-size:.78rem}
+        form.saisie .coche input{width:auto}
+        .rech{display:flex;gap:8px;flex-wrap:wrap} .rech input{flex:1 1 200px;font:inherit;font-size:.85rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 10px;min-width:0}
+        .rech input:focus{outline:none;border-color:var(--cyan)}
+        .cadre-graf{width:100%;height:560px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.7)}
+        @media (max-width:600px){.cadre-graf{height:420px}}
+        a.lien{color:var(--cyan);overflow-wrap:anywhere}
+        .tuiles{--nt:3}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/></svg>
+                <div><h1>Grafana</h1><small>Métriques de sécurité et tableau de bord des services</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-<div class="layout">
-  <nav class="sidebar" id="sidebar"></nav>
-  <div class="container">
-    <div class="topbar">
-      <div><strong>SecuBox</strong> · Grafana — security metrics</div>
-      <div class="actions">
-        <a href="/" title="Back to SecuBox hub">← hub</a>
-        <a href="#" id="open-native" title="Open native Grafana in this tab">native UI</a>
-      </div>
-    </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cGlobal" title="État global calculé par grafanactl : sain si le conteneur, le démon Grafana et l'API hôte tournent ; dégradé si le conteneur existe et au moins le démon ou l'API tourne ; arrêté sinon."><span class="l">Statut</span><span class="v" id="tGlobal">—</span><span class="s">vert, jaune ou rouge</span></div>
+            <div class="tuile cy" id="cComp" title="Composants en fonctionnement sur le total relevé : conteneur LXC, démon grafana-server, service API hôte."><span class="l">Composants</span><span class="v" id="tComp">—</span><span class="s">en fonctionnement</span></div>
+            <div class="tuile cy" title="Nombre d'adresses d'accès à l'interface Grafana native (LAN et, si configuré, public)."><span class="l">Accès</span><span class="v" id="tAcces">—</span><span class="s">adresses déclarées</span></div>
+        </section>
 
-    <section class="threefold" id="threefold">
-      <article id="components-card">
-        <h3>Components</h3>
-        <div class="v" id="components-v">loading…</div>
-      </article>
-      <article id="status-card">
-        <h3>Status</h3>
-        <div class="v" id="status-v">loading…</div>
-      </article>
-      <article id="access-card">
-        <h3>Access</h3>
-        <div class="v" id="access-v">loading…</div>
-      </article>
-    </section>
+        <div class="grille">
+            <div class="pan"><h3>Composants <i>GET /components</i></h3>
+                <ul class="liste" id="lComp"></ul>
+            </div>
+            <div class="pan"><h3>Accès <i>GET /access</i></h3>
+                <ul class="liste" id="lAcces"></ul>
+                <div class="bout"><a class="btn prim" id="natif" href="#" hidden target="_blank" rel="noopener">Ouvrir l'interface Grafana native</a><a class="btn" href="/">← Retour au hub</a></div>
+                <p class="note">L'adresse native retenue est la publique si elle existe, sinon celle du réseau local.</p>
+            </div>
+        </div>
 
-    <div class="iframe-wrap">
-      <iframe class="grafana-frame"
-              src="/grafana/d/secubox-services/secubox-services-overview?kiosk=tv&theme=light"
-              title="Grafana dashboards"
-              referrerpolicy="no-referrer"></iframe>
-    </div>
-  </div>
-</div>
+        <div class="pan"><h3>Tableau de bord des services <i>Grafana, même origine</i></h3>
+            <iframe class="cadre-graf" id="graf" title="Tableaux de bord Grafana" referrerpolicy="no-referrer"></iframe>
+            <p class="note" id="nGraf"></p>
+        </div>
 
-<script src="/shared/sidebar.js"></script>
-<script src="/shared/api-utils.js"></script>
-<script>
-// Mandatory auth wrapper (matches docs/MODULE-GUIDELINES.md §4)
-(function() {
-  function getToken() { return localStorage.getItem('sbx_token'); }
-  function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine). Seule une
-            // vraie 401 redirige (gere dans les appels fetch).
-            return true;
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/grafana';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-  if (!checkAuth()) {
-    document.body.innerHTML = '<div style="padding:2rem;color:var(--root-main);">Redirecting to login...</div>';
-    return;
-  }
+        // Écriture : inerte en démonstration. Les routes, méthodes et corps sont ceux de l'ancienne page.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function taille(o) {
+            if (o === null || o === undefined || o === '' || isNaN(Number(o))) return '—';
+            o = Number(o);
+            if (o < 1024) return o + ' o';
+            if (o < 1048576) return (o / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            if (o < 1073741824) return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+            return (o / 1073741824).toFixed(1).replace('.', ',') + ' Go';
+        }
+        function date(ts) { if (!ts) return '—'; const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'grafana' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        const refus = es => es.some(e => e.status === 'rejected' && e.reason && (e.reason.statut === 401 || e.reason.statut === 403));
 
-  // Fill the threefold cards from /api/v1/grafana/*
-  function get(path) {
-    return fetch('/api/v1/grafana' + path, {
-      headers: { 'Authorization': 'Bearer ' + getToken() }
-    }).then(r => r.ok ? r.json() : Promise.reject(r.status));
-  }
 
-  get('/components').then(d => {
-    document.getElementById('components-v').innerHTML =
-      d.components.map(c => '<div>' + c.name + ': <strong>' + c.state + '</strong></div>').join('');
-  }).catch(() => {
-    document.getElementById('components-v').textContent = 'unavailable';
-  });
+        const SRC_GRAFANA = '/grafana/d/secubox-services/secubox-services-overview?kiosk=tv&theme=light';
+        let COMP = null, STAT = null, ACCES = null, SESSION_OK = true, CHARGE = false;
 
-  get('/status').then(d => {
-    document.getElementById('status-v').innerHTML =
-      '<span style="color:var(--' + (d.overall === 'green' ? 'root-main' : d.overall === 'yellow' ? 'wall-main' : 'auth-main') + ')">'
-      + (d.overall || 'unknown').toUpperCase() + '</span>';
-  }).catch(() => {
-    document.getElementById('status-v').textContent = 'unavailable';
-  });
+        function demoData() {
+            COMP = [{ name: 'lxc', state: 'running', detail: 'grafana @ 10.100.0.50 sur br-lxc' }, { name: 'daemon', state: 'running', detail: 'grafana-server, port 3000' }, { name: 'host-api', state: 'running', detail: 'secubox-grafana.service' }];
+            STAT = { overall: 'green' };
+            ACCES = [{ url: 'http://10.100.0.50:3000/', auth: 'lan-only', scope: 'lan' }, { url: 'https://grafana.example.org/', auth: 'LAN-gated', scope: 'public' }];
+        }
 
-  get('/access').then(d => {
-    var access = d.access || [];
-    document.getElementById('access-v').innerHTML =
-      access.map(a => '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>').join('');
-    // Single source of truth for the "native UI" button.
-    var pub = access.find(a => a.scope === 'public');
-    var lan = access.find(a => a.scope === 'lan');
-    var target = (pub && pub.url) || (lan && lan.url) || '#';
-    var btn = document.getElementById('open-native');
-    if (btn) { btn.href = target; btn.target = '_blank'; btn.rel = 'noopener'; }
-  }).catch(() => {
-    document.getElementById('access-v').textContent = 'unavailable';
-  });
-})();
-</script>
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const es = await Promise.allSettled([lire('/components'), lire('/status'), lire('/access')]);
+            const val = i => es[i].status === 'fulfilled' ? es[i].value : null;
+            SESSION_OK = !refus(es);
+            const c = val(0); COMP = c && Array.isArray(c.components) ? c.components : null;
+            STAT = val(1);
+            const a = val(2); ACCES = a && Array.isArray(a.access) ? a.access : null;
+            CHARGE = true;
+            const tous = es.every(e => e.status === 'rejected');
+            $('erreur').hidden = !(tous && SESSION_OK);
+            if (tous && SESSION_OK) $('erreur').textContent = 'Impossible de lire le service Grafana (arrêté ou injoignable).';
+            rendre();
+        }
 
+        const httpOk = u => typeof u === 'string' && /^https?:\/\//i.test(u);
+        const marche = c => String(c.state || '').toLowerCase() === 'running';
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat'), ov = STAT && STAT.overall;
+            const lib = { green: ['SAIN', 'ok'], yellow: ['DÉGRADÉ', 'att'], red: ['ARRÊTÉ', 'hors'] }[ov];
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!lib) { etat.className = 'actif hors'; etat.textContent = STAT || COMP || ACCES ? 'INCONNU' : 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (lib[1] === 'att' ? ' att' : lib[1] === 'hors' ? ' hors' : ''); etat.textContent = lib[0]; }
+            $('tGlobal').textContent = lib ? lib[0] : '—'; $('cGlobal').className = 'tuile ' + (lib ? lib[1] : 'cy');
+            $('tComp').textContent = COMP ? COMP.filter(marche).length + ' / ' + COMP.length : '—';
+            $('cComp').className = 'tuile ' + (COMP ? (COMP.every(marche) ? 'ok' : 'att') : 'cy');
+            $('tAcces').textContent = ACCES ? ACCES.length : '—';
+            rendreComp(); rendreAcces(); rendreGraf();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreComp() {
+            const ul = $('lComp'); ul.replaceChildren();
+            if (!COMP || !COMP.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : 'Aucun composant relevé')); return; }
+            COMP.forEach(c => {
+                const li = el('li', 'elt');
+                li.appendChild(el('span', 'nom', tiret(c.name)));
+                li.appendChild(el('span', 'pill ' + (marche(c) ? 'ok' : 'hors'), tiret(c.state).toUpperCase()));
+                if (c.detail) li.appendChild(el('span', 'desc', c.detail));
+                ul.appendChild(li);
+            });
+        }
+
+        function rendreAcces() {
+            const ul = $('lAcces'); ul.replaceChildren();
+            const n = $('natif');
+            const pub = ACCES && ACCES.find(a => a.scope === 'public'), lan = ACCES && ACCES.find(a => a.scope === 'lan');
+            const cible = (pub && pub.url) || (lan && lan.url) || '';
+            if (httpOk(cible)) { n.href = cible; n.hidden = false; } else { n.removeAttribute('href'); n.hidden = true; }
+            if (!ACCES || !ACCES.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : 'Aucune adresse déclarée')); return; }
+            ACCES.forEach(a => {
+                const li = el('li', 'elt');
+                li.appendChild(el('span', 'nom', tiret(a.scope)));
+                if (a.auth) li.appendChild(el('span', 'pill', a.auth));
+                if (httpOk(a.url)) { const l = el('a', 'lien', a.url); l.href = a.url; l.target = '_blank'; l.rel = 'noopener'; li.appendChild(l); }
+                else li.appendChild(el('span', 'meta', tiret(a.url)));
+                ul.appendChild(li);
+            });
+        }
+
+        function rendreGraf() {
+            const f = $('graf');
+            if (DEMO) { f.hidden = true; $('nGraf').textContent = 'Démonstration : le tableau de bord Grafana n’est pas chargé.'; return; }
+            f.hidden = false; $('nGraf').textContent = '';
+            if (!f.getAttribute('src')) f.setAttribute('src', SRC_GRAFANA);
+        }
+
+        $('rafraichir').addEventListener('click', charger);
+        charger();
+        setInterval(() => { if (!document.hidden && !DEMO) charger(); }, 30000);
+
+    </script>
 </body>
 </html>

@@ -4,270 +4,395 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Serveur XMPP Prosody : service, utilisateurs, domaines virtuels, journaux.
+  Au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret n'est affiché ni stocké.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jabber - SecuBox</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Jabber XMPP</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root { --xmpp-green: #00a86b; --xmpp-light: #00cc84; --xmpp-dark: #008555; }
-        body.dark { --xmpp-green: #00cc84; --xmpp-light: #33d69e; --xmpp-dark: #00a86b; }
-        .accent { color: var(--xmpp-green); }
-        .accent-bg { background-color: var(--xmpp-green); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 1.75rem; font-weight: bold; color: var(--xmpp-green); }
-        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--xmpp-green); color: white; border-color: var(--xmpp-green); }
-        .btn.primary:hover { background: var(--xmpp-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--xmpp-green); border-bottom-color: var(--xmpp-green); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .user-list { display: grid; gap: 0.5rem; }
-        .user-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .user-icon { font-size: 1.5rem; }
-        .user-info { flex: 1; }
-        .user-jid { font-weight: 500; font-family: monospace; }
-        .user-domain { font-size: 0.875rem; color: var(--text-secondary); }
-        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 300px; overflow-y: auto; white-space: pre-wrap; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
-        .add-form { max-width: 400px; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem; }
-        .install-form { max-width: 400px; margin: 2rem auto; padding: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; text-align: center; }
-        .hidden { display: none !important; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nt,4),1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:560px} td.mono{white-space:nowrap}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)} tbody tr.sel{background:rgba(41,182,246,.12)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .verdict{display:flex;gap:10px;align-items:center;margin-top:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--trait2)}
+        .verdict b{font-size:1rem} .verdict.ok{border-color:var(--vert);color:var(--vert)} .verdict.ko{border-color:var(--rouge);color:var(--rouge)}
+        .sortie{margin:8px 0 0;max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        ol.etapes{margin:6px 0 0;padding-left:1.3rem;font-size:.8rem;color:var(--doux);display:grid;gap:4px} ol.etapes b{color:var(--texte)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px}
+        .onglets button{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button[aria-selected=true]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.18)}
+        .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .liste{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+        .elt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border:1px solid var(--trait);border-radius:10px;padding:8px 11px;background:rgba(8,18,38,.55);min-width:0}
+        .elt .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .elt .desc{color:var(--doux);font-size:.78rem;flex-basis:100%;overflow-wrap:anywhere}
+        .elt .act{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .elt .meta{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .journal{margin:0;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .sel-fichier{font:inherit;font-size:.8rem;color:var(--texte);min-width:0;max-width:100%}
+        form.saisie .coche{display:flex;align-items:center;gap:6px;color:var(--doux);font-size:.78rem}
+        form.saisie .coche input{width:auto}
+        .rech{display:flex;gap:8px;flex-wrap:wrap} .rech input{flex:1 1 200px;font:inherit;font-size:.85rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 10px;min-width:0}
+        .rech input:focus{outline:none;border-color:var(--cyan)}
+        .cadre-graf{width:100%;height:560px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.7)}
+        @media (max-width:600px){.cadre-graf{height:420px}}
+        a.lien{color:var(--cyan);overflow-wrap:anywhere}
+        .tuiles{--nt:5}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">Jabber</span> XMPP Server</h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
-        </div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20.5l1.3-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/></svg>
+                <div><h1>Jabber XMPP</h1><small>Serveur de messagerie Prosody</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div id="install-section" class="install-form hidden">
-            <h2>Install Prosody</h2>
-            <form onsubmit="install(event)">
-                <div class="form-group"><label>Domain</label><input type="text" id="install-domain" placeholder="chat.example.com" required></div>
-                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install Prosody</button>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cSvc" title="État du service Prosody (systemctl is-active prosody) : actif, arrêté ou non installé."><span class="l">Service Prosody</span><span class="v" id="tSvc">—</span><span class="s">serveur XMPP</span></div>
+            <div class="tuile cy" title="Comptes XMPP comptés dans les dossiers de Prosody. Compté seulement quand le service tourne."><span class="l">Utilisateurs</span><span class="v" id="tUsers">—</span><span class="s">comptes</span></div>
+            <div class="tuile cy" title="Domaines virtuels (VirtualHost) déclarés dans Prosody."><span class="l">Domaines</span><span class="v" id="tHosts">—</span><span class="s">virtuels</span></div>
+            <div class="tuile cy" title="Port d'écoute des clients XMPP (client vers serveur), champ c2s_port de GET /status."><span class="l">Port C2S</span><span class="v" id="tC2s">—</span><span class="s">clients</span></div>
+            <div class="tuile cy" title="Port d'écoute de la fédération XMPP (serveur vers serveur), champ s2s_port de GET /status."><span class="l">Port S2S</span><span class="v" id="tS2s">—</span><span class="s">fédération</span></div>
+        </section>
+
+        <div class="pan" id="pInstall" hidden><h3>Installer Prosody <i>POST /install</i></h3>
+            <form class="saisie" id="fInstall">
+                <label>Domaine<input id="instDomaine" placeholder="chat.example.com" required autocomplete="off"></label>
+                <div class="bout" style="margin:0"><button class="btn prim" id="btnInstall" type="submit">Installer Prosody</button></div>
             </form>
+            <div id="rInstall" class="retour" hidden></div>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="users-count">0</div><div class="stat-label">Users</div></div>
-                <div class="stat-card"><div class="stat-value" id="hosts-count">0</div><div class="stat-label">Hosts</div></div>
-                <div class="stat-card"><div class="stat-value">5222</div><div class="stat-label">C2S Port</div></div>
-                <div class="stat-card"><div class="stat-value">5269</div><div class="stat-label">S2S Port</div></div>
+        <div id="principal" hidden>
+            <div class="pan"><h3>Service <i>POST /start, /stop, /restart, /reload</i></h3>
+                <div class="bout" style="margin-top:0"><button class="btn prim" id="btnStart" type="button">Démarrer</button><button class="btn" id="btnStop" type="button" disabled>Arrêter</button><button class="btn" id="btnRestart" type="button" disabled>Redémarrer</button><button class="btn" id="btnReload" type="button">Recharger la configuration</button></div>
+                <div id="rSvc" class="retour" hidden></div>
             </div>
 
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-                <button class="btn" onclick="reloadConfig()">Reload</button>
-            </div>
-
-            <div class="tabs">
-                <button class="tab active" data-tab="users">Users</button>
-                <button class="tab" data-tab="hosts">Hosts</button>
-                <button class="tab" data-tab="logs">Logs</button>
-            </div>
-
-            <div id="tab-users" class="tab-content active">
-                <div class="add-form">
-                    <h4 style="margin-top:0;">Add User</h4>
-                    <form onsubmit="createUser(event)">
-                        <div class="form-group"><label>Username</label><input type="text" id="user-name" required></div>
-                        <div class="form-group"><label>Domain</label><select id="user-domain"></select></div>
-                        <div class="form-group"><label>Password</label><input type="password" id="user-pass" minlength="6" required></div>
-                        <button type="submit" class="btn primary">Create User</button>
-                    </form>
+            <div class="pan" style="margin-top:10px">
+                <div class="onglets" role="tablist">
+                    <button type="button" role="tab" id="oUsers" data-tab="users" aria-selected="true">Utilisateurs</button>
+                    <button type="button" role="tab" id="oHosts" data-tab="hosts" aria-selected="false">Domaines</button>
+                    <button type="button" role="tab" id="oLogs" data-tab="logs" aria-selected="false">Journaux</button>
                 </div>
-                <div id="users-list" class="user-list"></div>
-            </div>
 
-            <div id="tab-hosts" class="tab-content">
-                <div class="add-form">
-                    <h4 style="margin-top:0;">Add Host</h4>
-                    <form onsubmit="createHost(event)">
-                        <div class="form-group"><label>Domain</label><input type="text" id="host-domain" placeholder="chat.example.com" required></div>
-                        <div class="form-group"><label><input type="checkbox" id="host-reg"> Allow Registration</label></div>
-                        <button type="submit" class="btn primary">Add Host</button>
+                <section id="tab-users" style="margin-top:12px">
+                    <h3>Ajouter un utilisateur <i>POST /users</i></h3>
+                    <form class="saisie" id="fUser">
+                        <label>Nom d'utilisateur<input id="uNom" required autocomplete="off"></label>
+                        <label>Domaine<select id="uDom"></select></label>
+                        <label>Mot de passe (6 caractères minimum)<input id="uPass" type="password" minlength="6" required autocomplete="new-password"></label>
+                        <div class="bout" style="margin:0"><button class="btn prim" id="btnUser" type="submit">Créer l'utilisateur</button></div>
                     </form>
-                </div>
-                <div id="hosts-list" class="user-list"></div>
-            </div>
+                    <div id="rUser" class="retour" hidden></div>
+                    <h3 style="margin-top:14px">Comptes <i id="nUsers"></i></h3>
+                    <ul class="liste" id="lUsers"></ul>
+                </section>
 
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
-                <div id="log-viewer" class="log-viewer">Loading...</div>
+                <section id="tab-hosts" style="margin-top:12px" hidden>
+                    <h3>Ajouter un domaine <i>POST /hosts</i></h3>
+                    <form class="saisie" id="fHost">
+                        <label>Domaine<input id="hDom" placeholder="chat.example.com" required autocomplete="off"></label>
+                        <label class="coche"><input type="checkbox" id="hReg"> Autoriser l'inscription libre</label>
+                        <div class="bout" style="margin:0"><button class="btn prim" id="btnHost" type="submit">Ajouter le domaine</button></div>
+                    </form>
+                    <div id="rHost" class="retour" hidden></div>
+                    <h3 style="margin-top:14px">Domaines déclarés <i id="nHosts"></i></h3>
+                    <ul class="liste" id="lHosts"></ul>
+                </section>
+
+                <section id="tab-logs" style="margin-top:12px" hidden>
+                    <h3>Journaux Prosody <i>GET /logs?lines=200</i></h3>
+                    <div class="bout" style="margin:0 0 8px"><button class="btn" id="btnLogs" type="button">Actualiser</button></div>
+                    <pre class="journal mono" id="journal">—</pre>
+                </section>
             </div>
         </div>
-    </div>
-    </main>
 
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
     <script>
-        const API = '/api/v1/jabber';
-        let hosts = [];
 
-        async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/jabber';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
             return r.json();
         }
-
-        async function loadStatus() {
+        // Écriture : inerte en démonstration. Les routes, méthodes et corps sont ceux de l'ancienne page.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (!d.installed) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
-                    return;
-                }
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                hosts = d.hosts || [];
-                updateDomainSelect();
-                if (d.running) {
-                    badge.textContent = 'Running'; badge.className = 'status-badge running';
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    document.getElementById('btn-restart').disabled = false;
-                    loadUsers(); loadHosts();
-                } else {
-                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
-                    document.getElementById('btn-start').disabled = false;
-                    document.getElementById('btn-stop').disabled = true;
-                    document.getElementById('btn-restart').disabled = true;
-                }
-                document.getElementById('users-count').textContent = d.users || 0;
-                document.getElementById('hosts-count').textContent = d.hosts?.length || 0;
-            } catch (e) { console.error(e); }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function taille(o) {
+            if (o === null || o === undefined || o === '' || isNaN(Number(o))) return '—';
+            o = Number(o);
+            if (o < 1024) return o + ' o';
+            if (o < 1048576) return (o / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            if (o < 1073741824) return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+            return (o / 1073741824).toFixed(1).replace('.', ',') + ' Go';
+        }
+        function date(ts) { if (!ts) return '—'; const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'jabber' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        const refus = es => es.some(e => e.status === 'rejected' && e.reason && (e.reason.statut === 401 || e.reason.statut === 403));
+
+
+        let ST = null, HOTES = [], USERS = [], SESSION_OK = true, CHARGE = false, CONFIRM = null, ONGLET = 'users', JOURNAL = null;
+        const MAJ = e => e.preventDefault();
+
+        function demoData() {
+            ST = { installed: true, running: true, users: 2, hosts: ['chat.example.org'], c2s_port: 5222, s2s_port: 5269 };
+            HOTES = [{ domain: 'chat.example.org', enabled: true, registration: false }, { domain: 'xmpp.example.net', enabled: false, registration: true }];
+            USERS = [{ username: 'alice', domain: 'chat.example.org', jid: 'alice@chat.example.org' }, { username: 'bob', domain: 'chat.example.org', jid: 'bob@chat.example.org' }];
+            JOURNAL = ['Oct 14 09:12:01 general info Prosody démarré (démonstration)', 'Oct 14 09:12:02 c2s info Écoute sur 5222 (démonstration)'];
         }
 
-        function updateDomainSelect() {
-            const sel = document.getElementById('user-domain');
-            sel.innerHTML = hosts.map(h => `<option value="${h}">${h}</option>`).join('') || '<option value="localhost">localhost</option>';
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const es = await Promise.allSettled([lire('/status')]);
+            SESSION_OK = !refus(es);
+            ST = es[0].status === 'fulfilled' ? es[0].value : null;
+            CHARGE = true;
+            $('erreur').hidden = !(!ST && SESSION_OK);
+            if (!ST && SESSION_OK) $('erreur').textContent = 'Impossible de lire le service XMPP (arrêté ou injoignable).';
+            if (ST && ST.installed && ST.running) {
+                const e2 = await Promise.allSettled([lire('/users'), lire('/hosts')]);
+                USERS = e2[0].status === 'fulfilled' && Array.isArray(e2[0].value.users) ? e2[0].value.users : [];
+                HOTES = e2[1].status === 'fulfilled' && Array.isArray(e2[1].value.hosts) ? e2[1].value.hosts : [];
+            } else { USERS = []; HOTES = []; }
+            rendre();
         }
 
-        async function loadUsers() {
-            try {
-                const d = await api('/users');
-                const list = document.getElementById('users-list');
-                if (!d.users || d.users.length === 0) { list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No users</p>'; return; }
-                list.innerHTML = d.users.map(u => `
-                    <div class="user-item">
-                        <div class="user-icon">👤</div>
-                        <div class="user-info">
-                            <div class="user-jid">${u.jid}</div>
-                            <div class="user-domain">${u.domain}</div>
-                        </div>
-                        <button class="btn" onclick="deleteUser('${u.jid}')" style="color:var(--error);">Delete</button>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat'), s = ST;
+            let svc = '—', cls = 'cy';
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!s.installed) { etat.className = 'actif att'; etat.textContent = 'NON INSTALLÉ'; svc = 'Non installé'; cls = 'att'; }
+            else if (s.running) { etat.className = 'actif'; etat.textContent = 'ACTIF'; svc = 'Actif'; cls = 'ok'; }
+            else { etat.className = 'actif hors'; etat.textContent = 'ARRÊTÉ'; svc = 'Arrêté'; cls = 'hors'; }
+            $('tSvc').textContent = svc; $('cSvc').className = 'tuile ' + cls;
+            $('tUsers').textContent = s && s.running ? nb(s.users) : '—';
+            $('tHosts').textContent = s && s.hosts ? s.hosts.length : '—';
+            $('tC2s').textContent = s ? tiret(s.c2s_port) : '—';
+            $('tS2s').textContent = s ? tiret(s.s2s_port) : '—';
+            const inst = !!(s && s.installed);
+            $('pInstall').hidden = !(s && !s.installed);
+            $('principal').hidden = !inst;
+            const run = !!(s && s.running);
+            $('btnStart').disabled = run; $('btnStop').disabled = !run; $('btnRestart').disabled = !run;
+            rendreSelecteur(); rendreUsers(); rendreHotes(); rendreOnglet();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadHosts() {
-            try {
-                const d = await api('/hosts');
-                const list = document.getElementById('hosts-list');
-                if (!d.hosts || d.hosts.length === 0) { list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No hosts</p>'; return; }
-                list.innerHTML = d.hosts.map(h => `
-                    <div class="user-item">
-                        <div class="user-icon">🌐</div>
-                        <div class="user-info">
-                            <div class="user-jid">${h.domain}</div>
-                            <div class="user-domain">${h.enabled ? 'Enabled' : 'Disabled'} · Registration: ${h.registration ? 'Open' : 'Closed'}</div>
-                        </div>
-                        <button class="btn" onclick="deleteHost('${h.domain}')" style="color:var(--error);">Delete</button>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
+        function rendreSelecteur() {
+            const sel = $('uDom'), cur = sel.value; sel.replaceChildren();
+            const noms = ST && ST.hosts && ST.hosts.length ? ST.hosts : ['localhost'];
+            noms.forEach(h => { const o = el('option', '', h); o.value = h; sel.appendChild(o); });
+            if (noms.indexOf(cur) >= 0) sel.value = cur;
         }
 
-        async function install(e) {
-            e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Installing...';
-            try { await api(`/install?domain=${document.getElementById('install-domain').value}`, { method: 'POST' }); await loadStatus(); } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; btn.textContent = 'Install Prosody'; }
+        function ligneConfirm(act, cle, texte, fn) {
+            if (CONFIRM === cle) {
+                act.appendChild(el('span', 'note', texte));
+                act.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                act.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else act.appendChild(btn('Supprimer', 'danger', () => { CONFIRM = cle; rendre(); }));
         }
 
-        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function reloadConfig() { try { await api('/reload', { method: 'POST' }); alert('Config reloaded'); } catch (e) { alert('Failed: ' + e.message); } }
-
-        async function createUser(e) {
-            e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true;
-            try {
-                await api('/users', { method: 'POST', body: JSON.stringify({
-                    username: document.getElementById('user-name').value,
-                    domain: document.getElementById('user-domain').value,
-                    password: document.getElementById('user-pass').value
-                })});
-                document.getElementById('user-name').value = '';
-                document.getElementById('user-pass').value = '';
-                loadUsers(); loadStatus();
-            } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; }
-        }
-
-        async function createHost(e) {
-            e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true;
-            try {
-                await api('/hosts', { method: 'POST', body: JSON.stringify({
-                    domain: document.getElementById('host-domain').value,
-                    enable_registration: document.getElementById('host-reg').checked
-                })});
-                document.getElementById('host-domain').value = '';
-                loadHosts(); loadStatus();
-            } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; }
-        }
-
-        async function deleteUser(jid) { if (!confirm(`Delete ${jid}?`)) return; try { await api(`/users/${encodeURIComponent(jid)}`, { method: 'DELETE' }); loadUsers(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function deleteHost(domain) { if (!confirm(`Delete ${domain}?`)) return; try { await api(`/hosts/${domain}`, { method: 'DELETE' }); loadHosts(); loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-
-        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
-
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-                if (tab.dataset.tab === 'logs') loadLogs();
+        function rendreUsers() {
+            const ul = $('lUsers'); ul.replaceChildren();
+            $('nUsers').textContent = USERS.length ? USERS.length + ' compte' + (USERS.length > 1 ? 's' : '') : '';
+            if (!USERS.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : (ST && ST.running ? 'Aucun utilisateur' : 'Service arrêté : comptes non lus'))); return; }
+            USERS.forEach(u => {
+                const li = el('li', 'elt');
+                li.appendChild(el('span', 'nom mono', tiret(u.jid)));
+                li.appendChild(el('span', 'meta', 'Domaine : ' + tiret(u.domain)));
+                const act = el('span', 'act');
+                ligneConfirm(act, 'u:' + u.jid, 'Supprimer ce compte, sans retour possible ?', () => supprimerUser(u.jid));
+                li.appendChild(act); ul.appendChild(li);
             });
-        });
+        }
 
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus(); setInterval(loadStatus, 30000);
+        function rendreHotes() {
+            const ul = $('lHosts'); ul.replaceChildren();
+            $('nHosts').textContent = HOTES.length ? HOTES.length + ' domaine' + (HOTES.length > 1 ? 's' : '') : '';
+            if (!HOTES.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : (ST && ST.running ? 'Aucun domaine' : 'Service arrêté : domaines non lus'))); return; }
+            HOTES.forEach(h => {
+                const li = el('li', 'elt');
+                li.appendChild(el('span', 'nom mono', tiret(h.domain)));
+                li.appendChild(el('span', 'pill ' + (h.enabled ? 'ok' : 'hors'), h.enabled ? 'ACTIVÉ' : 'DÉSACTIVÉ'));
+                li.appendChild(el('span', 'meta', 'Inscription libre : ' + (h.registration ? 'ouverte' : 'fermée')));
+                const act = el('span', 'act');
+                ligneConfirm(act, 'h:' + h.domain, 'Supprimer ce domaine, sans retour possible ?', () => supprimerHote(h.domain));
+                li.appendChild(act); ul.appendChild(li);
+            });
+        }
+
+        function rendreOnglet() {
+            ['users', 'hosts', 'logs'].forEach(t => {
+                $('tab-' + t).hidden = t !== ONGLET;
+                $('o' + t.charAt(0).toUpperCase() + t.slice(1)).setAttribute('aria-selected', String(t === ONGLET));
+            });
+        }
+        document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => {
+            ONGLET = b.dataset.tab; rendreOnglet(); if (ONGLET === 'logs') chargerJournal(); annoncer();
+        }));
+
+        async function chargerJournal() {
+            const j = $('journal');
+            if (DEMO) { j.textContent = JOURNAL.join('\n'); return; }
+            try { const d = await lire('/logs?lines=200'); j.textContent = d.logs && d.logs.length ? d.logs.join('\n') : 'Aucun journal'; }
+            catch (e) { j.textContent = 'Journaux illisibles : ' + e.message; }
+            annoncer();
+        }
+        $('btnLogs').addEventListener('click', chargerJournal);
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        $('fInstall').addEventListener('submit', async ev => {
+            MAJ(ev); const b = $('btnInstall'); b.disabled = true; b.textContent = 'Installation…';
+            const r = await ecrire('POST', '/install?domain=' + encodeURIComponent($('instDomaine').value));
+            b.disabled = false; b.textContent = 'Installer Prosody';
+            if (r.ok) { retour('rInstall', true, 'Prosody installé.'); charger(); } else retour('rInstall', false, 'Installation impossible : ' + detail(r));
+        });
+        async function service(action, bouton, libelle) {
+            if (bouton) bouton.disabled = true;
+            const r = await ecrire('POST', '/' + action);
+            if (r.ok) { retour('rSvc', true, libelle); await charger(); } else { retour('rSvc', false, 'Échec : ' + detail(r)); rendre(); }
+        }
+        $('btnStart').addEventListener('click', () => service('start', $('btnStart'), 'Service démarré.'));
+        $('btnStop').addEventListener('click', () => service('stop', $('btnStop'), 'Service arrêté.'));
+        $('btnRestart').addEventListener('click', () => service('restart', $('btnRestart'), 'Service redémarré.'));
+        $('btnReload').addEventListener('click', () => service('reload', null, 'Configuration rechargée.'));
+
+        $('fUser').addEventListener('submit', async ev => {
+            MAJ(ev); const b = $('btnUser'); b.disabled = true;
+            const r = await ecrire('POST', '/users', { username: $('uNom').value, domain: $('uDom').value, password: $('uPass').value });
+            b.disabled = false; $('uPass').value = '';
+            if (r.ok) { retour('rUser', true, 'Utilisateur créé.'); $('uNom').value = ''; charger(); } else retour('rUser', false, 'Création impossible : ' + detail(r));
+        });
+        $('fHost').addEventListener('submit', async ev => {
+            MAJ(ev); const b = $('btnHost'); b.disabled = true;
+            const r = await ecrire('POST', '/hosts', { domain: $('hDom').value, enable_registration: $('hReg').checked });
+            b.disabled = false;
+            if (r.ok) { retour('rHost', true, 'Domaine ajouté.'); $('hDom').value = ''; charger(); } else retour('rHost', false, 'Ajout impossible : ' + detail(r));
+        });
+        async function supprimerUser(jid) {
+            const r = await ecrire('DELETE', '/users/' + encodeURIComponent(jid));
+            if (r.ok) { retour('rUser', true, 'Compte supprimé.'); charger(); } else { retour('rUser', false, 'Suppression impossible : ' + detail(r)); rendre(); }
+        }
+        async function supprimerHote(domaine) {
+            const r = await ecrire('DELETE', '/hosts/' + encodeURIComponent(domaine));
+            if (r.ok) { retour('rHost', true, 'Domaine supprimé.'); charger(); } else { retour('rHost', false, 'Suppression impossible : ' + detail(r)); rendre(); }
+        }
+
+        $('rafraichir').addEventListener('click', charger);
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || $('uNom').value || $('uPass').value || $('hDom').value || $('instDomaine').value) return;
+            charger();
+        }, 30000);
+
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

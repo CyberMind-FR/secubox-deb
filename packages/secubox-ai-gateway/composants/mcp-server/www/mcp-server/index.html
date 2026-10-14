@@ -4,181 +4,293 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Serveur MCP (Model Context Protocol) : outils, ressources, sessions et requêtes récentes.
+  Au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret n'est affiché ni stocké.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - MCP Server</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — MCP Server</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root { --p31-peak: #00dd44; --p31-mid: #009933; --p31-dim: #006622; --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --bg-card: var(--tube-pale); --border: var(--tube-soft); --text: #1b3d1c; --text-dim: var(--p31-dim); --primary: var(--p31-peak); --danger: #ff4466; --warning: #ffb347; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; background: var(--tube-light); border: 1px solid var(--border); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
-        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; }
-        .btn:hover { background: var(--tube-light); }
-        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
-        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; background: var(--tube-light); }
-        .tool-card { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
-        .tool-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .tool-name { font-weight: 600; font-family: monospace; }
-        .tool-desc { font-size: 0.85rem; color: var(--text-dim); }
-        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.5rem; }
-        .status-dot.active { background: var(--primary); }
-        .status-dot.inactive { background: var(--danger); }
-        .empty-state { text-align: center; padding: 2rem; color: var(--text-dim); }
-        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nt,4),1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:560px} td.mono{white-space:nowrap}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)} tbody tr.sel{background:rgba(41,182,246,.12)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .verdict{display:flex;gap:10px;align-items:center;margin-top:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--trait2)}
+        .verdict b{font-size:1rem} .verdict.ok{border-color:var(--vert);color:var(--vert)} .verdict.ko{border-color:var(--rouge);color:var(--rouge)}
+        .sortie{margin:8px 0 0;max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        ol.etapes{margin:6px 0 0;padding-left:1.3rem;font-size:.8rem;color:var(--doux);display:grid;gap:4px} ol.etapes b{color:var(--texte)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px}
+        .onglets button{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button[aria-selected=true]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.18)}
+        .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .liste{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+        .elt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border:1px solid var(--trait);border-radius:10px;padding:8px 11px;background:rgba(8,18,38,.55);min-width:0}
+        .elt .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .elt .desc{color:var(--doux);font-size:.78rem;flex-basis:100%;overflow-wrap:anywhere}
+        .elt .act{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .elt .meta{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .journal{margin:0;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .sel-fichier{font:inherit;font-size:.8rem;color:var(--texte);min-width:0;max-width:100%}
+        form.saisie .coche{display:flex;align-items:center;gap:6px;color:var(--doux);font-size:.78rem}
+        form.saisie .coche input{width:auto}
+        .rech{display:flex;gap:8px;flex-wrap:wrap} .rech input{flex:1 1 200px;font:inherit;font-size:.85rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 10px;min-width:0}
+        .rech input:focus{outline:none;border-color:var(--cyan)}
+        .cadre-graf{width:100%;height:560px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.7)}
+        @media (max-width:600px){.cadre-graf{height:420px}}
+        a.lien{color:var(--cyan);overflow-wrap:anywhere}
+        .tuiles{--nt:3}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <div class="main">
-        <div class="header">
-            <h1>🔧 MCP Server</h1>
-            <span class="badge">v1.0.0</span>
-        </div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.1-.6-.6-2.1z"/></svg>
+                <div><h1>Serveur MCP</h1><small>Outils et ressources exposés aux clients IA</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">🔌</div>
-                <div class="stat-value" id="connected-clients">-</div>
-                <div class="stat-label">Connected Clients</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🛠️</div>
-                <div class="stat-value" id="available-tools">-</div>
-                <div class="stat-label">Available Tools</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">📊</div>
-                <div class="stat-value" id="requests-24h">-</div>
-                <div class="stat-label">Requests (24h)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">⚡</div>
-                <div class="stat-value" id="avg-latency">-</div>
-                <div class="stat-label">Avg Latency (ms)</div>
-            </div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Sessions MCP ouvertes sur le serveur (champ sessions de GET /stats). L'API donne leur nombre, pas leur liste."><span class="l">Clients connectés</span><span class="v" id="tClients">—</span><span class="s">sessions MCP</span></div>
+            <div class="tuile cy" title="Nombre d'outils MCP déclarés par le serveur (champ tools de GET /status)."><span class="l">Outils disponibles</span><span class="v" id="tOutils">—</span><span class="s">déclarés</span></div>
+            <div class="tuile cy" title="Nombre de ressources MCP (secubox://…) exposées aux clients (champ resources de GET /status)."><span class="l">Ressources</span><span class="v" id="tRes">—</span><span class="s">exposées</span></div>
+            <div class="tuile cy" title="Nombre de modèles de requêtes (prompts) MCP déclarés (champ prompts de GET /stats)."><span class="l">Prompts</span><span class="v" id="tPrompts">—</span><span class="s">déclarés</span></div>
+            <div class="tuile cy" title="L'API ne compte pas les requêtes sur 24 h : la valeur reste à « — » plutôt qu'inventée."><span class="l">Requêtes (24 h)</span><span class="v" id="tReq">—</span><span class="s">non fourni par l'API</span></div>
+            <div class="tuile cy" title="L'API ne mesure pas la latence : la valeur reste à « — » plutôt qu'inventée."><span class="l">Latence moyenne</span><span class="v" id="tLat">—</span><span class="s">non fourni par l'API</span></div>
+        </section>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>🛠️ Available Tools</h2>
-                <button class="btn btn-sm" onclick="loadTools()">Refresh</button>
+        <div class="grille">
+            <div class="pan"><h3>Outils disponibles <i>GET /tools</i></h3>
+                <ul class="liste" id="lOutils"></ul>
+                <p class="note">Les outils sont déclarés par le serveur ; l'API ne fournit pas d'état activé / désactivé par outil.</p>
             </div>
-            <div id="tools-list">
-                <div class="empty-state">Loading tools...</div>
+            <div class="pan"><h3>Serveur MCP <i>GET /status</i></h3>
+                <dl class="kv">
+                    <dt>Module</dt><dd id="dModule">—</dd><dt>État</dt><dd id="dEtat">—</dd><dt>Version</dt><dd id="dVersion">—</dd><dt>Protocole MCP</dt><dd id="dMcp">—</dd>
+                </dl>
+                <h3 style="margin-top:14px">Clients connectés</h3>
+                <p class="note" id="nClients" style="margin-top:0">—</p>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>📋 Recent Requests</h2>
-            </div>
-            <table>
-                <thead>
-                    <tr><th>Time</th><th>Client</th><th>Tool</th><th>Latency</th><th>Status</th></tr>
-                </thead>
-                <tbody id="requests-table">
-                    <tr><td colspan="5" class="empty-state">No recent requests</td></tr>
-                </tbody>
-            </table>
+        <div class="pan"><h3>Requêtes récentes <i>GET /requests?limit=10</i></h3>
+            <div class="tab"><table><thead><tr><th>Heure</th><th>Client</th><th>Outil</th><th>Latence</th><th>Statut</th></tr></thead><tbody id="bReq"></tbody></table></div>
+            <p class="note" id="nReq"></p>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>🔌 Connected Clients</h2>
-            </div>
-            <div id="clients-list">
-                <div class="empty-state">No clients connected</div>
-            </div>
-        </div>
-    </div>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
+
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/mcp-server';
-
-        async function api(path, method = 'GET', data = null) {
-            const token = localStorage.getItem('sbx_token');
-            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nb = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR');
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : inerte en démonstration. Les routes, méthodes et corps sont ceux de l'ancienne page.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { method, headers, body: data ? JSON.stringify(data) : null });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
-                return res.json();
-            } catch { return null; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function taille(o) {
+            if (o === null || o === undefined || o === '' || isNaN(Number(o))) return '—';
+            o = Number(o);
+            if (o < 1024) return o + ' o';
+            if (o < 1048576) return (o / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            if (o < 1073741824) return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+            return (o / 1073741824).toFixed(1).replace('.', ',') + ' Go';
+        }
+        function date(ts) { if (!ts) return '—'; const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'mcp-server' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        const refus = es => es.some(e => e.status === 'rejected' && e.reason && (e.reason.statut === 401 || e.reason.statut === 403));
+
+
+        let STATUT = null, STATS = null, OUTILS = [], REQ = null, REQ_DISPO = true, SESSION_OK = true, CHARGE = false;
+
+        function demoData() {
+            const t = Date.now();
+            STATUT = { module: 'mcp-server', status: 'ok', version: '1.0.0', mcp_version: '2024-11-05', tools: 3, resources: 4 };
+            STATS = { sessions: 2, tools: 3, resources: 4, prompts: 2 };
+            OUTILS = [
+                { name: 'secubox_status', description: 'État global de la machine (démonstration).', inputSchema: { type: 'object', properties: { module: {} } } },
+                { name: 'secubox_firewall_list', description: 'Liste des règles du pare-feu (démonstration).', inputSchema: { type: 'object', properties: {} } },
+                { name: 'secubox_wireguard_peers', description: 'Pairs WireGuard connus (démonstration).', inputSchema: { type: 'object', properties: { interface: {} } } }];
+            REQ = [{ timestamp: t - 60000, client: 'client-demo-1', tool: 'secubox_status', latency_ms: 42, success: true },
+                   { timestamp: t - 240000, client: 'client-demo-2', tool: 'secubox_firewall_list', latency_ms: 118, success: false }];
         }
 
-        async function loadStatus() {
-            const data = await api('/status');
-            if (!data) return;
-            document.getElementById('connected-clients').textContent = data.connected_clients || 0;
-            document.getElementById('available-tools').textContent = data.available_tools || 0;
-            document.getElementById('requests-24h').textContent = (data.requests_24h || 0).toLocaleString();
-            document.getElementById('avg-latency').textContent = data.avg_latency_ms || 0;
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const es = await Promise.allSettled([lire('/status'), lire('/stats'), lire('/tools'), lire('/requests?limit=10')]);
+            const val = i => es[i].status === 'fulfilled' ? es[i].value : null;
+            SESSION_OK = !refus(es);
+            STATUT = val(0); STATS = val(1);
+            const o = val(2); OUTILS = o && Array.isArray(o.tools) ? o.tools : [];
+            const r = val(3); REQ = r && Array.isArray(r.requests) ? r.requests : [];
+            REQ_DISPO = es[3].status === 'fulfilled';
+            CHARGE = true;
+            const tous = es.every(e => e.status === 'rejected');
+            $('erreur').hidden = !(tous && SESSION_OK);
+            if (tous && SESSION_OK) $('erreur').textContent = 'Impossible de lire le serveur MCP (arrêté ou injoignable).';
+            rendre();
         }
 
-        async function loadTools() {
-            const data = await api('/tools');
-            const container = document.getElementById('tools-list');
-            if (!data?.tools?.length) {
-                container.innerHTML = '<div class="empty-state">No tools available</div>';
-                return;
-            }
-            container.innerHTML = data.tools.map(t => `
-                <div class="tool-card">
-                    <div class="tool-header">
-                        <span class="tool-name">${t.name}</span>
-                        <span><span class="status-dot ${t.enabled ? 'active' : 'inactive'}"></span>${t.enabled ? 'Active' : 'Disabled'}</span>
-                    </div>
-                    <div class="tool-desc">${t.description || 'No description'}</div>
-                </div>
-            `).join('');
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat'), s = STATUT;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s.status !== 'ok') { etat.className = 'actif att'; etat.textContent = 'DÉGRADÉ'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            const st = STATS || {};
+            const clients = st.sessions != null ? st.sessions : (s && s.connected_clients != null ? s.connected_clients : null);
+            const outils = s ? (s.tools != null ? s.tools : s.available_tools) : null;
+            $('tClients').textContent = nb(clients);
+            $('tOutils').textContent = nb(outils != null ? outils : (CHARGE && OUTILS.length ? OUTILS.length : null));
+            $('tRes').textContent = nb(s ? s.resources : null);
+            $('tPrompts').textContent = nb(st.prompts);
+            $('tReq').textContent = nb(s ? s.requests_24h : null);
+            $('tLat').textContent = (s && s.avg_latency_ms != null) ? nb(s.avg_latency_ms) + ' ms' : '—';
+            $('dModule').textContent = s ? tiret(s.module) : '—';
+            $('dEtat').textContent = s ? tiret(s.status) : '—';
+            $('dVersion').textContent = s ? tiret(s.version) : '—';
+            $('dMcp').textContent = s ? tiret(s.mcp_version) : '—';
+            $('nClients').textContent = clients == null ? '—' : (clients + ' session' + (clients > 1 ? 's' : '') + ' MCP ouverte' + (clients > 1 ? 's' : '') + ' ; l’API ne fournit pas le détail des clients.');
+            rendreOutils(); rendreRequetes();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadRequests() {
-            const data = await api('/requests?limit=10');
-            const tbody = document.getElementById('requests-table');
-            if (!data?.requests?.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No recent requests</td></tr>';
-                return;
-            }
-            tbody.innerHTML = data.requests.map(r => `
-                <tr>
-                    <td>${new Date(r.timestamp).toLocaleString()}</td>
-                    <td>${r.client || '-'}</td>
-                    <td><code>${r.tool}</code></td>
-                    <td>${r.latency_ms || '-'}ms</td>
-                    <td style="color:${r.success ? 'var(--primary)' : 'var(--danger)'};">${r.success ? '✓' : '✗'}</td>
-                </tr>
-            `).join('');
+        function rendreOutils() {
+            const ul = $('lOutils'); ul.replaceChildren();
+            if (!OUTILS.length) { ul.appendChild(el('li', 'vide', !SESSION_OK || !CHARGE ? '—' : 'Aucun outil disponible')); return; }
+            OUTILS.forEach(t => {
+                const li = el('li', 'elt');
+                li.appendChild(el('span', 'nom mono', tiret(t.name)));
+                const props = t.inputSchema && t.inputSchema.properties ? Object.keys(t.inputSchema.properties) : [];
+                li.appendChild(el('span', 'meta', props.length ? 'Paramètres : ' + props.join(', ') : 'Sans paramètre'));
+                li.appendChild(el('span', 'desc', t.description || 'Sans description'));
+                ul.appendChild(li);
+            });
         }
 
-        loadStatus();
-        loadTools();
-        loadRequests();
-        setInterval(loadStatus, 30000);
+        function rendreRequetes() {
+            const tb = $('bReq'); tb.replaceChildren();
+            $('nReq').textContent = '';
+            const ligne = (txt) => { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); };
+            if (!SESSION_OK || !CHARGE) { ligne('—'); return; }
+            if (!REQ_DISPO) { ligne('—'); $('nReq').textContent = 'L’API ne fournit pas le journal des requêtes (la route /requests n’existe pas) : rien n’est inventé.'; return; }
+            if (!REQ || !REQ.length) { ligne('Aucune requête récente'); return; }
+            REQ.forEach(r => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', date(r.timestamp)));
+                tr.appendChild(el('td', '', tiret(r.client)));
+                tr.appendChild(el('td', 'mono', tiret(r.tool)));
+                tr.appendChild(el('td', '', r.latency_ms != null ? r.latency_ms + ' ms' : '—'));
+                const td = el('td'); td.appendChild(el('span', 'pill ' + (r.success ? 'ok' : 'hors'), r.success ? 'RÉUSSIE' : 'ÉCHEC')); tr.appendChild(td);
+                tb.appendChild(tr);
+            });
+        }
+
+        $('rafraichir').addEventListener('click', charger);
+        charger();
+        setInterval(() => { if (!document.hidden && !DEMO) charger(); }, 30000);
+
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

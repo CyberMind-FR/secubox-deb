@@ -1,3 +1,19 @@
+secubox-matrix (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /jabber/ refaite au profil Aurora (#2649) : page autonome, tuiles (service, utilisateurs, domaines, ports C2S et S2S),
+    onglets Utilisateurs / Domaines / Journaux, ?demo=1 (donnees fictives, actions inertes), ?embed=1, bandeau « session
+    requise » sur 401/403, hauteur annoncee a l'hote (sbxVue).
+  * Memes routes, methodes et corps pour toutes les ecritures (POST /install?domain=, /start, /stop, /restart, /reload, /users,
+    /hosts ; DELETE /users/{jid}, /hosts/{domaine}). Confirmation integree a la page pour les suppressions (plus aucun
+    confirm/alert), retours d'echec lus sur detail et affiches dans la page, mot de passe vide apres envoi, jamais stocke.
+  * Corrige : plus de « Bearer null » sans jeton, plus d'innerHTML ni de gestionnaires en ligne alimentes par l'API, ports lus
+    dans l'API (plus codes en dur), liste des comptes et domaines non lue quand le service est arrete (dit dans la page).
+  * Non repris : theme CRT/hybrid-dark. Aucune action ajoutee (changement de mot de passe et /online existent dans l'API mais
+    n'etaient pas dans l'ancienne page).
+  * Tests : tests/test_jabber_aurora_2649.py (statique + navigateur Playwright).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 11:30:00 +0200
+
 secubox-matrix (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /matrix/ refaite au profil Aurora (#2612) : un seul fichier autonome, tuiles (service, version, disque,
