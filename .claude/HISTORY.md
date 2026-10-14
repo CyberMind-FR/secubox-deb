@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-14 — YouTube SAS et carte Flux au profil Aurora, flux embarqué (ref #2638)
+Page admin `/ytsas/` (0.5.0) refaite en Aurora, mêmes appels d'API, onglet « Flux » qui encadre la carte du Hall (`hall.<domaine>/cardlets/ytflux.html?embed=1`, domaine déduit de l'hôte). Carte Flux (webos 1.10.0) en Aurora ; nginx du Hall : location dédiée avec `frame-ancestors 'self' $sbx_admin_du_hall` (admin du même domaine, sans joker). Aucune route flux sur le vhost admin. Tests `test_ytsas_aurora_2638.py`, `test_ytflux_aurora_2638.py`. **Non déployé.**
+
 ## 2026-10-14 — Podcaster : import YouTube sans ré-encodage, échecs de flux visibles (ref #2635)
 Playlist 4135 sur gk2 : 2 épisodes en 30 min, charge 10. `yt-dlp -x --audio-format m4a` prenait le flux webm/opus et ffmpeg le ré-encodait en AAC ; `-f ba[ext=m4a]/ba` ne fait plus qu'un remux. Table `feeds` : `last_error`, `last_refresh` (migration idempotente), remplis par l'import et le rafraîchisseur ; `POST /feeds/{id}/refresh` (jwt). Page Podcaster : erreur sous le flux, ⧉ copier l'adresse de la playlist, ⟳ réimporter. Carte Flux YouTube : ⧉ copier, ★ favori du Hall (`sbx_favoris`), 🧭 voir dans Surf. Podcaster 1.3.0, webos 1.9.12. Non fait : favori et Surf depuis la page Podcaster (autre origine que le Hall, pas de localStorage partagé) ; podcast vidéo (l'épisode reste audio). Essai manuel sur gk2 : deux imports concurrents sur les mêmes dossiers + ffmpeg orphelins, arrêtés et dossiers partiels supprimés.
 

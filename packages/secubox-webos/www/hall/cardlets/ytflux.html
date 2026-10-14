@@ -5,62 +5,119 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — carte « Flux YouTube » du Hall (secubox-ytsas).
+  SecuBox — carte « Flux YouTube » du Hall (secubox-ytsas), au profil Aurora (.claude/AURORA-REFERENCE.md).
 
-  Les listes que YouTube tient pour le compte de la personne — à regarder plus tard, propositions, abonnements,
-  historique — lues par YouTube SAS avec les cookies du coffre. LECTURE SEULE. Chaque vidéo : vignette (servie par la box),
-  titre, chaîne, durée ; « ▶ » ouvre YouTube, « ⬇ » l'ajoute au SAS (bibliothèque de la box).
-  Tout texte venu du serveur passe par textContent : aucune injection HTML.
+  Les listes que YouTube tient pour le compte de la personne — à regarder plus tard, propositions, abonnements, historique —
+  lues par YouTube SAS avec les cookies du coffre. LECTURE SEULE. Chaque vidéo : vignette (servie par la box), titre, chaîne,
+  durée ; « ▶ » ouvre YouTube, « ⬇ » l'ajoute au SAS (bibliothèque de la box), « ⧉ » copie le lien, « ★ » le met en favori du Hall,
+  « 🧭 » l'ouvre dans Surf.
+  Page autonome, servie par le Hall ET encadrée (?embed=1) par la page d'administration de YouTube SAS.
+  ?demo=1 : données fictives, actions inertes. Mesure absente = « — ». Tout texte venu du serveur passe par textContent.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flux YouTube</title>
 <style>
-  :root{ --fond:#14181f; --fond2:#1c222d; --texte:#eef1f6; --muted:#a3adbd; --line:rgba(255,255,255,.14); --verre:rgba(255,255,255,.07);
-         --accent:#ff5a4f; --ok:#46d38b; --alerte:#ffb454; --erreur:#ff7a7a; }
-  :root[data-theme="light"]{ color-scheme:light; --fond:#f4f6fa; --fond2:#e4e9f2; --texte:#16202f; --muted:#4b5a73; --line:rgba(22,32,47,.16);
-         --verre:rgba(255,255,255,.7); --accent:#c4302b; --ok:#0b7d45; --alerte:#8a5a00; --erreur:#b3261e; }
-  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ color-scheme:light; --fond:#f4f6fa; --fond2:#e4e9f2; --texte:#16202f;
-         --muted:#4b5a73; --line:rgba(22,32,47,.16); --verre:rgba(255,255,255,.7); --accent:#c4302b; --ok:#0b7d45; --alerte:#8a5a00; --erreur:#b3261e; } }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:linear-gradient(160deg,var(--fond),var(--fond2));color:var(--texte);font:14px/1.35 "IBM Plex Sans",Inter,system-ui,sans-serif;overflow:auto}
-  .flux{display:flex;flex-direction:column;gap:.5rem;padding:.5rem .6rem;min-height:100%}
-  .onglets{display:flex;gap:.3rem;flex-wrap:wrap;padding-right:50px}
-  .onglet{min-height:36px;padding:.2rem .7rem;border-radius:999px;border:1px solid var(--line);background:var(--verre);color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer}
-  .onglet[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
-  .onglet:focus-visible,.act:focus-visible,.btn:focus-visible{outline:2px solid #5cc2ff;outline-offset:2px}
-  .etat{font-size:.74rem;color:var(--muted);display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
-  .etat b{color:var(--alerte);font-weight:600}
-  .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.55rem}
-  .video{display:flex;flex-direction:column;background:var(--verre);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .vign{position:relative;aspect-ratio:16/9;background:#000}
-  .vign img{width:100%;height:100%;object-fit:cover;display:block}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible,.act:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  body.emb .tuiles,body.dans .tuiles{display:none}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.emb .pan,body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 13px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+  .video{display:flex;flex-direction:column;border:1px solid var(--trait);border-radius:12px;overflow:hidden;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .video:hover{border-color:var(--cyan)}
+  .vign{position:relative;aspect-ratio:16/9;background:linear-gradient(160deg,rgba(41,182,246,.16),rgba(8,18,38,.9));display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--faible)}
+  .vign img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
   .duree{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.78);color:#fff;font-size:.68rem;padding:0 .3rem;border-radius:4px;font-variant-numeric:tabular-nums}
-  .corps{padding:.35rem .45rem .45rem;display:flex;flex-direction:column;gap:.2rem;min-width:0}
-  .titre{font-size:.8rem;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .chaine{font-size:.7rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .actions{display:flex;gap:.3rem;margin-top:.15rem}
-  .act{flex:1;min-height:34px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center}
-  .act:hover{border-color:var(--accent)}
+  .corps{padding:7px 9px 9px;display:flex;flex-direction:column;gap:3px;min-width:0}
+  .titre{font-size:.8rem;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .chaine{font-size:.7rem;color:var(--doux);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+  .act{flex:1 1 0;min-width:0;min-height:34px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;padding:0 4px;white-space:nowrap}
+  .act:hover{border-color:var(--cyan)}
+  .act.lien{flex:1 1 100%;color:var(--cyan)} .act.sas{flex:2 1 0}
+  /* Encadrée par l'administration (?embed=1), la carte n'a pas le Hall pour parent : le message « surf » n'aurait personne à qui parler. */
+  body.emb .surf{display:none}
   .act[disabled]{opacity:.6;cursor:default}
-  .msg{padding:.8rem;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:.84rem;text-align:center}
-  .msg.err{color:var(--erreur)}
-  .btn{min-height:36px;padding:.2rem .8rem;border-radius:8px;border:1px solid var(--line);background:var(--verre);color:var(--texte);font:inherit;cursor:pointer}
-  @media (prefers-reduced-motion:no-preference){ .video{transition:border-color .15s} .video:hover{border-color:var(--accent)} }
+  .msg{padding:12px;margin-top:10px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .msg .btn{margin:6px 0 0 .6rem}
 </style>
-<div class="flux" id="flux">
-  <div class="onglets" role="tablist" aria-label="Flux du compte" id="onglets"></div>
-  <div class="etat" id="etat" aria-live="polite"></div>
-  <div class="grille" id="grille"></div>
-  <div class="msg" id="msg" hidden></div>
-</div>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9.2 5 2.8-5 2.8z"/></svg>
+      <div><h1>Flux YouTube</h1><small>Les listes de ton compte, en lecture seule</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune lecture réelle, actions inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Nombre de vidéos de la liste affichée (24 au plus par lecture)."><span class="l">Vidéos</span><span class="v" id="tVideos">—</span><span class="s">dans la liste affichée</span></div>
+    <div class="tuile cy" title="Heure de la lecture des listes par YouTube SAS (pas celle de cette page)."><span class="l">Dernière lecture</span><span class="v long" id="tLecture">—</span><span class="s">par YouTube SAS</span></div>
+    <div class="tuile cy" title="Oui : la box a répondu avec sa copie gardée plutôt que de réinterroger YouTube."><span class="l">Copie de la box</span><span class="v" id="tCache">—</span><span class="s">cache de lecture</span></div>
+    <div class="tuile cy" id="cDonnees" title="Périmées : YouTube n'a pas répondu, la box montre sa dernière lecture (la cause est dite sous les onglets)."><span class="l">Données</span><span class="v" id="tDonnees">—</span><span class="s">fraîcheur de la liste</span></div>
+  </section>
+
+  <div class="pan"><h3>Mes listes <i>GET /api/v1/ytsas/flux</i></h3>
+    <div class="onglets" role="tablist" aria-label="Flux du compte" id="onglets"></div>
+    <p class="note" id="lecture" aria-live="polite" hidden></p>
+    <div class="retour" id="retour" role="status" hidden></div>
+    <div class="msg" id="msg" role="status" hidden></div>
+    <div class="grille" id="grille" role="tabpanel"></div>
+  </div>
+</div></div>
 <script src="../sonde.js"></script>
 <script>
 (function(){
   'use strict';
   var API = '/api/v1/ytsas/';
   var TYPES = [ ['envie','À regarder plus tard'], ['propositions','Proposées'], ['abonnements','Abonnements'], ['historique','Historique'] ];
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if(Q.get('embed')) document.body.classList.add('emb');
+  try{ if(window.top !== window) document.body.classList.add('dans'); }catch(e){ document.body.classList.add('dans'); }
   var $ = function(id){ return document.getElementById(id); };
   var courant = 'envie';
   var jeton = 0;
@@ -72,12 +129,24 @@
     var p2 = function(n){ return (n<10?'0':'')+n; };
     return h ? h+':'+p2(m)+':'+p2(c) : m+':'+p2(c);
   }
+  function date(t){ try{ return new Date(t*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return '—'; } }
+  function pastille(cls, texte){ var e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
+  function tuiles(n, lecture, cache, donnees){
+    $('tVideos').textContent = n == null ? '—' : n;
+    $('tLecture').textContent = lecture ? date(lecture) : '—';
+    $('tCache').textContent = cache == null ? '—' : (cache ? 'Oui' : 'Non');
+    $('tDonnees').textContent = donnees || '—';
+    $('cDonnees').className = 'tuile ' + (donnees === 'Fraîches' ? 'ok' : donnees === 'Périmées' ? 'att' : 'cy');
+  }
+  function retour(texte){ var r = $('retour'); r.hidden = false; r.textContent = texte; annoncer(); }
   function message(texte, erreur, avecReessai){
     var m = $('msg'); m.hidden = false; m.className = 'msg' + (erreur ? ' err' : '');
     m.textContent = texte;
-    if(avecReessai){ var b = el('button','btn','Réessayer'); b.type = 'button'; b.style.marginLeft = '.6rem'; b.onclick = function(){ charger(courant); }; m.appendChild(b); }
+    if(avecReessai){ var b = el('button','btn','Réessayer'); b.type = 'button'; b.onclick = function(){ charger(courant); }; m.appendChild(b); }
   }
+  function inerte(){ retour('Démonstration : action inerte, rien n’est écrit ni envoyé.'); }
   function ajouter(btn, url){
+    if(DEMO){ inerte(); return; }
     btn.disabled = true; btn.textContent = '…';
     fetch(API + 'add', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})})
       .then(function(r){ btn.textContent = r.ok ? '✓ Au SAS' : '⚠'; if(!r.ok) btn.disabled = false; })
@@ -87,6 +156,7 @@
   function lireFavoris(){ try{ var l = JSON.parse(localStorage.getItem('sbx_favoris') || '[]'); return Array.isArray(l) ? l : []; }catch(e){ return []; } }
   function favori(u){ return lireFavoris().indexOf(u) >= 0; }
   function basculerFavori(btn, u){
+    if(DEMO){ inerte(); return; }
     try{
       var l = lireFavoris(), i = l.indexOf(u);
       if(i >= 0) l.splice(i, 1); else l.push(u);
@@ -95,6 +165,7 @@
     }catch(e){ btn.textContent = '⚠'; }
   }
   function copier(btn, u){
+    if(DEMO){ inerte(); return; }
     var ok = function(){ btn.textContent = '✓'; setTimeout(function(){ btn.textContent = '⧉'; }, 1500); };
     var ko = function(){ btn.textContent = '⚠'; setTimeout(function(){ btn.textContent = '⧉'; }, 1500); };
     try{ navigator.clipboard.writeText(u).then(ok, ko); }catch(e){ ko(); }
@@ -102,60 +173,121 @@
   function carte(v){
     var c = el('div','video');
     var vg = el('div','vign');
-    var img = document.createElement('img'); img.loading = 'lazy'; img.alt = ''; img.src = v.vignette;
-    img.onerror = function(){ img.style.display = 'none'; };
-    vg.appendChild(img);
+    if(DEMO){ vg.appendChild(el('span', null, '🎞️')); }
+    else if(v.vignette){
+      var img = document.createElement('img'); img.loading = 'lazy'; img.alt = ''; img.src = v.vignette;
+      img.onerror = function(){ img.style.display = 'none'; };
+      vg.appendChild(img);
+    }
     if(v.duree != null) vg.appendChild(el('span','duree',duree(v.duree)));
     c.appendChild(vg);
     var co = el('div','corps');
-    co.appendChild(el('div','titre',v.titre));
-    co.appendChild(el('div','chaine',v.chaine));
+    co.appendChild(el('div','titre',v.titre || '—'));
+    co.appendChild(el('div','chaine',v.chaine || '—'));
     var ac = el('div','actions');
-    var lien = el('a','act','▶ YouTube'); lien.href = v.url; lien.target = '_blank'; lien.rel = 'noopener noreferrer'; lien.title = 'Ouvrir sur YouTube';
-    var sas = el('button','act','⬇ SAS'); sas.type = 'button'; sas.title = 'Ajouter à la bibliothèque de la box';
+    var lien = el('a','act lien','▶ YouTube'); lien.href = v.url; lien.target = '_blank'; lien.rel = 'noopener noreferrer'; lien.title = 'Ouvrir sur YouTube';
+    var sas = el('button','act sas','⬇ SAS'); sas.type = 'button'; sas.title = 'Ajouter à la bibliothèque de la box';
     sas.onclick = function(){ ajouter(sas, v.url); };
     var cop = el('button','act','⧉'); cop.type = 'button'; cop.title = 'Copier le lien'; cop.setAttribute('aria-label','Copier le lien');
     cop.onclick = function(){ copier(cop, v.url); };
     var fav = el('button','act', favori(v.url) ? '★' : '☆'); fav.type = 'button'; fav.title = 'Ajouter aux favoris du Hall'; fav.setAttribute('aria-label','Favori');
     fav.onclick = function(){ basculerFavori(fav, v.url); };
-    var surf = el('button','act','🧭'); surf.type = 'button'; surf.title = 'Voir dans Surf (navigation web)'; surf.setAttribute('aria-label','Voir dans Surf');
-    surf.onclick = function(){ try{ parent.postMessage({ sbx: 'surf', url: v.url }, location.origin); }catch(e){} };
+    var surf = el('button','act surf','🧭'); surf.type = 'button'; surf.title = 'Voir dans Surf (navigation web)'; surf.setAttribute('aria-label','Voir dans Surf');
+    surf.onclick = function(){ if(DEMO){ inerte(); return; } try{ parent.postMessage({ sbx: 'surf', url: v.url }, location.origin); }catch(e){} };
     ac.appendChild(lien); ac.appendChild(sas); ac.appendChild(cop); ac.appendChild(fav); ac.appendChild(surf); co.appendChild(ac); c.appendChild(co);
     return c;
   }
-  function date(t){ try{ return new Date(t*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+
+  // Données fictives (démonstration) : adresses de documentation, chaînes inventées, aucune requête.
+  function demoListe(type){
+    var base = {
+      envie: [['Montage d’une baie de brassage', 'Atelier Réseau', 1325], ['Comprendre WireGuard en 15 minutes', 'Cours Libres', 905], ['Souder des câbles RJ45', 'Atelier Réseau', 412], ['Les arbres de Merkle', 'Cryptologie pour tous', 2210], ['Installer une box à la maison', 'Cours Libres', 1780]],
+      propositions: [['Concert acoustique en direct', 'Scène Ouverte', 3605], ['Cartes et territoires', 'Géographie Vivante', 1488], ['Le son des synthétiseurs modulaires', 'Atelier Sonore', 1902], ['Dépanner un routeur', 'Atelier Réseau', 623], ['Histoire de l’informatique libre', 'Cours Libres', 2750], ['Cuisine de saison', 'La Table Ronde', 840]],
+      abonnements: [['Nouveautés du mois', 'Atelier Réseau', 540], ['Entretien avec un cryptologue', 'Cryptologie pour tous', 3180], ['Randonnée en Maurienne', 'Géographie Vivante', 1215], ['Session de mixage', 'Atelier Sonore', 4020]],
+      historique: [['Documentaire : les câbles sous-marins', 'Cours Libres', 3300], ['Tutoriel nftables', 'Atelier Réseau', 1675], ['Podcast : la vie privée', 'Scène Ouverte', 2480], ['Bande-annonce', 'Cinéma Libre', 132], ['Conférence sur la souveraineté numérique', 'Cours Libres', 3590]]
+    };
+    var l = base[type] || [];
+    return { type: type, en_cache: false, perime: false, date: Math.floor(Date.now()/1000) - 300,
+      items: l.map(function(x, i){ var id = 'demo-' + type.slice(0,3) + i; return { id: id, titre: x[0], chaine: x[1], duree: x[2], url: 'https://www.youtube.com/watch?v=' + id }; }) };
+  }
+
+  function afficher(x){
+    var d = x.d, g = $('grille'), items = d.items || [];
+    $('retour').hidden = true;
+    var lec = $('lecture');
+    if(!items.length){
+      pastille('neutre', 'LISTE VIDE'); tuiles(0, d.date, !!d.en_cache, d.perime ? 'Périmées' : 'Fraîches');
+      message('Rien dans cette liste pour l’instant.', false); return;
+    }
+    lec.hidden = false; lec.textContent = '';
+    lec.appendChild(el('span', null, items.length + ' vidéos'));
+    if(d.date) lec.appendChild(el('span', null, ' · lu ' + date(d.date)));
+    if(d.perime){
+      lec.appendChild(el('b', null, x.d.cause === 'cookies'
+        ? ' · données anciennes — cookies YouTube périmés : redépose ton cookies.txt (panneau Authentification de YouTube SAS)'
+        : ' · données anciennes (YouTube n’a pas répondu)'));
+      pastille('att', x.d.cause === 'cookies' ? 'DONNÉES PÉRIMÉES — COOKIES' : 'DONNÉES PÉRIMÉES');
+    } else pastille('', 'À JOUR');
+    tuiles(items.length, d.date, !!d.en_cache, d.perime ? 'Périmées' : 'Fraîches');
+    items.forEach(function(v){ g.appendChild(carte(v)); });
+  }
+
   function charger(type){
     courant = type; var mon = ++jeton;
-    var g = $('grille'); g.textContent = ''; $('msg').hidden = true; $('etat').textContent = 'Lecture…';
-    Array.prototype.forEach.call($('onglets').children, function(b){ b.setAttribute('aria-selected', b.dataset.type === type ? 'true' : 'false'); });
-    fetch(API + 'flux?type=' + encodeURIComponent(type) + '&limite=24', {credentials:'same-origin', cache:'no-store'})
+    var g = $('grille'); g.textContent = ''; $('msg').hidden = true; $('lecture').hidden = true; $('retour').hidden = true;
+    pastille('neutre', 'Lecture…'); tuiles(null, null, null, null); $('session').hidden = true;
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    Array.prototype.forEach.call($('onglets').children, function(b){
+      var sel = b.dataset.type === type; b.setAttribute('aria-selected', sel ? 'true' : 'false'); b.tabIndex = sel ? 0 : -1;
+      if(sel) g.setAttribute('aria-labelledby', b.id);
+    });
+    if(DEMO){ $('demo').hidden = false; afficher({d: demoListe(type)}); annoncer(); return; }
+    var entetes = {Accept:'application/json'};
+    try{ var tok = localStorage.getItem('sbx_token'); if(tok) entetes.Authorization = 'Bearer ' + tok; }catch(e){}
+    fetch(API + 'flux?type=' + encodeURIComponent(type) + '&limite=24', {credentials:'same-origin', cache:'no-store', headers:entetes})
       .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {st:r.status, d:d}; }); })
       .then(function(x){
         if(mon !== jeton) return;
-        $('etat').textContent = '';
-        if(x.st === 401 && x.d && x.d.cookies_perimes){ message('YouTube ne reconnaît plus ton compte : tes cookies sont périmés (ou exportés d\u2019un navigateur non connecté). Réexporte cookies.txt depuis un navigateur connecté à YouTube, puis dépose-le dans YouTube SAS (panneau Authentification).', false); return; }
-        if(x.st === 401 && x.d && /cookies/i.test(x.d.error||'')){ message('Dépose ton cookies.txt dans YouTube SAS (panneau Authentification) pour lire les listes de ton compte.', false); return; }
-        if(x.st === 401 || x.st === 403){ message('Connexion requise : ouvre une session SecuBox pour voir tes listes.', false); return; }
-        if(x.st === 502 || x.st === 504){ message('YouTube n’a pas répondu' + (x.d && x.d.detail ? ' (' + x.d.detail + ')' : '') + '.', true, true); return; }
-        if(x.st !== 200){ message('Flux indisponible (' + x.st + ').', true, true); return; }
-        var items = x.d.items || [];
-        if(!items.length){ message('Rien dans cette liste pour l’instant.', false); return; }
-        var et = $('etat');
-        et.appendChild(el('span', null, items.length + ' vidéos'));
-        if(x.d.date) et.appendChild(el('span', null, '· lu ' + date(x.d.date)));
-        if(x.d.perime){
-          et.appendChild(el('b', null, x.d.cause === 'cookies'
-            ? '· données anciennes — cookies YouTube périmés : redépose ton cookies.txt (panneau Authentification de YouTube SAS)'
-            : '· données anciennes (YouTube n’a pas répondu)'));
-        }
-        items.forEach(function(v){ g.appendChild(carte(v)); });
+        if(x.st === 401 && x.d && x.d.cookies_perimes){ pastille('att', 'COOKIES PÉRIMÉS'); message('YouTube ne reconnaît plus ton compte : tes cookies sont périmés (ou exportés d’un navigateur non connecté). Réexporte cookies.txt depuis un navigateur connecté à YouTube, puis dépose-le dans YouTube SAS (panneau Authentification).', false); }
+        else if(x.st === 401 && x.d && /cookies/i.test(x.d.error||'')){ pastille('att', 'COOKIES ABSENTS'); message('Dépose ton cookies.txt dans YouTube SAS (panneau Authentification) pour lire les listes de ton compte.', false); }
+        else if(x.st === 401 || x.st === 403){ pastille('neutre', 'SESSION REQUISE'); $('session').hidden = false; message('Connexion requise : ouvre une session SecuBox pour voir tes listes.', false); }
+        else if(x.st === 502 || x.st === 504){ pastille('hors', 'HORS LIGNE'); message('YouTube n’a pas répondu' + (x.d && x.d.detail ? ' (' + x.d.detail + ')' : '') + '.', true, true); }
+        else if(x.st !== 200){ pastille('hors', 'HORS LIGNE'); message('Flux indisponible (' + x.st + ').', true, true); }
+        else afficher(x);
+        annoncer();
       })
-      .catch(function(){ if(mon !== jeton) return; $('etat').textContent = ''; message('Flux injoignable.', true, true); });
+      .catch(function(){ if(mon !== jeton) return; pastille('hors', 'HORS LIGNE'); message('Flux injoignable.', true, true); annoncer(); });
   }
+
   TYPES.forEach(function(t){
-    var b = el('button','onglet',t[1]); b.type = 'button'; b.setAttribute('role','tab'); b.dataset.type = t[0];
-    b.onclick = function(){ charger(t[0]); }; $('onglets').appendChild(b);
+    var b = el('button','onglet',t[1]); b.type = 'button'; b.id = 'o-' + t[0]; b.setAttribute('role','tab'); b.dataset.type = t[0];
+    b.onclick = function(){ charger(t[0]); };
+    b.onkeydown = function(e){
+      var i = TYPES.map(function(x){ return x[0]; }).indexOf(t[0]), n = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : -1;
+      if(n < 0) return;
+      n = (n + TYPES.length) % TYPES.length; charger(TYPES[n][0]); $('o-' + TYPES[n][0]).focus(); e.preventDefault();
+    };
+    $('onglets').appendChild(b);
   });
+  $('rafraichir').onclick = function(){ charger(courant); };
+
+  // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  // Le parent est soit le Hall (même origine : location.origin), soit l'administration de YouTube SAS (admin.<domaine du Hall>, ?embed=1) :
+  // postMessage ne livre qu'à l'origine NOMMÉE, location.origin ferait donc taire l'administration. On ne nomme jamais '*' : l'origine
+  // d'administration est DÉDUITE de celle du Hall (hall.gk2.secubox.in → admin.gk2.secubox.in), comme le fait sa CSP (frame-ancestors).
+  function origineParent(){
+    try{ void parent.location.href; return location.origin; }catch(e){ /* parent d'une autre origine */ }
+    var L = location.hostname.split('.');
+    return (L[0] === 'hall' && L.length > 2) ? 'https://admin.' + L.slice(1).join('.') : location.origin;
+  }
+  function annoncer(){
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'ytflux'}, origineParent()); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+
   charger(courant);
 })();
 </script>
+</body>
+</html>

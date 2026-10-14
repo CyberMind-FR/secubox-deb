@@ -1,3 +1,12 @@
+secubox-webos (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Flux YouTube au profil Aurora (page autonome, tuiles, pastille d'état, ?demo=1 et ?embed=1, hauteur annoncée) ; quatre listes, ▶ YouTube, ⬇ SAS, ⧉ copier, ★ favori, 🧭 Surf et messages de cause inchangés.
+  * nginx : location dédiée = /cardlets/ytflux.html avec la CSP générique des cartes, seul frame-ancestors change : 'self' et l'administration du domaine du Hall (map sbx_admin_du_hall, jamais de joker) ; la page d'administration de YouTube SAS peut ainsi l'encadrer. La route /api/v1/ytsas/flux garde auth_request et GET seul.
+  * Non repris : en ?embed=1 le bouton Surf est masqué (le parent n'est pas le Hall) ; pas d'actualisation automatique.
+  * Tests : test_ytflux_aurora_2638.py (ref #2638).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 14:00:00 +0200
+
 secubox-webos (1.9.12-1~bookworm1) bookworm; urgency=medium
 
   * Carte Flux YouTube : copier le lien, favori du Hall, voir dans Surf (ref #2635).
