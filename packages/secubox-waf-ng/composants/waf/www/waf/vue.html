@@ -50,6 +50,17 @@
   svg.monde{width:100%;height:auto;display:block;border-radius:8px}
   .pays{display:grid;gap:3px;align-content:start;font-size:.78rem}
   .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)}
+  .carte svg.monde g.pt{cursor:pointer;outline:none} .carte svg.monde g.pt:focus-visible .hal{stroke:var(--texte);stroke-width:.35}
+  .carte svg.monde .att{opacity:.16} .pays .att{opacity:.35}
+  .pays .lg{display:flex;justify-content:flex-start;align-items:center;gap:6px} .pays .lg svg{flex:none;width:11px;height:11px} .pays .lg b{margin-left:auto}
+  .legT{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .legT button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:.72rem;color:var(--doux);background:rgba(59,130,246,.10);border:1px solid var(--trait);border-radius:999px;padding:3px 10px 3px 7px;cursor:pointer}
+  .legT button svg{width:12px;height:12px;flex:none} .legT button b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .legT button[aria-pressed="true"]{color:var(--texte);border-color:var(--cyan);background:rgba(41,182,246,.20)}
+  .legT button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .legT .aucun{color:var(--faible);font-size:.72rem}
+  .tip{position:fixed;z-index:9;pointer-events:none;max-width:240px;background:#0b1830;border:1px solid var(--trait2);border-radius:8px;padding:7px 9px;font-size:.72rem;color:var(--doux);box-shadow:0 4px 18px rgba(0,0,0,.5)}
+  .tip b{color:var(--texte)} .tip div{display:flex;align-items:center;gap:6px;margin-top:2px;font-variant-numeric:tabular-nums} .tip svg{width:10px;height:10px;flex:none} .tip em{margin-left:auto;font-style:normal;color:var(--texte)}
   .note{color:var(--faible);font-size:.66rem;margin-top:6px}
   .repart{display:grid;gap:12px;grid-template-columns:130px 1fr;align-items:center}
   .donut{width:130px;height:130px;border-radius:50%;position:relative}
@@ -59,6 +70,9 @@
   .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
   .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
   .site{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;font-size:.76rem;padding:3px 0} .site i{width:8px;height:8px;border-radius:50%;background:var(--cyan)} .site .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .leg svg,.ligne svg{width:11px;height:11px;flex:none;vertical-align:-1px}
+  tr.att{opacity:.35} td svg{width:11px;height:11px;vertical-align:-1px;margin-right:2px}
+  .leg div.att,.ligne.att{opacity:.3}
   table{width:100%;border-collapse:collapse;font-size:.76rem}
   th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
   td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;font-variant-numeric:tabular-nums}
@@ -84,7 +98,7 @@
   <div><h2>Vue d’ensemble</h2><div class="sous">Protection en temps réel de vos services web, API et applications.</div></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="grille g1">
-    <div class="pan sec"><h3>Carte des attaques <i>pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="monde" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des menaces"></svg><div class="pays" id="pays"></div></div><div class="note" id="geoNote"></div></div>
+    <div class="pan sec"><h3>Carte des attaques <i>pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="monde" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des menaces"></svg><div class="pays" id="pays"></div></div><div class="legT" id="legT" role="group" aria-label="Types de menace : appuyer pour mettre un type en avant"></div><div class="note" id="geoNote"></div><div class="tip" id="tip" role="tooltip" hidden></div></div>
     <div class="pan"><h3>Évolution des événements <i>par jour</i></h3><div id="courbe"></div><div class="legende" id="legCourbe"></div></div>
   </div>
   <div class="grille g3">
@@ -109,7 +123,6 @@
   function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
   var q=new URLSearchParams(location.search);
   if(q.get('embed')) document.body.classList.add('emb');
-  var PAL=['#ff4d5e','#a78bfa','#3b82f6','#ff9f1c','#29b6f6','#2ecc71','#ffd23f'];
   var IC={
     req:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(59,130,246,.16)"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
     bloc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V5a1.5 1.5 0 013 0v5M11 10V4a1.5 1.5 0 013 0v6M14 10V5.5a1.5 1.5 0 013 0V13c0 4-2.5 7-6 7-3 0-4.5-2-6-5l-1-2.5a1.5 1.5 0 012.6-1.4L8 14" fill="rgba(255,77,94,.14)"/></svg>',
@@ -127,15 +140,103 @@
   var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
   var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
   function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
+  // Types de menace : la catégorie libre du journal est rangée dans une famille (regex ordonnées), chaque famille a une couleur Aurora ET une forme.
+  var NS='http://www.w3.org/2000/svg';
+  var TYPES=[
+    {id:'inj',nom:'Injection (SQL, code)',coul:'#ff4d5e',forme:'cercle',re:/sql|inject|\brce\b|exec|command|cmd|shell|eval|code/i},
+    {id:'xss',nom:'Script (XSS)',coul:'#ff9f1c',forme:'carre',re:/xss|script|csrf|html/i},
+    {id:'trav',nom:'Traversée de fichiers',coul:'#ffd23f',forme:'losange',re:/travers|lfi|rfi|path|director|inclusion|file|dotdot/i},
+    {id:'leurre',nom:'Leurres (honeypot)',coul:'#2ecc71',forme:'croix',re:/leurre|honey|decoy|trap|bait|canary/i},
+    {id:'bot',nom:'Robots',coul:'#3b82f6',forme:'triangleb',re:/bot|robot|crawl|spider|scrap/i},
+    {id:'brute',nom:'Brute force / accès',coul:'#a78bfa',forme:'hexa',re:/brute|auth|login|cred|passw|access|accès|unauthor|ssh|smtp/i},
+    {id:'scan',nom:'Scanners / reconnaissance',coul:'#29b6f6',forme:'triangle',re:/scan|fuzz|recon|probe|nikto|nmap|anomal|suspic|unrouted|absent|host_/i},
+    {id:'autre',nom:'Autre type',coul:'#9fb3d6',forme:'anneau',re:/./}];
+  var TYPE_PAR_ID={};TYPES.forEach(function(t){TYPE_PAR_ID[t.id]=t;});
+  function famille(cat){var c=String(cat==null?'':cat).trim();if(!c)return null;for(var i=0;i<TYPES.length;i++)if(TYPES[i].re.test(c))return TYPES[i].id;return 'autre';}
+  function noeud(nom,at,parent){var n=document.createElementNS(NS,nom);for(var k in at)n.setAttribute(k,at[k]);if(parent)parent.appendChild(n);return n;}
+  // Glyphe centré en (x,y), demi-taille r : une forme par famille, lisible sans la couleur.
+  function glyphe(parent,forme,x,y,r,coul){
+    var f=function(p){return p.map(function(v){return (+v).toFixed(2);}).join(' ');},at={fill:coul,stroke:'none'},n;
+    if(forme==='cercle')n=noeud('circle',{cx:x,cy:y,r:r,fill:coul},parent);
+    else if(forme==='carre')n=noeud('rect',{x:x-r*.85,y:y-r*.85,width:r*1.7,height:r*1.7,fill:coul},parent);
+    else if(forme==='losange')n=noeud('polygon',{points:f([x,y-r*1.1,x+r*1.1,y,x,y+r*1.1,x-r*1.1,y]),fill:coul},parent);
+    else if(forme==='triangle')n=noeud('polygon',{points:f([x,y-r*1.05,x+r*1.05,y+r*.85,x-r*1.05,y+r*.85]),fill:coul},parent);
+    else if(forme==='triangleb')n=noeud('polygon',{points:f([x-r*1.05,y-r*.85,x+r*1.05,y-r*.85,x,y+r*1.05]),fill:coul},parent);
+    else if(forme==='hexa'){var h=[];for(var i=0;i<6;i++)h.push(x+r*1.05*Math.cos(Math.PI/3*i),y+r*1.05*Math.sin(Math.PI/3*i));n=noeud('polygon',{points:f(h),fill:coul},parent);}
+    else if(forme==='croix'){var e=r*.38;n=noeud('polygon',{points:f([x-e,y-r,x+e,y-r,x+e,y-e,x+r,y-e,x+r,y+e,x+e,y+e,x+e,y+r,x-e,y+r,x-e,y+e,x-r,y+e,x-r,y-e,x-e,y-e]),fill:coul},parent);}
+    else n=noeud('circle',{cx:x,cy:y,r:r*.8,fill:'none',stroke:coul,'stroke-width':r*.4},parent);
+    return n;}
+  function pastille(t){var sv=noeud('svg',{viewBox:'0 0 10 10','aria-hidden':'true',focusable:'false'});glyphe(sv,t.forme,5,5,3.8,t.coul);return sv;}
+  // Répartition pays × type, déduite des alertes récentes déjà lues (/alerts, au plus 500 : aucune route nouvelle).
+  function croise(alertes){
+    var par={},tot={},n=0;
+    (alertes||[]).forEach(function(a){var f=famille(a.category),c=String(a.country||'').toUpperCase();if(!f)return;n++;tot[f]=(tot[f]||0)+1;
+      if(/^[A-Z]{2}$/.test(c)){par[c]=par[c]||{};par[c][f]=(par[c][f]||0)+1;}});
+    return {par:par,tot:tot,n:n};}
+  function dominant(rep){var b=null,m=0;TYPES.forEach(function(t){if(rep&&(rep[t.id]||0)>m){m=rep[t.id];b=t.id;}});return b;}
+  var etat={d:null,foc:null,pays:[],cx:{par:{},tot:{},n:0}};
+  function arc(cx,cy,r,ri,a0,a1){
+    function p(R,a){return (cx+R*Math.sin(a)).toFixed(2)+','+(cy-R*Math.cos(a)).toFixed(2);}
+    if(a1-a0>=Math.PI*2-1e-6){var m=a0+Math.PI;return 'M'+p(r,a0)+'A'+r+','+r+' 0 1 1 '+p(r,m)+'A'+r+','+r+' 0 1 1 '+p(r,a0)+'ZM'+p(ri,a0)+'A'+ri+','+ri+' 0 1 0 '+p(ri,m)+'A'+ri+','+ri+' 0 1 0 '+p(ri,a0)+'Z';}
+    var g=a1-a0>Math.PI?1:0;
+    return 'M'+p(r,a0)+'A'+r+','+r+' 0 '+g+' 1 '+p(r,a1)+'L'+p(ri,a1)+'A'+ri+','+ri+' 0 '+g+' 0 '+p(ri,a0)+'Z';}
+  function hexa(h,a){var n=parseInt(h.slice(1),16);return 'rgba('+(n>>16)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+  function att(id){return !!(etat.foc&&etat.foc!==id);}
+  // pastille en chaîne : uniquement des constantes internes (couleur et forme de TYPES), jamais une donnée du journal
+  function pastilleStr(t){var sv=pastille(t);return sv.outerHTML;}
+  // Trafic par surface (http, smtp, ssh…) : seules les surfaces qui SONT un type de menace reprennent sa couleur (leurres, autre) ; les protocoles restent neutres.
+  var TRAFIC_TYPE={leurre:'leurre',autre:'autre'};
+  function nomType(id){return id&&TYPE_PAR_ID[id]?TYPE_PAR_ID[id].nom:'type inconnu';}
+  function resume(p){var rep=etat.cx.par[p.code]||{},tt=0,l=[];TYPES.forEach(function(t){tt+=rep[t.id]||0;});
+    TYPES.forEach(function(t){if(rep[t.id])l.push([t,rep[t.id]]);});l.sort(function(x,y){return y[1]-x[1];});return {l:l,tt:tt};}
+  function aria(p){var r=resume(p);return p.code+' : '+fmt(p.n)+' événements'+(r.tt?' ; '+r.l.map(function(x){return x[0].nom+' '+x[1];}).join(', '):' ; type inconnu');}
+  function infobulle(p,ev){
+    var t=el('tip'),r=resume(p);t.textContent='';
+    var h=document.createElement('b');h.textContent=drapeau(p.code)+' '+p.code+' · '+fmt(p.n)+' événements';t.appendChild(h);
+    if(!r.tt){var d=document.createElement('div');d.textContent='Type inconnu : aucune alerte récente de ce pays.';t.appendChild(d);}
+    else{r.l.forEach(function(x){var d=document.createElement('div');d.appendChild(pastille(x[0]));var s=document.createElement('span');s.textContent=x[0].nom;d.appendChild(s);var e=document.createElement('em');e.textContent=x[1]+' ('+Math.round(100*x[1]/r.tt)+' %)';d.appendChild(e);t.appendChild(d);});
+      var z=document.createElement('div');z.style.color='var(--faible)';z.textContent='sur '+r.tt+' alertes récentes';t.appendChild(z);}
+    t.hidden=false;var b=ev.target.getBoundingClientRect(),w=t.offsetWidth,x=Math.min(Math.max(4,b.left+b.width/2-w/2),window.innerWidth-w-4),y=b.bottom+6;
+    if(y+t.offsetHeight>window.innerHeight)y=Math.max(4,b.top-t.offsetHeight-6);t.style.left=x+'px';t.style.top=y+'px';}
+  function cacheBulle(){el('tip').hidden=true;}
   function monde(pays){
-    var s='<defs><radialGradient id="lueur"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".95"/><stop offset="1" stop-color="#ff4d5e" stop-opacity="0"/></radialGradient></defs><rect width="120" height="60" fill="rgba(6,13,27,.5)"/>';
+    var sv=el('monde');sv.textContent='';
+    var rect=noeud('rect',{width:120,height:60,fill:'rgba(6,13,27,.5)'},sv);
+    var terre=noeud('g',{fill:'#33507f','aria-hidden':'true'},sv),d='';
     TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
-      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)s+='<circle cx="'+(x+i+.5)+'" cy="'+(j+.5)+'" r=".42" fill="#33507f"/>';}x+=n;cur=!cur;});});
-    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1]));
+      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)d+='M'+(x+i+.08)+','+(j+.5)+'a.42,.42 0 1 0 .84,0a.42,.42 0 1 0 -.84,0';}x+=n;cur=!cur;});});
+    noeud('path',{d:d},terre);
+    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1])),foc=etat.foc;
     pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
-      s+='<circle cx="'+((c[1]+180)/3).toFixed(1)+'" cy="'+((90-c[0])/3).toFixed(1)+'" r="'+(1.4+3.4*Math.sqrt(num(p.n)/max)).toFixed(1)+'" fill="url(#lueur)"><title>'+esc(p.code)+' : '+fmt(p.n)+'</title></circle>';});
-    return s;
+      var cx=+((c[1]+180)/3).toFixed(1),cy=+((90-c[0])/3).toFixed(1),r=+(1.6+3.4*Math.sqrt(num(p.n)/max)).toFixed(1),ri=r*.52,rep=etat.cx.par[p.code],dom=dominant(rep),tt=resume(p).tt;
+      var att=foc&&!(rep&&rep[foc]);
+      var g=noeud('g',{'class':'pt'+(att?' att':''),tabindex:'0',role:'img','aria-label':aria(p),'data-pays':p.code,'data-dom':dom||'','data-n':num(p.n)},sv);
+      noeud('circle',{'class':'hal',cx:cx,cy:cy,r:r+.5,fill:dom?TYPE_PAR_ID[dom].coul:'#9fb3d6','fill-opacity':.18},g);
+      if(!dom){noeud('circle',{cx:cx,cy:cy,r:r*.78,fill:'none',stroke:'#9fb3d6','stroke-width':.35,'stroke-dasharray':'.9 .7'},g);}
+      else{var a=0;TYPES.forEach(function(t){var k=rep[t.id]||0;if(!k)return;var da=2*Math.PI*k/tt;
+        noeud('path',{d:arc(cx,cy,r,ri,a,a+da),fill:t.coul,stroke:'#060d1b','stroke-width':.18,'fill-opacity':foc&&foc!==t.id?.22:1,'data-type':t.id},g);a+=da;});
+        glyphe(g,TYPE_PAR_ID[dom].forme,cx,cy,ri*.55,TYPE_PAR_ID[dom].coul);}
+      g.addEventListener('mouseenter',function(ev){infobulle(p,ev);});g.addEventListener('mouseleave',cacheBulle);
+      g.addEventListener('focus',function(ev){infobulle(p,ev);});g.addEventListener('blur',cacheBulle);});
   }
+  function liste(pays){
+    var box=el('pays');box.textContent='';
+    if(!pays.length){var v=document.createElement('div');v.className='vide';v.textContent='Session requise.';box.appendChild(v);return;}
+    pays.slice(0,8).forEach(function(p){var rep=etat.cx.par[p.code],dom=dominant(rep),t=dom&&TYPE_PAR_ID[dom],row=document.createElement('div');
+      row.className='lg'+(etat.foc&&!(rep&&rep[etat.foc])?' att':'');row.setAttribute('data-pays',p.code);row.setAttribute('data-dom',dom||'');
+      row.title=p.code+' : '+(t?'type dominant, '+t.nom:'type inconnu (aucune alerte récente)');
+      row.appendChild(pastille(t||{forme:'anneau',coul:'#6f84a8'}));
+      var s=document.createElement('span');s.textContent=drapeau(p.code)+' '+p.code;row.appendChild(s);
+      var b=document.createElement('b');b.textContent=fmt(p.n);row.appendChild(b);box.appendChild(row);});}
+  function legende(){
+    var box=el('legT');box.textContent='';var cx=etat.cx,pres=TYPES.filter(function(t){return cx.tot[t.id];});
+    if(!pres.length){var v=document.createElement('span');v.className='aucun';v.textContent='Types : — (aucune alerte récente lue)';box.appendChild(v);return;}
+    pres.sort(function(a,b){return cx.tot[b.id]-cx.tot[a.id];});
+    pres.forEach(function(t){var bt=document.createElement('button');bt.type='button';bt.setAttribute('data-type',t.id);bt.setAttribute('aria-pressed',etat.foc===t.id?'true':'false');
+      bt.title='Mettre « '+t.nom+' » en avant sur la carte (appuyer de nouveau pour annuler)';
+      bt.appendChild(pastille(t));var s=document.createElement('span');s.textContent=t.nom;bt.appendChild(s);var b=document.createElement('b');b.textContent=fmt(cx.tot[t.id]);bt.appendChild(b);
+      bt.addEventListener('click',function(){etat.foc=etat.foc===t.id?null:t.id;if(etat.d)rend(etat.d);else carte();});box.appendChild(bt);});}
+  function carte(){monde(etat.pays);liste(etat.pays);legende();}
   function courbe(j){
     var n=j.length;if(n<2) return '<div class="vide">Pas encore assez de jours mesurés.</div>';
     var W=520,H=170,L=38,R=8,T=8,B=20,max=Math.max.apply(null,j.map(function(d){return num(d.total);}).concat([1]));
@@ -150,10 +251,11 @@
   var ACT={robot:['Robot','v'],banned:['Banni','b'],blocked:['Bloqué','b'],block:['Bloqué','b'],warning:['Alerte','o'],log:['Capturé','o'],captured:['Capturé','o'],limited:['Limité','o']};
   function evenements(al){
     el('evNote').textContent=al?'':'session requise';
-    el('events').innerHTML=al&&al.length?al.slice(0,8).map(function(a){var g=GRAV[a.severity]||[a.severity||'—','#6f84a8',0],ac=ACT[a.action]||[a.action||'—','o'],h=String(a.timestamp||'').slice(11,19);
-      return '<tr><td>'+esc(h)+'</td><td>'+esc(a.client_ip)+'</td><td>'+drapeau(a.country)+' '+esc(a.country)+'</td><td>'+esc(a.category)+'</td><td title="'+esc((a.host||'')+(a.path||''))+'">'+esc((a.host||'')+(a.path||''))+'</td><td><span class="risque" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span></td><td class="act '+ac[1]+'">'+esc(ac[0])+'</td></tr>';}).join(''):'<tr><td colspan="7" class="vide">'+(al?'Aucun événement.':'Ouvre une session pour voir les événements.')+'</td></tr>';
+    el('events').innerHTML=al&&al.length?al.slice(0,8).map(function(a){var fa=famille(a.category),g=GRAV[a.severity]||[a.severity||'—','#6f84a8',0],ac=ACT[a.action]||[a.action||'—','o'],h=String(a.timestamp||'').slice(11,19);
+      return '<tr'+(fa&&att(fa)?' class="att"':'')+'><td>'+esc(h)+'</td><td>'+esc(a.client_ip)+'</td><td>'+drapeau(a.country)+' '+esc(a.country)+'</td><td>'+(fa?pastilleStr(TYPE_PAR_ID[fa])+' ':'')+esc(a.category)+'</td><td title="'+esc((a.host||'')+(a.path||''))+'">'+esc((a.host||'')+(a.path||''))+'</td><td><span class="risque" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span></td><td class="act '+ac[1]+'">'+esc(ac[0])+'</td></tr>';}).join(''):'<tr><td colspan="7" class="vide">'+(al?'Aucun événement.':'Ouvre une session pour voir les événements.')+'</td></tr>';
   }
   function rend(d){
+    etat.d=d;
     el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.stats||d.status);
     var s=d.stats,st=d.status,a=el('actif');
     a.textContent=st?(st.enabled?'ACTIF · '+fmt(st.total_rules)+' RÈGLES EN SERVICE':'WAF DÉSACTIVÉ'):(s?'ACTIF':'HORS LIGNE');a.classList.toggle('hors',!(st?st.enabled:s));
@@ -168,20 +270,27 @@
      +tuile(IC.men,N(men),'Menaces détectées','gravité moyenne et plus · aujourd’hui','Événements de gravité moyenne, haute ou critique, aujourd’hui. Les robots (gravité info) n’y sont pas comptés.',spark(J.map(function(x){return x.menaces;}),'#a78bfa'))
      +tuile(IC.rob,N(rob),'Robots connus','aujourd’hui','Requêtes de robots reconnus (catégorie « robots »). Contexte, pas verdict.','')
      +tuile(IC.surf,surf?fmt(surf.length):'—','Surfaces observées',surf?surf.join(', '):'','Types de trafic ayant produit des événements aujourd’hui (http, smtp, ssh, leurres…).','');
-    var pays=s&&s.top_countries||[];pays=pays.map(function(p){return {code:p.country,n:p.count};});
-    el('monde').innerHTML=monde(pays);
-    el('pays').innerHTML=pays.length?pays.slice(0,8).map(function(p){return '<div><span>'+drapeau(p.code)+' '+esc(p.code)+'</span><b>'+fmt(p.n)+'</b></div>';}).join(''):'<div class="vide">Session requise.</div>';
-    el('geoNote').textContent=pays.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':'';
+    var pays=s&&s.top_countries||[];pays=pays.map(function(p){return {code:String(p.country||'').toUpperCase(),n:p.count};});
+    etat.cx=croise(d.alerts);
+    if(!pays.length&&d.alerts){var cc={};d.alerts.forEach(function(a){var c=String(a.country||'').toUpperCase();if(/^[A-Z]{2}$/.test(c))cc[c]=(cc[c]||0)+1;});pays=Object.keys(cc).map(function(c){return {code:c,n:cc[c]};}).sort(function(x,y){return y.n-x.n;}).slice(0,25);}
+    etat.pays=pays;if(etat.foc&&!etat.cx.tot[etat.foc])etat.foc=null;
+    carte();
+    el('geoNote').textContent=pays.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle. Taille = événements du pays ; secteurs et couleur = type de menace, calculés sur les '+(etat.cx.n?fmt(etat.cx.n):'—')+' alertes récentes lues (500 au plus), pas sur tout le compteur.'+(d.demo?' Répartition fictive (démonstration).':''):'';
     el('courbe').innerHTML=J.length?courbe(J):'<div class="vide">Historique indisponible (session requise).</div>';
     el('legCourbe').innerHTML=J.length?'<span><i style="background:#29b6f6"></i>Événements</span><span><i style="background:#a78bfa"></i>Menaces</span><span><i style="background:#ff4d5e"></i>Bloquées (haute et critique)</span>':'';
-    var bc=s&&s.by_category||{},cl=Object.keys(bc).filter(function(k){return k!=='robots';}).map(function(k){return [k,num(bc[k])];}).sort(function(x,y){return y[1]-x[1];}),tot=cl.reduce(function(t,c){return t+c[1];},0);
-    if(s&&tot>0){var top=cl.slice(0,6),rest=tot-top.reduce(function(t,c){return t+c[1];},0);if(rest>0)top.push(['autres',rest]);
-      var acc=0,seg=top.map(function(c,i){var p=100*c[1]/tot,b=acc;acc+=p;return PAL[i%7]+' '+b+'% '+acc+'%';});
-      el('donut').style.background='conic-gradient('+seg.join(',')+')';el('donutC').innerHTML='<div><b>'+fmt(tot)+'</b>menaces</div>';
-      el('cats').innerHTML=top.map(function(c,i){return '<div><i style="background:'+PAL[i%7]+'"></i><span title="'+esc(c[0])+'">'+esc(c[0])+'</span><b>'+Math.round(100*c[1]/tot)+'%</b></div>';}).join('');}
-    else{el('donut').style.background='rgba(159,179,214,.16)';el('donutC').textContent='—';el('cats').innerHTML='<div class="vide">'+(s?'Aucune menace hors robots.':'Session requise.')+'</div>';}
+    var bc=s&&s.by_category||{},fam={},tot=0;
+    Object.keys(bc).filter(function(k){return k!=='robots';}).forEach(function(k){var f=famille(k),v=num(bc[k]);if(f&&v>0){fam[f]=(fam[f]||0)+v;tot+=v;}});
+    var fl=TYPES.filter(function(t){return fam[t.id];}).sort(function(x,y){return fam[y.id]-fam[x.id];}),cats=el('cats');cats.textContent='';
+    if(s&&tot>0){var acc=0,seg=fl.map(function(t){var p=100*fam[t.id]/tot,b0=acc;acc+=p;return (att(t.id)?hexa(t.coul,.22):t.coul)+' '+b0+'% '+acc+'%';});
+      el('donut').style.background='conic-gradient('+seg.join(',')+')';el('donutC').textContent='';var dv=document.createElement('div'),db=document.createElement('b');db.textContent=fmt(tot);dv.appendChild(db);dv.appendChild(document.createTextNode('menaces'));el('donutC').appendChild(dv);
+      fl.forEach(function(t){var r=document.createElement('div');if(att(t.id))r.className='att';r.setAttribute('data-type',t.id);r.appendChild(pastille(t));var sp=document.createElement('span');sp.textContent=t.nom;sp.title=t.nom;r.appendChild(sp);var bb=document.createElement('b');bb.textContent=Math.round(100*fam[t.id]/tot)+'%';r.appendChild(bb);cats.appendChild(r);});}
+    else{el('donut').style.background='rgba(159,179,214,.16)';el('donutC').textContent='—';var vi=document.createElement('div');vi.className='vide';vi.textContent=s?'Aucune menace hors robots.':'Session requise.';cats.appendChild(vi);}
     var tp=pt?Object.keys(pt).map(function(k){return [k,num(pt[k])];}).filter(function(x){return x[1]>0;}).sort(function(x,y){return y[1]-x[1];}):null,tm=tp&&tp.length?tp[0][1]:1;
-    el('types').innerHTML=tp&&tp.length?tp.map(function(t,i){return '<div class="ligne"><span class="n" style="text-align:left">'+esc(t[0].toUpperCase())+'</span><span>'+fmt(t[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*t[1]/tm)+'%;background:'+PAL[i%7]+'"></i></div></div>';}).join(''):'<div class="vide">Session requise.</div>';
+    var bx=el('types');bx.textContent='';
+    if(tp&&tp.length){tp.forEach(function(t){var fid=TRAFIC_TYPE[t[0]]||null,ty=fid&&TYPE_PAR_ID[fid],r=document.createElement('div');r.className='ligne'+(fid&&att(fid)?' att':'');if(fid)r.setAttribute('data-type',fid);
+        var n=document.createElement('span');n.className='n';n.style.textAlign='left';if(ty)n.appendChild(pastille(ty));n.appendChild(document.createTextNode((ty?' ':'')+t[0].toUpperCase()));n.title=ty?'Type de menace associé : '+ty.nom:'Surface neutre (protocole), sans type de menace propre';r.appendChild(n);
+        var v=document.createElement('span');v.textContent=fmt(t[1]);r.appendChild(v);var ba=document.createElement('div');ba.className='barre';var i=document.createElement('i');i.style.width=Math.max(4,100*t[1]/tm)+'%';i.style.background=ty?ty.coul:'#6f84a8';ba.appendChild(i);r.appendChild(ba);bx.appendChild(r);});}
+    else{var vv=document.createElement('div');vv.className='vide';vv.textContent='Session requise.';bx.appendChild(vv);}
     var tv=s&&s.top_vhosts||[];
     el('sites').innerHTML=tv.length?tv.slice(0,7).map(function(v){return '<div class="site"><i></i><span class="n" title="'+esc(v.vhost)+'">'+esc(v.vhost)+'</span><b>'+fmt(v.count)+'</b></div>';}).join(''):'<div class="vide">Session requise.</div>';
     evenements(d.alerts);
@@ -193,12 +302,14 @@
     (d.detections&&d.detections.detections||[]).forEach(function(x){P.push([x.nom,x.actif===true?1:x.actif===false?0:null]);});
     el('prot').innerHTML=P.length?P.map(function(p){return '<div class="prot"><span>'+(p[1]===1?'✅':p[1]===0?'⛔':'❔')+'</span><span>'+esc(p[0])+'</span><span class="'+(p[1]===1?'on':p[1]===0?'off':'inc')+'">'+(p[1]===1?'ON':p[1]===0?'OFF':'?')+'</span></div>';}).join(''):'<div class="vide">Session requise.</div>';
   }
+  var DEMO_MIX={US:{'sql.injection':14,'scan-ports':9,'xss':6,'http.suspicious':4,robots:3},DE:{'scan-ports':8,'brute-force ssh':5,'sql.injection':2},GB:{xss:6,'path traversal':4,'http.suspicious':2},CN:{'sql.injection':9,'brute-force ssh':7,'honeypot leurre':4,'scan-ports':3},NL:{robots:8,'scan-ports':2},FR:{'honeypot leurre':6,'path traversal':2},SG:{'rce command':5,xss:3},RU:{'brute-force ssh':6}};
+  var DEMO_AL=[];Object.keys(DEMO_MIX).forEach(function(c){Object.keys(DEMO_MIX[c]).forEach(function(k){for(var i=0;i<DEMO_MIX[c][k];i++)DEMO_AL.push({timestamp:'2026-10-10T14:2'+(i%10)+':00',client_ip:'203.0.113.'+(1+DEMO_AL.length%250),country:c,category:k,host:'app.gk2',path:'/',severity:'medium',action:'warning'});});});
   var DEMO={demo:true,status:{enabled:true,total_rules:382,autoban_enabled:true},
-    stats:{par_origine:{waf:1282856},blocked_24h:136638,by_severity:{critical:600,high:1800,medium:2021,info:90000},by_category:{robots:383,'Injection SQL':1180,'Fuzzer / scan':930,'Accès non autorisé':760,'Exécution de code':510,'Traversée de répertoires':340,'Bots malveillants':250,autres:240},par_type:{http:1228856,smtp:18151,ssh:17458,leurre:24581,autre:14916},
+    stats:{par_origine:{waf:1282856},blocked_24h:136638,by_severity:{critical:600,high:1800,medium:2021,info:90000},by_category:{robots:383,'Injection SQL':1180,'Fuzzer / scan':930,'Script (XSS)':310,'Leurres':180,'Accès non autorisé':760,'Exécution de code':510,'Traversée de répertoires':340,'Bots malveillants':250,autres:240},par_type:{http:1228856,smtp:18151,ssh:17458,leurre:24581,autre:14916},
       top_countries:[{country:'US',count:2224},{country:'DE',count:532},{country:'GB',count:421},{country:'CN',count:398},{country:'NL',count:310},{country:'FR',count:287},{country:'SG',count:198},{country:'RU',count:142}],
       top_vhosts:[{vhost:'app.gk2.secubox.in',count:420},{vhost:'api.secubox.in',count:310},{vhost:'www.gk2.secubox.in',count:240},{vhost:'mail.secubox.in',count:90}]},
     history:{jours:{'2026-10-04':{total:700,severites:{high:60,medium:150,critical:20}},'2026-10-05':{total:1100,severites:{high:90,medium:210,critical:30}},'2026-10-06':{total:900,severites:{high:70,medium:160,critical:25}},'2026-10-07':{total:1500,severites:{high:120,medium:260,critical:40}},'2026-10-08':{total:1300,severites:{high:100,medium:240,critical:35}},'2026-10-09':{total:1900,severites:{high:150,medium:300,critical:50}},'2026-10-10':{total:1700,severites:{high:140,medium:280,critical:45}}},top_ips:{'57.141.0.17':254,'57.141.0.57':243,'57.141.3.58':238,'57.141.3.42':227}},
-    alerts:[{timestamp:'2026-10-10T14:27:12',client_ip:'57.141.0.17',country:'US',category:'sql.injection',host:'app.gk2',path:'/index.php?id=1',severity:'critical',action:'banned'},{timestamp:'2026-10-10T14:26:58',client_ip:'185.220.101.3',country:'DE',category:'scan-ports',host:'app.gk2',path:'/',severity:'high',action:'banned'},{timestamp:'2026-10-10T14:25:50',client_ip:'192.168.33.12',country:'GB',category:'http.suspicious',host:'app.gk2',path:'/admin',severity:'medium',action:'warning'}],
+    alerts:[{timestamp:'2026-10-10T14:27:12',client_ip:'57.141.0.17',country:'US',category:'sql.injection',host:'app.gk2',path:'/index.php?id=1',severity:'critical',action:'banned'},{timestamp:'2026-10-10T14:26:58',client_ip:'185.220.101.3',country:'DE',category:'scan-ports',host:'app.gk2',path:'/',severity:'high',action:'banned'},{timestamp:'2026-10-10T14:25:50',client_ip:'192.168.33.12',country:'GB',category:'http.suspicious',host:'app.gk2',path:'/admin',severity:'medium',action:'warning'}].concat(DEMO_AL),
     campaigns:{campagnes:[{signature:'089b4a5e1234',outil:'sql.injection',sondes:1273},{signature:'1392fa1c9876',outil:'scanner',sondes:987}]},
     detections:{detections:[{nom:'Hôtes non routés',actif:true},{nom:'Anti-robots',actif:true},{nom:'Leurres de service',actif:true}]}};
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -208,7 +319,7 @@
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     var b='/api/v1/waf/';
-    Promise.all([jget(b+'stats'),jget(b+'status'),jget(b+'alerts?limit=8'),jget(b+'campaigns'),jget(b+'history'),jget(b+'detections')]).then(function(r){
+    Promise.all([jget(b+'stats'),jget(b+'status'),jget(b+'alerts?limit=500'),jget(b+'campaigns'),jget(b+'history'),jget(b+'detections')]).then(function(r){
       rend({stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,campaigns:r[3],history:r[4],detections:r[5]});
     });
   }
