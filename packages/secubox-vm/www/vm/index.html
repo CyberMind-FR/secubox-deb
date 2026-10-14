@@ -4,700 +4,412 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Machines virtuelles et conteneurs au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VM Manager - SecuBox</title>
+    <title>SecuBox — Machines et conteneurs</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
     <style>
-        .main-content {
-            margin-left: 200px;
-            padding: 2rem;
-        }
-        .status-card {
-            background: var(--card-bg, #1a1a2e);
-            border: 1px solid var(--border-color, #333);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .status-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--border-color, #333);
-        }
-        .status-row:last-child { border-bottom: none; }
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        .badge-success { background: #2d5a27; color: #7fff7f; }
-        .badge-warning { background: #5a5a27; color: #ffff7f; }
-        .badge-danger { background: #5a2727; color: #ff7f7f; }
-        .badge-info { background: #27455a; color: #7fd4ff; }
-        .btn {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            margin-right: 0.5rem;
-        }
-        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
-        .btn-success { background: #27ae60; color: #fff; }
-        .btn-danger { background: #c0392b; color: #fff; }
-        .btn-secondary { background: #555; color: #fff; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
-        .section-title {
-            margin: 2rem 0 1rem 0;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid var(--accent-color, #4a9eff);
-        }
-        .vm-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1rem;
-        }
-        .vm-card {
-            background: var(--card-bg, #1a1a2e);
-            border: 1px solid var(--border-color, #333);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-        .vm-card h4 {
-            margin: 0 0 0.5rem 0;
-            color: var(--accent-color, #4a9eff);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .vm-card .type-badge {
-            font-size: 0.7rem;
-            padding: 0.1rem 0.4rem;
-            border-radius: 4px;
-            background: #333;
-            color: #aaa;
-            text-transform: uppercase;
-        }
-        .vm-card .state {
-            margin-bottom: 0.5rem;
-        }
-        .vm-card .meta {
-            font-size: 0.85rem;
-            color: #888;
-            margin-bottom: 0.75rem;
-        }
-        .vm-card .actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.25rem;
-        }
-        .tabs {
-            display: flex;
-            border-bottom: 2px solid var(--border-color, #333);
-            margin-bottom: 1rem;
-        }
-        .tab {
-            padding: 0.75rem 1.5rem;
-            cursor: pointer;
-            border: none;
-            background: transparent;
-            color: #888;
-            font-size: 1rem;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
-        }
-        .tab.active {
-            color: var(--accent-color, #4a9eff);
-            border-bottom-color: var(--accent-color, #4a9eff);
-        }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal.active { display: flex; }
-        .modal-content {
-            background: #1a1a2e;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 2rem;
-            max-width: 500px;
-            width: 90%;
-        }
-        .modal-content h3 { margin-top: 0; }
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #aaa;
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #333;
-            border-radius: 4px;
-            background: #0a0a0a;
-            color: #fff;
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-        .stats-row {
-            display: flex;
-            gap: 2rem;
-        }
-        .stat-box {
-            text-align: center;
-        }
-        .stat-box .value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--accent-color, #4a9eff);
-        }
-        .stat-box .label {
-            font-size: 0.85rem;
-            color: #888;
-        }
-        /* LISTE LXC (#1225) — une ligne par conteneur, boutons rapides. */
-        .lxc-list { display: flex; flex-direction: column; gap: 4px; }
-        .lxc-row {
-            display: flex; align-items: center; gap: 10px;
-            background: var(--card-bg, #1a1a2e); border: 1px solid #2a2a40;
-            border-radius: 7px; padding: 7px 11px; font-size: 0.86rem;
-        }
-        .lxc-row.is-off { opacity: 0.62; }
-        .lxc-row:hover { border-color: #3a3a5a; }
-        .st-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
-        .st-run { background: #27ae60; box-shadow: 0 0 0 3px rgba(39,174,96,0.18); }
-        .st-frozen { background: #4a9eff; box-shadow: 0 0 0 3px rgba(74,158,255,0.18); }
-        .st-stop { background: #666; }
-        .lxc-name { font-weight: 700; color: #e8e6f0; min-width: 120px; }
-        .lxc-state { color: #9a9ab0; font-size: 0.74rem; min-width: 78px; text-transform: capitalize; }
-        .lxc-ip { color: #7fd4ff; font-family: ui-monospace, monospace; font-size: 0.76rem; min-width: 108px; }
-        .lxc-mem { color: #888; font-size: 0.74rem; font-variant-numeric: tabular-nums; flex: 1; }
-        .lxc-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; flex: 0 0 auto; }
-        .qb {
-            border: 1px solid #3a3a55; background: #22223a; color: #d8d8ea;
-            border-radius: 6px; cursor: pointer; font-size: 0.82rem; line-height: 1;
-            padding: 5px 8px; min-width: 30px;
-        }
-        .qb:hover { border-color: #4a9eff; }
-        .qb-go { color: #7fff7f; border-color: #2d5a27; }
-        .qb-stop { color: #ffcf7f; }
-        .qb-cut { color: #ff7f7f; border-color: #5a2727; }
-        .qb-auto { font-size: 0.64rem; letter-spacing: 0.05em; text-transform: uppercase; color: #777; }
-        .qb-auto.on { color: #7fff7f; border-color: #2d5a27; background: rgba(39,174,96,0.12); }
-        @media (max-width: 640px) {
-            .lxc-ip, .lxc-mem { display: none; }
-            .lxc-name { min-width: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.on{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .barre-outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        .barre-outils input[type=search]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;flex:1 1 160px;max-width:300px}
+        .barre-outils input[type=search]:focus{outline:none;border-color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .cellule{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        td.act .cellule .note{margin:0;white-space:normal}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie h4{grid-column:1/-1;margin:0;font-size:.84rem}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M7 8h4M7 11h7"/></svg>
+                <div><h1>Machines et conteneurs</h1><small>Conteneurs LXC et machines KVM</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-    <div class="main-content">
-        <h1>🖥️ VM Manager</h1>
-        <p>Virtual machines and containers</p>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Conteneurs LXC connus de lxc-ls. « — » si LXC n’est pas disponible sur la machine."><span class="l">Conteneurs LXC</span><span class="v" id="tLxc">—</span><span class="s">au total</span></div>
+            <div class="tuile ok" title="Conteneurs LXC dont l’état est « running » (les conteneurs en veille ne sont pas comptés)."><span class="l">LXC en marche</span><span class="v" id="tLxcOn">—</span><span class="s">démarrés</span></div>
+            <div class="tuile cy" title="Machines virtuelles KVM déclarées dans libvirt. « — » si libvirtd est arrêté."><span class="l">Machines KVM</span><span class="v" id="tKvm">—</span><span class="s">au total</span></div>
+            <div class="tuile ok" title="Machines KVM dont l’état contient « running »."><span class="l">KVM en marche</span><span class="v" id="tKvmOn">—</span><span class="s">démarrées</span></div>
+            <div class="tuile" id="cLibvirt" title="Service libvirtd actif ; l’accélération KVM dépend de la présence de /dev/kvm."><span class="l">Libvirt</span><span class="v" id="tLibvirt">—</span><span class="s" id="sLibvirt">accélération KVM</span></div>
+            <div class="tuile" id="cLxcDispo" title="Commande lxc-ls présente sur la machine."><span class="l">LXC</span><span class="v" id="tLxcDispo">—</span><span class="s">moteur de conteneurs</span></div>
+        </section>
 
-        <div class="status-card">
-            <h3>Virtualization Status</h3>
-            <div class="status-row">
-                <span>KVM/libvirt</span>
-                <span id="libvirt-status" class="badge badge-warning">Checking...</span>
-            </div>
-            <div class="status-row">
-                <span>LXC</span>
-                <span id="lxc-status" class="badge badge-warning">Checking...</span>
-            </div>
-            <div class="stats-row" style="margin-top: 1rem;">
-                <div class="stat-box">
-                    <div class="value" id="vm-count">-</div>
-                    <div class="label">VMs</div>
-                </div>
-                <div class="stat-box">
-                    <div class="value" id="vm-running">-</div>
-                    <div class="label">Running</div>
-                </div>
-                <div class="stat-box">
-                    <div class="value" id="container-count">-</div>
-                    <div class="label">Containers</div>
-                </div>
-                <div class="stat-box">
-                    <div class="value" id="container-running">-</div>
-                    <div class="label">Running</div>
-                </div>
-            </div>
+        <div class="barre-outils">
+            <button class="btn prim" id="addLxc" type="button">+ Nouveau conteneur LXC</button>
+            <button class="btn prim" id="addKvm" type="button">+ Nouvelle machine KVM</button>
+            <input type="search" id="filtre" placeholder="Filtrer par nom" aria-label="Filtrer par nom">
+        </div>
+        <div id="retour" class="retour" role="status" hidden></div>
+
+        <form class="saisie" id="fLxc" hidden>
+            <h4>Créer un conteneur LXC</h4>
+            <label>Nom<input name="name" placeholder="mon-conteneur" required></label>
+            <label>Modèle<select name="template" id="lxcTemplate"></select></label>
+            <label>Version<select name="release" id="lxcRelease"></select></label>
+            <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fLxc">Annuler</button></div>
+        </form>
+        <form class="saisie" id="fKvm" hidden>
+            <h4>Créer une machine virtuelle KVM</h4>
+            <label>Nom<input name="name" placeholder="ma-vm" required></label>
+            <label>Mémoire (Mo)<input name="memory" type="number" min="512" value="2048" required></label>
+            <label>vCPU<input name="vcpus" type="number" min="1" value="2" required></label>
+            <label>Disque (Go)<input name="disk_size" type="number" min="5" value="20" required></label>
+            <label>Image ISO (facultative)<select name="iso" id="kvmIso"><option value="">Aucune (importer un disque existant)</option></select></label>
+            <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fKvm">Annuler</button></div>
+        </form>
+
+        <div class="onglets" role="tablist" aria-label="Types de machines">
+            <button type="button" role="tab" id="o-toutes" data-t="toutes" aria-selected="true" aria-controls="t-toutes">Toutes</button>
+            <button type="button" role="tab" id="o-kvm" data-t="kvm" aria-selected="false" aria-controls="t-kvm">Machines KVM</button>
+            <button type="button" role="tab" id="o-lxc" data-t="lxc" aria-selected="false" aria-controls="t-lxc">Conteneurs LXC</button>
         </div>
 
-        <div style="margin-bottom: 1rem;">
-            <button class="btn btn-primary" onclick="showCreateKVMModal()">New KVM VM</button>
-            <button class="btn btn-primary" onclick="showCreateLXCModal()">New LXC Container</button>
-            <button class="btn btn-secondary" onclick="loadVMs()">Refresh</button>
-        </div>
+        <section id="t-toutes" role="tabpanel" aria-labelledby="o-toutes">
+            <div class="pan"><h3>Toutes les machines <i id="n-toutes"></i></h3>
+                <div class="tab"><table><thead><tr><th>État</th><th>Nom</th><th>Type</th><th>Adresse IPv4</th><th>Mémoire</th><th>Démarrage auto</th><th>Actions</th></tr></thead><tbody id="b-toutes"></tbody></table></div></div>
+        </section>
+        <section id="t-kvm" role="tabpanel" aria-labelledby="o-kvm" hidden>
+            <div class="pan"><h3>Machines KVM <i id="n-kvm"></i></h3>
+                <div class="tab"><table><thead><tr><th>État</th><th>Nom</th><th>Type</th><th>Adresse IPv4</th><th>Mémoire</th><th>Démarrage auto</th><th>Actions</th></tr></thead><tbody id="b-kvm"></tbody></table></div></div>
+        </section>
+        <section id="t-lxc" role="tabpanel" aria-labelledby="o-lxc" hidden>
+            <div class="pan"><h3>Conteneurs LXC <i id="n-lxc"></i></h3>
+                <div class="tab"><table><thead><tr><th>État</th><th>Nom</th><th>Type</th><th>Adresse IPv4</th><th>Mémoire</th><th>Démarrage auto</th><th>Actions</th></tr></thead><tbody id="b-lxc"></tbody></table></div></div>
+        </section>
 
-        <div class="tabs">
-            <button class="tab active" onclick="showTab('all')">All</button>
-            <button class="tab" onclick="showTab('kvm')">KVM VMs</button>
-            <button class="tab" onclick="showTab('lxc')">LXC Containers</button>
-        </div>
-
-        <div id="tab-all" class="tab-content active">
-            <div id="all-vms" class="vm-grid">
-                <p>Loading...</p>
-            </div>
-        </div>
-
-        <div id="tab-kvm" class="tab-content">
-            <div id="kvm-vms" class="vm-grid">
-                <p>Loading...</p>
-            </div>
-        </div>
-
-        <div id="tab-lxc" class="tab-content">
-            <div id="lxc-containers" class="vm-grid">
-                <p>Loading...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Create KVM Modal -->
-    <div id="kvm-modal" class="modal">
-        <div class="modal-content">
-            <h3>Create KVM Virtual Machine</h3>
-            <div class="form-group">
-                <label>Name</label>
-                <input type="text" id="kvm-name" placeholder="my-vm">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Memory (MB)</label>
-                    <input type="number" id="kvm-memory" value="2048" min="512">
-                </div>
-                <div class="form-group">
-                    <label>vCPUs</label>
-                    <input type="number" id="kvm-vcpus" value="2" min="1">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Disk Size (GB)</label>
-                <input type="number" id="kvm-disk" value="20" min="5">
-            </div>
-            <div class="form-group">
-                <label>ISO Image (optional)</label>
-                <select id="kvm-iso">
-                    <option value="">No ISO (import existing disk)</option>
-                </select>
-            </div>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-success" onclick="createKVM()">Create</button>
-                <button class="btn btn-secondary" onclick="closeKVMModal()">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Create LXC Modal -->
-    <div id="lxc-modal" class="modal">
-        <div class="modal-content">
-            <h3>Create LXC Container</h3>
-            <div class="form-group">
-                <label>Name</label>
-                <input type="text" id="lxc-name" placeholder="my-container">
-            </div>
-            <div class="form-group">
-                <label>Template</label>
-                <select id="lxc-template" onchange="updateReleases()">
-                    <option value="debian">Debian</option>
-                    <option value="ubuntu">Ubuntu</option>
-                    <option value="alpine">Alpine</option>
-                    <option value="fedora">Fedora</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Release</label>
-                <select id="lxc-release">
-                    <option value="bookworm">bookworm</option>
-                </select>
-            </div>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-success" onclick="createLXC()">Create</button>
-                <button class="btn btn-secondary" onclick="closeLXCModal()">Cancel</button>
-            </div>
-        </div>
-    </div>
+        <div class="pan"><h3>Ce que cette page ne montre pas</h3>
+            <p class="note" style="margin:0">L’API ne fournit ni charge CPU, ni disque, ni instantanés, ni console graphique : ces mesures ne sont pas affichées plutôt qu’inventées. La mémoire est celle que rapporte lxc-ls (conteneurs LXC) ; les machines KVM n’ont ni adresse ni mémoire dans la liste. Un conteneur LXC se crée, se démarre, se met en veille, s’arrête et se règle en démarrage auto ici ; sa suppression n’est pas proposée.</p></div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/vm';
-        let allVMs = [];
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        const releases = {
-            debian: ['bookworm', 'bullseye', 'buster'],
-            ubuntu: ['noble', 'jammy', 'focal'],
-            alpine: ['3.19', '3.18', 'edge'],
-            fedora: ['39', '38']
-        };
+        let STATUT = null, MACHINES = [], SESSION_OK = true, ONGLET = 'toutes', OCCUPE = false;
+        let CONFIRM = null;   // { cle } : confirmation en cours dans la ligne, jamais de dialogue natif
+        // Modèles de repli si /templates est indisponible (mêmes valeurs que l'ancienne page).
+        let MODELES = [
+            { name: 'debian', releases: ['bookworm', 'bullseye', 'buster'] },
+            { name: 'ubuntu', releases: ['noble', 'jammy', 'focal'] },
+            { name: 'alpine', releases: ['3.19', '3.18', 'edge'] },
+            { name: 'fedora', releases: ['39', '38'] }];
 
-        function showTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelector(`.tab-content#tab-${tabName}`).classList.add('active');
-            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+
+        function demoData() {
+            STATUT = { libvirt: { available: true, kvm_enabled: true }, lxc: { available: true }, vms: { total: 2, running: 1 }, containers: { total: 4, running: 2 } };
+            MACHINES = [
+                { id: '3', name: 'passerelle-test', state: 'running', type: 'kvm' },
+                { id: null, name: 'bureau-archive', state: 'shut off', type: 'kvm' },
+                { name: 'web-exemple', state: 'running', frozen: false, ip: '192.0.2.10', memory: '412.30MB', autostart: true, type: 'lxc' },
+                { name: 'messagerie-exemple', state: 'running', frozen: false, ip: '192.0.2.11', memory: '1.20GB', autostart: true, type: 'lxc' },
+                { name: 'cache-exemple', state: 'frozen', frozen: true, ip: '192.0.2.12', memory: '96.00MB', autostart: false, type: 'lxc' },
+                { name: 'essai-exemple', state: 'stopped', frozen: false, ip: null, memory: '0.00MB', autostart: false, type: 'lxc' }];
         }
 
-        async function loadStatus() {
-            try {
-                const res = await fetch(`${API}/status`);
-                const data = await res.json();
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; $('erreur').hidden = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/vms')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            SESSION_OK = !refus;
+            STATUT = val(0);
+            const v = val(1); MACHINES = v ? (Array.isArray(v) ? v : (v.vms || [])) : [];
+            const tous = essais.every(e => e.status === 'rejected');
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire l’état des machines (service arrêté ou injoignable).';
+            rendre();
+        }
 
-                const libvirtEl = document.getElementById('libvirt-status');
-                libvirtEl.textContent = data.libvirt?.available ?
-                    (data.libvirt.kvm_enabled ? 'KVM Enabled' : 'No KVM') : 'Not Available';
-                libvirtEl.className = 'badge ' + (data.libvirt?.available ? 'badge-success' : 'badge-danger');
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            const dispoLxc = s && s.lxc ? !!s.lxc.available : null;
+            const dispoKvm = s && s.libvirt ? !!s.libvirt.available : null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!dispoLxc && !dispoKvm) { etat.className = 'actif att'; etat.textContent = 'AUCUN MOTEUR'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            // Un total n’est une mesure que si le moteur est disponible : sinon « — », jamais 0.
+            const n = (dispo, bloc, cle) => (s && dispo && s[bloc] && s[bloc][cle] != null) ? s[bloc][cle] : '—';
+            $('tLxc').textContent = n(dispoLxc, 'containers', 'total');
+            $('tLxcOn').textContent = n(dispoLxc, 'containers', 'running');
+            $('tKvm').textContent = n(dispoKvm, 'vms', 'total');
+            $('tKvmOn').textContent = n(dispoKvm, 'vms', 'running');
+            const kvmOk = s && s.libvirt && s.libvirt.available ? !!s.libvirt.kvm_enabled : null;
+            $('tLibvirt').textContent = !s ? '—' : (dispoKvm ? 'Actif' : 'Arrêté');
+            $('sLibvirt').textContent = !s ? 'accélération KVM' : (dispoKvm ? (kvmOk ? 'accélération KVM active' : 'sans accélération KVM') : 'libvirtd inactif');
+            $('cLibvirt').className = 'tuile ' + (!s ? '' : dispoKvm ? (kvmOk ? 'ok' : 'att') : 'hors');
+            $('tLxcDispo').textContent = !s ? '—' : (dispoLxc ? 'Disponible' : 'Absent');
+            $('cLxcDispo').className = 'tuile ' + (!s ? '' : dispoLxc ? 'ok' : 'hors');
+            for (const t of ['toutes', 'kvm', 'lxc']) rendreTable(t);
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-                const lxcEl = document.getElementById('lxc-status');
-                lxcEl.textContent = data.lxc?.available ? 'Available' : 'Not Available';
-                lxcEl.className = 'badge ' + (data.lxc?.available ? 'badge-success' : 'badge-danger');
-
-                document.getElementById('vm-count').textContent = data.vms?.total || 0;
-                document.getElementById('vm-running').textContent = data.vms?.running || 0;
-                document.getElementById('container-count').textContent = data.containers?.total || 0;
-                document.getElementById('container-running').textContent = data.containers?.running || 0;
-            } catch (e) {
-                console.error('Failed to load status:', e);
+        function btn(txt, cls, fn, titre) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; if (titre) b.title = titre; b.addEventListener('click', fn); return b; }
+        // Confirmation dans la cellule : nomme la machine, Confirmer/Annuler, jamais de dialogue natif.
+        function action(cell, vm, verbe, libelle, question, fn, cls) {
+            const cle = verbe + ':' + vm.name;
+            if (CONFIRM && CONFIRM.cle === cle) {
+                cell.appendChild(el('span', 'note', question));
+                cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+            } else {
+                cell.appendChild(btn(libelle, cls || '', () => { CONFIRM = { cle }; rendre(); }));
             }
         }
-
-        async function loadVMs() {
-            try {
-                const res = await fetch(`${API}/vms`);
-                const data = await res.json();
-                allVMs = data.vms || [];
-                renderVMs();
-            } catch (e) {
-                console.error('Failed to load VMs:', e);
+        function etatMachine(vm) {
+            const st = String(vm.state || '').toLowerCase();
+            if (vm.type === 'lxc') {
+                if (vm.frozen || st === 'frozen') return { c: 'att', l: 'EN VEILLE', cat: 'veille' };
+                if (st === 'running') return { c: 'ok', l: 'EN MARCHE', cat: 'marche' };
+                if (st === 'stopped') return { c: '', l: 'ARRÊTÉ', cat: 'arret' };
+                return { c: '', l: st ? st.toUpperCase() : 'INCONNU', cat: 'arret' };
             }
+            if (st.includes('running')) return { c: 'ok', l: 'EN MARCHE', cat: 'marche' };
+            if (st.includes('paused')) return { c: 'att', l: 'EN PAUSE', cat: 'veille' };
+            if (st.includes('shut off')) return { c: '', l: 'ÉTEINTE', cat: 'arret' };
+            return { c: '', l: st ? st.toUpperCase() : 'INCONNU', cat: 'arret' };
         }
 
-        function renderVMs() {
-            const allEl = document.getElementById('all-vms');
-            const kvmEl = document.getElementById('kvm-vms');
-            const lxcEl = document.getElementById('lxc-containers');
-
-            const kvmVMs = allVMs.filter(v => v.type === 'kvm');
-            const lxcContainers = allVMs.filter(v => v.type === 'lxc');
-
-            // LES LXC EN LISTE, PAS EN CARTES (#1225) : 27 conteneurs en cartes
-            // noyaient l'ecran ; une ligne par conteneur avec des boutons
-            // rapides (démarrer / veille / réveiller / arrêter / couper /
-            // autostart) se parcourt d'un coup d'oeil. On l'applique PARTOUT ou
-            // un LXC s'affiche — onglet « All » compris, celui qu'on voit en
-            // arrivant : un KVM (rare) garde sa carte, un LXC devient une ligne.
-            const rowOrCard = v => v.type === 'lxc' ? renderLxcRow(v) : renderVMCard(v);
-            allEl.className = 'lxc-list';
-            allEl.innerHTML = allVMs.length ? allVMs.map(rowOrCard).join('') : '<p>No VMs found</p>';
-            kvmEl.innerHTML = kvmVMs.length ? kvmVMs.map(renderVMCard).join('') : '<p>No KVM VMs</p>';
-            lxcEl.className = 'lxc-list';
-            lxcEl.innerHTML = lxcContainers.length
-                ? lxcContainers.map(renderLxcRow).join('')
-                : '<p>No LXC containers</p>';
-        }
-
-        // Une ligne LXC : etat, nom, IP, RAM, puis boutons rapides adaptes a
-        // l'etat courant, et une pastille autostart cliquable.
-        function renderLxcRow(vm) {
-            const state = (vm.state || 'unknown').toLowerCase();
-            const running = state === 'running';
-            const frozen = vm.frozen || state === 'frozen';
-            const stopped = !running && !frozen;
-            const dot = frozen ? 'st-frozen' : (running ? 'st-run' : 'st-stop');
-            const n = vm.name;
-            let actions = '';
-            if (stopped) {
-                actions = `<button class="qb qb-go" title="Démarrer" onclick="startVM('${n}')">▶</button>`;
-            } else if (frozen) {
-                actions =
-                    `<button class="qb qb-go" title="Réveiller" onclick="wakeVM('${n}')">☀️</button>` +
-                    `<button class="qb qb-stop" title="Arrêter" onclick="stopVM('${n}')">⏹</button>`;
-            } else { // running
-                actions =
-                    `<button class="qb" title="Mettre en veille (freeze)" onclick="freezeVM('${n}')">💤</button>` +
-                    `<button class="qb" title="Redémarrer" onclick="restartVM('${n}')">⭮</button>` +
-                    `<button class="qb qb-stop" title="Arrêter" onclick="stopVM('${n}')">⏹</button>` +
-                    `<button class="qb qb-cut" title="Couper pour de bon (arrêt + autostart off)" onclick="cutVM('${n}')">⏻</button>`;
+        function ligne(vm) {
+            const tr = el('tr'); const e = etatMachine(vm); const lxc = vm.type === 'lxc'; const nom = vm.name;
+            const t0 = el('td'); t0.appendChild(pastille(e.c, e.l, vm.state ? 'État rapporté : ' + vm.state : '')); tr.appendChild(t0);
+            tr.appendChild(el('td', 'mono', tiret(nom)));
+            const tt = el('td'); tt.appendChild(pastille('cy', lxc ? 'LXC' : 'KVM')); tr.appendChild(tt);
+            tr.appendChild(el('td', 'mono', lxc ? tiret(vm.ip) : '—'));
+            tr.appendChild(el('td', '', lxc && vm.memory && vm.memory !== '0.00MB' ? vm.memory : '—'));
+            const ta = el('td');
+            if (lxc) {
+                const on = !!vm.autostart;
+                ta.appendChild(btn(on ? 'Auto : activé' : 'Auto : désactivé', on ? 'on' : '', () => autostart(nom, !on),
+                    on ? 'Démarre au boot — cliquer pour désactiver' : 'Ne démarre pas au boot — cliquer pour activer'));
+            } else ta.textContent = '—';
+            tr.appendChild(ta);
+            const act = el('td', 'act'); const c = el('div', 'cellule'); act.appendChild(c);
+            if (e.cat === 'arret') {
+                action(c, vm, 'start', 'Démarrer', 'Démarrer ' + nom + ' ?', () => faire(nom, 'start', 'Démarrage de ' + nom + ' lancé', 'Démarrage impossible'));
+            } else if (e.cat === 'veille' && lxc) {
+                c.appendChild(btn('Réveiller', '', () => faire(nom, 'unfreeze', nom + ' réveillé', 'Réveil impossible'), 'Reprend les processus gelés, instantané'));
+                action(c, vm, 'stop', 'Arrêter', 'Arrêter ' + nom + ' ?', () => faire(nom, 'stop', nom + ' arrêté', 'Arrêt impossible'), 'danger');
+            } else {
+                if (lxc) c.appendChild(btn('Veille', '', () => faire(nom, 'freeze', nom + ' mis en veille', 'Mise en veille impossible'), 'Gèle les processus, la mémoire est conservée'));
+                action(c, vm, 'restart', 'Redémarrer', 'Redémarrer ' + nom + ' ?', () => faire(nom, 'restart', nom + ' redémarré', 'Redémarrage impossible'));
+                action(c, vm, 'stop', 'Arrêter', 'Arrêter ' + nom + ' ?', () => faire(nom, 'stop', nom + ' arrêté', 'Arrêt impossible'), 'danger');
+                if (lxc) action(c, vm, 'cut', 'Couper', 'Couper ' + nom + ' pour de bon (arrêt et démarrage auto retiré) ?',
+                    () => faire(nom, 'stop?hold=true', nom + ' coupé et retiré du démarrage auto', 'Coupure impossible'), 'danger');
             }
-            const autoOn = !!vm.autostart;
-            const auto = `<button class="qb qb-auto ${autoOn ? 'on' : ''}" ` +
-                `title="Démarrage auto : ${autoOn ? 'activé — cliquer pour désactiver' : 'désactivé — cliquer pour activer'}" ` +
-                `onclick="toggleAutostart('${n}', ${autoOn ? 'false' : 'true'})">auto</button>`;
-            return `
-                <div class="lxc-row ${stopped ? 'is-off' : ''}" data-name="${n}">
-                    <span class="st-dot ${dot}" title="${state}"></span>
-                    <span class="lxc-name">${n}</span>
-                    <span class="lxc-state">${frozen ? 'en veille' : state}</span>
-                    <span class="lxc-ip">${vm.ip || ''}</span>
-                    <span class="lxc-mem">${vm.memory && vm.memory !== '0.00MB' ? vm.memory : ''}</span>
-                    <span class="lxc-actions">${auto}${actions}</span>
-                </div>`;
+            if (!lxc) action(c, vm, 'delete', 'Supprimer', 'Supprimer ' + nom + ' définitivement ?', () => supprimer(nom), 'danger');
+            tr.appendChild(act);
+            return tr;
         }
 
-        function renderVMCard(vm) {
-            const isRunning = vm.state?.toLowerCase().includes('running');
-            const stateClass = isRunning ? 'badge-success' : 'badge-danger';
-
-            return `
-                <div class="vm-card">
-                    <h4>
-                        ${vm.name}
-                        <span class="type-badge">${vm.type}</span>
-                    </h4>
-                    <div class="state">
-                        <span class="badge ${stateClass}">${vm.state || 'unknown'}</span>
-                    </div>
-                    <div class="meta">
-                        ${vm.ip ? `IP: ${vm.ip}` : ''}
-                        ${vm.memory ? ` • ${vm.memory}` : ''}
-                    </div>
-                    <div class="actions">
-                        ${!isRunning ?
-                            `<button class="btn btn-sm btn-success" onclick="startVM('${vm.name}')">Start</button>` :
-                            `<button class="btn btn-sm btn-warning" onclick="stopVM('${vm.name}')">Stop</button>
-                             <button class="btn btn-sm btn-secondary" onclick="restartVM('${vm.name}')">Restart</button>`
-                        }
-                        <button class="btn btn-sm btn-danger" onclick="deleteVM('${vm.name}')">Delete</button>
-                    </div>
-                </div>
-            `;
-        }
-
-        async function startVM(name) {
-            try {
-                await fetch(`${API}/vms/${name}/start`, { method: 'POST' });
-                loadVMs();
-                loadStatus();
-            } catch (e) {
-                alert('Failed to start VM');
+        function rendreTable(t) {
+            const tb = $('b-' + t); tb.replaceChildren();
+            const f = ($('filtre').value || '').trim().toLowerCase();
+            const liste = MACHINES.filter(v => (t === 'toutes' || v.type === t) && (!f || String(v.name).toLowerCase().includes(f)));
+            const total = MACHINES.filter(v => t === 'toutes' || v.type === t).length;
+            $('n-' + t).textContent = total ? (liste.length === total ? total : liste.length + ' / ' + total) + ' machine' + (total > 1 ? 's' : '') : '';
+            if (!liste.length) {
+                const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : total ? 'Aucun résultat pour ce filtre' : t === 'kvm' ? 'Aucune machine KVM' : t === 'lxc' ? 'Aucun conteneur LXC' : 'Aucune machine');
+                td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); return;
             }
+            liste.forEach(v => tb.appendChild(ligne(v)));
         }
 
-        async function stopVM(name) {
-            try {
-                await fetch(`${API}/vms/${name}/stop`, { method: 'POST' });
-                loadVMs();
-                loadStatus();
-            } catch (e) {
-                alert('Failed to stop VM');
-            }
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function faire(nom, verbe, ok, echec) {
+            const r = await ecrire('POST', '/vms/' + encodeURIComponent(nom) + '/' + verbe);
+            if (r.ok) { retour(true, ok + '.'); charger(); } else { retour(false, echec + ' : ' + detail(r)); rendre(); }
+        }
+        async function supprimer(nom) {
+            const r = await ecrire('DELETE', '/vms/' + encodeURIComponent(nom));
+            if (r.ok) { retour(true, nom + ' supprimé.'); charger(); } else { retour(false, 'Suppression impossible : ' + detail(r)); rendre(); }
+        }
+        async function autostart(nom, on) {
+            const r = await ecrire('POST', '/vms/' + encodeURIComponent(nom) + '/autostart?on=' + (on ? 'true' : 'false'));
+            if (r.ok) { retour(true, 'Démarrage auto de ' + nom + (on ? ' activé.' : ' désactivé.')); charger(); } else retour(false, 'Réglage du démarrage auto impossible : ' + detail(r));
         }
 
-        async function restartVM(name) {
-            try {
-                await fetch(`${API}/vms/${name}/restart`, { method: 'POST' });
-                loadVMs();
-                loadStatus();
-            } catch (e) {
-                alert('Failed to restart VM');
-            }
+        function remplirVersions() {
+            const m = MODELES.find(x => x.name === $('lxcTemplate').value);
+            const sel = $('lxcRelease'); sel.replaceChildren();
+            ((m && m.releases) || ['latest']).forEach(r => { const o = el('option', '', r); o.value = r; sel.appendChild(o); });
         }
-
-        // VEILLE / RÉVEIL (#1225) : freeze garde la RAM, réveil instantané.
-        async function freezeVM(name) {
-            try {
-                await fetch(`${API}/vms/${name}/freeze`, { method: 'POST' });
-                loadVMs(); loadStatus();
-            } catch (e) { alert('Échec de la mise en veille'); }
+        async function chargerModeles() {
+            if (!DEMO) { try { const d = await lire('/templates'); if (d && Array.isArray(d.templates) && d.templates.length) MODELES = d.templates; } catch (e) { /* repli */ } }
+            const sel = $('lxcTemplate'); const cur = sel.value; sel.replaceChildren();
+            MODELES.forEach(m => { const o = el('option', '', m.name); o.value = m.name; sel.appendChild(o); });
+            if (cur && MODELES.some(m => m.name === cur)) sel.value = cur; else if (MODELES.some(m => m.name === 'debian')) sel.value = 'debian';
+            remplirVersions();
         }
-        async function wakeVM(name) {
-            try {
-                await fetch(`${API}/vms/${name}/unfreeze`, { method: 'POST' });
-                loadVMs(); loadStatus();
-            } catch (e) { alert('Échec du réveil'); }
+        async function chargerIso() {
+            const sel = $('kvmIso'); sel.replaceChildren();
+            const o0 = el('option', '', 'Aucune (importer un disque existant)'); o0.value = ''; sel.appendChild(o0);
+            if (DEMO) { const o = el('option', '', 'debian-exemple.iso (650.0 Mo)'); o.value = 'debian-exemple.iso'; sel.appendChild(o); return; }
+            try { const d = await lire('/iso'); (d.images || []).forEach(i => { const o = el('option', '', i.name + (i.size_human ? ' (' + i.size_human + ')' : '')); o.value = i.name; sel.appendChild(o); }); } catch (e) { /* liste vide */ }
         }
-
-        // COUPER POUR DE BON : arrêt + autostart off, pour que le conteneur ne
-        // revienne pas au boot par le superviseur d'autoboot.
-        async function cutVM(name) {
-            if (!confirm(`Couper ${name} pour de bon ?\n\nLe conteneur est arrêté ET retiré du démarrage auto : il ne reviendra pas au prochain redémarrage tant que vous ne le réactivez pas.`)) return;
-            try {
-                await fetch(`${API}/vms/${name}/stop?hold=true`, { method: 'POST' });
-                loadVMs(); loadStatus();
-            } catch (e) { alert("Échec de l'arrêt"); }
+        function basculeForm(id, autre) {
+            const f = $(id); f.hidden = !f.hidden; $(autre).hidden = true;
+            if (!f.hidden) { if (id === 'fLxc') chargerModeles(); else chargerIso(); f.querySelector('input').focus(); }
+            annoncer();
         }
-
-        // AUTOSTART : (dé)clarer le démarrage au boot.
-        async function toggleAutostart(name, on) {
-            try {
-                await fetch(`${API}/vms/${name}/autostart?on=${on ? 'true' : 'false'}`, { method: 'POST' });
-                loadVMs();
-            } catch (e) { alert("Échec du réglage de l'autostart"); }
-        }
-
-        async function deleteVM(name) {
-            if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
-            try {
-                await fetch(`${API}/vms/${name}`, { method: 'DELETE' });
-                loadVMs();
-                loadStatus();
-            } catch (e) {
-                alert('Failed to delete VM');
-            }
-        }
-
-        function showCreateKVMModal() {
-            document.getElementById('kvm-name').value = '';
-            document.getElementById('kvm-memory').value = '2048';
-            document.getElementById('kvm-vcpus').value = '2';
-            document.getElementById('kvm-disk').value = '20';
-            loadISOs();
-            document.getElementById('kvm-modal').classList.add('active');
-        }
-
-        function closeKVMModal() {
-            document.getElementById('kvm-modal').classList.remove('active');
-        }
-
-        async function loadISOs() {
-            try {
-                const res = await fetch(`${API}/iso`);
-                const data = await res.json();
-                const select = document.getElementById('kvm-iso');
-                select.innerHTML = '<option value="">No ISO</option>';
-                (data.images || []).forEach(iso => {
-                    select.innerHTML += `<option value="${iso.name}">${iso.name} (${iso.size_human})</option>`;
-                });
-            } catch (e) {
-                console.error('Failed to load ISOs:', e);
-            }
-        }
-
-        async function createKVM() {
-            const name = document.getElementById('kvm-name').value.trim();
-            if (!name) {
-                alert('Name is required');
-                return;
-            }
-
-            const config = {
-                name,
-                memory: parseInt(document.getElementById('kvm-memory').value),
-                vcpus: parseInt(document.getElementById('kvm-vcpus').value),
-                disk_size: parseInt(document.getElementById('kvm-disk').value),
-                iso: document.getElementById('kvm-iso').value || null
-            };
-
-            try {
-                const res = await fetch(`${API}/vms/kvm`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.detail);
-                }
-
-                closeKVMModal();
-                loadVMs();
-                loadStatus();
-            } catch (e) {
-                alert('Failed to create VM: ' + e.message);
-            }
-        }
-
-        function showCreateLXCModal() {
-            document.getElementById('lxc-name').value = '';
-            document.getElementById('lxc-template').value = 'debian';
-            updateReleases();
-            document.getElementById('lxc-modal').classList.add('active');
-        }
-
-        function closeLXCModal() {
-            document.getElementById('lxc-modal').classList.remove('active');
-        }
-
-        function updateReleases() {
-            const template = document.getElementById('lxc-template').value;
-            const releaseSelect = document.getElementById('lxc-release');
-            const options = releases[template] || ['latest'];
-            releaseSelect.innerHTML = options.map(r => `<option value="${r}">${r}</option>`).join('');
-        }
-
-        async function createLXC() {
-            const name = document.getElementById('lxc-name').value.trim();
-            if (!name) {
-                alert('Name is required');
-                return;
-            }
-
-            const config = {
-                name,
-                template: document.getElementById('lxc-template').value,
-                release: document.getElementById('lxc-release').value
-            };
-
-            try {
-                const res = await fetch(`${API}/vms/lxc`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.detail);
-                }
-
-                closeLXCModal();
-                loadVMs();
-                loadStatus();
-            } catch (e) {
-                alert('Failed to create container: ' + e.message);
-            }
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadStatus();
-            loadVMs();
+        $('addLxc').addEventListener('click', () => basculeForm('fLxc', 'fKvm'));
+        $('addKvm').addEventListener('click', () => basculeForm('fKvm', 'fLxc'));
+        $('lxcTemplate').addEventListener('change', remplirVersions);
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { $(b.dataset.ferme).hidden = true; annoncer(); }));
+        $('fLxc').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target; const nom = f.name.value.trim();
+            if (!nom) { retour(false, 'Le nom est obligatoire.'); return; }
+            OCCUPE = true; const b = f.querySelector('[type=submit]'); b.disabled = true; retour(true, 'Création de ' + nom + ' en cours (peut durer plusieurs minutes)…');
+            const r = await ecrire('POST', '/vms/lxc', { name: nom, template: f.template.value, release: f.release.value });
+            OCCUPE = false; b.disabled = false;
+            if (r.ok) { f.reset(); f.hidden = true; retour(true, 'Conteneur ' + nom + ' créé.'); charger(); } else retour(false, 'Création impossible : ' + detail(r));
+        });
+        $('fKvm').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target; const nom = f.name.value.trim();
+            if (!nom) { retour(false, 'Le nom est obligatoire.'); return; }
+            OCCUPE = true; const b = f.querySelector('[type=submit]'); b.disabled = true; retour(true, 'Création de ' + nom + ' en cours…');
+            const r = await ecrire('POST', '/vms/kvm', { name: nom, memory: parseInt(f.memory.value, 10), vcpus: parseInt(f.vcpus.value, 10), disk_size: parseInt(f.disk_size.value, 10), iso: f.iso.value || null });
+            OCCUPE = false; b.disabled = false;
+            if (r.ok) { f.reset(); f.hidden = true; retour(true, 'Machine ' + nom + ' créée.'); charger(); } else retour(false, 'Création impossible : ' + detail(r));
+        });
+        $('filtre').addEventListener('input', () => { for (const t of ['toutes', 'kvm', 'lxc']) rendreTable(t); annoncer(); });
+        addEventListener('keydown', ev => {
+            if (ev.key !== 'Escape') return;
+            $('fLxc').hidden = true; $('fKvm').hidden = true;
+            if (CONFIRM) { CONFIRM = null; rendre(); } else annoncer();
         });
 
-        // Auto-refresh
+        // ----- Onglets -----
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ['toutes', 'kvm', 'lxc'].forEach(t => { $('t-' + t).hidden = t !== nom; });
+            annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'vm' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie, une confirmation ouverte ou une création, ni onglet masqué.
         setInterval(() => {
-            loadStatus();
-            loadVMs();
-        }, 15000);
-
-        // Close modals on escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeKVMModal();
-                closeLXCModal();
-            }
-        });
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || OCCUPE || !$('fLxc').hidden || !$('fKvm').hidden || $('filtre').value || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT'))) return;
+            charger();
+        }, 20000);
     </script>
 </body>
 </html>
