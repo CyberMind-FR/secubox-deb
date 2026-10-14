@@ -1,3 +1,17 @@
+secubox-streamlit (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pages /streamlit/ et /streamforge/ au profil Aurora (#2653) : pages autonomes, sans dépendance ni police distante,
+    onglets accessibles (Mosaïque, État, Accès, Applis, Instances), tuiles à infobulle de définition, ?demo=1 (aucune écriture)
+    et ?embed=1, aucun dialogue natif (confirmations dans la page). Routes, méthodes, corps et en-têtes d'API inchangés.
+  * Zéro appli en ligne n'est plus présenté comme une panne (#982) : pastille EN VEILLE et message qui l'explique ;
+    mesure absente affichée « — » (l'ancienne page StreamForge affichait 0).
+  * Exposées dans l'interface : actions conteneur (démarrer, arrêter, installer) et clonage Gitea, qui existaient dans le
+    script mais sans bouton. Déploiement : le formulaire en fenêtre appelait une fonction absente, remplacé par un formulaire
+    en ligne (nom, port, ZIP) qui envoie le même POST /deploy.
+  * Non repris : redirection vers /login.html sur 401 (bandeau « session requise » à la place).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-streamlit (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-streamforge (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
