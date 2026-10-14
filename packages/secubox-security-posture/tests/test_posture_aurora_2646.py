@@ -105,8 +105,8 @@ def test_tuiles_domaines_constats_et_audits_viennent_de_l_api(navigateur):
     assert p.locator("#domaines .dom").count() == 2 and "<i>x</i>" in p.inner_text("#domaines") and p.locator("#domaines .nm i").count() == 0
     assert p.inner_text("#domaines .dom >> nth=1 >> .sc") == "—"                      # pas de mesure : « — », jamais 0
     assert p.locator("#domaines a[href^='javascript']").count() == 0 and p.locator("#constats a[href^='/antirootkit']").count() == 1
-    assert "apt-get -s upgrade" in p.inner_text("#constats") and "échec" in p.inner_text("#bCspn")
-    assert p.inner_text("#tpnPill") == "2 manuelle(s)" and "manuel" in p.inner_text("#bTpn")
+    assert "apt-get -s upgrade" in p.inner_text("#constats") and "échec" in p.text_content("#bCspn")
+    assert p.inner_text("#tpnPill") == "2 manuelle(s)" and "manuel" in p.text_content("#bTpn")
     assert {a[2] for a in appels} == {"Bearer jt"} and err == []
     ctx.close()
 
