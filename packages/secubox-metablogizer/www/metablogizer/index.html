@@ -4,1136 +4,665 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  MetaBlogizer (console des sites publiés) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes ;
+  ?vue=mosaique : la mosaïque seule, en lecture (vue « Mes sites » du Hall, #1835).
+  Aucun secret n'est affiché ; le jeton n'est lu que pour l'en-tête Authorization.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - MetaBlogizer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <title>SecuBox — MetaBlogizer</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-dim: #6b7b8b;      /* labels discrets */
-            --bg-dark: #0d1117;      /* fond de page */
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row:  rgba(20, 30, 45, 0.6);
-            --border:  rgba(100, 150, 200, 0.2);
-            --text:    #e8e6d9;
-            --cyan:    #00d4ff;      /* accent PRINCIPAL — titres, actif, bouton primaire */
-            --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
-            --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--bg-dark);
-            color: var(--text);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); letter-spacing: 0.05em; }
-        .header .sub { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.2rem; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.success, .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* Stat tiles */
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center; backdrop-filter: blur(10px); }
-        .stat-card .value { font-size: 1.6rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.62rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.orange .value { color: var(--orange); }
-        .stat-card.blue .value { color: var(--blue); }
-
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; }
-        .tab { padding: 0.6rem 1.1rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--p31-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.2s; }
-        .tab:hover { color: var(--cyan); }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem; margin-bottom: 1.25rem; backdrop-filter: blur(10px); }
-        .card h2 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.9rem; text-transform: uppercase; letter-spacing: 0.08em; }
-
-        /* Filter bar (shared: mosaic + sites) */
-        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
-        .filter-bar input { flex: 1; min-width: 200px; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .filter-bar input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
-        .filter-count { font-size: 0.7rem; color: var(--p31-dim); white-space: nowrap; }
-        .filter-count.orange { color: var(--orange); }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.55rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
-        th { color: var(--p31-dim); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; }
-        tr:hover td { background: rgba(0,212,255,0.03); }
-        th[data-sort] { cursor: pointer; user-select: none; }
-        th[data-sort]:hover { color: var(--cyan); }
-        .sort-ind { font-size: 0.8em; color: var(--cyan); }
-        table a { color: var(--cyan); text-decoration: none; }
-        table a:hover { text-decoration: underline; }
-
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid; white-space: nowrap; }
-        .badge.published { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .badge.draft { background: rgba(107,123,139,0.15); border-color: var(--p31-dim); color: var(--p31-dim); }
-
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: rgba(20,30,45,0.95); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 380px; max-width: 90vw; backdrop-filter: blur(10px); }
-        .modal-content h3 { color: var(--cyan); margin-bottom: 1rem; }
-        .form-group { margin-bottom: 0.9rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-row); color: var(--text); font-family: 'Courier Prime', monospace; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-
-        /* Mosaic tab — sites as tiles. NEVER an iframe: the tile only carries
-           a thumbnail image + an "open" link that targets a new tab. */
-        .mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 1rem; }
-        .mosaic-tile { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; backdrop-filter: blur(10px); transition: all 0.2s; display: flex; flex-direction: column; }
-        .mosaic-tile:hover { border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,212,255,0.15); }
-        .mosaic-tile.unpublished { opacity: 0.75; }
-        .mosaic-thumb { position: relative; aspect-ratio: 16 / 10; background: var(--bg-row); display: flex; align-items: center; justify-content: center; font-size: 2.4rem; overflow: hidden; }
-        .mosaic-thumb-emoji { position: relative; z-index: 0; }
-        .mosaic-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; background: var(--bg-row); }
-        .mosaic-body { padding: 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; }
-        .mosaic-name { color: var(--cyan); font-weight: 700; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .mosaic-domain { font-size: 0.68rem; color: var(--p31-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .mosaic-footer { padding: 0.5rem 0.7rem; border-top: 1px solid var(--border); }
-        .mosaic-footer a { color: var(--cyan); text-decoration: none; font-size: 0.7rem; }
-        .mosaic-footer a:hover { text-decoration: underline; }
-        .mosaic-empty { color: var(--p31-dim); padding: 1rem; grid-column: 1 / -1; }
-        .mosaic-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
-
-        /* Deploy list */
-        .deploy-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 550px; overflow-y: auto; }
-        .deploy-row { display: grid; grid-template-columns: 6.5em 1fr auto auto auto; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; background: var(--bg-row); border-radius: 4px; font-size: 0.75rem; border-left: 3px solid var(--blue); }
-        .deploy-row.webhook { border-left-color: var(--purple); }
-        .deploy-source { color: var(--p31-dim); font-size: 0.68rem; text-transform: uppercase; }
-        .deploy-site { color: var(--cyan); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .deploy-sha { color: var(--p31-dim); font-size: 0.7rem; font-family: monospace; }
-        .deploy-duration { color: var(--p31-dim); font-size: 0.7rem; text-align: right; }
-        .deploy-when { color: var(--p31-dim); font-size: 0.7rem; text-align: right; min-width: 70px; }
-        .deploy-flag { font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); text-transform: uppercase; }
-
-        /* Settings */
-        .value-ok { color: var(--green); }
-        .value-bad { color: var(--red); }
-
-        /* Boutons rapides de vignette (#1323). Discrets au repos — une grille
-           de 172 tuiles couverte de boutons colorés serait illisible — et
-           francs au survol, là où l'attention est déjà posée. */
-        .mosaic-footer { display: flex; gap: 4px; padding: 6px 8px; align-items: center; }
-        .tuile-btn {
-            flex: 1; display: inline-flex; align-items: center; justify-content: center;
-            gap: 4px; padding: 3px 6px; font-size: .68rem; line-height: 1.4;
-            border: 1px solid var(--border); border-radius: 7px;
-            background: transparent; color: var(--p31-dim);
-            text-decoration: none; cursor: pointer; white-space: nowrap;
-            transition: border-color .12s, color .12s, background .12s;
-        }
-        .tuile-btn:hover { color: var(--p31-fg, #e8e6d9); border-color: var(--p31-dim); }
-        .tuile-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
-        .tuile-btn[disabled] { opacity: .55; cursor: progress; }
-        /* En ligne = vert. Hors ligne = neutre, PAS rouge : un brouillon n'est
-           pas une panne, et le rouge le ferait lire comme telle. */
-        .tuile-btn.actif { color: var(--green); border-color: rgba(120,220,150,.35); }
-        .tuile-btn.actif:hover { background: rgba(120,220,150,.08); }
-        .tuile-btn[href] { flex: 0 0 auto; padding: 3px 8px; }
-
-        /* Publish wizard */
-        .wizard-steps { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
-        .wizard-steps span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: .75rem; opacity: .7; color: var(--p31-dim); }
-        .wizard-steps span.ok { border-color: var(--green); color: var(--green); opacity: 1; }
-        .wizard-steps span.fail { border-color: var(--red); color: var(--red); opacity: 1; }
-        /* EN COURS : ni vert ni rouge. Un certificat que certbot obtient en
-           tâche de fond n'est pas acquis, et n'est pas raté non plus. */
-        .wizard-steps span.encours { border-color: var(--p31-dim); opacity: 1;
-            animation: wiz-pulse 1.2s ease-in-out infinite; }
-        .wizard-steps span.actif { border-color: var(--p31-accent, #7cf);
-            color: var(--p31-accent, #7cf); opacity: 1;
-            animation: wiz-pulse 1.2s ease-in-out infinite; }
-        @keyframes wiz-pulse { 50% { opacity: .45; } }
-        @media (prefers-reduced-motion: reduce) {
-            .wizard-steps span.actif, .wizard-steps span.encours { animation: none; }
-        }
-        .wizard-steps span .wiz-pourquoi { display: block; font-size: .68rem;
-            opacity: .85; margin-top: 2px; max-width: 22ch; white-space: normal; }
-        .wiz-encours { font-size: .78rem; color: var(--p31-dim); margin: 6px 0; }
-        #wiz-result.result { max-height: 240px; overflow: auto; background: var(--bg-row); padding: 10px; border-radius: 8px; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; color: var(--text); margin-top: 0.5rem; }
-
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 0.75rem 1.25rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); pointer-events: none; }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); pointer-events: auto; }
-        .toast .dismiss { margin-left: 0.75rem; cursor: pointer; font-weight: bold; }
-
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; padding-top: 60px; }
-            table { display: block; overflow-x: auto; }
-            th, td { white-space: nowrap; }
-            .deploy-row { grid-template-columns: 5em 1fr auto; }
-            .deploy-row .deploy-duration, .deploy-row .deploy-flag { display: none; }
-        }
-        /* MOSAÏQUE SEULE (#1835) : « Mes sites » agrandi depuis le Hall n'ouvre
-           que la mosaïque, en lecture — ni onglets, ni chiffres, ni gestes
-           d'administration (publier, détails, rebalayer). ?vue=mosaique */
-        body.vue-mosaique #sidebar, body.vue-mosaique .header .btn-group,
-        body.vue-mosaique .grid, body.vue-mosaique .tabs,
-        body.vue-mosaique .tab-content:not(#tab-mosaic),
-        body.vue-mosaique .tuile-btn, body.vue-mosaique #mosaic-refresh-btn { display: none !important; }
-        body.vue-mosaique .main { margin-left: 0; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.ok{border-color:var(--vert);color:var(--vert)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.bl .v{color:var(--bleu)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px} .onglets button{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer;min-height:32px}
+        .onglets button[aria-selected="true"]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.16)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .barre{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+        .barre input[type=search]{flex:1 1 180px;min-width:0}
+        .compte{font-size:.72rem;color:var(--doux);white-space:nowrap} .compte.att{color:var(--orange)}
+        input,select,textarea{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan)} input[type=file]{padding:4px 6px}
+        .barre input,.barre select{width:auto}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .mosaique{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+        .vignette{display:flex;flex-direction:column;border:1px solid var(--trait);border-radius:12px;overflow:hidden;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .vignette:hover{border-color:var(--cyan)} .vignette.hl{opacity:.78}
+        .miniature{position:relative;aspect-ratio:16/10;background:rgba(8,18,38,.8);display:flex;align-items:center;justify-content:center;font-size:2.2rem;overflow:hidden}
+        .miniature img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+        .corps{padding:8px 10px;display:grid;gap:4px;min-width:0}
+        .nom{font-weight:700;font-size:.82rem;color:var(--cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .dom{font-size:.68rem;color:var(--faible);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pied{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:6px 8px;border-top:1px solid rgba(86,150,255,.12)}
+        .pied .btn{flex:1 1 auto;text-align:center} .pied .note{margin:0;flex:1 1 100%}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;justify-self:start}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .tab{overflow-x:auto} .tab table{min-width:720px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        th button{all:unset;cursor:pointer;text-transform:inherit;letter-spacing:inherit} th button:hover,th button:focus-visible{color:var(--cyan)}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td a,.corps a{color:var(--cyan);text-decoration:none} td a:hover{text-decoration:underline}
+        td.act{white-space:nowrap}
+        td.act>*{margin:2px 4px 2px 0}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem;grid-column:1/-1}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .etapes{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}
+        .etapes span{padding:4px 10px;border:1px solid var(--trait);border-radius:8px;font-size:.74rem;color:var(--faible)}
+        .etapes span.ok{border-color:var(--vert);color:var(--vert)} .etapes span.fail{border-color:var(--rouge);color:var(--rouge)} .etapes span.encours{border-color:var(--faible);color:var(--doux)} .etapes span.actif{border-color:var(--cyan);color:var(--cyan)}
+        .etapes small{display:block;font-size:.68rem;margin-top:2px;max-width:22ch;white-space:normal}
+        .sortie{margin:8px 0 0;max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7);font-size:.76rem}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
+        .toast.show{opacity:1;transform:translate(-50%,0)} .toast.ko{border-color:var(--rouge);pointer-events:auto}
+        .toast button{all:unset;cursor:pointer;margin-left:10px;font-weight:700}
+        @media (prefers-reduced-motion:reduce){.toast{transition:none}}
+        /* Vue « Mes sites » du Hall (#1835) : la mosaïque seule, en lecture. */
+        body.vue-mosaique #sidebar,body.vue-mosaique .tete .droite button,body.vue-mosaique .tuiles,body.vue-mosaique .onglets,
+        body.vue-mosaique .volet:not(#v-mosaique),body.vue-mosaique .pied,body.vue-mosaique #creer,body.vue-mosaique #btnRebalayer{display:none!important}
+        body.vue-mosaique .principal{margin-left:0;padding-top:0}
     </style>
 </head>
-<body class="hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <div>
-                <h1>📝 MetaBlogizer</h1>
-                <div class="sub">Publication de sites statiques</div>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M7 13h6M7 16h10"/></svg>
+                <div><h1>MetaBlogizer</h1><small>Publication de sites statiques</small></div>
             </div>
-            <div class="btn-group">
-                <button class="btn" onclick="republishAll()">⟲ Republier tout</button>
-                <button class="btn" onclick="refresh()">↻ Rafraîchir</button>
-                <button class="btn primary" onclick="showCreateSite()">+ Nouveau site</button>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn" id="btnRepublier" type="button" title="Republie tous les sites : régénère les blocs nginx et les routes (POST /republish-all)">⟲ Republier tout</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+                <button class="btn prim" id="btnNouveau" type="button">+ Nouveau site</button>
             </div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <!-- Stat tiles -->
-        <div class="grid">
-            <div class="stat-card cyan">
-                <div class="value" id="stat-total">-</div>
-                <div class="label">📰 Sites</div>
-            </div>
-            <div class="stat-card green">
-                <div class="value" id="stat-published">-</div>
-                <div class="label">✅ Publiés</div>
-            </div>
-            <div class="stat-card cyan" id="stat-card-domain">
-                <div class="value" id="stat-domain">-</div>
-                <div class="label">🌐 Avec domaine</div>
-            </div>
-            <div class="stat-card blue">
-                <div class="value" id="stat-deploys">-</div>
-                <div class="label">🚀 Déploiements/24h</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre de sites connus du service (compteur de GET /status, issu du cache du balayage hors-ligne)."><span class="l">Sites</span><span class="v" id="tTotal">—</span><span class="s">gérés par ce nœud</span></div>
+            <div class="tuile ok" title="Sites dont le drapeau « publié » est levé : nginx les sert et la route du WAF existe."><span class="l">Publiés</span><span class="v" id="tPublies">—</span><span class="s">servis en ce moment</span></div>
+            <div class="tuile cy" id="cDomaine" title="Sites portant un domaine. Chaque site devrait en avoir un (attribué d’office s’il n’est pas fixé) : en dessous du total, un site.json est mal formé et la tuile passe en orange."><span class="l">Avec domaine</span><span class="v" id="tDomaine">—</span><span class="s">domaines résolus / sites</span></div>
+            <div class="tuile bl" title="Déploiements (git pull manuel ou webhook) des 24 dernières heures, comptés côté page à partir de GET /deploys."><span class="l">Déploiements / 24 h</span><span class="v" id="tDeploys">—</span><span class="s">manuels + webhooks</span></div>
+        </section>
+
+        <div class="pan" id="creer" hidden><h3>Créer un site <i>POST /site</i></h3>
+            <form class="saisie" id="fCreer">
+                <label>Nom du site<input id="nNom" placeholder="mon-blog" required autocomplete="off"></label>
+                <label>Domaine (facultatif)<input id="nDomaine" placeholder="blog.example.org" autocomplete="off"></label>
+                <div class="bout" style="margin:0"><button class="btn prim" id="btnCreer" type="submit">Créer</button><button class="btn" id="btnAnnulerCreer" type="button">Annuler</button></div>
+            </form>
+            <div id="rCreer" class="retour" hidden></div>
         </div>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="mosaic" onclick="showTab('mosaic')">🧩 Mosaïque</div>
-            <div class="tab" data-tab="sites" onclick="showTab('sites')">📋 Sites</div>
-            <div class="tab" data-tab="deploys" onclick="showTab('deploys')">🚀 Déploiements</div>
+        <div class="onglets" role="tablist" aria-label="Sections">
+            <button type="button" role="tab" id="tab-mosaique" data-tab="mosaique" aria-selected="true">Mosaïque</button>
+            <button type="button" role="tab" id="tab-sites" data-tab="sites" aria-selected="false">Sites</button>
+            <button type="button" role="tab" id="tab-deploys" data-tab="deploys" aria-selected="false">Déploiements</button>
         </div>
 
-        <!-- MOSAIC TAB -->
-        <div class="tab-content active" id="tab-mosaic">
-            <div class="card">
-                <div class="filter-bar">
-                    <input type="search" id="mosaic-filter" placeholder="🔍 Filtrer par nom ou domaine…" oninput="renderMosaic()">
-                    <span class="filter-count" id="mosaic-filter-count"></span>
-                    <span class="filter-count" id="mosaic-cache-status"></span>
-                    <button class="btn sm" id="mosaic-refresh-btn" onclick="refreshSites()">🔄 Rafraîchir</button>
-                </div>
-                <div class="mosaic-grid" id="mosaic-grid">
-                    <div class="mosaic-empty">Chargement des sites…</div>
-                </div>
+        <section class="volet pan" id="v-mosaique" role="tabpanel" aria-labelledby="tab-mosaique">
+            <div class="barre">
+                <input type="search" id="fMosaique" placeholder="Filtrer par nom ou domaine…" aria-label="Filtrer la mosaïque">
+                <span class="compte" id="cMosaique"></span><span class="compte" id="cCache" title="Âge du cache du balayage hors-ligne (metablog-audit.timer). Au-delà de 15 minutes, le minuteur est probablement arrêté."></span>
+                <button class="btn sm" id="btnRebalayer" type="button" title="Lance le balayage hors-ligne sans l’attendre (POST /sites/refresh) ; la liste est relue 20 s plus tard.">Rafraîchir le cache</button>
             </div>
-        </div>
+            <div class="mosaique" id="mosaique"></div>
+        </section>
 
-        <!-- SITES TAB -->
-        <div class="tab-content" id="tab-sites">
-            <div class="card">
-                <h2>Sites</h2>
-                <div class="filter-bar">
-                    <input type="search" id="sites-filter" placeholder="🔍 Filtrer par nom ou domaine…" oninput="renderSitesTable()">
-                    <span class="filter-count" id="sites-filter-count"></span>
-                </div>
-                <table>
-                    <thead><tr>
-                        <th data-sort="name" onclick="sortBy('name', this)">Nom <span class="sort-ind"></span></th>
-                        <th data-sort="domain" onclick="sortBy('domain', this)">Domaine <span class="sort-ind"></span></th>
-                        <th data-sort="version" onclick="sortBy('version', this)">Version <span class="sort-ind"></span></th>
-                        <th data-sort="last_updated" onclick="sortBy('last_updated', this)">Mis à jour <span class="sort-ind"></span></th>
-                        <th>Statut</th>
-                        <th>Taille</th>
-                        <th>Actions</th>
-                    </tr></thead>
-                    <tbody id="site-list"><tr><td colspan="7">Chargement…</td></tr></tbody>
-                </table>
+        <section class="volet" id="v-sites" role="tabpanel" aria-labelledby="tab-sites" hidden style="display:grid;gap:10px">
+            <div class="pan"><h3>Sites <i id="nSites"></i></h3>
+                <div class="barre"><input type="search" id="fSites" placeholder="Filtrer par nom ou domaine…" aria-label="Filtrer les sites"><span class="compte" id="cSites"></span></div>
+                <div id="rSites" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr>
+                    <th><button type="button" data-tri="name">Nom <span class="ind"></span></button></th>
+                    <th><button type="button" data-tri="domain">Domaine <span class="ind"></span></button></th>
+                    <th><button type="button" data-tri="version">Version <span class="ind"></span></button></th>
+                    <th><button type="button" data-tri="last_updated">Mis à jour <span class="ind"></span></button></th>
+                    <th>Statut</th><th>Taille</th><th>Actions</th></tr></thead><tbody id="bSites"></tbody></table></div>
             </div>
-
-            <section class="card" id="publish-wizard">
-                <h2>🚀 Publier un site</h2>
-                <!-- Les étapes sont ANNONCÉES PAR LE SERVEUR au début du flux :
-                     la page n'en tient plus la liste, qui divergeait (elle en
-                     montrait quatre sur six, et pas « Service », celle qui
-                     décide pourtant du verdict). -->
-                <div class="wizard-steps" id="wiz-steps"></div>
-                <div id="wiz-encours" class="wiz-encours" hidden></div>
-                <div class="form-group"><label>Nom du site</label>
-                    <input id="wiz-name" placeholder="zem"></div>
-                <div class="form-group"><label>Domaine</label>
-                    <input id="wiz-domain" placeholder="zem.gk2.secubox.in"></div>
-                <div class="form-group"><label>Contenu (.zip ou .html)</label>
-                    <input id="wiz-file" type="file" accept=".zip,.html"></div>
-                <button class="btn primary" id="wiz-go">Publier</button>
-                <button class="btn" id="wiz-backup" disabled>⬇ Télécharger la sauvegarde</button>
-                <pre id="wiz-result" class="result"></pre>
-            </section>
-        </div>
-
-        <!-- DEPLOYS TAB -->
-        <div class="tab-content" id="tab-deploys">
-            <div class="card">
-                <h2>Déploiements récents</h2>
-                <div class="deploy-list" id="deploy-list">Chargement…</div>
+            <div class="pan" id="assistant"><h3>Publier un site <i>POST /publish/wizard</i></h3>
+                <div class="etapes" id="wizEtapes"></div>
+                <div class="note" id="wizEncours" hidden></div>
+                <form class="saisie" id="fWiz">
+                    <label>Nom du site<input id="wizNom" placeholder="zem" autocomplete="off"></label>
+                    <label>Domaine<input id="wizDomaine" placeholder="zem.example.org" autocomplete="off"></label>
+                    <label>Contenu (.zip ou .html)<input id="wizFichier" type="file" accept=".zip,.html"></label>
+                </form>
+                <div class="bout"><button class="btn prim" id="wizGo" type="button">Publier</button><button class="btn" id="wizSauvegarde" type="button" disabled>⬇ Télécharger la sauvegarde</button></div>
+                <pre id="wizResultat" class="sortie" hidden></pre>
+                <p class="note">Les étapes sont annoncées par le serveur au fil de la publication (git, nginx, certificat) ; le site n’est marqué publié que si toutes réussissent.</p>
             </div>
-        </div>
+        </section>
 
-    </main>
+        <section class="volet pan" id="v-deploys" role="tabpanel" aria-labelledby="tab-deploys" hidden>
+            <h3>Déploiements récents <i id="nDeploys"></i></h3>
+            <div class="tab"><table><thead><tr><th>Source</th><th>Site</th><th>Commit</th><th>Durée</th><th>Domaine</th><th>Il y a</th></tr></thead><tbody id="bDeploys"></tbody></table></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-    <div class="modal" id="create-modal">
-        <div class="modal-content">
-            <h3>Créer un site</h3>
-            <div class="form-group"><label>Nom du site</label><input type="text" id="new-name" placeholder="mon-blog"></div>
-            <div class="form-group"><label>Domaine</label><input type="text" id="new-domain" placeholder="blog.example.com"></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('create-modal')">Annuler</button>
-                <button class="btn success" onclick="createSite()">Créer</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="toast" id="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), VUE = Q.get('vue') === 'mosaique';
+        if (Q.get('embed') || VUE) document.body.classList.add('emb');
+        if (VUE) document.body.classList.add('vue-mosaique');
         const API = '/api/v1/metablogizer';
-        // Read BOTH token keys like every working module (hub/portal set both);
-        // reading only sbx_token missed a valid token stored under secubox_token.
-        const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function esc(s) {
-            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        let STATUT = null, SITES = null, CACHE = { available: null, reason: null, cache_age_seconds: null }, DEPLOYS = null;
+        let SESSION_OK = true, INJOIGNABLE = false, CHARGE = false, ONGLET = 'mosaique';
+        let TRI = { champ: null, sens: 1 };
+        let CONF = null;          // { nom, action:'retirer'|'supprimer' } : confirmation en attente, dans la page
+        const OCCUPE = {};        // nom du site -> libellé de l'opération en cours
+        let WIZ_EN_COURS = false, DERNIER_NOM = '';
+
+        // Lire les DEUX clés de jeton comme les autres modules (le hub et le portail posent les deux). localStorage peut lever.
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra, avecJeton) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = avecJeton === false ? '' : jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        // Un Bearer périmé peut masquer une session SSO valide (require_jwt préfère le Bearer) : sur 401, on retente par cookie seul,
+        // SANS détruire le jeton (la barre latérale et les autres composants s'en servent).
+        async function envoyer(methode, chemin, corps) {
+            const base = { method: methode, credentials: 'same-origin', cache: 'no-store' };
+            const json = corps !== undefined && !(corps instanceof FormData);
+            const h = jeton => entetes(json ? { 'Content-Type': 'application/json' } : {}, jeton);
+            const opts = jeton => Object.assign({}, base, { headers: h(jeton) }, corps === undefined ? {} : { body: json ? JSON.stringify(corps) : corps });
+            let r = await fetch(API + chemin, opts(true));
+            if (r.status === 401 && jeton()) r = await fetch(API + chemin, opts(false));
+            return r;
         }
-
-        async function api(path, opts = {}) {
+        async function lire(chemin) {
+            const r = await envoyer('GET', chemin);
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            if (!(r.headers.get('content-type') || '').includes('application/json')) { const e = new Error('réponse non JSON'); e.statut = 0; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                let res = await fetch(API + path, { ...opts, headers: headers(), credentials: 'same-origin' });
-                if (res.status === 401) {
-                    // A stale localStorage Bearer can shadow a valid SSO session
-                    // cookie (require_jwt prefers the Bearer when present). Retry
-                    // cookie-only WITHOUT destroying the token — the shared
-                    // sidebar and other components rely on it; nuking it on a
-                    // transient 401 cascades everything to the login page.
-                    res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
-                }
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
-                const ct = res.headers.get('content-type') || '';
-                if (!res.ok || !ct.includes('application/json')) {
-                    console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);
-                    if (!res.ok) errorToast('Erreur API ' + path + ' (' + res.status + ')');
-                    return {};
-                }
-                return await res.json();
-            } catch (e) { console.warn('api()', path, 'threw', e); errorToast('Requête impossible: ' + path); return {}; }
+                const r = await envoyer(methode, chemin, corps);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && (res.data.detail || res.data.erreur || res.data.error || res.data.message);
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function reussi(res) { return !!res.ok && !(res.data && (res.data.success === false || res.data.ok === false)); }
+
+        function toast(msg, erreur) {
+            const t = $('toast'); t.replaceChildren(document.createTextNode(msg));
+            t.className = 'toast show' + (erreur ? ' ko' : '');
+            clearTimeout(toast.h);
+            if (erreur) {   // une erreur reste jusqu'à ce qu'on la ferme : jamais un éclair qu'on rate
+                const b = el('button', '', '✕'); b.type = 'button'; b.setAttribute('aria-label', 'Fermer'); b.addEventListener('click', () => t.classList.remove('show')); t.appendChild(b);
+            } else toast.h = setTimeout(() => t.classList.remove('show'), 3200);
+        }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+
+        function relatif(iso) {
+            if (!iso) return '—';
+            const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+            if (isNaN(diff)) return String(iso);
+            if (diff < 60) return Math.max(0, Math.floor(diff)) + ' s';
+            if (diff < 3600) return Math.floor(diff / 60) + ' min';
+            if (diff < 86400) return Math.floor(diff / 3600) + ' h';
+            return Math.floor(diff / 86400) + ' j';
+        }
+        function relatifEpoch(s) { return s == null ? '—' : relatif(s * 1000); }
+        function matchesFilter(s, q) { if (!q) return true; return String(s.name || '').toLowerCase().includes(q) || String(s.domain || '').toLowerCase().includes(q); }
+
+        function demoData() {
+            const t = Math.floor(Date.now() / 1000), iso = d => new Date((t - d) * 1000).toISOString();
+            STATUT = { site_count: 5, published_count: 4 };
+            CACHE = { available: true, reason: null, cache_age_seconds: 140 };
+            SITES = [
+                { name: 'atelier', domain: 'atelier.example.org', published: true, version: 'v1.4.2', last_updated: iso(3600 * 5), size: '12M', category: 'blog' },
+                { name: 'docs-reseau', domain: 'docs.example.net', published: true, version: 'v0.9.0', last_updated: iso(86400 * 2), size: '4,2M', category: 'doc' },
+                { name: 'portfolio-lea', domain: 'lea.example.org', published: true, version: 'v2.0.1', last_updated: iso(86400 * 9), size: '38M', category: 'portfolio' },
+                { name: 'boutique-test', domain: 'boutique.example.net', published: true, version: '', last_updated: iso(1200), size: '1,1M', category: 'boutique' },
+                { name: 'brouillon', domain: '', published: false, version: '', last_updated: '', size: '88K' }
+            ];
+            DEPLOYS = [
+                { source: 'webhook', site: 'atelier', from: 'a1b2c3d4e5', to: 'f6a7b8c9d0', duration_ms: 1840, timestamp: t - 3600 * 5 },
+                { source: 'manual', site: 'docs-reseau', from: '11223344', to: '55667788', duration_ms: 920, domain_changed: true, timestamp: t - 3600 * 30 }
+            ];
         }
 
-        function toast(msg) {
-            const t = document.getElementById('toast');
-            t.innerHTML = esc(msg);
-            t.className = 'toast show';
-            clearTimeout(toast._t);
-            toast._t = setTimeout(() => t.classList.remove('show'), 3000);
+        async function chargerSites(force) {
+            if (DEMO) return;
+            if (SITES && !force) return;
+            const d = await lire('/sites');
+            SITES = Array.isArray(d.sites) ? d.sites : [];
+            CACHE = { available: d.available ?? true, reason: d.reason ?? null, cache_age_seconds: d.cache_age_seconds ?? null };
         }
 
-        // Fatal/API errors stay until dismissed — never a flash the user can miss.
-        function errorToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerHTML = esc(msg) + '<span class="dismiss" onclick="this.parentElement.classList.remove(\'show\')">✕</span>';
-            t.className = 'toast show error';
-            clearTimeout(toast._t);
+        async function charger(forcer) {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), chargerSites(true), lire('/deploys')]);
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = essais[0].status === 'fulfilled' ? essais[0].value : null;
+            if (essais[1].status === 'rejected') SITES = SITES || null;
+            DEPLOYS = essais[2].status === 'fulfilled' && Array.isArray(essais[2].value.deploys) ? essais[2].value.deploys : (essais[2].status === 'fulfilled' ? [] : DEPLOYS);
+            INJOIGNABLE = tous && !refus;
+            CHARGE = true;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire le service MetaBlogizer (arrêté ou injoignable).';
+            rendre();
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showCreateSite() { showModal('create-modal'); }
-
-        // ═══════════════════════════════════════════════════════════════
-        // Tabs — lazy-loaded: nothing is fetched for a tab until it is
-        // opened. Mosaïque is the default tab, so its data loads at init.
-        // ═══════════════════════════════════════════════════════════════
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelector('.tab[data-tab="' + name + '"]').classList.add('active');
-            document.getElementById('tab-' + name).classList.add('active');
-            if (name === 'mosaic') loadMosaic();
-            else if (name === 'sites') loadSitesTab();
-            else if (name === 'deploys') loadDeploys();
+        function rendreEtat() {
+            const etat = $('etat'), s = $('session');
+            s.hidden = SESSION_OK;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (INJOIGNABLE) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!CHARGE) { etat.className = 'actif neutre'; etat.textContent = 'Chargement…'; }
+            else if (CACHE.available === false) { etat.className = 'actif att'; etat.textContent = 'CACHE ABSENT'; }
+            else if (typeof CACHE.cache_age_seconds === 'number' && CACHE.cache_age_seconds > 900) { etat.className = 'actif att'; etat.textContent = 'DONNÉES PÉRIMÉES — MINUTEUR ARRÊTÉ ?'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN SERVICE'; }
         }
 
-        // ─── Shared site cache (Mosaïque + Sites tabs both consume it) ───
-        // GET /sites is itself backed by an out-of-band cache refreshed by
-        // metablog-audit.timer (#974, ~14.6s scan measured on the board —
-        // never run inline). `sitesCacheMeta` carries that cache's own
-        // state (available/reason/age) so the UI can tell "cache not
-        // written yet" apart from "genuinely zero sites" instead of just
-        // reading `sites: []` at face value.
-        let allSites = null;
-        let sitesLoading = null;
-        let sitesCacheMeta = { available: null, reason: null, cache_age_seconds: null };
-
-        async function ensureSites(force) {
-            if (force) { allSites = null; }
-            if (allSites) return allSites;
-            if (sitesLoading) return sitesLoading;
-            sitesLoading = api('/sites').then(d => {
-                allSites = d.sites || [];
-                sitesCacheMeta = {
-                    available: d.available ?? true,
-                    reason: d.reason ?? null,
-                    cache_age_seconds: d.cache_age_seconds ?? null,
-                };
-                sitesLoading = null;
-                updateDomainStat(allSites);
-                return allSites;
-            });
-            return sitesLoading;
+        function rendreTuiles() {
+            const nbSites = STATUT && STATUT.site_count != null ? STATUT.site_count : (SITES ? SITES.length : null);
+            const nbPub = STATUT && STATUT.published_count != null ? STATUT.published_count : (SITES ? SITES.filter(s => s.published).length : null);
+            $('tTotal').textContent = nbSites == null ? '—' : nbSites;
+            $('tPublies').textContent = nbPub == null ? '—' : nbPub;
+            if (SITES && CACHE.available !== false) {
+                const avec = SITES.filter(s => !!(s.domain && String(s.domain).trim())).length;
+                $('tDomaine').textContent = avec + '/' + SITES.length;
+                $('cDomaine').className = 'tuile ' + (avec < SITES.length ? 'att' : 'cy');
+            } else { $('tDomaine').textContent = '—'; $('cDomaine').className = 'tuile cy'; }
+            if (DEPLOYS) { const maintenant = Date.now() / 1000; $('tDeploys').textContent = DEPLOYS.filter(d => (maintenant - (d.timestamp || 0)) < 86400).length; }
+            else $('tDeploys').textContent = '—';
         }
 
-        // Manual refresh (#974): fires the out-of-band scan without
-        // blocking on it — the endpoint itself never recomputes inline, so
-        // this returns immediately and the cache updates a few seconds
-        // later. Re-polls once after a short delay so the tab catches the
-        // new cache without the user having to reopen it.
-        async function refreshSites() {
-            const btn = document.getElementById('mosaic-refresh-btn');
-            btn.disabled = true;
-            const r = await api('/sites/refresh', { method: 'POST' });
-            if (r.triggered) {
-                toast('🔄 Rafraîchissement du cache lancé…');
-                setTimeout(async () => {
-                    await ensureSites(true);
-                    if (mosaicLoaded) renderMosaic();
-                    if (sitesTabLoaded) renderSitesTable();
-                    btn.disabled = false;
-                }, 20000);
-            } else {
-                errorToast('Rafraîchissement indisponible: ' + (r.error || 'inconnu'));
-                btn.disabled = false;
-            }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            rendreEtat(); rendreTuiles();
+            if (ONGLET === 'mosaique') rendreMosaique(); else if (ONGLET === 'sites') rendreSites(); else rendreDeploys();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('stat-total').textContent = d.site_count ?? '-';
-            document.getElementById('stat-published').textContent = d.published_count ?? '-';
+        // ----- Onglets -----
+        function ouvrirOnglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === nom ? 'true' : 'false'));
+            ['mosaique', 'sites', 'deploys'].forEach(n => { $('v-' + n).hidden = n !== nom; });
+            rendre();
         }
+        document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => ouvrirOnglet(b.dataset.tab)));
 
-        // "Avec domaine" doubles as an integrity check: every site the backend
-        // returns is expected to carry a resolvable domain (auto-assigned if not
-        // configured explicitly). If the count drops below the total, some
-        // site.json is malformed — surfaced here in orange rather than silently
-        // dropped.
-        function updateDomainStat(sites) {
-            const withDomain = sites.filter(s => !!(s.domain && s.domain.trim())).length;
-            document.getElementById('stat-domain').textContent = withDomain + '/' + sites.length;
-            const card = document.getElementById('stat-card-domain');
-            card.classList.toggle('orange', withDomain < sites.length);
-            card.classList.toggle('cyan', withDomain >= sites.length);
-        }
+        function btn(txt, cls, fn, titre) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; if (titre) b.title = titre; b.addEventListener('click', fn); return b; }
+        function lien(txt, cls, href, titre) { const a = el('a', 'btn sm ' + (cls || ''), txt); a.href = href; a.target = '_blank'; a.rel = 'noopener'; if (titre) a.title = titre; return a; }
+        function pastille(publie) { return el('span', 'pill ' + (publie ? 'ok' : ''), publie ? 'publié' : 'non publié'); }
 
-        function matchesFilter(s, q) {
-            if (!q) return true;
-            const name = (s.name || '').toLowerCase();
-            const domain = (s.domain || '').toLowerCase();
-            return name.includes(q) || domain.includes(q);
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // Mosaïque — one tile per site. NEVER an iframe/embed: the tile
-        // carries a thumbnail placeholder + an "ouvrir" link that opens the
-        // site in a new tab. These are static sites, always served — there
-        // is no sleep/wake concept here (unlike the Streamlit fleet).
-        // ═══════════════════════════════════════════════════════════════
-        let mosaicLoaded = false;
-
-        async function loadMosaic(force) {
-            mosaicLoaded = true;
-            const grid = document.getElementById('mosaic-grid');
-            if (!allSites) grid.innerHTML = '<div class="mosaic-empty">Chargement des sites…</div>';
-            await ensureSites(force);
-            renderMosaic();
-        }
-
-        function tileEmoji(s) {
-            const cat = (s.category || '').toLowerCase();
-            const domain = (s.domain || '').toLowerCase();
+        function emoji(s) {
+            const cat = String(s.category || '').toLowerCase(), dom = String(s.domain || '').toLowerCase();
             if (s.streamlit_app) return '📊';
-            if (cat.includes('portfolio') || domain.includes('portfolio')) return '🎨';
+            if (cat.includes('portfolio') || dom.includes('portfolio')) return '🎨';
             if (cat.includes('doc')) return '📚';
-            if (cat.includes('blog') || domain.includes('blog')) return '📰';
+            if (cat.includes('blog') || dom.includes('blog')) return '📰';
             if (cat.includes('shop') || cat.includes('boutique')) return '🛒';
             return '🌐';
         }
 
-        function renderCacheStatus() {
-            const el = document.getElementById('mosaic-cache-status');
-            if (sitesCacheMeta.available === false) {
-                const reason = sitesCacheMeta.reason === 'cache not written yet'
-                    ? 'cache pas encore généré' : 'cache illisible';
-                el.textContent = '⚠️ ' + reason;
-                el.classList.add('orange');
-            } else if (typeof sitesCacheMeta.cache_age_seconds === 'number') {
-                const age = sitesCacheMeta.cache_age_seconds;
-                const label = age < 60 ? age + 's' : Math.floor(age / 60) + 'min';
-                el.textContent = '🕒 maj il y a ' + label;
-                // A cache older than 3x the 5-minute timer cadence means the
-                // timer likely stopped running — surface it rather than
-                // silently showing stale data as if it were live.
-                el.classList.toggle('orange', age > 900);
+        function rendreCache() {
+            const c = $('cCache');
+            if (CACHE.available === false) { c.textContent = '⚠ ' + (CACHE.reason === 'cache not written yet' ? 'cache pas encore généré' : 'cache illisible'); c.className = 'compte att'; }
+            else if (typeof CACHE.cache_age_seconds === 'number') { const a = CACHE.cache_age_seconds; c.textContent = 'maj il y a ' + (a < 60 ? a + ' s' : Math.floor(a / 60) + ' min'); c.className = 'compte' + (a > 900 ? ' att' : ''); }
+            else { c.textContent = ''; c.className = 'compte'; }
+        }
+
+        // ----- Mosaïque : une vignette par site, JAMAIS d'iframe -----
+        function rendreMosaique() {
+            const g = $('mosaique'); g.replaceChildren(); rendreCache();
+            const vide = txt => { g.appendChild(el('div', 'vide', txt)); $('cMosaique').textContent = ''; };
+            if (!SESSION_OK) return vide('—');
+            if (!SITES) return vide(CHARGE ? 'Liste des sites indisponible' : 'Chargement des sites…');
+            // Un cache jamais écrit ne se lit PAS comme une flotte vide (#974).
+            if (CACHE.available === false) return vide('Liste des sites indisponible (' + (CACHE.reason === 'cache not written yet' ? 'cache pas encore généré — patientez ou rafraîchissez le cache' : 'cache illisible — rafraîchissez le cache') + ')');
+            const q = $('fMosaique').value.toLowerCase().trim();
+            const liste = SITES.filter(s => matchesFilter(s, q)).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+            $('cMosaique').textContent = liste.length + ' / ' + SITES.length;
+            if (!liste.length) return vide(SITES.length ? 'Aucun site ne correspond au filtre' : 'Aucun site publié pour l’instant');
+            liste.forEach(s => g.appendChild(vignette(s)));
+        }
+
+        function vignette(s) {
+            const nom = String(s.name || '?'), publie = !!s.published;
+            const v = el('div', 'vignette' + (publie ? '' : ' hl'));
+            const mini = el('div', 'miniature'); mini.appendChild(el('span', '', emoji(s)));
+            // La capture est produite hors-ligne (metablog-shots) : 404 par conception tant qu'elle n'existe pas ; le pictogramme reste alors.
+            // `?v=` change à chaque recapture : le navigateur ne garde jamais une vignette périmée (#977).
+            if (!DEMO && s.name) {
+                const img = el('img'); img.loading = 'lazy'; img.alt = '';
+                img.src = API + '/site/' + encodeURIComponent(s.name) + '/screenshot' + (s.screenshot_captured_at ? '?v=' + encodeURIComponent(s.screenshot_captured_at) : '');
+                img.addEventListener('error', () => img.remove()); mini.appendChild(img);
+            }
+            v.appendChild(mini);
+            const c = el('div', 'corps');
+            const n = el('div', 'nom', nom); n.title = nom; c.appendChild(n);
+            const d = el('div', 'dom', s.domain || '—'); d.title = s.domain || ''; c.appendChild(d);
+            c.appendChild(pastille(publie)); v.appendChild(c);
+            const pied = el('div', 'pied');
+            if (CONF && CONF.nom === nom && CONF.action === 'retirer') {
+                pied.appendChild(el('span', 'note', 'Retirer « ' + nom + ' » du web ? Le contenu reste intact, on peut republier.'));
+                pied.appendChild(btn('Confirmer', 'danger', () => { CONF = null; bascule(nom, false); }));
+                pied.appendChild(btn('Annuler', '', () => { CONF = null; rendre(); }));
             } else {
-                el.textContent = '';
-                el.classList.remove('orange');
+                const occ = OCCUPE[nom];
+                const b1 = btn('⚙ détails', '', () => { location.href = 'site.html?name=' + encodeURIComponent(nom) + (DEMO ? '&demo=1' : ''); }, 'Ouvrir la vue détaillée'); pied.appendChild(b1);
+                // Dépublier se confirme, publier non : publier ne casse rien et se défait d'un clic.
+                const b2 = btn(occ ? '⏳ ' + occ : (publie ? '⏻ en ligne' : '⭘ hors ligne'), publie ? 'ok' : '', () => { if (publie) { CONF = { nom, action: 'retirer' }; rendre(); } else bascule(nom, true); },
+                    publie ? 'Dépublier ce site' : 'Publier ce site');
+                b2.disabled = !!occ; pied.appendChild(b2);
+                if (s.domain) pied.appendChild(lien('↗', '', 'https://' + s.domain + '/', 'Ouvrir le site'));
             }
+            v.appendChild(pied);
+            return v;
+        }
+        $('fMosaique').addEventListener('input', rendreMosaique);
+
+        // Publier régénère nginx pour TOUS les sites : c'est long. L'état d'attente évite le second clic.
+        async function bascule(nom, versPublie) {
+            if (OCCUPE[nom]) return;
+            OCCUPE[nom] = versPublie ? 'publication…' : 'retrait…'; rendre();
+            const r = await ecrire('POST', '/site/' + encodeURIComponent(nom) + (versPublie ? '/publish' : '/unpublish'));
+            delete OCCUPE[nom];
+            if (reussi(r)) {
+                toast((versPublie ? '✅ ' : '⭘ ') + nom + (versPublie ? ' publié' : ' retiré du web'));
+                // On relit la liste : l'état affiché vient de ce que la board CONSTATE, pas de ce qu'on espérait.
+                try { await chargerSites(true); } catch (e) { /* conserve la liste précédente */ }
+                rendre();
+            } else { toast('⚠ ' + nom + ' : ' + detail(r), true); rendre(); }
         }
 
-        function renderMosaic() {
-            const grid = document.getElementById('mosaic-grid');
-            const countEl = document.getElementById('mosaic-filter-count');
-            if (!allSites) return;
-            renderCacheStatus();
-
-            // A cache that was never written (or is unreadable) must NEVER
-            // render the same way as a real empty fleet — that would read
-            // as "no sites" when the truth is "no data yet" (#974).
-            if (sitesCacheMeta.available === false) {
-                grid.innerHTML = '<div class="mosaic-empty">'
-                    + '⚠️ Liste des sites indisponible ('
-                    + (sitesCacheMeta.reason === 'cache not written yet'
-                        ? 'cache pas encore généré — patientez ou cliquez sur Rafraîchir'
-                        : 'cache illisible — cliquez sur Rafraîchir')
-                    + ')</div>';
-                countEl.textContent = '';
-                return;
-            }
-
-            const q = (document.getElementById('mosaic-filter').value || '').toLowerCase().trim();
-            const filtered = allSites.filter(s => matchesFilter(s, q));
-            countEl.textContent = filtered.length + ' / ' + allSites.length;
-
-            if (!filtered.length) {
-                grid.innerHTML = allSites.length
-                    ? '<div class="mosaic-empty">Aucun site ne correspond au filtre</div>'
-                    : '<div class="mosaic-empty">Aucun site publié pour l’instant</div>';
-                return;
-            }
-            const sorted = filtered.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-            grid.innerHTML = sorted.map(renderMosaicTile).join('');
-            poseGestesTuiles();
-        }
-
-        function renderMosaicTile(s) {
-            const name = esc(s.name || '?');
-            const domain = esc(s.domain || '');
-            const published = !!s.published;
-            const emoji = tileEmoji(s);
-            // #977: nginx now serves this URL directly (alias on the
-            // capture cache dir, see nginx/metablogizer.conf) with a long
-            // `immutable` Cache-Control — safe ONLY because captured_at is
-            // baked into the URL. A recapture changes screenshot_captured_at
-            // (api/sites_scan.py), which changes this URL, so a browser can
-            // never keep serving a vignette past its own recapture. No
-            // captured_at yet (never captured) means no `?v=` — same bare
-            // URL as before, 404s exactly like it always did.
-            const capturedAt = s.screenshot_captured_at || '';
-            const thumbSrc = esc('/api/v1/metablogizer/site/' + encodeURIComponent(s.name || '') + '/screenshot' +
-                (capturedAt ? '?v=' + encodeURIComponent(capturedAt) : ''));
-            const openUrl = s.domain ? esc('https://' + s.domain + '/') : '';
-
-            return '<div class="mosaic-tile' + (published ? '' : ' unpublished') + '">' +
-                '<div class="mosaic-thumb">' +
-                    '<span class="mosaic-thumb-emoji">' + emoji + '</span>' +
-                    // The vignette is captured out-of-band by
-                    // metablog-shots.timer (#956) and only ever fills in
-                    // progressively (172 sites, one capture per 2 minutes) —
-                    // a fresh install or a not-yet-reached site 404s here by
-                    // design. onerror removes the <img>, leaving the emoji
-                    // span (already in the DOM, underneath) as the fallback —
-                    // the tile never breaks or shows a broken-image icon.
-                    // loading="lazy" defers the request for tiles below the
-                    // fold entirely, native to the browser, no JS needed.
-                    '<img loading="lazy" alt="" src="' + thumbSrc + '" onerror="this.remove()">' +
-                '</div>' +
-                '<div class="mosaic-body">' +
-                    '<div class="mosaic-name" title="' + name + '">' + name + '</div>' +
-                    '<div class="mosaic-domain" title="' + domain + '">' + (domain || '—') + '</div>' +
-                    '<span class="badge ' + (published ? 'published' : 'draft') + '">' + (published ? '✅ publié' : '📝 non publié') + '</span>' +
-                '</div>' +
-                // BOUTONS RAPIDES (#1323). Cent soixante-douze vignettes, et
-                // pour chacune il fallait passer par l'onglet Sites puis
-                // retrouver la ligne : les deux gestes les plus fréquents —
-                // ouvrir le détail, publier ou dépublier — sont maintenant là.
-                //
-                // `data-nom` plutôt qu'un `onclick` qui interpole le nom : un
-                // nom de site contenant une apostrophe casserait l'attribut,
-                // et c'est exactement le genre de chose qu'on découvre le jour
-                // où quelqu'un crée « l'atelier ». L'écouteur est délégué sur
-                // la grille (voir plus bas), il n'y a donc PAS un écouteur par
-                // vignette : sur 172 tuiles, ça compte.
-                '<div class="mosaic-footer">' +
-                    '<button class="tuile-btn" data-geste="details" data-nom="' + name + '"' +
-                        ' title="Ouvrir la vue détaillée">⚙ détails</button>' +
-                    '<button class="tuile-btn ' + (published ? 'actif' : '') + '"' +
-                        ' data-geste="bascule" data-nom="' + name + '"' +
-                        ' data-publie="' + (published ? '1' : '0') + '"' +
-                        ' title="' + (published ? 'Dépublier ce site' : 'Publier ce site') + '">' +
-                        (published ? '⏻ en ligne' : '⭘ hors ligne') + '</button>' +
-                    (openUrl ? '<a class="tuile-btn" href="' + openUrl + '" target="_blank" rel="noopener" title="Ouvrir le site">↗</a>' : '') +
-                '</div>' +
-            '</div>';
-        }
-
-        // ── LES GESTES DE VIGNETTE ────────────────────────────────────────
-        //
-        // Écouteur DÉLÉGUÉ, posé une fois sur la grille : la mosaïque est
-        // reconstruite à chaque filtre, et rattacher 172 écouteurs à chaque
-        // frappe dans le champ de recherche serait gaspiller pour rien.
-        let gestesTuilesPoses = false;
-        function poseGestesTuiles() {
-            if (gestesTuilesPoses) return;
-            const grid = document.getElementById('mosaic-grid');
-            if (!grid) return;
-            gestesTuilesPoses = true;
-            grid.addEventListener('click', function (ev) {
-                const b = ev.target.closest('button.tuile-btn');
-                if (!b) return;
-                const nom = b.dataset.nom;
-                if (b.dataset.geste === 'details') {
-                    window.location = 'site.html?name=' + encodeURIComponent(nom);
-                    return;
-                }
-                if (b.dataset.geste === 'bascule') {
-                    basculePublication(nom, b.dataset.publie !== '1', b);
-                }
-            });
-        }
-
-        // DÉPUBLIER SE CONFIRME, PUBLIER NON. Dépublier retire un site du web :
-        // sur une grille de 172 vignettes, un clic de travers doit coûter une
-        // question. Publier ne casse rien et se défait d'un clic.
-        async function basculePublication(nom, versPublie, bouton) {
-            if (!versPublie && !confirm('Retirer « ' + nom + ' » du web ?\n\n'
-                    + 'Le site ne sera plus servi. Son contenu reste intact et '
-                    + 'vous pouvez le republier à tout moment.')) return;
-
-            // PUBLIER RÉGÉNÈRE NGINX POUR TOUS LES SITES : c'est long (des
-            // dizaines de secondes sur la board). Sans état d'attente, la
-            // vignette resterait muette et l'on cliquerait une deuxième fois.
-            const avant = bouton.textContent;
-            bouton.disabled = true;
-            bouton.textContent = versPublie ? '⏳ publication…' : '⏳ retrait…';
-            try {
-                const t = token();
-                const r = await fetch(API + '/site/' + encodeURIComponent(nom)
-                        + (versPublie ? '/publish' : '/unpublish'),
-                    { method: 'POST', credentials: 'same-origin',
-                      headers: t ? { 'Authorization': 'Bearer ' + t } : {} });
-                const d = await r.json().catch(function () { return {}; });
-                if (!r.ok || d.ok === false) {
-                    throw new Error(d.detail || d.erreur || ('HTTP ' + r.status));
-                }
-                if (typeof toast === 'function') {
-                    toast((versPublie ? '✅ ' : '⭘ ') + nom + (versPublie ? ' publié' : ' retiré du web'));
-                }
-                // On relit la liste plutôt que de corriger la vignette à la
-                // main : la publication touche le vhost, la route et le
-                // certificat, et l'état affiché doit venir de ce que la board
-                // CONSTATE, pas de ce que l'on espérait.
-                allSites = null;
-                await ensureSites(true);
-                renderMosaic();
-                if (typeof sitesTabLoaded !== 'undefined' && sitesTabLoaded) renderSitesTable();
-            } catch (e) {
-                bouton.disabled = false;
-                bouton.textContent = avant;
-                if (typeof toast === 'function') toast('⚠ ' + nom + ' : ' + e.message);
-                else alert(nom + ' : ' + e.message);
-            }
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // Sites tab — sortable/filterable table + row actions.
-        // ═══════════════════════════════════════════════════════════════
-        let sitesTabLoaded = false;
-        let currentSort = { field: null, dir: 'asc' };
-
-        async function loadSitesTab(force) {
-            sitesTabLoaded = true;
-            const list = document.getElementById('site-list');
-            if (!allSites) list.innerHTML = '<tr><td colspan="7">Chargement…</td></tr>';
-            await ensureSites(force);
-            renderSitesTable();
-        }
-
-        function relativeTime(iso) {
-            if (!iso) return '—';
-            const d = new Date(iso);
-            const diff = (Date.now() - d.getTime()) / 1000;
-            if (isNaN(diff)) return iso;
-            if (diff < 60) return Math.floor(diff) + 's';
-            if (diff < 3600) return Math.floor(diff / 60) + 'min';
-            if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-            return Math.floor(diff / 86400) + 'j';
-        }
-
-        function sortBy(field, thEl) {
-            if (currentSort.field === field) {
-                currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort = { field, dir: 'asc' };
-            }
-            document.querySelectorAll('th[data-sort] .sort-ind').forEach(s => s.textContent = '');
-            const ind = thEl.querySelector('.sort-ind');
-            if (ind) ind.textContent = currentSort.dir === 'asc' ? ' ▲' : ' ▼';
-            renderSitesTable();
-        }
-
-        function siteTooltip(s) {
-            const lines = [];
-            lines.push('📛 Nom: ' + (s.name || ''));
-            lines.push('🌐 Domaine: ' + (s.domain || ''));
-            lines.push('🚦 Statut: ' + (s.published ? '✅ Publié' : '📝 Brouillon'));
-            if (s.version) lines.push('🏷️ Version: ' + s.version);
-            if (s.title) lines.push('📰 Titre: ' + s.title);
-            if (s.description) lines.push('📝 ' + s.description);
-            if (s.category) lines.push('📂 Catégorie: ' + s.category);
-            if (Array.isArray(s.tags) && s.tags.length) lines.push('🏷️ Tags: ' + s.tags.join(', '));
-            if (s.size) lines.push('📦 Taille: ' + s.size);
-            if (s.last_updated) lines.push('🕐 Mis à jour: ' + s.last_updated);
-            return esc(lines.join('\n'));
-        }
-
-        function renderSitesTable() {
-            if (!allSites) return;
-            const list = document.getElementById('site-list');
-            const countEl = document.getElementById('sites-filter-count');
-
-            // Same cache-unavailable guard as the Mosaic tab (#974): don't
-            // let an empty backing array read as "no sites" when the real
-            // state is "no cache yet".
-            if (sitesCacheMeta.available === false) {
-                list.innerHTML = '<tr><td colspan="7" style="color:var(--orange)">⚠️ Liste des sites indisponible ('
-                    + (sitesCacheMeta.reason === 'cache not written yet' ? 'cache pas encore généré' : 'cache illisible')
-                    + ')</td></tr>';
-                countEl.textContent = '';
-                return;
-            }
-
-            const q = (document.getElementById('sites-filter').value || '').toLowerCase().trim();
-            let filtered = allSites.filter(s => matchesFilter(s, q));
-            countEl.textContent = filtered.length + ' / ' + allSites.length;
-
-            if (currentSort.field) {
-                const field = currentSort.field;
-                const dir = currentSort.dir === 'asc' ? 1 : -1;
-                filtered = filtered.slice().sort((a, b) => {
-                    const av = (a[field] ?? '') + '';
-                    const bv = (b[field] ?? '') + '';
-                    if (av === '' && bv !== '') return 1;
-                    if (bv === '' && av !== '') return -1;
-                    return av.localeCompare(bv, undefined, { numeric: true }) * dir;
-                });
-            }
-
-            if (!filtered.length) {
-                list.innerHTML = '<tr><td colspan="7" style="color:var(--p31-dim)">Aucun site</td></tr>';
-                return;
-            }
-
-            list.innerHTML = filtered.map(s => {
-                const tip = siteTooltip(s);
-                const name = esc(s.name || '');
-                const domain = esc(s.domain || '');
-                const url = esc('https://' + (s.domain || ''));
-                const versionCell = s.version ? '<code>' + esc(s.version) + '</code>' : '<span style="color:var(--p31-dim)">—</span>';
-                const updatedCell = s.last_updated
-                    ? '<span title="' + esc(s.last_updated) + '">' + esc(relativeTime(s.last_updated)) + '</span>'
-                    : '<span style="color:var(--p31-dim)">—</span>';
-                const actions = (s.published
-                    ? '<a href="' + url + '" target="_blank" rel="noopener" class="btn sm">Ouvrir</a>' +
-                      '<button class="btn sm" data-action="unpublish">Dépublier</button>'
-                    : '<button class="btn sm success" data-action="publish">Publier</button>') +
-                    '<button class="btn sm" data-action="deploy" title="Mettre à jour — git pull">🔄</button>' +
-                    '<button class="btn sm" data-action="upload" title="Charger un contenu">⬆</button>' +
-                    '<button class="btn sm danger" data-action="delete">🗑️</button>';
-
-                return '<tr class="site-row" title="' + tip + '" data-name="' + name + '">' +
-                    '<td><strong><a href="site.html?name=' + encodeURIComponent(s.name || '') + '">' + name + '</a></strong></td>' +
-                    '<td><a href="' + url + '" target="_blank" rel="noopener">🌐 ' + domain + ' ↗</a></td>' +
-                    '<td>' + versionCell + '</td>' +
-                    '<td>' + updatedCell + '</td>' +
-                    '<td><span class="badge ' + (s.published ? 'published' : 'draft') + '">' + (s.published ? '✅ Publié' : '📝 Brouillon') + '</span></td>' +
-                    '<td>' + esc(s.size || '-') + '</td>' +
-                    '<td>' + actions + '</td>' +
-                '</tr>';
-            }).join('');
-        }
-
-        // Row actions — delegated listener, name read from data-name (never
-        // hand-interpolated into an onclick string).
-        document.getElementById('site-list').addEventListener('click', async (ev) => {
-            const btn = ev.target.closest('button[data-action]');
-            if (!btn) return;
-            const tr = btn.closest('tr.site-row');
-            const name = tr && tr.dataset.name;
-            if (!name) return;
-            const action = btn.dataset.action;
-
-            if (action === 'publish') {
-                const r = await api('/site/' + encodeURIComponent(name) + '/publish', { method: 'POST' });
-                if (r.success) { toast('✅ ' + name + ' publié'); await ensureSites(true); renderSitesTable(); if (mosaicLoaded) renderMosaic(); }
-            } else if (action === 'unpublish') {
-                const r = await api('/site/' + encodeURIComponent(name) + '/unpublish', { method: 'POST' });
-                if (r.success) { toast('📝 ' + name + ' dépublié'); await ensureSites(true); renderSitesTable(); if (mosaicLoaded) renderMosaic(); }
-            } else if (action === 'deploy') {
-                const r = await api('/site/' + encodeURIComponent(name) + '/deploy', { method: 'POST' });
-                if (r && r.success) {
-                    toast(r.updated ? '✓ ' + name + ' mis à jour: ' + String(r.from).slice(0, 8) + ' → ' + String(r.to).slice(0, 8) : '• ' + name + ' déjà à jour');
-                    await ensureSites(true); renderSitesTable();
-                } else {
-                    errorToast('Échec de mise à jour pour ' + name + (r && r.detail ? ': ' + r.detail : ''));
-                }
-            } else if (action === 'upload') {
-                uploadSiteContent(name);
-            } else if (action === 'delete') {
-                if (!confirm('Supprimer le site ' + name + ' ?')) return;
-                const r = await api('/site/' + encodeURIComponent(name), { method: 'DELETE' });
-                if (r.success) { toast('🗑️ ' + name + ' supprimé'); await ensureSites(true); renderSitesTable(); if (mosaicLoaded) renderMosaic(); }
-                else errorToast('Échec de suppression pour ' + name);
-            }
+        $('btnRebalayer').addEventListener('click', async () => {
+            const b = $('btnRebalayer'); b.disabled = true;
+            const r = await ecrire('POST', '/sites/refresh');
+            if (r.ok && r.data && r.data.triggered) {
+                toast('🔄 Rafraîchissement du cache lancé…');
+                setTimeout(async () => { try { await chargerSites(true); } catch (e) { /* idem */ } rendre(); b.disabled = false; }, 20000);
+            } else { toast('Rafraîchissement indisponible : ' + ((r.data && r.data.error) || detail(r)), true); b.disabled = false; }
         });
 
-        // Uses a transient hidden file input; the multipart POST needs the raw
-        // FormData body (no JSON Content-Type), so it calls fetch directly with
-        // the same auth headers/cookie strategy as api().
-        function uploadSiteContent(name) {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.zip,.tar.gz,.tgz,.html,.htm';
-            input.onchange = async () => {
-                const f = input.files && input.files[0];
-                if (!f) return;
-                const fd = new FormData();
-                fd.append('file', f);
-                const t = token();
-                const auth = t ? { 'Authorization': 'Bearer ' + t } : {};
-                try {
-                    let res = await fetch(API + '/site/' + encodeURIComponent(name) + '/upload',
-                        { method: 'POST', headers: auth, body: fd, credentials: 'same-origin' });
-                    if (res.status === 401) {
-                        res = await fetch(API + '/site/' + encodeURIComponent(name) + '/upload',
-                            { method: 'POST', body: fd, credentials: 'same-origin' });
-                    }
-                    if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
-                    const d = await res.json().catch(() => ({}));
-                    if (res.ok && d.success) { toast('✓ ' + name + ' — contenu mis à jour (' + (d.kind || 'ok') + ')'); await ensureSites(true); renderSitesTable(); }
-                    else errorToast('Échec du chargement pour ' + name + (d.detail ? ': ' + d.detail : ''));
-                } catch (e) {
-                    errorToast('Échec du chargement pour ' + name + ': ' + e);
-                }
-            };
+        // ----- Onglet Sites : tableau triable et filtrable -----
+        function rendreSites() {
+            const tb = $('bSites'); tb.replaceChildren(); rendreCache();
+            const vide = txt => { const tr = el('tr'), td = el('td', 'vide', txt); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); $('cSites').textContent = ''; $('nSites').textContent = ''; };
+            if (!SESSION_OK) return vide('—');
+            if (!SITES) return vide(CHARGE ? 'Liste des sites indisponible' : 'Chargement…');
+            if (CACHE.available === false) return vide('Liste des sites indisponible (' + (CACHE.reason === 'cache not written yet' ? 'cache pas encore généré' : 'cache illisible') + ')');
+            const q = $('fSites').value.toLowerCase().trim();
+            let liste = SITES.filter(s => matchesFilter(s, q));
+            $('cSites').textContent = liste.length + ' / ' + SITES.length;
+            $('nSites').textContent = SITES.length + ' site' + (SITES.length > 1 ? 's' : '');
+            if (TRI.champ) liste = liste.slice().sort((a, b) => {
+                const av = String(a[TRI.champ] ?? ''), bv = String(b[TRI.champ] ?? '');
+                if (av === '' && bv !== '') return 1;
+                if (bv === '' && av !== '') return -1;
+                return av.localeCompare(bv, undefined, { numeric: true }) * TRI.sens;
+            });
+            document.querySelectorAll('th button[data-tri]').forEach(b => { b.querySelector('.ind').textContent = b.dataset.tri === TRI.champ ? (TRI.sens === 1 ? ' ▲' : ' ▼') : ''; });
+            if (!liste.length) return vide('Aucun site');
+            liste.forEach(s => tb.appendChild(ligneSite(s)));
+        }
+        document.querySelectorAll('th button[data-tri]').forEach(b => b.addEventListener('click', () => {
+            TRI = TRI.champ === b.dataset.tri ? { champ: TRI.champ, sens: -TRI.sens } : { champ: b.dataset.tri, sens: 1 };
+            rendreSites();
+        }));
+        $('fSites').addEventListener('input', rendreSites);
+
+        function infobulleSite(s) {
+            const l = ['Nom : ' + (s.name || ''), 'Domaine : ' + (s.domain || ''), 'Statut : ' + (s.published ? 'publié' : 'brouillon')];
+            if (s.version) l.push('Version : ' + s.version);
+            if (s.title) l.push('Titre : ' + s.title);
+            if (s.description) l.push(s.description);
+            if (s.category) l.push('Catégorie : ' + s.category);
+            if (Array.isArray(s.tags) && s.tags.length) l.push('Étiquettes : ' + s.tags.join(', '));
+            if (s.size) l.push('Taille : ' + s.size);
+            if (s.last_updated) l.push('Mis à jour : ' + s.last_updated);
+            return l.join('\n');
+        }
+
+        function ligneSite(s) {
+            const nom = String(s.name || ''), tr = el('tr'); tr.title = infobulleSite(s);
+            const a = el('a', '', nom); a.href = 'site.html?name=' + encodeURIComponent(nom) + (DEMO ? '&demo=1' : '');
+            const t1 = el('td'); const st = el('strong'); st.appendChild(a); t1.appendChild(st); tr.appendChild(t1);
+            const t2 = el('td');
+            if (s.domain) { const d = el('a', '', '🌐 ' + s.domain + ' ↗'); d.href = 'https://' + s.domain; d.target = '_blank'; d.rel = 'noopener'; t2.appendChild(d); } else t2.textContent = '—';
+            tr.appendChild(t2);
+            const t3 = el('td'); if (s.version) t3.appendChild(el('code', 'mono', s.version)); else t3.textContent = '—'; tr.appendChild(t3);
+            const t4 = el('td', '', s.last_updated ? relatif(s.last_updated) : '—'); if (s.last_updated) t4.title = s.last_updated; tr.appendChild(t4);
+            const t5 = el('td'); t5.appendChild(pastille(!!s.published)); tr.appendChild(t5);
+            tr.appendChild(el('td', '', tiret(s.size)));
+            const act = el('td', 'act'), occ = OCCUPE[nom];
+            if (CONF && CONF.nom === nom) {
+                act.appendChild(el('span', 'note', CONF.action === 'retirer' ? 'Retirer « ' + nom + ' » du web ?' : 'Supprimer « ' + nom + ' » et son contenu, sans retour possible ?'));
+                const action = CONF.action;
+                act.appendChild(btn('Confirmer', 'danger', () => { CONF = null; if (action === 'retirer') bascule(nom, false); else supprimer(nom); }));
+                act.appendChild(btn('Annuler', '', () => { CONF = null; rendre(); }));
+            } else {
+                if (s.published && s.domain) act.appendChild(lien('Ouvrir', '', 'https://' + s.domain));
+                const bp = btn(occ ? '⏳ ' + occ : (s.published ? 'Dépublier' : 'Publier'), s.published ? '' : 'ok', () => { if (s.published) { CONF = { nom, action: 'retirer' }; rendre(); } else bascule(nom, true); });
+                bp.disabled = !!occ; act.appendChild(bp);
+                act.appendChild(btn('🔄', '', () => deployer(nom), 'Mettre à jour — git pull'));
+                act.appendChild(btn('⬆', '', () => televerser(nom), 'Charger un contenu'));
+                act.appendChild(btn('🗑️', 'danger', () => { CONF = { nom, action: 'supprimer' }; rendre(); }, 'Supprimer le site'));
+            }
+            tr.appendChild(act);
+            return tr;
+        }
+
+        async function deployer(nom) {
+            const r = await ecrire('POST', '/site/' + encodeURIComponent(nom) + '/deploy');
+            if (r.ok && r.data && r.data.success) {
+                toast(r.data.updated ? '✓ ' + nom + ' mis à jour : ' + String(r.data.from).slice(0, 8) + ' → ' + String(r.data.to).slice(0, 8) : '• ' + nom + ' déjà à jour');
+                try { await chargerSites(true); } catch (e) { /* idem */ } rendre();
+            } else toast('Échec de mise à jour pour ' + nom + ' : ' + detail(r), true);
+        }
+
+        async function supprimer(nom) {
+            const r = await ecrire('DELETE', '/site/' + encodeURIComponent(nom));
+            if (r.ok && r.data && r.data.success) { toast('🗑️ ' + nom + ' supprimé'); try { await chargerSites(true); } catch (e) { /* idem */ } rendre(); }
+            else { toast('Échec de suppression pour ' + nom + ' : ' + detail(r), true); rendre(); }
+        }
+
+        // Entrée de fichier transitoire ; le corps multipart reste un FormData brut (pas de Content-Type JSON).
+        function televerser(nom) {
+            if (DEMO) { toast('Démonstration : action inerte.'); return; }
+            const input = document.createElement('input'); input.type = 'file'; input.accept = '.zip,.tar.gz,.tgz,.html,.htm';
+            input.addEventListener('change', async () => {
+                const f = input.files && input.files[0]; if (!f) return;
+                const fd = new FormData(); fd.append('file', f);
+                const r = await ecrire('POST', '/site/' + encodeURIComponent(nom) + '/upload', fd);
+                if (r.ok && r.data && r.data.success) { toast('✓ ' + nom + ' — contenu mis à jour (' + (r.data.kind || 'ok') + ')'); try { await chargerSites(true); } catch (e) { /* idem */ } rendre(); }
+                else toast('Échec du chargement pour ' + nom + ' : ' + detail(r), true);
+            });
             input.click();
         }
 
-        async function createSite() {
-            const name = document.getElementById('new-name').value.trim();
-            const domain = document.getElementById('new-domain').value.trim() || undefined;
-            const r = await api('/site', { method: 'POST', body: JSON.stringify({ name, domain }) });
-            if (r.success) { hideModal('create-modal'); toast('✅ Site créé'); await ensureSites(true); if (sitesTabLoaded) renderSitesTable(); if (mosaicLoaded) renderMosaic(); loadStatus(); }
-            else errorToast('Erreur: ' + (r.detail || 'échec de la création'));
-        }
-
-        async function republishAll() {
-            const btn = event.target;
-            const origText = btn.textContent;
-            btn.textContent = '⟲ Publication…';
-            btn.disabled = true;
+        // ----- Création, republication globale -----
+        $('btnNouveau').addEventListener('click', () => { $('creer').hidden = !$('creer').hidden; if (!$('creer').hidden) $('nNom').focus(); annoncer(); });
+        $('btnAnnulerCreer').addEventListener('click', () => { $('creer').hidden = true; $('rCreer').hidden = true; annoncer(); });
+        $('fCreer').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const nom = $('nNom').value.trim(), domaine = $('nDomaine').value.trim() || undefined;
+            const b = $('btnCreer'); b.disabled = true;
+            const r = await ecrire('POST', '/site', { name: nom, domain: domaine });
+            b.disabled = false;
+            if (r.ok && r.data && r.data.success) {
+                $('creer').hidden = true; $('rCreer').hidden = true; $('nNom').value = ''; $('nDomaine').value = '';
+                toast('✅ Site créé'); await charger();
+            } else retour('rCreer', false, 'Création impossible : ' + detail(r));
+        });
+        $('btnRepublier').addEventListener('click', async () => {
+            const b = $('btnRepublier'), avant = b.textContent; b.textContent = '⟲ Publication…'; b.disabled = true;
             try {
-                const r = await api('/republish-all', { method: 'POST' });
-                if (r.success) {
-                    toast('✓ ' + r.sites_published + ' sites publiés');
-                    await ensureSites(true);
-                    if (sitesTabLoaded) renderSitesTable();
-                    if (mosaicLoaded) renderMosaic();
-                    loadStatus();
-                } else {
-                    errorToast('Erreur: ' + (r.message || 'échec de republication'));
-                }
-            } finally {
-                btn.textContent = origText;
-                btn.disabled = false;
+                const r = await ecrire('POST', '/republish-all');
+                if (r.ok && r.data && r.data.success) { toast('✓ ' + r.data.sites_published + ' sites publiés'); await charger(); }
+                else toast('Republication impossible : ' + ((r.data && r.data.message) || detail(r)), true);
+            } finally { b.textContent = avant; b.disabled = false; }
+        });
+
+        // ----- Onglet Déploiements -----
+        function rendreDeploys() {
+            const tb = $('bDeploys'); tb.replaceChildren();
+            const vide = txt => { const tr = el('tr'), td = el('td', 'vide', txt); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); $('nDeploys').textContent = ''; };
+            if (!SESSION_OK) return vide('—');
+            if (!DEPLOYS) return vide(CHARGE ? 'Déploiements indisponibles' : 'Chargement…');
+            if (!DEPLOYS.length) return vide('Aucun déploiement enregistré');
+            $('nDeploys').textContent = DEPLOYS.length;
+            DEPLOYS.forEach(d => {
+                const web = d.source === 'webhook', tr = el('tr');
+                const s = el('td'); s.appendChild(el('span', 'pill ' + (web ? 'vi' : ''), web ? 'webhook' : 'manuel')); tr.appendChild(s);
+                tr.appendChild(el('td', 'mono', tiret(d.site)));
+                tr.appendChild(el('td', 'mono', String(d.from || '').slice(0, 8) + ' → ' + String(d.to || '').slice(0, 8)));
+                tr.appendChild(el('td', '', d.duration_ms != null ? d.duration_ms + ' ms' : '—'));
+                const f = el('td'); if (d.domain_changed) f.appendChild(el('span', 'pill att', 'domaine modifié')); else f.textContent = '—'; tr.appendChild(f);
+                tr.appendChild(el('td', '', relatifEpoch(d.timestamp)));
+                tb.appendChild(tr);
+            });
+        }
+
+        // ----- Assistant de publication : le serveur annonce les étapes (NDJSON), la page les allume au fil de l'eau -----
+        const barre = $('wizEtapes'), encours = $('wizEncours'), sortieWiz = $('wizResultat');
+        function ecrireWiz(txt) { sortieWiz.hidden = !txt; sortieWiz.textContent = txt; annoncer(); }
+        function poseEtapes(etapes) {
+            barre.replaceChildren();
+            (etapes || []).forEach((e, i) => { const sp = el('span', '', (i + 1) + ' · ' + e.libelle); sp.dataset.step = e.cle; barre.appendChild(sp); });
+        }
+        function etatEtape(cle, classe, pourquoi) {
+            const sp = [].slice.call(barre.children).find(x => x.dataset.step === cle); if (!sp) return;
+            sp.classList.remove('ok', 'fail', 'encours', 'actif'); if (classe) sp.classList.add(classe);
+            const ex = sp.querySelector('small'); if (ex) ex.remove();
+            if (pourquoi) sp.appendChild(el('small', '', pourquoi));
+        }
+        // La prochaine étape non traitée est montrée EN COURS : sinon le temps passé dessus ressemble à un blocage.
+        function suivante(faites) {
+            const toutes = [].slice.call(barre.children);
+            for (const sp of toutes) if (!faites[sp.dataset.step]) {
+                etatEtape(sp.dataset.step, 'actif'); encours.hidden = false;
+                encours.textContent = '⏳ ' + sp.firstChild.textContent.replace(/^\d+ · /, '') + '…'; return;
             }
+            encours.hidden = true;
         }
-
-        // ═══════════════════════════════════════════════════════════════
-        // Déploiements tab
-        // ═══════════════════════════════════════════════════════════════
-        let deploysData = null;
-
-        function formatEpoch(seconds) {
-            if (seconds == null) return '—';
-            const diff = Date.now() / 1000 - seconds;
-            if (diff < 60) return Math.floor(diff) + 's';
-            if (diff < 3600) return Math.floor(diff / 60) + 'min';
-            if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-            return Math.floor(diff / 86400) + 'j';
-        }
-
-        function updateDeployStat(deploys) {
-            const now = Date.now() / 1000;
-            const recent = deploys.filter(d => (now - (d.timestamp || 0)) < 86400).length;
-            document.getElementById('stat-deploys').textContent = recent;
-        }
-
-        async function loadDeploys(force) {
-            if (deploysData && !force) { renderDeploys(); return; }
-            const list = document.getElementById('deploy-list');
-            if (!deploysData) list.innerHTML = 'Chargement…';
-            const d = await api('/deploys');
-            deploysData = d.deploys || [];
-            updateDeployStat(deploysData);
-            renderDeploys();
-        }
-
-        function renderDeployRow(d) {
-            const isWebhook = d.source === 'webhook';
-            const site = esc(d.site || '?');
-            const source = isWebhook ? '🪝 webhook' : '🖐 manuel';
-            const from = esc(String(d.from || '').slice(0, 8));
-            const to = esc(String(d.to || '').slice(0, 8));
-            const duration = d.duration_ms != null ? d.duration_ms + ' ms' : '-';
-            const when = formatEpoch(d.timestamp);
-            const changed = d.domain_changed ? '<span class="deploy-flag">domaine modifié</span>' : '<span></span>';
-            return '<div class="deploy-row' + (isWebhook ? ' webhook' : '') + '">' +
-                '<span class="deploy-source">' + source + '</span>' +
-                '<span class="deploy-site" title="' + site + '">' + site + '</span>' +
-                '<span class="deploy-sha">' + from + ' → ' + to + '</span>' +
-                '<span class="deploy-duration">' + duration + '</span>' +
-                changed +
-                '<span class="deploy-when" title="il y a ' + esc(when) + '">' + esc(when) + '</span>' +
-            '</div>';
-        }
-
-        function renderDeploys() {
-            const list = document.getElementById('deploy-list');
-            if (!deploysData || !deploysData.length) {
-                list.innerHTML = '<div class="mosaic-empty">Aucun déploiement enregistré</div>';
-                return;
-            }
-            list.innerHTML = deploysData.map(renderDeployRow).join('');
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // Réglages tab
-        // ═══════════════════════════════════════════════════════════════
-
-        // ═══════════════════════════════════════════════════════════════
-        // Init + periodic refresh (only the currently visible tab refetches)
-        // ═══════════════════════════════════════════════════════════════
-        function refresh() {
-            loadStatus();
-            const active = document.querySelector('.tab.active');
-            const name = active ? active.dataset.tab : 'mosaic';
-            if (name === 'mosaic') loadMosaic(true);
-            else if (name === 'sites') loadSitesTab(true);
-            else if (name === 'deploys') loadDeploys(true);
-        }
-
-        // ?vue=mosaique (#1835) : la vue « Mes sites » du Hall — mosaïque seule.
-        if (new URLSearchParams(location.search).get('vue') === 'mosaique') {
-            document.body.classList.add('vue-mosaique');
-        }
-        loadStatus();
-        loadMosaic();
-
-        setInterval(() => { if (!document.hidden) refresh(); }, 60000);
-    </script>
-    <!-- L'ASSISTANT SUIT LE FLUX DU SERVEUR (#1323).
-         Avant : un POST unique, « Publication… », puis plus rien pendant les
-         dizaines de secondes que prennent git, nginx et certbot. Les pastilles
-         n'apparaissaient qu'à la toute fin, et seulement quatre sur six —
-         « Service », qui décide du verdict, n'était montrée nulle part. Une
-         publication refusée par `nginx -t` affichait donc quatre pastilles
-         vertes et aucune rouge : « ça s'arrête sans avancer ».
-         Maintenant : le serveur rend chaque étape dès qu'elle est finie
-         (NDJSON), la page les allume au fil de l'eau, et dit ce qui a manqué. -->
-    <script>
-        (function () {
-            var barre = document.getElementById('wiz-steps');
-            var encours = document.getElementById('wiz-encours');
-            var bouton = document.getElementById('wiz-go');
-            var lastName = '';
-
-            function poseEtapes(etapes) {
-                barre.innerHTML = '';
-                etapes.forEach(function (e, i) {
-                    var sp = document.createElement('span');
-                    sp.dataset.step = e.cle;
-                    sp.textContent = (i + 1) + ' · ' + e.libelle;
-                    barre.appendChild(sp);
-                });
-            }
-            function etat(cle, classe, pourquoi) {
-                var el = barre.querySelector('[data-step="' + cle + '"]');
-                if (!el) { return; }
-                el.classList.remove('ok', 'fail', 'encours', 'actif');
-                if (classe) { el.classList.add(classe); }
-                var ex = el.querySelector('.wiz-pourquoi');
-                if (ex) { ex.remove(); }
-                if (pourquoi) {
-                    var d = document.createElement('small');
-                    d.className = 'wiz-pourquoi';
-                    d.textContent = pourquoi;
-                    el.appendChild(d);
-                }
-            }
-            // La prochaine étape non encore traitée : on la montre EN COURS,
-            // sinon le temps passé sur elle ressemble à un blocage.
-            function suivante(faites) {
-                var toutes = [].slice.call(barre.querySelectorAll('[data-step]'));
-                for (var i = 0; i < toutes.length; i++) {
-                    var c = toutes[i].dataset.step;
-                    if (!faites[c]) { etat(c, 'actif'); encours.hidden = false;
-                        encours.textContent = '⏳ ' + toutes[i].textContent.replace(/^\d+ · /, '') + '…';
-                        return; }
-                }
-                encours.hidden = true;
-            }
-
-            bouton.addEventListener('click', async function () {
-                var name = document.getElementById('wiz-name').value.trim();
-                var domain = document.getElementById('wiz-domain').value.trim();
-                var f = document.getElementById('wiz-file').files[0];
-                var out = document.getElementById('wiz-result');
-                if (!name || !f) { out.textContent = 'nom et fichier requis'; return; }
-                barre.innerHTML = ''; encours.hidden = true;
-                out.textContent = '';
-                // ON REND LA MAIN QUOI QU'IL ARRIVE. Le bouton restait
-                // désactivé après un échec : plus moyen de corriger et de
-                // relancer sans recharger la page.
-                bouton.disabled = true;
-                var fd = new FormData();
-                fd.append('name', name); if (domain) { fd.append('domain', domain); }
-                fd.append('file', f);
-                var t = (typeof token === 'function') ? token() : '';
-                var auth = t ? { 'Authorization': 'Bearer ' + t } : {};
-                var faites = {};
-                try {
-                    var res = await fetch(API + '/publish/wizard?flux=1',
-                        { method: 'POST', headers: auth, body: fd, credentials: 'same-origin' });
-                    if (res.status === 401) {
-                        res = await fetch(API + '/publish/wizard?flux=1',
-                            { method: 'POST', body: fd, credentials: 'same-origin' });
-                    }
-                    if (res.status === 401) {
-                        if (!/\/login\.html$/.test(location.pathname)) {
-                            window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname);
-                        }
-                        return;
-                    }
-                    if (!res.ok || !res.body) {
-                        // Un 4xx AVANT le flux (archive refusée) reste du JSON.
-                        var err = await res.json().catch(function () { return {}; });
-                        out.textContent = err.detail || ('erreur HTTP ' + res.status);
-                        return;
-                    }
-                    var lecteur = res.body.getReader();
-                    var dec = new TextDecoder();
-                    var reste = '';
-                    for (;;) {
-                        var bout = await lecteur.read();
-                        if (bout.done) { break; }
-                        reste += dec.decode(bout.value, { stream: true });
-                        var lignes = reste.split('\n');
-                        reste = lignes.pop();
-                        lignes.forEach(function (l) {
-                            if (!l.trim()) { return; }
-                            var m; try { m = JSON.parse(l); } catch (e) { return; }
-                            if (m.type === 'debut') {
-                                poseEtapes(m.etapes); suivante(faites);
-                            } else if (m.type === 'attente') {
-                                // Battement du serveur : la publication vit
-                                // toujours. On le montre, sinon une étape
-                                // longue ne se distingue pas d'un blocage.
-                                if (!encours.hidden) {
-                                    encours.textContent = encours.textContent
-                                        .replace(/…+$/, '') + '…';
-                                }
-                            } else if (m.type === 'etape') {
-                                faites[m.cle] = true;
-                                etat(m.cle, m.etat === 'ok' ? 'ok' : m.etat === 'encours' ? 'encours' : 'fail',
-                                     m.etat === 'ok' ? '' : m.detail);
-                                suivante(faites);
-                            } else if (m.type === 'fin') {
-                                encours.hidden = true;
-                                if (m.ok) {
-                                    lastName = name;
-                                    document.getElementById('wiz-backup').disabled = false;
-                                    out.textContent = '✅ ' + name + ' publié sur ' + (m.domain || domain);
-                                    if (typeof toast === 'function') { toast('✅ ' + name + ' publié'); }
-                                    allSites = null;
-                                    if (typeof mosaicLoaded !== 'undefined' && mosaicLoaded) { loadMosaic(true); }
-                                    if (typeof sitesTabLoaded !== 'undefined' && sitesTabLoaded) { loadSitesTab(true); }
-                                    if (typeof loadStatus === 'function') { loadStatus(); }
-                                } else {
-                                    // DIRE CE QUI A MANQUÉ, pas « échec ». Sans
-                                    // cela l'utilisateur ne peut que constater.
-                                    var rates = [].slice.call(barre.querySelectorAll('.fail'))
-                                        .map(function (e) { return e.textContent.replace(/^\d+ · /, ''); });
-                                    out.textContent = m.detail ? m.detail
-                                        : rates.length ? ('Publication incomplète — ' + rates.join(', ')
-                                            + '. Le site n\'est pas marqué publié ; corrigez et relancez.')
-                                        : 'Publication incomplète.';
-                                }
+        $('wizGo').addEventListener('click', async () => {
+            const nom = $('wizNom').value.trim(), domaine = $('wizDomaine').value.trim(), f = $('wizFichier').files[0];
+            if (DEMO) { ecrireWiz('Démonstration : action inerte.'); return; }
+            if (!nom || !f) { ecrireWiz('nom et fichier requis'); return; }
+            barre.replaceChildren(); encours.hidden = true; ecrireWiz('');
+            const b = $('wizGo'); b.disabled = true; WIZ_EN_COURS = true;   // on rend la main quoi qu'il arrive (finally)
+            const fd = new FormData(); fd.append('name', nom); if (domaine) fd.append('domain', domaine); fd.append('file', f);
+            const faites = {};
+            try {
+                const res = await envoyer('POST', '/publish/wizard?flux=1', fd);
+                if (res.status === 401) { SESSION_OK = false; rendreEtat(); ecrireWiz('Session requise : connectez-vous puis relancez.'); return; }
+                if (!res.ok || !res.body) { const err = await res.json().catch(() => ({})); ecrireWiz(err.detail || ('erreur HTTP ' + res.status)); return; }
+                const lecteur = res.body.getReader(), dec = new TextDecoder(); let reste = '';
+                for (;;) {
+                    const bout = await lecteur.read(); if (bout.done) break;
+                    reste += dec.decode(bout.value, { stream: true });
+                    const lignes = reste.split('\n'); reste = lignes.pop();
+                    lignes.forEach(l => {
+                        if (!l.trim()) return;
+                        let m; try { m = JSON.parse(l); } catch (e) { return; }
+                        if (m.type === 'debut') { poseEtapes(m.etapes); suivante(faites); }
+                        else if (m.type === 'attente') { if (!encours.hidden) encours.textContent = encours.textContent.replace(/…+$/, '') + '…'; }
+                        else if (m.type === 'etape') {
+                            faites[m.cle] = true;
+                            etatEtape(m.cle, m.etat === 'ok' ? 'ok' : m.etat === 'encours' ? 'encours' : 'fail', m.etat === 'ok' ? '' : m.detail);
+                            suivante(faites);
+                        } else if (m.type === 'fin') {
+                            encours.hidden = true;
+                            if (m.ok) {
+                                DERNIER_NOM = nom; $('wizSauvegarde').disabled = false;
+                                ecrireWiz('✅ ' + nom + ' publié sur ' + (m.domain || domaine)); toast('✅ ' + nom + ' publié');
+                                charger();
+                            } else {
+                                // Dire ce qui a manqué, pas « échec ».
+                                const rates = [].slice.call(barre.querySelectorAll('.fail')).map(e => e.firstChild.textContent.replace(/^\d+ · /, ''));
+                                ecrireWiz(m.detail ? m.detail : rates.length ? 'Publication incomplète — ' + rates.join(', ') + '. Le site n’est pas marqué publié ; corrigez et relancez.' : 'Publication incomplète.');
                             }
-                        });
-                    }
-                } catch (e) {
-                    out.textContent = 'erreur : ' + e;
-                    // Une coupure en plein vol laisse des pastilles en attente :
-                    // on les éteint plutôt que de les laisser tourner à vide.
-                    barre.querySelectorAll('.actif').forEach(function (el) {
-                        el.classList.remove('actif');
+                        }
                     });
-                    encours.hidden = true;
-                } finally {
-                    bouton.disabled = false;
                 }
-            });
-            document.getElementById('wiz-backup').addEventListener('click', function () {
-                if (lastName) { window.location = API + '/publish/export/' + encodeURIComponent(lastName); }
-            });
-        })();
+            } catch (e) {
+                ecrireWiz('erreur : ' + e);
+                barre.querySelectorAll('.actif').forEach(x => x.classList.remove('actif')); encours.hidden = true;
+            } finally { b.disabled = false; WIZ_EN_COURS = false; }
+        });
+        $('wizSauvegarde').addEventListener('click', () => { if (DERNIER_NOM && !DEMO) location.href = API + '/publish/export/' + encodeURIComponent(DERNIER_NOM); });
+
+        $('rafraichir').addEventListener('click', () => charger());
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'metablogizer' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, une confirmation ou une publication.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONF || WIZ_EN_COURS || Object.keys(OCCUPE).length) return;
+            if (!$('creer').hidden) return;
+            if (['fMosaique', 'fSites', 'wizNom', 'wizDomaine'].some(i => $(i).value)) return;
+            charger();
+        }, 60000);
     </script>
 </body>
 </html>
