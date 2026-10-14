@@ -4,870 +4,517 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  DevWatch au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance, lecture seule.
+  Routes lues : /summary (cache du poller GitHub) et /issues. Aucune écriture : les flux saisis se règlent dans admin.html.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — DevWatch</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .depot{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;color:var(--doux);border:1px solid var(--trait);border-radius:8px;padding:3px 9px;overflow-wrap:anywhere}
+        .depot b{color:var(--texte)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.or{border-color:var(--jaune);color:var(--jaune)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .lede{margin:0;color:var(--doux);font-size:.8rem;max-width:80ch}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuiles.q4{grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles.q4{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.jn .v{color:var(--jaune)} .tuile.vi .v{color:var(--violet)}
+        .tuile .v small{font-size:.8rem;font-weight:600;color:var(--faible)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1.4fr 1fr}}
+        .large{grid-column:1/-1}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .vide{color:var(--faible);padding:12px 8px;text-align:center;font-size:.8rem}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .pill.jn{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)} .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        svg.graph{display:block;width:100%;height:auto;overflow:visible}
+        svg.graph text{fill:var(--faible);font-size:10px;font-family:inherit}
+        .defile{overflow-x:auto}
+        .eff{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:8px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+        .eff .lab{flex:1 1 160px;min-width:0;color:var(--doux)} .eff .lab small{display:block;color:var(--faible);font-size:.68rem}
+        .eff .val{font-weight:700;font-variant-numeric:tabular-nums}
+        .barre{height:6px;border-radius:999px;background:rgba(159,179,214,.16);overflow:hidden;margin:8px 0 4px}
+        .barre i{display:block;height:100%;background:var(--jaune);border-radius:999px}
+        .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:6px}
+        .chip{flex:0 0 auto;border:1px solid var(--trait);border-radius:9px;padding:4px 10px;font-size:.74rem;background:rgba(10,22,46,.5)}
+        .chip b{margin-right:6px} .chip span{color:var(--cyan);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.7rem}
+        .chip.neuf{border-color:var(--cyan)}
+        .mods{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))}
+        .mod{display:flex;gap:8px;align-items:baseline;border:1px solid rgba(86,150,255,.12);border-radius:9px;padding:6px 9px;font-size:.78rem;min-width:0}
+        .mod b{flex:0 0 auto} .mod .v{flex:0 0 auto;color:var(--cyan);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.7rem} .mod .d{flex:1;min-width:0;color:var(--doux);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+        .chant{display:grid;gap:8px;grid-template-columns:1fr}
+        @container a (min-width:700px){.chant{grid-template-columns:repeat(2,1fr)}}
+        @container a (min-width:1000px){.chant{grid-template-columns:repeat(3,1fr)}}
+        .ch{display:block;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;color:var(--texte);text-decoration:none;background:rgba(8,18,38,.5);min-width:0}
+        .ch:hover{border-color:var(--cyan)} .ch:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .ch .t{font-size:.82rem;margin:6px 0 4px;overflow-wrap:anywhere} .ch .m{font-size:.68rem;color:var(--faible);overflow-wrap:anywhere}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+        .onglets button{font:inherit;font-size:.76rem;padding:6px 12px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .ilist{max-height:420px;overflow:auto;border-top:1px solid rgba(86,150,255,.12)}
+        .ir{display:grid;grid-template-columns:4.2rem 1fr auto;gap:2px 10px;align-items:baseline;padding:7px 2px;border-bottom:1px solid rgba(86,150,255,.12);font-size:.8rem}
+        .ir .num{color:var(--faible);font-family:ui-monospace,Menlo,Consolas,monospace} .ir a{color:var(--texte);text-decoration:none;overflow-wrap:anywhere} .ir a:hover{color:var(--cyan);text-decoration:underline}
+        .ir .d{font-size:.68rem;color:var(--doux);white-space:nowrap} .ir .lb{grid-column:2/4;display:flex;flex-wrap:wrap;gap:4px}
+        .ibar{display:grid;grid-template-columns:minmax(80px,150px) 1fr 2.5rem;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
+        .ibar span{overflow-wrap:anywhere} .ibar i{display:block;height:8px;border-radius:4px;background:var(--violet);opacity:.8} .ibar em{font-style:normal;text-align:right;color:var(--doux);font-variant-numeric:tabular-nums}
+        .com{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+        .com:first-of-type{border-top:0}
+        .com .av{flex:0 0 auto;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:.66rem;background:rgba(41,182,246,.2);border:1px solid var(--trait2)}
+        .com .corps{flex:1;min-width:0} .com .msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .com .meta{font-size:.68rem;color:var(--faible);font-family:ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+        .com .quand{flex:0 0 auto;font-size:.7rem;color:var(--doux);white-space:nowrap}
+        .corps-release{max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem;color:var(--doux);margin:8px 0}
+        a.lien{color:var(--cyan)}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2.5-7 4 14 2.5-7h5"/></svg>
+                <div><h1>DevWatch</h1><small>pouls du dépôt amont : cadence, versions, émancipation</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <span class="depot" id="depot">—</span>
+            <div class="droite"><span id="maj">—</span><a class="btn" href="admin.html" title="Flux saisis (dépenses, soutien, abonnements) et réglages d’estimation">Admin</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <p class="lede">Le développement amont rendu lisible : cadence réelle, flèches d’efficience, temps cumulé, et une couche d’émancipation qui traduit l’effort en coût, en carbone et en campagne de soutien. Les faits viennent de l’API publique GitHub (via le cache de la box) ; les chiffres marqués « estimation » sont dérivés, réglables, jamais des mesures.</p>
 
-<meta charset="utf-8">
-<title>DevWatch</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<style>
-/* ============ THEME TOKENS ============ */
-:root{
-  --bg:#eef1f7; --surface:#ffffff; --surface-2:#f5f7fc; --sunk:#eaeef6;
-  --ink:#131722; --ink-soft:#3a4256; --muted:#5b6478; --faint:#8a93a6;
-  --line:#dce1ec; --line-soft:#e7ebf3;
-  --cyan:#0784a8; --cyan-ink:#0784a8;
-  --up:#0f9d54; --down:#dc2f43; --gold:#b7810a; --leaf:#1f8f57; --violet:#6b46c9;
-  --pulse:#0784a8;
-  --tile-glow:rgba(7,132,168,.08);
-  --shadow:0 1px 2px rgba(20,30,60,.06),0 8px 24px rgba(20,30,60,.07);
-  --shadow-lg:0 2px 6px rgba(20,30,60,.08),0 20px 50px rgba(20,30,60,.12);
-  --grid:rgba(20,40,80,.05);
-}
-:root:not([data-theme="light"]){
-  @media (prefers-color-scheme: dark){}
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0b0e14; --surface:#141a26; --surface-2:#10151f; --sunk:#0c1017;
-    --ink:#e7ebf4; --ink-soft:#c2c9d8; --muted:#8791a6; --faint:#5e6779;
-    --line:#232b3b; --line-soft:#1b2230;
-    --cyan:#28d6ff; --cyan-ink:#8fe6ff;
-    --up:#35d07f; --down:#ff5d6c; --gold:#f0b429; --leaf:#5fc98a; --violet:#a98bff;
-    --pulse:#28d6ff;
-    --tile-glow:rgba(40,214,255,.10);
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
-    --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 26px 60px rgba(0,0,0,.5);
-    --grid:rgba(120,170,255,.06);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0b0e14; --surface:#141a26; --surface-2:#10151f; --sunk:#0c1017;
-  --ink:#e7ebf4; --ink-soft:#c2c9d8; --muted:#8791a6; --faint:#5e6779;
-  --line:#232b3b; --line-soft:#1b2230;
-  --cyan:#28d6ff; --cyan-ink:#8fe6ff;
-  --up:#35d07f; --down:#ff5d6c; --gold:#f0b429; --leaf:#5fc98a; --violet:#a98bff;
-  --pulse:#28d6ff;
-  --tile-glow:rgba(40,214,255,.10);
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
-  --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 26px 60px rgba(0,0,0,.5);
-  --grid:rgba(120,170,255,.06);
-}
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre total de commits de la branche par défaut du dépôt suivi."><span class="l">Commits</span><span class="v" id="tCommits">—</span><span class="s" id="sCommits">—</span></div>
+            <div class="tuile vi" title="Contributeurs distincts du dépôt, selon l’API GitHub."><span class="l">Contributeurs</span><span class="v" id="tContrib">—</span><span class="s" id="sContrib">—</span></div>
+            <div class="tuile cy" title="Releases publiées sur GitHub ; les tags peuvent être plus nombreux."><span class="l">Releases</span><span class="v" id="tRel">—</span><span class="s" id="sRel">—</span></div>
+            <div class="tuile jn" title="Issues ouvertes du dépôt (les pull requests ne sont pas comptées ici)."><span class="l">Issues ouvertes</span><span class="v" id="tIss">—</span><span class="s">dépôt amont</span></div>
+            <div class="tuile" title="Pull requests ouvertes."><span class="l">PR ouvertes</span><span class="v" id="tPr">—</span><span class="s">en attente de revue</span></div>
+            <div class="tuile jn" title="Étoiles du dépôt ; les forks en sous-ligne."><span class="l">Étoiles</span><span class="v" id="tStars">—</span><span class="s" id="sStars">—</span></div>
+        </section>
 
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{
-  margin:0; background:var(--bg); color:var(--ink);
-  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
-  font-size:15px; line-height:1.5; letter-spacing:.005em;
-  -webkit-font-smoothing:antialiased;
-  background-image:
-    radial-gradient(1200px 600px at 80% -10%, var(--tile-glow), transparent 70%);
-  background-attachment:fixed;
-}
-.wrap{max-width:1180px; margin:0 auto; padding:26px 22px 64px}
-h1,h2,h3{font-family:"Chivo",sans-serif; margin:0; letter-spacing:-.01em}
-.mono{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
-.num{font-family:"Chivo",sans-serif; font-variant-numeric:tabular-nums; letter-spacing:-.02em}
-a{color:inherit}
+        <section class="grille">
+            <div class="pan"><h3>Cadence <i>30 derniers jours · commits par jour</i></h3>
+                <div id="spark"></div>
+                <div id="effrow"></div></div>
+            <div class="pan"><h3>Carte du Hall <i>aperçu de /micro</i></h3>
+                <dl class="kv"><dt>Aujourd’hui</dt><dd id="hAuj">—</dd><dt>Tendance 7 j</dt><dd id="hTend">—</dd><dt>Temps cumulé</dt><dd id="hTemps">—</dd><dt>Release</dt><dd id="hRel">—</dd><dt>Carbone</dt><dd id="hCo2">—</dd><dt>Dernier commit</dt><dd class="mono" id="hCom">—</dd><dt>Campagne</dt><dd id="hFond">—</dd></dl>
+                <p class="note">Mêmes chiffres que la carte affichée dans le Hall.</p></div>
 
-/* ============ MASTHEAD ============ */
-.mast{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:22px}
-.brand{display:flex; align-items:center; gap:12px}
-.sat{width:44px; height:44px; border-radius:13px; display:grid; place-items:center; flex:0 0 auto;
-  background:linear-gradient(150deg, color-mix(in srgb, var(--cyan) 26%, var(--surface)), var(--surface));
-  border:1px solid var(--line); box-shadow:var(--shadow); font-size:1.25rem; position:relative; overflow:hidden}
-.sat::after{content:""; position:absolute; inset:-40% -40% auto auto; width:90%; height:180%;
-  background:linear-gradient(transparent, color-mix(in srgb,var(--cyan) 30%, transparent));
-  transform:rotate(25deg); opacity:.5}
-.brand .wm{display:flex; flex-direction:column; line-height:1.05}
-.brand .wm b{font-family:"Chivo"; font-weight:900; font-size:1.42rem; letter-spacing:-.02em}
-.brand .wm b i{font-style:normal; color:var(--cyan-ink)}
-.brand .wm span{font-size:.66rem; letter-spacing:.24em; text-transform:uppercase; color:var(--faint); font-weight:600}
-.repochip{margin-left:4px; display:flex; align-items:center; gap:9px; padding:8px 13px; border-radius:11px;
-  background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow)}
-.repochip .gh{font-size:1rem; opacity:.85}
-.repochip .path{font-family:"IBM Plex Mono"; font-size:.82rem; font-weight:500}
-.repochip .path .o{color:var(--muted)}
-.repochip .path .r{color:var(--ink); font-weight:600}
-.live{display:inline-flex; align-items:center; gap:7px; padding:5px 11px 5px 9px; border-radius:999px;
-  background:color-mix(in srgb, var(--up) 12%, var(--surface)); border:1px solid color-mix(in srgb,var(--up) 30%, var(--line));
-  font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--up)}
-.dot{width:8px; height:8px; border-radius:50%; background:var(--up); box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 60%,transparent);
-  animation:pulse 2.2s ease-out infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 55%,transparent)}
-  70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
-.spacer{flex:1 1 40px}
-.mockbadge{display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px;
-  border:1px dashed color-mix(in srgb, var(--violet) 45%, var(--line)); color:var(--violet);
-  font-size:.68rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; background:var(--surface)}
+            <div class="pan large"><h3>Évolutions <i>versions et releases</i><span id="evoLeg"></span></h3>
+                <div class="defile" id="evoGraph"></div>
+                <p class="note">La hauteur d’une barre dit l’importance du saut de version, déduite du type (majeur, mineur, correctif, pré-version) : ce n’est pas une mesure de travail.</p></div>
 
-.lede{color:var(--muted); font-size:.94rem; max-width:64ch; margin:0 0 24px; text-wrap:pretty}
-.lede b{color:var(--ink-soft); font-weight:600}
+            <div class="pan large"><h3>Modules <i>dernières révisions locales</i><span class="pill" id="modsN" hidden></span></h3>
+                <div class="chips" id="modsStrip"></div>
+                <div class="mods" id="modsList"></div></div>
 
-/* ============ CARDS / GRID ============ */
-.card{background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow)}
-.sec-h{display:flex; align-items:center; gap:10px; margin:0 0 14px}
-.sec-h .k{font-size:.68rem; letter-spacing:.18em; text-transform:uppercase; color:var(--faint); font-weight:700}
-.sec-h .rule{flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent)}
-.sec-h .est{font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--violet);
-  border:1px solid color-mix(in srgb,var(--violet) 35%,var(--line)); border-radius:6px; padding:2px 7px; font-weight:700}
+            <div class="pan large"><h3>Émancipation <i>impacts et soutien</i><span class="pill att">estimation</span></h3>
+                <section class="tuiles q4" aria-label="Émancipation">
+                    <div class="tuile cy" title="Estimation : nombre de commits multiplié par une durée moyenne par commit (réglable). Ce n’est pas du temps pointé."><span class="l">Temps cumulé</span><span class="v" id="eTemps">—</span><span class="s" id="sTemps">—</span></div>
+                    <div class="tuile jn" title="Estimation : heures cumulées multipliées par un tarif horaire (réglable). Ce que coûterait de refaire l’effort, pas une dépense réelle."><span class="l">Coût de reconstruction</span><span class="v" id="eCout">—</span><span class="s" id="sCout">—</span></div>
+                    <div class="tuile ok" title="Estimation : heures cumulées multipliées par un facteur carbone par heure (réglable) ; l’équivalent en kilomètres de voiture vient d’un second facteur."><span class="l">Empreinte carbone</span><span class="v" id="eCo2">—</span><span class="s" id="sCo2">—</span></div>
+                    <div class="tuile jn" id="cFond" title="Saisi dans l’admin : soutien reçu rapporté aux dépenses cumulées. Une valeur saisie, pas une mesure du dépôt."><span class="l">Campagne perpétuelle · saisi</span><span class="v" id="eFond">—</span><span class="s" id="sFond">—</span></div>
+                </section>
+                <div class="barre" aria-hidden="true"><i id="barFond" style="width:0"></i></div>
+                <p class="note">Réglages : tarif horaire, minutes par commit, facteur carbone (TOML ou admin). Les flux saisis (abonnements, dons, hébergement) viennent de l’admin.</p></div>
 
-/* HERO TILES */
-.hero{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:26px}
-.tile{padding:16px 16px 14px; position:relative; overflow:hidden}
-.tile .cap{display:flex; align-items:center; gap:7px; font-size:.72rem; color:var(--muted); font-weight:600}
-.tile .cap .e{font-size:.92rem}
-.tile .big{display:flex; align-items:baseline; gap:8px; margin-top:9px}
-.tile .big .v{font-size:2.15rem; font-weight:800; line-height:1}
-.tile .big .u{font-size:.78rem; color:var(--faint); font-weight:600}
-.trend{display:inline-flex; align-items:center; gap:4px; font-family:"IBM Plex Mono"; font-size:.74rem;
-  font-weight:600; padding:3px 8px; border-radius:8px; margin-top:11px}
-.trend.up{color:var(--up); background:color-mix(in srgb,var(--up) 13%,transparent)}
-.trend.down-good{color:var(--up); background:color-mix(in srgb,var(--up) 13%,transparent)}
-.trend.down{color:var(--down); background:color-mix(in srgb,var(--down) 13%,transparent)}
-.trend .ar{font-size:.9rem; line-height:1}
-.tile .sub{font-size:.68rem; color:var(--faint); margin-top:7px}
-.tile.k-cyan::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--cyan)}
-.tile.k-violet::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--violet)}
-.tile.k-gold::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--gold)}
-.tile.k-leaf::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--leaf)}
+            <div class="pan"><h3>Soutien <i>logiciel libre et auto-hébergé</i></h3>
+                <p class="note" style="margin:0 0 4px">Le code est public ; la souveraineté se soutient. Embarquer la dernière version, mettre une étoile, ou financer la suite.</p>
+                <div class="actions"><a class="btn prim" id="aRel" href="#" target="_blank" rel="noopener" hidden>Dernière release</a><a class="btn" id="aRepo" href="#" target="_blank" rel="noopener" hidden>Dépôt</a><a class="btn or" id="aSponsor" href="#" target="_blank" rel="noopener" hidden>Devenir sponsor</a></div></div>
+            <div class="pan"><h3>Dernière release</h3><div id="release"></div></div>
 
-/* MIDDLE: cadence + cardlet */
-.mid{display:grid; grid-template-columns:1.6fr 1fr; gap:18px; margin-bottom:26px; align-items:start}
-.pad{padding:18px}
-.spark-wrap{margin:2px 0 6px}
-.spark-wrap svg{display:block; width:100%; height:auto; overflow:visible}
-.effrow{display:flex; flex-direction:column; gap:2px; margin-top:8px}
-.eff{display:flex; align-items:center; gap:12px; padding:11px 4px; border-top:1px solid var(--line-soft)}
-.eff .lab{flex:1; font-size:.86rem; color:var(--ink-soft)}
-.eff .lab small{display:block; font-size:.67rem; color:var(--faint); font-weight:500}
-.eff .val{font-family:"Chivo"; font-weight:700; font-size:1.02rem}
-.eff .badge{display:inline-flex; align-items:center; gap:4px; font-family:"IBM Plex Mono"; font-size:.72rem;
-  font-weight:600; padding:3px 8px; border-radius:7px; min-width:66px; justify-content:center}
-.badge.up{color:var(--up); background:color-mix(in srgb,var(--up) 13%,transparent)}
-.badge.down{color:var(--down); background:color-mix(in srgb,var(--down) 13%,transparent)}
+            <div class="pan large"><h3>Chantiers ouverts <i>évolutions résiduelles</i><span class="pill" id="chN" hidden></span></h3>
+                <div class="chant" id="chant"></div></div>
 
-/* ---- Hall mini-cardlet inset ---- */
-.inset{display:flex; flex-direction:column; gap:10px}
-.inset .note{font-size:.68rem; color:var(--faint); text-align:center; letter-spacing:.04em}
-.hall{border-radius:18px; padding:14px; background:
-  linear-gradient(180deg, color-mix(in srgb,var(--cyan) 8%, var(--sunk)), var(--sunk));
-  border:1px solid var(--line); box-shadow:var(--shadow-lg) }
-.hall .bar{display:flex; align-items:center; gap:7px; margin-bottom:10px; padding:0 2px}
-.hall .bar .d{width:7px; height:7px; border-radius:50%; background:var(--muted)}
-.hall .bar .t{font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700}
-.hall .bar .t b{color:var(--muted)}
-.cardlet{width:100%; max-width:280px; margin:0 auto; background:var(--surface); border:1px solid var(--line);
-  border-radius:13px; padding:12px 12px 10px; box-shadow:var(--shadow)}
-.cl-h{display:flex; align-items:center; gap:7px; margin-bottom:9px}
-.cl-h .ic{font-size:.95rem}
-.cl-h b{font-size:.82rem; font-family:"Chivo"; font-weight:800}
-.cl-h .cl-live{margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:.56rem;
-  letter-spacing:.08em; text-transform:uppercase; color:var(--up); font-weight:700}
-.cl-h .cl-live .dot{width:6px;height:6px}
-.cl-hero{display:flex; align-items:flex-end; gap:9px; padding:8px 0 9px; border-bottom:1px solid var(--line-soft)}
-.cl-hero .v{font-family:"Chivo"; font-weight:900; font-size:2rem; line-height:.9; letter-spacing:-.03em}
-.cl-hero .meta{display:flex; flex-direction:column; gap:2px; padding-bottom:2px}
-.cl-hero .meta .l{font-size:.62rem; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; font-weight:600}
-.cl-hero .meta .t{font-family:"IBM Plex Mono"; font-size:.68rem; font-weight:600; color:var(--up)}
-.cl-mini{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:9px 0}
-.cl-mini .m{background:var(--surface-2); border-radius:8px; padding:6px 7px; text-align:center}
-.cl-mini .m .e{font-size:.82rem}
-.cl-mini .m .n{font-family:"Chivo"; font-weight:700; font-size:.82rem; margin-top:1px}
-.cl-mini .m .g{font-size:.52rem; color:var(--faint); text-transform:uppercase; letter-spacing:.05em}
-.cl-commit{display:flex; align-items:center; gap:7px; font-family:"IBM Plex Mono"; font-size:.66rem;
-  padding:7px 0 8px; border-top:1px solid var(--line-soft); color:var(--muted)}
-.cl-commit .sha{color:var(--cyan-ink); font-weight:600}
-.cl-commit .msg{color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0}
-.cl-loop{display:flex; align-items:center; gap:9px; padding:8px 0 4px; border-top:1px solid var(--line-soft)}
-.ring{--p:62; width:34px; height:34px; border-radius:50%; flex:0 0 auto;
-  background:conic-gradient(var(--gold) calc(var(--p)*1%), color-mix(in srgb,var(--gold) 16%,transparent) 0);
-  display:grid; place-items:center; animation:spin 8s linear infinite}
-.ring::after{content:""; width:24px; height:24px; border-radius:50%; background:var(--surface)}
-.ring i{position:absolute; font-style:normal; font-size:.62rem}
-.cl-loop .txt{line-height:1.25}
-.cl-loop .txt b{font-family:"Chivo"; font-size:.8rem; font-weight:800; color:var(--gold)}
-.cl-loop .txt small{display:block; font-size:.58rem; color:var(--faint); text-transform:uppercase; letter-spacing:.06em}
-@keyframes spin{to{transform:rotate(360deg)}}
+            <div class="pan large"><h3>Issues <i>rapport, ouvertes, en cours, fermées</i><span class="pill" id="issReleve" hidden></span></h3>
+                <section class="tuiles q4" aria-label="Issues">
+                    <div class="tuile jn" title="Issues ouvertes du dépôt."><span class="l">Ouvertes</span><span class="v" id="iOuv">—</span><span class="s">à traiter</span></div>
+                    <div class="tuile cy" title="Issues ouvertes qui ont soit une branche de travail vivante, soit l’étiquette wip."><span class="l">En cours</span><span class="v" id="iCours">—</span><span class="s">branche ou étiquette wip</span></div>
+                    <div class="tuile ok" title="Issues fermées depuis la création du dépôt."><span class="l">Fermées</span><span class="v" id="iFerm">—</span><span class="s" id="sFerm">—</span></div>
+                    <div class="tuile" title="Ouvertes plus fermées."><span class="l">Total</span><span class="v" id="iTot">—</span><span class="s">depuis l’origine</span></div>
+                </section>
+                <p class="note" id="issSub">—</p>
+                <div class="onglets" role="tablist" aria-label="Issues">
+                    <button type="button" role="tab" data-e="rapport" aria-selected="true">Rapport</button>
+                    <button type="button" role="tab" data-e="ouvertes" aria-selected="false">Ouvertes</button>
+                    <button type="button" role="tab" data-e="en_cours" aria-selected="false">En cours</button>
+                    <button type="button" role="tab" data-e="fermees" aria-selected="false">Fermées</button>
+                </div>
+                <div class="ilist" id="issList"></div>
+                <p class="note" id="issNote"></p></div>
 
-/* EMANCIPATION */
-.eman{padding:20px; margin-bottom:26px; position:relative; overflow:hidden}
-.eman-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px}
-.epanel{background:var(--surface-2); border:1px solid var(--line-soft); border-radius:14px; padding:16px 15px; position:relative}
-.epanel .top{display:flex; align-items:center; gap:8px; font-size:.74rem; color:var(--muted); font-weight:600}
-.epanel .top .e{font-size:1.05rem}
-.epanel .val{font-family:"Chivo"; font-weight:800; font-size:1.72rem; line-height:1.05; margin:10px 0 3px; letter-spacing:-.02em}
-.epanel .val small{font-size:.82rem; font-weight:700; color:var(--faint)}
-.epanel .eq{font-size:.72rem; color:var(--muted); line-height:1.35}
-.epanel .eq b{color:var(--ink-soft); font-weight:600}
-.epanel.time .val{color:var(--cyan-ink)}
-.epanel.cost .val{color:var(--gold)}
-.epanel.carbon .val{color:var(--leaf)}
-.epanel.fund{background:linear-gradient(165deg, color-mix(in srgb,var(--gold) 12%, var(--surface-2)), var(--surface-2))}
-/* funding loop bar */
-.loopbar{height:8px; border-radius:999px; background:color-mix(in srgb,var(--gold) 16%,transparent); overflow:hidden; margin:12px 0 8px; position:relative}
-.loopbar i{position:absolute; inset:0; width:62%; border-radius:999px;
-  background:linear-gradient(90deg,var(--gold),color-mix(in srgb,var(--gold) 60%,#ffd97a))}
-.loopbar i::after{content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);
-  transform:translateX(-100%); animation:sheen 2.6s ease-in-out infinite}
-@keyframes sheen{0%{transform:translateX(-100%)}60%,100%{transform:translateX(320%)}}
-.fund .val{color:var(--gold)}
-.fund .val .seek{font-family:"IBM Plex Sans"; font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--gold); border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line)); border-radius:999px; padding:2px 8px;
-  vertical-align:middle; margin-left:4px; animation:seek 2.4s ease-in-out infinite}
-@keyframes seek{0%,100%{opacity:.55}50%{opacity:1}}
-.loopbar.zero i{background:repeating-linear-gradient(90deg,var(--gold),var(--gold) 4px,transparent 4px,transparent 9px); opacity:.7}
-.seekc{color:var(--gold)!important}
-.fund .foot{display:flex; align-items:center; justify-content:space-between; font-size:.68rem; color:var(--muted)}
-.fund .foot .goal{font-family:"Chivo"; font-weight:800; color:var(--gold); font-size:.82rem}
-.infty{position:absolute; top:12px; right:13px; font-size:.9rem; color:var(--gold); animation:spin 9s linear infinite}
-.eman .caption{margin-top:15px; font-size:.7rem; color:var(--faint); display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap}
-.eman .caption .lg{display:inline-flex; gap:7px; align-items:baseline; flex-wrap:wrap; max-width:46ch; line-height:1.5}
-.eman .caption code{font-family:"IBM Plex Mono"; background:var(--sunk); border:1px solid var(--line-soft); border-radius:5px; padding:1px 6px; color:var(--muted)}
-.est.saisi-b{color:var(--gold); border-color:color-mix(in srgb,var(--gold) 40%,var(--line))}
-.saisi{margin-left:auto; font-size:.56rem; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); font-weight:700;
-  border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line)); border-radius:5px; padding:1px 6px}
+            <div class="pan large"><h3>Derniers commits</h3><div id="commits"></div></div>
+        </section>
+        <p class="note" id="pied">DevWatch · données publiques GitHub, cache double-buffer · aucun secret, aucun tiers chargé</p>
+    </div></div></main>
 
-/* BOTTOM: commits + release */
-.bot{display:grid; grid-template-columns:1.5fr 1fr; gap:18px}
-.commits{padding:18px}
-.clist{display:flex; flex-direction:column}
-.crow{display:flex; align-items:center; gap:12px; padding:11px 4px; border-top:1px solid var(--line-soft)}
-.crow:first-child{border-top:0}
-.crow .av{width:26px; height:26px; border-radius:7px; flex:0 0 auto; display:grid; place-items:center;
-  font-family:"Chivo"; font-weight:800; font-size:.66rem; color:#fff}
-.av.gk{background:linear-gradient(135deg,#0784a8,#28d6ff)}
-.av.cl{background:linear-gradient(135deg,#7a5cff,#a98bff)}
-.crow .body{flex:1; min-width:0}
-.crow .msg{font-size:.83rem; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500}
-.crow .meta{font-family:"IBM Plex Mono"; font-size:.68rem; color:var(--faint); margin-top:1px}
-.crow .meta .sha{color:var(--cyan-ink); font-weight:600}
-.crow .when{font-family:"IBM Plex Mono"; font-size:.7rem; color:var(--muted); flex:0 0 auto; white-space:nowrap}
-.rel{padding:18px; display:flex; flex-direction:column}
-.rel .tag{display:inline-flex; align-items:center; gap:8px; align-self:flex-start; padding:7px 13px; border-radius:10px;
-  background:color-mix(in srgb,var(--cyan) 12%,var(--surface-2)); border:1px solid color-mix(in srgb,var(--cyan) 28%,var(--line));
-  font-family:"IBM Plex Mono"; font-weight:600; font-size:.88rem; color:var(--cyan-ink)}
-.rel h3{font-size:1.05rem; margin:14px 0 6px; text-wrap:balance}
-.rel p{font-size:.82rem; color:var(--muted); margin:0 0 14px; flex:1}
-.rel .when{font-family:"IBM Plex Mono"; font-size:.7rem; color:var(--faint); margin-bottom:14px}
-.cta{display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 16px; border-radius:11px;
-  background:var(--ink); color:var(--bg); font-weight:700; font-size:.86rem; text-decoration:none; border:0;
-  font-family:"Chivo"; letter-spacing:.01em; transition:transform .12s ease, box-shadow .12s ease}
-:root[data-theme="dark"] .cta, :root:not([data-theme="light"]) .cta{background:var(--cyan); color:#04121a}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cta{background:var(--cyan); color:#04121a}}
-.cta:hover{transform:translateY(-1px); box-shadow:var(--shadow-lg)}
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/devwatch';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const NS = 'http://www.w3.org/2000/svg';
+        const sv = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in (attrs || {})) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; return e; };
+        const nf = new Intl.NumberFormat('fr-FR');
+        const ok = v => typeof v === 'number' && isFinite(v);
+        const n = v => ok(v) ? nf.format(Math.round(v)) : '—';
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const https = u => (typeof u === 'string' && /^https:\/\//.test(u)) ? u : null;
 
-/* WORK / issues */
-.work{padding:18px; margin-top:26px}
-.work .wcount{font-family:"IBM Plex Mono"; font-size:.72rem; color:var(--muted)}
-.work .wcount b{color:var(--ink-soft)}
-.wgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
-.witem{background:var(--surface-2); border:1px solid var(--line-soft); border-radius:12px; padding:13px 13px 11px}
-.wtop{display:flex; align-items:center; gap:8px; margin-bottom:8px}
-.wtop .ref{margin-left:auto; font-size:.7rem; color:var(--cyan-ink); font-weight:600}
-.lab{font-size:.62rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:2px 8px; border-radius:6px}
-.prio-hi{color:var(--down); background:color-mix(in srgb,var(--down) 13%,transparent)}
-.prio-md{color:var(--gold); background:color-mix(in srgb,var(--gold) 14%,transparent)}
-.prio-lo{color:var(--muted); background:color-mix(in srgb,var(--muted) 15%,transparent)}
-.prio-new{color:var(--violet); background:color-mix(in srgb,var(--violet) 15%,transparent)}
-.wt{font-size:.86rem; font-weight:500; color:var(--ink-soft); line-height:1.3; margin-bottom:10px; min-height:2.2em}
-.wbar{height:6px; border-radius:999px; background:var(--sunk); overflow:hidden; margin-bottom:7px}
-.wbar i{display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--cyan),color-mix(in srgb,var(--cyan) 55%,var(--violet)))}
-.wfoot{display:flex; align-items:center; justify-content:space-between; font-size:.66rem; color:var(--faint)}
-.wfoot .mono{font-size:.64rem}
-/* EVO — bargraphe comparatif des versions/releases */
-.evo{padding:18px; margin-bottom:26px}
-.evo-leg{display:flex; gap:11px; font-size:.62rem; color:var(--muted); flex-wrap:wrap}
-.evo-leg span{display:inline-flex; align-items:center; gap:4px}
-.evo-leg i{width:9px; height:9px; border-radius:2px; display:inline-block}
-.evo-graph{overflow-x:auto; scrollbar-width:thin}
-.evo-graph svg{display:block; height:auto; min-width:100%}
-.evo-graph .note{padding:8px 2px}
-/* MODULES — révisions locales */
-.mods{padding:18px; margin-bottom:26px}
-.mods-n{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--muted)}
-.mods-strip{display:flex;gap:7px;overflow-x:auto;scrollbar-width:thin;padding-bottom:8px;margin-bottom:6px}
-.mods-chip{flex:0 0 auto;display:inline-flex;align-items:baseline;gap:6px;padding:6px 11px;border-radius:9px;
-  background:var(--surface-2);border:1px solid var(--line-soft)}
-.mods-chip b{font-family:"Chivo";font-size:.8rem}
-.mods-chip .v{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--cyan-ink);font-weight:600}
-.mods-chip.fresh{border-color:color-mix(in srgb,var(--cyan) 45%,var(--line))}
-.mods-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:4px}
-.mods-row{display:flex;align-items:baseline;gap:9px;padding:9px 11px;border:1px solid var(--line-soft);border-radius:10px;background:var(--surface-2)}
-.mods-row .nm{font-family:"Chivo";font-weight:700;font-size:.84rem;flex:0 0 auto}
-.mods-row .v{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--cyan-ink);font-weight:600;flex:0 0 auto}
-.mods-row .dev{color:var(--muted);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
-/* PROPAGANDE — appel à soutien + release GitHub */
-.propa{padding:0;margin-bottom:26px;overflow:hidden;position:relative;
-  background:linear-gradient(135deg, color-mix(in srgb,var(--cyan) 16%, var(--surface)), var(--surface) 60%, color-mix(in srgb,var(--gold) 12%, var(--surface)));
-  border-color:color-mix(in srgb,var(--cyan) 30%,var(--line))}
-.propa-in{display:flex;gap:22px;align-items:center;padding:22px 24px;flex-wrap:wrap}
-.propa-main{flex:1;min-width:260px}
-.propa-eyebrow{font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-ink);font-weight:700;margin-bottom:8px}
-.propa-h{font-size:1.5rem;line-height:1.1;margin:0 0 8px;text-wrap:balance;letter-spacing:-.02em}
-.propa-sub{color:var(--muted);font-size:.9rem;margin:0 0 16px;max-width:52ch}
-.propa-sub b{color:var(--ink-soft);font-weight:600}
-.propa-cta{display:flex;gap:10px;flex-wrap:wrap}
-.propa-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:11px;text-decoration:none;
-  font-family:"Chivo";font-weight:700;font-size:.84rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);
-  transition:transform .12s ease, box-shadow .12s ease}
-.propa-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg)}
-.propa-btn b{font-family:"IBM Plex Mono";font-weight:600}
-.propa-btn.primary{background:var(--ink);color:var(--bg);border:0}
-:root[data-theme="dark"] .propa-btn.primary, :root:not([data-theme="light"]) .propa-btn.primary{background:var(--cyan);color:#04121a}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .propa-btn.primary{background:var(--cyan);color:#04121a}}
-.propa-btn.gold{border-color:color-mix(in srgb,var(--gold) 50%,var(--line));color:var(--gold)}
-.propa-btn.gold:hover{background:color-mix(in srgb,var(--gold) 12%,var(--surface))}
-.propa-gauge{flex:0 0 auto;min-width:180px;text-align:center;padding:14px 18px;border-radius:14px;
-  background:var(--surface);border:1px solid color-mix(in srgb,var(--gold) 32%,var(--line))}
-.propa-gauge .pg-v{font-family:"Chivo";font-weight:800;font-size:2rem;color:var(--gold);line-height:1}
-.propa-gauge .pg-seek{display:inline-block;margin-top:6px;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--gold);font-weight:700;border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line));border-radius:999px;padding:3px 10px}
-.propa-gauge .pg-bar{height:7px;border-radius:999px;background:color-mix(in srgb,var(--gold) 16%,transparent);overflow:hidden;margin:12px 0 8px}
-.propa-gauge .pg-bar i{display:block;height:100%;border-radius:999px;background:repeating-linear-gradient(90deg,var(--gold),var(--gold) 4px,transparent 4px,transparent 9px)}
-.propa-gauge .pg-foot{font-size:.68rem;color:var(--muted);font-variant-numeric:tabular-nums}
-@media(max-width:640px){.propa-h{font-size:1.25rem}.propa-gauge{width:100%}}
+        let SUM = null, ISS = null, ISS_ETAT = 'rapport', SESSION_OK = true, INJOIGNABLE = false;
 
-.foot-note{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); font-size:.72rem; color:var(--faint);
-  display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; text-align:center}
-.foot-note b{color:var(--muted); font-weight:600}
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            try {
+                const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function rel(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
+            if (isNaN(s)) return '—';
+            if (s < 60) return 'à l’instant';
+            if (s < 3600) return Math.floor(s / 60) + ' min';
+            if (s < 86400) return Math.floor(s / 3600) + ' h';
+            if (s < 2592000) return Math.floor(s / 86400) + ' j';
+            return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        }
+        function jour(s) { const d = Date.parse(s || ''); return isNaN(d) ? '—' : new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' }); }
 
-/* toggle */
-.tgl{display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border-radius:999px; cursor:pointer;
-  background:var(--surface); border:1px solid var(--line); color:var(--muted); font-size:.7rem; font-weight:600; box-shadow:var(--shadow)}
-.tgl:hover{color:var(--ink)}
+        // ---------- Démonstration : adresses RFC 2606, noms fictifs ----------
+        function demoData() {
+            const jours = [2, 5, 3, 0, 1, 6, 4, 7, 3, 2, 0, 0, 5, 8, 6, 4, 3, 1, 0, 2, 5, 9, 7, 4, 3, 2, 6, 8, 5, 4];
+            const iso = h => new Date(Date.now() - h * 3600000).toISOString();
+            SUM = {
+                ok: true, repo: { full: 'exemple-org/depot-demo', html_url: 'https://example.org/exemple-org/depot-demo' },
+                totals: { commits: 1842, contributors: 6, releases: 14, tags: 22, stars: 318, forks: 41, open_issues: 27, open_prs: 3 },
+                cadence: { today: 4, last7: 33, per_day: 4.7, daily: jours, arrows: {
+                    weekly: { value: 33, good: 'up', dir: 'up', pct: 12.5 }, commits_per_day: { value: 4.7, good: 'up', dir: 'up', pct: 12.5 },
+                    review_latency: { value: 5.2, good: 'down', dir: 'flat', pct: 0 }, release_cadence: { value: 0.4, good: 'up', dir: 'flat', pct: 0 } } },
+                emancipation: { time: { hours: 676, days_dev: 28.2, detail: '1842 commits × ~22 min' }, cost: { keur: 43.9, detail: '676 h × 65 €/h' }, carbon: { co2_t: 0.1, km_car: 21700, detail: 'CI + calcul + poste' } },
+                fund: { pct: 18, seeking: true, sponsor_recu: 400, depenses_cumulees: 2200, abonnement_mensuel: 120 },
+                latest_commits: [
+                    { sha: 'a1b2c3d', login: 'dev-exemple', message: 'feat: page de démonstration (ref #1)', date: iso(2) },
+                    { sha: 'e4f5a6b', login: 'bot-exemple', message: 'docs: mise à jour du journal', date: iso(9) },
+                    { sha: 'c7d8e9f', login: 'dev-exemple', message: 'fix: cas limite du cache', date: iso(30) }],
+                latest_release: { tag: 'v1.4.0', name: 'Version 1.4.0', url: 'https://example.org/releases/v1.4.0', published_at: iso(120), body: 'Notes de version fictives pour la démonstration.' },
+                evolutions: [
+                    { tag: 'v1.0.0', type: 'major', weight: 100, url: 'https://example.org/v1.0.0', gap_days: 0 }, { tag: 'v1.1.0', type: 'minor', weight: 60, url: 'https://example.org/v1.1.0', gap_days: 30 },
+                    { tag: 'v1.1.1', type: 'patch', weight: 34, url: 'https://example.org/v1.1.1', gap_days: 6 }, { tag: 'v1.2.0-rc1', type: 'pre', weight: 20, url: 'https://example.org/v1.2.0-rc1', gap_days: 20 },
+                    { tag: 'v1.4.0', type: 'minor', weight: 60, url: 'https://example.org/v1.4.0', gap_days: 21, latest: true }],
+                modules: { total: 3, modules: [
+                    { name: 'secubox-exemple', version: '1.2.0-1', dev: 'Dev Exemple', date: '2026-10-12' }, { name: 'secubox-demo', version: '0.4.1-1', dev: 'Dev Exemple', date: '2026-10-10' },
+                    { name: 'secubox-maquette', version: '2.0.0-1', dev: 'Bot Exemple', date: '2026-10-01' }] },
+                issues: [
+                    { number: 12, title: 'Page de démonstration à finaliser', prio: 'hi', labels: ['enhancement'], url: 'https://example.org/issues/12' },
+                    { number: 9, title: 'Documenter le cache', prio: 'md', labels: ['docs'], url: 'https://example.org/issues/9' },
+                    { number: 4, title: 'Idée : export CSV', prio: 'lo', labels: [], url: 'https://example.org/issues/4' }],
+                meta: { rate_left: 4821, error: null }
+            };
+            const l = (nn, t, lab, extra) => Object.assign({ n: nn, titre: t, labels: lab, url: 'https://example.org/issues/' + nn, maj: new Date(Date.now() - nn * 3600000 * 5).toISOString() }, extra || {});
+            ISS = { ok: true, compte: { ouvertes: 27, en_cours: 2, fermees: 310, total: 337, fermees_30j: 41, ouvertes_7j: 5 },
+                listes: { ouvertes: [l(12, 'Page de démonstration à finaliser', ['enhancement']), l(9, 'Documenter le cache', ['docs'])], en_cours: [l(12, 'Page de démonstration à finaliser', ['wip'], { branche: true })],
+                          fermees: [l(7, 'Corriger le tri', [], { ferme: new Date(Date.now() - 86400000 * 3).toISOString() })] },
+                par_etiquette: { enhancement: 9, docs: 5, '(sans étiquette)': 3 }, delai_median_heures: 27, delai_median_jours: 1.1, plus_ancienne_jours: 119,
+                definition_en_cours: 'une branche de travail vivante ou l’étiquette wip', echantillon_fermees: 1, releve: new Date().toISOString() };
+        }
 
-@media (max-width:900px){
-  .hero{grid-template-columns:repeat(2,1fr)}
-  .mid{grid-template-columns:1fr}
-  .eman-grid{grid-template-columns:repeat(2,1fr)}
-  .bot{grid-template-columns:1fr}
-  .wgrid{grid-template-columns:repeat(2,1fr)}
-}
-@media (max-width:520px){
-  .hero{grid-template-columns:1fr 1fr}
-  .eman-grid{grid-template-columns:1fr}
-  .wgrid{grid-template-columns:1fr}
-  .brand .wm b{font-size:1.25rem}
-}
-@media (prefers-reduced-motion:reduce){
-  .dot,.ring,.infty,.loopbar i::after{animation:none}
-}
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; INJOIGNABLE = false; rendre(); return; }
+            const [s, i] = await Promise.all([lire('/summary'), lire('/issues')]);
+            const refus = [s, i].some(r => r.statut === 401 || r.statut === 403);
+            SUM = s.ok ? s.data : null; ISS = i.ok && i.data && i.data.ok ? i.data : null;
+            SESSION_OK = !refus; INJOIGNABLE = !refus && !s.ok;
+            rendre();
+        }
 
-/* ── Issues (#1585) ─────────────────────────────────────────────────────── */
-.iss{padding:18px; margin-top:26px}
-.iss .inum{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:12px}
-.iss .n{background:var(--surface-2); border:1px solid var(--line-soft); border-radius:12px; padding:10px 12px; cursor:pointer}
-.iss .n b{display:block; font-family:"IBM Plex Mono",monospace; font-size:1.5rem; font-variant-numeric:tabular-nums; color:var(--ink)}
-.iss .n span{font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
-.iss .n.o b{color:var(--gold)} .iss .n.p b{color:var(--cyan-ink)} .iss .n.c b{color:var(--up)}
-.iss .n[aria-pressed="true"]{border-color:var(--cyan); box-shadow:0 0 0 1px var(--cyan) inset}
-.iss .isub{font-size:.74rem; color:var(--muted); margin:0 0 12px; font-variant-numeric:tabular-nums}
-.iss .isub b{color:var(--ink-soft)}
-.iss .itabs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px}
-.iss .itabs button{font:inherit; font-size:.74rem; padding:4px 11px; border-radius:999px; border:1px solid var(--line);
-  background:transparent; color:var(--ink-soft); cursor:pointer}
-.iss .itabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:var(--surface)}
-.iss .ilist{max-height:420px; overflow-y:auto; border-top:1px solid var(--line-soft)}
-.iss .ir{display:grid; grid-template-columns:4.2rem 1fr auto; gap:4px 10px; align-items:baseline;
-  padding:7px 2px; border-bottom:1px solid var(--line-soft); font-size:.8rem}
-.iss .ir .num{font-family:"IBM Plex Mono",monospace; color:var(--faint)}
-.iss .ir a{color:var(--ink); text-decoration:none} .iss .ir a:hover{color:var(--cyan-ink); text-decoration:underline}
-.iss .ir .d{font-size:.68rem; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums}
-.iss .ir .lb{grid-column:2/4; display:flex; flex-wrap:wrap; gap:4px}
-.iss .lab{font-size:.62rem; padding:1px 7px; border-radius:999px; background:var(--sunk); color:var(--ink-soft)}
-.iss .lab.wip{background:var(--cyan); color:var(--surface)}
-.iss .ibar{display:grid; grid-template-columns:minmax(90px,160px) 1fr 2.5rem; gap:8px; align-items:center; font-size:.76rem; padding:3px 0}
-.iss .ibar i{display:block; height:8px; border-radius:4px; background:var(--violet); opacity:.75}
-.iss .ibar em{font-style:normal; text-align:right; color:var(--muted); font-variant-numeric:tabular-nums}
-.iss .note{font-size:.68rem; color:var(--faint); margin-top:8px}
-.iss .wcount{font-family:"IBM Plex Mono",monospace; font-size:.72rem; color:var(--muted)}
-</style>
-<style>
-/* Suppléments pour le rendu live (états neutres + issues cliquables). */
-.trend.flat{color:var(--muted); background:color-mix(in srgb,var(--muted) 14%,transparent)}
-.badge.flat{color:var(--muted); background:color-mix(in srgb,var(--muted) 14%,transparent)}
-a.witem{display:block; text-decoration:none; color:inherit; transition:border-color .12s ease, transform .12s ease}
-a.witem:hover{border-color:color-mix(in srgb,var(--cyan) 45%,var(--line)); transform:translateY(-1px)}
-a.witem .wt{min-height:2.6em}
-.note{font-size:.78rem; color:var(--faint); padding:8px 2px}
-</style>
-<div class="wrap">
+        // ---------- Rendu ----------
+        function pastille(dir, good, pct) {
+            // Couleur selon que le sens est bon ou mauvais, jamais selon le seul sens.
+            if (dir === 'flat' || !dir) return ['neutre', '→ stable'];
+            const bon = dir === (good || 'up');
+            return [bon ? 'ok' : 'hors', (dir === 'up' ? '↗ ' : '↘ ') + (pct > 0 ? '+' : '') + pct + ' %'];
+        }
+        function ajoutePastille(parent, p) { parent.appendChild(el('span', 'pill ' + (p[0] === 'neutre' ? '' : p[0]), p[1])); }
 
-  <header class="mast">
-    <div class="brand">
-      <div class="sat">🛰️</div>
-      <div class="wm"><b>Dev<i>Watch</i></b><span>pouls du dépôt · temps réel</span></div>
-    </div>
-    <div class="repochip">
-      <span class="gh">⌥</span>
-      <span class="path"><span class="o" id="repo-owner">…/</span><span class="r" id="repo-name">…</span></span>
-    </div>
-    <span class="live" id="live"><span class="dot"></span><span id="live-t">en direct</span></span>
-    <span class="spacer"></span>
-    <a class="tgl" id="admin-link" href="admin.html" title="Panneau admin (flux statiques)">✎ admin</a>
-    <span class="tgl" id="tgl">◐ thème</span>
-  </header>
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire DevWatch (API arrêtée ou injoignable).';
+            const s = SUM && !SUM.warming ? SUM : null, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (INJOIGNABLE || !SUM) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (SUM.warming) { etat.className = 'actif att'; etat.textContent = 'PRÉCHAUFFAGE'; }
+            else if (s.meta && s.meta.error) { etat.className = 'actif att'; etat.textContent = 'QUOTA BAS'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN DIRECT'; }
+            const full = SUM && SUM.repo && SUM.repo.full;
+            $('depot').textContent = tiret(full);
+            tuiles(s); cadence(s); hall(s); evolutions(s); modules(s); emancipation(s); soutien(s); release(s); chantiers(s); issues(); commits(s);
+            const m = s && s.meta;
+            $('pied').textContent = 'DevWatch · données publiques GitHub, cache double-buffer · aucun secret, aucun tiers chargé' + (m && ok(m.rate_left) ? ' · quota GitHub restant ' + n(m.rate_left) : '');
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-  <p class="lede">Le développement amont, vulgarisé et rendu <b>lisible</b> : cadence réelle, flèches d'efficience, temps cumulé — et une couche d'<b>émancipation</b> qui traduit l'effort en coût, en carbone et en campagne de soutien perpétuelle. Personnel, mais mutualisable pour n'importe quel dépôt.</p>
+        function tuiles(s) {
+            const t = (s && s.totals) || {}, c = (s && s.cadence) || {};
+            $('tCommits').textContent = n(t.commits);
+            $('sCommits').textContent = s ? ((ok(c.today) ? c.today + ' aujourd’hui' : '') + (ok(c.today) && ok(c.last7) ? ' · ' : '') + (ok(c.last7) ? '+' + c.last7 + ' / 7 j' : '') || '—') : '—';
+            $('tContrib').textContent = n(t.contributors); $('sContrib').textContent = 'distincts';
+            $('tRel').textContent = n(t.releases); $('sRel').textContent = ok(t.tags) ? n(t.tags) + ' tags' : '—';
+            $('tIss').textContent = n(t.open_issues); $('tPr').textContent = n(t.open_prs);
+            $('tStars').textContent = n(t.stars); $('sStars').textContent = ok(t.forks) ? n(t.forks) + ' forks' : '—';
+        }
 
-  <section class="hero" id="hero"></section>
+        // Une seule échelle : le plus grand compte quotidien ; la moyenne mobile 7 j reprend la même échelle.
+        function cadence(s) {
+            const c = (s && s.cadence) || {}, daily = (c.daily || []).slice(-30), boite = $('spark');
+            boite.replaceChildren();
+            if (!daily.length) boite.appendChild(el('div', 'vide', s ? 'Série indisponible' : '—'));
+            else {
+                const W = 480, H = 170, gx = 34, gy = 14, bas = H - 24, hh = bas - gy, max = Math.max.apply(null, daily.concat([1]));
+                const pas = (W - gx) / daily.length, X = i => gx + pas * (i + .5), Y = v => bas - (v / max) * hh;
+                const g = sv('svg', { class: 'graph', viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Commits quotidiens sur 30 jours' });
+                [0, .5, 1].forEach(f => {
+                    const y = Y(max * f); g.appendChild(sv('line', { x1: gx, x2: W, y1: y, y2: y, stroke: 'rgba(86,150,255,.16)' }));
+                    g.appendChild(sv('text', { x: gx - 4, y: y + 3, 'text-anchor': 'end' }, nombreCourt(max * f)));
+                });
+                const bw = Math.max(3, pas - 3);
+                daily.forEach((v, i) => g.appendChild(sv('rect', { x: X(i) - bw / 2, y: Y(v), width: bw, height: Math.max(0, bas - Y(v)), rx: 2, fill: '#29b6f6', 'fill-opacity': '.45' })));
+                const mm = daily.map((_, i) => { const a = daily.slice(Math.max(0, i - 6), i + 1); return a.reduce((p, q) => p + q, 0) / a.length; });
+                const d = mm.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1)).join(' ');
+                g.appendChild(sv('path', { d: d + ' L' + X(mm.length - 1).toFixed(1) + ',' + bas + ' L' + X(0).toFixed(1) + ',' + bas + ' Z', fill: '#29b6f6', 'fill-opacity': '.14' }));
+                g.appendChild(sv('path', { d, fill: 'none', stroke: '#ffd23f', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }));
+                g.appendChild(sv('text', { x: gx, y: H - 6 }, 'il y a ' + daily.length + ' j'));
+                g.appendChild(sv('text', { x: W, y: H - 6, 'text-anchor': 'end' }, 'aujourd’hui'));
+                boite.appendChild(g);
+                boite.appendChild(el('p', 'note', 'Barres : commits par jour. Courbe jaune : moyenne mobile sur 7 jours, même échelle.'));
+            }
+            const lignes = $('effrow'); lignes.replaceChildren();
+            const ar = c.arrows || {};
+            const defs = [
+                ['commits_per_day', 'Commits par jour', 'moyenne mobile 7 j', a => ok(a.value) ? String(a.value) : '—', true],
+                ['review_latency', 'Latence de revue', 'ouverture à fusion d’une PR', a => ok(a.value) ? (Math.round(a.value * 10) / 10) + ' h' : '—', false],
+                ['release_cadence', 'Cadence de release', 'tags par semaine', a => ok(a.value) ? String(a.value) : '—', false],
+                ['weekly', 'Activité hebdomadaire', 'commits cette semaine', a => ok(a.value) ? String(a.value) : '—', true]];
+            for (const [cle, lib, sous, fmt, tendance] of defs) {
+                const a = ar[cle], l = el('div', 'eff'), lab = el('div', 'lab', lib); lab.appendChild(el('small', '', sous)); l.appendChild(lab);
+                l.appendChild(el('span', 'val', a ? fmt(a) : '—'));
+                // L'API ne calcule pas de tendance pour la latence ni la cadence de release : pas de flèche inventée.
+                if (a && tendance) ajoutePastille(l, pastille(a.dir, a.good, a.pct));
+                else { const p = el('span', 'pill', 'tendance non calculée'); p.title = 'L’API ne fournit pas de tendance pour cette mesure.'; if (a) l.appendChild(p); }
+                lignes.appendChild(l);
+            }
+        }
+        function nombreCourt(v) { return v >= 10 ? String(Math.round(v)) : String(Math.round(v * 10) / 10); }
 
-  <section class="mid">
-    <div class="card pad">
-      <div class="sec-h"><span class="k">Cadence · 30 derniers jours</span><span class="rule"></span></div>
-      <div class="spark-wrap" id="spark"></div>
-      <div class="effrow" id="effrow"></div>
-    </div>
-    <div class="inset">
-      <div class="hall">
-        <div class="bar"><span class="d"></span><span class="d" style="background:var(--gold)"></span><span class="d" style="background:var(--up)"></span>
-          <span class="t">SBXOS · le Hall — <b>carte /micro</b></span></div>
-        <div id="cardlet-mini"></div>
-      </div>
-      <p class="note">↑ rendu ~280 px, tel qu'il apparaîtrait dans le Hall</p>
-    </div>
-  </section>
+        function hall(s) {
+            const c = (s && s.cadence) || {}, a = c.arrows || {}, e = (s && s.emancipation) || {}, f = (s && s.fund) || {}, r = s && s.latest_release, lc = s && (s.latest_commits || [])[0];
+            $('hAuj').textContent = s ? tiret(ok(c.today) ? c.today + ' commits' : null) : '—';
+            const w = a.weekly;
+            $('hTend').textContent = w ? pastille(w.dir, w.good, w.pct)[1] : '—';
+            $('hTemps').textContent = e.time && ok(e.time.hours) ? n(e.time.hours) + ' h (estimation)' : '—';
+            $('hRel').textContent = r ? tiret(r.tag) : '—';
+            $('hCo2').textContent = e.carbon && ok(e.carbon.co2_t) ? nf.format(e.carbon.co2_t) + ' t CO₂e (estimation)' : '—';
+            $('hCom').textContent = lc ? tiret(lc.sha) + ' ' + tiret(lc.message) : '—';
+            $('hFond').textContent = ok(f.pct) ? n(f.pct) + ' % · ' + n(f.sponsor_recu) + ' € / ' + n(f.depenses_cumulees) + ' €' : '—';
+        }
 
-  <section class="card evo">
-    <div class="sec-h"><span class="k">Évolutions · versions &amp; releases</span><span class="rule"></span><span class="evo-leg" id="evo-leg"></span></div>
-    <div class="evo-graph" id="evo-graph"></div>
-  </section>
+        const EVO_COL = { major: '#29b6f6', minor: '#a78bfa', patch: '#9fb3d6', pre: '#ff9f1c' };
+        const EVO_LAB = { major: 'majeur', minor: 'mineur', patch: 'correctif', pre: 'pré-version' };
+        function evolutions(s) {
+            const ev = (s && s.evolutions) || [], g = $('evoGraph'), leg = $('evoLeg');
+            g.replaceChildren(); leg.replaceChildren();
+            if (!ev.length) { g.appendChild(el('div', 'vide', s ? 'Pas encore de release publiée' : '—')); return; }
+            const cnt = {}; ev.forEach(x => { cnt[x.type] = (cnt[x.type] || 0) + 1; });
+            Object.keys(EVO_LAB).filter(k => cnt[k]).forEach(k => { const p = el('span', 'pill', EVO_LAB[k] + ' (' + cnt[k] + ')'); p.style.borderColor = p.style.color = EVO_COL[k]; p.style.marginLeft = '4px'; leg.appendChild(p); });
+            const pas = Math.max(56, Math.min(96, 720 / ev.length)), bw = Math.min(34, pas * .5), W = Math.max(380, Math.round(ev.length * pas)), H = 200, base = 150, haut = 20;
+            const svg = sv('svg', { class: 'graph', viewBox: '0 0 ' + W + ' ' + H, width: W, role: 'img', 'aria-label': 'Évolution des versions' });
+            svg.style.width = W + 'px'; svg.style.maxWidth = 'none'; svg.style.height = H + 'px';
+            svg.appendChild(sv('line', { x1: 0, x2: W, y1: base, y2: base, stroke: 'rgba(86,150,255,.3)' }));
+            ev.forEach((x, i) => {
+                const cx = Math.round(i * pas + pas / 2), h = Math.max(8, (ok(x.weight) ? x.weight : 26) / 100 * (base - haut)), y = base - h, col = EVO_COL[x.type] || '#9fb3d6';
+                svg.appendChild(sv('rect', { x: cx - bw / 2, y, width: bw, height: h, rx: 4, fill: col, 'fill-opacity': x.latest ? '1' : '.6' }));
+                if (x.latest) svg.appendChild(sv('text', { x: cx, y: y - 6, 'text-anchor': 'middle', style: 'fill:' + col + ';font-weight:700' }, '▲ dernier'));
+                else if (x.type === 'major') svg.appendChild(sv('text', { x: cx, y: y - 5, 'text-anchor': 'middle' }, 'majeur'));
+                else if (ok(x.gap_days) && x.gap_days > 0) svg.appendChild(sv('text', { x: cx, y: y - 5, 'text-anchor': 'middle' }, '+' + x.gap_days + ' j'));
+                const tag = String(x.tag || '').replace(/^v/, '').slice(0, 12), u = https(x.url);
+                const t = sv('text', { x: cx, y: base + 16, 'text-anchor': 'middle', style: 'fill:' + (x.latest ? col : '#9fb3d6') }, tag);
+                if (u) { const a = sv('a', { href: u, target: '_blank', rel: 'noopener' }); a.appendChild(t); svg.appendChild(a); } else svg.appendChild(t);
+            });
+            g.appendChild(svg);
+        }
 
-  <section class="card mods">
-    <div class="sec-h"><span class="k">Modules · dernières révisions</span><span class="rule"></span><span class="mods-n" id="mods-n"></span></div>
-    <div class="mods-strip" id="mods-strip"></div>
-    <div class="mods-list" id="mods-list"></div>
-  </section>
+        function modules(s) {
+            const m = (s && s.modules && s.modules.modules) || [], tot = (s && s.modules && s.modules.total) || m.length;
+            const strip = $('modsStrip'), liste = $('modsList'), nn = $('modsN');
+            strip.replaceChildren(); liste.replaceChildren();
+            nn.hidden = !tot; nn.textContent = tot + ' modules installés';
+            if (!m.length) { strip.appendChild(el('div', 'vide', s ? 'Révisions indisponibles' : '—')); return; }
+            m.slice(0, 10).forEach((x, i) => { const c = el('span', 'chip' + (i < 3 ? ' neuf' : '')); c.appendChild(el('b', '', tiret(x.name))); c.appendChild(el('span', '', tiret(x.version))); strip.appendChild(c); });
+            m.forEach(x => {
+                const r = el('div', 'mod'); r.title = (x.dev || '') + (x.date ? ' — ' + x.date : '');
+                r.appendChild(el('b', '', tiret(x.name))); r.appendChild(el('span', 'v', tiret(x.version))); r.appendChild(el('span', 'd', tiret(x.dev))); liste.appendChild(r);
+            });
+        }
 
-  <section class="card eman">
-    <span class="infty">∞</span>
-    <div class="sec-h"><span class="k">Émancipation · impacts &amp; soutien</span><span class="rule"></span><span class="est">◇ estimations</span></div>
-    <div class="eman-grid" id="eman-grid"></div>
-    <div class="caption">
-      <span class="lg"><span class="est">◇ estimation</span> dérivée de l'activité publique — réglable :
-        <code>tarif_horaire</code> <code>min_par_commit</code> <code>facteur_carbone</code></span>
-      <span class="lg"><span class="est saisi-b">✎ saisi</span> flux statiques entrés dans l'admin (webmin) —
-        ex. <code>abonnements = 120 €/mois</code>, dons récurrents, hébergement</span>
-    </div>
-  </section>
+        function emancipation(s) {
+            const e = (s && s.emancipation) || {}, f = (s && s.fund) || {}, tm = e.time || {}, co = e.cost || {}, ca = e.carbon || {};
+            const unite = (id, v, u) => { const c = $(id); c.replaceChildren(); c.appendChild(document.createTextNode(v)); if (v !== '—') c.appendChild(el('small', '', ' ' + u)); };
+            unite('eTemps', ok(tm.hours) ? n(tm.hours) : '—', 'h'); $('sTemps').textContent = ok(tm.days_dev) ? '≈ ' + tm.days_dev + ' jours·dev · ' + tiret(tm.detail) : '—';
+            unite('eCout', ok(co.keur) ? nf.format(co.keur) : '—', 'k€'); $('sCout').textContent = s ? tiret(co.detail) : '—';
+            unite('eCo2', ok(ca.co2_t) ? nf.format(ca.co2_t) : '—', 't CO₂e'); $('sCo2').textContent = ok(ca.km_car) ? '≈ ' + n(ca.km_car) + ' km en voiture · ' + tiret(ca.detail) : '—';
+            unite('eFond', ok(f.pct) ? n(f.pct) : '—', '%');
+            $('sFond').textContent = ok(f.sponsor_recu) ? n(f.sponsor_recu) + ' € reçus / ' + n(f.depenses_cumulees) + ' € dépensés' + (f.seeking ? ' · cherche sponsor' : '') : '—';
+            $('cFond').className = 'tuile ' + (ok(f.pct) ? (f.seeking ? 'att' : 'ok') : 'jn');
+            $('barFond').style.width = ok(f.pct) ? Math.max(2, Math.min(100, f.pct)) + '%' : '0';
+        }
 
-  <section class="card propa">
-    <div class="propa-in">
-      <div class="propa-main">
-        <div class="propa-eyebrow">◆ Logiciel souverain · appel à soutien</div>
-        <h2 class="propa-h">Le code est public. La souveraineté, elle, se soutient.</h2>
-        <p class="propa-sub">SecuBox est une box de cybersécurité <b>libre &amp; auto-hébergée</b> — chaque commit est ouvert, chaque module vérifiable. Embarquez la dernière version, ou financez la suite.</p>
-        <div class="propa-cta">
-          <a class="propa-btn primary" id="propa-rel" href="#" target="_blank" rel="noopener">🏷️ <b>—</b> · code source ↗</a>
-          <a class="propa-btn" id="propa-repo" href="#" target="_blank" rel="noopener">⭐ Star le dépôt</a>
-          <a class="propa-btn gold" id="propa-sponsor" href="#" target="_blank" rel="noopener">💛 Devenir sponsor</a>
-        </div>
-      </div>
-      <div class="propa-gauge" id="propa-gauge"></div>
-    </div>
-  </section>
+        function soutien(s) {
+            const repo = (s && s.repo) || {}, r = s && s.latest_release, base = https(repo.html_url);
+            const lien = (id, url, txt) => { const a = $(id); a.hidden = !url; if (url) { a.href = url; if (txt) a.textContent = txt; } };
+            lien('aRel', https(r && r.url) || (base ? base + '/releases' : null), r && r.tag ? 'Release ' + r.tag : 'Releases');
+            lien('aRepo', base, ok(s && s.totals && s.totals.stars) ? 'Étoile le dépôt · ' + n(s.totals.stars) : 'Dépôt');
+            lien('aSponsor', base ? base + '/wiki/Sponsor-a-Port' : null, null);
+        }
 
-  <section class="card work">
-    <div class="sec-h"><span class="k">Chantiers ouverts · évolutions résiduelles</span><span class="rule"></span>
-      <span class="wcount" id="wcount"></span></div>
-    <div class="wgrid" id="wgrid"></div>
-  </section>
+        function release(s) {
+            const h = $('release'); h.replaceChildren();
+            const r = s && s.latest_release;
+            if (!r) { h.appendChild(el('div', 'vide', s ? 'Aucune release publiée' : '—')); return; }
+            h.appendChild(el('span', 'pill cy', tiret(r.tag)));
+            h.appendChild(el('div', '', tiret(r.name || r.tag))).style.margin = '8px 0 2px';
+            h.appendChild(el('div', 'note', 'publiée il y a ' + rel(r.published_at)));
+            h.appendChild(el('div', 'corps-release', tiret(r.body)));
+            const u = https(r.url); if (u) { const a = el('a', 'btn', 'Voir la release ↗'); a.href = u; a.target = '_blank'; a.rel = 'noopener'; h.appendChild(a); }
+        }
 
+        const PRIO = { hi: ['hors', '● priorité'], md: ['att', '◐ moyen'], lo: ['', '○ backlog'], new: ['vi', '✦ nouveau'] };
+        function chantiers(s) {
+            const liste = $('chant'), t = (s && s.totals) || {}, iss = (s && s.issues) || [];
+            liste.replaceChildren();
+            $('chN').hidden = !s; $('chN').textContent = n(t.open_issues) + ' issues · ' + n(t.open_prs) + ' PR';
+            if (!iss.length) { liste.appendChild(el('div', 'vide', s ? 'Aucune issue ouverte' : '—')); return; }
+            for (const x of iss) {
+                const u = https(x.url), c = el(u ? 'a' : 'div', 'ch');
+                if (u) { c.href = u; c.target = '_blank'; c.rel = 'noopener'; }
+                const p = PRIO[x.prio] || ['', '○'], tete = el('div'); tete.appendChild(el('span', 'pill ' + p[0], p[1]));
+                const ref = el('span', 'mono', ' #' + tiret(x.number)); ref.style.cssText = 'float:right;color:var(--cyan)'; tete.appendChild(ref); c.appendChild(tete);
+                c.appendChild(el('div', 't', tiret(x.title)));
+                c.appendChild(el('div', 'm', (x.labels || []).slice(0, 2).join(' · ') || '—'));
+                liste.appendChild(c);
+            }
+        }
 
-  <section class="card iss" id="iss" hidden>
-    <div class="sec-h"><span class="k">Issues · rapport, ouvertes, en cours, fermées</span><span class="rule"></span>
-      <span class="wcount" id="iss-releve"></span></div>
-    <div class="inum" id="iss-num"></div>
-    <p class="isub" id="iss-sub"></p>
-    <div class="itabs" role="tablist" id="iss-tabs">
-      <button role="tab" data-etat="rapport" aria-selected="true">Rapport complet</button>
-      <button role="tab" data-etat="ouvertes">Ouvertes</button>
-      <button role="tab" data-etat="en_cours">En cours</button>
-      <button role="tab" data-etat="fermees">Fermées</button>
-    </div>
-    <div class="ilist" id="iss-list"></div>
-    <p class="note" id="iss-note"></p>
-  </section>
-  <section class="bot">
-    <div class="card commits">
-      <div class="sec-h"><span class="k">Derniers commits</span><span class="rule"></span></div>
-      <div class="clist" id="clist"></div>
-    </div>
-    <div class="card rel" id="release"></div>
-  </section>
+        function issues() {
+            const i = ISS, c = (i && i.compte) || {};
+            $('iOuv').textContent = n(c.ouvertes); $('iCours').textContent = n(c.en_cours); $('iFerm').textContent = n(c.fermees); $('iTot').textContent = n(c.total);
+            $('sFerm').textContent = ok(c.fermees_30j) ? n(c.fermees_30j) + ' en 30 j' : '—';
+            const med = i && i.delai_median_heures;
+            $('issSub').textContent = i ? (ok(c.ouvertes_7j) ? n(c.ouvertes_7j) + ' ouvertes en 7 j' : '— ouvertes en 7 j') + ' · clôture médiane '
+                + (!ok(med) ? '—' : med < 1 ? Math.round(med * 60) + ' min' : med < 48 ? med + ' h' : tiret(i.delai_median_jours) + ' j')
+                + (ok(i.plus_ancienne_jours) ? ' · plus ancienne ouverte : ' + i.plus_ancienne_jours + ' j' : '') : (SESSION_OK ? 'Rapport des issues indisponible.' : '—');
+            const rv = $('issReleve'); rv.hidden = !(i && i.releve); if (i && i.releve) rv.textContent = 'relevé ' + new Date(i.releve).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            document.querySelectorAll('[data-e]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.e === ISS_ETAT)));
+            const box = $('issList'); box.replaceChildren();
+            if (!i) { box.appendChild(el('div', 'vide', '—')); $('issNote').textContent = ''; return; }
+            if (ISS_ETAT === 'rapport') {
+                const e = i.par_etiquette || {}, max = Math.max.apply(null, Object.values(e).concat([1]));
+                const cles = Object.keys(e);
+                if (!cles.length) box.appendChild(el('div', 'vide', 'Aucune étiquette'));
+                for (const k of cles) { const l = el('div', 'ibar'); l.appendChild(el('span', '', k)); const b = el('i'); b.style.width = Math.max(4, Math.round(100 * e[k] / max)) + '%'; l.appendChild(b); l.appendChild(el('em', '', String(e[k]))); box.appendChild(l); }
+            } else {
+                const l = (i.listes || {})[ISS_ETAT] || [];
+                if (!l.length) box.appendChild(el('div', 'vide', 'Aucune.'));
+                for (const x of l) {
+                    const r = el('div', 'ir'); r.appendChild(el('span', 'num', '#' + tiret(x.n)));
+                    const u = https(x.url), t = el(u ? 'a' : 'span', '', tiret(x.titre)); if (u) { t.href = u; t.target = '_blank'; t.rel = 'noopener'; } r.appendChild(t);
+                    r.appendChild(el('span', 'd', ISS_ETAT === 'fermees' ? 'fermée ' + jour(x.ferme) : 'maj ' + jour(x.maj)));
+                    const labs = (x.labels || []).slice(); const lb = el('span', 'lb');
+                    if (x.branche) lb.appendChild(el('span', 'pill cy', 'branche'));
+                    labs.forEach(z => lb.appendChild(el('span', 'pill' + (/^wip$/i.test(z) ? ' cy' : ''), z)));
+                    if (lb.childNodes.length) r.appendChild(lb);
+                    box.appendChild(r);
+                }
+            }
+            $('issNote').textContent = ISS_ETAT === 'en_cours' ? '« En cours » = ' + tiret(i.definition_en_cours)
+                : ISS_ETAT === 'fermees' ? 'Les ' + tiret(i.echantillon_fermees) + ' dernières fermées (sur ' + tiret(c.fermees) + ').' : ISS_ETAT === 'rapport' ? 'Issues ouvertes par étiquette.' : '';
+        }
+        document.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => { ISS_ETAT = b.dataset.e; issues(); annoncer(); }));
 
-  <div class="foot-note">
-    <b>DevWatch</b> · cardlet + service vhost <span class="mono">devwatch.gk2.secubox.in</span>
-    · données publiques GitHub, cache double-buffer · aucun secret, aucun tiers chargé
-    <span id="meta-note"></span>
-  </div>
+        function commits(s) {
+            const h = $('commits'); h.replaceChildren();
+            const cs = (s && s.latest_commits) || [];
+            if (!cs.length) { h.appendChild(el('div', 'vide', s ? 'Pas de commit récent' : '—')); return; }
+            for (const c of cs) {
+                const l = el('div', 'com'); l.appendChild(el('div', 'av', String(c.login || '?').slice(0, 2).toUpperCase()));
+                const b = el('div', 'corps'); b.appendChild(el('div', 'msg', tiret(c.message))); b.appendChild(el('div', 'meta', tiret(c.sha) + ' · ' + tiret(c.login))); l.appendChild(b);
+                l.appendChild(el('div', 'quand', rel(c.date))); h.appendChild(l);
+            }
+        }
 
-</div>
+        $('rafraichir').addEventListener('click', charger);
 
-<script>
-(function(){
-  "use strict";
-  var API = '/api/v1/devwatch';
-  var nf = new Intl.NumberFormat('fr-FR');
-  var el = function(id){ return document.getElementById(id); };
-  function esc(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){
-    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
-  function n(v){ return (v==null||isNaN(v))?'—':nf.format(Math.round(v)); }
-  function rel(iso){
-    if(!iso) return '';
-    var d=new Date(iso), s=(Date.now()-d.getTime())/1000;
-    if(s<60) return 'à l’instant';
-    if(s<3600) return Math.floor(s/60)+' min';
-    if(s<86400) return Math.floor(s/3600)+' h';
-    if(s<2592000) return Math.floor(s/86400)+' j';
-    return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
-  }
-  // Une flèche d'efficience : couleur selon good/dir, jamais selon le seul sens.
-  function arrow(a){
-    if(!a) return '';
-    var good=a.good||'up', dir=a.dir||'flat', pct=a.pct||0;
-    var cls='trend', ar='→', txt;
-    if(dir==='flat'){ cls+=' flat'; ar='→'; txt='stable'; }
-    else {
-      var ok=(dir===good);
-      cls+= ok?' up':' down';
-      ar = dir==='up'?'↗':'↘';
-      txt=(pct>0?'+':'')+pct+' %';
-    }
-    return '<span class="'+cls+'"><span class="ar">'+ar+'</span> '+txt+'</span>';
-  }
-  function badge(a){
-    if(!a || a.value==null) return '<span class="badge flat">—</span>';
-    var good=a.good||'up', dir=a.dir||'flat';
-    if(dir==='flat') return '<span class="badge flat">→ stable</span>';
-    var ok=(dir===good), ar=dir==='up'?'↗':'↘';
-    return '<span class="badge '+(ok?'up':'down')+'">'+ar+' '+(a.pct>0?'+':'')+a.pct+' %</span>';
-  }
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'devwatch' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-  function sparkline(daily){
-    daily = (daily||[]).slice(-30);
-    if(!daily.length){ return '<div class="note">série indisponible</div>'; }
-    var W=600,H=150, max=Math.max.apply(null,daily.concat([1])), stepX=W/Math.max(1,daily.length-1);
-    var bw=Math.max(6, Math.min(14, W/daily.length-6));
-    var bars='', line='';
-    daily.forEach(function(v,i){
-      var x=i*stepX, h=(v/max)*(H-44), y=H-h;
-      bars+='<rect x="'+(x-bw/2).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2"/>';
-    });
-    // moyenne mobile 7 j pour la ligne de tendance
-    var sm=daily.map(function(_,i){ var a=daily.slice(Math.max(0,i-6),i+1); return a.reduce(function(s,x){return s+x;},0)/a.length; });
-    var smax=Math.max.apply(null,sm.concat([1]));
-    sm.forEach(function(v,i){ var x=i*stepX, y=H-8-(v/smax)*(H-44); line+=(i?'L':'M')+x.toFixed(1)+','+y.toFixed(1)+' '; });
-    var lx=(daily.length-1)*stepX, ly=H-8-(sm[sm.length-1]/smax)*(H-44);
-    return '<svg viewBox="0 0 600 150" role="img" aria-label="Commits quotidiens (30 j)">'
-      +'<defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">'
-      +'<stop offset="0" stop-color="var(--cyan)" stop-opacity="0.26"/><stop offset="1" stop-color="var(--cyan)" stop-opacity="0"/></linearGradient></defs>'
-      +'<line x1="0" y1="37" x2="600" y2="37" stroke="var(--grid)"/><line x1="0" y1="75" x2="600" y2="75" stroke="var(--grid)"/><line x1="0" y1="113" x2="600" y2="113" stroke="var(--grid)"/>'
-      +'<g fill="var(--cyan)" opacity="0.16">'+bars+'</g>'
-      +'<path d="'+line+'L'+lx.toFixed(1)+','+H+' L0,'+H+' Z" fill="url(#fill)"/>'
-      +'<path d="'+line+'" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'
-      +'<circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="4.5" fill="var(--cyan)"/>'
-      +'<circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="8" fill="none" stroke="var(--cyan)" stroke-width="1.5" opacity="0.5"/></svg>';
-  }
-
-  function hero(s){
-    var t=s.totals||{}, ar=(s.cadence&&s.cadence.arrows)||{}, cad=s.cadence||{};
-    var openTot=(t.open_issues!=null?t.open_issues:'—');
-    var tiles=[
-      {k:'k-cyan', e:'⛬', cap:'Commits', v:n(t.commits), u:'', tr:arrow(ar.weekly),
-        sub:(cad.today!=null?cad.today+' aujourd’hui · ':'')+(cad.last7!=null?'+'+cad.last7+' / 7 j':'')},
-      {k:'k-violet', e:'👥', cap:'Contributeurs', v:n(t.contributors), u:'', tr:'',
-        sub: (t.stars!=null?('★ '+n(t.stars)+' · ⑂ '+n(t.forks)):'')},
-      {k:'k-cyan', e:'🏷️', cap:'Releases', v:n(t.releases), u:(t.tags!=null?'· '+n(t.tags)+' tags':''),
-        tr:arrow(ar.release_cadence), sub:''},
-      {k:'k-cyan', e:'◎', cap:'Ouvert', v:n(t.open_issues), u:(t.open_prs!=null?'issues · '+n(t.open_prs)+' PR':'issues'),
-        tr:'', sub:''}
-    ];
-    el('hero').innerHTML = tiles.map(function(x){
-      return '<div class="card tile '+x.k+'"><div class="cap"><span class="e">'+x.e+'</span> '+x.cap+'</div>'
-        +'<div class="big"><span class="v num">'+x.v+'</span>'+(x.u?'<span class="u">'+x.u+'</span>':'')+'</div>'
-        +(x.tr||'')+(x.sub?'<div class="sub">'+esc(x.sub)+'</div>':'')+'</div>';
-    }).join('');
-  }
-
-  function cadence(s){
-    var cad=s.cadence||{}, ar=cad.arrows||{};
-    el('spark').innerHTML = sparkline(cad.daily);
-    function h(v){ return (v==null)?'—':v; }
-    var rows=[
-      {l:'Commits / jour', s:'moyenne mobile 7 j', v:h(ar.commits_per_day&&ar.commits_per_day.value), b:badge(ar.commits_per_day)},
-      {l:'Latence de revue', s:'ouverture → merge PR', v:(ar.review_latency&&ar.review_latency.value!=null?(Math.round(ar.review_latency.value*10)/10)+' h':'—'), b:badge(ar.review_latency)},
-      {l:'Cadence de release', s:'tags / semaine', v:h(ar.release_cadence&&ar.release_cadence.value), b:badge(ar.release_cadence)},
-      {l:'Activité hebdo', s:'commits cette semaine', v:h(ar.weekly&&ar.weekly.value), b:badge(ar.weekly)}
-    ];
-    el('effrow').innerHTML = rows.map(function(r){
-      return '<div class="eff"><div class="lab">'+r.l+' <small>'+r.s+'</small></div>'
-        +'<div class="val num">'+r.v+'</div>'+r.b+'</div>';
-    }).join('');
-  }
-
-  function eman(s){
-    var e=s.emancipation||{}, f=s.fund||{};
-    var tm=e.time||{}, co=e.cost||{}, ca=e.carbon||{};
-    var pct=Math.max(0,Math.min(100, f.pct||0));
-    var seeking = f.seeking;
-    var fundVal = seeking
-      ? '<div class="val num">'+n(pct)+' <small>%</small> <span class="seek">cherche sponsor</span></div>'
-      : '<div class="val num">'+n(pct)+' <small>%</small></div>';
-    el('eman-grid').innerHTML =
-      '<div class="epanel time"><div class="top"><span class="e">⏱️</span> Temps cumulé</div>'
-        +'<div class="val num">'+n(tm.hours)+' <small>h</small></div>'
-        +'<div class="eq">≈ <b>'+(tm.days_dev!=null?tm.days_dev:'—')+' jours·dev</b>.<br>'+esc(tm.detail||'')+'</div></div>'
-      +'<div class="epanel cost"><div class="top"><span class="e">💶</span> Coût de reconstruction</div>'
-        +'<div class="val num">'+(co.keur!=null?nf.format(co.keur):'—')+' <small>k€</small></div>'
-        +'<div class="eq">Ce que coûterait <b>refaire</b> l’effort.<br>'+esc(co.detail||'')+'</div></div>'
-      +'<div class="epanel carbon"><div class="top"><span class="e">🌱</span> Empreinte carbone</div>'
-        +'<div class="val num">'+(ca.co2_t!=null?nf.format(ca.co2_t):'—')+' <small>t CO₂e</small></div>'
-        +'<div class="eq">'+esc(ca.detail||'')+'.<br>≈ <b>'+n(ca.km_car)+' km</b> en voiture.</div></div>'
-      +'<div class="epanel fund"><div class="top"><span class="e">💛</span> Campagne perpétuelle <span class="saisi">✎ saisi</span></div>'
-        +fundVal
-        +'<div class="loopbar'+(pct<=0?' zero':'')+'"><i style="width:'+Math.max(2,pct)+'%"></i></div>'
-        +'<div class="foot"><span>'+n(f.sponsor_recu)+' € sponsorisé</span><span class="goal">dépenses cumulées '+n(f.depenses_cumulees)+' €</span></div></div>';
-  }
-
-  var PRIOL={hi:'● priorité',md:'◐ moyen',lo:'○ backlog',new:'✦ nouveau'};
-  function work(s){
-    var iss=s.issues||[], t=s.totals||{};
-    el('wcount').innerHTML='<b>'+n(t.open_issues)+'</b> issues · <b>'+n(t.open_prs)+'</b> PR';
-    if(!iss.length){ el('wgrid').innerHTML='<div class="note">aucune issue ouverte 🎉</div>'; return; }
-    el('wgrid').innerHTML = iss.map(function(x){
-      var lbl=(x.labels||[]).slice(0,2).map(esc).join(' · ')||'—';
-      return '<a class="witem" href="'+esc(x.url)+'" target="_blank" rel="noopener">'
-        +'<div class="wtop"><span class="lab prio-'+esc(x.prio)+'">'+(PRIOL[x.prio]||'○')+'</span>'
-        +'<span class="ref mono">#'+esc(x.number)+'</span></div>'
-        +'<div class="wt">'+esc(x.title)+'</div>'
-        +'<div class="wfoot"><span class="mono">'+lbl+'</span></div></a>';
-    }).join('');
-  }
-
-  // ÉVOLUTIONS · bargraphe comparatif des versions/releases. Hauteur = importance
-  // du saut (majeur > mineur > correctif > pré) ; la dernière et les majeures
-  // sont mises en avant. Purement dérivé des tags/dates (aucune donnée inventée).
-  var EVO_COL={major:'var(--cyan)', minor:'var(--violet)', patch:'var(--muted)', pre:'var(--gold)', '?':'var(--muted)'};
-  var EVO_LAB={major:'majeur', minor:'mineur', patch:'correctif', pre:'pré-version'};
-  function evo(s){
-    var ev=s.evolutions||[]; var g=el('evo-graph'), leg=el('evo-leg');
-    if(!ev.length){ g.innerHTML='<div class="note">pas encore de release publiée</div>'; if(leg) leg.innerHTML=''; return; }
-    // Légende + comptes par type.
-    var cnt={}; ev.forEach(function(x){ cnt[x.type]=(cnt[x.type]||0)+1; });
-    if(leg) leg.innerHTML=['major','minor','patch','pre'].filter(function(k){return cnt[k];}).map(function(k){
-      return '<span><i style="background:'+EVO_COL[k]+'"></i>'+EVO_LAB[k]+' ('+cnt[k]+')</span>';
-    }).join('');
-    var step=Math.max(52, Math.min(96, 720/ev.length)), barW=Math.min(34, step*0.5);
-    var W=Math.max(600, Math.round(ev.length*step)), H=210, base=150, top=16;
-    var bars='';
-    ev.forEach(function(x,i){
-      var cx=Math.round(i*step+step/2), w=x.weight||26, h=Math.max(8, w/100*(base-top)), y=base-h;
-      var col=EVO_COL[x.type]||'var(--muted)', latest=!!x.latest;
-      // barre
-      bars+='<rect x="'+(cx-barW/2)+'" y="'+y.toFixed(1)+'" width="'+barW+'" height="'+h.toFixed(1)+'" rx="4" fill="'+col+'"'
-        + (latest? '' : ' opacity="'+(x.type==='patch'?0.55:x.type==='pre'?0.5:0.82)+'"')+'/>';
-      if(latest){
-        // mise en avant du DERNIER : halo + marqueur ▲ dernier
-        bars+='<rect x="'+(cx-barW/2-3)+'" y="'+(y-3).toFixed(1)+'" width="'+(barW+6)+'" height="'+(h+3).toFixed(1)+'" rx="6" fill="none" stroke="'+col+'" stroke-width="1.5" opacity="0.6"/>';
-        bars+='<text x="'+cx+'" y="'+(y-6).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+col+'">▲ dernier</text>';
-      } else if(x.type==='major'){
-        bars+='<text x="'+cx+'" y="'+(y-5).toFixed(1)+'" text-anchor="middle" font-size="8.5" fill="'+col+'">majeur</text>';
-      } else if(x.gap_days!=null && x.gap_days>0){
-        bars+='<text x="'+cx+'" y="'+(y-5).toFixed(1)+'" text-anchor="middle" font-size="8" fill="var(--faint)">+'+x.gap_days+'j</text>';
-      }
-      // tag (tronqué), cliquable via <a>
-      var tag=esc(String(x.tag||'').replace(/^v/,'').slice(0,12));
-      bars+='<a href="'+esc(x.url)+'" target="_blank" rel="noopener">'
-        +'<text x="'+cx+'" y="'+(base+16)+'" text-anchor="middle" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="'+(latest?col:'var(--muted)')+'" font-weight="'+(latest?700:500)+'">'+tag+'</text></a>';
-    });
-    g.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Évolution des versions">'
-      +'<line x1="0" y1="'+base+'" x2="'+W+'" y2="'+base+'" stroke="var(--line)"/>'
-      +bars+'</svg>';
-  }
-
-  // MODULES · révisions locales des paquets secubox-* (dpkg + changelog),
-  // du plus récemment construit au plus ancien. Une slice de chips + une liste.
-  function mods(s){
-    var m=(s.modules&&s.modules.modules)||[], tot=(s.modules&&s.modules.total)||m.length;
-    el('mods-n').textContent = tot ? (tot+' modules installés') : '';
-    if(!m.length){ el('mods-strip').innerHTML='<div class="note">révisions indisponibles</div>'; el('mods-list').innerHTML=''; return; }
-    el('mods-strip').innerHTML = m.slice(0,10).map(function(x,i){
-      return '<span class="mods-chip'+(i<3?' fresh':'')+'"><b>'+esc(x.name)+'</b><span class="v">'+esc(x.version)+'</span></span>';
-    }).join('');
-    el('mods-list').innerHTML = m.map(function(x){
-      return '<div class="mods-row" title="'+esc(x.dev||'')+(x.date?' — '+esc(x.date):'')+'">'
-        +'<span class="nm">'+esc(x.name)+'</span><span class="v">'+esc(x.version)+'</span>'
-        +'<span class="dev">'+esc(x.dev||'—')+'</span></div>';
-    }).join('');
-  }
-
-  // PROPAGANDE : la dernière release + lien source GitHub, et l'appel à sponsor.
-  function propa(s){
-    var repo=s.repo||{}, r=s.latest_release, f=s.fund||{};
-    var relEl=el('propa-rel');
-    if(r && r.url){ relEl.href=r.url; relEl.querySelector('b').textContent=r.tag||'release'; }
-    else { relEl.href=(repo.html_url||'#')+'/releases'; relEl.querySelector('b').textContent='releases'; }
-    var t=s.totals||{};
-    el('propa-repo').href=repo.html_url||'#';
-    el('propa-repo').innerHTML='⭐ Star le dépôt'+(t.stars!=null?' <b>'+n(t.stars)+'</b>':'');
-    el('propa-sponsor').href=(repo.html_url||'https://github.com/CyberMind-FR/secubox-deb')+'/wiki/Sponsor-a-Port';
-    var pct=Math.max(0,Math.min(100,f.pct||0));
-    el('propa-gauge').innerHTML=
-      '<div class="pg-v">'+n(pct)+' %</div>'
-      +(f.seeking?'<div class="pg-seek">cherche sponsor</div>':'')
-      +'<div class="pg-bar"><i style="width:'+Math.max(2,pct)+'%"></i></div>'
-      +'<div class="pg-foot">'+n(f.sponsor_recu)+' € / '+n(f.depenses_cumulees)+' €</div>';
-  }
-
-  function commits(s){
-    var cs=s.latest_commits||[];
-    if(!cs.length){ el('clist').innerHTML='<div class="note">pas de commit récent</div>'; return; }
-    el('clist').innerHTML = cs.map(function(c){
-      var initials=String(c.login||'?').slice(0,2).toUpperCase();
-      var cl=/claude|bot|◆/i.test(c.login||'')?'cl':'gk';
-      return '<div class="crow"><div class="av '+cl+'">'+esc(initials)+'</div>'
-        +'<div class="body"><div class="msg">'+esc(c.message)+'</div>'
-        +'<div class="meta"><span class="sha">'+esc(c.sha)+'</span> · '+esc(c.login)+'</div></div>'
-        +'<div class="when">'+rel(c.date)+'</div></div>';
-    }).join('');
-  }
-
-  function release(s){
-    var r=s.latest_release;
-    var host=el('release');
-    if(!r){ host.innerHTML='<div class="sec-h"><span class="k">Dernière release</span><span class="rule"></span></div><p class="note">aucune release publiée</p>'; return; }
-    host.innerHTML='<div class="sec-h"><span class="k">Dernière release</span><span class="rule"></span></div>'
-      +'<span class="tag">🏷️ '+esc(r.tag)+'</span>'
-      +'<h3>'+esc(r.name||r.tag)+'</h3>'
-      +'<div class="when">publiée '+rel(r.published_at)+'</div>'
-      +'<p>'+esc(r.body||'—')+'</p>'
-      +'<a class="cta" href="'+esc(r.url)+'" target="_blank" rel="noopener">Voir la release ↗</a>';
-  }
-
-  function miniCardlet(s){
-    var t=s.totals||{}, cad=s.cadence||{}, ar=cad.arrows||{}, e=s.emancipation||{}, f=s.fund||{}, r=s.latest_release, lc=(s.latest_commits||[])[0];
-    var pct=Math.max(0,Math.min(100,f.pct||0));
-    el('cardlet-mini').innerHTML =
-      '<div class="cardlet"><div class="cl-h"><span class="ic">🛰️</span><b>DevWatch</b>'
-      +'<span class="cl-live"><span class="dot"></span>direct</span></div>'
-      +'<div class="cl-hero"><span class="v num">'+(cad.today!=null?cad.today:'—')+'</span>'
-      +'<div class="meta"><span class="l">commits aujourd’hui</span><span class="t">'+(ar.weekly?((ar.weekly.dir==='up'?'↗ +':ar.weekly.dir==='down'?'↘ ':'→ ')+(ar.weekly.pct||0)+' % / 7 j'):'')+'</span></div></div>'
-      +'<div class="cl-mini">'
-      +'<div class="m"><div class="e">⏱️</div><div class="n">'+n((e.time||{}).hours)+' h</div><div class="g">cumulé</div></div>'
-      +'<div class="m"><div class="e">🏷️</div><div class="n">'+esc(r?r.tag:'—')+'</div><div class="g">release</div></div>'
-      +'<div class="m"><div class="e">🌱</div><div class="n">'+((e.carbon||{}).co2_t!=null?nf.format(e.carbon.co2_t):'—')+' t</div><div class="g">CO₂e</div></div></div>'
-      +(lc?'<div class="cl-commit"><span class="sha">'+esc(lc.sha)+'</span><span class="msg">'+esc(lc.message)+'</span></div>':'')
-      +'<div class="cl-loop"><div class="ring" style="--p:'+Math.max(2,pct)+'; position:relative"><i>💶</i></div>'
-      +'<div class="txt"><b'+(f.seeking?' class="seekc"':'')+'>'+n(pct)+' %</b><small>campagne · '+n(f.sponsor_recu)+' € / '+n(f.depenses_cumulees)+' €'+(f.seeking?' · sponsor ?':'')+'</small></div></div></div>';
-  }
-
-  function render(s){
-    if(!s || (s.warming)){
-      var full=(s&&s.repo&&s.repo.full)||'…';
-      el('repo-owner').textContent=full.split('/')[0]+'/'; el('repo-name').textContent=full.split('/')[1]||'';
-      el('live-t').textContent='préchauffage…'; el('live').style.opacity='.6';
-      return;
-    }
-    var full=(s.repo&&s.repo.full)||'—';
-    el('repo-owner').textContent=(full.split('/')[0]||'')+'/';
-    el('repo-name').textContent=full.split('/')[1]||'';
-    hero(s); cadence(s); evo(s); mods(s); eman(s); propa(s); work(s); commits(s); release(s); miniCardlet(s);
-    var m=s.meta||{};
-    el('meta-note').textContent = m.rate_left!=null ? (' · quota GitHub '+m.rate_left) : '';
-    if(m.error){ el('live-t').textContent='rafraîchi (quota bas)'; }
-  }
-
-  function charge(){
-    fetch(API+'/summary',{headers:{'Accept':'application/json'}})
-      .then(function(r){ return r.ok?r.json():null; })
-      .then(function(s){ if(s) render(s); })
-      .catch(function(){ el('live-t').textContent='service injoignable'; });
-  }
-  charge();
-  setInterval(charge, 120000);
-
-  // ── ISSUES (#1585) : rapport complet, ouvertes, en cours, fermées. ────────
-  var ISS = null, issEtat = 'rapport';
-  function jours(s){ var d = Date.parse(s||''); return isNaN(d) ? '' : new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}); }
-  function issLigne(i, quand){
-    var labs = (i.labels||[]).map(function(l){ return '<span class="lab'+(/^wip$/i.test(l)?' wip':'')+'">'+esc(l)+'</span>'; });
-    if(i.branche) labs.unshift('<span class="lab wip">branche</span>');
-    return '<div class="ir"><span class="num">#'+esc(i.n)+'</span>'
-      + '<a href="'+esc(i.url||'#')+'" target="_blank" rel="noopener">'+esc(i.titre)+'</a>'
-      + '<span class="d">'+esc(quand)+'</span>'
-      + (labs.length ? '<span class="lb">'+labs.join('')+'</span>' : '') + '</div>';
-  }
-  function issRendu(){
-    if(!ISS || !ISS.ok) return;
-    var c = ISS.compte||{}, L = ISS.listes||{}, h = '';
-    [].forEach.call(document.querySelectorAll('#iss-tabs button, #iss-num .n'), function(b){
-      var on = b.getAttribute('data-etat') === issEtat;
-      b.setAttribute(b.tagName === 'BUTTON' ? 'aria-selected' : 'aria-pressed', on ? 'true' : 'false');
-    });
-    if(issEtat === 'rapport'){
-      var e = ISS.par_etiquette||{}, max = 0, k;
-      for(k in e) max = Math.max(max, e[k]);
-      h = '<div style="padding:8px 2px">';
-      for(k in e) h += '<div class="ibar"><span>'+esc(k)+'</span><i style="width:'+Math.max(4, Math.round(100*e[k]/(max||1)))+'%"></i><em>'+e[k]+'</em></div>';
-      h += '</div>';
-    } else {
-      var l = L[issEtat]||[];
-      h = l.length ? l.map(function(i){ return issLigne(i, issEtat==='fermees' ? 'fermée '+jours(i.ferme) : 'maj '+jours(i.maj)); }).join('')
-                   : '<p class="note" style="padding:10px 2px">Aucune.</p>';
-    }
-    el('iss-list').innerHTML = h;
-    el('iss-note').textContent = issEtat === 'en_cours' ? ('« En cours » = '+(ISS.definition_en_cours||''))
-      : issEtat === 'fermees' ? ('Les '+(ISS.echantillon_fermees||0)+' dernières fermées (sur '+(c.fermees||0)+').')
-      : issEtat === 'rapport' ? 'Ouvertes par étiquette.' : '';
-  }
-  function issCharge(){
-    fetch(API+'/issues',{headers:{'Accept':'application/json'}})
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(r){
-        if(!r || !r.ok) return;
-        ISS = r; var c = r.compte||{};
-        el('iss').hidden = false;
-        el('iss-num').innerHTML = [
-          ['ouvertes','o','Ouvertes',c.ouvertes],['en_cours','p','En cours',c.en_cours],
-          ['fermees','c','Fermées',c.fermees],['rapport','','Total',c.total]
-        ].map(function(x){ return '<div class="n '+x[1]+'" role="button" tabindex="0" data-etat="'+x[0]+'"><b>'+(x[3]==null?'—':x[3])+'</b><span>'+x[2]+'</span></div>'; }).join('');
-        var med = r.delai_median_heures;
-        el('iss-sub').innerHTML = '<b>'+(c.fermees_30j==null?'—':c.fermees_30j)+'</b> fermées en 30 j · <b>'+(c.ouvertes_7j||0)+'</b> ouvertes en 7 j · clôture médiane <b>'
-          + (med==null ? '—' : med < 1 ? Math.round(med*60)+' min' : med < 48 ? med+' h' : (r.delai_median_jours+' j')) + '</b>'
-          + (r.plus_ancienne_jours!=null ? ' · plus ancienne ouverte : <b>'+r.plus_ancienne_jours+' j</b>' : '');
-        el('iss-releve').textContent = r.releve ? 'relevé '+new Date(r.releve).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
-        issRendu();
-      }).catch(function(){});
-  }
-  document.addEventListener('click', function(ev){
-    var b = ev.target.closest('#iss-tabs button, #iss-num .n');
-    if(!b) return;
-    issEtat = b.getAttribute('data-etat'); issRendu();
-  });
-  document.addEventListener('keydown', function(ev){
-    var b = ev.target.closest && ev.target.closest('#iss-num .n');
-    if(b && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); issEtat = b.getAttribute('data-etat'); issRendu(); }
-  });
-  issCharge();
-  setInterval(issCharge, 300000);
-
-  // Thème : suit le Hall (?theme= / postMessage), sinon bascule locale.
-  var order=['','dark','light'], root=document.documentElement;
-  (function(){ var t=new URLSearchParams(location.search).get('theme');
-    if(t==='dark'||t==='light') root.setAttribute('data-theme',t); })();
-  addEventListener('message',function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) root.setAttribute('data-theme',d.theme); });
-  function curT(){ try{ return localStorage.getItem('dw.theme')||''; }catch(e){ return ''; } }
-  function applyT(t){ if(t) root.setAttribute('data-theme',t); else root.removeAttribute('data-theme'); }
-  if(!new URLSearchParams(location.search).get('theme')) applyT(curT());
-  var b=el('tgl'); if(b) b.addEventListener('click',function(){
-    var i=order.indexOf(curT()), nx=order[(i+1)%order.length];
-    try{ localStorage.setItem('dw.theme',nx); }catch(e){}
-    applyT(nx); b.textContent = nx==='dark'?'☾ sombre':nx==='light'?'☀ clair':'◐ système';
-  });
-})();
-</script>
+        charger();
+        // Résumé et issues : relevés du poller, inutile de les tirer onglet masqué.
+        setInterval(() => { if (!document.hidden && !DEMO) charger(); }, 120000);
+    </script>
+</body>
+</html>

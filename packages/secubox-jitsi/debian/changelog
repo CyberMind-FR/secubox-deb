@@ -1,3 +1,23 @@
+secubox-jitsi (2.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /turn/ (composant TURN/STUN) refaite au profil Aurora (ref #2651) : tuiles (service, sessions, utilisateurs, ports, UDP, TCP,
+    allocations, echecs d'authentification), onglets Tableau de bord / Sessions / Utilisateurs / Configuration, ?demo=1, ?embed=1,
+    hauteur annoncee a l'hote, 420 px sans debordement, infobulles de definition, mesure absente affichee « - ».
+  * Memes ecritures, memes routes et corps : POST /start /stop /restart, POST /config {content}, POST /users {username,password},
+    DELETE /users/{nom}, POST /generate_secret, POST /realm {realm[,secret]}, POST /credentials {username,ttl}. Aucune action ajoutee.
+  * Le secret partage n'est plus jamais affiche : l'ancienne page le revelait en clair apres « Generate » et dans l'editeur de
+    turnserver.conf. Il reste dans un champ masque ; dans l'editeur, static-auth-secret, cli-password, user= et les bases d'utilisateurs
+    sont masques et restaures tels quels a l'enregistrement (corps identique si rien n'est retape).
+  * Bogues corriges : confirm() et fenetres modales natives remplaces par une confirmation dans la page (suppression d'utilisateur,
+    arret, redemarrage, ecrasement de la configuration, changement de secret) ; compteurs affiches a 0 quand l'API ne repond pas
+    (desormais « - ») ; 401 qui redirigeait toute la page vers login.html (desormais bandeau session requise) ; innerHTML avec des
+    donnees (nom d'utilisateur, URL) remplace par du texte ; nom d'utilisateur encode dans DELETE /users/ ; polices Google retirees ;
+    plus d'actualisation onglet masque ou pendant une saisie.
+  * Non repris : le panneau « Quick Credentials » (doublon du generateur d'identifiants) et la fenetre modale d'identifiants,
+    fondus dans le tableau de bord. 16 tests (statique + navigateur).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 12:00:00 +0200
+
 secubox-jitsi (2.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /jitsi/ refaite au profil Aurora (#2612) : tuiles (conteneur, reunions, participants, plus grande reunion,
