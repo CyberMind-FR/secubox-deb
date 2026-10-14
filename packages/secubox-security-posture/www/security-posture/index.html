@@ -4,103 +4,352 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<!--
-  SecuBox · Security Posture — v2.0.0
-  Honest, board-truthful scorecard. Every number on this page traces to a real
-  measurement; UNKNOWN/MANUAL badges mark what could not be auto-verified.
-  Palette + layout follow .claude/DESIGN-CHARTER.md (WALL module hue), rendered
-  on the shared hybrid-skin dark tokens via /shared/sidebar.js.
+  Posture de sécurité au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance (CSS et JS en ligne,
+  ni police distante, ni posture.css / posture.js). Chaque chiffre vient d'une mesure réelle ; les indicateurs non mesurés
+  sont « inconnu » ou « manuel » et exclus du score. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, action inerte. Tout texte venu de l'API est posé en textContent.
 -->
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
-    <title>SecuBox · Security Posture</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/design-tokens.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="posture.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <title>SecuBox — Posture de sécurité</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,159,28,.09),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:2px 9px;font-size:.7rem;min-height:24px} .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.cy .v{color:var(--cyan)} .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.ro .v{color:var(--rouge)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .heros{display:grid;gap:12px;grid-template-columns:1fr;align-items:center}
+        @container a (min-width:700px){.heros{grid-template-columns:minmax(200px,260px) 1fr}}
+        .jauge{position:relative;width:100%;max-width:260px;margin:0 auto}
+        .jauge svg{display:block;width:100%;height:auto}
+        .jauge .piste{fill:none;stroke:rgba(159,179,214,.16);stroke-width:14;stroke-linecap:round}
+        .jauge .rempli{fill:none;stroke:var(--cyan);stroke-width:14;stroke-linecap:round}
+        .jauge .centre{position:absolute;left:0;right:0;bottom:2px;text-align:center}
+        .jauge .centre b{font-size:2.2rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1} .jauge .centre span{color:var(--faible);font-size:.74rem;display:block}
+        .defcon{display:flex;gap:12px;align-items:center;border:1px solid var(--trait2);border-radius:12px;padding:10px 14px;width:fit-content;max-width:100%}
+        .defcon .em{font-size:1.8rem;line-height:1} .defcon .n{font-weight:800;font-size:1.1rem} .defcon .nom{color:var(--doux);font-size:.8rem}
+        @media (prefers-reduced-motion:no-preference){.defcon.clign{animation:cl 1.4s ease-in-out infinite}@keyframes cl{50%{opacity:.55}}}
+        .domaines{display:grid;gap:8px;grid-template-columns:1fr}
+        @container a (min-width:700px){.domaines{grid-template-columns:1fr 1fr}}
+        @container a (min-width:1100px){.domaines{grid-template-columns:1fr 1fr 1fr}}
+        .dom{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:linear-gradient(160deg,rgba(18,40,78,.55),rgba(8,18,38,.6));border-top:3px solid var(--dc,var(--cyan));min-width:0}
+        .dom .tt{display:flex;gap:8px;align-items:flex-start}
+        .dom .ic{font-size:1.4rem;line-height:1}
+        .dom .nm{flex:1;min-width:0;font-weight:700} .dom .nm a{color:var(--texte);text-decoration:none} .dom .nm a:hover,.dom .nm a:focus-visible{color:var(--cyan);text-decoration:underline}
+        .dom .bl{color:var(--faible);font-size:.72rem;font-weight:400;margin-top:2px;overflow-wrap:anywhere}
+        .dom .sc{font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--dc,var(--cyan))}
+        .dom .cov{display:flex;align-items:center;gap:8px;margin:8px 0 4px;font-size:.72rem;color:var(--doux)}
+        .barre{flex:1;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;background:var(--dc,var(--cyan))}
+        .dom ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;font-size:.78rem}
+        .dom li{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap} .dom li em{font-style:normal;color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+        .pt{width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--faible)} .pt.warn{background:var(--orange)} .pt.crit{background:var(--rouge)}
+        .bien{color:var(--vert);font-size:.78rem;margin-top:6px}
+        .constat{display:flex;gap:10px;border:1px solid var(--trait);border-left:3px solid var(--orange);border-radius:10px;padding:8px 10px;background:rgba(8,18,38,.6);min-width:0;margin-top:6px}
+        .constat.crit{border-left-color:var(--rouge)}
+        .constat .corps{min-width:0;flex:1}
+        .constat .tt{font-weight:600;font-size:.84rem;overflow-wrap:anywhere} .constat .tt a{font-size:.7rem;font-weight:500;color:var(--cyan);margin-left:6px;text-decoration:none}
+        .constat .dt{color:var(--doux);font-size:.76rem;margin-top:2px;overflow-wrap:anywhere}
+        .constat code{display:inline-block;margin-top:5px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem;color:var(--texte);background:rgba(41,182,246,.08);border:1px solid var(--trait);border-radius:6px;padding:2px 8px;overflow-wrap:anywhere;max-width:100%}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok,.pill.pass{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.warn{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .pill.crit,.pill.fail{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.manual{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        details.audit{border:1px solid var(--trait);border-radius:12px;padding:8px 12px;background:rgba(10,22,46,.6)}
+        details.audit summary{cursor:pointer;font-weight:700;font-size:.88rem;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+        details.audit summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .tab{overflow-x:auto;margin-top:8px} .tab table{min-width:480px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:top} td.mono{white-space:nowrap}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td .rd{color:var(--faible);font-size:.72rem;margin-top:2px;overflow-wrap:anywhere}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+    </style>
 </head>
-<body class="module-wall hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main">
-        <header class="page">
-            <h1>🎚️ Security Posture <span class="ver" id="ver">v2.0.0</span></h1>
-            <div class="actions">
-                <span class="updated" id="updated">—</span>
-                <button class="btn" id="refresh" title="Recompute now">↻ Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 6v5.6c0 4.4 3.1 8.1 7.5 9.6 4.4-1.5 7.5-5.2 7.5-9.6V6z"/><path d="M8.5 13.5 11 10l2 2.4 2.5-3.4"/></svg>
+                <div><h1>Posture de sécurité</h1><small>Score unique à partir de signaux réels sur les six domaines de SecuBox</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn prim" id="btnRecalc" type="button" title="Recalcule la posture maintenant (POST /refresh, administrateur).">↻ Recalculer</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div class="info" id="calcul" hidden>Calcul de la posture en cours… nouvelle tentative automatique.</div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="rRecalc" class="retour" hidden></div>
 
-        <div id="error" class="banner err" hidden></div>
-        <div id="loading" class="banner info">Computing posture…</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cScore" title="Score global de 0 à 100 : moyenne pondérée des indicateurs réellement mesurés. Les indicateurs inconnus ou manuels en sont exclus."><span class="l">Score global</span><span class="v" id="tScore">—</span><span class="s">sur 100</span></div>
+            <div class="tuile cy" id="cDefcon" title="Niveau DEFCON déduit du score global par le service (1 = critique, 5 = nominal)."><span class="l">Niveau DEFCON</span><span class="v" id="tDefcon">—</span><span class="s" id="sDefcon">—</span></div>
+            <div class="tuile cy" title="Part des indicateurs réellement mesurés sur l’ensemble des domaines. Un score à faible couverture est partiel."><span class="l">Couverture</span><span class="v" id="tCouv">—</span><span class="s">signaux réels</span></div>
+            <div class="tuile att" id="cConstats" title="Nombre de constats actifs (avertissements et critiques) relevés sur les indicateurs mesurés."><span class="l">Constats</span><span class="v" id="tConstats">—</span><span class="s" id="sConstats">actifs</span></div>
+            <div class="tuile vi" title="Conformité CSPN : exigences réussies sur les exigences notées. Les exigences manuelles ne comptent pas."><span class="l">CSPN</span><span class="v" id="tCspn">—</span><span class="s" id="sCspn">exigences</span></div>
+            <div class="tuile vi" title="Protection des médias (TPN) : exigences réussies sur les exigences notées. Les exigences manuelles ne comptent pas."><span class="l">TPN médias</span><span class="v" id="tTpn">—</span><span class="s" id="sTpn">exigences</span></div>
+        </section>
 
-        <div id="content" hidden>
-            <!-- Hero: DEFCON gauge + overall score -->
-            <section class="hero">
-                <div class="gauge-wrap">
-                    <svg viewBox="0 0 200 120" class="gauge" id="gauge" aria-label="DEFCON gauge">
-                        <path class="gauge-track" d="M20 110 A 80 80 0 0 1 180 110" />
-                        <path class="gauge-fill" id="gaugeFill" d="M20 110 A 80 80 0 0 1 180 110" />
-                    </svg>
-                    <div class="gauge-center">
-                        <div class="gauge-score" id="score">—</div>
-                        <div class="gauge-max">/ 100</div>
-                    </div>
+        <div class="pan"><h3>Vue d’ensemble</h3>
+            <div class="heros">
+                <div class="jauge"><svg viewBox="0 0 200 118" aria-label="Jauge du score global"><path class="piste" d="M20 108 A80 80 0 0 1 180 108"/><path class="rempli" id="jaugeRempli" d="M20 108 A80 80 0 0 1 180 108" stroke-dasharray="251.3" stroke-dashoffset="251.3"/></svg>
+                    <div class="centre"><b id="jScore">—</b><span>/ 100</span></div></div>
+                <div>
+                    <div class="defcon" id="defcon"><span class="em" id="dEmoji" aria-hidden="true">⚫</span><div><div class="n" id="dNiveau">DEFCON —</div><div class="nom" id="dNom">Inconnu</div></div></div>
+                    <p class="note" id="noteCouv" style="margin-top:8px"></p>
+                    <p class="note">Les signaux non mesurés sont affichés « inconnu » ou « manuel » et exclus du score : aucun chiffre n’est inventé.</p>
                 </div>
-                <div class="hero-meta">
-                    <div class="defcon-badge" id="defconBadge">
-                        <span class="defcon-emoji" id="defconEmoji">⚫</span>
-                        <div>
-                            <div class="defcon-level" id="defconLevel">DEFCON —</div>
-                            <div class="defcon-name" id="defconName">Unknown</div>
-                        </div>
-                    </div>
-                    <div class="coverage-note" id="coverageNote"></div>
-                    <p class="hero-blurb">Single posture score from real, provenance-tracked
-                       signals across the six SecuBox module-domains. Unmeasured signals are
-                       shown honestly as <span class="badge unknown">unknown</span> /
-                       <span class="badge manual">manual</span> and excluded from the score.</p>
-                </div>
-            </section>
-
-            <!-- Six module-domain cards -->
-            <section>
-                <h2>Domains</h2>
-                <div class="domain-grid" id="domains"></div>
-            </section>
-
-            <!-- Actionable findings -->
-            <section>
-                <h2>Findings <span class="count" id="findingCount"></span></h2>
-                <div class="findings" id="findings"></div>
-            </section>
-
-            <!-- CSPN audit -->
-            <section>
-                <details class="audit">
-                    <summary><h2>CSPN compliance <span class="pill" id="cspnPill"></span></h2></summary>
-                    <table class="audit-table" id="cspnTable"></table>
-                </details>
-            </section>
-
-            <!-- TPN media overlay -->
-            <section>
-                <details class="audit">
-                    <summary><h2>TPN media protection <span class="pill" id="tpnPill"></span></h2></summary>
-                    <table class="audit-table" id="tpnTable"></table>
-                </details>
-            </section>
+            </div>
         </div>
-    </main>
+
+        <div class="pan"><h3>Domaines <i id="nDom"></i></h3><div class="domaines" id="domaines"></div></div>
+
+        <div class="pan"><h3>Constats <i id="nConstats"></i></h3><div id="constats"></div></div>
+
+        <details class="audit"><summary>Conformité CSPN <span class="pill" id="cspnPill">—</span></summary>
+            <div class="tab"><table><thead><tr><th>ID</th><th>Exigence</th><th>État</th></tr></thead><tbody id="bCspn"></tbody></table></div></details>
+        <details class="audit"><summary>Protection des médias (TPN) <span class="pill" id="tpnPill">—</span></summary>
+            <div class="tab"><table><thead><tr><th>ID</th><th>Exigence</th><th>État</th></tr></thead><tbody id="bTpn"></tbody></table></div></details>
+    </div></div></main>
 
     <script src="/shared/sidebar.js"></script>
-    <script src="posture.js" defer></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/security-posture';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const LONG_ARC = 251.3;                       // longueur de l'arc de 80 px de rayon
+        const COULEUR = c => /^#[0-9a-fA-F]{3,8}$/.test(c || '') ? c : '';       // une couleur venue de l'API n'est jamais posée telle quelle
+        const LIEN = l => /^\/(?!\/)/.test(l || '') ? l : '';                      // chemins internes seulement
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+
+        let SNAP = null, SESSION_OK = true, CHARGE = false, CALCUL = false, RETRY = null;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        function retour(ok, msg) { const r = $('rRecalc'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+
+        function demoData() {
+            const iso = new Date().toISOString();
+            const ind = (status, label, detail, value) => ({ status, label, detail, value });
+            SNAP = {
+                timestamp: iso, coverage: 0.78,
+                overall: { score: 74.5, level: 3, name: 'Attention', color: '#ff9f1c', emoji: '🟠', blink: false },
+                domains: [
+                    { domain: 'auth', name: 'Authentification', icon: '🔑', color: '#29b6f6', link: '/users/', blurb: 'Comptes, second facteur, sessions', score: 88, coverage: 1, indicators: [ind('ok', 'Second facteur actif', 'administrateurs', 1)] },
+                    { domain: 'wall', name: 'Pare-feu et WAF', icon: '🛡️', color: '#2ecc71', link: '/waf/', blurb: 'nftables, sbxwaf, leurres', score: 81, coverage: 0.9, indicators: [ind('warn', 'Règles WAF anciennes', 'dernière mise à jour il y a 12 jours', 0.6)] },
+                    { domain: 'root', name: 'Intégrité du système', icon: '🧬', color: '#a78bfa', link: '/antirootkit/', blurb: 'Rootkit, paquets, mises à jour', score: 58, coverage: 0.5, indicators: [ind('crit', 'Mises à jour de sécurité en attente', '4 paquets', 0.2), ind('unknown', 'Audit noyau', 'source injoignable', null)] }
+                ],
+                findings: [
+                    { severity: 'crit', title: 'Mises à jour de sécurité en attente', domain: 'Intégrité du système', link: '/antirootkit/', detail: '4 paquets à mettre à jour.', remediation: 'apt-get -s upgrade' },
+                    { severity: 'warn', title: 'Règles WAF anciennes', domain: 'Pare-feu et WAF', link: '/waf/', detail: 'Dernière mise à jour il y a 12 jours.' }
+                ],
+                cspn: { score: 66.7, passed: 4, scored: 6, manual: 2, items: [
+                    { id: 'CSPN-1', title: 'Journal d’audit en ajout seul', detail: 'audit.log append-only', status: 'pass' },
+                    { id: 'CSPN-2', title: 'Chiffrement TLS 1.3 en frontal', detail: '', status: 'pass' },
+                    { id: 'CSPN-3', title: 'Revue documentaire', detail: 'jugement humain', status: 'manual' },
+                    { id: 'CSPN-4', title: 'Service sans privilèges superflus', detail: '2 unités en root', status: 'fail' }] },
+                tpn: { score: null, passed: 0, scored: 0, manual: 3, items: [{ id: 'TPN-1', title: 'Contrôle humain des médias', detail: '', status: 'manual' }] }
+            };
+        }
+
+        async function charger() {
+            clearTimeout(RETRY);
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; CALCUL = false; $('erreur').hidden = true; rendre(); return; }
+            try {
+                SNAP = await lire('/overview'); SESSION_OK = true; CALCUL = false; $('erreur').hidden = true;
+            } catch (e) {
+                SNAP = null;
+                if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; CALCUL = false; $('erreur').hidden = true; }
+                else if (e.statut === 503) { SESSION_OK = true; CALCUL = true; $('erreur').hidden = true; RETRY = setTimeout(charger, 3000); }   // posture pas encore calculée
+                else { SESSION_OK = true; CALCUL = false; $('erreur').hidden = false; $('erreur').textContent = 'Impossible de lire la posture (service arrêté ou injoignable) : ' + e.message + '.'; }
+            }
+            CHARGE = true;
+            rendre();
+        }
+
+        function pct(v) { return v == null || isNaN(Number(v)) ? '—' : Math.round(Number(v) * 100) + ' %'; }
+        function nombre(v) { return v == null || isNaN(Number(v)) ? '—' : String(Math.round(Number(v))); }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('calcul').hidden = !CALCUL;
+            const etat = $('etat'), s = SNAP, ov = s && s.overall ? s.overall : null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (CALCUL) { etat.className = 'actif att'; etat.textContent = 'CALCUL EN COURS'; }
+            else if (!CHARGE) { etat.className = 'actif neutre'; etat.textContent = 'Chargement…'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { const sc = ov && typeof ov.score === 'number' ? ov.score : null; etat.className = 'actif ' + (sc == null ? 'neutre' : sc >= 80 ? '' : sc >= 50 ? 'att' : 'hors'); etat.textContent = ov && ov.level ? 'DEFCON ' + ov.level : 'POSTURE INCONNUE'; }
+
+            const score = ov && typeof ov.score === 'number' ? ov.score : null;
+            $('tScore').textContent = nombre(score);
+            $('cScore').className = 'tuile ' + (score == null ? 'cy' : score >= 80 ? 'ok' : score >= 50 ? 'att' : 'ro');
+            $('tDefcon').textContent = ov && ov.level ? ov.level : '—';
+            $('sDefcon').textContent = ov && ov.name ? ov.name : '—';
+            $('tCouv').textContent = s ? pct(s.coverage) : '—';
+            const fi = s && Array.isArray(s.findings) ? s.findings : null;
+            $('tConstats').textContent = fi ? fi.length : '—';
+            $('sConstats').textContent = fi ? fi.filter(f => f.severity === 'crit').length + ' critique(s)' : 'actifs';
+            $('cConstats').className = 'tuile ' + (!fi ? 'att' : fi.length ? (fi.some(f => f.severity === 'crit') ? 'ro' : 'att') : 'ok');
+            audit('Cspn', s && s.cspn); audit('Tpn', s && s.tpn);
+            rendreJauge(ov);
+            $('noteCouv').textContent = s && s.coverage != null ? 'Couverture des signaux réels : ' + pct(s.coverage) + ' sur les domaines mesurés.' : '';
+            rendreDomaines(s && Array.isArray(s.domains) ? s.domains : null);
+            rendreConstats(fi);
+            if (s && s.timestamp) { const t = new Date(s.timestamp); $('maj').textContent = 'Posture du ' + (isNaN(t) ? '—' : t.toLocaleString('fr-FR')); }
+            else $('maj').textContent = '—';
+            annoncer();
+        }
+
+        function rendreJauge(ov) {
+            const score = ov && typeof ov.score === 'number' ? ov.score : null;
+            const f = $('jaugeRempli');
+            f.setAttribute('stroke-dashoffset', score == null ? LONG_ARC : LONG_ARC * (1 - Math.max(0, Math.min(100, score)) / 100));
+            f.style.stroke = (ov && COULEUR(ov.color)) || 'var(--faible)';
+            $('jScore').textContent = nombre(score);
+            $('dEmoji').textContent = (ov && ov.emoji) || '⚫';
+            $('dNiveau').textContent = ov && ov.level ? 'DEFCON ' + ov.level : 'DEFCON —';
+            $('dNom').textContent = (ov && ov.name) || 'Inconnu';
+            const d = $('defcon'); d.style.borderColor = (ov && COULEUR(ov.color)) || ''; d.classList.toggle('clign', !!(ov && ov.blink));
+        }
+
+        function rendreDomaines(doms) {
+            const z = $('domaines'); z.replaceChildren();
+            $('nDom').textContent = doms ? doms.length + ' domaine' + (doms.length > 1 ? 's' : '') : '';
+            if (!doms) { z.appendChild(el('div', 'vide', '—')); return; }
+            doms.forEach(d => {
+                const ind = Array.isArray(d.indicators) ? d.indicators : [];
+                const couleur = COULEUR(d.color), cov = Math.round((d.coverage || 0) * 100);
+                const mesures = ind.filter(i => i.value != null).length;
+                const c = el('article', 'dom'); if (couleur) c.style.setProperty('--dc', couleur);
+                const tt = el('div', 'tt'); tt.appendChild(el('span', 'ic', d.icon || '📦'));
+                const nm = el('div', 'nm'), lien = LIEN(d.link);
+                if (lien) { const a = el('a', null, tiret(d.name)); a.href = lien; nm.appendChild(a); } else nm.appendChild(document.createTextNode(tiret(d.name)));
+                if (d.blurb) nm.appendChild(el('div', 'bl', d.blurb));
+                tt.appendChild(nm); tt.appendChild(el('span', 'sc', nombre(d.score)));
+                tt.lastChild.title = 'Score du domaine (0 à 100), « — » si aucun indicateur n’est mesuré.';
+                c.appendChild(tt);
+                const cv = el('div', 'cov'); cv.title = mesures + '/' + ind.length + ' indicateurs mesurés';
+                cv.appendChild(document.createTextNode('couverture ')); cv.appendChild(el('b', null, cov + ' %'));
+                const b = el('span', 'barre'), i = el('i'); i.style.width = cov + '%'; b.appendChild(i); cv.appendChild(b); c.appendChild(cv);
+                const fl = ind.filter(x => x.status === 'warn' || x.status === 'crit').slice(0, 2);
+                if (fl.length) {
+                    const ul = el('ul');
+                    fl.forEach(f => { const li = el('li'); li.appendChild(el('span', 'pt ' + f.status)); li.appendChild(document.createTextNode(tiret(f.label))); if (f.detail) li.appendChild(el('em', null, f.detail)); ul.appendChild(li); });
+                    c.appendChild(ul);
+                } else c.appendChild(el('div', 'bien', 'aucun avertissement'));
+                z.appendChild(c);
+            });
+        }
+
+        function rendreConstats(fi) {
+            const z = $('constats'); z.replaceChildren();
+            $('nConstats').textContent = fi && fi.length ? '(' + fi.length + ')' : '';
+            if (!fi) { z.appendChild(el('div', 'vide', '—')); return; }
+            if (!fi.length) { z.appendChild(el('div', 'bien', '✓ Aucun constat actif : tous les indicateurs mesurés sont sains.')); return; }
+            fi.forEach(f => {
+                const c = el('div', 'constat' + (f.severity === 'crit' ? ' crit' : ''));
+                const corps = el('div', 'corps'), tt = el('div', 'tt', tiret(f.title));
+                const lien = LIEN(f.link);
+                if (f.domain) { if (lien) { const a = el('a', null, f.domain); a.href = lien; tt.appendChild(a); } else tt.appendChild(el('span', 'note', ' ' + f.domain)); }
+                corps.appendChild(tt);
+                if (f.detail) corps.appendChild(el('div', 'dt', f.detail));
+                if (f.remediation) {
+                    const code = el('code', null, f.remediation); code.title = 'Cliquer pour copier'; code.tabIndex = 0; code.setAttribute('role', 'button');
+                    const copie = () => { try { navigator.clipboard.writeText(f.remediation).then(() => toastCopie(code), () => {}); } catch (e) { /* presse-papiers refusé */ } };
+                    code.addEventListener('click', copie); code.addEventListener('keydown', e => { if (e.key === 'Enter') copie(); });
+                    corps.appendChild(code);
+                }
+                c.appendChild(el('span', null, f.severity === 'crit' ? '🔴' : '🟡')); c.appendChild(corps); z.appendChild(c);
+            });
+        }
+        function toastCopie(code) { const t = code.title; code.title = 'Copié'; setTimeout(() => { code.title = t; }, 900); }
+
+        const ETAT_AUDIT = { pass: 'réussi', fail: 'échec', manual: 'manuel', unknown: 'inconnu' };
+        function audit(nom, rap) {
+            const pill = $(nom.toLowerCase() + 'Pill'), tb = $('b' + nom);
+            pill.className = 'pill';
+            if (!rap) { pill.textContent = '—'; } else if (rap.score == null) { pill.textContent = (rap.manual || 0) + ' manuelle(s)'; }
+            else { pill.textContent = rap.score + ' % (' + rap.passed + '/' + rap.scored + ')'; pill.className = 'pill ' + (rap.score >= 80 ? 'ok' : rap.score >= 50 ? 'warn' : 'crit'); }
+            $('t' + nom).textContent = rap && rap.score != null ? rap.score + ' %' : '—';
+            $('s' + nom).textContent = rap && rap.score != null ? rap.passed + '/' + rap.scored + ' réussies' : rap ? (rap.manual || 0) + ' manuelle(s), non notée' : 'exigences';
+            tb.replaceChildren();
+            const items = rap && Array.isArray(rap.items) ? rap.items : [];
+            if (!items.length) { const tr = el('tr'), td = el('td', 'vide', '—'); td.colSpan = 3; tr.appendChild(td); tb.appendChild(tr); return; }
+            items.forEach(i => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(i.id)));
+                const td = el('td', null, tiret(i.title)); if (i.detail) td.appendChild(el('div', 'rd', i.detail)); tr.appendChild(td);
+                const st = el('td'); st.appendChild(el('span', 'pill ' + (i.status || ''), ETAT_AUDIT[i.status] || tiret(i.status))); tr.appendChild(st);
+                tb.appendChild(tr);
+            });
+        }
+
+        // ----- Action (même appel que l'ancienne page : POST /refresh, avec le jeton en plus) -----
+        $('btnRecalc').addEventListener('click', async () => {
+            if (DEMO) { retour(true, 'Démonstration : action inerte.'); return; }
+            const b = $('btnRecalc'); b.disabled = true;
+            try {
+                const r = await fetch(API + '/refresh', { method: 'POST', credentials: 'same-origin', headers: entetes() });
+                if (r.ok) { retour(true, 'Posture recalculée.'); await charger(); }
+                else retour(false, r.status === 401 || r.status === 403 ? 'Connexion administrateur requise.' : 'Recalcul impossible (HTTP ' + r.status + ').');
+            } catch (e) { retour(false, 'Recalcul impossible : serveur injoignable.'); }
+            b.disabled = false;
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'security-posture' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        setInterval(() => { if (document.hidden || DEMO) return; charger(); }, 60000);
+    </script>
 </body>
 </html>

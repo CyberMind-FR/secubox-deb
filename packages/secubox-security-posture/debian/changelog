@@ -1,3 +1,12 @@
+secubox-security-posture (2.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pages /security-posture/ et www/index.html (tableau historique) refaites au profil Aurora (ref #2646) : pages autonomes en français (CSS et JS en ligne ; plus de Google Fonts, de skin hybrid-dark, ni de posture.css / posture.js, supprimés), tuiles avec infobulles de définition (score global, DEFCON, couverture, constats, CSPN, TPN), jauge SVG du score, cartes de domaines (couverture, avertissements), constats avec commande de remédiation copiable, audits CSPN et TPN, mode ?demo=1 (données fictives, action inerte, bandeau orange) et ?embed=1, bandeau « session requise » sur 401/403, état « calcul en cours » sur 503 avec nouvelle tentative, état HORS LIGNE, hauteur annoncée à l'hôte (sbxVue).
+  * Corrigé : toutes les lectures partaient sans jeton Bearer (401 pris pour une panne) et le recalcul POST /refresh, réservé à l'administrateur, partait sans jeton ; les valeurs de l'API (noms, titres, couleurs, liens) passaient par innerHTML et par des styles en ligne non filtrés : nœuds DOM, couleurs hexadécimales et liens internes seulement ; un domaine sans mesure affichait un anneau à 0 au lieu de « — ».
+  * Non repris : les composants defcon-badge.js / defcon-card du tableau historique (script absent du paquet, jamais livré).
+  * Appels inchangés : GET /overview et POST /refresh (page /security-posture/) ; GET /overview, /defcon, /cspn/summary, /tpn/summary, /performance/summary (tableau historique, non installé par debian/rules). Aucun changement d'API. Tests Playwright ajoutés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 13:30:00 +0200
+
 secubox-security-posture (2.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Page /antirootkit/ au profil Aurora (ref #2584) : page autonome (CSS/JS en ligne, plus de police Google Fonts ni de skin
