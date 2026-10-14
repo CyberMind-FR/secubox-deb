@@ -38,8 +38,8 @@ def test_sidebar_and_shared_assets_present():
     html = _html()
     assert '<nav class="sidebar" id="sidebar">' in html
     assert '/shared/sidebar.js' in html
-    assert 'hybrid-dark.css' in html or 'hybrid-skin.css' in html
-    assert 'hybrid-dark' in html  # body class or palette reference
+    # #2681 : profil Aurora, page autonome (le skin hybrid-dark n'est plus chargé)
+    assert 'hybrid-dark' not in html and '<script src=' not in html
 
 
 # ── auth token convention ────────────────────────────────────────────────
@@ -63,7 +63,7 @@ def test_calls_centers_ownership():
 
 def test_calls_centers_list():
     html = _html()
-    assert "API + '/centers'" in html or '"/centers"' in html or "'/centers'" in html
+    assert "lire('/centers')" in html
 
 
 def test_calls_centers_proposals():
@@ -158,14 +158,15 @@ def test_uses_event_delegation_with_dataset():
     assert "dataset" in html
     assert "addEventListener('click'" in html or 'addEventListener("click"' in html
     # scope/center_did/grant_id must travel via data-* attributes
-    assert "data-scope" in html
-    assert "data-center-did" in html or "data-center_did" in html
+    # (#2681 : posés par dataset, jamais en attribut HTML construit en chaîne)
+    assert "dataset.scope" in html
+    assert "dataset.centerDid" in html
 
 
-def test_esc_helper_defined_and_used():
+def test_no_innerhtml_so_no_esc_helper_needed():
+    # #2681 : tout est construit en textContent ; plus de innerHTML, donc plus d'esc()
     html = _html()
-    assert "function esc(" in html
-    assert "esc(" in html.split("function esc(", 1)[1]  # used somewhere after definition
+    assert "innerHTML" not in html
 
 
 # ── graceful degradation ─────────────────────────────────────────────────
