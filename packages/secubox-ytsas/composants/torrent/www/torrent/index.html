@@ -1,556 +1,422 @@
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
-     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-     SecuBox-Deb :: secubox-torrent :: www/torrent/index.html — CyberMind https://cybermind.fr
-     Player webui — this module is dual-served: aggregator-hosted (/torrent/
-     on the hub, static alias) AND on its own public vhost
-     (torrent.gk2.secubox.in, which already proxies /shared/ for LAN
-     clients — see nginx/torrent.conf). Loads the shared SecuBox WebUI Panel
-     Guidelines chassis (cyan hybrid-dark terminal: /shared/sidebar.js +
-     /shared/hybrid-skin.css) so the page is reachable from — and can return
-     to — the rest of the admin. No external/CDN URLs: palette + component
-     classes stay inlined verbatim, font falls back to local Courier Prime
-     (offline-clean, WAF-safe). -->
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: secubox-ytsas (composant torrent) :: composants/torrent/www/torrent/index.html
+  Torrent au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes (aucune écriture, aucun flux lu).
+  Page à double service : l'administration la sert sur le hub (/torrent/, alias statique) ; le lecteur public du conteneur
+  (torrent.<domaine>) en sert une variante sans menu (lxc/www/index.html). Menu commun /shared/sidebar.js injecté hors ?embed=1
+  et hors démonstration.
+  Le lecteur est celui d'avant : une balise video qui lit /stream/<infohash>/<index> (le moteur WebTorrent du conteneur
+  sert l'octet demandé à la volée). Mêmes routes, méthodes, corps et en-têtes qu'avant ; rien n'est affiché de secret.
+-->
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — Torrent</title>
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
-  :root {
-    --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
-    --bg-row:  rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2);
-    --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
-    --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
-  }
-  * { box-sizing: border-box; }
-  body {
-    font-family: 'Courier Prime', 'Courier New', monospace;
-    background: var(--bg-dark); color: var(--text); margin: 0; min-height: 100vh;
-    background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92));
-  }
-  a { color: var(--cyan); }
-  /* Shared chassis: fixed 220px sidebar (populated by /shared/sidebar.js) +
-     content pushed clear of it. hybrid-skin.css reinforces this (and the
-     top bar clearance via its own --gmb-h var) once it tags the body
-     .hybrid-skin — this local rule just avoids a layout jump/overlap
-     before that JS/CSS lands. */
-  .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-  .main { max-width: 60rem; margin: 0 auto 0 220px; padding: 1.5rem 1.2rem 4rem; }
-  /* .header now wraps ONLY the page title. sidebar.js's global top bar
-     replaces per-page headers by hiding .header entirely (display:none) —
-     the title text lives on in the injected top bar instead. Actions and
-     the live status line therefore must NOT live inside .header (they'd
-     vanish with it): they live in .toolbar, a sibling, below. */
-  .header { margin-bottom: 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
-  .header h1 { margin: 0; font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-  .toolbar { display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; }
-  .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; }
-  .btn-group { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
-    text-decoration: none; color: var(--text); background: var(--bg-row); border: 1px solid var(--border);
-    border-radius: 6px; padding: .5rem .9rem; cursor: pointer; transition: border-color .15s, box-shadow .15s;
-    display: inline-flex; align-items: center; gap: .35rem; }
-  .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.4); }
-  .btn.primary { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,.12); }
-  .btn.danger { border-color: var(--red); color: var(--red); background: rgba(255,68,102,.12); }
-  .btn.good { border-color: var(--green); color: var(--green); background: rgba(0,221,68,.12); }
-  .btn.sm { padding: .3rem .55rem; font-size: .68rem; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: .75rem; margin-bottom: 1.2rem; }
-  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: .75rem; text-align: center; backdrop-filter: blur(10px); }
-  .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor;
-    font-variant-numeric: tabular-nums; color: var(--text); }
-  .stat-card .label { font-size: .6rem; color: var(--p31-dim); letter-spacing: .1em; margin-top: .2rem; text-transform: uppercase; }
-  .stat-card.cyan .value { color: var(--cyan); }
-  .stat-card.green .value { color: var(--green); }
-  .stat-card.orange .value { color: var(--orange); }
-  .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .62rem;
-    text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--border); }
-  .badge.bt-only { border-color: var(--orange); color: var(--orange); }
-  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 1.1rem 1.2rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-  .card h3 { margin: 0 0 .8rem; font-size: .95rem; color: var(--cyan); letter-spacing: .03em; }
-  .add-row { display: flex; gap: .5rem; flex-wrap: wrap; }
-  .add-row input[type=text] { flex: 1 1 20rem; }
-  input[type=text] { font-family: inherit; background: var(--bg-row); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); padding: .6rem .7rem; font-size: .85rem; }
-  input[type=text]:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 6px rgba(0,212,255,.25); }
-  .item { background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 5px;
-    padding: .6rem .8rem; margin-bottom: .5rem; }
-  .item.kept { border-left-color: var(--green); }
-  .item.ephemeral { border-left-color: var(--orange); }
-  .item-top { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
-  .item .title { color: var(--text); font-size: .88rem; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; max-width: 26rem; cursor: pointer; }
-  .item .title:hover { color: var(--cyan); }
-  .item .meta { color: var(--p31-dim); font-size: .68rem; margin-top: .3rem; font-variant-numeric: tabular-nums; }
-  .item .row-actions { display: flex; gap: .35rem; flex: none; }
-  .progress-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .35rem; }
-  .progress-bar .fill { height: 100%; background: var(--cyan); transition: width .3s; }
-  .item.kept .progress-bar .fill { background: var(--green); }
-  .files { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--border); display: none; }
-  .files.open { display: block; }
-  .file-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem;
-    padding: .3rem .4rem; border-radius: 4px; font-size: .78rem; }
-  .file-row:hover { background: rgba(0,212,255,.08); }
-  .file-row .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-  .file-row .fname.playable:hover { color: var(--cyan); }
-  .file-row .fname:not(.playable) { color: var(--p31-dim); cursor: default; }
-  .muted { color: var(--p31-dim); font-size: .8rem; }
-  #player video { width: 100%; max-height: 60vh; background: #000; border-radius: 6px; }
-  #playerCard { display: none; }
-  .toast { position: fixed; bottom: 1rem; right: 1rem; max-width: 22rem; background: var(--cyan);
-    color: #07121a; padding: .65rem 1rem; border-radius: 6px; font-size: .78rem; opacity: 0;
-    pointer-events: none; transition: opacity .2s; z-index: 50; }
-  .toast.show { opacity: 1; pointer-events: auto; }
-  .toast.error { background: var(--red); color: #fff; }
-  .toast .x { float: right; margin-left: .6rem; cursor: pointer; font-weight: bold; }
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-  @media (max-width: 768px) {
-    .main { margin-left: 0; padding: 1rem .8rem; }
-    .item .title { max-width: 12rem; }
-  }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar,body.dem #sidebar{display:none}
+  .principal{min-width:0}
+  body:not(.emb):not(.dem) .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.dem) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none;line-height:1.3}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.titre:focus-visible,.fich:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:3px 9px;font-size:.72rem;min-height:28px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+  .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.bon{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.10)}
+  .btn.inerte{cursor:default;color:var(--doux)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  [hidden]{display:none!important}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+  .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+  .ajout{display:grid;gap:8px;grid-template-columns:minmax(0,170px) minmax(0,1fr) auto;align-items:center}
+  @media (max-width:560px){.ajout{grid-template-columns:1fr}}
+  .ajout input,.ajout select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+  .ajout input:focus,.ajout select:focus{outline:none;border-color:var(--cyan)}
+  .ajout input[type=file]{padding:4px 6px}
+  .item{border:1px solid var(--trait);border-left:3px solid var(--vert);border-radius:10px;padding:8px 10px;margin-bottom:8px;background:rgba(8,18,38,.55);min-width:0}
+  .item.ephemeral{border-left-color:var(--orange)}
+  .item-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px}
+  .titre{font:inherit;font-size:.86rem;color:var(--texte);background:none;border:0;padding:2px 0;text-align:left;cursor:pointer;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 12rem}
+  .titre:hover{color:var(--cyan)} .titre i{font-style:normal;color:var(--faible);font-size:.7rem}
+  .actions{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  .actions select{font:inherit;font-size:.72rem;background:rgba(10,22,46,.7);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:3px 6px;min-height:28px}
+  .confirme{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.76rem;color:var(--rouge)}
+  .barre{height:6px;background:rgba(159,179,214,.16);border-radius:3px;overflow:hidden;margin-top:6px} .barre>div{height:100%;background:var(--cyan)} .item:not(.ephemeral) .barre>div{background:var(--vert)}
+  .meta{color:var(--faible);font-size:.7rem;margin-top:5px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .fichiers{margin-top:8px;padding-top:6px;border-top:1px solid rgba(86,150,255,.12)}
+  .ligne-f{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px 10px;padding:3px 4px;border-radius:6px;font-size:.78rem}
+  .ligne-f:hover{background:rgba(41,182,246,.07)}
+  .fich{font:inherit;font-size:.78rem;color:var(--doux);background:none;border:0;padding:0;text-align:left;min-width:0;overflow-wrap:anywhere}
+  button.fich{color:var(--texte);cursor:pointer} button.fich:hover{color:var(--cyan)}
+  .taille{color:var(--faible);font-size:.7rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+  #player video{width:100%;max-height:60vh;background:#000;border-radius:8px}
 </style>
 </head>
-<body class="hybrid-dark">
+<body>
 <nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-<main class="main">
-  <header class="header">
-    <h1>📥 Torrent</h1>
+<main class="principal"><div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/></svg>
+      <div><h1>Torrent</h1><small id="sousTitre">BitTorrent et lecteur WebTorrent</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="btnRefresh" type="button">⟳ Actualiser</button></div>
   </header>
-  <div class="toolbar">
-    <div class="sub" id="sub">BitTorrent + WebTorrent player · chargement…</div>
-    <div class="btn-group">
-      <button class="btn" id="btnRefresh">↻ Refresh</button>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+  <div id="erreur" role="alert" hidden></div>
+
+  <section class="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Torrents chargés dans le moteur WebTorrent en ce moment (valeur « active » de /status). Un torrent conservé mais inactif n’y figure pas : il est chargé à la lecture."><span class="l">Actifs</span><span class="v" id="tActifs">—</span><span class="s">dans le moteur</span></div>
+    <div class="tuile cy" title="Place libre sur le disque du moteur (disk_free de /status). Sert à savoir s’il reste de quoi télécharger."><span class="l">Disque libre</span><span class="v" id="tDisque">—</span><span class="s">pour les téléchargements</span></div>
+    <div class="tuile cy" id="cWebrtc" title="Pairs WebRTC du moteur. « BitTorrent seul » : WebRTC désactivé, seuls les pairs BitTorrent classiques sont joints. « — » : l’API ne l’annonce pas (moteur endormi)."><span class="l">WebRTC</span><span class="v" id="tWebrtc">—</span><span class="s">pairs navigateur</span></div>
+    <div class="tuile cy" title="Nombre de torrents de la bibliothèque (réponse de /list), conservés ou à purger."><span class="l">Torrents</span><span class="v" id="tTorrents">—</span><span class="s">dans la bibliothèque</span></div>
+    <div class="tuile att" id="cEph" title="Torrents dont une purge est programmée (ephemeral_until renseigné). Sans action de votre part ils seront supprimés avec leurs données."><span class="l">À purger</span><span class="v" id="tEph">—</span><span class="s">purge programmée</span></div>
+  </section>
+
+  <div class="pan"><h3>Ajouter un torrent <i>POST /add, /add-file</i></h3>
+    <div class="ajout">
+      <select id="addMode" aria-label="Source du torrent"><option value="magnet">Lien magnet</option><option value="url">Adresse d’un .torrent</option><option value="file">Fichier .torrent</option></select>
+      <input type="text" id="magnetInput" placeholder="magnet:?xt=urn:btih:…" autocomplete="off" aria-label="Lien magnet">
+      <input type="text" id="urlInput" placeholder="https://…/fichier.torrent" autocomplete="off" aria-label="Adresse du fichier .torrent" hidden>
+      <input type="file" id="fileInput" accept=".torrent,application/x-bittorrent" aria-label="Fichier .torrent" hidden>
+      <button class="btn prim" id="btnAdd" type="button">Ajouter</button>
     </div>
+    <div id="rAjout" class="retour" role="status" hidden></div>
   </div>
 
-  <div class="grid" id="statGrid">
-    <div class="stat-card cyan"><div class="value" id="statActive">–</div><div class="label">📦 Actifs</div></div>
-    <div class="stat-card green"><div class="value" id="statDisk">–</div><div class="label">💾 Disque libre</div></div>
-    <div class="stat-card orange" style="display:flex;align-items:center;justify-content:center">
-      <span class="badge bt-only" id="webrtcBadge" style="display:none">🧲 BitTorrent-only</span>
-      <span class="muted" id="webrtcOk" style="display:none">🕸️ WebRTC actif</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>➕ Ajouter un torrent</h3>
-    <div class="add-row">
-      <select id="addMode" title="Source">
-        <option value="magnet">🧲 Magnet</option>
-        <option value="url">🔗 URL .torrent</option>
-        <option value="file">📄 Fichier .torrent</option>
-      </select>
-      <input type="text" id="magnetInput" placeholder="magnet:?xt=urn:btih:…">
-      <input type="text" id="urlInput" placeholder="https://…/fichier.torrent" style="display:none">
-      <input type="file" id="fileInput" accept=".torrent,application/x-bittorrent" style="display:none">
-      <button class="btn primary" id="btnAdd">➕ Add</button>
-    </div>
-  </div>
-
-  <div class="card" id="playerCard">
-    <h3>▶ Lecture</h3>
+  <div class="pan" id="playerCard" hidden><h3>Lecture <i>GET /stream/&lt;infohash&gt;/&lt;fichier&gt;</i></h3>
     <div id="player"></div>
   </div>
 
-  <div class="card">
-    <h3>📚 Torrents</h3>
-    <div id="list"><p class="muted">Chargement…</p></div>
+  <div class="pan"><h3>Torrents <i id="nTorrents"></i></h3>
+    <div id="rListe" class="retour" role="status" hidden></div>
+    <div id="list"><p class="vide">Chargement…</p></div>
+    <p class="note">Cliquer sur un nom déplie ses fichiers ; les formats lisibles (mp4, webm, m4v, mp3, m4a, ogg) se lisent dans le lecteur, les autres se téléchargent.</p>
   </div>
-</main>
-
-<div class="toast" id="toast"></div>
+</div></div></main>
 
 <script>
 (function () {
   'use strict';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+  if (EMBED) document.body.classList.add('emb');
+  if (DEMO) document.body.classList.add('dem');
+  if (!EMBED && !DEMO) { try { var sj = document.createElement('script'); sj.src = '/shared/sidebar.js'; document.body.appendChild(sj); } catch (e) { /* menu absent : la page reste utilisable */ } }
   var API = '/api/v1/torrent';
   var PLAYABLE = ['mp4', 'webm', 'm4v', 'mp3', 'm4a', 'ogg'];
-  var openFiles = Object.create(null); // infohash -> bool (files panel expanded)
+  var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) {
-      return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c];
+  var STATUT = null, LISTE = null, SESSION_OK = true, CHARGE = false;
+  var CONFIRM = null;                    // infohash dont la suppression attend confirmation (dans la page, jamais de dialogue natif)
+  var OUVERT = Object.create(null);      // infohash -> panneau des fichiers déplié
+  var FICHIERS = Object.create(null);    // infohash -> fichiers (démonstration)
+
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  function entetes() { var h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+  function lire(chemin) {
+    return fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() }).then(function (r) {
+      if (!r.ok) { var e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+      return r.json();
     });
   }
+  // Écriture : mêmes routes, méthodes, corps et en-têtes que l'ancienne page. Inerte en démonstration.
+  // Content-Type seulement quand un corps part (sinon Fastify répond 400) ; le .torrent garde application/x-bittorrent.
+  function ecrire(methode, chemin, corps, type) {
+    if (DEMO) return Promise.resolve({ ok: false, demo: true });
+    var h = entetes(), opts = { method: methode, credentials: 'same-origin', headers: h };
+    if (corps != null) { h['Content-Type'] = type || 'application/json'; opts.body = corps; }
+    return fetch(API + chemin, opts).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (data) { return { ok: r.ok, statut: r.status, data: data }; });
+    }).catch(function () { return { ok: false, statut: 0, data: null }; });
+  }
+  function detail(res) {
+    if (res.demo) return 'Démonstration : action inerte.';
+    if (res.statut === 401 || res.statut === 403) return 'session requise';
+    if (res.data && res.data.error) return String(res.data.error);
+    return res.statut ? 'HTTP ' + res.statut : 'serveur injoignable';
+  }
+  function retour(id, ok, msg) { var r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
 
-  // Mirrors the server's sanitizeFilename (filenames.js): the real filename
-  // is torrent metadata (untrusted), so strip path separators/control chars
-  // before it ever becomes a suggested download name. The server's
-  // Content-Disposition header is authoritative; this is a belt-and-suspenders
-  // fallback for browsers that resolve the download attribute before the
-  // response headers even arrive.
-  function sanitizeFname(name) {
+  // Le nom réel d'un fichier est une métadonnée du torrent (non fiable) : pas de séparateur ni de caractère de contrôle
+  // dans le nom proposé au téléchargement (même règle que sanitizeFilename côté serveur ; son Content-Disposition fait foi).
+  function nomSur(name) {
     var n = String(name == null ? '' : name).replace(/[/\\]/g, '_').replace(/[\x00-\x1f\x7f]/g, '').trim();
     return n || 'file';
   }
-
-  // Relative time for a scheduled purge (unix ts).
-  function fmtWhen(ts) {
+  function dansHttp(u) { return /^https?:\/\//i.test(String(u || '')); }
+  function ext(name) { var m = /\.([A-Za-z0-9]+)$/.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
+  function octets(n) {
+    if (n == null || !isFinite(n)) return '—';
+    if (n === 0) return '0 o';
+    var u = ['o', 'Ko', 'Mo', 'Go', 'To'], i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+    return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1).replace('.', ',') + ' ' + u[i];
+  }
+  function quand(ts) {
     var d = ts * 1000 - Date.now();
     if (d <= 0) return 'imminente';
     var h = Math.round(d / 3600000);
-    if (h < 24) return 'dans ' + h + ' h';
-    return 'dans ' + Math.round(h / 24) + ' j';
+    return h < 24 ? 'dans ' + h + ' h' : 'dans ' + Math.round(h / 24) + ' j';
   }
 
-  function extOf(name) {
-    var m = /\.([A-Za-z0-9]+)$/.exec(name || '');
-    return m ? m[1].toLowerCase() : '';
+  // ----- Données de démonstration (adresses et noms fictifs) -----
+  function demoData() {
+    var t = Math.floor(Date.now() / 1000);
+    STATUT = { status: 'ok', active: 2, disk_free: 412 * 1073741824, webrtc: true };
+    LISTE = [
+      { infohash: '0123456789abcdef0123456789abcdef01234567', name: 'distribution-exemple-arm64.iso', complete: true, ephemeral_until: null,
+        stats: { progress: 1, downloadSpeed: 0, uploadSpeed: 184320, numPeers: 6, wires: [1, 2, 3, 4, 5, 6] } },
+      { infohash: 'fedcba9876543210fedcba9876543210fedcba98', name: 'conference-exemple-2026.mp4', complete: false, ephemeral_until: t + 6 * 3600,
+        stats: { progress: 0.42, downloadSpeed: 2621440, uploadSpeed: 65536, numPeers: 11, wires: [1, 2, 3, 4, 5, 6, 7, 8] } },
+      { infohash: '00112233445566778899aabbccddeeff00112233', name: 'album-exemple-libre', complete: true, ephemeral_until: null,
+        stats: null, lyrion_status: 'done', lyrion_path: '/musique/album-exemple-libre' }
+    ];
+    FICHIERS['0123456789abcdef0123456789abcdef01234567'] = [{ idx: 0, name: 'distribution-exemple-arm64.iso', length: 734003200 }, { idx: 1, name: 'SHA256SUMS', length: 412 }];
+    FICHIERS['fedcba9876543210fedcba9876543210fedcba98'] = [{ idx: 0, name: 'conference-exemple-2026.mp4', length: 1288490188 }, { idx: 1, name: 'sous-titres.srt', length: 38211 }];
+    FICHIERS['00112233445566778899aabbccddeeff00112233'] = [{ idx: 0, name: '01-premier-titre.ogg', length: 6291456 }, { idx: 1, name: 'pochette.jpg', length: 204800 }];
   }
 
-  function fmtBytes(n) {
-    if (n == null || !isFinite(n)) return '∞';
-    if (n === 0) return '0 B';
-    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
-    return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+  function charger() {
+    if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return Promise.resolve(); }
+    return Promise.allSettled([lire('/status'), lire('/list')]).then(function (essais) {
+      var val = function (i) { return essais[i].status === 'fulfilled' ? essais[i].value : null; };
+      var refus = essais.some(function (e) { return e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403); });
+      var tous = essais.every(function (e) { return e.status === 'rejected'; });
+      SESSION_OK = !refus;
+      STATUT = val(0) && typeof val(0) === 'object' ? val(0) : null;
+      LISTE = Array.isArray(val(1)) ? val(1) : null;
+      CHARGE = true;
+      $('erreur').hidden = !(tous && !refus);
+      if (tous && !refus) $('erreur').textContent = 'Impossible de lire le moteur torrent (arrêté ou injoignable).';
+      rendre();
+    });
   }
 
-  var toastTimer = null;
-  function toast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast show';
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.className = 'toast'; }, 3000);
-  }
-  function errorToast(msg) {
-    var t = document.getElementById('toast');
-    clearTimeout(toastTimer);
-    t.innerHTML = '';
-    t.appendChild(document.createTextNode('⚠ ' + msg));
-    var x = document.createElement('span');
-    x.className = 'x';
-    x.textContent = '✕';
-    x.addEventListener('click', function () { t.className = 'toast'; });
-    t.appendChild(x);
-    t.className = 'toast show error';
-  }
-
-  function authHeaders() {
-    var h = {};
-    var tok = localStorage.getItem('sbx_token');
-    if (tok) h['Authorization'] = 'Bearer ' + tok;
-    return h;
+  function rendre() {
+    $('demo').hidden = !DEMO;
+    $('session').hidden = SESSION_OK;
+    var s = STATUT, etat = $('etat');
+    if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+    else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+    else if (s.asleep === true || s.running === false) { etat.className = 'actif att'; etat.textContent = 'MOTEUR ENDORMI'; }
+    else { etat.className = 'actif'; etat.textContent = 'ACTIF'; }
+    $('tActifs').textContent = s && s.active != null ? s.active : '—';
+    $('tDisque').textContent = s ? octets(s.disk_free) : '—';
+    var w = s ? (s.webrtc === false ? 'BitTorrent seul' : s.webrtc === true ? 'Actif' : '—') : '—';
+    $('tWebrtc').textContent = w; $('tWebrtc').classList.toggle('long', w.length > 8);
+    $('cWebrtc').className = 'tuile ' + (w === 'BitTorrent seul' ? 'att' : w === 'Actif' ? 'ok' : 'cy');
+    $('sousTitre').textContent = s && s.webrtc === false ? 'BitTorrent et lecteur WebTorrent · mode BitTorrent seul (WebRTC désactivé)' : 'BitTorrent et lecteur WebTorrent';
+    $('tTorrents').textContent = LISTE ? LISTE.length : '—';
+    $('tEph').textContent = LISTE ? LISTE.filter(function (r) { return r.ephemeral_until; }).length : '—';
+    rendreListe();
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    annoncer();
   }
 
-  function api(path, opts) {
-    opts = opts || {};
-    // Only advertise a JSON body when we actually send one — a POST with
-    // Content-Type: application/json but no body makes Fastify 400
-    // (FST_ERR_CTP_EMPTY_JSON_BODY), which broke keep/remove/conserve.
-    var headers = Object.assign({}, opts.headers, authHeaders());
-    // Default to JSON only when the caller hasn't set a Content-Type — the
-    // .torrent file upload sends application/x-bittorrent and must NOT be
-    // clobbered to json (that made the binary hit the json parser → 400).
-    if (opts.body != null && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-    return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
-      if (res.status === 401) {
-        errorToast('🔒 Login required');
-        throw new Error('unauthorized');
-      }
-      return res.json().catch(function () { return {}; }).then(function (body) {
-        if (!res.ok) throw new Error(body && body.error ? body.error : ('HTTP ' + res.status));
-        return body;
+  function bouton(txt, cls, fn, titre) { var b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; if (titre) b.title = titre; b.addEventListener('click', fn); return b; }
+
+  function statsLigne(st) {
+    var pct = Math.round((st.progress || 0) * 100), fils = (st.wires || []).length;
+    return pct + ' % · ↓ ' + octets(st.downloadSpeed) + '/s · ↑ ' + octets(st.uploadSpeed) + '/s · ' + (st.numPeers || 0) + ' pairs · ' + fils + ' connexions';
+  }
+
+  function rendreListe() {
+    var cible = $('list'); cible.replaceChildren();
+    $('nTorrents').textContent = LISTE && LISTE.length ? LISTE.length + ' torrent' + (LISTE.length > 1 ? 's' : '') : '';
+    if (!LISTE || !LISTE.length) { cible.appendChild(el('p', 'vide', !SESSION_OK || !LISTE ? '—' : CHARGE ? 'Aucun torrent — collez un lien magnet ci-dessus.' : '—')); return; }
+    LISTE.forEach(function (r) { cible.appendChild(ligne(r)); });
+    Object.keys(OUVERT).forEach(function (ih) { if (OUVERT[ih]) { var z = cible.querySelector('[data-ih="' + ih.replace(/["\\]/g, '\\$&') + '"] .fichiers'); if (z) chargerFichiers(ih, z); } });
+  }
+
+  function ligne(r) {
+    var ih = r.infohash, eph = r.ephemeral_until, pt = r.peertube_status, ly = r.lyrion_status;
+    // stats vides = conservé mais déchargé du moteur (chargé à la demande), pas « 0 % téléchargé ».
+    var pct = r.stats ? Math.round((r.stats.progress || 0) * 100) : null;
+    var it = el('div', 'item' + (eph ? ' ephemeral' : '')); it.setAttribute('data-ih', ih);
+    var haut = el('div', 'item-top'); it.appendChild(haut);
+
+    var t = el('button', 'titre', (eph ? '⏳ ' : '📌 ') + (r.name || ih)); t.type = 'button'; t.title = r.name || ih;
+    if (eph) t.appendChild(el('i', '', ' (purge ' + quand(eph) + ')'));
+    t.addEventListener('click', function () {
+      OUVERT[ih] = !OUVERT[ih];
+      var z = it.querySelector('.fichiers'); z.hidden = !OUVERT[ih];
+      if (OUVERT[ih]) chargerFichiers(ih, z); annoncer();
+    });
+    haut.appendChild(t);
+
+    var act = el('div', 'actions'); haut.appendChild(act);
+    if (pct == null) act.appendChild(bouton('▶ Reprendre', '', function () { agir('/resume/' + encodeURIComponent(ih), null, function (res) { return res && res.status === 'resuming' ? 'Reprise du téléchargement…' : 'Torrent chargé.'; }, 'Reprendre'); }, 'Charger / reprendre'));
+    if (r.complete) {
+      var z = el('a', 'btn sm', '🗜 ZIP'); z.href = API + '/zip/' + encodeURIComponent(ih); z.setAttribute('download', ''); z.title = 'Télécharger tout le dossier en ZIP';
+      z.addEventListener('click', function () { retour('rListe', true, 'Préparation de l’archive ZIP… le téléchargement va démarrer.'); });
+      act.appendChild(z);
+    }
+    if (pt === 'done' && dansHttp(r.peertube_url)) {
+      var pa = el('a', 'btn sm bon', '📼 PeerTube ✓'); pa.href = r.peertube_url; pa.target = '_blank'; pa.rel = 'noopener'; act.appendChild(pa);
+    } else if (ly === 'done' && r.lyrion_path) {
+      var lb = el('span', 'btn sm bon inerte', '🎵 Lyrion ✓'); lb.title = r.lyrion_path; act.appendChild(lb);
+    } else if (pt === 'queued') act.appendChild(el('span', 'btn sm inerte', '⏳ conservation…'));
+    else {
+      // La destination (PeerTube pour la vidéo, Lyrion pour l'audio) se décide côté hôte selon le type de fichier (#967).
+      act.appendChild(bouton('💾 Conserver', '', function () { agir('/conserve/' + encodeURIComponent(ih), null, function () { return 'Envoi vers PeerTube en file d’attente…'; }, 'Conservation'); }, 'Conserver (vidéo → PeerTube, audio → Lyrion ; téléchargement complet requis)'));
+      if (pt === 'error' || ly === 'error') act.appendChild(el('span', 'note', '⚠ échec de conservation'));
+    }
+    if (eph) act.appendChild(bouton('📌 Conserver', 'bon', function () { agir('/keep/' + encodeURIComponent(ih), null, function () { return 'Torrent conservé.'; }, 'Conserver'); }, 'Annuler la purge'));
+    else {
+      var sel = el('select'); sel.title = 'Programmer une purge'; sel.setAttribute('aria-label', 'Programmer une purge');
+      [['', 'Purger dans…'], ['3600', '1 h'], ['21600', '6 h'], ['86400', '24 h'], ['604800', '7 j']].forEach(function (o) { var op = el('option', '', o[1]); op.value = o[0]; sel.appendChild(op); });
+      sel.addEventListener('change', function () {
+        var secs = Number(sel.value); if (!secs) return;
+        agir('/ephemeral/' + encodeURIComponent(ih), JSON.stringify({ seconds: secs }), function () { return 'Purge programmée ' + quand(Math.floor(Date.now() / 1000) + secs) + '.'; }, 'Purge');
       });
-    });
-  }
-
-  function refreshStatus() {
-    return api(API + '/status').then(function (s) {
-      document.getElementById('statActive').textContent = s.active != null ? s.active : '–';
-      document.getElementById('statDisk').textContent = fmtBytes(s.disk_free);
-      var badgeEl = document.getElementById('webrtcBadge');
-      var okEl = document.getElementById('webrtcOk');
-      var btOnly = s.webrtc === false;
-      badgeEl.style.display = btOnly ? 'inline-block' : 'none';
-      okEl.style.display = btOnly ? 'none' : 'inline';
-      document.getElementById('sub').textContent = btOnly
-        ? 'BitTorrent + WebTorrent player · mode BitTorrent-only (WebRTC désactivé)'
-        : 'BitTorrent + WebTorrent player · WebRTC actif';
-    }).catch(function (e) { console.error(e); });
-  }
-
-  function statsLine(stats) {
-    if (!stats) return '<span class="muted">pas de session active</span>';
-    var pct = Math.round((stats.progress || 0) * 100);
-    var wires = (stats.wires || []).length;
-    return pct + '% · ⬇ ' + fmtBytes(stats.downloadSpeed) + '/s · ⬆ ' + fmtBytes(stats.uploadSpeed) +
-      '/s · 🤝 ' + (stats.numPeers || 0) + ' peers · 🔌 ' + wires + ' wires';
-  }
-
-  function renderList(rows) {
-    var el = document.getElementById('list');
-    if (!rows.length) {
-      el.innerHTML = '<p class="muted">Aucun torrent — colle un lien magnet ci-dessus.</p>';
-      return;
+      act.appendChild(sel);
     }
-    el.innerHTML = rows.map(function (r) {
-      // stats come from the engine, which under the sas model is EMPTY for
-      // conserved-but-not-streaming torrents (lazy). So a null stats = loaded
-      // on demand, not "0% downloaded". Completeness is enforced server-side by
-      // /conserve (it loads the torrent and checks) — the button stays enabled.
-      var pct = r.stats ? Math.round((r.stats.progress || 0) * 100) : null;
-      var eph = r.ephemeral_until;      // unix ts, or null → conserved
-      var pt = r.peertube_status;       // 'done' | 'queued' | 'error' | null
-      var ly = r.lyrion_status;         // 'done' | 'error' | null
-      var filesOpen = !!openFiles[r.infohash];
-      // ZIP download only makes sense once the download actually finished —
-      // r.complete is the library's own flag (survives the torrent being
-      // lazily unloaded from the engine, unlike r.stats/pct which go null
-      // for a conserved-but-idle torrent).
-      var zipHtml = r.complete
-        ? '<a class="btn sm" data-action="zip" href="' + API + '/zip/' + encodeURIComponent(r.infohash) +
-            '" download title="Télécharger tout le dossier en ZIP">🗜️ ZIP</a>'
-        : '';
+    act.appendChild(bouton('🗑 Supprimer', 'danger', function () { CONFIRM = ih; rendre(); }, 'Supprimer ce torrent et ses données'));
+    if (CONFIRM === ih) {
+      var c = el('div', 'confirme'); c.appendChild(el('span', '', 'Supprimer ce torrent et ses données, sans retour possible ?'));
+      c.appendChild(bouton('Confirmer', 'danger', function () { CONFIRM = null; agir('/remove/' + encodeURIComponent(ih), null, function () { delete OUVERT[ih]; return 'Torrent supprimé.'; }, 'Suppression'); }));
+      c.appendChild(bouton('Annuler', '', function () { CONFIRM = null; rendre(); }));
+      it.appendChild(c);
+    }
 
-      // Conserve badge / action. The actual destination (PeerTube for video,
-      // Lyrion for audio) is decided host-side by file type — the panel
-      // doesn't know it in advance, so "queued" is shown generically and the
-      // two done/error states are read from whichever partner's columns the
-      // host drain actually wrote to (#967).
-      var ptHtml;
-      if (pt === 'done' && r.peertube_url) {
-        ptHtml = '<a class="btn sm good" href="' + esc(r.peertube_url) + '" target="_blank" rel="noopener">📼 PeerTube ✓</a>';
-      } else if (ly === 'done' && r.lyrion_path) {
-        ptHtml = '<span class="btn sm good" title="' + esc(r.lyrion_path) + '">🎵 Lyrion ✓</span>';
-      } else if (pt === 'queued') {
-        ptHtml = '<span class="btn sm muted">⏳ conservation…</span>';
-      } else {
-        ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver (vidéo → PeerTube, audio → Lyrion ; téléchargement complet requis)">💾 Conserver</button>' +
-          ((pt === 'error' || ly === 'error') ? ' <span class="muted" title="échec de conservation">⚠</span>' : '');
-      }
+    if (pct == null) it.appendChild(el('div', 'meta', '📌 conservé — chargé à la lecture'));
+    else {
+      var b = el('div', 'barre'); var f = el('div'); f.style.width = pct + '%'; b.appendChild(f); it.appendChild(b);
+      it.appendChild(el('div', 'meta', statsLigne(r.stats)));
+    }
+    var fz = el('div', 'fichiers'); fz.hidden = !OUVERT[ih]; fz.appendChild(el('p', 'note', 'Chargement des fichiers…')); it.appendChild(fz);
+    return it;
+  }
 
-      // Purge control: conserved → offer a delay; marked → offer to cancel
-      var purgeHtml = eph
-        ? '<button class="btn sm good" data-action="keep" title="Annuler la purge">📌 Conserver</button>'
-        : '<select class="btn sm" data-action="purge-in" title="Programmer une purge">' +
-            '<option value="">⏳ Purger dans…</option>' +
-            '<option value="3600">1 h</option>' +
-            '<option value="21600">6 h</option>' +
-            '<option value="86400">24 h</option>' +
-            '<option value="604800">7 j</option>' +
-          '</select>';
-
-      return (
-        '<div class="item ' + (eph ? 'ephemeral' : 'kept') + '" data-ih="' + esc(r.infohash) + '">' +
-          '<div class="item-top">' +
-            '<div class="title" data-action="toggle-files" title="' + esc(r.name) + '">' +
-              (eph ? '⏳ ' : '📌 ') + esc(r.name) +
-              (eph ? ' <span class="muted">(purge ' + fmtWhen(eph) + ')</span>' : '') +
-            '</div>' +
-            '<div class="row-actions">' +
-              (pct == null ? '<button class="btn sm" data-action="resume" title="Charger / reprendre">▶ Reprendre</button>' : '') +
-              zipHtml + ptHtml + purgeHtml +
-              '<button class="btn sm danger" data-action="remove">🗑</button>' +
-            '</div>' +
-          '</div>' +
-          (pct == null
-            ? '<div class="meta muted">📌 conservé — chargé à la lecture</div>'
-            : '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
-              '<div class="meta">' + statsLine(r.stats) + '</div>') +
-          '<div class="files' + (filesOpen ? ' open' : '') + '" data-role="files">' +
-            '<p class="muted">Chargement des fichiers…</p>' +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
-    Object.keys(openFiles).forEach(function (ih) {
-      if (openFiles[ih]) loadFiles(ih);
+  // Action d'écriture sur un torrent : même appel qu'avant ; résultat ou erreur affichés dans la page.
+  function agir(chemin, corps, msgOk, nom) {
+    return ecrire('POST', chemin, corps).then(function (res) {
+      if (res.ok) { retour('rListe', true, msgOk(res.data)); return charger(); }
+      retour('rListe', false, nom + ' impossible : ' + detail(res));
     });
   }
 
-  function refreshList() {
-    return api(API + '/list').then(renderList).catch(function (e) {
-      document.getElementById('list').innerHTML = '<p class="muted">Erreur de chargement.</p>';
-      console.error(e);
-    });
-  }
-
-  function loadFiles(infohash) {
-    var itemEl = document.querySelector('.item[data-ih="' + cssEscape(infohash) + '"]');
-    if (!itemEl) return;
-    var filesEl = itemEl.querySelector('[data-role="files"]');
-    api(API + '/files/' + encodeURIComponent(infohash)).then(function (files) {
-      if (!files.length) {
-        filesEl.innerHTML = '<p class="muted">Métadonnées pas encore disponibles.</p>';
-        return;
-      }
-      filesEl.innerHTML = files.map(function (f) {
-        var ext = extOf(f.name);
-        var playable = PLAYABLE.indexOf(ext) !== -1;
-        if (playable) {
-          return '<div class="file-row">' +
-            '<span class="fname playable" data-action="play" data-idx="' + f.idx + '">▶ ' + esc(f.name) + '</span>' +
-            '<span class="muted">' + fmtBytes(f.length) + '</span></div>';
+  function chargerFichiers(ih, zone) {
+    var peint = function (files) {
+      zone.replaceChildren();
+      if (!Array.isArray(files) || !files.length) { zone.appendChild(el('p', 'note', 'Métadonnées pas encore disponibles.')); annoncer(); return; }
+      files.forEach(function (f) {
+        var l = el('div', 'ligne-f');
+        if (PLAYABLE.indexOf(ext(f.name)) !== -1) {
+          var b = el('button', 'fich', '▶ ' + f.name); b.type = 'button'; b.title = 'Lire dans le lecteur';
+          b.addEventListener('click', function () { lire_fichier(ih, f.idx, f.name); });
+          l.appendChild(b);
+        } else l.appendChild(el('span', 'fich', f.name));
+        var d = el('span', 'actions'); d.appendChild(el('span', 'taille', octets(f.length)));
+        if (PLAYABLE.indexOf(ext(f.name)) === -1) {
+          var a = el('a', 'btn sm', '⬇ Télécharger'); a.href = '/stream/' + encodeURIComponent(ih) + '/' + encodeURIComponent(f.idx); a.setAttribute('download', nomSur(f.name));
+          if (DEMO) a.addEventListener('click', function (ev) { ev.preventDefault(); retour('rListe', false, detail({ demo: true })); });
+          d.appendChild(a);
         }
-        var href = '/stream/' + encodeURIComponent(infohash) + '/' + f.idx;
-        var dlName = esc(sanitizeFname(f.name));
-        return '<div class="file-row">' +
-          '<span class="fname">' + esc(f.name) + '</span>' +
-          '<a class="btn sm" href="' + href + '" download="' + dlName + '">⬇ Download</a></div>';
-      }).join('');
-    }).catch(function (e) {
-      filesEl.innerHTML = '<p class="muted">Erreur de chargement des fichiers.</p>';
-      console.error(e);
+        l.appendChild(d); zone.appendChild(l);
+      });
+      annoncer();
+    };
+    if (DEMO) { peint(FICHIERS[ih]); return; }
+    lire('/files/' + encodeURIComponent(ih)).then(peint).catch(function () { zone.replaceChildren(el('p', 'note', 'Erreur de chargement des fichiers.')); annoncer(); });
+  }
+
+  // Le lecteur : une balise video native sur /stream/<infohash>/<index>, comme avant.
+  function lire_fichier(ih, idx, nom) {
+    var carte = $('playerCard'), p = $('player');
+    carte.hidden = false;
+    if (DEMO) { p.replaceChildren(el('p', 'note', 'Démonstration : aucun flux n’est lu (' + nom + ').')); annoncer(); return; }
+    var v = document.createElement('video'); v.controls = true; v.autoplay = true; v.src = '/stream/' + encodeURIComponent(ih) + '/' + encodeURIComponent(idx);
+    p.replaceChildren(v, el('p', 'note', nom));
+    annoncer();
+    try { carte.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* sans défilement */ }
+  }
+
+  // ----- Ajout -----
+  function ajoute(meta) {
+    retour('rAjout', true, 'Torrent ajouté : ' + ((meta && (meta.name || meta.infohash)) || 'ok'));
+    $('fileInput').value = '';
+    return charger();
+  }
+  function ajouter() {
+    var mode = $('addMode').value, b = $('btnAdd');
+    if (mode === 'file') {
+      var f = $('fileInput').files[0];
+      if (!f) { retour('rAjout', false, 'Fichier .torrent requis.'); return; }
+      if (DEMO) { retour('rAjout', false, detail({ demo: true })); return; }
+      b.disabled = true;
+      f.arrayBuffer().then(function (buf) { return ecrire('POST', '/add-file', buf, 'application/x-bittorrent'); }).then(function (res) {
+        b.disabled = false;
+        if (res.ok) ajoute(res.data); else retour('rAjout', false, 'Échec de l’ajout : ' + detail(res));
+      });
+      return;
+    }
+    var champ = $(mode === 'url' ? 'urlInput' : 'magnetInput'), val = champ.value.trim();
+    if (!val) { retour('rAjout', false, mode === 'url' ? 'URL .torrent requise.' : 'Lien magnet requis.'); return; }
+    var corps = mode === 'url' ? { torrentUrl: val } : { magnet: val };
+    b.disabled = true;
+    ecrire('POST', '/add', JSON.stringify(corps)).then(function (res) {
+      b.disabled = false;
+      if (res.ok) { champ.value = ''; ajoute(res.data); } else retour('rAjout', false, 'Échec de l’ajout : ' + detail(res));
     });
   }
 
-  function cssEscape(s) {
-    return String(s).replace(/["\\]/g, '\\$&');
-  }
-
-  function playFile(infohash, idx, name) {
-    var card = document.getElementById('playerCard');
-    var player = document.getElementById('player');
-    card.style.display = 'block';
-    var src = '/stream/' + encodeURIComponent(infohash) + '/' + idx;
-    player.innerHTML = '<video controls autoplay src="' + esc(src) + '"></video>' +
-      '<p class="muted" style="margin-top:.5rem">' + esc(name) + '</p>';
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function onListClick(ev) {
-    var actionEl = ev.target.closest('[data-action]');
-    if (!actionEl) return;
-    var itemEl = ev.target.closest('.item');
-    if (!itemEl) return;
-    var ih = itemEl.getAttribute('data-ih');
-    var action = actionEl.getAttribute('data-action');
-
-    if (action === 'toggle-files') {
-      openFiles[ih] = !openFiles[ih];
-      var filesEl = itemEl.querySelector('[data-role="files"]');
-      filesEl.classList.toggle('open', openFiles[ih]);
-      if (openFiles[ih]) loadFiles(ih);
-      return;
-    }
-    if (action === 'keep') {
-      api(API + '/keep/' + encodeURIComponent(ih), { method: 'POST' }).then(function () {
-        toast('📌 Torrent conservé');
-        refreshList();
-      }).catch(function (e) { errorToast('Échec: ' + e.message); });
-      return;
-    }
-    if (action === 'resume') {
-      api(API + '/resume/' + encodeURIComponent(ih), { method: 'POST' }).then(function (res) {
-        toast(res && res.status === 'resuming' ? '▶ Reprise du téléchargement…' : '▶ Chargé');
-        refreshList();
-      }).catch(function (e) { errorToast('Reprendre: ' + e.message); });
-      return;
-    }
-    if (action === 'conserve') {
-      api(API + '/conserve/' + encodeURIComponent(ih), { method: 'POST' }).then(function (res) {
-        toast('📼 Envoi vers PeerTube en file d’attente…');
-        refreshList();
-      }).catch(function (e) { errorToast('Conserver: ' + e.message); });
-      return;
-    }
-    if (action === 'remove') {
-      if (!confirm('Supprimer ce torrent et ses données ?')) return;
-      api(API + '/remove/' + encodeURIComponent(ih), { method: 'POST' }).then(function () {
-        toast('🗑 Torrent supprimé');
-        delete openFiles[ih];
-        refreshList();
-      }).catch(function (e) { errorToast('Échec: ' + e.message); });
-      return;
-    }
-    if (action === 'zip') {
-      // Don't preventDefault: this is a real <a href download> and the
-      // browser's own download machinery streams it straight to disk (never
-      // buffered in this page's JS). A multi-GB archive can take a while to
-      // start flowing once the download hits the wire (the server may need
-      // to re-verify a conserved-but-idle torrent's data first), so give
-      // immediate feedback here — otherwise a slow start reads as "nothing
-      // happened" and invites repeated clicks.
-      toast('🗜️ Préparation de l’archive ZIP… le téléchargement va démarrer.');
-      return;
-    }
-    if (action === 'play') {
-      var idx = actionEl.getAttribute('data-idx');
-      var name = actionEl.textContent.replace(/^▶\s*/, '');
-      playFile(ih, idx, name);
-      return;
-    }
-  }
-
-  function onAdded(meta) {
-    toast('➕ Torrent ajouté: ' + (meta.name || meta.infohash || 'ok'));
-    document.getElementById('fileInput').value = '';
-    refreshList();
-  }
-  function onAddErr(e) { errorToast('Échec de l\'ajout: ' + e.message); }
-
-  function addTorrent() {
-    var mode = document.getElementById('addMode').value;
-    var btn = document.getElementById('btnAdd');
-    if (mode === 'file') {
-      var f = document.getElementById('fileInput').files[0];
-      if (!f) { errorToast('Fichier .torrent requis'); return; }
-      btn.disabled = true;
-      f.arrayBuffer().then(function (buf) {
-        return api(API + '/add-file', { method: 'POST',
-          headers: { 'Content-Type': 'application/x-bittorrent' }, body: buf });
-      }).then(onAdded).catch(onAddErr).finally(function () { btn.disabled = false; });
-      return;
-    }
-    var input = document.getElementById(mode === 'url' ? 'urlInput' : 'magnetInput');
-    var val = input.value.trim();
-    if (!val) { errorToast(mode === 'url' ? 'URL .torrent requise' : 'Lien magnet requis'); return; }
-    var body = mode === 'url' ? { torrentUrl: val } : { magnet: val };
-    btn.disabled = true;
-    api(API + '/add', { method: 'POST', body: JSON.stringify(body) })
-      .then(function (meta) { input.value = ''; onAdded(meta); })
-      .catch(onAddErr).finally(function () { btn.disabled = false; });
-  }
-
-  function refresh() {
-    refreshStatus();
-    refreshList();
-  }
-
-  document.getElementById('btnRefresh').addEventListener('click', refresh);
-  document.getElementById('btnAdd').addEventListener('click', addTorrent);
-  document.getElementById('addMode').addEventListener('change', function () {
+  $('btnRefresh').addEventListener('click', charger);
+  $('btnAdd').addEventListener('click', ajouter);
+  $('addMode').addEventListener('change', function () {
     var m = this.value;
-    document.getElementById('magnetInput').style.display = m === 'magnet' ? '' : 'none';
-    document.getElementById('urlInput').style.display = m === 'url' ? '' : 'none';
-    document.getElementById('fileInput').style.display = m === 'file' ? '' : 'none';
+    $('magnetInput').hidden = m !== 'magnet'; $('urlInput').hidden = m !== 'url'; $('fileInput').hidden = m !== 'file';
   });
-  document.getElementById('magnetInput').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') addTorrent();
-  });
-  document.getElementById('urlInput').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') addTorrent();
-  });
-  document.getElementById('list').addEventListener('click', onListClick);
-  // Purge-delay dropdown (change, not click).
-  document.getElementById('list').addEventListener('change', function (ev) {
-    var sel = ev.target.closest('[data-action="purge-in"]');
-    if (!sel) return;
-    var itemEl = ev.target.closest('.item');
-    if (!itemEl) return;
-    var ih = itemEl.getAttribute('data-ih');
-    var secs = Number(sel.value);
-    if (!secs) return;
-    api(API + '/ephemeral/' + encodeURIComponent(ih),
-      { method: 'POST', body: JSON.stringify({ seconds: secs }) }).then(function () {
-      toast('⏳ Purge programmée ' + fmtWhen(Math.floor(Date.now() / 1000) + secs));
-      refreshList();
-    }).catch(function (e) { errorToast('Purge: ' + e.message); });
-  });
+  ['magnetInput', 'urlInput'].forEach(function (i) { $(i).addEventListener('keydown', function (e) { if (e.key === 'Enter') ajouter(); }); });
 
-  refresh();
-  setInterval(refresh, 15000);
+  // ----- Hauteur annoncée à l'hôte (iframes) -----
+  function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'torrent' }, location.origin); } catch (e) { /* hors iframe */ }
+  }
+  if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+
+  charger();
+  // Pas d'actualisation onglet masqué, en démonstration, pendant une confirmation ou un choix de purge ouvert.
+  setInterval(function () {
+    if (document.hidden || DEMO || CONFIRM) return;
+    var a = document.activeElement; if (a && a.tagName === 'SELECT' && $('list').contains(a)) return;
+    charger();
+  }, 15000);
 })();
 </script>
 </body>
