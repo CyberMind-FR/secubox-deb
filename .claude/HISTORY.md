@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-14 — Page système : trois échecs corrigés (ref #2615) + /acces/ dans la navigation (ref #2613)
+
+Captures de `/system/` : « Interactive authentication required » au démarrage d'un service, `.xinitrc: Permission denied` à l'activation du kiosque, « Inst, Inst, Inst » dans la liste des mises à jour. Cause commune des deux premiers : l'API tourne en `User=secubox` + `NoNewPrivileges=true` et lançait `systemctl` / le script root directement. Corrigé : règle polkit bornée à `secubox-system.service` (le compte `secubox` est partagé par tous les modules), unité root `secubox-kiosk-setup@.service` (3 instances), parsing `apt-get -s` (2ᵉ mot). system 1.10.1, kiosk 1.0.2, core 1.7.7. La page `/acces/` charge la navigation commune hors mode encadré (auth 1.6.1, #2613/#2614).
+
+Constat gk2 (14 oct.) : l'installation de `secubox-auth` relance l'agrégateur deux fois (configure ≈ 3 min), d'où des HTTP 502 de plusieurs minutes sur toute l'administration pendant un déploiement. Défaut de conception connu (agrégateur = point unique).
+
 ## 2026-10-13 — CI release : un seul publieur (ref #2610)
 
 La release v3.0.0-alpha.15 est restée incomplète (images RPi400, live x64, full VM absentes), comme l'alpha.14. Cause : `build-image.yml` (job release), `build-all-live-usb.yml` (job release) et `release.yml` (create-release) publiaient les mêmes noms de fichiers dans la même release en même temps et s'effaçaient mutuellement leurs envois (« Deleting previously uploaded asset » puis « Not Found »). Une relance ne corrige rien : elle réutilise le workflow du tag. Correctif : `release.yml` passe `publier: 'non'` aux deux appelés, `create-release` (qui télécharge lui-même tous les artefacts) reste le seul publieur ; appelés seuls, les workflows gardent leur comportement. À valider sur le prochain tag (alpha.16) ; l'alpha.15 reste incomplète.

@@ -14,6 +14,7 @@ secubox_core.kiosk — Kiosk mode and board detection utilities
 - get_interface_class()  -> Classify interfaces into WAN/LAN/SFP
 """
 from __future__ import annotations
+import os
 import subprocess
 from pathlib import Path
 from typing import Literal, Optional
@@ -30,6 +31,8 @@ KIOSK_ENABLED_MARKER = Path("/var/lib/secubox/.kiosk-enabled")
 CONSOLE_ENABLED_MARKER = Path("/var/lib/secubox/.console-enabled")
 KIOSK_MODE_FILE = Path("/var/lib/secubox/.kiosk-mode")
 KIOSK_SETUP_SCRIPT = Path("/usr/sbin/secubox-kiosk-setup")
+# Sortie de l'unite root secubox-kiosk-setup@<action>.service (voir _lance_setup).
+KIOSK_SETUP_LOG = Path("/run/secubox/kiosk-setup.log")
 
 
 def kiosk_status() -> dict:
@@ -141,6 +144,25 @@ def display_mode() -> str:
     return "none"
 
 
+def _lance_setup(action: str, args: list, timeout: int):
+    """Execute `secubox-kiosk-setup <args>` et rend (code, message d'erreur) (#2615).
+
+    En root (CLI), appel direct. Sinon (l'API systeme tourne en User=secubox, NoNewPrivileges) : l'unite root
+    secubox-kiosk-setup@<action>.service est demarree par polkit ; son motif d'echec est relu dans KIOSK_SETUP_LOG.
+    Avant : l'appel direct ecrivait /home/secubox-kiosk/.xinitrc sous le compte du service -> « Permission denied » a chaque fois."""
+    if os.geteuid() == 0:
+        r = subprocess.run([str(KIOSK_SETUP_SCRIPT)] + args, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, (r.stderr.strip() or r.stdout.strip() or "Unknown error")
+    r = subprocess.run(["systemctl", "start", "--wait", f"secubox-kiosk-setup@{action}.service"], capture_output=True, text=True, timeout=timeout)
+    if r.returncode == 0:
+        return 0, ""
+    try:
+        motif = KIOSK_SETUP_LOG.read_text(errors="replace")[-600:].strip()
+    except OSError:
+        motif = ""
+    return r.returncode, (motif or r.stderr.strip() or r.stdout.strip() or "Unknown error")
+
+
 def kiosk_enable(mode: Literal["x11", "wayland"] = "x11") -> dict:
     """
     Enable kiosk mode.
@@ -158,18 +180,11 @@ def kiosk_enable(mode: Literal["x11", "wayland"] = "x11") -> dict:
         return {"success": False, "error": "Kiosk setup script not installed", "mode": mode}
 
     try:
-        mode_flag = f"--{mode}"
-        r = subprocess.run(
-            [str(KIOSK_SETUP_SCRIPT), "enable", mode_flag],
-            capture_output=True, text=True, timeout=120
-        )
-
-        if r.returncode == 0:
+        code, error = _lance_setup(f"enable-{mode}", ["enable", f"--{mode}"], 120)
+        if code == 0:
             log.info("Kiosk mode enabled: %s", mode)
             return {"success": True, "error": None, "mode": mode}
-        else:
-            error = r.stderr.strip() or r.stdout.strip() or "Unknown error"
-            return {"success": False, "error": error, "mode": mode}
+        return {"success": False, "error": error, "mode": mode}
 
     except subprocess.TimeoutExpired:
         return {"success": False, "error": "Setup timed out", "mode": mode}
@@ -188,17 +203,11 @@ def kiosk_disable() -> dict:
         return {"success": False, "error": "Kiosk setup script not installed"}
 
     try:
-        r = subprocess.run(
-            [str(KIOSK_SETUP_SCRIPT), "disable"],
-            capture_output=True, text=True, timeout=60
-        )
-
-        if r.returncode == 0:
+        code, error = _lance_setup("disable", ["disable"], 60)
+        if code == 0:
             log.info("Kiosk mode disabled")
             return {"success": True, "error": None}
-        else:
-            error = r.stderr.strip() or r.stdout.strip() or "Unknown error"
-            return {"success": False, "error": error}
+        return {"success": False, "error": error}
 
     except subprocess.TimeoutExpired:
         return {"success": False, "error": "Disable timed out"}

@@ -1,3 +1,9 @@
+secubox-kiosk (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Unite root a la demande secubox-kiosk-setup@.service (#2615) : trois instances seulement (enable-x11, enable-wayland, disable), toute autre est refusee. L'API systeme (User=secubox, NoNewPrivileges) la demarre par polkit ; avant, elle lancait le script root directement et ecrivait /home/secubox-kiosk/.xinitrc sous son propre compte : « Permission denied » a chaque activation du kiosque par l'API. La sortie va dans /run/secubox/kiosk-setup.log (motif d'echec relu par l'API).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 07:35:50 +0200
+
 secubox-kiosk (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * L'utilisateur secubox-kiosk est cree (et un compte existant repare) avec /bin/bash et non /usr/sbin/nologin (#2506) : le lanceur ouvre la session par `su -l`, qui repondait « This account is currently not available » apres le demarrage de Xorg (constate sur RPi400). Meme shell que build-live-usb.sh.

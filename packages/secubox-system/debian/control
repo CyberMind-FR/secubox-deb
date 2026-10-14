@@ -10,6 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-system
 Architecture: all
 Depends: ${misc:Depends},
+         polkitd | policykit-1,
  secubox-core (>= 1.5.47~),
  python3-psutil,
  python3-fastapi | python3-pip,

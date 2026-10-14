@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+//
+// SecuBox :: l'API systeme pilote les unites secubox-* (#2615).
+//
+// POURQUOI. secubox-system.service tourne en User=secubox avec NoNewPrivileges=true : « systemctl start secubox-hub » repondait
+// « Interactive authentication required » (polkit), donc demarrer/arreter/redemarrer un service depuis la page systeme n'a jamais pu marcher.
+//
+// POURQUOI PAS « l'utilisateur secubox ». Ce compte est PARTAGE par tous les modules : une regle par utilisateur donnerait a n'importe lequel
+// le droit d'arreter le WAF. La regle est donc bornee au SUJET (l'unite secubox-system.service), aux unites secubox-*.service et a quatre verbes.
+// Si polkit ne dit pas dans quelle unite tourne le demandeur, la regle ne repond rien : le refus par defaut s'applique (echec sans danger).
+polkit.addRule(function (action, subject) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units") return polkit.Result.NOT_HANDLED;
+    if (subject.user !== "secubox" || subject.system_unit !== "secubox-system.service") return polkit.Result.NOT_HANDLED;
+    var unite = action.lookup("unit") || "";
+    var verbe = action.lookup("verb") || "";
+    if (!/^secubox-[A-Za-z0-9@._-]+\.service$/.test(unite)) return polkit.Result.NOT_HANDLED;
+    if (["start", "stop", "restart", "reload"].indexOf(verbe) < 0) return polkit.Result.NOT_HANDLED;
+    return polkit.Result.YES;
+});

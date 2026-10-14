@@ -12,6 +12,7 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	install -D -m 755 sbin/secubox-kiosk-setup debian/secubox-kiosk/usr/sbin/secubox-kiosk-setup
+	install -D -m 644 systemd/secubox-kiosk-setup@.service debian/secubox-kiosk/usr/lib/systemd/system/secubox-kiosk-setup@.service
 
 override_dh_auto_test:
 	# Les tests tournent hors build (pytest).
