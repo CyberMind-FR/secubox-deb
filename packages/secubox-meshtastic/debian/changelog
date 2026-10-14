@@ -1,3 +1,12 @@
+secubox-meshtastic (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /meshtastic/ refaite au profil Aurora (#2612) : un seul fichier autonome, onglets Nœuds, Messages, Canaux, Écoute et Radio, carte SVG hors ligne à l'échelle avec graduations réelles, ?demo=1 (données fictives, actions inertes), ?embed=1, bandeau « session requise » sur 401 et 403, hauteur annoncée à l'hôte. Les trois écritures gardent exactement les mêmes routes, méthodes et corps : POST /send, POST /grid, POST /mode.
+  * Confirmation intégrée à la page (plus aucun dialogue natif) avant toute émission radio, tout changement de mode et toute politique de grille.
+  * Bogues de l'ancienne page corrigés : le démon répond 200 {"status":"error"} quand le ctl échoue et 200 {"status":"radio-absent"} sans radio, ce qui s'affichait « envoyé » ou « enregistré » ; 403 non traité comme session absente ; le mode choisi mais non appliqué était écrasé à chaque actualisation ; le code d'appairage Bluetooth était affiché (désormais jamais) ; le SVG du QR renvoyé par l'API était injecté en HTML brut ; une seconde fonction d'échappement écrasait la première ; en-tête Content-Type posé sur les lectures ; unités RSSI (dBm) et SNR (dB) absentes ; batterie 101 affichée « 101 % » (désormais « secteur ») ; actualisation maintenue pendant une saisie.
+  * Non repris : le QR code et l'affichage du lien de jonction (ils portent la clé du canal) ; le lien reste disponible, copié dans le presse-papiers après confirmation. Aucune action matérielle nouvelle, aucun changement de région ni flash du module. Aucune modification de l'API.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 07:30:00 +0200
+
 secubox-meshtastic (0.5.2-1~bookworm1) bookworm; urgency=high
 
   * Chemin Python : les paquets Debian sont ajoutés EN QUEUE s'ils manquent, plus en tête. Devant /usr/local, le websockets 10.4 de Debian masquait celui qu'attend uvicorn ≥ 0.54 (installé par pip) : le service mourait au démarrage (« cannot import name ServerProtocol ») et redémarrait en boucle (#1796).
