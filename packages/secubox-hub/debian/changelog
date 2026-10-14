@@ -1,3 +1,9 @@
+secubox-hub (1.11.1-1~bookworm1) bookworm; urgency=medium
+
+  * /portal/login.html au profil Aurora (#2687) : le relais vers /login.html (page de connexion que possede secubox-portal, #1064) prend la feuille Aurora autonome et le francais. Cible fixe, requete (?redirect=) et fragment (#elevation=) reportes a l'identique ; aucun formulaire, aucun jeton. 7 tests, dont un qui interdit au hub de livrer un login.html a la racine.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-hub (1.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Pages /espace/, /health/ et /appareil/ au profil Aurora (#2538). La Vue d'ensemble Aurora (#2485) avait supprime apercu.css et apercu.js : /espace/ et /appareil/ les liaient encore (404), deux pages sans feuille de style. Un test refuse desormais toute ressource locale manquante dans une page du hub.

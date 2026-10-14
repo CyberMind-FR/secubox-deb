@@ -4,517 +4,142 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Connexion SecuBox au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance, ni menu commun
+  ni mode démonstration (rien à simuler, rien n'est envoyé hors d'une saisie).
+  Flux inchangé : mot de passe -> (TOTP | inscription TOTP | choix du mot de passe) -> jeton sbx_token -> ?redirect= validé
+  (chemin absolu à barre unique, jamais //hote ni /\hote : pas de redirection ouverte).
+  Les secrets affichés (clé TOTP d'inscription, codes de secours) ne le sont que lorsque le serveur les remet à l'instant
+  même ; rien n'est journalisé ni conservé hors du jeton de session.
+-->
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — Login</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>SecuBox — Connexion</title>
 <style>
-/**
- * SecuBox Login — 6-Module Design System v2.0
- * Based on Charte Graphique Six-Module Color System
- * CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie
- */
-
-:root {
-  /* 6-MODULE COLOR SYSTEM */
-  --auth-main:  #C04E24;  /* Orange — Auth stack */
-  --auth-light: #E8845A;
-  --wall-main:  #9A6010;  /* Yellow — Wall stack */
-  --wall-light: #CC8820;
-  --boot-main:  #803018;  /* Red — Boot stack */
-  --boot-light: #C06040;
-  --mind-main:  #3D35A0;  /* Violet — Mind stack */
-  --mind-light: #6366F1;
-  --root-main:  #0A5840;  /* Green — Root stack */
-  --root-light: #148C66;
-  --mesh-main:  #104A88;  /* Blue — Mesh stack */
-  --mesh-light: #2080C0;
-
-  /* DARK THEME */
-  --bg-dark:      #0B0F14;
-  --surface-dark: #141A24;
-  --border-dark:  #1E2A38;
-  --text-dark:    #E8ECF2;
-  --muted-dark:   #6B7A8C;
-
-  /* Active theme */
-  --bg:       var(--bg-dark);
-  --surface:  var(--surface-dark);
-  --border:   var(--border-dark);
-  --text:     var(--text-dark);
-  --muted:    var(--muted-dark);
-  --accent:   var(--root-main);
-  --accent-light: var(--root-light);
-
-  /* Typography */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', monospace;
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-display);
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-/* Animated grid background */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(10,88,64,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(10,88,64,0.04) 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: gridMove 40s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes gridMove {
-  0% { transform: translate(0,0); }
-  100% { transform: translate(50px,50px); }
-}
-
-/* Left accent stripe effect */
-body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(180deg, var(--root-main), var(--mesh-main), var(--mind-main));
-  z-index: 1000;
-}
-
-.container {
-  width: 100%;
-  max-width: 420px;
-  position: relative;
-  z-index: 1;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 48px 40px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
-  position: relative;
-  overflow: hidden;
-}
-
-/* Top accent gradient bar */
-.card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--root-main), var(--mesh-main), var(--mind-main));
-}
-
-.logo-section {
-  text-align: center;
-  margin-bottom: 36px;
-}
-
-.logo {
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, var(--root-main), var(--root-light));
-  border-radius: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: #fff;
-  margin-bottom: 20px;
-  box-shadow: 0 12px 32px rgba(10,88,64,0.3);
-  transition: all 0.3s ease;
-}
-
-.logo:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 40px rgba(10,88,64,0.4);
-}
-
-.badge-device {
-  display: inline-block;
-  padding: 3px 10px;
-  background: rgba(10,88,64,0.15);
-  border: 1px solid var(--root-main);
-  border-radius: 6px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--root-light);
-  margin-left: 10px;
-  vertical-align: middle;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-
-.logo-title {
-  font-size: 1.8rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.logo-title span {
-  color: var(--root-light);
-}
-
-.logo-sub {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin-top: 6px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-
-.form-group {
-  margin-bottom: 24px;
-}
-
-.form-label {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--muted);
-  margin-bottom: 10px;
-  font-family: var(--font-mono);
-}
-
-.form-input {
-  width: 100%;
-  padding: 14px 16px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  font-size: 1rem;
-  font-family: var(--font-display);
-  transition: all 0.2s ease;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--root-main);
-  box-shadow: 0 0 0 3px rgba(10,88,64,0.2);
-}
-
-.form-input::placeholder {
-  color: var(--muted);
-  opacity: 0.6;
-}
-
-.btn {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, var(--root-main), var(--root-light));
-  border: none;
-  border-radius: 10px;
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  font-family: var(--font-display);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 6px 20px rgba(10,88,64,0.3);
-  letter-spacing: 0.03em;
-}
-
-.btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(10,88,64,0.4);
-}
-
-.btn:active {
-  transform: translateY(0);
-}
-
-.btn.loading {
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.msg {
-  padding: 14px;
-  border-radius: 10px;
-  font-size: 0.9rem;
-  margin-bottom: 20px;
-  display: none;
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-}
-
-.msg.error {
-  background: rgba(128,48,24,0.15);
-  border: 1px solid var(--boot-main);
-  color: var(--boot-light);
-  display: block;
-}
-
-.msg.success {
-  background: rgba(10,88,64,0.15);
-  border: 1px solid var(--root-main);
-  color: var(--root-light);
-  display: block;
-}
-
-.footer {
-  text-align: center;
-  margin-top: 28px;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.footer a {
-  color: var(--root-light);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.footer a:hover {
-  color: var(--text);
-}
-
-/* 6-Module indicator dots */
-.module-dots {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 20px;
-}
-
-.module-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  opacity: 0.6;
-  transition: all 0.3s ease;
-}
-
-.module-dot:hover {
-  opacity: 1;
-  transform: scale(1.3);
-}
-
-.module-dot.boot { background: var(--boot-main); }
-.module-dot.auth { background: var(--auth-main); }
-.module-dot.root { background: var(--root-main); }
-.module-dot.mind { background: var(--mind-main); }
-.module-dot.mesh { background: var(--mesh-main); }
-.module-dot.wall { background: var(--wall-main); }
-
-/* TOTP / MFA steps */
-.step { display: none; }
-.step.active { display: block; }
-.step-hint {
-  color: var(--muted);
-  font-size: 0.85rem;
-  line-height: 1.5;
-  margin-bottom: 20px;
-  text-align: center;
-}
-.totp-input {
-  text-align: center;
-  letter-spacing: 0.5em;
-  font-family: var(--font-mono);
-  font-size: 1.4rem;
-  padding-left: 0.5em;
-}
-.qr-box {
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px;
-  width: 188px;
-  margin: 0 auto 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.qr-box img { width: 160px; height: 160px; image-rendering: pixelated; display: block; }
-.secret-line {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--auth-light);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  text-align: center;
-  word-break: break-all;
-  margin-bottom: 22px;
-  cursor: pointer;
-}
-.secret-line small { display: block; color: var(--muted); font-size: 0.6rem; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px; }
-.backup-codes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  margin: 18px 0 22px;
-}
-.backup-codes code {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px;
-  text-align: center;
-  color: var(--text);
-}
-.link-btn {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  cursor: pointer;
-  margin-top: 16px;
-  width: 100%;
-  text-align: center;
-  letter-spacing: 0.04em;
-}
-.link-btn:hover { color: var(--text); }
-
-/* Responsive */
-@media (max-width: 480px) {
-  .card {
-    padding: 36px 24px;
-  }
-  .logo {
-    width: 64px;
-    height: 64px;
-    font-size: 1.8rem;
-  }
-  .logo-title {
-    font-size: 1.5rem;
-  }
-}
+:root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+  --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+  color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
+.cadre{padding:10px;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.app{width:100%;max-width:400px;min-width:0;border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:20px 18px;display:grid;gap:12px}
+.app>*{min-width:0}
+.marque{text-align:center}
+.marque h1{margin:0;font-size:1.5rem;font-weight:800} .marque h1 span{color:var(--cyan)}
+.marque small{display:block;color:var(--cyan);font-size:.74rem;margin-top:2px}
+.badge{display:inline-block;margin-left:8px;border:1px solid var(--violet);color:var(--violet);background:rgba(167,139,250,.12);border-radius:999px;padding:1px 9px;font-size:.62rem;font-weight:700;vertical-align:middle}
+.points{display:flex;justify-content:center;gap:6px;margin-top:8px}
+.points i{width:8px;height:8px;border-radius:50%;display:block}
+.points .boot{background:#803018}
+.points .auth{background:#C04E24}
+.points .root{background:#0A5840}
+.points .mind{background:#3D35A0}
+.points .mesh{background:#104A88}
+.points .wall{background:#9A6010}
+.msg{display:none;border-radius:10px;padding:8px 12px;font-size:.82rem;overflow-wrap:anywhere}
+.msg.error{display:block;border:1px solid var(--rouge);background:rgba(255,77,94,.1);color:#ffd3d8}
+.msg.success{display:block;border:1px solid var(--vert);background:rgba(46,204,113,.1);color:#c9f5dc}
+.step{display:none;gap:10px;min-width:0} .step.active{display:grid}
+.indice{margin:0;color:var(--doux);font-size:.8rem}
+.champ{display:grid;gap:4px}
+.champ label{color:var(--doux);font-size:.74rem}
+.champ input{font:inherit;width:100%;min-height:40px;padding:8px 11px;border-radius:10px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte)}
+.champ input:focus-visible{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan)}
+.champ input.code{text-align:center;letter-spacing:.35em;font-size:1.25rem;font-variant-numeric:tabular-nums}
+.btn{font:inherit;font-weight:700;min-height:42px;border-radius:10px;border:1px solid var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);cursor:pointer;padding:8px 14px}
+.btn:hover{background:rgba(41,182,246,.28)} .btn:focus-visible,.lien:focus-visible,.cle:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.btn:disabled,.btn.loading{opacity:.6;cursor:default}
+.lien{font:inherit;background:none;border:0;color:var(--doux);cursor:pointer;font-size:.78rem;padding:8px;min-height:36px}
+.lien:hover{color:var(--cyan)}
+.qr{background:#fff;border-radius:10px;padding:8px;justify-self:center;max-width:100%} .qr img{display:block;width:180px;max-width:100%;height:auto}
+.cle{font:inherit;display:grid;gap:2px;text-align:left;border:1px dashed var(--trait2);border-radius:10px;background:rgba(10,22,46,.6);color:var(--texte);padding:8px 11px;cursor:pointer}
+.cle small{color:var(--faible);font-size:.68rem} .cle span{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.8rem;overflow-wrap:anywhere}
+.secours{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.secours code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.8rem;text-align:center;border:1px solid var(--trait);border-radius:8px;padding:6px 4px;background:rgba(10,22,46,.6);overflow-wrap:anywhere;user-select:all}
+.pied{text-align:center;color:var(--faible);font-size:.7rem} .pied a{color:var(--doux)}
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="card">
-    <div class="logo-section">
-      <div class="logo" id="logo-icon">S</div>
-      <h1 class="logo-title" id="logo-title">Secu<span>Box</span><span class="badge-device" id="device-badge" style="display:none;"></span></h1>
-      <p class="logo-sub" id="logo-sub">Secure Network Appliance</p>
-      <div class="module-dots">
-        <span class="module-dot boot" title="BOOT"></span>
-        <span class="module-dot auth" title="AUTH"></span>
-        <span class="module-dot root" title="ROOT"></span>
-        <span class="module-dot mind" title="MIND"></span>
-        <span class="module-dot mesh" title="MESH"></span>
-        <span class="module-dot wall" title="WALL"></span>
-      </div>
-    </div>
-
-    <div id="msg" class="msg"></div>
-
-    <!-- Step 1: password -->
-    <form id="login-form" class="step active" onsubmit="return handleLogin(event)">
-      <div class="form-group">
-        <label class="form-label">Username</label>
-        <input type="text" id="username" class="form-input" placeholder="admin" required autocomplete="username">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Password</label>
-        <!-- Pas de `required` (#1709) : un compte sans mot de passe s'ouvre, en
-             première configuration, avec un champ vide — c'est le serveur qui
-             tranche (réseau local seulement, #1707). -->
-        <input type="password" id="password" class="form-input" placeholder="********" autocomplete="current-password">
-      </div>
-      <button type="submit" id="btn-submit" class="btn">Sign In</button>
-    </form>
-
-    <!-- Step 1b: choisir le mot de passe — première configuration ou changement
-         imposé (#1709). Le serveur a vérifié ce qu'il fallait vérifier et remis
-         un jeton limité à ce seul geste. -->
-    <form id="setup-form" class="step" onsubmit="return handleSetup(event)">
-      <p class="step-hint">🔑 Premier accès à ce compte, ou changement imposé.<br>Choisissez son mot de passe.</p>
-      <div class="form-group">
-        <label class="form-label">Nouveau mot de passe</label>
-        <input type="password" id="setup-pw" class="form-input" autocomplete="new-password" minlength="10" required>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Confirmer</label>
-        <input type="password" id="setup-pw2" class="form-input" autocomplete="new-password" minlength="10" required>
-      </div>
-      <button type="submit" id="btn-setup" class="btn">Définir le mot de passe</button>
-      <button type="button" class="link-btn" onclick="resetToLogin()">← Annuler</button>
-    </form>
-
-    <!-- Step 2: TOTP challenge (already-enrolled users) -->
-    <form id="mfa-form" class="step" onsubmit="return handleMfa(event)">
-      <p class="step-hint">🔐 Two-factor required.<br>Enter the 6-digit code from your authenticator (a backup code also works).</p>
-      <div class="form-group">
-        <label class="form-label">Verification Code</label>
-        <input type="text" id="mfa-code" class="form-input totp-input" placeholder="······" inputmode="numeric" autocomplete="one-time-code" maxlength="14" required>
-      </div>
-      <button type="submit" id="btn-mfa" class="btn">Verify</button>
-      <button type="button" class="link-btn" onclick="resetToLogin()">← Back to sign in</button>
-    </form>
-
-    <!-- Step 3: TOTP enrollment (admin forced to enrol) -->
-    <form id="enroll-form" class="step" onsubmit="return handleEnroll(event)">
-      <p class="step-hint">🛡️ Two-factor setup required for this account.<br>Scan the code with your authenticator app, then enter the 6-digit code it shows.</p>
-      <div class="qr-box"><img id="enroll-qr" alt="TOTP QR code"></div>
-      <div class="secret-line" id="enroll-secret" title="Tap to copy"><small>Manual entry key</small><span id="enroll-secret-val"></span></div>
-      <div class="form-group">
-        <label class="form-label">Verification Code</label>
-        <input type="text" id="enroll-code" class="form-input totp-input" placeholder="······" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
-      </div>
-      <button type="submit" id="btn-enroll" class="btn">Confirm &amp; Enable</button>
-      <button type="button" class="link-btn" onclick="resetToLogin()">← Cancel</button>
-    </form>
-
-    <!-- Step 4: one-time backup codes -->
-    <div id="backup-step" class="step">
-      <p class="step-hint">✅ Two-factor enabled.<br><strong>Save these backup codes</strong> — each works once and they are shown only now.</p>
-      <div class="backup-codes" id="backup-codes"></div>
-      <button type="button" id="btn-backup" class="btn" onclick="finishBackup()">I've saved them — Continue</button>
-    </div>
-
-    <div class="footer">
-      <p>SecuBox &copy; <a href="https://cybermind.fr">CyberMind</a></p>
-    </div>
+<div class="cadre">
+ <main class="app">
+  <div class="marque">
+    <h1 id="logo-title">Secu<span>Box</span><span class="badge" id="device-badge" style="display:none"></span></h1>
+    <small id="logo-sub">Appliance réseau sécurisée</small>
+    <div class="points" aria-hidden="true"><i class="boot" title="BOOT"></i><i class="auth" title="AUTH"></i><i class="root" title="ROOT"></i><i class="mind" title="MIND"></i><i class="mesh" title="MESH"></i><i class="wall" title="WALL"></i></div>
   </div>
-</div>
 
+  <div id="msg" class="msg" role="alert" aria-live="polite"></div>
+
+  <!-- Étape 1 : identifiants -->
+  <form id="login-form" class="step active" autocomplete="on">
+    <div class="champ"><label for="username">Identifiant</label>
+      <input type="text" id="username" name="username" placeholder="admin" required autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+    <div class="champ"><label for="password">Mot de passe</label>
+      <!-- Pas de `required` (#1709) : un compte sans mot de passe s'ouvre, en première configuration, avec un champ vide —
+           c'est le serveur qui tranche (réseau local seulement, #1707). -->
+      <input type="password" id="password" name="password" placeholder="********" autocomplete="current-password"></div>
+    <button type="submit" id="btn-submit" class="btn">Se connecter</button>
+  </form>
+
+  <!-- Étape 1b : choisir le mot de passe — première configuration ou changement imposé (#1709) -->
+  <form id="setup-form" class="step">
+    <p class="indice">🔑 Premier accès à ce compte, ou changement imposé.<br>Choisissez son mot de passe.</p>
+    <div class="champ"><label for="setup-pw">Nouveau mot de passe</label>
+      <input type="password" id="setup-pw" name="new-password" autocomplete="new-password" minlength="10" required></div>
+    <div class="champ"><label for="setup-pw2">Confirmer</label>
+      <input type="password" id="setup-pw2" name="confirm-password" autocomplete="new-password" minlength="10" required></div>
+    <button type="submit" id="btn-setup" class="btn">Définir le mot de passe</button>
+    <button type="button" class="lien" data-retour>← Annuler</button>
+  </form>
+
+  <!-- Étape 2 : code TOTP (compte déjà inscrit) -->
+  <form id="mfa-form" class="step">
+    <p class="indice">🔐 Second facteur requis.<br>Saisissez le code à 6 chiffres de votre application d'authentification (un code de secours convient aussi).</p>
+    <div class="champ"><label for="mfa-code">Code de vérification</label>
+      <input type="text" id="mfa-code" name="otp" class="code" placeholder="······" inputmode="numeric" autocomplete="one-time-code" maxlength="14" required></div>
+    <button type="submit" id="btn-mfa" class="btn">Vérifier</button>
+    <button type="button" class="lien" data-retour>← Retour à la connexion</button>
+  </form>
+
+  <!-- Étape 3 : inscription TOTP (administrateur tenu de s'inscrire) -->
+  <form id="enroll-form" class="step">
+    <p class="indice">🛡️ Second facteur à configurer pour ce compte.<br>Scannez le code avec votre application d'authentification, puis saisissez le code à 6 chiffres qu'elle affiche.</p>
+    <div class="qr"><img id="enroll-qr" alt="Code QR TOTP"></div>
+    <button type="button" class="cle" id="enroll-secret" title="Toucher pour copier"><small>Clé de saisie manuelle</small><span id="enroll-secret-val"></span></button>
+    <div class="champ"><label for="enroll-code">Code de vérification</label>
+      <input type="text" id="enroll-code" name="otp" class="code" placeholder="······" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
+    <button type="submit" id="btn-enroll" class="btn">Confirmer et activer</button>
+    <button type="button" class="lien" data-retour>← Annuler</button>
+  </form>
+
+  <!-- Étape 4 : codes de secours, montrés une seule fois -->
+  <div id="backup-step" class="step">
+    <p class="indice">✅ Second facteur activé.<br><strong>Conservez ces codes de secours</strong> : chacun ne sert qu'une fois et ils ne sont montrés que maintenant.</p>
+    <div class="secours" id="backup-codes"></div>
+    <button type="button" id="btn-backup" class="btn">Codes conservés — continuer</button>
+  </div>
+
+  <div class="pied">SecuBox &copy; <a href="https://cybermind.fr">CyberMind</a></div>
+ </main>
+</div>
 <script>
-var API = '/api/v1/hub';
+(function () {
+'use strict';
+
+function $(id) { return document.getElementById(id); }
 
 function showMsg(text, type) {
-  var msg = document.getElementById('msg');
+  var msg = $('msg');
   msg.textContent = text;
   msg.className = 'msg ' + type;
 }
+function clearMsg() { $('msg').className = 'msg'; }
 
-// Cross-step state. mfaToken / enrollToken are short-lived scoped tokens the
-// server hands back mid-login; username is remembered so a code step knows who
-// it is finishing for.
+// État entre étapes. mfaToken / enrollToken / setupToken sont des jetons à portée limitée et courte durée remis par le
+// serveur en cours de connexion ; l'identifiant est retenu pour que l'étape suivante sache pour qui elle termine.
 var _username = '';
 var _mfaToken = '';
 var _enrollToken = '';
@@ -523,24 +148,24 @@ var _setupToken = '';
 function showStep(id) {
   var steps = document.querySelectorAll('.step');
   for (var i = 0; i < steps.length; i++) steps[i].classList.remove('active');
-  document.getElementById(id).classList.add('active');
+  $(id).classList.add('active');
 }
 
 function resetToLogin() {
   _mfaToken = ''; _enrollToken = ''; _setupToken = '';
-  document.getElementById('msg').className = 'msg';
-  var pw = document.getElementById('password'); if (pw) pw.value = '';
+  clearMsg();
+  var pw = $('password'); if (pw) pw.value = '';
   showStep('login-form');
 }
 
 function setBtn(id, loading, label) {
-  var b = document.getElementById(id);
+  var b = $(id);
   if (!b) return;
-  if (loading) { b.classList.add('loading'); b.textContent = label; }
-  else { b.classList.remove('loading'); b.textContent = label; }
+  if (loading) b.classList.add('loading'); else b.classList.remove('loading');
+  b.textContent = label;
 }
 
-// Persist the real session token and go where we came from.
+// Conserve le vrai jeton de session.
 function finalizeToken(token) {
   localStorage.setItem('sbx_token', token);
   localStorage.setItem('secubox_token', token);
@@ -548,252 +173,230 @@ function finalizeToken(token) {
   localStorage.setItem('secubox_role', 'admin');
 }
 
-function handleLogin(e) {
-  e.preventDefault();
-  _username = document.getElementById('username').value.trim();
-  var password = document.getElementById('password').value;
-  setBtn('btn-submit', true, 'Authenticating...');
+// Honore ?redirect=<chemin de même origine> pour revenir à la page qui nous a envoyés ici (ex. /metablogizer/) au lieu
+// d'atterrir toujours à la racine du hub. Seul un chemin absolu à barre unique est accepté (jamais //hote ni /\hote) —
+// pas de redirection ouverte. Les caractères de contrôle sont aussi refusés : le navigateur retire tabulations et sauts
+// de ligne d'une adresse, si bien que « /<TAB>/hote » deviendrait « //hote ».
+function _sbxRedirect() {
+  try {
+    var p = new URLSearchParams(window.location.search).get('redirect');
+    if (p && /^\/(?![\/\\])/.test(p) && !/[\u0000-\u001f\u007f]/.test(p)) return p;
+  } catch (e) {}
+  return '/';
+}
 
-  // MUST hit the canonical auth service (/api/v1/auth → auth.sock), NOT the
-  // hub-proxied copy (/api/v1/hub/auth/login). The hub includes the auth
-  // router but does NOT register the session callback, so a login through the
-  // hub mints a token whose jti is never written to sessions.json — every
-  // later request then fails require_jwt with "Session révoquée". Going
-  // straight to auth.sock records the session, so the token actually works.
+function lireJson(r, repli) {
+  return r.json().catch(function () { return {}; }).then(function (d) {
+    if (!r.ok) throw new Error((d && d.detail) || repli);
+    return d;
+  });
+}
+
+function handleLogin() {
+  _username = $('username').value.trim();
+  var password = $('password').value;
+  setBtn('btn-submit', true, 'Authentification…');
+
+  // DOIT viser le service d'authentification canonique (/api/v1/auth → auth.sock), PAS la copie relayée par le hub
+  // (/api/v1/hub/auth/login). Le hub inclut le routeur d'authentification mais n'enregistre PAS le rappel de session :
+  // une connexion par le hub produit un jeton dont le jti n'est jamais écrit dans sessions.json — chaque requête
+  // suivante échoue alors dans require_jwt avec « Session révoquée ». Aller droit à auth.sock enregistre la session.
   fetch('/api/v1/auth/login', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({username: _username, password: password}),
     credentials: 'include'
   })
-  .then(function(r) {
-    return r.json().then(function(d) {
-      if (!r.ok) throw new Error(d.detail || 'Invalid credentials');
-      return d;
-    });
-  })
-  .then(function(data) {
-    setBtn('btn-submit', false, 'Sign In');
-    if (data.access_token) {                 // password-only login
+  .then(function (r) { return lireJson(r, 'Identifiants invalides'); })
+  .then(function (data) {
+    setBtn('btn-submit', false, 'Se connecter');
+    if (data.access_token) {                 // mot de passe seul
       finalizeToken(data.access_token);
-      showMsg('Login successful!', 'success');
-      setTimeout(function() { window.location.href = _sbxRedirect(); }, 500);
-    } else if (data.mfa_required) {          // enrolled user → ask for code
+      showMsg('Connexion réussie.', 'success');
+      setTimeout(function () { window.location.href = _sbxRedirect(); }, 500);
+    } else if (data.mfa_required) {          // compte inscrit → demander le code
       _mfaToken = data.mfa_token;
-      document.getElementById('msg').className = 'msg';
+      clearMsg();
       showStep('mfa-form');
-      document.getElementById('mfa-code').focus();
-    } else if (data.enrollment_required) {   // admin must set up 2FA now
+      $('mfa-code').focus();
+    } else if (data.enrollment_required) {   // l'administrateur doit configurer le TOTP maintenant
       _enrollToken = data.enrollment_token;
       startEnrollment();
-    } else if (data.setup_required) {         // première configuration / changement imposé (#1709)
+    } else if (data.setup_required) {        // première configuration / changement imposé (#1709)
       _setupToken = data.setup_token;
-      document.getElementById('msg').className = 'msg';
+      clearMsg();
       showStep('setup-form');
-      document.getElementById('setup-pw').focus();
+      $('setup-pw').focus();
     } else {
-      throw new Error(data.detail || 'Login failed');
+      throw new Error(data.detail || 'Échec de la connexion');
     }
   })
-  .catch(function(err) {
-    setBtn('btn-submit', false, 'Sign In');
-    showMsg(err.message || 'Authentication failed', 'error');
+  .catch(function (err) {
+    setBtn('btn-submit', false, 'Se connecter');
+    showMsg(err.message || 'Échec de l\'authentification', 'error');
   });
-  return false;
 }
 
-// Step 1b — choisir le mot de passe (#1709), puis se reconnecter avec lui : la
-// suite (OTP, session) est celle d'une connexion ordinaire.
-function handleSetup(e) {
-  e.preventDefault();
-  var pw = document.getElementById('setup-pw').value;
-  var pw2 = document.getElementById('setup-pw2').value;
-  if (pw.length < 10) { showMsg('Au moins 10 caractères.', 'error'); return false; }
-  if (pw !== pw2) { showMsg('Les deux saisies diffèrent.', 'error'); return false; }
-  setBtn('btn-setup', true, 'Enregistrement...');
+// Étape 1b — choisir le mot de passe (#1709), puis se reconnecter avec lui : la suite (OTP, session) est celle d'une
+// connexion ordinaire.
+function handleSetup() {
+  var pw = $('setup-pw').value;
+  var pw2 = $('setup-pw2').value;
+  if (pw.length < 10) { showMsg('Au moins 10 caractères.', 'error'); return; }
+  if (pw !== pw2) { showMsg('Les deux saisies diffèrent.', 'error'); return; }
+  setBtn('btn-setup', true, 'Enregistrement…');
   fetch('/api/v1/auth/set-password', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _setupToken},
     body: JSON.stringify({new_password: pw}),
     credentials: 'include'
   })
-  .then(function(r) {
-    return r.json().then(function(d) {
-      if (!r.ok) throw new Error(d.detail || 'Échec de l\'enregistrement');
-      return d;
-    });
-  })
-  .then(function() {
+  .then(function (r) { return lireJson(r, 'Échec de l\'enregistrement'); })
+  .then(function () {
     setBtn('btn-setup', false, 'Définir le mot de passe');
     _setupToken = '';
-    document.getElementById('setup-pw').value = '';
-    document.getElementById('setup-pw2').value = '';
-    document.getElementById('password').value = pw;
+    $('setup-pw').value = '';
+    $('setup-pw2').value = '';
+    $('password').value = pw;
     showStep('login-form');
     showMsg('Mot de passe enregistré — connexion…', 'success');
-    handleLogin({preventDefault: function() {}});
+    handleLogin();
   })
-  .catch(function(err) {
+  .catch(function (err) {
     setBtn('btn-setup', false, 'Définir le mot de passe');
     showMsg(err.message || 'Échec', 'error');
   });
-  return false;
 }
 
-// Step 2 — verify a code for an already-enrolled account.
-function handleMfa(e) {
-  e.preventDefault();
-  var code = document.getElementById('mfa-code').value.trim();
-  setBtn('btn-mfa', true, 'Verifying...');
+// Étape 2 — vérifier un code pour un compte déjà inscrit.
+function handleMfa() {
+  var code = $('mfa-code').value.trim();
+  setBtn('btn-mfa', true, 'Vérification…');
   fetch('/api/v1/auth/login/mfa', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _mfaToken},
     body: JSON.stringify({code: code}),
     credentials: 'include'
   })
-  .then(function(r) {
-    return r.json().then(function(d) {
-      if (!r.ok) throw new Error(d.detail || 'Invalid code');
-      return d;
-    });
-  })
-  .then(function(data) {
-    setBtn('btn-mfa', false, 'Verify');
+  .then(function (r) { return lireJson(r, 'Code invalide'); })
+  .then(function (data) {
+    setBtn('btn-mfa', false, 'Vérifier');
     finalizeToken(data.access_token);
-    showMsg('Login successful!', 'success');
-    setTimeout(function() { window.location.href = _sbxRedirect(); }, 500);
+    showMsg('Connexion réussie.', 'success');
+    setTimeout(function () { window.location.href = _sbxRedirect(); }, 500);
   })
-  .catch(function(err) {
-    setBtn('btn-mfa', false, 'Verify');
-    showMsg(err.message || 'Verification failed', 'error');
-    var f = document.getElementById('mfa-code'); f.value = ''; f.focus();
+  .catch(function (err) {
+    setBtn('btn-mfa', false, 'Vérifier');
+    showMsg(err.message || 'Échec de la vérification', 'error');
+    var f = $('mfa-code'); f.value = ''; f.focus();
   });
-  return false;
 }
 
-// Step 3a — ask the server to mint a secret + QR for this enrollment token.
+// Étape 3a — demander au serveur un secret + un QR pour ce jeton d'inscription.
 function startEnrollment() {
-  document.getElementById('msg').className = 'msg';
+  clearMsg();
   fetch('/api/v1/auth/totp/enroll', {
     method: 'POST',
     headers: {'Authorization': 'Bearer ' + _enrollToken},
     credentials: 'include'
   })
-  .then(function(r) {
-    return r.json().then(function(d) {
-      if (!r.ok) throw new Error(d.detail || 'Enrollment failed');
-      return d;
-    });
-  })
-  .then(function(data) {
+  .then(function (r) { return lireJson(r, 'Échec de l\'inscription'); })
+  .then(function (data) {
     var qr = data.qr_png_b64 || '';
-    document.getElementById('enroll-qr').src =
-      (qr.indexOf('data:') === 0) ? qr : 'data:image/png;base64,' + qr;
-    document.getElementById('enroll-secret-val').textContent = data.secret || '';
+    $('enroll-qr').src = (qr.indexOf('data:') === 0) ? qr : 'data:image/png;base64,' + qr;
+    $('enroll-secret-val').textContent = data.secret || '';
     showStep('enroll-form');
-    document.getElementById('enroll-code').focus();
+    $('enroll-code').focus();
   })
-  .catch(function(err) {
-    showMsg(err.message || 'Could not start 2FA setup', 'error');
+  .catch(function (err) {
+    showMsg(err.message || 'Impossible de démarrer la configuration 2FA', 'error');
     showStep('login-form');
   });
 }
 
-// Step 3b — confirm the first code, enabling TOTP; server returns a real token.
-function handleEnroll(e) {
-  e.preventDefault();
-  var code = document.getElementById('enroll-code').value.trim();
-  setBtn('btn-enroll', true, 'Enabling...');
+// Étape 3b — confirmer le premier code, ce qui active le TOTP ; le serveur remet un vrai jeton.
+function handleEnroll() {
+  var code = $('enroll-code').value.trim();
+  setBtn('btn-enroll', true, 'Activation…');
   fetch('/api/v1/auth/totp/confirm', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _enrollToken},
     body: JSON.stringify({code: code}),
     credentials: 'include'
   })
-  .then(function(r) {
-    return r.json().then(function(d) {
-      if (!r.ok) throw new Error(d.detail || 'Invalid code');
-      return d;
-    });
-  })
-  .then(function(data) {
-    setBtn('btn-enroll', false, 'Confirm & Enable');
-    finalizeToken(data.access_token);      // logged in; hold the redirect until
-    _enrollToken = '';                      // the user acknowledges backup codes
+  .then(function (r) { return lireJson(r, 'Code invalide'); })
+  .then(function (data) {
+    setBtn('btn-enroll', false, 'Confirmer et activer');
+    finalizeToken(data.access_token);      // connecté ; on retient la redirection jusqu'à ce que
+    _enrollToken = '';                      // l'utilisateur ait pris acte des codes de secours
     var codes = data.backup_codes || [];
-    var box = document.getElementById('backup-codes');
-    box.innerHTML = '';
+    var box = $('backup-codes');
+    box.textContent = '';
     for (var i = 0; i < codes.length; i++) {
       var c = document.createElement('code');
       c.textContent = codes[i];
       box.appendChild(c);
     }
-    document.getElementById('msg').className = 'msg';
+    clearMsg();
     showStep('backup-step');
   })
-  .catch(function(err) {
-    setBtn('btn-enroll', false, 'Confirm & Enable');
-    showMsg(err.message || 'Verification failed', 'error');
-    var f = document.getElementById('enroll-code'); f.value = ''; f.focus();
+  .catch(function (err) {
+    setBtn('btn-enroll', false, 'Confirmer et activer');
+    showMsg(err.message || 'Échec de la vérification', 'error');
+    var f = $('enroll-code'); f.value = ''; f.focus();
   });
-  return false;
 }
 
-function finishBackup() {
-  window.location.href = _sbxRedirect();
-}
+function finishBackup() { window.location.href = _sbxRedirect(); }
 
-// Tap the manual-entry key to copy it.
-document.getElementById('enroll-secret').addEventListener('click', function() {
-  var val = document.getElementById('enroll-secret-val').textContent;
+function onSubmit(id, fn) {
+  $(id).addEventListener('submit', function (e) { e.preventDefault(); fn(); });
+}
+onSubmit('login-form', handleLogin);
+onSubmit('setup-form', handleSetup);
+onSubmit('mfa-form', handleMfa);
+onSubmit('enroll-form', handleEnroll);
+$('btn-backup').addEventListener('click', finishBackup);
+var retours = document.querySelectorAll('[data-retour]');
+for (var k = 0; k < retours.length; k++) retours[k].addEventListener('click', resetToLogin);
+
+// Toucher la clé de saisie manuelle pour la copier.
+$('enroll-secret').addEventListener('click', function () {
+  var val = $('enroll-secret-val').textContent;
   if (val && navigator.clipboard) {
-    navigator.clipboard.writeText(val).then(function() { showMsg('Key copied', 'success'); });
+    navigator.clipboard.writeText(val).then(function () { showMsg('Clé copiée.', 'success'); }, function () {});
   }
 });
 
-// Honor ?redirect=<same-origin path> so login returns to the page that sent us
-// here (e.g. /metablogizer/) instead of always landing at the hub root. Only a
-// single-slash absolute path is accepted (never //host or /\host) — open-redirect safe.
-function _sbxRedirect() {
-  try {
-    var p = new URLSearchParams(window.location.search).get('redirect');
-    if (p && /^\/(?![\/\\])/.test(p)) return p;
-  } catch (e) {}
-  return '/';
-}
-
-// Load device-specific theme
+// Thème propre à l'appareil
 function loadTheme() {
   fetch('/api/v1/portal/theme')
-  .then(function(r) { return r.json(); })
-  .then(function(theme) {
+  .then(function (r) { return r.json(); })
+  .then(function (theme) {
     if (theme && theme.name) {
-      var sub = document.getElementById('logo-sub');
+      var sub = $('logo-sub');
       if (sub) sub.textContent = 'SecuBox ' + theme.name + ' Edition';
     }
     if (theme && theme.badge) {
-      var badge = document.getElementById('device-badge');
+      var badge = $('device-badge');
       if (badge) {
         badge.textContent = theme.badge;
         badge.style.display = 'inline-block';
       }
     }
   })
-  .catch(function() {});
+  .catch(function () {});
 }
 
-// Check if already authenticated — but ONLY on a direct visit. If we were
-// bounced here by a module (a ?redirect= is present), that module REJECTED the
-// current token, so auto-redirecting back on a lenient hub/status check creates
-// an infinite login<->module loop where the form never shows. In that case,
-// drop the stale token(s) and show the form so the user can actually re-auth.
-// DÉCONNEXION DEMANDÉE (#1803) — le Hall ouvre cette page avec
-// ?deconnexion=1 : on termine la session côté serveur (cookie ET jeton), on
-// efface le navigateur, puis on montre le formulaire, sans rebond.
+// Déjà authentifié ? — mais SEULEMENT sur une visite directe. Si un module nous a renvoyés ici (un ?redirect= est
+// présent), c'est qu'il a REFUSÉ le jeton actuel : rebondir sur une vérification complaisante du hub créerait une boucle
+// infinie connexion<->module où le formulaire ne s'affiche jamais. Dans ce cas on jette le(s) jeton(s) périmé(s) et on
+// montre le formulaire pour que l'utilisateur puisse se réauthentifier.
+// DÉCONNEXION DEMANDÉE (#1803) — le Hall ouvre cette page avec ?deconnexion=1 : on termine la session côté serveur
+// (cookie ET jeton), on efface le navigateur, puis on montre le formulaire, sans rebond.
 var _sbxQs = new URLSearchParams(window.location.search);
-// ÉLÉVATION DEPUIS UN APPAREIL DE CONFIANCE (#1827). L'Identity Manager du Hall
-// remet un BON d'une minute, à usage unique, dans le fragment (jamais envoyé au
-// serveur, jamais journalisé) ; on l'échange ici contre la session
+// ÉLÉVATION DEPUIS UN APPAREIL DE CONFIANCE (#1827). L'Identity Manager du Hall remet un BON d'une minute, à usage
+// unique, dans le fragment (jamais envoyé au serveur, jamais journalisé) ; on l'échange ici contre la session
 // d'administration, puis on efface le fragment AVANT toute autre chose.
 var _sbxElev = (window.location.hash.match(/^#elevation=([A-Za-z0-9_-]{40,64})$/) || [])[1];
 if (_sbxElev) history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -815,7 +418,7 @@ if (_sbxElev) {
 } else if (_sbxQs.has('deconnexion')) {
   var _sbxT = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
   fetch('/api/v1/auth/auth/logout', { method: 'POST', credentials: 'include',
-    headers: _sbxT ? { 'Authorization': 'Bearer ' + _sbxT } : {} }).catch(function() {});
+    headers: _sbxT ? { 'Authorization': 'Bearer ' + _sbxT } : {} }).catch(function () {});
   localStorage.removeItem('sbx_token');
   localStorage.removeItem('secubox_token');
   localStorage.removeItem('secubox_user');
@@ -831,20 +434,18 @@ if (_sbxElev) {
     fetch('/api/v1/hub/status', {
       headers: {'Authorization': 'Bearer ' + token}
     })
-    .then(function(r) {
+    .then(function (r) {
       if (r.ok) window.location.href = _sbxRedirect();
     })
-    .catch(function() {});
+    .catch(function () {});
   }
 }
 
-// CONSOLE LOCALE DU KIOSQUE (#1695). Sur le port console (admin.localhost:9078,
-// l'administration qu'encadre le Hall de la console hall.localhost:9078),
-// l'administration s'ouvre sans authentification : le serveur n'accorde la
-// session qu'à une connexion du kiosque lui-même. Toute page d'administration
-// sans session arrive ici ; on la renvoie d'où elle vient, session en main.
-// Garde anti-boucle : si un module refuse cette session, il nous renverrait
-// ici aussitôt — au-delà d'un essai par 15 s, on s'arrête et on le dit.
+// CONSOLE LOCALE DU KIOSQUE (#1695). Sur le port console (admin.localhost:9078, l'administration qu'encadre le Hall de la
+// console hall.localhost:9078), l'administration s'ouvre sans authentification : le serveur n'accorde la session qu'à une
+// connexion du kiosque lui-même. Toute page d'administration sans session arrive ici ; on la renvoie d'où elle vient,
+// session en main. Garde anti-boucle : si un module refuse cette session, il nous renverrait ici aussitôt — au-delà d'un
+// essai par 15 s, on s'arrête et on le dit.
 (function () {
   if (!/^(hall|admin)\.localhost$/.test(location.hostname) || location.port !== '9078') return;
   var dernier = 0;
@@ -866,6 +467,7 @@ if (_sbxElev) {
 })();
 
 loadTheme();
+})();
 </script>
 </body>
 </html>
