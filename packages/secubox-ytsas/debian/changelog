@@ -1,3 +1,9 @@
+secubox-ytsas (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * Vhost public ytsas : le journal par domaine (access_log secubox-hosts.log, format sbx_host) fait partie de la source, comme pour les autres vhosts. Il n'y était pas : un outil le posait à la main sur la box, ce qui faisait poser à dpkg la question du fichier de configuration modifié à chaque mise à jour (la 0.8.0 s'est arrêtée dessus). Aucun autre changement de comportement (ref #2714).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 20:00:00 +0200
+
 secubox-ytsas (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Administration du Flux YouTube (ref #2714) : nouvel onglet « Administration du flux » dans la page YouTube SAS, à côté de la carte du Hall (conservée). État des cookies (présence, date du fichier, verdict de YouTube : jamais le contenu, jamais un nom ni une valeur de cookie) avec le mode d'emploi pour des cookies qui tiennent, état de chaque liste (dernière lecture, vidéos en cache, périmé, cause, durée), actualiser ou vider une liste (confirmation dans la page), diagnostic (version de yt-dlp, moteur JavaScript, derniers échecs assainis, taille du cache). Mode ?demo=1 sans requête ni écriture.
