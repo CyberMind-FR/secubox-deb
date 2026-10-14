@@ -30,7 +30,9 @@ def test_l_apercu_n_est_relu_qu_une_fois_par_minute():
 
 
 def test_valeurs_serveur_echappees_et_aucune_ressource_externe():
-    assert "esc(e.acteur" in HTML and "esc(e.type" in HTML and "esc(e.module" in HTML
+    # Aurora (#2682) : plus aucun innerHTML ; les valeurs serveur passent par textContent (h(tag, classe, texte)), jamais interprétées
+    assert "innerHTML" not in HTML
+    assert "e.acteur" in HTML and "String(e.type" in HTML and "String(e.module" in HTML
     assert "http://" not in HTML.replace("http://www.w3.org/2000/svg", "")
 
 
@@ -60,7 +62,7 @@ def test_les_scripts_de_la_page_sont_du_javascript_valide():
 def test_les_robots_connus_sont_classes_a_part_et_echappes():
     """#2201 : une tuile et une ligne dédiées, alimentées par `robots` de l'aperçu ; jamais dans les paliers critiques/suspects/observés."""
     assert "function rendRobots(" in HTML and "APERCU.robots" in HTML
-    assert "accès de robots connus" in HTML and "esc(x.famille)" in HTML
+    assert "ccès de robots connus" in HTML and "x.famille+" in HTML   # #2682 : textContent, plus esc()
     corps = re.search(r"function rendTuiles\(\)\{(.*?)\n\}", HTML, re.S).group(1)
     assert "rendRobots()" in corps
     assert "score(a)" in corps and "robot" not in corps.split("rendRobots()")[0].lower().replace("acteurs", "")   # le barème des acteurs ignore les robots

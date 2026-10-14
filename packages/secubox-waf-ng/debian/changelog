@@ -1,3 +1,10 @@
+secubox-waf-ng (1.29.2-1~bookworm1) bookworm; urgency=low
+
+  * Aurora, vague 7 (#2682) : la page Actor Intelligence (/actor/, /actor-intelligence/) et le poste de garde WAF (/waf/tableau) passent au profil Aurora : pages autonomes (CSS et JS en ligne, plus de police distante ni de skin partage), aucune injection de balisage (createElement et textContent), infobulle de definition sur chaque tuile, mesure absente affichee « — », bandeau « session requise », ?demo=1 (donnees fictives, aucune ecriture) et ?embed=1, hauteur annoncee a l'hote (sbxVue + onglet), 420 px sans debordement. Memes routes et memes appels (lecture seule) ; le jeton sbx_token part en Bearer. Le menu commun n'est charge que hors embed, hors demonstration et sur l'hote d'administration.
+  * Non repris : theme clair (?theme=) et message de theme du Hall pour le poste de garde (profil sombre unique) ; sur un 401 le poste de garde ne redirige plus vers /login.html, il affiche un bandeau avec le lien de connexion ; la tuile Posture affiche « — » si le moteur ne la fournit pas (elle valait « Protegee » par defaut) ; « LAN » n'est plus compte comme un pays sur la carte.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 09:30:00 +0200
+
 secubox-waf-ng (1.29.1-1~bookworm1) bookworm; urgency=high
 
   * ExecReload n'envoie plus SIGHUP (#2629) : « systemctl reload secubox-waf-ng » (appele par secubox-relais-maillage, secubox-podcaster, l'exposition mesh...) tuait le WAF sans relance. Il fait maintenant un touch de haproxy-routes.json, qui force la relecture a chaud (controle de mtime). Le commentaire de l'unite parlait d'une « reparation de la table nft sur SIGHUP » qui n'existe pas dans le code. NB : le deploiement de ce paquet relance le WAF (quelques secondes de 503) : a faire hors heure de pointe.
