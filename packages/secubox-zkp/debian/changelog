@@ -1,3 +1,13 @@
+secubox-zkp (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /zkp/ refaite au profil Aurora (ref #2612) : page autonome en français, tuiles (outils, version, clés, preuves), panneaux « Générer une clé » et « Prouver et vérifier », tableau des clés, mode ?demo=1 (données fictives, actions inertes) et ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncée à l'hôte (sbxVue, onglet zkp).
+  * Corrigé : les confirm() et alert() natifs sont remplacés par une confirmation intégrée à la page (suppression d'une clé) et des messages dans la page ; la redirection brutale vers /login.html sur 401 devient un bandeau ; les noms de clés et les réponses de l'API ne passent plus par innerHTML ni par des gestionnaires en ligne (injection) ; le détail d'une erreur 422 (liste) n'affiche plus « [object Object] » ; « Vérifier » n'exige plus d'avoir généré la preuve pendant la session, la preuve enregistrée côté serveur étant vérifiable.
+  * Retiré : le dessin « visualisation du graphe » de la fenêtre de détail, qui tirait ses nœuds au hasard (Math.random) et n'illustrait aucune donnée réelle ; le détail de la clé s'affiche dans le panneau de preuve.
+  * Non repris : le nombre de preuves (l'API ne le fournit pas, la tuile reste à « — ») ; aucun secret, témoin ou clé privée n'est affiché, seul un aperçu public tronqué de la preuve l'est.
+  * Appels d'écriture inchangés : POST /keygen, /prove, /verify et DELETE /keys/{nom}, mêmes corps. Tests Playwright ajoutés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 09:00:00 +0200
+
 secubox-zkp (1.2.4-1~bookworm1) bookworm; urgency=low
 
   * Recommends: zkp-hamiltonian-tools : l'API appelle zkp_keygen, zkp_prover et zkp_verifier sans que le paquet qui les fournit soit recommandé (dégradation propre conservée, donc Recommends et non Depends). (ref #2050)
