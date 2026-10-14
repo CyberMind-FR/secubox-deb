@@ -1,192 +1,174 @@
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
-     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-     SecuBox-Deb :: secubox-ytsas :: www/ytsas/index.html — CyberMind https://cybermind.fr
-     Player webui — this module is dual-served: aggregator-hosted (/ytsas/
-     on the hub, static alias) AND on its own public vhost
-     (ytsas.gk2.secubox.in, which already proxies /shared/ for LAN
-     clients — see nginx/ytsas.conf). Loads the shared SecuBox WebUI Panel
-     Guidelines chassis (cyan hybrid-dark terminal: /shared/sidebar.js +
-     /shared/hybrid-skin.css) so the page is reachable from — and can return
-     to — the rest of the admin. No external/CDN URLs: palette + component
-     classes stay inlined verbatim, font falls back to local Courier Prime
-     (offline-clean, WAF-safe). Sibling of the torrent SAS webui — yt-dlp
-     fetch engine + cookie auth. -->
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  YouTube SAS au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance. Passerelle média web (yt-dlp) :
+  coller un lien, déposer les cookies, médiathèque (lire, garder, purger, réessayer, supprimer). Mêmes appels d'API qu'avant
+  (/api/v1/ytsas/…, jeton sbx_token en Bearer) : on refait la peau, pas le contrat.
+  Onglet « Flux » : ENCADRE la carte « Flux YouTube » du Hall (https://hall.<domaine>/cardlets/ytflux.html?embed=1), jamais une copie ;
+  l'hôte admin n'ouvre aucune route /flux. Le menu commun reste chargé hors ?embed=1 et hors ?demo=1.
+  ?demo=1 : données fictives, actions inertes. Mesure absente = « — ». Aucun secret affiché (les cookies ne sont jamais relus).
+-->
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — YT-SAS</title>
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<title>SecuBox — YouTube SAS</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
-  :root {
-    --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
-    --bg-row:  rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2);
-    --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
-    --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
-  }
-  * { box-sizing: border-box; }
-  body {
-    font-family: 'Courier Prime', 'Courier New', monospace;
-    background: var(--bg-dark); color: var(--text); margin: 0; min-height: 100vh;
-    background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92));
-  }
-  a { color: var(--cyan); }
-  /* Shared chassis: fixed 220px sidebar (populated by /shared/sidebar.js) +
-     content pushed clear of it. hybrid-skin.css reinforces this (and the
-     top bar clearance via its own --gmb-h var) once it tags the body
-     .hybrid-skin — this local rule just avoids a layout jump/overlap
-     before that JS/CSS lands. */
-  .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-  .main { max-width: 60rem; margin: 0 auto 0 220px; padding: 1.5rem 1.2rem 4rem; }
-  /* .header now wraps ONLY the page title. sidebar.js's global top bar
-     replaces per-page headers by hiding .header entirely (display:none) —
-     the title text lives on in the injected top bar instead. Actions and
-     the live status line therefore must NOT live inside .header (they'd
-     vanish with it): they live in .toolbar, a sibling, below. */
-  .header { margin-bottom: 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
-  .header h1 { margin: 0; font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-  .toolbar { display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; }
-  .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; }
-  .btn-group { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
-    text-decoration: none; color: var(--text); background: var(--bg-row); border: 1px solid var(--border);
-    border-radius: 6px; padding: .5rem .9rem; cursor: pointer; transition: border-color .15s, box-shadow .15s;
-    display: inline-flex; align-items: center; gap: .35rem; }
-  .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.4); }
-  .btn.primary { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,.12); }
-  .btn.danger { border-color: var(--red); color: var(--red); background: rgba(255,68,102,.12); }
-  .btn.good { border-color: var(--green); color: var(--green); background: rgba(0,221,68,.12); }
-  .btn.sm { padding: .3rem .55rem; font-size: .68rem; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: .75rem; margin-bottom: 1.2rem; }
-  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: .75rem; text-align: center; backdrop-filter: blur(10px); }
-  .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor;
-    font-variant-numeric: tabular-nums; color: var(--text); }
-  .stat-card .label { font-size: .6rem; color: var(--p31-dim); letter-spacing: .1em; margin-top: .2rem; text-transform: uppercase; }
-  .stat-card.cyan .value { color: var(--cyan); }
-  .stat-card.green .value { color: var(--green); }
-  .stat-card.orange .value { color: var(--orange); }
-  .stat-card.purple .value { color: var(--purple); }
-  .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .62rem;
-    text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--border); }
-  .badge.kept { border-color: var(--green); color: var(--green); }
-  .badge.eph { border-color: var(--orange); color: var(--orange); }
-  .badge.ok { border-color: var(--green); color: var(--green); }
-  .badge.warn { border-color: var(--orange); color: var(--orange); }
-  .badge.off { border-color: var(--red); color: var(--red); }
-  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 1.1rem 1.2rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-  .card h3 { margin: 0 0 .8rem; font-size: .95rem; color: var(--cyan); letter-spacing: .03em; }
-  .card .hint { color: var(--p31-dim); font-size: .72rem; margin: .1rem 0 .7rem; line-height: 1.5; }
-  .add-row { display: flex; gap: .5rem; flex-wrap: wrap; }
-  .add-row input[type=text] { flex: 1 1 22rem; }
-  input[type=text] { font-family: inherit; background: var(--bg-row); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); padding: .6rem .7rem; font-size: .85rem; }
-  input[type=text]:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 6px rgba(0,212,255,.25); }
-  input[type=file] { font-family: inherit; font-size: .74rem; color: var(--p31-dim); max-width: 100%; }
-  .cookie-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
-  .item { background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 5px;
-    padding: .6rem .8rem; margin-bottom: .5rem; }
-  .item.kept { border-left-color: var(--green); }
-  .item.ephemeral { border-left-color: var(--orange); }
-  .item.downloading { border-left-color: var(--cyan); }
-  .item.error { border-left-color: var(--red); }
-  .item-top { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
-  .item .title { color: var(--text); font-size: .88rem; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; max-width: 26rem; }
-  .item .meta { color: var(--p31-dim); font-size: .68rem; margin-top: .3rem; font-variant-numeric: tabular-nums; }
-  .item .row-actions { display: flex; gap: .35rem; flex: none; flex-wrap: wrap; align-items: center; }
-  .progress-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .35rem; }
-  .progress-bar .fill { height: 100%; background: var(--cyan); transition: width .3s; }
-  .item.kept .progress-bar .fill { background: var(--green); }
-  .player { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--border); display: none; }
-  .player.open { display: block; }
-  .player video { width: 100%; max-height: 60vh; background: #000; border-radius: 6px; }
-  .muted { color: var(--p31-dim); font-size: .8rem; }
-  .toast { position: fixed; bottom: 1rem; right: 1rem; max-width: 22rem; background: var(--cyan);
-    color: #07121a; padding: .65rem 1rem; border-radius: 6px; font-size: .78rem; opacity: 0;
-    pointer-events: none; transition: opacity .2s; z-index: 50; }
-  .toast.show { opacity: 1; pointer-events: auto; }
-  .toast.error { background: var(--red); color: #fff; }
-  .toast .x { float: right; margin-left: .6rem; cursor: pointer; font-weight: bold; }
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-  @media (max-width: 768px) {
-    .main { margin-left: 0; padding: 1rem .8rem; }
-    .item .title { max-width: 12rem; }
-  }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb,body.dem{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar,body.dem #sidebar{display:none}
+  .principal{min-width:0}
+  body.menu .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body.menu .principal{margin-left:0}}
+  body.mobile-mode.menu .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-flex;align-items:center;gap:4px;min-height:32px;text-decoration:none}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:3px 9px;font-size:.72rem;min-height:30px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+  .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.good{border-color:var(--vert);color:var(--vert)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.cy .v{color:var(--cyan)} .tuile.ok .v{color:var(--vert)} .tuile.vi .v{color:var(--violet)}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:38px;padding:4px 16px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.82rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+  .panneaux{display:grid;gap:12px;min-width:0} .panneaux>*{min-width:0}
+  .note{color:var(--faible);font-size:.72rem;margin:6px 0 0;line-height:1.5;overflow-wrap:anywhere}
+  .muted{color:var(--doux);font-size:.8rem}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .ligne-saisie{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  input[type=text]{flex:1 1 14rem;min-width:0;font:inherit;font-size:.82rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 10px}
+  input[type=text]:focus{outline:none;border-color:var(--cyan)}
+  input[type=file]{font:inherit;font-size:.74rem;color:var(--doux);max-width:100%;min-width:0}
+  select{font:inherit;font-size:.72rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:3px 6px;min-height:30px}
+  a{color:var(--cyan)}
+  .item{border:1px solid var(--trait);border-left:3px solid var(--trait2);border-radius:10px;padding:8px 11px;margin-bottom:8px;background:linear-gradient(160deg,rgba(18,40,78,.55),rgba(8,18,38,.55));min-width:0}
+  .item.kept{border-left-color:var(--vert)} .item.ephemeral{border-left-color:var(--orange)} .item.downloading{border-left-color:var(--cyan)} .item.error{border-left-color:var(--rouge)}
+  .item-top{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap}
+  .item .titre{font-size:.88rem;font-weight:600;min-width:0;flex:1 1 12rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .row-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0}
+  .item .meta{color:var(--doux);font-size:.72rem;margin-top:5px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .item .meta.ko{color:var(--rouge)}
+  .barre{height:6px;background:rgba(159,179,214,.16);border-radius:3px;overflow:hidden;margin-top:6px} .barre i{display:block;height:100%;background:var(--cyan)}
+  .player{margin-top:8px;padding-top:8px;border-top:1px solid var(--trait)}
+  .player video{width:100%;max-height:60vh;background:#000;border-radius:8px}
+  .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+  #cFlux{display:block;width:100%;height:520px;border:1px solid var(--trait);border-radius:10px;background:rgba(8,18,38,.7);margin-top:8px}
+  .flux-indispo{border:1px dashed var(--orange);color:var(--orange);border-radius:10px;padding:12px;font-size:.85rem;text-align:center;margin-top:8px}
+  .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
+  .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto} .toast.ko{border-color:var(--rouge)}
+  .toast .x{margin-left:10px;cursor:pointer;font-weight:700;background:none;border:0;color:inherit;font:inherit}
 </style>
 </head>
-<body class="hybrid-dark">
+<body>
 <nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-<main class="main">
-  <header class="header">
-    <h1>🎞️ YT-SAS</h1>
+<main class="principal"><div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9.2 5 2.8-5 2.8z"/></svg>
+      <div><h1>YouTube SAS</h1><small id="sous">Passerelle média web (yt-dlp)</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
   </header>
-  <div class="toolbar">
-    <div class="sub" id="sub">Passerelle média web (yt-dlp) · chargement…</div>
-    <div class="btn-group">
-      <button class="btn" id="btnRefresh">↻ Refresh</button>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+
+  <section class="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Téléchargements en cours dans le SAS (champ active, à défaut downloading)."><span class="l">En cours</span><span class="v" id="tActive">—</span><span class="s">téléchargements</span></div>
+    <div class="tuile ok" title="Espace libre du disque où le SAS range ses vidéos."><span class="l">Disque libre</span><span class="v" id="tDisk">—</span><span class="s">stockage du SAS</span></div>
+    <div class="tuile cy" title="Vidéos gardées (sans purge programmée)."><span class="l">Conservés</span><span class="v" id="tKept">—</span><span class="s">sans purge</span></div>
+    <div class="tuile vi" title="Vidéos confiées à PeerTube (champ peertube, à défaut conserved)."><span class="l">→ PeerTube</span><span class="v" id="tPeertube">—</span><span class="s">conservées</span></div>
+  </section>
+
+  <div class="onglets" role="tablist" aria-label="Sections de YouTube SAS">
+    <button class="onglet" id="oBiblio" type="button" role="tab" aria-selected="true" aria-controls="pBiblio">Médiathèque</button>
+    <button class="onglet" id="oFlux" type="button" role="tab" aria-selected="false" aria-controls="pFlux" tabindex="-1">Flux</button>
+  </div>
+
+  <div class="panneaux" id="pBiblio" role="tabpanel" aria-labelledby="oBiblio">
+    <div class="grille">
+      <div class="pan"><h3>➕ Coller un lien <i>POST /add</i></h3>
+        <div class="ligne-saisie">
+          <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=… (tout site supporté par yt-dlp)" aria-label="Adresse de la vidéo ou de la playlist" autocomplete="off">
+          <button class="btn prim" id="btnAdd" type="button">➕ Récupérer</button>
+        </div>
+        <p class="note">Une playlist ajoute toutes ses vidéos. Le téléchargement apparaît dans la médiathèque.</p>
+      </div>
+      <div class="pan"><h3>🔒 Authentification (cookies) <i>POST /cookies</i></h3>
+        <p class="note" style="margin-top:0">Les vidéos avec restriction d’âge, privées ou réservées aux membres exigent les cookies de ton navigateur. Exporte un <code>cookies.txt</code> au format Netscape (extension « Get cookies.txt ») pendant que tu es connecté, puis dépose-le ici. Les cookies restent sur la box (0600), ne sont jamais journalisés ni relus.</p>
+        <div class="ligne-saisie"><span class="pill neutre" id="cookieState">…</span><span class="muted" id="cookieMeta"></span></div>
+        <div class="ligne-saisie">
+          <input type="file" id="cookieFile" accept=".txt,text/plain" aria-label="Fichier cookies.txt">
+          <button class="btn prim" id="btnCookie" type="button">⬆ Déposer les cookies</button>
+        </div>
+      </div>
+    </div>
+    <div class="pan"><h3>📚 Médiathèque <i id="nList"></i></h3>
+      <div id="list"><p class="vide">Chargement…</p></div>
     </div>
   </div>
 
-  <div class="grid" id="statGrid">
-    <div class="stat-card cyan"><div class="value" id="statActive">–</div><div class="label">⏳ En cours</div></div>
-    <div class="stat-card green"><div class="value" id="statDisk">–</div><div class="label">💾 Disque libre</div></div>
-    <div class="stat-card"><div class="value" id="statKept">–</div><div class="label">📌 Conservés</div></div>
-    <div class="stat-card purple"><div class="value" id="statPeertube">–</div><div class="label">📼 → PeerTube</div></div>
-  </div>
-
-  <div class="card">
-    <h3>➕ Coller un lien</h3>
-    <div class="add-row">
-      <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=… (tout site supporté par yt-dlp)">
-      <button class="btn primary" id="btnAdd">➕ Récupérer</button>
+  <div class="panneaux" id="pFlux" role="tabpanel" aria-labelledby="oFlux" hidden>
+    <div class="pan"><h3>🎞️ Flux de ton compte YouTube <i>carte du Hall</i></h3>
+      <p class="note" style="margin-top:0">Les listes du compte (à regarder plus tard, proposées, abonnements, historique), lues par YouTube SAS avec les cookies déposés. C’est la carte du Hall, encadrée ici : une seule source, jamais une copie. Elle demande une session SecuBox ouverte sur le Hall. <a id="lienHall" href="#" target="_blank" rel="noopener noreferrer" hidden>Ouvrir dans le Hall</a></p>
+      <div class="flux-indispo" id="fluxIndispo" role="status" hidden>Flux indisponible depuis cet hôte — ouvrir dans le Hall</div>
+      <div id="zoneFlux"></div>
     </div>
   </div>
-
-  <div class="card">
-    <h3>🔒 Authentification (cookies)</h3>
-    <p class="hint">Les vidéos avec restriction d'âge, privées ou réservées aux membres exigent
-      les cookies de ton navigateur. Exporte un <code>cookies.txt</code> au format Netscape
-      (extension « Get cookies.txt » / « cookies.txt ») pendant que tu es connecté, puis dépose-le ici.
-      Les cookies restent sur la box (0600), ne sont jamais journalisés.</p>
-    <div class="cookie-row">
-      <span id="cookieState" class="badge">…</span>
-      <span class="muted" id="cookieMeta"></span>
-    </div>
-    <div class="cookie-row" style="margin-top:.7rem">
-      <input type="file" id="cookieFile" accept=".txt,text/plain">
-      <button class="btn primary" id="btnCookie">⬆ Déposer les cookies</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>📚 Médiathèque</h3>
-    <div id="list"><p class="muted">Chargement…</p></div>
-  </div>
-</main>
-
-<div class="toast" id="toast"></div>
+</div></div></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
   'use strict';
   var API = '/api/v1/ytsas';
-  var openPlayers = Object.create(null); // id -> bool (inline player expanded)
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMB = !!Q.get('embed');
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function tiret(v) { return (v === null || v === undefined || v === '') ? '—' : String(v); }
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) {
-      return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c];
-    });
+  if (EMB) document.body.classList.add('emb');
+  if (DEMO) document.body.classList.add('dem');
+  // Menu commun : hors cadre et hors démonstration (AURORA-REFERENCE §9).
+  if (!EMB && !DEMO) {
+    document.body.classList.add('menu');
+    try { var sj = document.createElement('script'); sj.src = '/shared/sidebar.js'; document.head.appendChild(sj); } catch (e) { /* menu absent : la page reste utilisable */ }
   }
 
-  // Relative time for a scheduled purge (unix ts).
+  var STATUS = null, COOKIES = null, LISTE = null, SESSION_OK = true, CHARGE = false;
+  var openPlayers = Object.create(null);     // id -> lecteur intégré ouvert
+  var CONFIRM = null;                        // id dont la suppression attend confirmation (dans la ligne, jamais de dialogue natif)
+  var OCCUPE = false;                        // ajout ou dépôt en cours
+
+  // ----- Mises en forme -----
   function fmtWhen(ts) {
     var d = ts * 1000 - Date.now();
     if (d <= 0) return 'imminente';
@@ -196,339 +178,299 @@
     if (h < 24) return 'dans ' + h + ' h';
     return 'dans ' + Math.round(h / 24) + ' j';
   }
-
   function fmtBytes(n) {
-    if (n == null || !isFinite(n)) return '–';
+    if (n == null || !isFinite(n)) return '—';
     if (n === 0) return '0 B';
     var units = ['B', 'KB', 'MB', 'GB', 'TB'];
     var i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
     return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
   }
-
-  // progress may arrive as 0..1 fraction or 0..100 percent — normalise to %.
+  // progress peut arriver en fraction 0..1 ou en pourcentage 0..100 : normalisé en %.
   function pctOf(p) {
     if (p == null || !isFinite(p)) return null;
     return p <= 1 ? Math.round(p * 100) : Math.round(p);
   }
+  function lienSur(u) { return /^https?:\/\//i.test(String(u || '')) ? String(u) : null; }
 
+  // ----- Retours dans la page -----
   var toastTimer = null;
   function toast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast show';
-    clearTimeout(toastTimer);
+    var t = $('toast'); clearTimeout(toastTimer);
+    t.replaceChildren(document.createTextNode(msg)); t.className = 'toast show';
     toastTimer = setTimeout(function () { t.className = 'toast'; }, 3000);
   }
-  function errorToast(msg) {
-    var t = document.getElementById('toast');
-    clearTimeout(toastTimer);
-    t.innerHTML = '';
-    t.appendChild(document.createTextNode('⚠ ' + msg));
-    var x = document.createElement('span');
-    x.className = 'x';
-    x.textContent = '✕';
+  function erreur(msg) {
+    var t = $('toast'); clearTimeout(toastTimer);
+    var x = el('button', 'x', '✕'); x.type = 'button'; x.setAttribute('aria-label', 'Fermer');
     x.addEventListener('click', function () { t.className = 'toast'; });
-    t.appendChild(x);
-    t.className = 'toast show error';
+    t.replaceChildren(document.createTextNode('⚠ ' + msg), x); t.className = 'toast show ko';
   }
 
+  // ----- Accès à l'API : mêmes appels que l'ancienne page -----
   function authHeaders() {
     var h = {};
-    var tok = localStorage.getItem('sbx_token');
-    if (tok) h['Authorization'] = 'Bearer ' + tok;
+    try { var tok = localStorage.getItem('sbx_token'); if (tok) h['Authorization'] = 'Bearer ' + tok; } catch (e) { /* localStorage indisponible */ }
     return h;
   }
-
   function api(path, opts) {
     opts = opts || {};
     var headers = Object.assign({}, opts.headers, authHeaders());
-    // Default to a JSON body ONLY when the caller hasn't set a Content-Type AND
-    // isn't sending a multipart/FormData body. A cookies.txt upload sends its own
-    // Content-Type (multipart boundary or text/plain) and must NOT be clobbered to
-    // json — that would hand a binary/text upload to the json parser → 400.
-    if (opts.body != null && !headers['Content-Type'] && !(opts.body instanceof FormData)) {
-      headers['Content-Type'] = 'application/json';
-    }
+    // Corps JSON par défaut SEULEMENT si l'appelant n'a pas fixé de Content-Type et n'envoie pas de FormData : le dépôt de
+    // cookies.txt envoie son propre Content-Type (texte brut) et ne doit pas être écrasé.
+    if (opts.body != null && !headers['Content-Type'] && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
     return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
-      if (res.status === 401) {
-        errorToast('🔒 Login required');
-        throw new Error('unauthorized');
-      }
+      if (res.status === 401) { SESSION_OK = false; throw new Error('unauthorized'); }
       return res.json().catch(function () { return {}; }).then(function (body) {
         if (!res.ok) throw new Error(body && body.error ? body.error : ('HTTP ' + res.status));
         return body;
       });
     });
   }
-
-  function refreshStatus() {
-    return api(API + '/status').then(function (s) {
-      document.getElementById('statActive').textContent =
-        s.active != null ? s.active : (s.downloading != null ? s.downloading : '–');
-      document.getElementById('statDisk').textContent = fmtBytes(s.disk_free);
-      document.getElementById('statKept').textContent = s.kept != null ? s.kept : '–';
-      document.getElementById('statPeertube').textContent =
-        s.peertube != null ? s.peertube : (s.conserved != null ? s.conserved : '–');
-      var active = s.active != null ? s.active : (s.downloading || 0);
-      document.getElementById('sub').textContent = active
-        ? 'Passerelle média web (yt-dlp) · ' + active + ' job(s) en cours'
-        : 'Passerelle média web (yt-dlp) · prêt';
-    }).catch(function (e) { console.error(e); });
+  // Écriture : inerte en démonstration (aucun appel), sinon succès/erreur dits dans la page.
+  function agir(path, opts, ok, ko, apres) {
+    if (DEMO) { toast('Démonstration : action inerte, rien n’est envoyé.'); return Promise.resolve(false); }
+    return api(path, opts).then(function (r) { toast(typeof ok === 'function' ? ok(r) : ok); if (apres) apres(); return true; })
+      .catch(function (e) { erreur(ko + (e.message === 'unauthorized' ? 'session requise' : e.message)); rendre(); return false; });
   }
 
-  function refreshCookies() {
-    return api(API + '/cookies/status').then(function (c) {
-      var el = document.getElementById('cookieState');
-      var meta = document.getElementById('cookieMeta');
-      // status: 'present' | 'expired' | 'absent'  (accept a few synonyms)
-      var st = (c.status || (c.present ? (c.expired ? 'expired' : 'present') : 'absent')).toLowerCase();
-      if (st === 'present' || st === 'ok') {
-        el.className = 'badge ok'; el.textContent = '✅ présent';
-      } else if (st === 'expired' || st === 'stale') {
-        el.className = 'badge warn'; el.textContent = '⚠ périmé';
-      } else {
-        el.className = 'badge off'; el.textContent = '⛔ absent';
-      }
-      var bits = [];
-      if (c.updated_at) bits.push('déposé ' + esc(String(c.updated_at)));
-      if (c.count != null) bits.push(c.count + ' cookies');
-      if (c.domains != null) bits.push(c.domains + ' domaines');
-      meta.textContent = bits.join(' · ');
-    }).catch(function (e) { console.error(e); });
+  // ----- Lecture -----
+  function demoData() {
+    var t = Math.floor(Date.now() / 1000);
+    STATUS = { active: 1, disk_free: 412 * 1024 * 1024 * 1024, kept: 3, peertube: 2 };
+    COOKIES = { status: 'present', updated_at: '2026-10-13', count: 42, domains: 7 };
+    LISTE = [
+      { id: 'demo-1', title: 'Conférence sur la souveraineté numérique', complete: true, ephemeral_until: null, size: 612368384, duration: '58:12' },
+      { id: 'demo-2', title: 'Atelier : monter une baie de brassage', complete: true, ephemeral_until: t + 7200, size: 148897792, duration: '22:05' },
+      { id: 'demo-3', title: 'Les arbres de Merkle expliqués', progress: 0.42, eta: '00:31', speed: 2411724 },
+      { id: 'demo-4', title: 'Vidéo réservée aux membres', status: 'error', error: 'Sign in to confirm your age', needs_cookies: true },
+      { id: 'demo-5', title: 'Concert acoustique en direct', complete: true, peertube_status: 'queued', size: 301989888 }
+    ];
+  }
+  function charger() {
+    if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return Promise.resolve(); }
+    var s = api(API + '/status').then(function (x) { STATUS = x; }).catch(function (e) { STATUS = null; return e; });
+    var c = api(API + '/cookies/status').then(function (x) { COOKIES = x; }).catch(function (e) { COOKIES = null; return e; });
+    var l = api(API + '/list').then(function (x) { LISTE = Array.isArray(x) ? x : (x && x.items) || []; }).catch(function (e) { LISTE = null; return e; });
+    SESSION_OK = true;
+    return Promise.all([s, c, l]).then(function () { CHARGE = true; rendre(); });
   }
 
-  function renderList(rows) {
-    var el = document.getElementById('list');
-    rows = Array.isArray(rows) ? rows : (rows && rows.items) || [];
-    if (!rows.length) {
-      el.innerHTML = '<p class="muted">Rien pour l\'instant — colle un lien ci-dessus.</p>';
-      return;
-    }
-    el.innerHTML = rows.map(function (r) {
-      var id = r.id;
-      var pct = pctOf(r.progress);
-      var complete = r.complete === true || r.status === 'complete' || r.status === 'done' || pct === 100;
-      var errored = r.status === 'error' || !!r.error;
-      var eph = r.ephemeral_until;                    // unix ts, or null → conservé
-      var kept = !eph;                                // kept-by-default
-      var pt = r.peertube_status;                     // 'done' | 'queued' | 'error' | null
-      var playerOpen = !!openPlayers[id];
+  // ----- Rendu -----
+  function rendre() {
+    $('demo').hidden = !DEMO;
+    $('session').hidden = SESSION_OK;
+    var s = STATUS, etat = $('etat');
+    var active = s ? (s.active != null ? s.active : (s.downloading != null ? s.downloading : null)) : null;
+    if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+    else if (!CHARGE) { etat.className = 'actif neutre'; etat.textContent = 'Chargement…'; }
+    else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+    else if (active) { etat.className = 'actif cy'; etat.textContent = active + ' EN COURS'; }
+    else { etat.className = 'actif'; etat.textContent = 'PRÊT'; }
+    $('tActive').textContent = s ? tiret(active) : '—';
+    $('tDisk').textContent = s ? fmtBytes(s.disk_free) : '—';
+    $('tKept').textContent = s ? tiret(s.kept) : '—';
+    $('tPeertube').textContent = s ? tiret(s.peertube != null ? s.peertube : s.conserved) : '—';
+    rendreCookies(); rendreListe();
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    annoncer();
+  }
+  function rendreCookies() {
+    var c = COOKIES, e = $('cookieState'), meta = $('cookieMeta');
+    if (!c) { e.className = 'pill'; e.textContent = '—'; meta.textContent = ''; return; }
+    // statut : 'present' | 'expired' | 'absent' (quelques synonymes acceptés)
+    var st = String(c.status || (c.present ? (c.expired ? 'expired' : 'present') : 'absent')).toLowerCase();
+    if (st === 'present' || st === 'ok') { e.className = 'pill ok'; e.textContent = '✅ présent'; }
+    else if (st === 'expired' || st === 'stale') { e.className = 'pill att'; e.textContent = '⚠ périmé'; }
+    else { e.className = 'pill hors'; e.textContent = '⛔ absent'; }
+    var bits = [];
+    if (c.updated_at) bits.push('déposé ' + String(c.updated_at));
+    if (c.count != null) bits.push(c.count + ' cookies');
+    if (c.domains != null) bits.push(c.domains + ' domaines');
+    meta.textContent = bits.join(' · ');
+  }
+  function btn(txt, cls, fn, titre) { var b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; if (titre) b.title = titre; b.addEventListener('click', fn); return b; }
 
-      var cls = errored ? 'error' : (!complete ? 'downloading' : (eph ? 'ephemeral' : 'kept'));
-
-      // State badge
-      var stateBadge = eph
-        ? '<span class="badge eph">⏳ purge ' + esc(fmtWhen(eph)) + '</span>'
-        : '<span class="badge kept">📌 gardé</span>';
-
-      // Conserve badge / action (complete only). The actual destination
-      // (PeerTube for video, Lyrion for audio) is decided host-side by file
-      // type — the panel doesn't know it in advance, so "queued" is shown
-      // generically and the two done/error states are read from whichever
-      // partner's columns the host drain actually wrote to (#967).
-      var ly = r.lyrion_status;                        // 'done' | 'error' | null
-      var ptHtml = '';
-      if (complete) {
-        if (pt === 'done' && r.peertube_url) {
-          ptHtml = '<a class="btn sm good" href="' + esc(r.peertube_url) + '" target="_blank" rel="noopener">📼 PeerTube ✓</a>';
-        } else if (ly === 'done' && r.lyrion_path) {
-          ptHtml = '<span class="btn sm good" title="' + esc(r.lyrion_path) + '">🎵 Lyrion ✓</span>';
-        } else if (pt === 'queued' || pt === 'uploading') {
-          ptHtml = '<span class="btn sm muted">⏳ conservation…</span>';
-        } else {
-          ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver (vidéo → PeerTube, audio → Lyrion)">💾 Garder</button>' +
-            ((pt === 'error' || ly === 'error') ? ' <span class="muted" title="échec de conservation">⚠</span>' : '');
-        }
-      }
-
-      // Purge control (complete only): ephemeral → cancel; kept → schedule
-      var purgeHtml = '';
-      if (complete) {
-        purgeHtml = eph
-          ? '<button class="btn sm good" data-action="keep" title="Reprendre garde (annuler la purge)">📌 Reprendre garde</button>'
-          : '<select class="btn sm" data-action="purge-in" title="Programmer une purge">' +
-              '<option value="">⏳ Purger dans…</option>' +
-              '<option value="3600">1 h</option>' +
-              '<option value="21600">6 h</option>' +
-              '<option value="86400">24 h</option>' +
-              '<option value="604800">7 j</option>' +
-            '</select>';
-      }
-
-      var playBtn = (complete && !errored)
-        ? '<button class="btn sm" data-action="toggle-play" title="Lire dans le navigateur">' +
-            (playerOpen ? '⏹ Fermer' : '▶ Lire') + '</button>'
-        : '';
-
-      var body;
-      if (errored) {
-        body = '<div class="meta" style="color:var(--red)">⚠ échec : ' + esc(r.error || 'erreur yt-dlp') +
-          (r.needs_cookies ? ' — dépose tes cookies ci-dessus' : '') + '</div>';
-      } else if (!complete) {
-        var pfill = pct == null ? 0 : pct;
-        body = '<div class="progress-bar"><div class="fill" style="width:' + pfill + '%"></div></div>' +
-          '<div class="meta">⏳ téléchargement ' + (pct == null ? '…' : pct + '%') +
-          (r.eta ? ' · ETA ' + esc(String(r.eta)) : '') +
-          (r.speed ? ' · ' + fmtBytes(r.speed) + '/s' : '') + '</div>';
-      } else {
-        body = '<div class="meta">✅ prêt' + (r.size != null ? ' · ' + fmtBytes(r.size) : '') +
-          (r.duration ? ' · ' + esc(String(r.duration)) : '') + '</div>';
-      }
-
-      var playerHtml = '<div class="player' + (playerOpen ? ' open' : '') + '" data-role="player">' +
-        (playerOpen
-          ? '<video controls autoplay preload="metadata" src="' + esc(API + '/stream/' + encodeURIComponent(id)) + '"></video>'
-          : '') +
-        '</div>';
-
-      return (
-        '<div class="item ' + cls + '" data-id="' + esc(id) + '">' +
-          '<div class="item-top">' +
-            '<div class="title" title="' + esc(r.title || r.url || id) + '">' +
-              esc(r.title || r.url || ('#' + id)) + '</div>' +
-            '<div class="row-actions">' +
-              (complete && !errored ? stateBadge : '') +
-              (errored ? '<button class="btn sm" data-action="retry" title="Réessayer le téléchargement">↻ Réessayer</button>' : '') +
-              playBtn + ptHtml + purgeHtml +
-              '<button class="btn sm danger" data-action="remove" title="Supprimer">🗑</button>' +
-            '</div>' +
-          '</div>' +
-          body +
-          playerHtml +
-        '</div>'
-      );
-    }).join('');
+  function rendreListe() {
+    var box = $('list'); box.replaceChildren();
+    var rows = LISTE;
+    $('nList').textContent = rows && rows.length ? rows.length + ' élément' + (rows.length > 1 ? 's' : '') : '';
+    if (!rows) { box.appendChild(el('p', 'vide', !CHARGE ? 'Chargement…' : !SESSION_OK ? '—' : 'Médiathèque illisible (service arrêté ou injoignable).')); return; }
+    if (!rows.length) { box.appendChild(el('p', 'vide', 'Rien pour l’instant — colle un lien ci-dessus.')); return; }
+    rows.forEach(function (r) { box.appendChild(ligne(r)); });
   }
 
-  function refreshList() {
-    return api(API + '/list').then(renderList).catch(function (e) {
-      document.getElementById('list').innerHTML = '<p class="muted">Erreur de chargement.</p>';
-      console.error(e);
-    });
-  }
+  function ligne(r) {
+    var id = String(r.id);
+    var pct = pctOf(r.progress);
+    var complete = r.complete === true || r.status === 'complete' || r.status === 'done' || pct === 100;
+    var errored = r.status === 'error' || !!r.error;
+    var eph = r.ephemeral_until;                 // timestamp unix, ou null → conservé
+    var pt = r.peertube_status, ly = r.lyrion_status;
+    var playerOpen = !!openPlayers[id];
+    var cls = errored ? 'error' : (!complete ? 'downloading' : (eph ? 'ephemeral' : 'kept'));
+    var it = el('div', 'item ' + cls); it.setAttribute('data-id', id);
 
-  function onListClick(ev) {
-    var actionEl = ev.target.closest('[data-action]');
-    if (!actionEl) return;
-    var itemEl = ev.target.closest('.item');
-    if (!itemEl) return;
-    var id = itemEl.getAttribute('data-id');
-    var action = actionEl.getAttribute('data-action');
-
-    if (action === 'toggle-play') {
-      openPlayers[id] = !openPlayers[id];
-      refreshList();
-      return;
-    }
-    if (action === 'keep') {
-      api(API + '/keep/' + encodeURIComponent(id), { method: 'POST' }).then(function () {
-        toast('📌 Garde reprise');
-        refreshList();
-      }).catch(function (e) { errorToast('Reprendre garde : ' + e.message); });
-      return;
-    }
-    if (action === 'conserve') {
-      api(API + '/conserve/' + encodeURIComponent(id), { method: 'POST' }).then(function () {
-        toast('📼 Envoi vers PeerTube en file d’attente…');
-        refreshList();
-      }).catch(function (e) { errorToast('Garder → PeerTube : ' + e.message); });
-      return;
-    }
-    if (action === 'remove') {
-      if (!confirm('Supprimer cette vidéo et ses données ?')) return;
-      api(API + '/remove/' + encodeURIComponent(id), { method: 'POST' }).then(function () {
-        toast('🗑 Supprimé');
-        delete openPlayers[id];
-        refreshList();
-      }).catch(function (e) { errorToast('Suppression : ' + e.message); });
-      return;
-    }
-    if (action === 'retry') {
-      actionEl.disabled = true;
-      api(API + '/retry/' + encodeURIComponent(id), { method: 'POST' })
-        .then(function () { toast('↻ Nouvelle tentative en cours…'); refreshList(); })
-        .catch(function (e) {
-          // L'erreur ANALYSÉE est remontée telle quelle : cookies périmés, auth
-          // requise, ou la queue de stderr yt-dlp — pas un code opaque.
-          errorToast('Réessai : ' + e.message);
-          actionEl.disabled = false;
+    var top = el('div', 'item-top');
+    var titre = el('div', 'titre', r.title || r.url || ('#' + id)); titre.title = r.title || r.url || id; top.appendChild(titre);
+    var act = el('div', 'row-actions');
+    if (complete && !errored) act.appendChild(eph ? el('span', 'pill att', '⏳ purge ' + fmtWhen(eph)) : el('span', 'pill ok', '📌 gardé'));
+    if (errored) act.appendChild(btn('↻ Réessayer', '', function (ev) {
+      var b = ev.currentTarget; if (!DEMO) b.disabled = true;
+      agir(API + '/retry/' + encodeURIComponent(id), { method: 'POST' }, '↻ Nouvelle tentative en cours…', 'Réessai : ', charger).then(function (ok) { if (!ok) b.disabled = false; });
+    }, 'Réessayer le téléchargement'));
+    if (complete && !errored) act.appendChild(btn(playerOpen ? '⏹ Fermer' : '▶ Lire', '', function () { openPlayers[id] = !openPlayers[id]; rendreListe(); }, 'Lire dans le navigateur'));
+    if (complete) {
+      // La destination réelle (PeerTube pour la vidéo, Lyrion pour l'audio) est décidée côté hôte selon le type de fichier :
+      // la page ne la connaît pas d'avance, « en file » reste générique et les états fini/échec se lisent dans les colonnes écrites.
+      var href = lienSur(r.peertube_url);
+      if (pt === 'done' && href) { var a = el('a', 'btn sm good', '📼 PeerTube ✓'); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; act.appendChild(a); }
+      else if (ly === 'done' && r.lyrion_path) { var l = el('span', 'pill ok', '🎵 Lyrion ✓'); l.title = String(r.lyrion_path); act.appendChild(l); }
+      else if (pt === 'queued' || pt === 'uploading') act.appendChild(el('span', 'pill', '⏳ conservation…'));
+      else {
+        act.appendChild(btn('💾 Garder', '', function () {
+          agir(API + '/conserve/' + encodeURIComponent(id), { method: 'POST' }, '📼 Envoi vers PeerTube en file d’attente…', 'Garder → PeerTube : ', charger);
+        }, 'Conserver (vidéo → PeerTube, audio → Lyrion)'));
+        if (pt === 'error' || ly === 'error') act.appendChild(el('span', 'pill hors', '⚠ échec de conservation'));
+      }
+      if (eph) act.appendChild(btn('📌 Reprendre garde', 'good', function () {
+        agir(API + '/keep/' + encodeURIComponent(id), { method: 'POST' }, '📌 Garde reprise', 'Reprendre garde : ', charger);
+      }, 'Annuler la purge'));
+      else {
+        var sel = el('select'); sel.title = 'Programmer une purge'; sel.setAttribute('aria-label', 'Programmer une purge');
+        [['', '⏳ Purger dans…'], ['3600', '1 h'], ['21600', '6 h'], ['86400', '24 h'], ['604800', '7 j']].forEach(function (o) { var op = el('option', '', o[1]); op.value = o[0]; sel.appendChild(op); });
+        sel.addEventListener('change', function () {
+          var secs = Number(sel.value); if (!secs) return;
+          agir(API + '/ephemeral/' + encodeURIComponent(id), { method: 'POST', body: JSON.stringify({ seconds: secs }) },
+            '⏳ Purge programmée ' + fmtWhen(Math.floor(Date.now() / 1000) + secs), 'Purge : ', charger);
         });
-      return;
+        act.appendChild(sel);
+      }
     }
+    if (CONFIRM === id) {
+      act.appendChild(el('span', 'note', 'Supprimer cette vidéo et ses données, sans retour possible ?'));
+      act.appendChild(btn('Confirmer', 'danger', function () {
+        CONFIRM = null;
+        agir(API + '/remove/' + encodeURIComponent(id), { method: 'POST' }, '🗑 Supprimé', 'Suppression : ', function () { delete openPlayers[id]; charger(); });
+      }));
+      act.appendChild(btn('Annuler', '', function () { CONFIRM = null; rendreListe(); }));
+    } else {
+      var del = btn('🗑', 'danger', function () { CONFIRM = id; rendreListe(); }, 'Supprimer'); del.setAttribute('aria-label', 'Supprimer');
+      act.appendChild(del);
+    }
+    top.appendChild(act); it.appendChild(top);
+
+    if (errored) {
+      it.appendChild(el('div', 'meta ko', '⚠ échec : ' + (r.error || 'erreur yt-dlp') + (r.needs_cookies ? ' — dépose tes cookies ci-dessus' : '')));
+    } else if (!complete) {
+      var barre = el('div', 'barre'); var fill = el('i'); fill.style.width = (pct == null ? 0 : pct) + '%'; barre.appendChild(fill); it.appendChild(barre);
+      it.appendChild(el('div', 'meta', '⏳ téléchargement ' + (pct == null ? '…' : pct + '%') + (r.eta ? ' · ETA ' + r.eta : '') + (r.speed ? ' · ' + fmtBytes(r.speed) + '/s' : '')));
+    } else {
+      it.appendChild(el('div', 'meta', '✅ prêt' + (r.size != null ? ' · ' + fmtBytes(r.size) : '') + (r.duration ? ' · ' + r.duration : '')));
+    }
+    if (playerOpen) {
+      var pl = el('div', 'player');
+      if (DEMO) pl.appendChild(el('p', 'note', 'Lecture indisponible en démonstration.'));
+      else { var v = document.createElement('video'); v.controls = true; v.autoplay = true; v.preload = 'metadata'; v.src = API + '/stream/' + encodeURIComponent(id); pl.appendChild(v); }
+      it.appendChild(pl);
+    }
+    return it;
   }
 
-  function onListChange(ev) {
-    var sel = ev.target.closest('[data-action="purge-in"]');
-    if (!sel) return;
-    var itemEl = ev.target.closest('.item');
-    if (!itemEl) return;
-    var id = itemEl.getAttribute('data-id');
-    var secs = Number(sel.value);
-    if (!secs) return;
-    api(API + '/ephemeral/' + encodeURIComponent(id),
-      { method: 'POST', body: JSON.stringify({ seconds: secs }) }).then(function () {
-      toast('⏳ Purge programmée ' + fmtWhen(Math.floor(Date.now() / 1000) + secs));
-      refreshList();
-    }).catch(function (e) { errorToast('Purge : ' + e.message); });
-  }
-
+  // ----- Actions de la page -----
   function addVideo() {
-    var input = document.getElementById('urlInput');
-    var btn = document.getElementById('btnAdd');
-    var val = input.value.trim();
-    if (!val) { errorToast('Lien requis'); return; }
-    btn.disabled = true;
+    var input = $('urlInput'), b = $('btnAdd'), val = input.value.trim();
+    if (!val) { erreur('Lien requis'); return; }
+    if (DEMO) { toast('Démonstration : action inerte, rien n’est envoyé.'); return; }
+    b.disabled = true; OCCUPE = true;
     api(API + '/add', { method: 'POST', body: JSON.stringify({ url: val }) })
       .then(function (meta) {
         input.value = '';
-        if (meta && meta.playlist) {
-          toast('🎞️ Playlist : ' + (meta.count || 0) + ' vidéo(s) ajoutée(s)');
-        } else {
-          toast('➕ Ajouté : ' + (meta.title || meta.id || 'ok'));
-        }
-        refreshList();
-        refreshStatus();
+        toast(meta && meta.playlist ? '🎞️ Playlist : ' + (meta.count || 0) + ' vidéo(s) ajoutée(s)' : '➕ Ajouté : ' + ((meta && (meta.title || meta.id)) || 'ok'));
+        charger();
       })
-      .catch(function (e) { errorToast('Échec de l\'ajout : ' + e.message); })
-      .finally(function () { btn.disabled = false; });
+      .catch(function (e) { erreur('Échec de l’ajout : ' + (e.message === 'unauthorized' ? 'session requise' : e.message)); })
+      .then(function () { b.disabled = false; OCCUPE = false; });
   }
-
   function uploadCookies() {
-    var f = document.getElementById('cookieFile').files[0];
-    var btn = document.getElementById('btnCookie');
-    if (!f) { errorToast('Fichier cookies.txt requis'); return; }
-    btn.disabled = true;
-    // Send the cookies.txt as RAW TEXT — the backend writes the raw body straight
-    // to the vault (it accepts raw text or a JSON envelope, not multipart).
+    var f = $('cookieFile').files[0], b = $('btnCookie');
+    if (!f) { erreur('Fichier cookies.txt requis'); return; }
+    if (DEMO) { toast('Démonstration : action inerte, rien n’est envoyé.'); return; }
+    b.disabled = true; OCCUPE = true;
+    // cookies.txt envoyé en TEXTE BRUT : le service l'écrit tel quel dans le coffre (texte brut ou enveloppe JSON, pas de multipart).
     f.text().then(function (txt) {
       return api(API + '/cookies', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: txt });
-    })
-      .then(function () {
-        document.getElementById('cookieFile').value = '';
-        toast('🔒 Cookies enregistrés');
-        refreshCookies();
-      })
-      .catch(function (e) { errorToast('Dépôt cookies : ' + e.message); })
-      .finally(function () { btn.disabled = false; });
+    }).then(function () {
+      $('cookieFile').value = ''; toast('🔒 Cookies enregistrés'); charger();
+    }).catch(function (e) { erreur('Dépôt cookies : ' + (e.message === 'unauthorized' ? 'session requise' : e.message)); })
+      .then(function () { b.disabled = false; OCCUPE = false; });
   }
+  $('btnAdd').addEventListener('click', addVideo);
+  $('urlInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') addVideo(); });
+  $('btnCookie').addEventListener('click', uploadCookies);
+  $('rafraichir').addEventListener('click', charger);
 
-  function refresh() {
-    refreshStatus();
-    refreshCookies();
-    refreshList();
+  // ----- Onglets : Médiathèque | Flux -----
+  var ONGLETS = [['oBiblio', 'pBiblio'], ['oFlux', 'pFlux']];
+  function choisir(id) {
+    ONGLETS.forEach(function (o) {
+      var sel = o[0] === id;
+      $(o[0]).setAttribute('aria-selected', sel ? 'true' : 'false'); $(o[0]).tabIndex = sel ? 0 : -1;
+      $(o[1]).hidden = !sel;
+    });
+    if (id === 'oFlux') ouvrirFlux();
+    annoncer();
   }
-
-  document.getElementById('btnRefresh').addEventListener('click', refresh);
-  document.getElementById('btnAdd').addEventListener('click', addVideo);
-  document.getElementById('urlInput').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') addVideo();
+  ONGLETS.forEach(function (o, i) {
+    $(o[0]).addEventListener('click', function () { choisir(o[0]); });
+    $(o[0]).addEventListener('keydown', function (e) {
+      var n = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : -1;
+      if (n < 0) return;
+      n = (n + ONGLETS.length) % ONGLETS.length; choisir(ONGLETS[n][0]); $(ONGLETS[n][0]).focus(); e.preventDefault();
+    });
   });
-  document.getElementById('btnCookie').addEventListener('click', uploadCookies);
-  document.getElementById('list').addEventListener('click', onListClick);
-  document.getElementById('list').addEventListener('change', onListChange);
 
-  refresh();
-  setInterval(refresh, 15000);
+  // L'origine du Hall se DÉDUIT du nom de l'hôte (admin.gk2.secubox.in → hall.gk2.secubox.in) ; sans cette forme (adresse IP, nom à
+  // moins de trois étiquettes, kiosque), on n'invente aucune adresse.
+  function origineHall() {
+    var h = String(location.hostname || '').toLowerCase(), L = h.split('.');
+    if (L.length < 3 || /^\d+(\.\d+)*$/.test(h) || !L.every(function (x) { return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(x); })) return null;
+    return 'https://hall.' + L.slice(1).join('.');
+  }
+  function ouvrirFlux() {
+    var base = origineHall();
+    $('fluxIndispo').hidden = !!base;
+    if (!base) return;
+    var lien = $('lienHall'); lien.href = base + '/'; lien.hidden = false;
+    if ($('cFlux')) return;
+    var f = document.createElement('iframe');
+    f.id = 'cFlux'; f.title = 'Flux YouTube (carte du Hall)';
+    f.setAttribute('allow', 'clipboard-write');
+    f.src = base + '/cardlets/ytflux.html?embed=1' + (DEMO ? '&demo=1' : '');
+    $('zoneFlux').appendChild(f);
+  }
+  // Hauteur annoncée par la carte : même origine que le Hall déduit ET source = notre cadre ; bornée à 300–4000 px, plus 4 px.
+  addEventListener('message', function (e) {
+    var f = $('cFlux'), base = origineHall();
+    if (!f || !base || e.origin !== base || e.source !== f.contentWindow) return;
+    var d = e.data;
+    if (!d || d.onglet !== 'ytflux' || typeof d.sbxVue !== 'number' || !isFinite(d.sbxVue)) return;
+    f.style.height = (Math.max(300, Math.min(4000, Math.ceil(d.sbxVue))) + 4) + 'px';
+    annoncer();
+  });
+
+  // ----- Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7) -----
+  function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'ytsas' }, location.origin); } catch (e) { /* hors iframe */ }
+  }
+  if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+
+  charger();
+  // Actualisation 15 s, jamais onglet masqué, ni pendant une saisie, un envoi ou une confirmation ouverte.
+  setInterval(function () {
+    if (document.hidden || DEMO || CONFIRM || OCCUPE || $('urlInput').value || $('cookieFile').value) return;
+    charger();
+  }, 15000);
 })();
 </script>
 </body>

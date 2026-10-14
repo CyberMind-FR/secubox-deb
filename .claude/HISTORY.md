@@ -9,6 +9,8 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-14 — YouTube SAS et carte Flux au profil Aurora, flux embarqué (closes #2638)
+Page admin `/ytsas/` (0.5.0) refaite en Aurora, mêmes appels d'API, onglet « Flux » qui encadre la carte du Hall (`hall.<domaine>/cardlets/ytflux.html?embed=1`, domaine déduit de l'hôte). Carte Flux (webos 1.10.0) en Aurora ; nginx du Hall : location dédiée avec `frame-ancestors 'self' $sbx_admin_du_hall` (admin du même domaine, sans joker). Aucune route flux sur le vhost admin. Tests `test_ytsas_aurora_2638.py`, `test_ytflux_aurora_2638.py`. **Non déployé.**
 ## 2026-10-14 — Podcaster : page /podcaster/ au profil Aurora (closes #2637)
 `secubox-podcaster` 1.4.0 : page refaite au profil Aurora (tuiles lues dans `GET /status`, flux et épisodes, menu commun hors `?embed=1` et hors démonstration, `?demo=1` sans écriture, bandeau « session requise » sur 401, hauteur `sbxVue`/`podcaster`). Mêmes appels d'API qu'avant ; suppression de flux et titre d'audiolivre saisis dans la page (plus de `confirm()` ni `prompt()`). Ajouts de #2635 conservés (erreur par flux, dernière vérification, copie, réimport). Test `test_podcaster_aurora_2637.py` (24, Playwright route-mocké). **Non déployé.**
 

@@ -1,3 +1,12 @@
+secubox-ytsas (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page d'administration au profil Aurora (page autonome, menu commun hors ?embed=1 et ?demo=1, ?demo=1 avec données fictives et actions inertes) : mêmes appels d'API qu'avant (status, cookies, list, add, keep, conserve, remove, retry, ephemeral, stream ; jeton sbx_token en Bearer), routes inchangées.
+  * Nouvel onglet « Flux » : encadre la carte « Flux YouTube » du Hall (https://hall.<domaine>/cardlets/ytflux.html?embed=1, domaine déduit du nom de l'hôte) ; hauteur annoncée acceptée seulement de l'origine du Hall et de notre cadre, bornée à 300-4000 px. Hôte sans forme admin.<domaine> : message « Flux indisponible depuis cet hôte ». Aucune route /flux ouverte sur le vhost admin.
+  * Non repris : la suppression ne passe plus par confirm() (confirmation dans la ligne) ; plus de dépendance à hybrid-skin.css ; le bouton « Surf » de la carte est masqué dans l'onglet (le parent n'est pas le Hall) ; la carte ne s'actualise pas seule (lecture YouTube coûteuse).
+  * Tests : test_ytsas_aurora_2638.py (statique et navigateur, API simulée) (ref #2638).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 14:00:00 +0200
+
 secubox-ytsas (0.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Flux : le repli sur l'ancien résultat dit sa cause (cookies refusés ou panne YouTube) et marque le panneau périmé (ref #2633).
