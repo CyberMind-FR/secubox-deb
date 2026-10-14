@@ -4,486 +4,435 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  CyberFeed (flux de renseignement sur les menaces) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - CyberFeed</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — CyberFeed</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-        .header h1 { font-size: 1.5rem; color: var(--p31-peak); text-shadow: var(--bloom-text); }
-        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; transition: all 0.2s; }
-        .btn:hover { background: var(--tube-bezel); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .btn.primary { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-peak); }
-        .btn.success { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-hot); }
-        .btn.danger { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-        .card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.75rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-text); }
-        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.25rem; }
-        .stat-card.feeds .value { color: var(--p31-peak); }
-        .stat-card.ips .value { color: var(--p31-decay); text-shadow: var(--bloom-amber); }
-        .stat-card.domains .value { color: var(--p31-hot); }
-        .stat-card.errors .value { color: var(--p31-decay); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
-        th { color: var(--p31-dim); font-weight: 500; }
-        tr:hover { background: rgba(51,255,102,0.05); }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; display: inline-block; }
-        .badge.active { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
-        .badge.disabled { background: rgba(15,136,34,0.2); color: var(--p31-dim); }
-        .badge.error { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
-        .badge.updating { background: rgba(51,255,102,0.15); color: var(--p31-mid); animation: pulse 1s infinite; }
-        .badge.ip { background: rgba(255,179,71,0.15); color: var(--p31-decay-dim); }
-        .badge.domain { background: rgba(51,255,102,0.15); color: var(--p31-peak); }
-        .badge.url { background: rgba(100,150,255,0.15); color: #8ab4f8; }
-        .badge.botnet { background: rgba(255,100,100,0.15); color: #f87171; }
-        .badge.malware { background: rgba(255,150,100,0.15); color: #fb923c; }
-        .badge.spam { background: rgba(200,200,100,0.15); color: #fbbf24; }
-        .badge.phishing { background: rgba(200,100,200,0.15); color: #c084fc; }
-        .badge.threats { background: rgba(255,120,120,0.15); color: #f87171; }
-        .badge.abuse { background: rgba(255,150,150,0.15); color: #fca5a5; }
-        .badge.reputation { background: rgba(100,200,200,0.15); color: #5eead4; }
-        .badge.anonymizer { background: rgba(150,100,200,0.15); color: #a78bfa; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--p31-ghost); border-radius: 22px; transition: 0.3s; }
-        .toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--p31-dim); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .toggle-slider { background: var(--p31-mid); }
-        .toggle input:checked + .toggle-slider:before { transform: translateX(18px); background: var(--p31-peak); }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { font-size: 1.1rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .close-btn { background: none; border: none; color: var(--p31-dim); cursor: pointer; font-size: 1.5rem; }
-        .close-btn:hover { color: var(--p31-decay); }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.875rem; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--p31-mid); box-shadow: 0 0 8px rgba(51,255,102,0.3); }
-        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); padding-bottom: 0.5rem; }
-        .tab { padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px 4px 0 0; color: var(--p31-dim); transition: all 0.2s; }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active { color: var(--p31-peak); background: rgba(51,255,102,0.1); border-bottom: 2px solid var(--p31-peak); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .blocklist-preview { max-height: 300px; overflow-y: auto; background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 4px; padding: 0.5rem; font-size: 0.75rem; }
-        .blocklist-preview code { color: var(--p31-mid); }
-        .search-box { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .search-box input { flex: 1; }
-        .indicator-item { padding: 0.5rem; border-bottom: 1px solid var(--tube-soft); display: flex; justify-content: space-between; align-items: center; }
-        .indicator-item:last-child { border-bottom: none; }
-        .indicator-value { font-family: monospace; color: var(--p31-mid); }
-        .indicator-meta { font-size: 0.75rem; color: var(--p31-dim); }
-        .feed-desc { font-size: 0.75rem; color: var(--p31-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .actions { display: flex; gap: 0.25rem; }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglet{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:8px;border:1px solid var(--trait);background:transparent;color:var(--doux);cursor:pointer;min-height:32px}
+        .onglet:hover{color:var(--texte)} .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.16);color:var(--texte)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .bout{margin:0 0 0 auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:760px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .ligne{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .desc{color:var(--faible);font-size:.7rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)} .pill.ja{border-color:var(--jaune);color:var(--jaune);background:rgba(255,210,63,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus,select:focus{outline:none;border-color:var(--cyan)}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+        .recherche{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+        .recherche .champ{flex:1 1 220px}
+        .liste{margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .verdict{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--trait2)}
+        .verdict b{font-size:1rem} .verdict.ok{border-color:var(--vert)} .verdict.ok b{color:var(--vert)} .verdict.ko{border-color:var(--rouge)} .verdict.ko b{color:var(--rouge)}
+        .verdict ul{margin:4px 0 0;padding-left:1.2rem;font-size:.8rem}
+        .ioc{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 2px;border-top:1px solid rgba(86,150,255,.12)}
+        .ioc:first-child{border-top:0} .ioc>div{min-width:0}
+        .tg{position:relative;display:inline-block;width:38px;height:22px}
+        .tg input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1}
+        .tg span{position:absolute;inset:0;background:rgba(159,179,214,.22);border-radius:22px;transition:.2s}
+        .tg span:before{content:"";position:absolute;height:16px;width:16px;left:3px;top:3px;background:var(--doux);border-radius:50%;transition:.2s}
+        .tg input:checked+span{background:rgba(46,204,113,.45)} .tg input:checked+span:before{transform:translateX(16px);background:var(--vert)}
+        .tg input:focus-visible+span{outline:2px solid var(--cyan);outline-offset:2px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>CyberFeed - Threat Intelligence</h1>
-            <div class="header-actions">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="updateAllFeeds()">Update All Feeds</button>
-                <button class="btn" onclick="showAddFeed()">Add Feed</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19a1.4 1.4 0 1 0 0-.01"/><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/></svg>
+                <div><h1>CyberFeed</h1><small>Flux de renseignement sur les menaces : IP et domaines à bloquer</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+                <button class="btn prim" id="majTout" type="button">Mettre à jour tous les flux</button>
+                <button class="btn" id="ajouter" type="button">Ajouter un flux</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="stats-grid">
-            <div class="stat-card feeds">
-                <div class="value" id="statFeeds">-</div>
-                <div class="label">Active Feeds</div>
-            </div>
-            <div class="stat-card ips">
-                <div class="value" id="statIPs">-</div>
-                <div class="label">Blocked IPs</div>
-            </div>
-            <div class="stat-card domains">
-                <div class="value" id="statDomains">-</div>
-                <div class="label">Blocked Domains</div>
-            </div>
-            <div class="stat-card errors">
-                <div class="value" id="statErrors">-</div>
-                <div class="label">Feed Errors</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre de flux activés (case cochée) sur le total des flux connus : intégrés plus personnalisés."><span class="l">Flux actifs</span><span class="v" id="tFlux">—</span><span class="s" id="sFlux">flux activés</span></div>
+            <div class="tuile" id="cIp" title="Somme des entrées des flux d’adresses IP activés. Une même adresse présente dans plusieurs flux est comptée plusieurs fois : le total dédoublonné se lit dans l’onglet Listes."><span class="l">IP bloquées</span><span class="v" id="tIp" style="color:var(--rouge)">—</span><span class="s">entrées, tous flux IP</span></div>
+            <div class="tuile" title="Somme des entrées des flux de domaines activés. Un domaine présent dans plusieurs flux est compté plusieurs fois."><span class="l">Domaines bloqués</span><span class="v" id="tDom" style="color:var(--jaune)">—</span><span class="s">entrées, tous flux domaines</span></div>
+            <div class="tuile" id="cErr" title="Nombre de flux dont la dernière mise à jour a échoué (état « error »). Le détail se lit au survol de la pastille d’état du flux."><span class="l">Flux en erreur</span><span class="v" id="tErr">—</span><span class="s">dernière mise à jour échouée</span></div>
+            <div class="tuile cy" title="Date de la dernière mise à jour globale enregistrée par le service. Absente tant qu’aucune mise à jour n’a eu lieu."><span class="l">Dernière mise à jour</span><span class="v long" id="tMaj">—</span><span class="s">globale</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections">
+            <button class="onglet" role="tab" id="o-flux" data-onglet="flux" aria-selected="true" type="button">Flux</button>
+            <button class="onglet" role="tab" id="o-listes" data-onglet="listes" aria-selected="false" type="button">Listes</button>
+            <button class="onglet" role="tab" id="o-verif" data-onglet="verif" aria-selected="false" type="button">Vérifier un indicateur</button>
+            <button class="onglet" role="tab" id="o-export" data-onglet="export" aria-selected="false" type="button">Export</button>
         </div>
 
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('feeds')">Feeds</div>
-            <div class="tab" onclick="switchTab('blocklist')">Blocklists</div>
-            <div class="tab" onclick="switchTab('indicators')">IoC Lookup</div>
-            <div class="tab" onclick="switchTab('export')">Export</div>
-        </div>
+        <section id="p-flux" role="tabpanel" aria-labelledby="o-flux" style="display:grid;gap:10px">
+            <div class="pan" id="pAjout" hidden><h3>Ajouter un flux personnalisé <i>POST /feeds/add</i></h3>
+                <form class="saisie" id="fAjout">
+                    <label>Nom du flux<input id="fNom" placeholder="mon-flux" autocomplete="off"></label>
+                    <label>Adresse du flux (URL)<input id="fUrl" placeholder="https://exemple.test/liste.txt" autocomplete="off"></label>
+                    <label>Type<select id="fType"><option value="ip">Adresses IP</option><option value="domain">Domaines</option><option value="url">URL</option><option value="hash">Empreintes de fichiers</option></select></label>
+                    <label>Format<select id="fFormat"><option value="plain">Texte (une entrée par ligne)</option><option value="hosts">Fichier hosts</option><option value="csv">CSV (première colonne)</option></select></label>
+                    <label>Catégorie<input id="fCat" placeholder="malware, phishing…" autocomplete="off"></label>
+                    <label>Description<input id="fDesc" placeholder="Brève description" autocomplete="off"></label>
+                    <div class="bout"><button class="btn prim" type="submit" id="btnAjout">Ajouter</button><button class="btn" type="button" id="annulAjout">Annuler</button></div>
+                </form>
+            </div>
+            <div class="pan"><h3>Flux de renseignement <i id="nFlux"></i><i>GET /feeds</i></h3>
+                <div class="recherche"><div class="champ"><label for="filtre">Filtrer par nom, type ou catégorie</label><input id="filtre" type="search" autocomplete="off"></div></div>
+                <div id="rFlux" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Actif</th><th>Flux</th><th>Type</th><th>Catégorie</th><th>Entrées</th><th>État</th><th>Dernière mise à jour</th><th>Actions</th></tr></thead><tbody id="bFlux"></tbody></table></div>
+            </div>
+        </section>
 
-        <!-- Feeds Tab -->
-        <div class="tab-content active" id="tab-feeds">
-            <div class="card">
-                <h2>Threat Intelligence Feeds</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Enabled</th>
-                            <th>Feed Name</th>
-                            <th>Type</th>
-                            <th>Category</th>
-                            <th>Entries</th>
-                            <th>Status</th>
-                            <th>Last Update</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="feedsTable"></tbody>
-                </table>
+        <section id="p-listes" role="tabpanel" aria-labelledby="o-listes" hidden>
+            <div class="grille">
+                <div class="pan"><h3>Liste d’adresses IP <i id="nIp"></i></h3><pre class="liste mono" id="lIp">—</pre><p class="note">Aperçu des 100 premières entrées, dédoublonnées entre les flux IP activés.</p></div>
+                <div class="pan"><h3>Liste de domaines <i id="nDom"></i></h3><pre class="liste mono" id="lDom">—</pre><p class="note">Aperçu des 100 premières entrées, dédoublonnées entre les flux de domaines activés.</p></div>
             </div>
-        </div>
+        </section>
 
-        <!-- Blocklist Tab -->
-        <div class="tab-content" id="tab-blocklist">
-            <div class="card">
-                <h2>
-                    IP Blocklist
-                    <span id="ipCount" style="font-weight: normal; font-size: 0.875rem;"></span>
-                </h2>
-                <div class="blocklist-preview" id="ipBlocklist">
-                    <code>Loading...</code>
-                </div>
+        <section id="p-verif" role="tabpanel" aria-labelledby="o-verif" hidden style="display:grid;gap:10px">
+            <div class="pan"><h3>Vérifier un indicateur <i>GET /check/ip, /check/domain</i></h3>
+                <form class="recherche" id="fVerif"><div class="champ"><label for="verif">Adresse IP ou domaine</label><input id="verif" placeholder="192.0.2.1 ou exemple.test" autocomplete="off"></div><button class="btn prim" type="submit" id="btnVerif">Vérifier</button></form>
+                <div id="resVerif" class="verdict" hidden></div>
             </div>
-            <div class="card">
-                <h2>
-                    Domain Blocklist
-                    <span id="domainCount" style="font-weight: normal; font-size: 0.875rem;"></span>
-                </h2>
-                <div class="blocklist-preview" id="domainBlocklist">
-                    <code>Loading...</code>
-                </div>
-            </div>
-        </div>
+            <div class="pan"><h3>Indicateurs récents <i>GET /indicators</i></h3><div id="lIoc"></div></div>
+        </section>
 
-        <!-- IoC Lookup Tab -->
-        <div class="tab-content" id="tab-indicators">
-            <div class="card">
-                <h2>Check Indicator</h2>
-                <div class="search-box">
-                    <input type="text" id="checkInput" placeholder="Enter IP or domain to check...">
-                    <button class="btn primary" onclick="checkIndicator()">Check</button>
+        <section id="p-export" role="tabpanel" aria-labelledby="o-export" hidden>
+            <div class="pan"><h3>Exporter les listes <i>GET /export/ips, /export/domains</i></h3>
+                <div class="grille">
+                    <div><b style="font-size:.82rem;color:var(--doux)">Liste d’adresses IP</b><div class="bout" style="margin-top:6px"><button class="btn sm" data-ex="ips:plain" type="button">Texte brut</button><button class="btn sm" data-ex="ips:nftables" type="button">nftables</button><button class="btn sm" data-ex="ips:hosts" type="button">Hosts</button></div></div>
+                    <div><b style="font-size:.82rem;color:var(--doux)">Liste de domaines</b><div class="bout" style="margin-top:6px"><button class="btn sm" data-ex="domains:plain" type="button">Texte brut</button><button class="btn sm" data-ex="domains:hosts" type="button">Hosts</button><button class="btn sm" data-ex="domains:unbound" type="button">Unbound</button><button class="btn sm" data-ex="domains:dnsmasq" type="button">dnsmasq</button></div></div>
                 </div>
-                <div id="checkResult"></div>
+                <div id="apercu" hidden style="margin-top:10px"><h3 style="margin:0 0 6px;font-size:.84rem">Aperçu de l’export <i id="nExport" style="font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem"></i></h3>
+                    <pre class="liste mono" id="contenu" style="max-height:400px"></pre>
+                    <div class="bout" style="margin-top:8px"><button class="btn prim" id="telecharger" type="button">Télécharger</button></div></div>
+                <p class="note">L’API borne certains formats : nftables à 500 adresses, Unbound à 5 000 domaines.</p>
             </div>
-            <div class="card">
-                <h2>Recent Indicators</h2>
-                <div id="indicatorsList"></div>
-            </div>
-        </div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- Export Tab -->
-        <div class="tab-content" id="tab-export">
-            <div class="card">
-                <h2>Export Blocklists</h2>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                    <div>
-                        <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--p31-mid);">IP Blocklist</h3>
-                        <button class="btn btn-sm" onclick="exportList('ips', 'plain')">Plain Text</button>
-                        <button class="btn btn-sm" onclick="exportList('ips', 'nftables')">nftables</button>
-                        <button class="btn btn-sm" onclick="exportList('ips', 'hosts')">Hosts</button>
-                    </div>
-                    <div>
-                        <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--p31-mid);">Domain Blocklist</h3>
-                        <button class="btn btn-sm" onclick="exportList('domains', 'plain')">Plain Text</button>
-                        <button class="btn btn-sm" onclick="exportList('domains', 'hosts')">Hosts</button>
-                        <button class="btn btn-sm" onclick="exportList('domains', 'unbound')">Unbound</button>
-                        <button class="btn btn-sm" onclick="exportList('domains', 'dnsmasq')">dnsmasq</button>
-                    </div>
-                </div>
-                <div id="exportPreview" style="margin-top: 1rem; display: none;">
-                    <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--p31-mid);">Export Preview</h3>
-                    <div class="blocklist-preview" style="max-height: 400px;">
-                        <code id="exportContent"></code>
-                    </div>
-                    <button class="btn primary" style="margin-top: 0.5rem;" onclick="downloadExport()">Download</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Add Feed Modal -->
-        <div class="modal" id="addFeedModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add Custom Feed</h3>
-                    <button class="close-btn" onclick="closeModal('addFeedModal')">&times;</button>
-                </div>
-                <div class="form-group">
-                    <label>Feed Name</label>
-                    <input type="text" id="feedName" placeholder="my-custom-feed">
-                </div>
-                <div class="form-group">
-                    <label>Feed URL</label>
-                    <input type="text" id="feedUrl" placeholder="https://example.com/blocklist.txt">
-                </div>
-                <div class="form-group">
-                    <label>Feed Type</label>
-                    <select id="feedType">
-                        <option value="ip">IP addresses</option>
-                        <option value="domain">Domains</option>
-                        <option value="url">URLs</option>
-                        <option value="hash">File Hashes</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Format</label>
-                    <select id="feedFormat">
-                        <option value="plain">Plain (one entry per line)</option>
-                        <option value="hosts">Hosts file format</option>
-                        <option value="csv">CSV (first column)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Category</label>
-                    <input type="text" id="feedCategory" placeholder="malware, phishing, etc.">
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" id="feedDesc" placeholder="Brief description">
-                </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn" onclick="closeModal('addFeedModal')">Cancel</button>
-                    <button class="btn primary" onclick="addFeed()">Add Feed</button>
-                </div>
-            </div>
-        </div>
-    </main>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/cyberfeed';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = n => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('fr-FR');
 
-        let currentExport = { type: '', format: '', content: '' };
+        let STATS = null, FEEDS = null, SESSION_OK = true, CHARGE = false, ONGLET = 'flux';
+        let CONFIRM = null;          // nom du flux dont la suppression attend confirmation (dans la ligne)
+        let OCCUPE = false;          // une écriture est en cours
+        let EXPORT = { type: '', format: '', content: '' };
 
-        async function api(path, opts = {}) {
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { 'Content-Type': 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        // Même contrat qu'avant : mêmes routes, méthodes, corps et en-têtes. Retourne { ok, statut, data }.
+        async function appel(chemin, opts) {
+            if (DEMO && opts && opts.method && opts.method !== 'GET') return { ok: false, demo: true, statut: 0, data: null };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                if (!res.ok) return {};
-                const text = await res.text();
-                return text ? JSON.parse(text) : {};
-            } catch { return {}; }
+                const r = await fetch(API + chemin, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts || {}, { headers: entetes() }));
+                let data = null; try { const t = await r.text(); data = t ? JSON.parse(t) : null; } catch (e) { /* corps non JSON */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function refus(r) { return r.statut === 401 || r.statut === 403; }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function motif(r) {
+            if (r.demo) return 'Démonstration : action inerte.';
+            const d = r.data && r.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + r.statut);
+            if (d) return String(d);
+            if (r.data && r.data.error) return String(r.data.error);
+            return r.statut ? 'HTTP ' + r.statut : 'Serveur injoignable';
+        }
+        function date(s) { if (!s) return '—'; const d = new Date(s); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+
+        const TYPES = { ip: ['IP', 'cy'], domain: ['Domaine', 'ja'], url: ['URL', 'cy'], hash: ['Empreinte', 'vi'], mixed: ['Mixte', 'vi'] };
+        const ETATS = { active: ['Actif', 'ok'], error: ['Erreur', 'hors'], updating: ['Mise à jour', 'cy'], disabled: ['Désactivé', ''] };
+        const CATS = { botnet: 'hors', malware: 'att', spam: 'ja', phishing: 'vi', threats: 'hors', abuse: 'att', reputation: 'cy', anonymizer: 'vi' };
+
+        function demoData() {
+            STATS = { total_feeds: 4, active_feeds: 3, total_ips: 5320, total_domains: 18240, total_urls: 0, feeds_with_errors: 1, last_global_update: new Date(Date.now() - 3600e3).toISOString() };
+            FEEDS = { feeds: [
+                { name: 'abuse-ch-feodo', description: 'Feodo Tracker - IP de commande et contrôle de botnets', feed_type: 'ip', category: 'botnet', enabled: true, status: 'active', entry_count: 320, last_update: new Date(Date.now() - 3600e3).toISOString(), builtin: true },
+                { name: 'liste-ip-fictive', description: 'Flux personnalisé de démonstration', feed_type: 'ip', category: 'abuse', enabled: true, status: 'active', entry_count: 5000, last_update: new Date(Date.now() - 7200e3).toISOString(), builtin: false },
+                { name: 'domaines-malveillants', description: 'Domaines de logiciels malveillants', feed_type: 'domain', category: 'malware', enabled: true, status: 'active', entry_count: 18240, last_update: new Date(Date.now() - 5400e3).toISOString(), builtin: true },
+                { name: 'hameconnage', description: 'Domaines d’hameçonnage', feed_type: 'domain', category: 'phishing', enabled: true, status: 'error', error: 'HTTP 503 du serveur du flux', entry_count: 0, last_update: null, builtin: true },
+                { name: 'tor-sortie', description: 'Nœuds de sortie Tor', feed_type: 'ip', category: 'anonymizer', enabled: false, status: 'disabled', entry_count: 0, last_update: null, builtin: true }] };
+        }
+        const DEMO_IPS = ['192.0.2.14', '192.0.2.77', '198.51.100.23', '198.51.100.201', '203.0.113.9', '203.0.113.150'];
+        const DEMO_DOM = ['malware.exemple.test', 'hameconnage.exemple.test', 'c2.exemple.test'];
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); chargerOnglet(); return; }
+            const [s, f] = await Promise.all([appel('/stats'), appel('/feeds')]);
+            SESSION_OK = !(refus(s) || refus(f));
+            STATS = s.ok ? s.data : null;
+            FEEDS = f.ok && f.data && Array.isArray(f.data.feeds) ? f.data : null;
+            CHARGE = true;
+            const panne = !s.ok && !f.ok && SESSION_OK;
+            $('erreur').hidden = !panne;
+            if (panne) $('erreur').textContent = 'Impossible de lire le service CyberFeed (arrêté ou injoignable).';
+            rendre(); chargerOnglet();
         }
 
-        function switchTab(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`.tab[onclick*="${tab}"]`).classList.add('active');
-            document.getElementById('tab-' + tab).classList.add('active');
-
-            if (tab === 'blocklist') loadBlocklists();
-            if (tab === 'indicators') loadIndicators();
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat'), s = STATS;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s && !FEEDS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s && s.feeds_with_errors > 0) { etat.className = 'actif att'; etat.textContent = s.feeds_with_errors + ' FLUX EN ERREUR'; }
+            else if (s && s.active_feeds === 0) { etat.className = 'actif neutre'; etat.textContent = 'AUCUN FLUX ACTIF'; }
+            else { etat.className = 'actif'; etat.textContent = 'À JOUR'; }
+            $('tFlux').textContent = s && s.active_feeds != null ? s.active_feeds : '—';
+            $('sFlux').textContent = s && s.total_feeds != null ? 'sur ' + s.total_feeds + ' flux connus' : 'flux activés';
+            $('tIp').textContent = s ? nombre(s.total_ips) : '—';
+            $('tDom').textContent = s ? nombre(s.total_domains) : '—';
+            $('tErr').textContent = s && s.feeds_with_errors != null ? s.feeds_with_errors : '—';
+            $('cErr').className = 'tuile ' + (s && s.feeds_with_errors > 0 ? 'hors' : s ? 'ok' : 'cy');
+            $('tMaj').textContent = s ? date(s.last_global_update) : '—';
+            rendreFlux();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadStats() {
-            const d = await api('/stats');
-            document.getElementById('statFeeds').textContent = d.active_feeds || 0;
-            document.getElementById('statIPs').textContent = (d.total_ips || 0).toLocaleString();
-            document.getElementById('statDomains').textContent = (d.total_domains || 0).toLocaleString();
-            document.getElementById('statErrors').textContent = d.feeds_with_errors || 0;
-        }
+        function pill(txt, cls) { return el('span', 'pill ' + (cls || ''), txt); }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
-        async function loadFeeds() {
-            const d = await api('/feeds');
-            const tbody = document.getElementById('feedsTable');
-            tbody.innerHTML = (d.feeds || []).map(f => `<tr>
-                <td>
-                    <label class="toggle">
-                        <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="toggleFeed('${f.name}', this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </td>
-                <td>
-                    <div>${f.name}</div>
-                    <div class="feed-desc" title="${f.description || ''}">${f.description || ''}</div>
-                </td>
-                <td><span class="badge ${f.feed_type}">${f.feed_type}</span></td>
-                <td><span class="badge ${f.category || ''}">${f.category || '-'}</span></td>
-                <td>${(f.entry_count || 0).toLocaleString()}</td>
-                <td><span class="badge ${f.status}">${f.status}</span></td>
-                <td>${f.last_update ? new Date(f.last_update).toLocaleString() : '-'}</td>
-                <td class="actions">
-                    <button class="btn btn-sm" onclick="updateFeed('${f.name}')">Update</button>
-                    ${!f.builtin ? `<button class="btn btn-sm danger" onclick="removeFeed('${f.name}')">Remove</button>` : ''}
-                </td>
-            </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--p31-dim)">No feeds configured</td></tr>';
-        }
-
-        async function loadBlocklists() {
-            const ips = await api('/blocklist/ips?limit=100');
-            const domains = await api('/blocklist/domains?limit=100');
-
-            document.getElementById('ipCount').textContent = `(${(ips.total || 0).toLocaleString()} total)`;
-            document.getElementById('domainCount').textContent = `(${(domains.total || 0).toLocaleString()} total)`;
-
-            document.getElementById('ipBlocklist').innerHTML = '<code>' +
-                (ips.ips || []).map(ip => ip).join('\n') +
-                (ips.total > 100 ? '\n... and more' : '') +
-                '</code>';
-
-            document.getElementById('domainBlocklist').innerHTML = '<code>' +
-                (domains.domains || []).map(d => d).join('\n') +
-                (domains.total > 100 ? '\n... and more' : '') +
-                '</code>';
-        }
-
-        async function loadIndicators() {
-            const d = await api('/indicators?limit=50');
-            const div = document.getElementById('indicatorsList');
-            div.innerHTML = (d.indicators || []).map(i => `<div class="indicator-item">
-                <div>
-                    <div class="indicator-value">${i.value}</div>
-                    <div class="indicator-meta">${i.source} - ${i.category}</div>
-                </div>
-                <span class="badge ${i.ioc_type}">${i.ioc_type}</span>
-            </div>`).join('') || '<div style="color:var(--p31-dim);text-align:center;padding:1rem;">No indicators loaded</div>';
-        }
-
-        async function toggleFeed(name, enabled) {
-            await api(`/feed/${name}/enable?enabled=${enabled}`, { method: 'POST' });
-            loadStats();
-            loadFeeds();
-        }
-
-        async function updateFeed(name) {
-            const d = await api(`/feed/${name}/update`, { method: 'POST' });
-            if (d.success) {
-                alert(`Updated ${name}: ${d.entries} entries`);
-            } else {
-                alert(`Error updating ${name}: ${d.error || 'Unknown error'}`);
-            }
-            refresh();
-        }
-
-        async function updateAllFeeds() {
-            const d = await api('/feeds/update', { method: 'POST' });
-            const results = d.results || [];
-            const success = results.filter(r => r.success).length;
-            const failed = results.filter(r => !r.success).length;
-            alert(`Updated ${success} feeds. ${failed} failed.`);
-            refresh();
-        }
-
-        async function removeFeed(name) {
-            if (!confirm(`Remove feed "${name}"?`)) return;
-            await api(`/feeds/${name}`, { method: 'DELETE' });
-            refresh();
-        }
-
-        async function checkIndicator() {
-            const input = document.getElementById('checkInput').value.trim();
-            if (!input) return;
-
-            const resultDiv = document.getElementById('checkResult');
-            resultDiv.innerHTML = '<div style="color:var(--p31-dim)">Checking...</div>';
-
-            // Determine if IP or domain
-            const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(input);
-            const endpoint = isIP ? `/check/ip/${input}` : `/check/domain/${input}`;
-
-            const d = await api(endpoint);
-
-            if (d.blocked) {
-                resultDiv.innerHTML = `<div style="background:rgba(255,100,100,0.1);border:1px solid #f87171;border-radius:4px;padding:1rem;">
-                    <strong style="color:#f87171;">BLOCKED</strong>
-                    <div style="margin-top:0.5rem;font-size:0.875rem;">
-                        Found in ${d.matches.length} feed(s):
-                        <ul style="margin-top:0.5rem;padding-left:1.5rem;">
-                            ${d.matches.map(m => `<li>${m.feed} (${m.category})</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>`;
-            } else {
-                resultDiv.innerHTML = `<div style="background:rgba(51,255,102,0.1);border:1px solid var(--p31-mid);border-radius:4px;padding:1rem;">
-                    <strong style="color:var(--p31-peak);">CLEAN</strong>
-                    <div style="margin-top:0.5rem;font-size:0.875rem;color:var(--p31-dim);">
-                        Not found in any enabled blocklist.
-                    </div>
-                </div>`;
-            }
-        }
-
-        async function exportList(type, format) {
-            const d = await api(`/export/${type}?format=${format}`);
-            currentExport = { type, format, content: d.content || '' };
-
-            document.getElementById('exportPreview').style.display = 'block';
-            document.getElementById('exportContent').textContent = d.content || 'No data';
-        }
-
-        function downloadExport() {
-            const blob = new Blob([currentExport.content], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `cyberfeed-${currentExport.type}-${currentExport.format}.txt`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function showAddFeed() {
-            document.getElementById('addFeedModal').classList.add('active');
-        }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-        }
-
-        async function addFeed() {
-            const feed = {
-                name: document.getElementById('feedName').value.trim(),
-                url: document.getElementById('feedUrl').value.trim(),
-                feed_type: document.getElementById('feedType').value,
-                format: document.getElementById('feedFormat').value,
-                category: document.getElementById('feedCategory').value.trim() || null,
-                description: document.getElementById('feedDesc').value.trim() || null,
-                enabled: true
-            };
-
-            if (!feed.name || !feed.url) {
-                alert('Name and URL are required');
-                return;
-            }
-
-            await api('/feeds/add', { method: 'POST', body: JSON.stringify(feed) });
-            closeModal('addFeedModal');
-            refresh();
-        }
-
-        function refresh() {
-            loadStats();
-            loadFeeds();
-        }
-
-        // Enter key for indicator check
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('checkInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') checkIndicator();
+        function rendreFlux() {
+            const tb = $('bFlux'); tb.replaceChildren();
+            const tous = FEEDS ? FEEDS.feeds : [];
+            const q = $('filtre').value.trim().toLowerCase();
+            const liste = tous.filter(f => !q || [f.name, f.feed_type, f.category].some(x => String(x || '').toLowerCase().includes(q)));
+            $('nFlux').textContent = tous.length ? (q ? liste.length + ' sur ' : '') + tous.length + ' flux' : '';
+            if (!liste.length) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : !FEEDS ? (CHARGE ? 'Flux indisponibles' : '—') : q ? 'Aucun flux ne correspond' : 'Aucun flux configuré'); td.colSpan = 8; tr.appendChild(td); tb.appendChild(tr); return; }
+            liste.forEach(f => {
+                const tr = el('tr');
+                const c0 = el('td'); const lab = el('label', 'tg'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!f.enabled; cb.setAttribute('aria-label', 'Activer le flux ' + f.name);
+                cb.addEventListener('change', () => basculer(f.name, cb.checked)); lab.appendChild(cb); lab.appendChild(el('span')); c0.appendChild(lab); tr.appendChild(c0);
+                const c1 = el('td'); c1.appendChild(el('div', '', tiret(f.name))); const d = el('div', 'desc', tiret(f.description === null ? '' : f.description)); if (f.description) d.title = f.description; c1.appendChild(d); tr.appendChild(c1);
+                const t = TYPES[f.feed_type]; const c2 = el('td'); c2.appendChild(pill(t ? t[0] : tiret(f.feed_type), t ? t[1] : '')); tr.appendChild(c2);
+                const c3 = el('td'); c3.appendChild(f.category ? pill(f.category, CATS[f.category] || '') : document.createTextNode('—')); tr.appendChild(c3);
+                tr.appendChild(el('td', '', f.entry_count == null ? '—' : nombre(f.entry_count)));
+                const e = ETATS[f.status]; const c5 = el('td'); const pe = pill(e ? e[0] : tiret(f.status), e ? e[1] : ''); if (f.error) pe.title = String(f.error); c5.appendChild(pe); tr.appendChild(c5);
+                tr.appendChild(el('td', '', date(f.last_update)));
+                const act = el('td', 'act'); const lg = el('div', 'ligne'); act.appendChild(lg);
+                lg.appendChild(btn('Mettre à jour', '', () => majFlux(f.name)));
+                if (!f.builtin) {
+                    if (CONFIRM === f.name) {
+                        lg.appendChild(el('span', 'note', 'Retirer ce flux ?'));
+                        lg.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; retirer(f.name); }));
+                        lg.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                    } else lg.appendChild(btn('Retirer', 'danger', () => { CONFIRM = f.name; rendre(); }));
+                }
+                tr.appendChild(act); tb.appendChild(tr);
             });
+        }
+
+        // ----- Onglets -----
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglet').forEach(b => b.setAttribute('aria-selected', b.dataset.onglet === nom ? 'true' : 'false'));
+            ['flux', 'listes', 'verif', 'export'].forEach(n => { $('p-' + n).hidden = n !== nom; });
+            chargerOnglet(); annoncer();
+        }
+        document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => onglet(b.dataset.onglet)));
+        function chargerOnglet() { if (ONGLET === 'listes') chargerListes(); if (ONGLET === 'verif') chargerIoc(); }
+
+        async function chargerListes() {
+            if (DEMO) {
+                $('nIp').textContent = '(' + nombre(5320) + ' au total)'; $('nDom').textContent = '(' + nombre(18240) + ' au total)';
+                $('lIp').textContent = DEMO_IPS.join('\n'); $('lDom').textContent = DEMO_DOM.join('\n'); annoncer(); return;
+            }
+            const [i, d] = await Promise.all([appel('/blocklist/ips?limit=100'), appel('/blocklist/domains?limit=100')]);
+            const rendu = (r, cle, nid, lid) => {
+                if (!r.ok || !r.data) { $(nid).textContent = ''; $(lid).textContent = '—'; return; }
+                const l = Array.isArray(r.data[cle]) ? r.data[cle] : [];
+                $(nid).textContent = '(' + nombre(r.data.total) + ' au total)';
+                $(lid).textContent = l.length ? l.join('\n') + (r.data.total > 100 ? '\n… et ' + nombre(r.data.total - l.length) + ' autres' : '') : 'Liste vide';
+            };
+            rendu(i, 'ips', 'nIp', 'lIp'); rendu(d, 'domains', 'nDom', 'lDom'); annoncer();
+        }
+
+        async function chargerIoc() {
+            const box = $('lIoc');
+            let liste = null;
+            if (DEMO) liste = [{ value: '192.0.2.14', source: 'abuse-ch-feodo', category: 'botnet', ioc_type: 'ip' }, { value: 'malware.exemple.test', source: 'domaines-malveillants', category: 'malware', ioc_type: 'domain' }];
+            else { const r = await appel('/indicators?limit=50'); liste = r.ok && r.data && Array.isArray(r.data.indicators) ? r.data.indicators : null; }
+            box.replaceChildren();
+            if (!liste || !liste.length) { box.appendChild(el('div', 'vide', liste ? 'Aucun indicateur chargé' : '—')); annoncer(); return; }
+            liste.forEach(i => {
+                const row = el('div', 'ioc'); const g = el('div');
+                g.appendChild(el('div', 'mono', tiret(i.value))); g.appendChild(el('div', 'note', tiret(i.source) + ' — ' + tiret(i.category)));
+                row.appendChild(g); const t = TYPES[i.ioc_type]; row.appendChild(pill(t ? t[0] : tiret(i.ioc_type), t ? t[1] : '')); box.appendChild(row);
+            });
+            annoncer();
+        }
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function basculer(nom, actif) {
+            const r = await appel('/feed/' + encodeURIComponent(nom) + '/enable?enabled=' + actif, { method: 'POST' });
+            if (!r.ok) retour('rFlux', false, 'Changement impossible : ' + motif(r));
+            await charger();
+        }
+        async function majFlux(nom) {
+            if (OCCUPE) return; OCCUPE = true;
+            const r = await appel('/feed/' + encodeURIComponent(nom) + '/update', { method: 'POST' });
+            OCCUPE = false;
+            if (r.ok && r.data && r.data.success) retour('rFlux', true, 'Flux « ' + nom + ' » mis à jour : ' + nombre(r.data.entries) + ' entrées.');
+            else retour('rFlux', false, 'Mise à jour de « ' + nom + ' » impossible : ' + motif(r));
+            if (!r.demo) await charger();
+        }
+        async function majTout() {
+            if (OCCUPE) return; OCCUPE = true;
+            const b = $('majTout'); b.disabled = true; b.textContent = 'Mise à jour…';
+            const r = await appel('/feeds/update', { method: 'POST' });
+            OCCUPE = false; b.disabled = false; b.textContent = 'Mettre à jour tous les flux';
+            if (r.ok && r.data) {
+                const res = Array.isArray(r.data.results) ? r.data.results : [];
+                const bon = res.filter(x => x.success).length, mauvais = res.filter(x => !x.success).length;
+                retour('rFlux', mauvais === 0, bon + ' flux mis à jour, ' + mauvais + ' en échec.');
+            } else retour('rFlux', false, 'Mise à jour impossible : ' + motif(r));
+            if (!r.demo) await charger();
+        }
+        async function retirer(nom) {
+            const r = await appel('/feeds/' + encodeURIComponent(nom), { method: 'DELETE' });
+            if (r.ok) retour('rFlux', true, 'Flux « ' + nom + ' » retiré.'); else retour('rFlux', false, 'Retrait impossible : ' + motif(r));
+            if (!r.demo) await charger(); else rendre();
+        }
+        $('ajouter').addEventListener('click', () => { onglet('flux'); $('pAjout').hidden = false; annoncer(); $('fNom').focus(); });
+        $('annulAjout').addEventListener('click', () => { $('pAjout').hidden = true; annoncer(); });
+        $('fAjout').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const feed = { name: $('fNom').value.trim(), url: $('fUrl').value.trim(), feed_type: $('fType').value, format: $('fFormat').value,
+                           category: $('fCat').value.trim() || null, description: $('fDesc').value.trim() || null, enabled: true };
+            if (!feed.name || !feed.url) { retour('rFlux', false, 'Le nom et l’adresse du flux sont obligatoires.'); return; }
+            const b = $('btnAjout'); b.disabled = true;
+            const r = await appel('/feeds/add', { method: 'POST', body: JSON.stringify(feed) });
+            b.disabled = false;
+            if (r.ok) { retour('rFlux', true, 'Flux « ' + feed.name + ' » ajouté.'); $('fAjout').reset(); $('pAjout').hidden = true; await charger(); }
+            else retour('rFlux', false, 'Ajout impossible : ' + motif(r));
+        });
+        $('filtre').addEventListener('input', rendreFlux);
+        $('majTout').addEventListener('click', majTout);
+        $('rafraichir').addEventListener('click', charger);
+
+        $('fVerif').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const saisie = $('verif').value.trim(); if (!saisie) return;
+            const estIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(saisie);
+            const v = $('resVerif'); v.hidden = false; v.className = 'verdict'; v.replaceChildren(el('span', 'note', 'Vérification…'));
+            let d;
+            if (DEMO) d = { blocked: DEMO_IPS.includes(saisie) || DEMO_DOM.includes(saisie.toLowerCase()), matches: [{ feed: 'abuse-ch-feodo', category: 'botnet' }] };
+            else { const r = await appel((estIp ? '/check/ip/' : '/check/domain/') + encodeURIComponent(saisie)); d = r.ok ? r.data : null; if (!d) { v.className = 'verdict ko'; v.replaceChildren(el('span', '', 'Vérification impossible : ' + motif(r))); annoncer(); return; } }
+            v.replaceChildren();
+            if (d.blocked) {
+                v.className = 'verdict ko'; v.appendChild(el('b', '', 'BLOQUÉ'));
+                const w = el('div'); const m = Array.isArray(d.matches) ? d.matches : [];
+                w.appendChild(el('div', 'note', 'Présent dans ' + m.length + ' flux :')); const ul = el('ul'); m.forEach(x => ul.appendChild(el('li', '', tiret(x.feed) + ' (' + tiret(x.category) + ')'))); w.appendChild(ul); v.appendChild(w);
+            } else { v.className = 'verdict ok'; v.appendChild(el('b', '', 'SAIN')); v.appendChild(el('span', 'note', 'Absent de toutes les listes de blocage activées.')); }
+            annoncer();
         });
 
-        refresh();
+        async function exporter(type, format) {
+            let content = '', count = null;
+            if (DEMO) { const l = type === 'ips' ? DEMO_IPS : DEMO_DOM; content = '# SecuBox CyberFeed (démonstration)\n' + l.join('\n') + '\n'; count = l.length; }
+            else { const r = await appel('/export/' + type + '?format=' + format); if (!r.ok || !r.data) { $('apercu').hidden = false; $('contenu').textContent = 'Export impossible : ' + motif(r); $('nExport').textContent = ''; EXPORT = { type, format, content: '' }; annoncer(); return; } content = r.data.content || ''; count = r.data.count; }
+            EXPORT = { type, format, content };
+            $('apercu').hidden = false; $('contenu').textContent = content || 'Aucune donnée';
+            $('nExport').textContent = (type === 'ips' ? 'IP' : 'domaines') + ' — ' + format + (count != null ? ' — ' + nombre(count) + ' entrées' : '');
+            annoncer();
+        }
+        document.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => { const [t, f] = b.dataset.ex.split(':'); exporter(t, f); }));
+        $('telecharger').addEventListener('click', () => {
+            if (!EXPORT.content) return;
+            const blob = new Blob([EXPORT.content], { type: 'text/plain' }), u = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = u; a.download = 'cyberfeed-' + EXPORT.type + '-' + EXPORT.format + '.txt'; a.click(); URL.revokeObjectURL(u);
+        });
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'cyberfeed' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, un formulaire ou une confirmation ouverte.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || OCCUPE || !$('pAjout').hidden || $('filtre').value || $('verif').value) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>

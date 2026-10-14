@@ -1,3 +1,12 @@
+secubox-mail (2.16.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /smtp-relay/ (composant smtp-relay) refaite au profil Aurora (ref #2650) : un seul fichier autonome (plus de police distante, plus de crt-light ni hybrid-dark, plus de crt-engine.js), tuiles (Postfix, relais, en file, envoyes, echecs, differes) avec infobulles de definition, onglets Apercu, File d'attente, Configuration et Journaux, ?demo=1 (donnees fictives, actions inertes), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet smtp-relay). Textes en francais.
+  * Memes routes, methodes, corps et en-tetes : GET /status, /stats, /queue, /config, /logs?lines= ; POST /start, /stop, /restart, /queue/flush, /config, /test ; DELETE /queue/{id}.
+  * Mot de passe SMTP : jamais affiche ni prerempli (l'ancienne page copiait le masque dans le champ). Laisse vide alors qu'un mot de passe est deja enregistre, le meme masque part comme avant et l'API conserve l'existant ; saisi, il remplace.
+  * Corrige : plus aucun confirm()/alert() ni fenetre modale (suppression de message, arret et redemarrage de Postfix confirmes dans la page ; le courriel d'essai a son panneau) ; session absente (401) renvoyait brutalement vers /login.html, desormais bandeau et tirets ; erreurs HTTP avalees (« Failed » sans motif), desormais le motif de l'API est affiche ; file, expediteurs et journaux injectes en HTML et dans des gestionnaires onclick : tout est desormais construit en textContent ; bouton Demarrer/Arreter selon l'etat reel ; actualisation toutes les 30 s, jamais onglet masque ni pendant une saisie ou une confirmation.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-mail (2.15.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /mail/ refaite au profil Aurora (ref #2571) : un seul fichier autonome (plus de police distante Google Fonts, plus de skin hybrid-dark), tuiles (boites, stockage, domaine, certificat, protections, ports), onglets Apercu, Boites, Alias, Externes, Journaux, Reglages, Actions et Socle, ?demo=1 (donnees fictives, actions inertes) et ?embed=1 (sans menu), hauteur annoncee a l'hote (sbxVue, onglet mail).

@@ -1,3 +1,12 @@
+secubox-ipblock (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /cyberfeed/ (composant cyberfeed) refaite au profil Aurora (ref #2650) : un seul fichier autonome (plus de crt-light ni hybrid-dark), tuiles (flux actifs, IP bloquees, domaines bloques, flux en erreur, derniere mise a jour) avec infobulles de definition, onglets Flux, Listes, Verifier un indicateur et Export, filtre cote client des flux, ajout de flux dans un panneau de la page (plus de fenetre modale), ?demo=1 (donnees fictives RFC 5737, aucune ecriture), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet cyberfeed). Textes en francais.
+  * Memes routes, methodes, corps et en-tetes : GET /stats, /feeds, /blocklist/ips et /domains, /indicators, /check/ip et /check/domain, /export/ips et /export/domains ; POST /feed/{nom}/enable?enabled=, /feed/{nom}/update, /feeds/update, /feeds/add ; DELETE /feeds/{nom}.
+  * Corrige : plus aucun confirm()/alert() (retrait d'un flux confirme dans la ligne, resultats affiches dans la page) ; le motif d'une mise a jour refusee est affiche (l'API le renvoie dans detail, l'ancienne page lisait un champ error inexistant et affichait toujours « Unknown error ») ; une session absente (401) renvoyait brutalement vers /login.html, desormais bandeau et tirets, et un echec reseau n'affiche plus 0 ; noms, descriptions et indicateurs injectes en HTML et dans des gestionnaires onclick (nom de flux contenant une apostrophe) : tout est desormais construit en textContent ; l'IP et le domaine saisis sont encodes dans l'URL de verification.
+  * Honnetete : les totaux IP et domaines des tuiles sont la somme des entrees des flux actifs (doublons compris), l'infobulle le dit ; l'onglet Listes donne le total dedoublonne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-ipblock (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /vortex-firewall/ refaite au profil Aurora (#2571) : page autonome sans bibliotheque (plus de crt-light ni
