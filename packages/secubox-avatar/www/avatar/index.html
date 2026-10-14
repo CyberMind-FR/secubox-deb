@@ -4,884 +4,489 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Identités et avatars au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret affiché : la page ne manipule que des métadonnées ; les personas sont du chiffré opaque que la box ne peut pas lire.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Identity & Avatar Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Identités et avatars</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            --tube-dark: #1a3320;
-            /* Avatar accent - purple/identity */
-            --avatar-accent: #9c27b0;
-            --avatar-accent-dim: #7b1fa2;
-            /* Legacy */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--avatar-accent);
-            --cyan: #00bcd4;
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: var(--avatar-accent);
-            /* Bloom */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-purple: 0 0 6px var(--avatar-accent), 0 0 14px rgba(156,39,176,0.5);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(156,39,176,0.02) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; }
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
-            background: var(--bg-card);
-        }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 {
-            font-size: 1.5rem; font-weight: 600;
-            color: var(--avatar-accent);
-            text-shadow: var(--bloom-purple);
-        }
-        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
-        .badge {
-            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-        }
-        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
-        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
-        .badge-purple { background: rgba(156,39,176,0.1); border: 1px solid var(--purple); color: var(--purple); }
-        .badge-cyan { background: rgba(0,188,212,0.1); border: 1px solid var(--cyan); color: var(--cyan); }
-
-        .btn {
-            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
-            background: var(--bg-card); color: var(--text); cursor: pointer;
-            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
-            transition: all 0.2s;
-        }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
-        .btn.primary { background: rgba(156,39,176,0.1); border-color: var(--purple); color: var(--purple); }
-        .btn.primary:hover { background: rgba(156,39,176,0.2); }
-        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
-        .btn.small { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-
-        .tabs {
-            display: flex; gap: 0; padding: 0 1.5rem;
-            background: var(--bg-card); border-bottom: 1px solid var(--border);
-        }
-        .tab {
-            padding: 0.75rem 1.25rem; cursor: pointer;
-            color: var(--text-dim); font-size: 0.85rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
-        .tab:hover { color: var(--text); }
-        .tab.active {
-            color: var(--purple); border-bottom-color: var(--purple);
-            text-shadow: var(--bloom-purple);
-        }
-
-        .content { padding: 1.5rem; }
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; }
-
-        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.25rem; text-align: center;
-        }
-        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
-        .stat-card.purple .value { color: var(--purple); text-shadow: var(--bloom-purple); }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
-
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
-        }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 {
-            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.1em; color: var(--p31-decay);
-        }
-
-        /* Identity list */
-        .identity-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .identity-card {
-            background: var(--tube-light); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1rem; display: flex; gap: 1rem;
-            transition: all 0.2s; cursor: pointer;
-        }
-        .identity-card:hover { border-color: var(--purple); transform: translateY(-2px); }
-        .identity-card.selected { border-color: var(--purple); background: rgba(156,39,176,0.05); }
-        .identity-avatar {
-            width: 64px; height: 64px; border-radius: 50%;
-            background: var(--border); display: flex; align-items: center;
-            justify-content: center; font-size: 1.5rem; color: var(--text-dim);
-            overflow: hidden; flex-shrink: 0;
-        }
-        .identity-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .identity-info { flex: 1; min-width: 0; }
-        .identity-info .name { font-weight: bold; color: var(--text); margin-bottom: 0.25rem; }
-        .identity-info .username { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; }
-        .identity-info .email { font-size: 0.8rem; color: var(--text-dim); }
-        .identity-services { display: flex; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap; }
-
-        /* Form styles */
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
-        .form-group input, .form-group select {
-            width: 100%; padding: 0.5rem; border: 1px solid var(--border);
-            background: var(--tube-light); border-radius: 4px;
-            font-family: inherit; color: var(--text);
-        }
-        .form-group input:focus, .form-group select:focus {
-            outline: none; border-color: var(--purple);
-        }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .checkbox-group { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-        .checkbox-label {
-            display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
-            padding: 0.5rem 0.75rem; border: 1px solid var(--border);
-            border-radius: 4px; background: var(--tube-light);
-        }
-        .checkbox-label:hover { border-color: var(--purple); }
-        .checkbox-label input[type="checkbox"] { width: auto; }
-        .checkbox-label.checked { background: rgba(156,39,176,0.1); border-color: var(--purple); }
-
-        /* Avatar upload */
-        .avatar-upload-area {
-            border: 2px dashed var(--border); border-radius: 8px;
-            padding: 2rem; text-align: center; cursor: pointer;
-            transition: all 0.2s;
-        }
-        .avatar-upload-area:hover { border-color: var(--purple); background: rgba(156,39,176,0.02); }
-        .avatar-upload-area.dragover { border-color: var(--green); background: rgba(0,221,68,0.05); }
-        .avatar-preview {
-            width: 150px; height: 150px; border-radius: 50%; margin: 0 auto 1rem;
-            background: var(--border); display: flex; align-items: center;
-            justify-content: center; overflow: hidden;
-        }
-        .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
-        .avatar-preview .placeholder { font-size: 3rem; color: var(--text-dim); }
-
-        /* Service sync status */
-        .sync-status { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
-        .sync-badge {
-            display: flex; align-items: center; gap: 0.5rem;
-            padding: 0.5rem 0.75rem; border-radius: 4px;
-            background: var(--tube-light); border: 1px solid var(--border);
-            font-size: 0.85rem;
-        }
-        .sync-badge .dot { width: 8px; height: 8px; border-radius: 50%; }
-        .sync-badge .dot.success { background: var(--green); }
-        .sync-badge .dot.failed { background: var(--red); }
-        .sync-badge .dot.pending { background: var(--yellow); }
-        .sync-badge .dot.skipped { background: var(--text-dim); }
-
-        /* Modal */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5); display: none;
-            align-items: center; justify-content: center; z-index: 1000;
-        }
-        .modal-overlay.show { display: flex; }
-        .modal {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px;
-            max-height: 90vh; overflow-y: auto;
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .modal-header h2 { font-size: 1.25rem; color: var(--purple); }
-        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-dim); }
-        .modal-close:hover { color: var(--red); }
-        .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-
-        /* Toast */
-        .toast {
-            position: fixed; bottom: 2rem; right: 2rem;
-            padding: 1rem 1.5rem; border-radius: 8px;
-            background: var(--bg-card); border: 1px solid var(--border);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1001; display: none;
-        }
-        .toast.show { display: block; animation: slideIn 0.3s ease; }
-        .toast.success { border-color: var(--green); }
-        .toast.error { border-color: var(--red); }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        /* Empty state */
-        .empty-state {
-            text-align: center; padding: 3rem; color: var(--text-dim);
-        }
-        .empty-state .icon { font-size: 4rem; margin-bottom: 1rem; }
-        .empty-state p { margin-bottom: 1rem; }
-
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } .form-row { grid-template-columns: 1fr; } }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible,.carte:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)} .tuile.ok .v{color:var(--vert)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglet{font:inherit;font-size:.8rem;padding:6px 14px;border-radius:8px;border:1px solid var(--trait);background:transparent;color:var(--doux);cursor:pointer;min-height:32px}
+        .onglet[aria-selected="true"]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.16)}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .liste{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))}
+        .carte{display:flex;gap:12px;border:1px solid var(--trait);border-radius:12px;padding:10px;background:rgba(8,18,38,.55);min-width:0;text-align:left;color:inherit;font:inherit}
+        button.carte{cursor:pointer} button.carte:hover{border-color:var(--cyan)}
+        .rond{width:56px;height:56px;border-radius:50%;background:rgba(159,179,214,.16);display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:700;color:var(--doux);overflow:hidden;flex-shrink:0}
+        .rond img{width:100%;height:100%;object-fit:cover}
+        .corps{min-width:0;flex:1} .corps .nom{font-weight:700;overflow-wrap:anywhere} .corps .sous{color:var(--doux);font-size:.8rem;overflow-wrap:anywhere}
+        .pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+        .persona{display:grid;gap:6px;border:1px solid var(--trait);border-radius:12px;padding:10px;background:rgba(8,18,38,.55);align-content:start}
+        .persona h4{margin:0;font-size:.9rem;color:var(--violet);overflow-wrap:anywhere}
+        .ligne{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;padding:5px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+        .ligne .d{overflow-wrap:anywhere;min-width:0}
+        .voile{position:fixed;inset:0;background:rgba(2,6,14,.72);display:flex;align-items:flex-start;justify-content:center;padding:16px 12px;overflow-y:auto;z-index:40}
+        .voile .boite{width:100%;max-width:520px;border:1px solid var(--trait2);border-radius:14px;background:linear-gradient(160deg,rgba(15,32,64,.98),rgba(7,15,32,.99));padding:14px;display:grid;gap:10px}
+        .boite h2{margin:0;font-size:1.05rem}
+        .boite .champ{display:grid;gap:3px;font-size:.72rem;color:var(--doux);min-width:0}
+        .boite input[type=text],.boite input[type=email]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        .boite input:focus{outline:none;border-color:var(--cyan)}
+        .deux{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+        .depot{border:1px dashed var(--trait2);border-radius:12px;padding:12px;text-align:center;cursor:pointer;display:grid;gap:6px;justify-items:center;font-size:.8rem;color:var(--doux)}
+        .depot:hover,.depot.sur{border-color:var(--cyan)} .depot .rond{width:96px;height:96px;font-size:1.8rem}
+        .coches{display:flex;flex-wrap:wrap;gap:6px}
+        .coche{display:flex;align-items:center;gap:6px;border:1px solid var(--trait);border-radius:8px;padding:5px 10px;font-size:.8rem;color:var(--texte)}
+        .coche.off{color:var(--faible)}
+        .bas{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:6px;border-top:1px solid var(--trait);padding-top:10px}
+        .bas .note{margin:0 auto 0 0}
+        .sync{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border:1px solid var(--trait);border-radius:8px;padding:6px 10px;font-size:.8rem}
+        .pt{width:8px;height:8px;border-radius:50%;background:var(--faible)} .pt.success{background:var(--vert)} .pt.failed{background:var(--rouge)} .pt.pending{background:var(--jaune)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:60;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)} .toast.ko{border-color:var(--rouge)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title">
-                <h1>Identity & Avatar Manager</h1>
-                <span class="badge badge-purple" id="identity-count">0 IDENTITIES</span>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c.9-3.9 3.8-6 7.5-6s6.6 2.1 7.5 6"/></svg>
+                <div><h1>Identités et avatars</h1><small>Profils d’identité, services reliés, personas du Companion</small></div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="openCreateModal()">+ New Identity</button>
-            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="nouvelle" type="button">+ Nouvelle identité</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="identities">Identities</div>
-            <div class="tab" data-tab="services">Services</div>
-            <div class="tab" data-tab="vault">Personas</div>
-        </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile vi" title="Nombre d’identités enregistrées sur la box (GET /identities)."><span class="l">Identités</span><span class="v" id="tTotal">—</span><span class="s">enregistrées</span></div>
+            <div class="tuile cy" title="Identités dont l’API fournit une adresse d’avatar (avatar_url)."><span class="l">Avec avatar</span><span class="v" id="tAvatars">—</span><span class="s">image déposée</span></div>
+            <div class="tuile ok" title="Services reliés dont la configuration les marque comme activés (GET /services). Reste à « — » tant que la liste des services n’est pas lue."><span class="l">Services actifs</span><span class="v" id="tServices">—</span><span class="s">sur <span id="tServicesN">—</span> connus</span></div>
+            <div class="tuile vi" title="Personas mis en cache par le Companion : un persona regroupe les sauvegardes chiffrées de plusieurs sites (GET /vault/list)."><span class="l">Personas</span><span class="v" id="tPersonas">—</span><span class="s">en cache</span></div>
+            <div class="tuile cy" title="Nombre de sauvegardes chiffrées, une par couple persona et site."><span class="l">Sites conservés</span><span class="v" id="tSites">—</span><span class="s">sauvegardes</span></div>
+            <div class="tuile ok" title="Somme des cookie_count annoncés dans les métadonnées. Le contenu reste chiffré : la box ne peut pas le lire. Chiffre partiel si certaines sauvegardes n’annoncent pas de compte."><span class="l">Cookies chiffrés</span><span class="v" id="tCookies">—</span><span class="s" id="tCookiesS">chiffre opaque</span></div>
+        </section>
 
-        <div class="content">
-            <!-- Identities Tab -->
-            <div id="tab-identities" class="tab-panel active">
-                <div class="stats-row">
-                    <div class="stat-card purple">
-                        <div class="value" id="stat-total">0</div>
-                        <div class="label">Total Identities</div>
-                    </div>
-                    <div class="stat-card cyan">
-                        <div class="value" id="stat-avatars">0</div>
-                        <div class="label">With Avatars</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="stat-services">0</div>
-                        <div class="label">Active Services</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>All Identities</h2>
-                    </div>
-                    <div id="identity-list" class="identity-grid">
-                        <div class="empty-state">
-                            <div class="icon">*</div>
-                            <p>No identities found</p>
-                            <button class="btn primary" onclick="openCreateModal()">Create First Identity</button>
-                        </div>
-                    </div>
-                </div>
+        <div class="pan">
+            <div class="onglets" role="tablist" aria-label="Sections">
+                <button class="onglet" role="tab" id="o-identites" data-onglet="identites" aria-selected="true" type="button">Identités</button>
+                <button class="onglet" role="tab" id="o-services" data-onglet="services" aria-selected="false" type="button">Services</button>
+                <button class="onglet" role="tab" id="o-personas" data-onglet="personas" aria-selected="false" type="button">Personas</button>
             </div>
 
-            <!-- Services Tab -->
-            <div id="tab-services" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Connected Services</h2>
-                    </div>
-                    <div id="services-list" class="identity-grid">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
+            <div id="p-identites" role="tabpanel" aria-labelledby="o-identites" style="margin-top:10px">
+                <h3 style="margin:0 0 8px;font-size:.88rem">Toutes les identités <i id="nIdent" style="font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem"></i></h3>
+                <div id="rIdent" class="retour" hidden></div>
+                <div class="liste" id="lIdent"></div>
             </div>
 
-            <!-- Personas Tab (Companion cookie cacher) -->
-            <div id="tab-vault" class="tab-panel">
-                <div class="stats-row">
-                    <div class="stat-card purple">
-                        <div class="value" id="vstat-personas">0</div>
-                        <div class="label">Personas Cached</div>
-                    </div>
-                    <div class="stat-card cyan">
-                        <div class="value" id="vstat-sites">0</div>
-                        <div class="label">Sites Held</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="vstat-cookies">0</div>
-                        <div class="label">Cookies Encrypted</div>
-                    </div>
-                </div>
+            <div id="p-services" role="tabpanel" aria-labelledby="o-services" style="margin-top:10px" hidden>
+                <h3 style="margin:0 0 8px;font-size:.88rem">Services reliés</h3>
+                <div class="liste" id="lServices"></div>
+                <p class="note">Activé et configuré viennent de la configuration du module (section services) : cette page ne les modifie pas.</p>
+            </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Cached Personas</h2>
-                        <span class="badge badge-purple">ciphertext only · on-box</span>
-                    </div>
-                    <p style="color: var(--text-dim); font-size: 0.8rem; margin-bottom: 1rem;">
-                        Login bundles the SecuBox Companion encrypted in your browser and parked here.
-                        The box stores opaque ciphertext — it never holds the passphrase or the cookies in clear.
-                        Decrypt + "Become" a persona from the Companion popup; this page only manages the cache.
-                    </p>
-                    <div id="vault-list" class="identity-grid">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
+            <div id="p-personas" role="tabpanel" aria-labelledby="o-personas" style="margin-top:10px" hidden>
+                <h3 style="margin:0 0 8px;font-size:.88rem">Personas en cache <span class="pill vi">chiffré seulement · sur la box</span></h3>
+                <p class="note" style="margin:0 0 10px">La connexion du SecuBox Companion chiffre les paquets dans votre navigateur et les dépose ici. La box ne stocke que du chiffré opaque : elle ne détient ni la phrase de passe ni les cookies en clair. Le déchiffrement et « Devenir » un persona se font depuis la fenêtre du Companion ; cette page ne gère que le cache.</p>
+                <div id="rVault" class="retour" hidden></div>
+                <div class="liste" id="lVault"></div>
             </div>
         </div>
-    </main>
+    </div></div></main>
 
-    <!-- Create/Edit Modal -->
-    <div class="modal-overlay" id="identity-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h2 id="modal-title">New Identity</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+    <div class="voile" id="voileIdent" role="dialog" aria-modal="true" aria-labelledby="mTitre" hidden>
+        <form class="boite" id="fIdent" autocomplete="off">
+            <h2 id="mTitre">Nouvelle identité</h2>
+            <input type="hidden" id="fId">
+            <div class="deux">
+                <label class="champ">Nom d’utilisateur<input type="text" id="fUser" required minlength="2" maxlength="64" placeholder="utilisateur"></label>
+                <label class="champ">Nom affiché<input type="text" id="fNom" required minlength="1" maxlength="128" placeholder="Camille Exemple"></label>
             </div>
-            <form id="identity-form">
-                <input type="hidden" id="form-id">
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" id="form-username" required minlength="2" maxlength="64" placeholder="username">
-                    </div>
-                    <div class="form-group">
-                        <label>Display Name</label>
-                        <input type="text" id="form-display-name" required minlength="1" maxlength="128" placeholder="John Doe">
-                    </div>
+            <label class="champ">Courriel<input type="email" id="fMail" placeholder="utilisateur@example.org"></label>
+            <div class="champ">Avatar
+                <div class="depot" id="depot" role="button" tabindex="0" aria-label="Choisir un avatar">
+                    <div class="rond" id="apercu"><span>?</span></div>
+                    <span>Cliquer ou glisser une image</span><span class="note" style="margin:0">JPG, PNG, GIF, WebP (5 Mo maximum)</span>
                 </div>
-
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="form-email" placeholder="user@example.com">
-                </div>
-
-                <div class="form-group">
-                    <label>Avatar</label>
-                    <div class="avatar-upload-area" id="avatar-drop-zone" onclick="document.getElementById('avatar-input').click()">
-                        <div class="avatar-preview" id="avatar-preview">
-                            <span class="placeholder">?</span>
-                        </div>
-                        <p>Click or drag to upload avatar</p>
-                        <p style="font-size: 0.75rem; color: var(--text-dim);">JPG, PNG, GIF, WebP (max 5MB)</p>
-                    </div>
-                    <input type="file" id="avatar-input" accept=".jpg,.jpeg,.png,.gif,.webp" style="display: none;">
-                </div>
-
-                <div class="form-group">
-                    <label>Connected Services</label>
-                    <div class="checkbox-group" id="service-checkboxes">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn" onclick="closeModal()">Cancel</button>
-                    <button type="button" class="btn danger" id="btn-delete" style="display: none;" onclick="deleteIdentity()">Delete</button>
-                    <button type="submit" class="btn primary">Save Identity</button>
-                </div>
-            </form>
-        </div>
+                <input type="file" id="fichier" accept=".jpg,.jpeg,.png,.gif,.webp" hidden>
+            </div>
+            <div class="champ">Services reliés<div class="coches" id="coches"></div></div>
+            <div id="rForm" class="retour" hidden></div>
+            <div id="syncBloc" hidden><div class="champ">Synchronisation</div><div id="syncRes" style="display:grid;gap:6px"></div></div>
+            <div class="bas">
+                <span class="note" id="confSupp" hidden>Supprimer cette identité, sans retour possible ?</span>
+                <button type="button" class="btn danger" id="bSupp" hidden>Supprimer</button>
+                <button type="button" class="btn danger" id="bSuppOui" hidden>Confirmer la suppression</button>
+                <button type="button" class="btn" id="bAnnul">Annuler</button>
+                <button type="submit" class="btn prim" id="bSave">Enregistrer l’identité</button>
+            </div>
+        </form>
     </div>
+    <div class="toast" id="toast" role="status"></div>
 
-    <!-- Sync Modal -->
-    <div class="modal-overlay" id="sync-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h2>Sync Identity</h2>
-                <button class="modal-close" onclick="closeSyncModal()">&times;</button>
-            </div>
-            <div id="sync-content">
-                <p>Syncing identity to connected services...</p>
-            </div>
-            <div class="sync-status" id="sync-results"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn primary" onclick="closeSyncModal()">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="toast" class="toast"></div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/avatar';
-        let identities = [];
-        let services = [];
-        let selectedIdentityId = null;
-        let pendingAvatarFile = null;
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        let IDENT = null, SERVICES = null, PERSONAS = null;     // null = non lu (affiché « — »)
+        let SESSION_OK = true, CHARGE = false, EDIT = null, FICHIER = null, CONF_SUPP = false;
+        let CONF_OUBLI = null;      // clé de la confirmation d'oubli ouverte (dans la page, jamais de dialogue natif)
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        // Ne JAMAIS pre-empter sur l'absence de jeton localStorage : la session
-        // peut tenir a un cookie (SSO parent-domaine), que le serveur accepte
-        // aussi bien qu'un Bearer. On laisse donc les requetes partir — le
-        // cookie voyage en meme-origine — et seule une vraie 401 redirige
-        // (gere dans api()). Rediriger ici cassait l'acces des utilisateurs
-        // authentifies par cookie, et forcait une bascule de connexion inutile.
-        function checkAuth() { return true; }
-
-        async function api(endpoint, options = {}) {
-            const token = getToken();
-            const headers = options.headers || {};
-            if (!options.formData) {
-                headers['Content-Type'] = 'application/json';
-            }
-            if (token) headers['Authorization'] = 'Bearer ' + token;
-
+        // Écriture : mêmes routes, méthodes, corps et en-têtes que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const fetchOptions = { credentials: 'same-origin', ...options, headers };
-                if (options.formData) {
-                    delete fetchOptions.headers['Content-Type'];
-                }
-                const res = await fetch(API + endpoint, fetchOptions);
-                if (res.status === 401) {
-                    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                    return null;
-                }
-                return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return null;
-            }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg, ko) { const t = $('toast'); t.textContent = msg; t.className = 'toast show' + (ko ? ' ko' : ''); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2800); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function dateIso(s) { if (!s) return ''; const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('fr-FR'); }
+        function initiales(nom) { return String(nom || '?').split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'; }
+        // L'adresse d'avatar vient de l'API (/api/v1/avatar/avatar/<id>) : on n'accepte qu'un chemin du module, jamais une adresse externe.
+        function avatarOk(u) { return typeof u === 'string' && u.indexOf('/api/v1/avatar/') === 0; }
+        function rond(cls, nom, url) {
+            const r = el('div', cls || 'rond');
+            if (avatarOk(url)) { const i = el('img'); i.src = url; i.alt = nom || 'Avatar'; r.appendChild(i); } else r.appendChild(el('span', '', initiales(nom)));
+            return r;
         }
 
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast show ' + type;
-            setTimeout(() => toast.classList.remove('show'), 3000);
+        function demoData() {
+            const t = new Date().toISOString();
+            IDENT = [
+                { id: 'demo-1', username: 'camille', display_name: 'Camille Exemple', email: 'camille@example.org', avatar_url: null, services: ['gitea', 'nextcloud'], created_at: t },
+                { id: 'demo-2', username: 'dominique', display_name: 'Dominique Test', email: null, avatar_url: null, services: ['mail'], created_at: t },
+                { id: 'demo-3', username: 'sacha', display_name: 'Sacha Maquette', email: 'sacha@example.net', avatar_url: null, services: [], created_at: t }];
+            SERVICES = [
+                { id: 'gitea', name: 'Gitea', icon: 'git', enabled: true, configured: true },
+                { id: 'nextcloud', name: 'Nextcloud', icon: 'cloud', enabled: true, configured: true },
+                { id: 'mail', name: 'Courrier', icon: 'mail', enabled: true, configured: false },
+                { id: 'matrix', name: 'Matrix', icon: 'chat', enabled: false, configured: false }];
+            PERSONAS = [
+                { profile: 'persona-lecture', items: [{ profile: 'persona-lecture', domain: 'news.example.org', meta: { cookie_count: 7 }, saved_at: t }, { profile: 'persona-lecture', domain: 'forum.example.net', meta: { cookie_count: 3 }, saved_at: t }] },
+                { profile: 'persona-travail', items: [{ profile: 'persona-travail', domain: 'wiki.example.org', meta: { cookie_count: 5 }, saved_at: t }] }];
         }
 
-        function getInitials(name) {
-            return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/identities'), lire('/services'), lire('/vault/list')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            const a = val(0), s = val(1), v = val(2);
+            IDENT = a ? (a.identities || []) : null;
+            SERVICES = s ? (s.services || []) : null;
+            PERSONAS = v ? regrouper(v.backups || []) : null;
+            CHARGE = true;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le service d’identités (arrêté ou injoignable).';
+            rendre();
         }
-
-        async function loadIdentities() {
-            const data = await api('/identities');
-            if (!data) return;
-
-            identities = data.identities || [];
-            document.getElementById('stat-total').textContent = identities.length;
-            document.getElementById('stat-avatars').textContent = identities.filter(i => i.avatar_url).length;
-            document.getElementById('identity-count').textContent = identities.length + ' IDENTIT' + (identities.length === 1 ? 'Y' : 'IES');
-
-            renderIdentities();
-        }
-
-        function renderIdentities() {
-            const container = document.getElementById('identity-list');
-
-            if (identities.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">*</div>
-                        <p>No identities found</p>
-                        <button class="btn primary" onclick="openCreateModal()">Create First Identity</button>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = identities.map(identity => `
-                <div class="identity-card" onclick="editIdentity('${identity.id}')">
-                    <div class="identity-avatar">
-                        ${identity.avatar_url
-                            ? `<img src="${identity.avatar_url}" alt="${identity.display_name}">`
-                            : `<span>${getInitials(identity.display_name)}</span>`
-                        }
-                    </div>
-                    <div class="identity-info">
-                        <div class="name">${identity.display_name}</div>
-                        <div class="username">@${identity.username}</div>
-                        ${identity.email ? `<div class="email">${identity.email}</div>` : ''}
-                        <div class="identity-services">
-                            ${(identity.services || []).map(s =>
-                                `<span class="badge badge-purple">${s}</span>`
-                            ).join('')}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function loadServices() {
-            const data = await api('/services');
-            if (!data) return;
-
-            services = data.services || [];
-            document.getElementById('stat-services').textContent = services.filter(s => s.enabled).length;
-
-            renderServiceCheckboxes();
-            renderServicesTab();
-        }
-
-        function renderServiceCheckboxes() {
-            const container = document.getElementById('service-checkboxes');
-            container.innerHTML = services.map(s => `
-                <label class="checkbox-label">
-                    <input type="checkbox" name="service" value="${s.id}" ${s.enabled ? '' : 'disabled'}>
-                    ${s.name}
-                    ${!s.enabled ? '<span style="color: var(--text-dim); font-size: 0.75rem;">(disabled)</span>' : ''}
-                </label>
-            `).join('');
-        }
-
-        function renderServicesTab() {
-            const container = document.getElementById('services-list');
-            container.innerHTML = services.map(s => `
-                <div class="identity-card" style="cursor: default;">
-                    <div class="identity-avatar" style="background: ${s.enabled ? 'rgba(156,39,176,0.1)' : 'var(--border)'};">
-                        <span style="font-size: 1.5rem;">${getServiceIcon(s.icon)}</span>
-                    </div>
-                    <div class="identity-info">
-                        <div class="name">${s.name}</div>
-                        <div class="identity-services" style="margin-top: 0.5rem;">
-                            <span class="badge ${s.enabled ? 'badge-green' : 'badge-red'}">${s.enabled ? 'ENABLED' : 'DISABLED'}</span>
-                            <span class="badge ${s.configured ? 'badge-cyan' : 'badge-red'}">${s.configured ? 'CONFIGURED' : 'NOT CONFIGURED'}</span>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function getServiceIcon(icon) {
-            const icons = {
-                'git': 'G',
-                'cloud': 'C',
-                'mail': '@',
-                'chat': '#',
-                'users': 'U'
-            };
-            return icons[icon] || '?';
-        }
-
-        // ── Personas: the Companion cookie cacher (metadata only) ──────────
-        // The box holds opaque ciphertext; it cannot decrypt. This view manages
-        // the CACHE — which persona holds which sites, how big, when saved.
-        let vaultPersonas = [];
-
-        function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, c =>
-                ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        }
-
-        async function loadVault() {
-            const container = document.getElementById('vault-list');
-            container.innerHTML = '<p style="color: var(--text-dim);">Loading...</p>';
-            const data = await api('/vault/list');
-            if (!data) { container.innerHTML = '<p style="color: var(--red);">Failed to load personas.</p>'; return; }
+        function regrouper(backups) {
             const map = {};
-            (data.backups || []).forEach(b => { (map[b.profile] = map[b.profile] || []).push(b); });
-            vaultPersonas = Object.keys(map).sort().map(profile => ({ profile, items: map[profile] }));
+            backups.forEach(b => { (map[b.profile] = map[b.profile] || []).push(b); });
+            return Object.keys(map).sort().map(profile => ({ profile, items: map[profile] }));
+        }
 
-            let sites = 0, cookies = 0;
-            vaultPersonas.forEach(p => {
-                sites += p.items.length;
-                p.items.forEach(b => cookies += (b.meta || {}).cookie_count || 0);
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!IDENT && !SERVICES && !PERSONAS) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = IDENT ? IDENT.length + (IDENT.length > 1 ? ' IDENTITÉS' : ' IDENTITÉ') : 'EN LIGNE'; }
+            $('tTotal').textContent = IDENT ? IDENT.length : '—';
+            $('tAvatars').textContent = IDENT ? IDENT.filter(i => i.avatar_url).length : '—';
+            $('tServices').textContent = SERVICES ? SERVICES.filter(s => s.enabled).length : '—';
+            $('tServicesN').textContent = SERVICES ? SERVICES.length : '—';
+            let sites = 0, cookies = 0, sans = 0;
+            if (PERSONAS) PERSONAS.forEach(p => { sites += p.items.length; p.items.forEach(b => { const c = (b.meta || {}).cookie_count; if (typeof c === 'number') cookies += c; else sans++; }); });
+            $('tPersonas').textContent = PERSONAS ? PERSONAS.length : '—';
+            $('tSites').textContent = PERSONAS ? sites : '—';
+            $('tCookies').textContent = PERSONAS ? cookies : '—';
+            $('tCookiesS').textContent = PERSONAS && sans ? 'partiel : ' + sans + ' sans compte' : 'chiffre opaque';
+            rendreIdentites(); rendreServices(); rendrePersonas();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+        function vide(conteneur, msg) { conteneur.replaceChildren(el('div', 'vide', msg)); }
+
+        function rendreIdentites() {
+            const c = $('lIdent'); c.replaceChildren();
+            $('nIdent').textContent = IDENT && IDENT.length ? IDENT.length + (IDENT.length > 1 ? ' identités' : ' identité') : '';
+            if (!IDENT || !IDENT.length) { vide(c, !SESSION_OK || !IDENT ? '—' : 'Aucune identité enregistrée. Utilisez « + Nouvelle identité ».'); return; }
+            IDENT.forEach(i => {
+                const b = el('button', 'carte'); b.type = 'button'; b.title = 'Modifier cette identité';
+                b.appendChild(rond('rond', i.display_name, i.avatar_url));
+                const k = el('div', 'corps');
+                k.appendChild(el('div', 'nom', tiret(i.display_name)));
+                k.appendChild(el('div', 'sous', '@' + tiret(i.username)));
+                if (i.email) k.appendChild(el('div', 'sous', i.email));
+                const ps = el('div', 'pills'); (i.services || []).forEach(s => ps.appendChild(el('span', 'pill vi', s))); k.appendChild(ps);
+                b.appendChild(k);
+                b.addEventListener('click', () => ouvrir(i.id));
+                c.appendChild(b);
             });
-            document.getElementById('vstat-personas').textContent = vaultPersonas.length;
-            document.getElementById('vstat-sites').textContent = sites;
-            document.getElementById('vstat-cookies').textContent = cookies;
-            renderVault();
         }
 
-        function renderVault() {
-            const container = document.getElementById('vault-list');
-            if (!vaultPersonas.length) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">*</div>
-                        <p>No personas cached yet</p>
-                        <p style="font-size:0.8rem;">Save one from the SecuBox Companion: pick your logins, tap "Save persona".</p>
-                    </div>`;
-                return;
-            }
-            container.innerHTML = vaultPersonas.map((p, pi) => {
-                const cookies = p.items.reduce((n, b) => n + ((b.meta || {}).cookie_count || 0), 0);
-                const latest = p.items.map(b => b.saved_at).filter(Boolean).sort().slice(-1)[0];
-                const when = latest ? new Date(latest).toLocaleString() : '';
-                const rows = p.items.map((b, di) => `
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; padding:0.3rem 0; border-top:1px solid var(--border);">
-                        <span>${escapeHtml(b.domain)} <span style="color:var(--text-dim);">(${(b.meta || {}).cookie_count || '?'}c)</span></span>
-                        <button class="btn small danger" onclick="forgetDomain(${pi},${di})">Forget</button>
-                    </div>`).join('');
-                return `
-                    <div class="card" style="margin-bottom:0;">
-                        <div class="card-header">
-                            <h2 style="color:var(--purple);">${escapeHtml(p.profile)}</h2>
-                            <button class="btn small danger" onclick="forgetPersona(${pi})">Forget all</button>
-                        </div>
-                        <div class="identity-services" style="margin-bottom:0.5rem;">
-                            <span class="badge badge-cyan">${p.items.length} site(s)</span>
-                            <span class="badge badge-green">${cookies} cookies</span>
-                            ${when ? `<span class="badge badge-purple">${escapeHtml(when)}</span>` : ''}
-                        </div>
-                        ${rows}
-                    </div>`;
-            }).join('');
-        }
-
-        async function forgetDomain(pi, di) {
-            const p = vaultPersonas[pi]; if (!p) return;
-            const b = p.items[di]; if (!b) return;
-            if (!confirm(`Forget ${b.domain} from persona "${p.profile}"? The encrypted backup is deleted from the box.`)) return;
-            const r = await api(`/vault/${encodeURIComponent(p.profile)}/${encodeURIComponent(b.domain)}`, { method: 'DELETE' });
-            if (r?.success) { showToast('Forgot ' + b.domain); loadVault(); }
-            else showToast('Failed to forget', 'error');
-        }
-
-        async function forgetPersona(pi) {
-            const p = vaultPersonas[pi]; if (!p) return;
-            if (!confirm(`Forget the entire persona "${p.profile}"? All its encrypted site backups are deleted from the box.`)) return;
-            for (const b of p.items) {
-                await api(`/vault/${encodeURIComponent(p.profile)}/${encodeURIComponent(b.domain)}`, { method: 'DELETE' });
-            }
-            showToast('Forgot persona ' + p.profile);
-            loadVault();
-        }
-
-        function openCreateModal() {
-            selectedIdentityId = null;
-            document.getElementById('modal-title').textContent = 'New Identity';
-            document.getElementById('btn-delete').style.display = 'none';
-            document.getElementById('identity-form').reset();
-            document.getElementById('form-id').value = '';
-            document.getElementById('avatar-preview').innerHTML = '<span class="placeholder">?</span>';
-            pendingAvatarFile = null;
-
-            // Reset service checkboxes
-            document.querySelectorAll('#service-checkboxes input').forEach(cb => cb.checked = false);
-
-            document.getElementById('identity-modal').classList.add('show');
-        }
-
-        function editIdentity(id) {
-            const identity = identities.find(i => i.id === id);
-            if (!identity) return;
-
-            selectedIdentityId = id;
-            document.getElementById('modal-title').textContent = 'Edit Identity';
-            document.getElementById('btn-delete').style.display = 'block';
-            document.getElementById('form-id').value = identity.id;
-            document.getElementById('form-username').value = identity.username;
-            document.getElementById('form-display-name').value = identity.display_name;
-            document.getElementById('form-email').value = identity.email || '';
-
-            // Set avatar preview
-            const preview = document.getElementById('avatar-preview');
-            if (identity.avatar_url) {
-                preview.innerHTML = `<img src="${identity.avatar_url}" alt="Avatar">`;
-            } else {
-                preview.innerHTML = `<span class="placeholder">${getInitials(identity.display_name)}</span>`;
-            }
-            pendingAvatarFile = null;
-
-            // Set service checkboxes
-            document.querySelectorAll('#service-checkboxes input').forEach(cb => {
-                cb.checked = (identity.services || []).includes(cb.value);
+        const ICONES = { git: 'G', cloud: 'C', mail: '@', chat: '#', users: 'U' };
+        function rendreServices() {
+            const c = $('lServices'); c.replaceChildren();
+            if (!SERVICES) { vide(c, '—'); return; }
+            if (!SERVICES.length) { vide(c, 'Aucun service connu.'); return; }
+            SERVICES.forEach(s => {
+                const d = el('div', 'carte');
+                d.appendChild(el('div', 'rond', ICONES[s.icon] || '?'));
+                const k = el('div', 'corps'); k.appendChild(el('div', 'nom', tiret(s.name)));
+                const ps = el('div', 'pills');
+                ps.appendChild(el('span', 'pill ' + (s.enabled ? 'ok' : 'hors'), s.enabled ? 'ACTIVÉ' : 'DÉSACTIVÉ'));
+                ps.appendChild(el('span', 'pill ' + (s.configured ? 'cy' : 'hors'), s.configured ? 'CONFIGURÉ' : 'NON CONFIGURÉ'));
+                k.appendChild(ps); d.appendChild(k); c.appendChild(d);
             });
-
-            document.getElementById('identity-modal').classList.add('show');
         }
 
-        function closeModal() {
-            document.getElementById('identity-modal').classList.remove('show');
-            selectedIdentityId = null;
-            pendingAvatarFile = null;
+        function rendrePersonas() {
+            const c = $('lVault'); c.replaceChildren();
+            if (!PERSONAS) { vide(c, '—'); return; }
+            if (!PERSONAS.length) { vide(c, 'Aucun persona en cache. Enregistrez-en un depuis le SecuBox Companion : cochez vos connexions puis « Enregistrer le persona ».'); return; }
+            PERSONAS.forEach(p => {
+                const cookies = p.items.reduce((n, b) => n + (((b.meta || {}).cookie_count) || 0), 0);
+                const dern = p.items.map(b => b.saved_at).filter(Boolean).sort().slice(-1)[0];
+                const quand = dateIso(dern);
+                const box = el('div', 'persona');
+                box.appendChild(el('h4', '', p.profile));
+                const ps = el('div', 'pills'); ps.style.marginTop = '0';
+                ps.appendChild(el('span', 'pill cy', p.items.length + ' site' + (p.items.length > 1 ? 's' : '')));
+                ps.appendChild(el('span', 'pill ok', cookies + ' cookies'));
+                if (quand) ps.appendChild(el('span', 'pill vi', quand));
+                box.appendChild(ps);
+                p.items.forEach(b => {
+                    const cle = p.profile + '/' + b.domain, l = el('div', 'ligne');
+                    const n = (b.meta || {}).cookie_count;
+                    l.appendChild(el('span', 'd', tiret(b.domain) + ' (' + (n === undefined || n === null ? '—' : n) + ' c)'));
+                    const a = el('span'); a.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;align-items:center';
+                    if (CONF_OUBLI === cle) {
+                        a.appendChild(el('span', 'note', 'Supprimer cette sauvegarde chiffrée de la box ?'));
+                        a.appendChild(btn('Confirmer', 'danger', () => { CONF_OUBLI = null; oublierDomaine(p, b); }));
+                        a.appendChild(btn('Annuler', '', () => { CONF_OUBLI = null; rendre(); }));
+                    } else a.appendChild(btn('Oublier', 'danger', () => { CONF_OUBLI = cle; rendre(); }));
+                    l.appendChild(a); box.appendChild(l);
+                });
+                const t = el('div', 'ligne'); const a = el('span'); a.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;align-items:center';
+                const clep = p.profile + '/*';
+                if (CONF_OUBLI === clep) {
+                    a.appendChild(el('span', 'note', 'Oublier tout le persona : toutes ses sauvegardes chiffrées sont supprimées de la box.'));
+                    a.appendChild(btn('Confirmer', 'danger', () => { CONF_OUBLI = null; oublierPersona(p); }));
+                    a.appendChild(btn('Annuler', '', () => { CONF_OUBLI = null; rendre(); }));
+                } else a.appendChild(btn('Tout oublier', 'danger', () => { CONF_OUBLI = clep; rendre(); }));
+                t.appendChild(a); box.appendChild(t);
+                c.appendChild(box);
+            });
+        }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+
+        // ----- Personas : mêmes appels que l'ancienne page -----
+        const cheminVault = (p, d) => '/vault/' + encodeURIComponent(p) + '/' + encodeURIComponent(d);
+        async function oublierDomaine(p, b) {
+            const r = await ecrire('DELETE', cheminVault(p.profile, b.domain));
+            if (r.ok && r.data && r.data.success) { retour('rVault', true, 'Sauvegarde « ' + b.domain + ' » oubliée.'); toast('Oublié : ' + b.domain); charger(); }
+            else retour('rVault', false, 'Suppression impossible : ' + detail(r));
+        }
+        async function oublierPersona(p) {
+            let echec = null;
+            for (const b of p.items) { const r = await ecrire('DELETE', cheminVault(p.profile, b.domain)); if (!r.ok && !echec) echec = r; }
+            if (echec) retour('rVault', false, 'Suppression incomplète : ' + detail(echec));
+            else { retour('rVault', true, 'Persona « ' + p.profile + ' » oublié.'); toast('Persona oublié : ' + p.profile); }
+            charger();
         }
 
-        async function saveIdentity(e) {
-            e.preventDefault();
+        // ----- Fenêtre d'identité (dans la page) -----
+        function renderCoches(sel) {
+            const c = $('coches'); c.replaceChildren();
+            if (!SERVICES || !SERVICES.length) { c.appendChild(el('span', 'note', '—')); return; }
+            SERVICES.forEach(s => {
+                const l = el('label', 'coche' + (s.enabled ? '' : ' off'));
+                const i = el('input'); i.type = 'checkbox'; i.name = 'service'; i.value = s.id; i.disabled = !s.enabled; i.checked = !!(sel && sel.indexOf(s.id) >= 0 && s.enabled);
+                l.appendChild(i); l.appendChild(el('span', '', tiret(s.name) + (s.enabled ? '' : ' (désactivé)'))); c.appendChild(l);
+            });
+        }
+        function majApercu(nom, url, src) {
+            const a = $('apercu'); a.replaceChildren();
+            if (src || avatarOk(url)) { const i = el('img'); i.src = src || url; i.alt = 'Avatar'; a.appendChild(i); } else a.appendChild(el('span', '', nom ? initiales(nom) : '?'));
+        }
+        function remiseSupp() { CONF_SUPP = false; $('confSupp').hidden = true; $('bSuppOui').hidden = true; $('bSupp').hidden = !EDIT; }
+        function ouvrirVoile() { $('voileIdent').hidden = false; $('fUser').focus(); annoncer(); }
+        function nouvelle() {
+            EDIT = null; FICHIER = null; $('fIdent').reset(); $('fId').value = ''; $('mTitre').textContent = 'Nouvelle identité';
+            $('rForm').hidden = true; $('syncBloc').hidden = true; remiseSupp(); majApercu('', null); renderCoches([]); ouvrirVoile();
+        }
+        function ouvrir(id) {
+            const i = (IDENT || []).find(x => x.id === id); if (!i) return;
+            EDIT = id; FICHIER = null; $('mTitre').textContent = 'Modifier l’identité';
+            $('fId').value = i.id; $('fUser').value = i.username || ''; $('fNom').value = i.display_name || ''; $('fMail').value = i.email || '';
+            $('rForm').hidden = true; $('syncBloc').hidden = true; remiseSupp(); majApercu(i.display_name, i.avatar_url); renderCoches(i.services || []); ouvrirVoile();
+        }
+        function fermer() { $('voileIdent').hidden = true; EDIT = null; FICHIER = null; remiseSupp(); annoncer(); }
 
-            const id = document.getElementById('form-id').value;
-            const selectedServices = Array.from(document.querySelectorAll('#service-checkboxes input:checked'))
-                .map(cb => cb.value);
+        $('nouvelle').addEventListener('click', nouvelle);
+        $('bAnnul').addEventListener('click', fermer);
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('voileIdent').hidden) fermer(); });
 
-            const data = {
-                username: document.getElementById('form-username').value,
-                display_name: document.getElementById('form-display-name').value,
-                email: document.getElementById('form-email').value || null,
-                services: selectedServices
+        $('fIdent').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const id = $('fId').value;
+            const donnees = {
+                username: $('fUser').value,
+                display_name: $('fNom').value,
+                email: $('fMail').value || null,
+                services: Array.from(document.querySelectorAll('#coches input:checked')).map(c => c.value)
             };
-
-            let result;
-            if (id) {
-                result = await api(`/identity/${id}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(data)
-                });
-            } else {
-                result = await api('/identity', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-            }
-
-            if (result?.success) {
-                const identityId = result.identity.id;
-
-                // Upload avatar if pending
-                if (pendingAvatarFile) {
-                    const formData = new FormData();
-                    formData.append('identity_id', identityId);
-                    formData.append('file', pendingAvatarFile);
-
-                    await fetch(API + '/avatar/upload', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + getToken() },
-                        body: formData
-                    });
+            const b = $('bSave'); b.disabled = true;
+            const r = await (id ? ecrire('PUT', '/identity/' + id, donnees) : ecrire('POST', '/identity', donnees));
+            b.disabled = false;
+            if (r.ok && r.data && r.data.success) {
+                if (FICHIER) {
+                    // Dépôt d'avatar : multipart, seul l'en-tête Authorization (le navigateur pose le Content-Type).
+                    const fd = new FormData(); fd.append('identity_id', r.data.identity.id); fd.append('file', FICHIER);
+                    const h = {}; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+                    try { await fetch(API + '/avatar/upload', { method: 'POST', headers: h, body: fd }); } catch (e) { /* l'identité est enregistrée ; l'avatar sera à redéposer */ }
                 }
+                toast(id ? 'Identité mise à jour' : 'Identité créée'); fermer(); charger();
+            } else retour('rForm', false, 'Échec : ' + detail(r));
+        });
 
-                showToast(id ? 'Identity updated' : 'Identity created');
-                closeModal();
-                loadIdentities();
-            } else {
-                showToast('Failed: ' + (result?.detail || 'Unknown error'), 'error');
-            }
-        }
+        $('bSupp').addEventListener('click', () => { CONF_SUPP = true; $('bSupp').hidden = true; $('confSupp').hidden = false; $('bSuppOui').hidden = false; });
+        $('bSuppOui').addEventListener('click', async () => {
+            if (!EDIT) return;
+            const r = await ecrire('DELETE', '/identity/' + EDIT);
+            if (r.ok && r.data && r.data.success) { toast('Identité supprimée'); fermer(); charger(); }
+            else { remiseSupp(); retour('rForm', false, 'Suppression impossible : ' + detail(r)); }
+        });
 
-        async function deleteIdentity() {
-            if (!selectedIdentityId) return;
-            if (!confirm('Are you sure you want to delete this identity?')) return;
-
-            const result = await api(`/identity/${selectedIdentityId}`, { method: 'DELETE' });
-            if (result?.success) {
-                showToast('Identity deleted');
-                closeModal();
-                loadIdentities();
-            } else {
-                showToast('Failed to delete', 'error');
-            }
-        }
-
+        // Synchronisation vers les services reliés (appel conservé ; l'ancienne page n'avait aucun bouton pour le lancer).
         async function syncIdentity(id) {
-            document.getElementById('sync-modal').classList.add('show');
-            document.getElementById('sync-results').innerHTML = '';
-
-            const result = await api('/sync', {
-                method: 'POST',
-                body: JSON.stringify({ identity_id: id })
-            });
-
-            if (result?.results) {
-                document.getElementById('sync-content').innerHTML = '<p>Sync completed:</p>';
-                document.getElementById('sync-results').innerHTML = result.results.map(r => `
-                    <div class="sync-badge">
-                        <span class="dot ${r.status}"></span>
-                        <span>${services.find(s => s.id === r.service)?.name || r.service}</span>
-                        <span style="color: var(--text-dim);">${r.message || ''}</span>
-                    </div>
-                `).join('');
-            } else {
-                document.getElementById('sync-content').innerHTML = '<p style="color: var(--red);">Sync failed</p>';
-            }
+            $('syncBloc').hidden = false; const res = $('syncRes'); res.replaceChildren(el('span', 'note', 'Synchronisation en cours…'));
+            const r = await ecrire('POST', '/sync', { identity_id: id });
+            res.replaceChildren();
+            if (r.ok && r.data && r.data.results) {
+                r.data.results.forEach(x => {
+                    const s = el('div', 'sync'); s.appendChild(el('span', 'pt ' + x.status));
+                    const sv = (SERVICES || []).find(y => y.id === x.service);
+                    s.appendChild(el('span', '', sv ? sv.name : x.service)); s.appendChild(el('span', 'note', x.message || '')); res.appendChild(s);
+                });
+            } else res.appendChild(el('span', 'note', 'Synchronisation impossible : ' + detail(r)));
+            annoncer();
         }
 
-        function closeSyncModal() {
-            document.getElementById('sync-modal').classList.remove('show');
+        // ----- Dépôt d'avatar -----
+        const depot = $('depot');
+        depot.addEventListener('click', () => $('fichier').click());
+        depot.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fichier').click(); } });
+        depot.addEventListener('dragover', e => { e.preventDefault(); depot.classList.add('sur'); });
+        depot.addEventListener('dragleave', () => depot.classList.remove('sur'));
+        depot.addEventListener('drop', e => { e.preventDefault(); depot.classList.remove('sur'); const f = e.dataTransfer.files[0]; if (f) prendre(f); });
+        $('fichier').addEventListener('change', e => { const f = e.target.files[0]; if (f) prendre(f); });
+        function prendre(f) {
+            if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].indexOf(f.type) < 0) { retour('rForm', false, 'Type de fichier refusé.'); return; }
+            if (f.size > 5 * 1024 * 1024) { retour('rForm', false, 'Fichier trop gros (5 Mo maximum).'); return; }
+            $('rForm').hidden = true; FICHIER = f;
+            const lec = new FileReader(); lec.onload = e => majApercu('', null, e.target.result); lec.readAsDataURL(f);
         }
 
-        // Avatar upload handling
-        const dropZone = document.getElementById('avatar-drop-zone');
-        const avatarInput = document.getElementById('avatar-input');
+        // ----- Onglets -----
+        document.querySelectorAll('.onglet').forEach(o => o.addEventListener('click', () => {
+            document.querySelectorAll('.onglet').forEach(x => x.setAttribute('aria-selected', x === o ? 'true' : 'false'));
+            ['identites', 'services', 'personas'].forEach(n => { $('p-' + n).hidden = n !== o.dataset.onglet; });
+            annoncer();
+        }));
+        $('rafraichir').addEventListener('click', charger);
 
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file) handleAvatarFile(file);
-        });
-
-        avatarInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) handleAvatarFile(file);
-        });
-
-        function handleAvatarFile(file) {
-            const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            if (!validTypes.includes(file.type)) {
-                showToast('Invalid file type', 'error');
-                return;
-            }
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('File too large (max 5MB)', 'error');
-                return;
-            }
-
-            pendingAvatarFile = file;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                document.getElementById('avatar-preview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
-            };
-            reader.readAsDataURL(file);
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'avatar' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        // Form submission
-        document.getElementById('identity-form').addEventListener('submit', saveIdentity);
-
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-
-                if (tab.dataset.tab === 'services') loadServices();
-                if (tab.dataset.tab === 'vault') loadVault();
-            });
-        });
-
-        function refresh() {
-            loadIdentities();
-            loadServices();
-            loadVault();
-        }
-
-        // Initial load
-        if (checkAuth()) {
-            refresh();
-        }
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, une fenêtre ouverte ou une confirmation.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONF_OUBLI || !$('voileIdent').hidden) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
