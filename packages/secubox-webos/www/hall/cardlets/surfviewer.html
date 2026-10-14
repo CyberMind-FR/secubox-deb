@@ -2,10 +2,12 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1266b — carte « Surf & Viewer » : rappel EN SLICES.
+  SecuBox #1266b — carte « Surf & Viewer » : rappel EN ONGLETS. Profil Aurora (.claude/AURORA-REFERENCE.md, #2660).
 
-  Trois primitives, trois bandes :
+  Trois primitives, trois onglets (plus le Global du parc) :
     ⭐ FAVORI      — se PARTAGE et se RÉPÈTE : keep personnel, re-vu d'un clic,
                      partageable (copie du lien).
     📡 PROPOSITION — se PROPOSE et se CUMULE : diffuser au parc EST proposer ;
@@ -15,93 +17,148 @@
   De MÊME ORIGINE que le Hall : elle lit le MÊME localStorage que le viewer
   (sbx_favoris, sbx.viewer.hist, sbx.broadcast.hist) et n'invente rien. Les
   actions passent au Hall par postMessage (sbx:'voir' / sbx:'diffuser').
+
+  Page autonome. ?demo=1 : listes fictives, ni stockage lu, ni message au Hall, ni requête (actions inertes). ?embed=1 : sans
+  en-tête, hauteur annoncée au parent. Tout texte (liens, titres) passe par textContent : jamais de HTML construit avec des données.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Surf &amp; Viewer — rappel</title>
-<link rel="stylesheet" href="../slicebar.css">
-<link rel="stylesheet" href="../spicy.css">
 <style>
-  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
-         --line-soft:#eef1f7; --cyan:#0784a8; --gold:#b7810a; --up:#0f9d54; --surf2:#f5f7fc; }
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-    --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
-    --line-soft:#1b2230; --cyan:#28d6ff; --gold:#f0b429; --up:#35d07f; --surf2:#10151f; } }
-  :root[data-theme="dark"]{ --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
-    --line-soft:#1b2230; --cyan:#28d6ff; --gold:#f0b429; --up:#35d07f; --surf2:#10151f; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;overflow:hidden;scrollbar-width:none}
-  html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
-  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
-  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.4rem}
-  .h{display:flex;align-items:center;gap:7px}
-  .h .ic{font-size:1rem} .h b{font-size:.84rem}
-  .h .n{margin-left:auto;font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
-  form.paste{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;
-    padding:5px 8px;background:var(--surf2)}
-  form.paste .pic{color:var(--faint);font-size:.85rem}
-  form.paste input{flex:1;min-width:0;border:0;background:none;color:var(--texte);font-size:.78rem;outline:none}
-  form.paste button{width:26px;height:22px;border-radius:6px;border:1px solid var(--line);background:none;
-    color:var(--muted);cursor:pointer;font-size:.72rem}
-  form.paste button:hover{border-color:var(--cyan);color:var(--cyan)}
-  .slices{display:flex;flex-direction:column;gap:6px;overflow-y:auto;scrollbar-width:none;flex:1;min-height:0}
-  .slices::-webkit-scrollbar{display:none}
-  /* SLICÉ (#1352) : une seule slice à la fois, choisie par la barre à bullets du bas. */
-  .slice{display:none;flex-direction:column;gap:3px}
-  .slice.actif{display:flex}
-  .slab{display:flex;align-items:center;gap:5px;font-size:.56rem;letter-spacing:.09em;text-transform:uppercase;
-    color:var(--faint);font-weight:700}
-  .slab .mut{color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0}
-  .slab .c{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
-  /* EN LISTE (#1352) : un item par ligne, pleine largeur (au lieu d'une bande
-     horizontale à faire défiler). */
-  .strip{display:flex;flex-direction:column;gap:4px;overflow-y:auto;scrollbar-width:none}
-  .strip::-webkit-scrollbar{display:none}
-  .chip{display:flex;width:100%;align-items:center;gap:0;border:1px solid var(--line);
-    border-radius:8px;overflow:hidden;background:var(--surf2)}
-  .chip button.act{flex:1;min-width:0;text-align:left}
-  .chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.72rem;
-    padding:5px 9px;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;overflow-wrap:anywhere}
+  .actif i{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:1px}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover:not(:disabled){border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible,.act:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;overflow-wrap:anywhere}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  body.emb .tuiles,body.dans .tuiles{display:none}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.hors .v{color:var(--rouge)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.emb .pan,body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .msg{padding:12px;margin-top:10px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg b{color:var(--texte)} .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  form.paste{display:flex;align-items:center;gap:6px;border:1px solid var(--trait2);border-radius:10px;padding:4px 6px 4px 10px;background:rgba(8,18,38,.7);min-width:0}
+  form.paste:focus-within{border-color:var(--cyan)}
+  form.paste .pic{color:var(--faible);font-size:.95rem}
+  form.paste input{flex:1;min-width:0;border:0;background:none;color:var(--texte);font:inherit;font-size:.85rem;outline:none;min-height:34px}
+  form.paste button{flex:0 0 auto}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 12px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .onglet .c{margin-left:5px;color:var(--faible);font-variant-numeric:tabular-nums} .onglet[aria-selected="true"] .c{color:var(--cyan)}
+  .slice{display:none} .slice.actif{display:block;border:0;background:none;border-radius:0;padding:0;margin:0;font-size:inherit;font-weight:inherit;letter-spacing:normal;color:inherit}   /* « actif » désigne ici l'onglet affiché, pas la pastille */
+  .slab{color:var(--faible);font-size:.72rem;margin:2px 0 8px}
+  .strip{display:grid;gap:6px;grid-template-columns:minmax(0,1fr)}
+  @container a (min-width:700px){.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .chip{display:flex;width:100%;align-items:stretch;border:1px solid var(--trait);border-radius:10px;overflow:hidden;background:rgba(18,40,78,.45);min-width:0}
+  .chip:hover{border-color:rgba(41,182,246,.5)}
+  .chip button{border:0;background:none;color:var(--doux);cursor:pointer;font:inherit;font-size:.8rem;padding:7px 10px;min-height:38px;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip button:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+  .chip button.act{flex:1;min-width:0;text-align:left;color:var(--texte)}
   .chip button.act:hover{color:var(--cyan)}
-  .chip .mini{padding:4px 6px;border-left:1px solid var(--line);color:var(--faint);font-size:.66rem}
-  .chip .mini:hover{color:var(--gold)}
+  .chip .mini{flex:0 0 auto;border-left:1px solid var(--trait);color:var(--faible);padding:7px 12px}
+  .chip .mini:hover{color:var(--jaune)}
   .chip .cnt{font-variant-numeric:tabular-nums;font-weight:700;color:var(--cyan)}
-  .chip .src{font-size:.78rem;line-height:1;margin-right:1px;vertical-align:-1px}
-  .chip .det{color:var(--faint);font-weight:400;margin-left:3px}
-  .empty-all{color:var(--faint);font-size:.72rem;text-align:center;padding:14px 4px}
-  .pied{margin-top:auto;display:flex;align-items:center;gap:6px;padding-top:.3rem;border-top:1px solid var(--line);
-    font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-  .pied .grow{flex:1}
+  .chip .src{font-size:.9rem;line-height:1;margin-right:3px;vertical-align:-1px}
+  .chip .det{color:var(--faible);font-weight:400;margin-left:3px}
+  .vide{color:var(--faible);font-size:.8rem;text-align:center;padding:14px 8px;border:1px dashed var(--trait2);border-radius:10px;overflow-wrap:anywhere}
 </style>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
+      <div><h1>Surf &amp; Viewer</h1><small>Favoris, propositions et liens collés</small></div>
+    </div>
+    <span class="actif neutre" id="tot" aria-live="polite">—</span>
+    <div class="droite"><span id="maj">—</span></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — listes fictives, aucun lien n'est ouvert ni diffusé</div>
 
-<div class="mw">
-  <div class="h"><span class="ic">🧭</span><b>Surf &amp; Viewer</b><span class="n" id="tot"></span></div>
-  <form class="paste" id="paste"><span class="pic">⌕</span>
-    <input id="pu" type="search" autocomplete="off" spellcheck="false" placeholder="coller un lien à voir / surfer…" aria-label="Coller un lien">
-    <button type="submit" title="Voir / surfer">▶</button></form>
-  <div class="slices" id="slices">
-    <div class="slice" id="s-fav"><div class="slab">⭐ Favoris <span class="mut">· se partage &amp; se répète</span><span class="c" id="c-fav"></span></div><div class="strip" id="st-fav"></div></div>
-    <div class="slice" id="s-diff"><div class="slab">📡 Propositions <span class="mut">· se propose &amp; se cumule</span><span class="c" id="c-diff"></span></div><div class="strip" id="st-diff"></div></div>
-    <div class="slice" id="s-hist"><div class="slab">🔗 Liens collés<span class="c" id="c-hist"></span></div><div class="strip" id="st-hist"></div></div>
-    <div class="slice" id="s-global"><div class="slab">🌍 Global <span class="mut">· diffusé au parc, ♥ en tops</span><span class="c" id="c-global"></span></div><div class="strip" id="st-global"></div></div>
-    <div class="empty-all" id="vide" hidden>Rien encore — collez un lien, mettez en favori (⭐) ou proposez au parc (📡).</div>
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Liens gardés en favori dans ce navigateur (sbx_favoris), partagés avec le viewer du Hall."><span class="l">Favoris</span><span class="v" id="tFav">—</span><span class="s">dans ce navigateur</span></div>
+    <div class="tuile cy" title="Liens proposés au parc depuis ce navigateur (sbx.broadcast.hist)."><span class="l">Propositions</span><span class="v" id="tDiff">—</span><span class="s">proposées au parc</span></div>
+    <div class="tuile cy" title="Liens collés ou vus dans le viewer (sbx.viewer.hist)."><span class="l">Liens collés</span><span class="v" id="tHist">—</span><span class="s">historique du viewer</span></div>
+    <div class="tuile cy" title="Diffusions du parc entier, lues sur la box (onglet Global)."><span class="l">Global</span><span class="v" id="tGlobal">—</span><span class="s">diffusions du parc</span></div>
+  </section>
+
+  <div class="pan"><h3>Rappel <i>stockage local du Hall</i></h3>
+    <form class="paste" id="paste"><span class="pic">⌕</span>
+      <input id="pu" type="search" autocomplete="off" spellcheck="false" placeholder="coller un lien à voir / surfer…" aria-label="Coller un lien">
+      <button class="btn" type="submit" title="Voir / surfer">▶</button></form>
+    <div class="onglets" role="tablist" aria-label="Rappel" id="onglets" style="margin-top:10px"></div>
+    <div class="retour" id="retour" role="status" hidden></div>
+    <div id="slices" role="tabpanel" style="margin-top:10px">
+      <div class="slice" id="s-fav"><div class="slab">⭐ Favoris · se partage &amp; se répète</div><div class="strip" id="st-fav"></div></div>
+      <div class="slice" id="s-diff"><div class="slab">📡 Propositions · se propose &amp; se cumule</div><div class="strip" id="st-diff"></div></div>
+      <div class="slice" id="s-hist"><div class="slab">🔗 Liens collés</div><div class="strip" id="st-hist"></div></div>
+      <div class="slice" id="s-global"><div class="slab">🌍 Global · diffusé au parc, ♥ en tops</div><div class="strip" id="st-global"></div></div>
+      <div class="vide" id="vide" hidden>Rien encore — collez un lien, mettez en favori (⭐) ou proposez au parc (📡).</div>
+    </div>
   </div>
-  <div id="slbar" class="slbar"></div>
-</div>
+</div></div>
 <script src="/api/v1/webos/public/hotes.js"></script>
 <script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
-<script src="../slicebar.js"></script>
 
 <script>
 (function(){
   "use strict";
-  var el=function(id){return document.getElementById(id);};
-  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+  var ONGLET = 'surfviewer';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo') && Q.get('demo') !== '0';
+  if(Q.get('embed')) document.body.classList.add('emb');
+  try{ if(window.top !== window) document.body.classList.add('dans'); }catch(e){ document.body.classList.add('dans'); }
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  /* Texte avec des passages en gras, sans jamais passer par du HTML : parts = ['texte', {b:'gras'}, 'suite']. */
+  function gras(cont, parts){
+    cont.textContent = '';
+    parts.forEach(function(p){ cont.appendChild(typeof p === 'string' ? document.createTextNode(p) : el('b', null, p.b)); });
+  }
+  /* Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7). */
+  function annoncer(){
+    if(parent === window) return;
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: ONGLET}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
   function lire(k){ try{ return JSON.parse(localStorage.getItem(k)||'[]'); }catch(e){ return []; } }
   // Au Hall qui nous pose, à sa propre origine (#1609).
   function post(m){ if(parent!==window){ try{ parent.postMessage(m, location.origin); }catch(e){} } }
   function bref(u){ return String(u).replace(/^https?:\/\//,'').replace(/^www\./,''); }
+  function inerte(){ var r = $('retour'); r.hidden = false; r.textContent = 'Démonstration : action inerte, rien n’est ouvert, copié, diffusé ni envoyé.'; annoncer(); }
 
   // Un lien média se lit par son NOM, pas par son URL. À défaut de titre (les
   // favoris et l'historique n'en gardent pas), on compose un libellé humain :
@@ -213,6 +270,7 @@
       .then(function(){ _sondeActive=false; setTimeout(traiterFileTitres, 400); });
   }
   function majTitres(){
+    if(DEMO) return;                                        // la démonstration ne lit ni n'écrit rien
     var urls=[].concat(lire('sbx_favoris'),
       lire('sbx.broadcast.hist').map(function(x){ return x&&x.u; }),
       lire('sbx.viewer.hist').map(function(x){ return x&&x.u; }));
@@ -220,56 +278,73 @@
     resoudreViaBiblio();                                    // YouTube & co (biblio ytsas)
   }
 
-  // Libellé riche (émoji + nom), échappé — à insérer en innerHTML.
+  // Libellé riche (émoji + nom) : une liste de nœuds, le texte n'étant jamais interprété comme du HTML.
   function joli(u, titre){
     if(titre && titre.trim() && !/^https?:\/\//i.test(titre.trim()))
-      return esc(titre.trim().slice(0,42));
-    var m=litTitres(); if(m[u]) return esc(String(m[u]).slice(0,42));   // titre retrouvé
-    var s=source(u), id=ident(u);
-    return '<span class="src">'+s.e+'</span>'+esc(s.s)+(id?' <span class="det">'+esc(id)+'</span>':'');
+      return [document.createTextNode(titre.trim().slice(0,42))];
+    var m=DEMO?{}:litTitres(); if(m[u]) return [document.createTextNode(String(m[u]).slice(0,42))];   // titre retrouvé
+    var s=source(u), id=ident(u), r=[el('span','src',s.e), document.createTextNode(s.s)];
+    if(id){ r.push(document.createTextNode(' ')); r.push(el('span','det',id)); }
+    return r;
   }
 
-  function chip(u, titre, act, extra){
-    var lbl=joli(u, titre);
-    var main='<button class="act" type="button" data-u="'+esc(u)+'" data-titre="'+esc(titre||'')+'" data-act="'+act+'" title="'+esc(titre||u)+'">'+lbl+'</button>';
-    return '<span class="chip">'+main+(extra||'')+'</span>';
+  function bouton(cls, u, titre, act, tip){
+    var b=el('button',cls); b.type='button'; b.setAttribute('data-u',u); if(titre!==null) b.setAttribute('data-titre',titre||''); if(act) b.setAttribute('data-act',act); if(tip) b.title=tip;
+    return b;
   }
+  function chip(u, titre, act, extra){
+    var c=el('span','chip'), b=bouton('act',u,titre||'',act,titre||u);
+    joli(u,titre).forEach(function(n){ b.appendChild(n); });
+    c.appendChild(b); if(extra) c.appendChild(extra);
+    return c;
+  }
+
+  // Données fictives (démonstration) : adresses de documentation (RFC 2606), aucune lecture du stockage.
+  var DEMO_FAV=['https://video.exemple.test/w/abc123','https://www.exemple.test/articles/reseau-maille.html'];
+  var DEMO_DIFF=[{u:'https://video.exemple.test/w/xyz789',titre:'Atelier : monter une baie',n:3,t:0},{u:'https://www.exemple.test/podcast/episode-12.mp3',titre:'',n:1,t:0}];
+  var DEMO_HIST=[{u:'https://exemple.test/carte.pdf',t:0}];
+  var DEMO_GLOBAL={total:2,tops:[{url:'https://video.exemple.test/w/xyz789',titre:'Atelier : monter une baie',likes:5}],recents:[{url:'https://exemple.test/image.png',titre:'',likes:0}]};
 
   function rend(){
-    var fav=lire('sbx_favoris');                 // [url]
-    var diff=lire('sbx.broadcast.hist');         // [{u,titre,n,t}]
-    var hist=lire('sbx.viewer.hist');            // [{u,t}]
+    var fav=DEMO?DEMO_FAV:lire('sbx_favoris');                 // [url]
+    var diff=DEMO?DEMO_DIFF:lire('sbx.broadcast.hist');        // [{u,titre,n,t}]
+    var hist=DEMO?DEMO_HIST:lire('sbx.viewer.hist');           // [{u,t}]
 
     // ⭐ Favoris : re-vu (répète) + partage (copie).
-    el('st-fav').innerHTML = fav.slice().reverse().slice(0,20).map(function(u){
-      var share='<button class="mini" type="button" data-u="'+esc(u)+'" data-act="share" title="Partager (copier le lien)">⤴</button>';
-      return chip(u, null, 'view', share);
-    }).join('');
+    var f=$('st-fav'); f.textContent='';
+    fav.slice().reverse().slice(0,20).forEach(function(u){
+      var sh=bouton('mini',u,null,'share','Partager (copier le lien)'); sh.textContent='⤴';
+      f.appendChild(chip(u, null, 'view', sh));
+    });
     // 📡 Propositions : re-proposer (cumule) — badge ×N.
-    el('st-diff').innerHTML = diff.map(function(x){
-      var n=Math.max(1, parseInt(x.n,10)||1), badge=n>1?' <span class="cnt">×'+n+'</span>':'';
-      return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×)">'+joli(x.u,x.titre)+badge+'</button></span>';
-    }).join('');
+    var d=$('st-diff'); d.textContent='';
+    diff.forEach(function(x){
+      var n=Math.max(1, parseInt(x.n,10)||1), c=el('span','chip'), b=bouton('act',x.u,x.titre||'','diffuse','Re-proposer au parc ('+n+'×)');
+      joli(x.u,x.titre).forEach(function(nd){ b.appendChild(nd); });
+      if(n>1){ b.appendChild(document.createTextNode(' ')); b.appendChild(el('span','cnt','×'+n)); }
+      c.appendChild(b); d.appendChild(c);
+    });
     // 🔗 Liens collés : re-vu.
-    el('st-hist').innerHTML = hist.map(function(x){ return chip(x.u, null, 'view', ''); }).join('');
+    var h=$('st-hist'); h.textContent='';
+    hist.forEach(function(x){ h.appendChild(chip(x.u, null, 'view', null)); });
 
-    el('c-fav').textContent = fav.length||'';
-    el('c-diff').textContent = diff.length||'';
-    el('c-hist').textContent = hist.length||'';
-    el('s-fav').classList.toggle('empty', !fav.length);
-    el('s-diff').classList.toggle('empty', !diff.length);
-    el('s-hist').classList.toggle('empty', !hist.length);
+    $('c-fav').textContent = fav.length;
+    $('c-diff').textContent = diff.length;
+    $('c-hist').textContent = hist.length;
+    $('tFav').textContent = fav.length; $('tDiff').textContent = diff.length; $('tHist').textContent = hist.length;
     var total=fav.length+diff.length+hist.length;
-    el('tot').textContent = total? (total+' items') : '';
-    el('vide').hidden = total>0;
+    $('tot').className = 'actif ' + (total ? '' : 'neutre'); $('tot').textContent = total ? (total+' items') : 'VIDE';
+    $('maj').textContent = DEMO ? 'Démonstration' : 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    $('vide').hidden = total>0;
     montreVerdict();   // le sort d'une proposition survit au redessin (#1609)
     majTitres();   // retrouve les titres manquants (PeerTube) en tâche de fond
+    annoncer();
   }
 
   function flash(b, txt, couleur, ms){
-    var old=b.innerHTML, oc=b.style.color;
-    b.textContent=txt; b.style.color=couleur||'var(--up)';
-    setTimeout(function(){ if(b.innerHTML===''||b.textContent===txt){ b.innerHTML=old; b.style.color=oc; } }, ms||1100);
+    var old=[].slice.call(b.childNodes), oc=b.style.color;
+    b.textContent=txt; b.style.color=couleur||'var(--vert)';
+    setTimeout(function(){ if(b.childNodes.length===0||b.textContent===txt){ b.textContent=''; old.forEach(function(n){ b.appendChild(n); }); b.style.color=oc; } }, ms||1100);
   }
   // LE SORT D'UNE PROPOSITION VIENT DE LA BOX (#1609). Le Hall la transmet et
   // nous renvoie la réponse (diffuser-resultat) ; on n'annonce rien d'avance.
@@ -292,13 +367,14 @@
       txt: d.ok===true ? '✓ proposé au parc'
          : (d.statut===401 || d.statut===403) ? '🔒 Réservé aux personnes connectées'
          : '⚠️ Diffusion impossible',
-      c: d.ok===true ? 'var(--up)' : 'var(--gold)'};
+      c: d.ok===true ? 'var(--vert)' : 'var(--orange)'};
     montreVerdict(); setTimeout(rend, 2600);
   });
-  // Clics délégués sur les trois strips. Un clic donne toujours un RETOUR visible
+  // Clics délégués sur les quatre listes. Un clic donne toujours un RETOUR visible
   // (sinon « le lien ne fait rien »). Les liens LOCAUX (/api/…, /media/…) sont
   // résolus côté Hall par viewerVoir — plus de https://<chemin> mort.
-  el('slices').addEventListener('click', function(e){
+  $('slices').addEventListener('click', function(e){
+    if(DEMO){ if(e.target.closest('[data-like],[data-u]')) inerte(); return; }
     // ♥ GLOBAL (#1360) : un like sur un broadcast du parc (historique partagé).
     var lk=e.target.closest('[data-like]');
     if(lk){ var lu=lk.getAttribute('data-like');
@@ -308,7 +384,7 @@
           if(r.ok) return r.json().then(function(){ rendGlobal(); });
           var bloque=(r.status===401 || r.status===403);
           lk.title=bloque?'Réservé aux personnes connectées':('Échec (HTTP '+r.status+')');
-          flash(lk, bloque?'🔒':'⚠️', 'var(--gold)', 2500);
+          flash(lk, bloque?'🔒':'⚠️', 'var(--orange)', 2500);
         }).catch(function(){});
       return; }
     var b=e.target.closest('[data-u]'); if(!b) return;
@@ -328,11 +404,12 @@
   });
 
   // Coller un lien → le Hall le VOIT (média → lecteur) ou le SURFE.
-  el('paste').addEventListener('submit', function(e){
+  $('paste').addEventListener('submit', function(e){
     e.preventDefault();
-    var u=(el('pu').value||'').trim(); if(!u) return;
+    var u=($('pu').value||'').trim(); if(!u) return;
+    if(DEMO){ inerte(); return; }
     if(!/^https?:\/\//i.test(u) && /\.[a-z]{2,}/i.test(u)) u='https://'+u;
-    post({sbx:'voir', url:u}); el('pu').value='';
+    post({sbx:'voir', url:u}); $('pu').value='';
   });
 
   // Le viewer écrit dans le MÊME localStorage (autre document, même origine) :
@@ -341,52 +418,72 @@
     if(!ev.key || ev.key==='sbx_favoris' || ev.key==='sbx.viewer.hist' || ev.key==='sbx.broadcast.hist') rend();
   });
   setInterval(rend, 4000);
-  rend();
 
-  // SLICÉ (#1352) : la barre du bas (bullets « double bullet ») choisit la slice
-  // visible — ⭐ Favoris · 📡 Propositions · 🔗 Liens collés. Manuel (pas de
+  // ONGLETS (#1352) : un seul à la fois — ⭐ Favoris · 📡 Propositions · 🔗 Liens collés · 🌍 Global. Manuel (pas de
   // rotation auto : le contenu ne bouge pas sous les yeux).
-  var _slices=[el('s-fav'), el('s-diff'), el('s-hist'), el('s-global')];
-  function montreSlice(i){ for(var k=0;k<_slices.length;k++){ if(_slices[k]) _slices[k].classList.toggle('actif', k===i); }
-    if(i===3) rendGlobal(); }
-  if(window.SBXSliceBar){
-    SBXSliceBar(el('slbar'), {autoMs:0, onShow:function(i){ montreSlice(i); },
-      slices:[{label:'⭐ Favoris'},{label:'📡 Propositions'},{label:'🔗 Liens collés'},{label:'🌍 Global'}]});
-  } else { montreSlice(0); }
+  var TABS=[['fav','⭐ Favoris'],['diff','📡 Propositions'],['hist','🔗 Liens collés'],['global','🌍 Global']];
+  function montreSlice(i){
+    TABS.forEach(function(t,k){
+      var on=k===i, b=$('o-'+t[0]);
+      $('s-'+t[0]).classList.toggle('actif', on);
+      b.setAttribute('aria-selected', on?'true':'false'); b.tabIndex=on?0:-1;
+    });
+    if(i===3) rendGlobal();
+    annoncer();
+  }
+  TABS.forEach(function(t,i){
+    var b=el('button','onglet',t[1]); b.type='button'; b.id='o-'+t[0]; b.setAttribute('role','tab'); b.setAttribute('aria-label',t[1]);
+    b.appendChild(el('span','c',null)); b.lastChild.id='c-'+t[0];
+    b.addEventListener('click', function(){ montreSlice(i); });
+    b.onkeydown=function(e){
+      var n=e.key==='ArrowRight'?i+1:e.key==='ArrowLeft'?i-1:-1; if(n<0) return;
+      n=(n+TABS.length)%TABS.length; montreSlice(n); $('o-'+TABS[n][0]).focus(); e.preventDefault();
+    };
+    $('onglets').appendChild(b);
+  });
 
   // 🌍 GLOBAL (#1360) : l'historique des broadcasts du PARC (partagé, backend),
   // tops par ♥ puis récents. Chaque item : ▶ voir · ♥ liker.
-  function rendGlobal(){
-    fetch('/api/v1/webos/public/broadcasts',{headers:{'Accept':'application/json'}})
-      .then(function(r){return r.ok?r.json():null;}).then(function(g){ if(!g) return;
-        var tops=g.tops||[], rec=g.recents||[];
-        var seen={}, items=[];
-        tops.concat(rec).forEach(function(x){ if(x&&x.url&&!seen[x.url]){ seen[x.url]=1; items.push(x); } });
-        items=items.slice(0,20);
-        el('c-global').textContent=g.total||'';
-        el('st-global').innerHTML=items.map(function(x){
-          var n=Math.max(0, parseInt(x.likes,10)||0), badge=n?(' <span class="cnt">'+n+'</span>'):'';   // un compte, donc un entier
-          return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.url)+'" data-titre="'+esc(x.titre||'')+'" data-act="view" title="'+esc(x.titre||x.url)+'">'+joli(x.url,x.titre)+'</button>'
-            +'<button class="mini" type="button" data-like="'+esc(x.url)+'" title="J\'aime">♥'+badge+'</button></span>';
-        }).join('');
-        el('s-global').classList.toggle('empty', !items.length);
-      }).catch(function(){});
+  function poseGlobal(g){
+    var tops=g.tops||[], rec=g.recents||[];
+    var seen={}, items=[];
+    tops.concat(rec).forEach(function(x){ if(x&&x.url&&!seen[x.url]){ seen[x.url]=1; items.push(x); } });
+    items=items.slice(0,20);
+    $('c-global').textContent=g.total||0; $('tGlobal').textContent=g.total==null?'—':g.total;
+    var z=$('st-global'); z.textContent='';
+    items.forEach(function(x){
+      var n=Math.max(0, parseInt(x.likes,10)||0);   // un compte, donc un entier
+      var c=el('span','chip'), b=bouton('act',x.url,x.titre||'','view',x.titre||x.url);
+      joli(x.url,x.titre).forEach(function(nd){ b.appendChild(nd); });
+      var lk=el('button','mini','♥'); lk.type='button'; lk.setAttribute('data-like',x.url); lk.title='J\'aime';
+      if(n){ lk.appendChild(document.createTextNode(' ')); lk.appendChild(el('span','cnt',n)); }
+      c.appendChild(b); c.appendChild(lk); z.appendChild(c);
+    });
+    if(!items.length) z.appendChild(el('div','vide','Aucune diffusion du parc pour l’instant.'));
+    annoncer();
   }
-  setInterval(function(){ if(el('s-global').classList.contains('actif')) rendGlobal(); }, 10000);
+  function rendGlobal(){
+    if(DEMO){ poseGlobal(DEMO_GLOBAL); return; }
+    fetch('/api/v1/webos/public/broadcasts',{headers:{'Accept':'application/json'}})
+      .then(function(r){return r.ok?r.json():null;}).then(function(g){ if(!g) return; poseGlobal(g); }).catch(function(){});
+  }
+  setInterval(function(){ if($('s-global').classList.contains('actif')) rendGlobal(); }, 10000);
 
-  (function(){ var t=new URLSearchParams(location.search).get('theme');
-    if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
-  addEventListener('message', function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+  if(DEMO) $('demo').hidden=false;
+  rend();
+  montreSlice(0);
 })();
 </script>
 
 <script src="../aide.js"></script>
 <script>window.SBXAide&&SBXAide({
-  slice:function(){var d=document.querySelector('.sbx-dots .on');return d?(d.getAttribute('aria-label')||''):'';},
+  slice:function(){var d=document.querySelector('.onglet[aria-selected="true"]');return d?(d.getAttribute('aria-label')||''):'';},
   zones:function(){return [
-    {el:document.querySelector('.h'),label:'En-tête — Surf & Viewer'},
+    {el:document.querySelector('.tete'),label:'En-tête — Surf & Viewer'},
     {el:document.getElementById('paste'),label:'Coller — un lien à voir (média) ou à surfer'},
-    {el:(document.querySelector('.slice.actif')||document.getElementById('slices')),label:'Tranche active — Favoris ⭐ · Propositions 📡 · Liens collés 🔗 · Global 🌍'},
-    {el:document.getElementById('slbar'),label:'Slices — tournent seules ; clic fige, re-clic reprend'}
+    {el:(document.querySelector('.slice.actif')||document.getElementById('slices')),label:'Onglet actif — Favoris ⭐ · Propositions 📡 · Liens collés 🔗 · Global 🌍'},
+    {el:document.getElementById('onglets'),label:'Onglets — un clic choisit la liste affichée'}
   ].filter(function(z){return z.el;});}
 });</script>
+</body>
+</html>

@@ -101,7 +101,8 @@ def test_la_carte_distingue_absent_indisponible_et_non_connecte():
 
 
 def test_la_carte_suit_le_theme_du_hall_et_ne_depend_pas_de_load():
-    assert 'data-theme="dark"' in CARTE and 'prefers-color-scheme: dark' in CARTE
+    # #2660 (profil Aurora) : thème unique sombre aux jetons Aurora, plus de bascule clair/sombre
+    assert "--fond:#060d1b" in CARTE and "prefers-color-scheme" not in CARTE and "data-theme" not in CARTE
     assert '<script src="../sonde.js"></script>' in CARTE      # le contrat de la sonde du Hall (annonce, thème)
 
 

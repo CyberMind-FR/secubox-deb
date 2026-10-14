@@ -2,8 +2,10 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1305 — RELAIS DE SESSION ENTRE DEUX DOMAINES.
+  SecuBox #1305 — RELAIS DE SESSION ENTRE DEUX DOMAINES. Profil Aurora (.claude/AURORA-REFERENCE.md, #2660).
 
   POURQUOI CETTE PAGE EXISTE. Le témoin de session porte `.gk2.secubox.in` :
   sur hall.gk2.net, le navigateur ne l'envoie jamais. Ce n'est pas un réglage
@@ -21,30 +23,41 @@
   LA DESTINATION EST VÉRIFIÉE, ET C'EST LE POINT CRITIQUE. Une page qui redirige
   vers ce qu'on lui dit est une redirection ouverte ; ici elle emporterait le
   jeton avec elle. La liste des retours acceptés est donc CLOSE et écrite ici.
+
+  Ce n'est pas une carte : une page de passage, sans mesure ni démonstration (un relais « de démonstration » serait une
+  redirection de plus). Seule la peau change ; le jeton, le fragment et la liste close des retours sont ceux de l'ancienne page.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SbX — relais de session</title>
 <style>
-  :root { --fond:#f7f8fa; --texte:#1a1a22; --muted:#6b6b7a; --accent:#5b46b8; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#0e0e14; --texte:#e8e6d9; --muted:#8a8a99;
-      --accent:#9d8bf0; }
-  }
-  body { margin:0; min-height:100vh; display:grid; place-items:center;
-         background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:15px; }
-  .b { max-width:420px; padding:28px 24px; text-align:center; }
-  h1 { font-size:1.1rem; margin:0 0 .4rem; }
-  p { color:var(--muted); font-size:.88rem; line-height:1.5; margin:.3rem 0; }
-  a.b2 { display:inline-block; margin-top:1rem; padding:.45rem .9rem; border-radius:8px;
-         border:1px solid var(--accent); color:var(--accent); text-decoration:none;
-         font-size:.85rem; }
-  .ko { color:#b7202c; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{min-height:100vh;display:grid;place-items:center;padding:16px;
+       background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4}
+  .app{width:100%;max-width:420px;border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:26px 22px;text-align:center}
+  .marque{display:flex;justify-content:center;align-items:center;gap:10px}
+  h1{font-size:1.2rem;font-weight:800;margin:0}
+  .etat{display:inline-block;margin-top:12px;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .etat.ko{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  p{color:var(--doux);font-size:.9rem;line-height:1.5;margin:.7rem 0 0;overflow-wrap:anywhere}
+  p.ko{color:var(--rouge)}
+  a.b2{display:inline-flex;align-items:center;justify-content:center;margin-top:1rem;min-height:40px;padding:.4rem 1rem;border-radius:8px;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.1);text-decoration:none;font-size:.85rem;font-weight:600}
+  a.b2:hover{background:rgba(41,182,246,.2)} a.b2:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 </style>
-
-<div class="b">
-  <h1>🔑 Relais de session</h1>
+</head>
+<body>
+<div class="app">
+  <div class="marque">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l3 3M14 9l2 2"/></svg>
+    <h1>Relais de session</h1>
+  </div>
+  <span class="etat" id="etat" aria-live="polite">EN COURS</span>
   <p id="msg">Vérification de votre session SecuBox…</p>
   <div id="suite"></div>
 </div>
@@ -61,15 +74,19 @@
 
   var msg = document.getElementById('msg');
   var suite = document.getElementById('suite');
+  var etat = document.getElementById('etat');
   var retour = new URLSearchParams(location.search).get('retour') || '';
+  function echec(texte, pastille) {
+    msg.className = 'ko'; msg.textContent = texte;
+    etat.className = 'etat ko'; etat.textContent = pastille;
+  }
 
   function origineDe(u) {
     try { return new URL(u).origin; } catch (e) { return ''; }
   }
   var origine = origineDe(retour);
   if (RETOURS.indexOf(origine) < 0) {
-    msg.className = 'ko';
-    msg.textContent = 'Destination de retour non autorisée.';
+    echec('Destination de retour non autorisée.', 'REFUSÉ');
     return;
   }
 
@@ -81,21 +98,27 @@
     .then(function (r) {
       if (r.code === 401 || r.code === 403) {
         msg.textContent = 'Vous n’êtes pas connecté à la box.';
-        suite.innerHTML = '<a class="b2" href="' + SBX_DOMAINE.admin + '/login.html'
-          + '?retour=' + encodeURIComponent(location.href) + '">Connexion SecuBox…</a>';
+        etat.textContent = 'SESSION REQUISE';
+        var a = document.createElement('a');
+        a.className = 'b2';
+        a.href = SBX_DOMAINE.admin + '/login.html' + '?retour=' + encodeURIComponent(location.href);
+        a.textContent = 'Connexion SecuBox…';
+        suite.textContent = ''; suite.appendChild(a);
         return;
       }
       var j = (r.corps || {}).jeton;
-      if (!j) { msg.className = 'ko'; msg.textContent = 'Jeton refusé.'; return; }
+      if (!j) { echec('Jeton refusé.', 'REFUSÉ'); return; }
       // Le jeton part dans le FRAGMENT, et on remplace l'entrée d'historique
       // plutôt que d'en ajouter une : revenir en arrière ne doit pas rejouer
       // un relais.
       msg.textContent = 'Session transmise. Retour…';
+      etat.textContent = 'TRANSMISE';
       location.replace(retour.split('#')[0] + '#sbx=' + encodeURIComponent(j));
     })
     .catch(function () {
-      msg.className = 'ko';
-      msg.textContent = 'Relais indisponible.';
+      echec('Relais indisponible.', 'INDISPONIBLE');
     });
 })();
 </script>
+</body>
+</html>
