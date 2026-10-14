@@ -1,213 +1,470 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-<!-- SecuBox-Deb :: Podcaster admin WebUI — CyberMind https://cybermind.fr -->
-<html lang="en">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Podcaster au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance, aucune police distante.
+  Mesure absente = « — ». ?embed=1 : sans menu, une colonne ; ?demo=1 : données fictives, actions inertes (aucune écriture).
+  Les appels d'API sont ceux de l'ancienne page (routes, méthodes, corps, en-têtes) ; la confirmation de suppression est dans la page.
+-->
+<html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuBox · Podcaster</title>
-<link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
-<style>
-  :root{
-    --cosmos-black:#0a0a0f; --gold-hermetic:#c9a84c; --cinnabar:#e63946;
-    --matrix-green:#00ff41; --void-purple:#6e40c9; --cyber-cyan:#00d4ff;
-    --text-primary:#e8e6d9; --text-muted:#6b6b7a; --panel:#13131c; --line:#23232f;
-  }
-  body{margin:0;background:var(--cosmos-black);color:var(--text-primary);
-    font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:14px;display:flex}
-  .main{flex:1;margin-left:220px;min-height:100vh}
-  @media(max-width:900px){.sidebar{display:none}.main{margin-left:0}}
-  .topbar{display:flex;align-items:center;gap:14px;padding:14px 20px;
-    border-bottom:1px solid var(--line);background:linear-gradient(90deg,#0a0a0f,#13131c)}
-  .topbar h1{font-size:18px;margin:0;letter-spacing:1px;color:var(--gold-hermetic)}
-  .topbar .em{font-size:22px}
-  .stats{margin-left:auto;display:flex;gap:16px;color:var(--text-muted);font-size:12px}
-  .stats b{color:var(--cyber-cyan)}
-  .wrap{display:grid;grid-template-columns:300px 1fr;gap:0;min-height:calc(100vh - 58px)}
-  aside.feeds{border-right:1px solid var(--line);background:var(--panel);padding:14px;overflow:auto}
-  section.eps{padding:18px 22px;overflow:auto}
-  @media(max-width:760px){.wrap{grid-template-columns:1fr}aside.feeds{border-right:0;border-bottom:1px solid var(--line)}}
-  .row{display:flex;gap:8px;margin-bottom:12px}
-  input,button,select{font-family:inherit;font-size:13px;border-radius:8px;border:1px solid var(--line)}
-  input{flex:1;background:#0e0e16;color:var(--text-primary);padding:9px 11px}
-  button{background:#1a1a26;color:var(--text-primary);padding:9px 13px;cursor:pointer;transition:.15s}
-  button:hover{border-color:var(--cyber-cyan);color:var(--cyber-cyan)}
-  button.go{background:var(--void-purple);border-color:var(--void-purple);color:#fff}
-  a.portal{color:var(--cyber-cyan);text-decoration:none;font-size:12px;border:1px solid var(--cyber-cyan);
-    padding:7px 11px;border-radius:8px}
-  .feed{display:flex;gap:10px;align-items:center;padding:9px;border-radius:8px;cursor:pointer;border:1px solid transparent}
-  .feed:hover{background:#0e0e16}.feed.sel{background:#0e0e16;border-color:var(--void-purple)}
-  .feed img{width:40px;height:40px;border-radius:6px;object-fit:cover;background:#222}
-  .feed .t{flex:1;min-width:0}.feed .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
-  .feed .t span{color:var(--text-muted);font-size:11px}
-  .feed .x{color:var(--text-muted);opacity:0;font-size:16px}.feed:hover .x{opacity:1}
-  .feed .ad{font-size:14px;cursor:pointer;opacity:.5}
-  .ferr{margin:-2px 0 8px 50px;font-size:11px;color:#ffb4a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.feed .ad.on{opacity:1;color:var(--matrix-green)}
-  label.autodl{display:flex;gap:7px;align-items:center;color:var(--text-muted);font-size:12px;margin:-4px 0 12px;cursor:pointer}
-  h2{font-size:15px;color:var(--gold-hermetic);border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 14px}
-  .ep{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:var(--panel)}
-  .ep .meta{flex:1;min-width:0}.ep .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ep .meta span{color:var(--text-muted);font-size:11px}
-  .ep .act{display:flex;gap:6px;align-items:center}
-  .badge{font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid var(--line);color:var(--text-muted)}
-  .badge.downloading{color:var(--cyber-cyan);border-color:var(--cyber-cyan)}
-  .badge.error{color:var(--cinnabar);border-color:var(--cinnabar)}
-  .bar{height:4px;border-radius:3px;background:#0e0e16;overflow:hidden;width:90px}.bar i{display:block;height:100%;background:var(--cyber-cyan);width:0}
-  audio{height:34px}
-  .share{margin-top:6px;padding:12px;border:1px dashed var(--void-purple);border-radius:10px;color:var(--text-muted);font-size:12px}
-  .share a{color:var(--cyber-cyan)}
-  .muted{color:var(--text-muted)}.empty{color:var(--text-muted);padding:40px;text-align:center}
-  dialog{background:var(--panel);color:var(--text-primary);border:1px solid var(--void-purple);border-radius:12px;padding:20px;width:min(520px,92vw)}
-  dialog label{display:block;margin:10px 0 4px;color:var(--text-muted);font-size:12px}dialog input{width:100%}
-  .toast{position:fixed;bottom:18px;right:18px;background:#13131c;border:1px solid var(--cyber-cyan);color:var(--cyber-cyan);padding:10px 14px;border-radius:8px;opacity:0;transition:.2s;font-size:12px}.toast.on{opacity:1}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Podcaster</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none;text-align:center}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:30px;min-width:30px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.on{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr;align-items:start}
+        @container a (min-width:900px){body:not(.emb) .grille{grid-template-columns:minmax(300px,380px) 1fr}}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0;overflow-wrap:anywhere}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        input[type=text],input[type=url],input[type=number],input:not([type]){font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus{outline:none;border-color:var(--cyan)}
+        .champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .ligne{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .ligne.nowrap{flex-wrap:nowrap;margin-top:0} .ligne.nowrap .btn{flex:none}
+        label.case{display:flex;gap:7px;align-items:center;color:var(--doux);font-size:.74rem;margin-top:8px;cursor:pointer}
+        form.cfg{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:0;align-items:end}
+        /* flux */
+        .feed{display:grid;grid-template-columns:40px 1fr;gap:4px 10px;align-items:center;padding:8px;border-radius:10px;border:1px solid transparent;cursor:pointer;min-width:0}
+        .feed:hover{background:rgba(41,182,246,.07)} .feed.sel{background:rgba(41,182,246,.12);border-color:var(--trait2)}
+        .feed .pochette{width:40px;height:40px;border-radius:8px;object-fit:cover;background:rgba(159,179,214,.16);display:flex;align-items:center;justify-content:center;font-size:1.1rem}
+        .feed .t{min-width:0} .feed .titre{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.84rem}
+        .feed .fmeta{color:var(--faible);font-size:.7rem;display:block;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .feed .btns{grid-column:2;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+        .feed .conf{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:.74rem;color:var(--doux);padding:4px 0 0}
+        .ferr{grid-column:1/-1;margin:0;font-size:.72rem;color:var(--rouge);overflow-wrap:anywhere}
+        .partage{margin-top:10px;font-size:.76rem;color:var(--doux)} .partage a{color:var(--cyan);overflow-wrap:anywhere}
+        /* épisodes */
+        .ep{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;padding:10px;border:1px solid var(--trait);border-radius:10px;margin-bottom:8px;background:rgba(8,18,38,.55)}
+        .ep .meta{flex:1 1 200px;min-width:0} .ep .meta b{display:block;overflow-wrap:anywhere;font-size:.84rem} .ep .meta span{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+        .ep .act{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0;max-width:100%}
+        .ep audio{height:34px;width:100%;max-width:300px;min-width:0}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden;width:90px} .barre i{display:block;height:100%;background:var(--cyan)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
 <body>
-<nav class="sidebar" id="sidebar"></nav>
-<main class="main">
-  <div class="topbar">
-    <span class="em">🎙️</span><h1>PODCASTER</h1>
-    <div class="stats" id="stats"></div>
-    <a class="portal" href="/podcaster/portal/" target="_blank">🌐 Public portal</a>
-    <button onclick="openCfg()" title="Config & status">⚙️</button>
-  </div>
-  <div class="wrap">
-    <aside class="feeds">
-      <div class="row">
-        <input id="feedUrl" placeholder="URL flux RSS ou lien YouTube…" onkeydown="if(event.key==='Enter')addFeed()">
-        <button class="go" onclick="addFeed()">＋</button>
-      </div>
-      <label class="autodl"><input type="checkbox" id="autodl" checked> auto-download new episodes</label>
-      <div class="row">
-        <button onclick="document.getElementById('opml').click()">Import OPML</button>
-        <button onclick="document.getElementById('abzip').click()" title="Upload an audiobook ZIP">📚 Audiobook ZIP</button>
-        <button onclick="loadAll()">↻</button>
-      </div>
-      <input type="file" id="opml" accept=".opml,.xml" style="display:none" onchange="importOpml(this)">
-      <input type="file" id="abzip" accept=".zip" style="display:none" onchange="uploadZip(this)">
-      <div id="feeds"></div>
-      <div class="share" id="share"></div>
-    </aside>
-    <section class="eps">
-      <h2 id="title">Latest episodes</h2>
-      <div id="eps"><div class="empty">Loading…</div></div>
-    </section>
-  </div>
-</main>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.8" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.2M8.8 21.2h6.4"/></svg>
+                <div><h1>Podcaster</h1><small>Flux, épisodes et audiolivres de la box</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite">
+                <span id="maj">—</span>
+                <a class="btn portail" href="/podcaster/portal/" target="_blank" rel="noopener" title="Portail public du podcaster">Portail public</a>
+                <button class="btn" id="cfgBtn" type="button" title="Configuration et état du service">⚙ Configuration</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+            </div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-<dialog id="cfg">
-  <h2>Config &amp; status</h2>
-  <div id="svc" class="muted"></div>
-  <label>Media path</label><input id="c_media">
-  <label>Max parallel downloads</label><input id="c_par" type="number">
-  <label>Refresh minutes</label><input id="c_ref" type="number">
-  <label>Public base URL (for shareable feed — leave empty for LAN)</label><input id="c_pub">
-  <label>Share feed title</label><input id="c_title">
-  <div class="row" style="margin-top:16px">
-    <button class="go" onclick="saveCfg()">Save</button>
-    <button onclick="document.getElementById('cfg').close()">Close</button>
-  </div>
-</dialog>
-<div class="toast" id="toast"></div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre de flux suivis (RSS, YouTube, audiolivres) dans la base du podcaster."><span class="l">Flux</span><span class="v" id="tFlux">—</span><span class="s">suivis</span></div>
+            <div class="tuile cy" title="Nombre total d’épisodes connus, tous flux confondus."><span class="l">Épisodes</span><span class="v" id="tEpisodes">—</span><span class="s">connus</span></div>
+            <div class="tuile ok" title="Épisodes dont le fichier audio est déjà sur la box (état « done »)."><span class="l">Téléchargés</span><span class="v" id="tLocal">—</span><span class="s">en local</span></div>
+            <div class="tuile cy" id="cFile" title="Épisodes en file d’attente ou en cours de téléchargement."><span class="l">File</span><span class="v" id="tFile">—</span><span class="s">en attente ou en cours</span></div>
+            <div class="tuile cy" id="cService" title="État du service renvoyé par l’API (champ service)."><span class="l">Service</span><span class="v" id="tService">—</span><span class="s">podcaster</span></div>
+            <div class="tuile cy" id="cWorker" title="Le worker télécharge les épisodes et rafraîchit les flux en tâche de fond."><span class="l">Worker</span><span class="v" id="tWorker">—</span><span class="s">téléchargements</span></div>
+        </section>
 
-<script src="/shared/sidebar.js"></script>
-<script>
-const API="/api/v1/podcaster";
-let SEL=null;
-function tok(){return localStorage.getItem("sbx_token")||""}
-async function api(p,opt={}){
-  opt.headers=Object.assign({},opt.headers||{});
-  if(!(opt.body instanceof FormData) && !opt.headers["Content-Type"]) opt.headers["Content-Type"]="application/json";
-  const t=tok(); if(t) opt.headers["Authorization"]="Bearer "+t;
-  const r=await fetch(API+p,opt);
-  if(r.status===401){window.location="/login.html";throw new Error("401")}
-  if(!r.ok) throw new Error(await r.text());
-  const ct=r.headers.get("content-type")||""; return ct.includes("json")?r.json():r.text();
-}
-function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._);t._=setTimeout(()=>t.classList.remove("on"),3000)}
-function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
-async function loadStatus(){
-  try{const s=await fetch(API+"/status").then(r=>r.json());
-    document.getElementById("stats").innerHTML=`feeds <b>${s.feeds}</b> · eps <b>${s.episodes}</b> · local <b>${s.downloaded}</b> · queue <b>${s.queued}</b>`;
-    const base=(s.public_base||location.origin);
-    document.getElementById("share").innerHTML=`🔗 Share feed:<br><a href="${API}/share/feed.xml" target="_blank">${esc(base)}/api/v1/podcaster/share/feed.xml</a>`;
-  }catch(e){}
-}
-async function loadFeeds(){
-  let d; try{d=await api("/feeds")}catch(e){return}
-  FEEDS=d.feeds;
-  const el=document.getElementById("feeds");
-  if(!d.feeds.length){el.innerHTML='<div class="muted" style="padding:12px">No feeds yet — add one above.</div>';return}
-  el.innerHTML=d.feeds.map(f=>`<div class="feed ${SEL===f.id?'sel':''}" onclick="selFeed(${f.id})">
-    <img src="${esc(f.image||'')}" onerror="this.style.visibility='hidden'">
-    <div class="t"><b>${esc(f.title||f.url)}</b><span>${f.downloaded}/${f.episodes} local${f.last_refresh?' · vérifié '+new Date(f.last_refresh*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</span></div>
-    <span class="ad ${f.auto_dl?'on':''}" title="auto-download ${f.auto_dl?'on':'off'}" onclick="event.stopPropagation();toggleAd(${f.id},${f.auto_dl?0:1})">⏬</span>
-    ${srcFeed(f)?`<span class="ad" title="Copier l'adresse de la playlist" onclick="event.stopPropagation();copySrc(${f.id})">⧉</span>`:''}
-    <span class="ad" title="Réimporter maintenant" onclick="event.stopPropagation();refreshFeed(${f.id})">⟳</span>
-    <span class="x" onclick="event.stopPropagation();delFeed(${f.id})">✕</span></div>
-    ${f.last_error?`<div class="ferr" title="${esc(f.last_error)}">⚠ ${esc(f.last_error)}</div>`:''}`).join("");
-}
-let FEEDS=[];
-function srcFeed(f){const u=(f.site&&/^https?:/.test(f.site))?f.site:(/^https?:/.test(f.url)?f.url:"");return u}
-function copySrc(id){const f=FEEDS.find(x=>x.id===id);const u=f&&srcFeed(f);if(!u)return;
-  const ok=()=>toast("Adresse copiée");
-  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(ok,()=>toast("Copie refusée : "+u))}else toast("Copie impossible : "+u)}
-async function refreshFeed(id){try{await api(`/feeds/${id}/refresh`,{method:"POST"});toast("Réimport lancé");setTimeout(loadFeeds,4000)}
-  catch(e){toast("Réimport impossible : "+(e.message||e))}}
-async function selFeed(id){SEL=id;loadFeeds();loadEps(true)}
-let EPS_SIG="";
-function epsSig(eps){return eps.map(e=>e.id+":"+e.state+":"+(e.progress||0)).join("|")}
-async function loadEps(force){
-  const el=document.getElementById("eps");const q=SEL?`?feed_id=${SEL}`:"";
-  document.getElementById("title").textContent=SEL?"Episodes":"Latest episodes";
-  let d; try{d=await api("/episodes"+q)}catch(e){return}
-  if(!d.episodes.length){el.innerHTML='<div class="empty">No episodes.</div>';EPS_SIG="";return}
-  // Don't rebuild the list (which would destroy a playing <audio>) when nothing
-  // changed, or while the user is actively listening — only on explicit actions.
-  const sig=(SEL||"all")+"|"+epsSig(d.episodes);
-  const playing=[...el.querySelectorAll("audio")].some(a=>!a.paused&&!a.ended);
-  if(!force && (sig===EPS_SIG || playing)) return;
-  EPS_SIG=sig;
-  el.innerHTML=d.episodes.map(e=>{
-    const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
-    let act;
-    if(e.state==="done") act=`<audio controls preload="none" src="${API}/media/${e.id}"></audio>`;
-    else if(e.state==="downloading"||e.state==="queued") act=`<span class="badge downloading">${e.state}</span><div class="bar"><i style="width:${e.progress||0}%"></i></div>`;
-    else if(e.state==="error") act=`<span class="badge error" title="${esc(e.error)}">error</span><button onclick="dl(${e.id})">retry</button>`;
-    else act=`<button onclick="dl(${e.id})">⬇ download</button>`;
-    return `<div class="ep"><div class="meta"><b>${esc(e.title)}</b><span>${esc(e.feed_title)} · ${date} ${e.duration?'· '+esc(e.duration):''}</span></div><div class="act">${act}</div></div>`;
-  }).join("");
-}
-async function addFeed(){const u=document.getElementById("feedUrl").value.trim();if(!u)return;
-  const ad=document.getElementById("autodl").checked;
-  try{const r=await api("/feeds",{method:"POST",body:JSON.stringify({url:u,auto_dl:ad})});
-    document.getElementById("feedUrl").value="";
-    if(r.imported){toast("🎬 Import YouTube démarré — suivi dans la liste");}
-    else{toast(`Added ${r.title||u} (${r.episodes} eps${r.queued?', '+r.queued+' queued':''})`);}
-    loadAll()}
-  catch(e){toast("Add failed: "+e.message.slice(0,60))}}
-async function toggleAd(id,on){try{const r=await api(`/feeds/${id}/autodl?on=${on?'true':'false'}`,{method:"POST"});
-    toast(on?`auto-download on${r.queued?' · '+r.queued+' queued':''}`:"auto-download off");loadAll()}catch(e){toast("toggle failed")}}
-async function delFeed(id){if(!confirm("Remove this feed?"))return;await api("/feeds/"+id,{method:"DELETE"});if(SEL===id)SEL=null;loadAll()}
-async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps(true)}catch(e){toast("Queue failed")}}
-async function importOpml(inp){const f=inp.files[0];if(!f)return;const opml=await f.text();
-  try{const r=await api("/feeds/import-opml",{method:"POST",body:JSON.stringify({opml})});toast(`Imported ${r.added}/${r.total}`);loadAll()}catch(e){toast("OPML import failed")}inp.value=""}
-async function uploadZip(inp){const f=inp.files[0];if(!f)return;
-  const title=prompt("Audiobook title:",f.name.replace(/\.zip$/i,""));if(title===null){inp.value="";return}
-  toast("Uploading "+f.name+" …");
-  try{const r=await api("/audiobook/upload?title="+encodeURIComponent(title),
-        {method:"POST",headers:{"Content-Type":"application/zip"},body:f});
-    toast(`Published "${r.title}" — ${r.tracks} tracks`);loadAll()}
-  catch(e){toast("Upload failed: "+e.message.slice(0,60))}inp.value=""}
-async function openCfg(){const d=await api("/config").then(r=>r.config).catch(()=>null);
-  const s=await fetch(API+"/status").then(r=>r.json()).catch(()=>({}));
-  document.getElementById("svc").innerHTML=`service <b style="color:var(--matrix-green)">${s.service||'?'}</b> · worker ${s.worker?'on':'off'} · ${s.downloaded||0} local`;
-  if(d){c_media.value=d.media_path||"";c_par.value=d.max_parallel||2;c_ref.value=d.refresh_minutes||60;c_pub.value=d.public_base||"";c_title.value=d.share_title||""}
-  document.getElementById("cfg").showModal()}
-async function saveCfg(){try{await api("/config",{method:"POST",body:JSON.stringify({media_path:c_media.value,max_parallel:+c_par.value,refresh_minutes:+c_ref.value,public_base:c_pub.value,share_title:c_title.value})});toast("Saved — restart to apply");document.getElementById("cfg").close()}catch(e){toast("Save failed")}}
-function loadAll(){loadStatus();loadFeeds();loadEps(true)}
-loadAll();setInterval(()=>{loadStatus();loadEps()},4000);
-</script>
+        <div class="pan" id="cfg" hidden><h3>Configuration <i>GET / POST /config</i></h3>
+            <div class="note" id="svc" style="margin:0 0 8px">—</div>
+            <form class="cfg" id="fCfg">
+                <label class="champ">Dossier des médias<input id="c_media" autocomplete="off"></label>
+                <label class="champ">Téléchargements en parallèle<input id="c_par" type="number" min="1"></label>
+                <label class="champ">Rafraîchissement (minutes)<input id="c_ref" type="number" min="1"></label>
+                <label class="champ">URL publique de base (flux partageable ; vide = LAN)<input id="c_pub" autocomplete="off"></label>
+                <label class="champ">Titre du flux partagé<input id="c_title" autocomplete="off"></label>
+                <div class="ligne" style="margin:0"><button class="btn prim" id="btnSaveCfg" type="submit">Enregistrer</button><button class="btn" id="btnCloseCfg" type="button">Fermer</button></div>
+            </form>
+            <div id="rCfg" class="retour" hidden></div>
+        </div>
+
+        <div class="grille">
+            <section class="pan" id="colFlux"><h3>Flux <i id="nFlux"></i></h3>
+                <form id="fAjout" style="margin:0">
+                    <div class="ligne nowrap"><input id="feedUrl" type="text" placeholder="URL d’un flux RSS ou lien YouTube…" autocomplete="off" aria-label="URL du flux ou lien YouTube"><button class="btn prim" id="btnAdd" type="submit">＋ Ajouter</button></div>
+                    <label class="case"><input type="checkbox" id="autodl" checked> Télécharger automatiquement les nouveaux épisodes</label>
+                </form>
+                <div class="ligne">
+                    <button class="btn" id="btnOpml" type="button">Importer un OPML</button>
+                    <button class="btn" id="btnZip" type="button" title="Envoyer un audiolivre au format ZIP">📚 Audiolivre ZIP</button>
+                </div>
+                <input type="file" id="opml" accept=".opml,.xml" hidden>
+                <input type="file" id="abzip" accept=".zip" hidden>
+                <div class="retour" id="zipPanel" hidden>
+                    <label class="champ">Titre de l’audiolivre<input id="zipTitre" autocomplete="off"></label>
+                    <div class="ligne"><button class="btn prim" id="btnZipOk" type="button">Envoyer</button><button class="btn" id="btnZipNon" type="button">Annuler</button></div>
+                </div>
+                <div id="feeds" style="margin-top:10px"><div class="vide">Chargement…</div></div>
+                <div class="partage" id="partage"></div>
+            </section>
+            <section class="pan" id="colEps"><h3><span id="titre">Derniers épisodes</span> <i id="nEps"></i></h3>
+                <div id="eps"><div class="vide">Chargement…</div></div>
+            </section>
+        </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+        if (EMBED) document.body.classList.add('emb');
+        // Menu commun : hors ?embed=1 et hors démonstration seulement.
+        if (!EMBED && !DEMO) { const sb = document.createElement('script'); sb.src = '/shared/sidebar.js'; document.body.appendChild(sb); }
+        const API = '/api/v1/podcaster';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+
+        let STATUT = null, FEEDS = [], EPS = [], SESSION_OK = true, CHARGE = false, SEL = null, CONFIRM = null, ZIPFILE = null;
+        let SIG_FEEDS = '', SIG_EPS = '', DERNIER = 0;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, méthodes, corps et en-têtes que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps, zip) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': zip ? 'application/zip' : 'application/json' }) };
+                if (corps !== undefined) opts.body = zip ? corps : JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide ou texte */ }
+                if (r.status === 401 || r.status === 403) { SESSION_OK = false; rendre(); }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.statut === 401 || res.statut === 403) return 'session requise, se connecter';
+            const d = res.data && res.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d).slice(0, 120);
+            return res.statut ? 'HTTP ' + res.statut : 'serveur injoignable';
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3200); }
+        function inerte() { toast('Démonstration : action inerte.'); }
+        function quand(ts) {
+            if (!ts) return '—';
+            const d = new Date(ts * 1000);
+            return isNaN(d) ? '—' : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function demoData() {
+            const t = Math.floor(Date.now() / 1000);
+            STATUT = { service: 'active', worker: true, media_path: '/data/podcaster', public_base: '', feeds: 3, episodes: 6, downloaded: 3, queued: 1 };
+            FEEDS = [
+                { id: 1, title: 'Radio Exemple', url: 'https://example.org/rss.xml', site: 'https://example.org/', image: '', auto_dl: 1, episodes: 3, downloaded: 2, last_refresh: t - 900, last_error: null },
+                { id: 2, title: 'Chaîne de démonstration', url: 'https://www.youtube.com/@demonstration', site: '', image: '', auto_dl: 0, episodes: 2, downloaded: 1, last_refresh: 0, last_error: 'Lecture du flux impossible : cookies refusés par le site' },
+                { id: 3, title: 'Audiolivre fictif', url: 'audiobook:demo', site: '', image: '', auto_dl: 0, episodes: 1, downloaded: 0, last_refresh: t - 86400 * 2, last_error: null }];
+            EPS = [
+                { id: 10, feed_id: 1, title: 'Épisode 12 — Les ondes courtes', feed_title: 'Radio Exemple', pubdate: t - 86400, duration: '34:10', state: 'done', progress: 100, error: null },
+                { id: 11, feed_id: 1, title: 'Épisode 11 — Le maillage', feed_title: 'Radio Exemple', pubdate: t - 86400 * 4, duration: '28:02', state: 'done', progress: 100, error: null },
+                { id: 12, feed_id: 2, title: 'Entretien : souveraineté numérique', feed_title: 'Chaîne de démonstration', pubdate: t - 86400 * 2, duration: '', state: 'downloading', progress: 40, error: null },
+                { id: 13, feed_id: 2, title: 'Démonstration du pare-feu', feed_title: 'Chaîne de démonstration', pubdate: t - 86400 * 9, duration: '', state: 'error', progress: 0, error: 'échec réseau' },
+                { id: 14, feed_id: 1, title: 'Épisode 10 — Archives', feed_title: 'Radio Exemple', pubdate: t - 86400 * 11, duration: '41:55', state: 'new', progress: 0, error: null },
+                { id: 15, feed_id: 3, title: 'Chapitre 1', feed_title: 'Audiolivre fictif', pubdate: t - 86400 * 2, duration: '18:20', state: 'done', progress: 100, error: null }];
+        }
+
+        async function charger() {
+            DERNIER = Date.now();
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const q = SEL ? '?feed_id=' + SEL : '';
+            const essais = await Promise.allSettled([lire('/status'), lire('/feeds'), lire('/episodes' + q)]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0);
+            const f = val(1); FEEDS = f && Array.isArray(f.feeds) ? f.feeds : [];
+            const e = val(2); EPS = e && Array.isArray(e.episodes) ? e.episodes : [];
+            CHARGE = true;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le podcaster (service arrêté ou injoignable).';
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (s.service !== 'active') { etat.className = 'actif att'; etat.textContent = 'SERVICE INACTIF'; }
+            else { etat.className = 'actif'; etat.textContent = 'PRÊT'; }
+            const n = k => (s && s[k] !== null && s[k] !== undefined) ? s[k] : '—';
+            $('tFlux').textContent = n('feeds'); $('tEpisodes').textContent = n('episodes'); $('tLocal').textContent = n('downloaded'); $('tFile').textContent = n('queued');
+            $('cFile').className = 'tuile ' + (s && s.queued > 0 ? 'att' : 'cy');
+            $('tService').textContent = s ? (s.service === 'active' ? 'Actif' : tiret(s.service)) : '—';
+            $('cService').className = 'tuile ' + (!s ? 'cy' : s.service === 'active' ? 'ok' : 'att');
+            $('tWorker').textContent = s && s.worker !== undefined ? (s.worker ? 'En marche' : 'Arrêté') : '—';
+            $('cWorker').className = 'tuile ' + (!s || s.worker === undefined ? 'cy' : s.worker ? 'ok' : 'att');
+            rendrePartage();
+            rendreFlux(); rendreEpisodes();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendrePartage() {
+            const p = $('partage'); p.replaceChildren();
+            if (!STATUT) return;
+            const base = STATUT.public_base || location.origin;
+            p.appendChild(document.createTextNode('🔗 Flux partagé : '));
+            const a = el('a', '', base + '/api/v1/podcaster/share/feed.xml'); a.href = API + '/share/feed.xml'; a.target = '_blank'; a.rel = 'noopener';
+            p.appendChild(a);
+        }
+
+        function btn(txt, cls, titre, fn) {
+            const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button';
+            if (titre) { b.title = titre; b.setAttribute('aria-label', titre); }
+            b.addEventListener('click', ev => { ev.stopPropagation(); fn(); }); return b;
+        }
+
+        // Adresse source de la playlist : le site s'il est http(s), sinon l'URL du flux si elle l'est.
+        function srcFeed(f) { return (f.site && /^https?:/.test(f.site)) ? f.site : (/^https?:/.test(f.url || '') ? f.url : ''); }
+        function copySrc(id) {
+            const f = FEEDS.find(x => x.id === id), u = f && srcFeed(f);
+            if (!u) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(u).then(() => toast('Adresse copiée'), () => toast('Copie refusée : ' + u));
+            else toast('Copie impossible : ' + u);
+        }
+        async function refreshFeed(id) {
+            const r = await ecrire('POST', '/feeds/' + id + '/refresh');
+            if (r.ok) { toast('Réimport lancé'); setTimeout(charger, 4000); }
+            else toast(r.demo ? detail(r) : 'Réimport impossible : ' + detail(r));
+        }
+
+        function rendreFlux() {
+            const box = $('feeds');
+            $('nFlux').textContent = FEEDS.length ? FEEDS.length + ' flux' : '';
+            const sig = JSON.stringify([FEEDS, SEL, CONFIRM, CHARGE, SESSION_OK]);
+            if (sig === SIG_FEEDS) return;
+            SIG_FEEDS = sig;
+            box.replaceChildren();
+            if (!FEEDS.length) { box.appendChild(el('div', 'vide', !SESSION_OK ? '—' : CHARGE ? 'Aucun flux pour l’instant : ajoutez-en un ci-dessus.' : 'Chargement…')); return; }
+            FEEDS.forEach(f => {
+                const ligne = el('div', 'feed' + (SEL === f.id ? ' sel' : ''));
+                ligne.addEventListener('click', () => selFeed(f.id));
+                if (f.image) {
+                    const im = el('img', 'pochette'); im.alt = ''; im.src = f.image; im.addEventListener('error', () => { im.style.visibility = 'hidden'; }); ligne.appendChild(im);
+                } else ligne.appendChild(el('div', 'pochette', '🎙'));
+                const t = el('div', 't');
+                t.appendChild(el('b', 'titre', f.title || f.url || '—'));
+                t.appendChild(el('span', 'fmeta', tiret(f.downloaded) + '/' + tiret(f.episodes) + ' en local · Vérifié ' + quand(f.last_refresh)));
+                ligne.appendChild(t);
+                const b = el('div', 'btns');
+                const ad = btn('⏬', 'act-ad' + (f.auto_dl ? ' on' : ''), 'Téléchargement automatique : ' + (f.auto_dl ? 'activé' : 'désactivé'), () => toggleAd(f.id, f.auto_dl ? 0 : 1));
+                ad.setAttribute('aria-pressed', f.auto_dl ? 'true' : 'false'); b.appendChild(ad);
+                if (srcFeed(f)) b.appendChild(btn('⧉', 'act-copy', 'Copier l’adresse de la playlist', () => copySrc(f.id)));
+                b.appendChild(btn('⟳', 'act-ref', 'Réimporter maintenant', () => refreshFeed(f.id)));
+                b.appendChild(btn('✕', 'danger act-del', 'Supprimer ce flux', () => { CONFIRM = f.id; rendre(); }));
+                ligne.appendChild(b);
+                if (CONFIRM === f.id) {
+                    const c = el('div', 'conf');
+                    c.appendChild(el('span', '', 'Supprimer ce flux et ses épisodes ?'));
+                    c.appendChild(btn('Confirmer', 'danger act-ok', 'Confirmer la suppression', () => { CONFIRM = null; delFeed(f.id); }));
+                    c.appendChild(btn('Annuler', 'act-no', 'Annuler la suppression', () => { CONFIRM = null; rendre(); }));
+                    ligne.appendChild(c);
+                }
+                if (f.last_error) { const er = el('div', 'ferr', '⚠ ' + f.last_error); er.title = f.last_error; ligne.appendChild(er); }
+                box.appendChild(ligne);
+            });
+        }
+
+        function selFeed(id) { SEL = id; SIG_EPS = ''; $('titre').textContent = 'Épisodes du flux'; if (DEMO) rendre(); else charger(); }
+
+        function rendreEpisodes() {
+            const box = $('eps');
+            $('titre').textContent = SEL ? 'Épisodes du flux' : 'Derniers épisodes';
+            const liste = DEMO && SEL ? EPS.filter(e => e.feed_id === SEL) : EPS;
+            $('nEps').textContent = liste.length ? liste.length + ' épisode' + (liste.length > 1 ? 's' : '') : '';
+            // Ne pas reconstruire la liste (ce qui couperait un lecteur audio en cours) si rien n'a changé ou pendant l'écoute.
+            const sig = (SEL || 'tous') + '|' + CHARGE + '|' + SESSION_OK + '|' + liste.map(e => e.id + ':' + e.state + ':' + (e.progress || 0)).join('|');
+            const ecoute = [...box.querySelectorAll('audio')].some(a => !a.paused && !a.ended);
+            if (sig === SIG_EPS || (ecoute && liste.length)) return;
+            SIG_EPS = sig;
+            box.replaceChildren();
+            if (!liste.length) { box.appendChild(el('div', 'vide', !SESSION_OK ? '—' : CHARGE ? 'Aucun épisode.' : 'Chargement…')); return; }
+            liste.forEach(e => {
+                const l = el('div', 'ep');
+                const m = el('div', 'meta');
+                m.appendChild(el('b', '', e.title || '—'));
+                m.appendChild(el('span', '', tiret(e.feed_title) + (e.pubdate ? ' · ' + new Date(e.pubdate * 1000).toLocaleDateString('fr-FR') : '') + (e.duration ? ' · ' + e.duration : '')));
+                l.appendChild(m);
+                const a = el('div', 'act');
+                if (e.state === 'done') {
+                    if (DEMO) a.appendChild(el('span', 'pill ok', 'LOCAL'));
+                    else { const au = el('audio'); au.controls = true; au.preload = 'none'; au.src = API + '/media/' + e.id; a.appendChild(au); }
+                } else if (e.state === 'downloading' || e.state === 'queued') {
+                    a.appendChild(el('span', 'pill cy', e.state === 'queued' ? 'EN FILE' : 'EN COURS'));
+                    const br = el('div', 'barre'); const i = el('i'); i.style.width = (e.progress || 0) + '%'; br.appendChild(i); a.appendChild(br);
+                } else if (e.state === 'error') {
+                    const p = el('span', 'pill hors', 'ERREUR'); if (e.error) p.title = e.error; a.appendChild(p);
+                    a.appendChild(btn('Réessayer', 'act-dl', 'Relancer le téléchargement', () => dl(e.id)));
+                } else a.appendChild(btn('⬇ Télécharger', 'act-dl', 'Télécharger cet épisode sur la box', () => dl(e.id)));
+                l.appendChild(a); box.appendChild(l);
+            });
+        }
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function addFeed() {
+            const u = $('feedUrl').value.trim(); if (!u) return;
+            const ad = $('autodl').checked;
+            const r = await ecrire('POST', '/feeds', { url: u, auto_dl: ad });
+            if (r.demo) return inerte();
+            if (!r.ok) return toast('Ajout impossible : ' + detail(r));
+            $('feedUrl').value = '';
+            const d = r.data || {};
+            if (d.imported) toast('🎬 Import YouTube démarré — suivi dans la liste');
+            else toast('Ajouté « ' + (d.title || u) + ' » (' + tiret(d.episodes) + ' épisodes' + (d.queued ? ', ' + d.queued + ' en file' : '') + ')');
+            charger();
+        }
+        async function toggleAd(id, on) {
+            const r = await ecrire('POST', '/feeds/' + id + '/autodl?on=' + (on ? 'true' : 'false'));
+            if (r.demo) return inerte();
+            if (!r.ok) return toast('Réglage impossible : ' + detail(r));
+            toast(on ? 'auto-téléchargement activé' + (r.data && r.data.queued ? ' · ' + r.data.queued + ' en file' : '') : 'auto-téléchargement désactivé');
+            charger();
+        }
+        async function delFeed(id) {
+            const r = await ecrire('DELETE', '/feeds/' + id);
+            if (r.demo) { rendre(); return inerte(); }
+            if (!r.ok) { rendre(); return toast('Suppression impossible : ' + detail(r)); }
+            if (SEL === id) SEL = null;
+            toast('Flux supprimé'); charger();
+        }
+        async function dl(id) {
+            const r = await ecrire('POST', '/episodes/' + id + '/download');
+            if (r.demo) return inerte();
+            if (!r.ok) return toast('Mise en file impossible : ' + detail(r));
+            toast('Épisode mis en file'); charger();
+        }
+        async function importOpml(inp) {
+            const f = inp.files[0]; if (!f) return;
+            if (DEMO) { inp.value = ''; return inerte(); }
+            const opml = await f.text();
+            const r = await ecrire('POST', '/feeds/import-opml', { opml });
+            if (r.ok) { toast('Importé ' + tiret(r.data && r.data.added) + '/' + tiret(r.data && r.data.total)); charger(); }
+            else toast('Import OPML impossible : ' + detail(r));
+            inp.value = '';
+        }
+        function choisirZip(inp) {
+            const f = inp.files[0]; if (!f) return;
+            ZIPFILE = f; $('zipTitre').value = f.name.replace(/\.zip$/i, ''); $('zipPanel').hidden = false; $('zipTitre').focus();
+        }
+        function fermerZip() { ZIPFILE = null; $('zipPanel').hidden = true; $('abzip').value = ''; }
+        async function envoyerZip() {
+            if (!ZIPFILE) return;
+            const f = ZIPFILE, titre = $('zipTitre').value;
+            if (DEMO) { fermerZip(); return inerte(); }
+            toast('Envoi de ' + f.name + '…');
+            const r = await ecrire('POST', '/audiobook/upload?title=' + encodeURIComponent(titre), f, true);
+            fermerZip();
+            if (r.ok) { toast('Publié « ' + ((r.data && r.data.title) || titre) + ' » — ' + tiret(r.data && r.data.tracks) + ' pistes'); charger(); }
+            else toast('Envoi impossible : ' + detail(r));
+        }
+
+        // ----- Configuration -----
+        async function ouvrirCfg() {
+            $('cfg').hidden = false; $('rCfg').hidden = true;
+            let d = null, s = STATUT;
+            if (DEMO) d = { media_path: '/data/podcaster', max_parallel: 2, refresh_minutes: 60, public_base: '', share_title: 'Podcaster de démonstration' };
+            else {
+                try { d = (await lire('/config')).config; } catch (e) { d = null; }
+                try { s = await lire('/status'); } catch (e) { /* état déjà connu */ }
+            }
+            $('svc').textContent = s ? 'Service ' + tiret(s.service) + ' · worker ' + (s.worker ? 'en marche' : 'arrêté') + ' · ' + tiret(s.downloaded) + ' en local' : 'État du service indisponible.';
+            if (d) { $('c_media').value = d.media_path || ''; $('c_par').value = d.max_parallel || 2; $('c_ref').value = d.refresh_minutes || 60; $('c_pub').value = d.public_base || ''; $('c_title').value = d.share_title || ''; }
+            else { const r = $('rCfg'); r.hidden = false; r.className = 'retour ko'; r.textContent = 'Configuration illisible : réservée aux administrateurs, session requise.'; }
+            annoncer();
+        }
+        async function enregistrerCfg(ev) {
+            ev.preventDefault();
+            const r = await ecrire('POST', '/config', { media_path: $('c_media').value, max_parallel: +$('c_par').value, refresh_minutes: +$('c_ref').value, public_base: $('c_pub').value, share_title: $('c_title').value });
+            const z = $('rCfg'); z.hidden = false;
+            if (r.ok) { z.className = 'retour ok'; z.textContent = 'Enregistré — redémarrer le service pour appliquer.'; }
+            else { z.className = 'retour ko'; z.textContent = r.demo ? detail(r) : 'Enregistrement impossible : ' + detail(r); }
+            annoncer();
+        }
+
+        $('fAjout').addEventListener('submit', ev => { ev.preventDefault(); addFeed(); });
+        $('btnOpml').addEventListener('click', () => $('opml').click());
+        $('btnZip').addEventListener('click', () => $('abzip').click());
+        $('opml').addEventListener('change', ev => importOpml(ev.target));
+        $('abzip').addEventListener('change', ev => choisirZip(ev.target));
+        $('btnZipOk').addEventListener('click', envoyerZip);
+        $('btnZipNon').addEventListener('click', fermerZip);
+        $('cfgBtn').addEventListener('click', () => { if ($('cfg').hidden) ouvrirCfg(); else { $('cfg').hidden = true; annoncer(); } });
+        $('btnCloseCfg').addEventListener('click', () => { $('cfg').hidden = true; annoncer(); });
+        $('fCfg').addEventListener('submit', enregistrerCfg);
+        $('rafraichir').addEventListener('click', () => { SIG_FEEDS = ''; SIG_EPS = ''; charger(); });
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'podcaster' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Actualisation : 5 s tant que des téléchargements sont en file, sinon 30 s ; jamais onglet masqué,
+        // pendant une saisie, une confirmation, un envoi d'audiolivre ou la configuration ouverte.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM !== null || $('feedUrl').value || !$('zipPanel').hidden || !$('cfg').hidden) return;
+            const periode = STATUT && STATUT.queued > 0 ? 5000 : 30000;
+            if (Date.now() - DERNIER >= periode - 200) charger();
+        }, 5000);
+    </script>
 </body>
 </html>
