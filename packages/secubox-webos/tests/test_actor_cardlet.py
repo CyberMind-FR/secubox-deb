@@ -30,11 +30,13 @@ def test_donnees_reelles_seulement_et_sonde_chargee():
     assert "Math.random" not in HTML
 
 
-def test_les_valeurs_serveur_sont_echappees_avant_innerhtml():
-    # un identifiant ou une heure ne doivent jamais entrer bruts dans le HTML construit
-    assert "'+a.id+'" not in HTML and "'+a.first+'" not in HTML and "'+a.last+'" not in HTML
-    assert "esc(a.id)" in HTML and "esc(a.first)" in HTML and "esc(a.last)" in HTML
-    assert "function esc(" in HTML and "function num(" in HTML and "&#39;" in HTML
+def test_les_valeurs_serveur_entrent_en_texte_jamais_en_html():
+    # #2658 : la carte au profil Aurora construit son DOM (createElement + textContent) au lieu de passer par innerHTML + esc() ;
+    # l'invariant reste le même : un identifiant ou une heure venus du serveur n'entrent jamais bruts dans du HTML.
+    for interdit in ("innerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function"):
+        assert interdit not in HTML, interdit
+    assert "mk('b',null,String(a.id))" in HTML and "fait(f,'Première détection',a.first)" in HTML and "fait(f,'Dernière activité',a.last)" in HTML
+    assert "function num(" in HTML and "textContent" in HTML
 
 
 def test_sans_session_on_ne_montre_pas_de_chiffres_inventes():
@@ -45,11 +47,12 @@ def test_carte_du_monde_top_pays_et_derniers_evenements():
     assert 'id="carte"' in HTML and "Top pays" in HTML and "Derniers événements" in HTML
     assert "/api/v1/actor/overview" in HTML
     # le fond de carte (Natural Earth, domaine public) est embarqué : aucune ressource externe
-    assert "http://" not in HTML and "https://" not in HTML.replace("https://secubox.in", "")
+    # (l'espace de noms SVG, identifiant et non ressource, est le seul « http:// » admis ; #2658 : les points sont créés par createElementNS)
+    assert "http://" not in HTML.replace("http://www.w3.org/2000/svg", "") and "https://" not in HTML.replace("https://secubox.in", "")
 
 
 def test_la_fiche_a_ses_trois_onglets_et_une_courbe_24h():
-    for o in ("data-o=", "Techniques", "Réponse", "Activité (24 h)", "activite_acteurs"):
+    for o in ("data-o", "Techniques", "Réponse", "Activité (24 h)", "activite_acteurs"):
         assert o in HTML
 
 
@@ -59,7 +62,7 @@ def test_l_aperçu_n_est_demande_qu_avec_une_session():
 
 
 def test_les_heures_des_evenements_sont_en_heure_locale():
-    assert "function heureLocale(" in HTML and "toLocaleTimeString" in HTML and "esc(heureLocale(e))" in HTML
+    assert "function heureLocale(" in HTML and "toLocaleTimeString" in HTML and "mk('td',null,heureLocale(e))" in HTML
 
 
 def test_moteur_absent_ou_en_demarrage_est_dit_clairement():

@@ -2,8 +2,10 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1242 — carte CUMULATIVE à couches rotatives.
+  SecuBox #1242 — carte CUMULATIVE à couches rotatives, au profil Aurora (.claude/AURORA-REFERENCE.md, #2658).
 
   UNE CARTE, PLUSIEURS COUCHES. Plutôt qu'une carte par service, une carte par
   THÈME qui fait tourner le contenu de ses sous-composants — comme un pare-feu
@@ -16,128 +18,140 @@
 
   Données lues en SOUS-COUCHE PUBLIQUE côté serveur (comme /public/cardlets/waf) :
   pas de jeton navigateur. La visibilité (masquage invité) est gérée par le Hall.
+
+  HAUTEUR : cette carte REMPLIT le cadre que le Hall lui donne (couches natives et cartes de service embarquées en
+  iframe à 100 %) ; elle n'annonce donc pas de hauteur (sbxVue) — son contenu n'en détermine pas.
+  ?demo=1 : couches natives fictives, cartes embarquées relancées en démonstration. Mesure absente = « — ».
+  Tout texte venu du serveur passe par textContent (aucun HTML injecté).
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Carte cumulative — vue micro</title>
-<link rel="stylesheet" href="../spicy.css">
+<title>Carte cumulative</title>
 <link rel="stylesheet" href="../slicebar.css">
 <script src="/api/v1/webos/public/hotes.js"></script>
 <script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script src="../slicebar.js"></script>
 <style>
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
-          --accent:#2e7d5b; --chaud:#c8791f; --alerte:#c0392b; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#5bbf8f; --chaud:#e0a45c; --alerte:#ef6b5c; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#5bbf8f; --chaud:#e0a45c; --alerte:#ef6b5c; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
-  body { background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
-  .mw { position:relative; display:flex; flex-direction:column; height:100%; padding:.6rem .72rem; gap:.45rem; }
-
-  .tete { display:flex; align-items:center; gap:.45rem; }
-  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
-              font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
-  .tete b { font-size:.88rem; }
-  .tete .couche { margin-left:auto; font-size:.6rem; color:var(--muted); letter-spacing:.04em; }
-  /* Mode EMBED : la carte EST le cardlet du service (avec SON en-tête). Pas de
-     chrome cumul (en-tête cumul doublait) — seule la barre de slices reste. */
-  .mw.embed { padding:0; }
-  .mw.embed .tete { display:none; }
-  /* BARRE DE SLICES PARTAGÉE (#1352 / SBXSliceBar). Elle remplace l'ancienne
-     pastille de points flottante ET le pied : puces (double-bullet, bleu=auto /
-     vert=manuel), libellé de la couche, et pastille d'HÔTE cliquable (ouvre le
-     service). Preview au survol pour Sécurité (natif), coupée en embed (recharge
-     d'iframe). En embed on lui rend fond + filet pour la détacher du cardlet. */
-  .sbx-bar { --cyan:#3b82f6; --up:#22c55e; --line:var(--border); flex:0 0 auto; }
-  .mw.embed .sbx-bar { padding:5px 9px; background:var(--fond); border-top:1px solid var(--border); }
-
-  .corps { flex:1; min-height:0; display:flex; flex-direction:column; gap:.42rem; }
-
-  .kpis { display:flex; gap:.4rem; }
-  .kpis .k { flex:1; border:1px solid var(--border); border-radius:9px; padding:.4rem .3rem;
-             text-align:center; }
-  .kpis .v { font-size:1.12rem; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; }
-  .kpis .k.alerte .v { color:var(--alerte); }
-  .kpis .l { font-size:.52rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted);
-             margin-top:.1rem; }
-  .sous { font-size:.6rem; color:var(--muted); }
-
-  .titre { font-size:.56rem; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
-           margin:.05rem 0 -.05rem; }
-  .camps { display:flex; flex-direction:column; gap:.24rem; }
-  .camp { display:flex; align-items:center; gap:.4rem; font-size:.68rem; }
-  .camp .sig { font-family:"JetBrains Mono",monospace; font-size:.58rem; color:var(--muted);
-               flex:0 0 auto; width:52px; overflow:hidden; text-overflow:ellipsis; }
-  .camp .bar { flex:1; height:6px; border-radius:4px; background:var(--border); overflow:hidden; min-width:0; }
-  .camp .bar i { display:block; height:100%; background:var(--chaud); }
-  .camp .nb { flex:0 0 auto; font-variant-numeric:tabular-nums; font-size:.62rem; }
-  .camp .hv { flex:0 0 auto; font-size:.55rem; color:var(--alerte); font-variant-numeric:tabular-nums; }
-  .camp .hv.z { color:var(--muted); opacity:.5; }
-  .vide { color:var(--muted); font-size:.7rem; text-align:center; margin:auto 0; }
-
-  /* Tendance du jour, en picto sur le chiffre (#1243). */
-  .kpis .v .tr { font-size:.62rem; margin-left:.12rem; vertical-align:middle; }
-  .kpis .v .tr.up { color:var(--alerte); }
-  .kpis .v .tr.down { color:var(--accent); }
-  /* Liste d'IP recentes (#1240), comme la carte Pare-feu. */
-  .iplist { display:flex; flex-direction:column; gap:.14rem; margin-top:.1rem; }
-  .ipr { display:flex; align-items:center; gap:.35rem; font-size:.66rem; }
-  .ipr .ipa { font-family:"JetBrains Mono",monospace; font-size:.62rem; }
-  .ipr .ipc { margin-left:auto; color:var(--muted); font-size:.56rem; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+    /* alias lus par les scripts partagés du Hall (slicebar.css, aide.js) */
+    --line:var(--trait);--line-2:var(--trait2);--muted:var(--doux);--up:var(--vert)}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  [hidden]{display:none!important}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .emb .cadre,.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  .emb .app,.dans .app{padding:10px;gap:8px}
+  .emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .marque .pic{font-size:1.5rem;line-height:1}
+  .emb .marque{display:none} .dans .marque small{display:none} .dans .marque h1{font-size:1.05rem}
+  .tete>.actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .tete>.actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .tete>.actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .tete>.actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .tete>.actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .btn.principal{background:rgba(41,182,246,.2);border-color:var(--cyan)} .btn.danger{color:var(--rouge);border-color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.ko .v{color:var(--rouge)} .tuile.vi .v{color:var(--violet)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .emb .pan,.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--doux);font-weight:600}
+  .msg{padding:12px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .defile{overflow-x:auto;max-width:100%}
+  html,body{height:100%;overflow:hidden}
+  .cadre{height:100%}
+  .app.mw{position:relative;display:flex;flex-direction:column;height:100%;padding:10px;gap:8px}
+  .app.mw>*{min-width:0}
+  .marque h1{font-size:1.05rem}
+  /* Mode EMBED : la carte EST le cardlet du service (avec SON en-tête). Pas de chrome cumul
+     (l'en-tête cumul doublait) — seule la barre de slices reste. */
+  .mw.embed{padding:0;border:0;border-radius:0;background:none;box-shadow:none}
+  .mw.embed .tete{display:none}
+  /* BARRE DE SLICES PARTAGÉE (#1352 / SBXSliceBar) : puces (bleu = auto, vert = manuel), libellé de la couche, pastille d'HÔTE
+     cliquable. En embed on lui rend fond + filet pour la détacher du cardlet. */
+  .sbx-bar{--cyan:#29b6f6;--up:#2ecc71;flex:0 0 auto;color:var(--doux);border-top-color:var(--trait)}
+  .mw.embed .sbx-bar{padding:5px 9px;background:var(--fond);border-top:1px solid var(--trait)}
+  .corps{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;overflow:auto}
+  .kpis{display:grid;gap:6px;grid-template-columns:repeat(auto-fit,minmax(86px,1fr))}
+  .kpis .tuile{padding:7px 9px;gap:3px}
+  .kpis .tuile .v{font-size:1.2rem}
+  .kpis .tuile .l{font-size:.7rem}
+  .kpis .v .tr{font-size:.62rem;margin-left:.2rem;vertical-align:middle}
+  .kpis .v .tr.up{color:var(--rouge)} .kpis .v .tr.down{color:var(--vert)}
+  .sous{font-size:.7rem;color:var(--faible);overflow-wrap:anywhere}
+  .titre{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faible)}
+  .camps{display:flex;flex-direction:column;gap:6px}
+  .camp{display:flex;align-items:center;gap:8px;font-size:.76rem}
+  .camp .sig{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;color:var(--doux);flex:0 0 auto;width:62px;overflow:hidden;text-overflow:ellipsis}
+  .camp .bar{flex:1;height:6px;border-radius:4px;background:rgba(159,179,214,.16);overflow:hidden;min-width:0}
+  .camp .bar i{display:block;height:100%;background:var(--orange)}
+  .camp .nb{flex:0 0 auto;font-variant-numeric:tabular-nums;font-size:.7rem}
+  .camp .hv{flex:0 0 auto;font-size:.66rem;color:var(--rouge);font-variant-numeric:tabular-nums}
+  .camp .hv.z{color:var(--faible)}
+  .vide{color:var(--doux);font-size:.78rem;text-align:center;margin:auto 0;overflow-wrap:anywhere}
+  .iplist{display:flex;flex-direction:column;gap:4px}
+  .ipr{display:flex;align-items:center;gap:8px;font-size:.74rem}
+  .ipr .ipa{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.7rem}
+  .ipr .ipc{margin-left:auto;color:var(--faible);font-size:.66rem}
   /* Couche ANALYSE : empreintes de workflow (#1243). UNE ligne par campagne. */
-  .anl1 { display:flex; align-items:center; gap:.4rem; padding:.16rem 0; overflow:hidden; }
-  .anl1 .sig2 { font-family:"JetBrains Mono",monospace; font-size:.58rem; color:var(--muted); flex:0 0 auto; }
-  .anl1 .anlnb { font-size:.62rem; flex:0 0 auto; }
-  .anl1 .anlhv { font-size:.56rem; color:var(--alerte); font-variant-numeric:tabular-nums; flex:0 0 auto; }
-  .anseq1 { flex:1; min-width:0; display:flex; align-items:center; gap:.1rem; overflow:hidden; white-space:nowrap;
-            -webkit-mask-image:linear-gradient(90deg,#000 85%,transparent); mask-image:linear-gradient(90deg,#000 85%,transparent); }
-  .anseq1 .sqc { font-family:"JetBrains Mono",monospace; font-size:.56rem; background:var(--border);
-                 color:var(--texte); padding:0 3px; border-radius:3px; white-space:nowrap; flex:0 0 auto; }
-  .anseq1 .sqa { color:var(--muted); font-size:.54rem; flex:0 0 auto; }
-
+  .anl1{display:flex;align-items:center;gap:8px;padding:3px 0;overflow:hidden}
+  .anl1 .sig2{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;color:var(--doux);flex:0 0 auto}
+  .anl1 .anlnb{font-size:.7rem;flex:0 0 auto}
+  .anl1 .anlhv{font-size:.66rem;color:var(--rouge);font-variant-numeric:tabular-nums;flex:0 0 auto}
+  .anseq1{flex:1;min-width:0;display:flex;align-items:center;gap:3px;overflow:hidden;white-space:nowrap;
+          -webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+  .anseq1 .sqc{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.64rem;background:rgba(159,179,214,.16);padding:0 4px;border-radius:3px;white-space:nowrap;flex:0 0 auto}
+  .anseq1 .sqa{color:var(--faible);font-size:.62rem;flex:0 0 auto}
   /* Couche MODULE (Dépôt / YTSaS / Torrent) — #1242. */
-  .modtete { display:flex; align-items:center; gap:.4rem; }
-  .modtete .modic { font-size:1rem; }
-  .modtete b { font-size:.84rem; }
-  .modtete .modn { margin-left:auto; font-size:.95rem; font-weight:700;
-                   font-variant-numeric:tabular-nums; color:var(--accent); }
-  .modlist { display:flex; flex-direction:column; gap:.16rem; margin-top:.25rem; }
-  .modit { font-size:.68rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-           color:var(--texte); }
-
-  /* Carte de service EMBARQUEE (#1242) : on INGERE son en-tete — le cadre est
-     décalé vers le haut de `crop` px (style inline) et le conteneur masque le
-     débordement. L'en-tete du cumul (groupe + couche) reste le seul. */
-  .embwrap { position:relative; height:100%; overflow:hidden; border-radius:6px; }
-  .embwrap .emb { position:absolute; left:0; top:0; width:100%; height:100%; border:0; display:block; }
-
+  .modtete{display:flex;align-items:center;gap:8px}
+  .modtete .modic{font-size:1.1rem} .modtete b{font-size:.92rem}
+  .modtete .modn{margin-left:auto;font-size:1.1rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--cyan)}
+  .modlist{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+  .modit{font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Carte de service EMBARQUÉE (#1242) : on INGÈRE son en-tête — le cadre est décalé vers le haut de `crop` px
+     et le conteneur masque le débordement. */
+  .embwrap{position:relative;height:100%;overflow:hidden;border-radius:6px}
+  .embwrap .emb{position:absolute;left:0;top:0;width:100%;height:100%;border:0;display:block}
 </style>
-
-<div class="mw" id="mw">
-  <div class="tete">
-    <span class="ic" id="ic">🛡️</span><b id="grp">Sécurité</b>
-  </div>
+</head>
+<body>
+<div class="cadre"><div class="app mw" id="mw">
+  <header class="tete">
+    <div class="marque"><span class="pic" id="ic" aria-hidden="true">🛡️</span><div><h1 id="grp">Sécurité</h1></div></div>
+    <div class="demo" id="demo" hidden style="margin-left:auto">DÉMONSTRATION</div>
+  </header>
   <div class="corps" id="corps"></div>
   <!-- La barre de slices partagée (SBXSliceBar) est ajoutée ici en pied par le
        script : puces + libellé de couche + pastille d'hôte cliquable. -->
-</div>
+</div></div>
 
 <script>
 (function () {
   "use strict";
   var API = '/api/v1/webos/public';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
   var el = function (id) { return document.getElementById(id); };
-  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
-      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
-  function num(n) { return (n == null ? '–' : n); }
+  function mk(tag, cls, texte) { var e = document.createElement(tag); if (cls) e.className = cls; if (texte != null) e.textContent = texte; return e; }
+  function vide(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+  function num(n) { return (n == null ? '—' : n); }
   function drapeau(cc) {
     cc = String(cc || '').toUpperCase();
     if (!/^[A-Z]{2}$/.test(cc)) return '🌐';
@@ -146,98 +160,125 @@
   // Chemin RACCOURCI : les crawls git produisent des chemins interminables qui
   // rendent l'empreinte illisible. On garde le début et la fin (titre = complet).
   function court(p) { p = String(p || ''); return p.length > 22 ? p.slice(0, 14) + '…' + p.slice(-6) : p; }
+  function msgVide(corps, texte) { vide(corps).appendChild(mk('div', 'vide', texte)); }
 
+  // Données fictives (démonstration) : adresses de documentation (RFC 5737), aucune requête.
+  var DEMOS = {
+    waf: {metrics: [{id: 'bans', value: 14}, {id: 'jour', value: 230}, {id: 'surfaces', value: 9}, {id: 'detections', value: 1288}],
+          content: {title: 'CN · RU · US'}, trend_jour: 'up',
+          recent: [{ip: '203.0.113.9', country: 'CN', categorie: 'scan'}, {ip: '198.51.100.23', country: 'RU', categorie: 'force brute'}, {ip: '192.0.2.77', country: 'US', categorie: 'sondage'}]},
+    quifrappe: {ok: true, attaquants: 23, campagnes_total: 4, haute_valeur: 2, campagnes: [
+      {signature: 'a1b2c3d4', outil: 'masscan', attaquants: 9, sondes: 310, haute_valeur: 1, sequence: ['/.env', '/wp-login.php', '/admin/config.php']},
+      {signature: 'e5f6a7b8', outil: '', attaquants: 5, sondes: 120, haute_valeur: 0, sequence: ['/phpmyadmin/', '/.git/config']},
+      {signature: '0c9d8e7f', outil: 'nuclei', attaquants: 3, sondes: 44, haute_valeur: 1, sequence: ['/actuator/health', '/api/v1/debug']}]},
+    liste: {donnees: {items: [{title: 'Élément fictif 1'}, {title: 'Élément fictif 2'}, {title: 'Élément fictif 3'}]}}
+  };
   function jget(url) {
+    if (DEMO) {
+      var d = url.indexOf('/cardlets/waf') >= 0 ? DEMOS.waf : url.indexOf('/waf/qui-frappe') >= 0 ? DEMOS.quifrappe : DEMOS.liste;
+      return Promise.resolve(d);
+    }
     return fetch(url, { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
   }
 
+  function kpi(v, l, alerte, def, tendance) {
+    var k = mk('div', 'tuile ' + (alerte ? 'ko' : 'cy')); k.title = def;
+    var vv = mk('span', 'v', String(num(v)));
+    if (tendance === 'up' || tendance === 'down') {
+      var t = mk('span', 'tr ' + tendance, tendance === 'up' ? '▲' : '▼');
+      t.title = tendance === 'up' ? "plus qu'un jour normal à cette heure" : "moins qu'un jour normal à cette heure";
+      vv.appendChild(t);
+    }
+    k.appendChild(mk('span', 'l', l)); k.appendChild(vv);
+    return k;
+  }
+  function kpis() { var g = mk('div', 'kpis'); Array.prototype.forEach.call(arguments, function (k) { g.appendChild(k); }); return g; }
+
   // ── COUCHE 1 : POSTURE DU PARE-FEU (« suis-je couvert ») ──────────────────
   // RENDUE NATIVEMENT par la carte (#1242), PAS via un /micro embarqué : un
-  // /micro apportait son propre entête (« Pare-feu / en veille ») qui DOUBLAIT
-  // celui de la carte, et sa police/taille jurait avec la couche « Qui frappe ? ».
-  // On peint donc les MÊMES chiffres (endpoint /cardlets/waf, identique à la
-  // carte Pare-feu) avec la MÊME grille .kpis que « Qui frappe ? » : un seul
-  // entête, une seule fonte. La carte Pare-feu autonome devient obsolète.
+  // /micro apportait son propre entête qui DOUBLAIT celui de la carte. On peint
+  // les MÊMES chiffres (endpoint /cardlets/waf, identique à la carte Pare-feu)
+  // avec la MÊME grille que « Qui frappe ? » : un seul entête, une seule fonte.
   function couchePosture(corps) {
     return jget(API + '/cardlets/waf').then(function (d) {
-      if (!d) { corps.innerHTML = '<div class="vide">Pare-feu injoignable.</div>'; return; }
+      if (!d) { msgVide(corps, 'Pare-feu injoignable.'); return; }
       var m = {};
       (d.metrics || []).forEach(function (x) { m[x.id] = x.value; });
       var org = (d.content && d.content.title) || '';   // drapeaux des origines
-      var tr = d.trend_jour || 'flat';
-      var ips = (d.recent || []).map(function (a) {
-        return '<div class="ipr"><span>' + (a.country ? drapeau(a.country) : '🌐') + '</span>'
-          + '<span class="ipa">' + esc(a.ip) + '</span>'
-          + '<span class="ipc">' + esc(a.categorie || '') + '</span></div>';
-      }).join('');
-      corps.innerHTML =
-        '<div class="kpis">'
-        + kpi(m.bans, 'bannis', m.bans > 0)
-        + kpiT(m.jour, 'menaces / j', m.jour > 0, tr)
-        + kpi(m.surfaces, 'surfaces') + kpi(m.detections, 'détections')
-        + '</div>'
-        + (org ? '<div class="sous">Origines · ' + esc(org) + '</div>' : '')
-        + (ips ? '<div class="iplist">' + ips + '</div>' : '');
+      vide(corps);
+      corps.appendChild(kpis(
+        kpi(m.bans, 'bannis', m.bans > 0, 'Adresses actuellement bannies par le pare-feu.'),
+        kpi(m.jour, 'menaces / j', m.jour > 0, 'Menaces repoussées sur les dernières 24 h.', d.trend_jour || 'flat'),
+        kpi(m.surfaces, 'surfaces', false, 'Surfaces exposées surveillées.'),
+        kpi(m.detections, 'détections', false, 'Détections cumulées du pare-feu.')));
+      if (org) corps.appendChild(mk('div', 'sous', 'Origines · ' + org));
+      var ips = d.recent || [];
+      if (ips.length) {
+        var lst = mk('div', 'iplist');
+        ips.forEach(function (a) {
+          var r = mk('div', 'ipr');
+          r.appendChild(mk('span', null, a.country ? drapeau(a.country) : '🌐'));
+          r.appendChild(mk('span', 'ipa', a.ip));
+          r.appendChild(mk('span', 'ipc', a.categorie || ''));
+          lst.appendChild(r);
+        });
+        corps.appendChild(lst);
+      }
     });
-  }
-  function kpi(v, l, alerte) {
-    return '<div class="k' + (alerte ? ' alerte' : '') + '"><div class="v">' + num(v)
-      + '</div><div class="l">' + l + '</div></div>';
-  }
-  // KPI avec picto de TENDANCE (#1243) : ▲ plus / ▼ moins qu'un jour normal.
-  function kpiT(v, l, alerte, tr) {
-    var p = tr === 'up' ? '<span class="tr up" title="plus qu\'un jour normal à cette heure">▲</span>'
-          : tr === 'down' ? '<span class="tr down" title="moins qu\'un jour normal à cette heure">▼</span>' : '';
-    return '<div class="k' + (alerte ? ' alerte' : '') + '"><div class="v">' + num(v) + p
-      + '</div><div class="l">' + l + '</div></div>';
   }
   // ── COUCHE 3 : ANALYSE — empreintes de workflow des campagnes (#1243) ──────
   function coucheAnalyse(corps) {
     return jget(API + '/waf/qui-frappe').then(function (d) {
-      if (!d || !d.ok) { corps.innerHTML = '<div class="vide">Aucune analyse.</div>'; return; }
+      if (!d || !d.ok) { msgVide(corps, 'Aucune analyse.'); return; }
       var camps = (d.campagnes || []).filter(function (c) { return (c.sequence || []).length; }).slice(0, 3);
-      if (!camps.length) { corps.innerHTML = '<div class="vide">Pas encore d\'empreinte.</div>'; return; }
-      corps.innerHTML = '<div class="titre">Empreintes de workflow</div>' + camps.map(function (c) {
-        // UNE LIGNE par campagne : la sequence deborde a l'horizontale, sans pave.
-        var seq = (c.sequence || []).slice(0, 4).map(function (p) {
-          return '<code class="sqc" title="' + esc(p) + '">' + esc(court(p)) + '</code>';
-        }).join('<span class="sqa">→</span>');
-        return '<div class="anl1"><code class="sig2">' + esc(c.signature) + '</code>'
-          + '<span class="anlnb">' + c.attaquants + ' IP</span>'
-          + (c.haute_valeur ? '<span class="anlhv">🔑' + c.haute_valeur + '</span>' : '')
-          + '<span class="anseq1">' + seq + '</span></div>';
-      }).join('');
+      if (!camps.length) { msgVide(corps, "Pas encore d'empreinte."); return; }
+      vide(corps).appendChild(mk('div', 'titre', 'Empreintes de workflow'));
+      camps.forEach(function (c) {
+        // UNE LIGNE par campagne : la séquence déborde à l'horizontale, sans pavé.
+        var l = mk('div', 'anl1');
+        l.appendChild(mk('code', 'sig2', c.signature));
+        l.appendChild(mk('span', 'anlnb', num(c.attaquants) + ' IP'));
+        if (c.haute_valeur) l.appendChild(mk('span', 'anlhv', '🔑' + c.haute_valeur));
+        var seq = mk('span', 'anseq1');
+        (c.sequence || []).slice(0, 4).forEach(function (p, i) {
+          if (i) seq.appendChild(mk('span', 'sqa', '→'));
+          var q = mk('code', 'sqc', court(p)); q.title = p; seq.appendChild(q);
+        });
+        l.appendChild(seq); corps.appendChild(l);
+      });
     });
   }
 
   // ── COUCHE 2 : QUI FRAPPE ? (caractérisation) ─────────────────────────────
   function coucheQuiFrappe(corps) {
     return jget(API + '/waf/qui-frappe').then(function (d) {
-      if (!d || !d.ok) { corps.innerHTML = '<div class="vide">Aucune corrélation.</div>'; return; }
+      if (!d || !d.ok) { msgVide(corps, 'Aucune corrélation.'); return; }
       var camps = d.campagnes || [];
       var maxS = camps.reduce(function (a, c) { return Math.max(a, c.sondes || 0); }, 1);
-      var rows = camps.slice(0, 3).map(function (c) {
-        var w = Math.max(4, Math.round((c.sondes || 0) / maxS * 100));
-        var hv = c.haute_valeur || 0;
-        var titre = (c.outil ? c.outil + ' · ' : '') + c.attaquants + ' IP · ' + c.sondes + ' sondes'
-          + (hv ? ' · ' + hv + ' haute valeur' : '');
-        return '<div class="camp" title="' + esc(titre) + '"><span class="sig">' + esc(c.signature)
-          + '</span><span class="bar"><i style="width:' + w + '%"></i></span>'
-          + '<span class="nb">' + (c.attaquants || 0) + '&#8239;IP</span>'
-          + '<span class="hv' + (hv ? '' : ' z') + '">🔑' + hv + '</span></div>';
-      }).join('');
-      corps.innerHTML =
-        '<div class="kpis">'
-        + kpi(d.attaquants, 'attaquants') + kpi(d.campagnes_total, 'campagnes')
-        + '<div class="k alerte"><div class="v">' + num(d.haute_valeur) + '</div><div class="l">haute valeur</div></div>'
-        + '</div>'
-        + (rows ? '<div class="titre">Top campagnes</div><div class="camps">' + rows + '</div>'
-                : '<div class="vide">Aucune campagne corrélée.</div>');
+      vide(corps);
+      corps.appendChild(kpis(
+        kpi(d.attaquants, 'attaquants', false, 'Adresses distinctes qui ont frappé.'),
+        kpi(d.campagnes_total, 'campagnes', false, 'Campagnes corrélées par empreinte de workflow.'),
+        kpi(d.haute_valeur, 'haute valeur', true, 'Cibles sensibles visées (clés, secrets, administration).')));
+      if (!camps.length) { corps.appendChild(mk('div', 'vide', 'Aucune campagne corrélée.')); return; }
+      corps.appendChild(mk('div', 'titre', 'Top campagnes'));
+      var box = mk('div', 'camps');
+      camps.slice(0, 3).forEach(function (c) {
+        var w = Math.max(4, Math.round((c.sondes || 0) / maxS * 100)), hv = c.haute_valeur || 0;
+        var r = mk('div', 'camp');
+        r.title = (c.outil ? c.outil + ' · ' : '') + c.attaquants + ' IP · ' + c.sondes + ' sondes' + (hv ? ' · ' + hv + ' haute valeur' : '');
+        r.appendChild(mk('span', 'sig', c.signature));
+        var bar = mk('span', 'bar'), i = mk('i'); i.style.width = w + '%'; bar.appendChild(i); r.appendChild(bar);
+        r.appendChild(mk('span', 'nb', (c.attaquants || 0) + ' IP'));
+        r.appendChild(mk('span', 'hv' + (hv ? '' : ' z'), '🔑' + hv));
+        box.appendChild(r);
+      });
+      corps.appendChild(box);
     });
   }
 
-  // ── COUCHE GENERIQUE D'UN MODULE (depot/ytsas/torrent) via /public/actions ──
+  // ── COUCHE GÉNÉRIQUE D'UN MODULE (depot/ytsas/torrent) via /public/actions ──
   function itemsDe(r) {
     var dn = (r && r.donnees) || r;
     if (Array.isArray(dn)) return dn;
@@ -252,42 +293,39 @@
     return function (corps) {
       return jget('/api/v1/webos/public/actions/' + mod + '/liste').then(function (r) {
         var l = itemsDe(r);
-        corps.innerHTML =
-          '<div class="modtete"><span class="modic">' + icon + '</span><b>' + esc(label) + '</b>'
-          + '<span class="modn">' + l.length + '</span></div>'
-          + (l.length
-            ? '<div class="modlist">' + l.slice(0, 4).map(function (x) {
-                return '<div class="modit" title="' + esc(nomItem(x)) + '">' + esc(nomItem(x)) + '</div>';
-              }).join('') + '</div>'
-            : '<div class="vide">vide</div>');
+        vide(corps);
+        var t = mk('div', 'modtete');
+        t.appendChild(mk('span', 'modic', icon)); t.appendChild(mk('b', null, label)); t.appendChild(mk('span', 'modn', String(l.length)));
+        corps.appendChild(t);
+        if (!l.length) { corps.appendChild(mk('div', 'vide', 'vide')); return; }
+        var lst = mk('div', 'modlist');
+        l.slice(0, 4).forEach(function (x) { var i = mk('div', 'modit', String(nomItem(x))); i.title = String(nomItem(x)); lst.appendChild(i); });
+        corps.appendChild(lst);
       });
     };
   }
 
   // ── COUCHE QUI EMBARQUE UNE CARTE DE SERVICE EXISTANTE ────────────────────
-  // Pour les services qui ONT déjà une carte (même origine, ou /micro),
-  // on l'imbrique telle quelle : la couche EST la carte du service, aucune
-  // logique dupliquée. Le thème est transmis.
-  // crop = hauteur (px) de l'en-tete de la carte embarquee a INGERER (recouvrir
-  // sous l'en-tete du cumul), pour ne pas le dupliquer et gagner la place.
+  // Pour les services qui ONT déjà une carte (même origine, ou /micro), on l'imbrique telle quelle : la couche EST la carte du
+  // service, aucune logique dupliquée. Le thème est transmis. crop = hauteur (px) de l'en-tête de la carte embarquée à INGÉRER.
   function coucheEmbed(src, crop) {
     crop = crop || 0;
     return function (corps) {
       var t = document.documentElement.getAttribute('data-theme');
       var sep = src.indexOf('?') >= 0 ? '&' : '?';
-      // #1266 : on SIGNALE l'embed à la carte (embed=1) pour qu'elle masque son
-      // propre hôte / bouton « ouvrir » — la barre du bas du cumul les reprend.
+      // #1266 : on SIGNALE l'embed à la carte (embed=1) pour qu'elle masque son propre hôte / bouton « ouvrir » — la barre du bas du cumul les reprend.
       var q = sep + 'embed=1';
       if (t === 'dark' || t === 'light') q += '&theme=' + t;
-      corps.innerHTML = '<div class="embwrap"><iframe class="emb" src="' + src + q
-        + '" scrolling="no" title="" style="top:-' + crop + 'px;height:calc(100% + '
-        + crop + 'px)"></iframe></div>';
+      if (DEMO) q += '&demo=1';
+      var w = mk('div', 'embwrap'), f = mk('iframe', 'emb');
+      f.src = src + q; f.setAttribute('scrolling', 'no'); f.title = '';
+      f.style.top = '-' + crop + 'px'; f.style.height = 'calc(100% + ' + crop + 'px)';
+      w.appendChild(f); vide(corps).appendChild(w);
       return Promise.resolve();
     };
   }
 
-  // ── COUCHE 4 : RENSEIGNEMENT — la carte Actor Intelligence elle-même (cardlets/actor.html), pas une copie réduite : vue d'ensemble avec carte
-  // du monde, événements, acteurs, fiche, réponse graduée. Même source de vérité, une seule à maintenir.
+  // ── COUCHE 4 : RENSEIGNEMENT — la carte Actor Intelligence elle-même (cardlets/actor.html), pas une copie réduite.
 
   // ── COMPOSITION DES GROUPES ───────────────────────────────────────────────
   var GROUPES = {
@@ -300,9 +338,7 @@
         { nom: 'Renseignement', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheEmbed('/cardlets/actor.html') }
       ]
     },
-    // GROUPES « embed » : la couche EST la carte réelle du service, avec SON
-    // PROPRE en-tête/titre. On ne surajoute donc PAS d'en-tête cumul (qui
-    // doublait et décalait le rendu) — juste une pastille de rotation flottante.
+    // GROUPES « embed » : la couche EST la carte réelle du service, avec SON PROPRE en-tête/titre. On ne surajoute donc PAS d'en-tête cumul.
     contenu: {
       titre: 'Contenu', icon: '📦', embed: true,
       couches: [
@@ -311,8 +347,7 @@
         { nom: 'Torrent', host: SBX_DOMAINE.hote('torrent.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=torrent') }
       ]
     },
-    // CLOUD : le nuage personnel, trois tranches VIVANTES qui tournent — Cloud (Nextcloud), Photos (PhotoPrism), Mail. Chacune est
-    // le gabarit d'accès rapide : état réel du service, chiffres, et « Ouvrir » avec la session du Hall.
+    // CLOUD : le nuage personnel, trois tranches VIVANTES qui tournent — Cloud (Nextcloud), Photos (PhotoPrism), Mail.
     cloud: {
       titre: 'Cloud', icon: '☁️', embed: true,
       couches: [
@@ -330,12 +365,12 @@
     }
   };
 
-  var gid = new URLSearchParams(location.search).get('groupe') || 'securite';
+  var gid = Q.get('groupe') || 'securite';
   var G = GROUPES[gid] || GROUPES.securite;
   el('ic').textContent = G.icon;
   el('grp').textContent = G.titre;
-  // Mode EMBED : on masque le chrome cumul (en-tête/pied), la carte du service
-  // porte le sien. Seule la pastille de rotation flotte.
+  if (DEMO) el('demo').hidden = false;
+  // Mode EMBED : on masque le chrome cumul (en-tête/pied), la carte du service porte le sien.
   if (G.embed) { var _mw = document.getElementById('mw'); if (_mw) _mw.classList.add('embed'); }
 
   var couches = G.couches, cur = 0;
@@ -348,10 +383,8 @@
   function afficheCouche(i){ cur = i; if (couches[i]) couches[i].charge(el('corps')); }
 
   // ── SLICER PARTAGÉ (#1352, SBXSliceBar) ────────────────────────────────────
-  // Puces double-bullet (bleu=auto / vert=manuel), libellé de couche, pastille
-  // d'HÔTE cliquable (ouvre le service). Rotation auto 8 s, figée au clic,
-  // persistée PAR GROUPE (key). PREVIEW au survol pour Sécurité (natif, léger) ;
-  // coupée en embed (elle rechargerait l'iframe). Pas de pause au survol.
+  // Puces double-bullet (bleu=auto / vert=manuel), libellé de couche, pastille d'HÔTE cliquable (ouvre le service). Rotation auto 8 s,
+  // figée au clic, persistée PAR GROUPE (key). PREVIEW au survol pour Sécurité ; coupée en embed (elle rechargerait l'iframe).
   if (window.SBXSliceBar) {
     SBXSliceBar(el('mw'), {
       key: 'cumul:' + gid, autoMs: 8000, pauseOnHover: false, preview: !G.embed,
@@ -360,13 +393,10 @@
     });
   } else { afficheCouche(0); }
 
-  // Rafraîchit la couche NATIVE (Sécurité) régulièrement — les couches embed se
-  // rafraîchissent elles-mêmes, inutile de recharger leur iframe.
+  // Rafraîchit la couche NATIVE (Sécurité) régulièrement — les couches embed se rafraîchissent elles-mêmes, inutile de recharger leur iframe.
   if (!G.embed) setInterval(function () { if (!document.hidden) afficheCouche(cur); }, 60000);
 
-  // Rester dans le Hall : le pied ouvre le service de la couche, EMBARQUÉ, par
-  // son hôte (ouvre-hote, indépendant d'un id de service enregistré) — pas de
-  // navigation top.
+  // Rester dans le Hall : le pied ouvre le service de la couche, EMBARQUÉ, par son hôte (ouvre-hote, indépendant d'un id de service enregistré) — pas de navigation top.
   document.addEventListener('click', function (ev) {
     if (parent === window) return;
     var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
@@ -377,13 +407,13 @@
   }, true);
 
   (function () {
-    var t = new URLSearchParams(location.search).get('theme');
+    var t = Q.get('theme');
     if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
   })();
   addEventListener('message', function (ev) {
     var d = ev.data;
     if (!d || !d.sbx) return;
-    // Thème venu du Hall : on l'applique ET on le transmet a la carte embarquee.
+    // Thème venu du Hall : on l'applique ET on le transmet à la carte embarquée.
     if (d.sbx === 'theme') {
       if (d.theme === 'dark' || d.theme === 'light') {
         document.documentElement.setAttribute('data-theme', d.theme);
@@ -392,19 +422,14 @@
       }
       return;
     }
-    // Intentions des cartes EMBARQUEES (enfants) -> relayees au Hall : sinon
-    // leurs liens/boutons resteraient captifs de la carte cumulative.
-    // Seule la carte embarquée de la couche parle, à l'origine de son cadre ;
-    // on ne relaie qu'au Hall, à notre origine (#1609).
+    // Intentions des cartes EMBARQUÉES (enfants) -> relayées au Hall : sinon leurs liens/boutons resteraient captifs de la carte cumulative.
+    // Seule la carte embarquée de la couche parle, à l'origine de son cadre ; on ne relaie qu'au Hall, à notre origine (#1609).
     var fe = document.querySelector('#corps iframe'), oe = '';
     try { oe = fe ? new URL(fe.src, location.href).origin : ''; } catch (e) {}
     if (!fe || ev.source !== fe.contentWindow || !oe || oe === 'null' || ev.origin !== oe) return;
     if (parent !== window && ev.source !== parent) {
-      // 'ouvre' porte l'id du service (désormais MASQUÉ dans le Hall) : le
-      // contrôle source/id du Hall le rejetterait, et le lien « ne serait plus
-      // cliquable ». On le CONVERTIT donc en 'ouvre-hote' (ouverture par hôte,
-      // sans contrôle). Hôte = celui de l'URL si absolue, sinon la couche
-      // affichée.
+      // 'ouvre' porte l'id du service (désormais MASQUÉ dans le Hall) : le contrôle source/id du Hall le rejetterait. On le CONVERTIT donc en
+      // 'ouvre-hote' (ouverture par hôte, sans contrôle). Hôte = celui de l'URL si absolue, sinon la couche affichée.
       if (d.sbx === 'ouvre' && d.url) {
         var hote2 = (couches[cur] && couches[cur].host) || '';
         try { var u2 = new URL(d.url); if (u2.host) hote2 = u2.host; } catch (e) {}
@@ -426,3 +451,5 @@
   {el:document.getElementById('corps'),label:'Services du groupe — état et chiffres, en rotation'},
   {el:document.querySelector('.sbx-bar'),label:'Slices — couche courante · hôte cliquable · choix de couche'}
 ].filter(function(z){return z.el;});}});</script>
+</body>
+</html>

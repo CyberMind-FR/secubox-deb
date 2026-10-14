@@ -5,7 +5,7 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — carte « Éphéméride » du Hall (secubox-ephemeride).
+  SecuBox — carte « Éphéméride » du Hall (secubox-ephemeride), au profil Aurora (.claude/AURORA-REFERENCE.md, #2658).
 
   UN SEUL composant, TROIS niveaux d'affichage :
     compact   date, heure, lune, lever/coucher, saint
@@ -17,77 +17,106 @@
   lecture) exprimée dans le FUSEAU DE LA BOX — jamais celui du navigateur. Les données sont relues toutes les minutes.
   Hors-ligne : la dernière lecture reste affichée, l'horloge et le soleil continuent, la météo dit quand elle date.
   Tout texte venu du serveur ou de l'utilisateur passe par textContent : aucune injection HTML.
+
+  ?demo=1 : éphéméride fictive, enregistrement des observations inerte (aucune écriture).
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Éphéméride</title>
 <style>
-  :root{ --fond:#0c1626; --fond2:#142744; --texte:#eaf1fb; --muted:#9db0cc; --faint:#7c8fae; --line:rgba(255,255,255,.14);
-         --verre:rgba(255,255,255,.07); --accent:#f6b94a; --ciel:#5cc2ff; --ok:#46d38b; --alerte:#ff7a7a; --lune:#e9eef7; --ombre:#1b2740; }
-  :root[data-theme="light"]{ color-scheme:light; --fond:#eef3fb; --fond2:#dbe7f7; --texte:#13213a; --muted:#46587a; --faint:#5d6f90;
-         --line:rgba(19,33,58,.16); --verre:rgba(255,255,255,.62); --accent:#b86a00; --ciel:#0a6aa8; --ok:#0b7d45; --alerte:#b3261e;
-         --lune:#f7f2e2; --ombre:#7d8bad; }
-  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ color-scheme:light; --fond:#eef3fb; --fond2:#dbe7f7; --texte:#13213a;
-         --muted:#46587a; --faint:#5d6f90; --line:rgba(19,33,58,.16); --verre:rgba(255,255,255,.62); --accent:#b86a00; --ciel:#0a6aa8;
-         --ok:#0b7d45; --alerte:#b3261e; --lune:#f7f2e2; --ombre:#7d8bad; } }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;
+    /* alias lus par les scripts partagés du Hall (slicebar.css, aide.js) */
+    --line:var(--trait);--line-2:var(--trait2);--muted:var(--doux);--up:var(--vert)}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:linear-gradient(160deg,var(--fond),var(--fond2));color:var(--texte);
-       font:14px/1.35 "IBM Plex Sans",Inter,system-ui,sans-serif;overflow:auto}
-  .eph{display:flex;flex-direction:column;gap:.4rem;padding:.5rem .6rem;min-height:100%;max-width:640px;margin:0 auto;container-type:inline-size;position:relative}
-  .verre{background:var(--verre);border:1px solid var(--line);border-radius:14px;padding:.4rem .6rem;
-         -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-  .bandeau{display:flex;align-items:center;gap:.5rem;padding-right:50px;min-height:44px}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  [hidden]{display:none!important}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .emb .cadre,.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  .emb .app,.dans .app{padding:10px;gap:8px}
+  .emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .marque .pic{font-size:1.5rem;line-height:1}
+  .emb .marque{display:none} .dans .marque small{display:none} .dans .marque h1{font-size:1.05rem}
+  .tete>.actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .tete>.actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .tete>.actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .tete>.actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .tete>.actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .btn.principal{background:rgba(41,182,246,.2);border-color:var(--cyan)} .btn.danger{color:var(--rouge);border-color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.ko .v{color:var(--rouge)} .tuile.vi .v{color:var(--violet)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .emb .pan,.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--doux);font-weight:600}
+  .msg{padding:12px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .defile{overflow-x:auto;max-width:100%}
+  :root{--accent:var(--jaune);--ombre:#1b2740;--lune:#e9eef7}
+  .eph{display:grid;gap:10px;container-type:inline-size;position:relative;min-width:0}
+  .verre{border:1px solid var(--trait);border-radius:12px;padding:8px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .bandeau{display:flex;align-items:center;gap:.5rem;min-height:44px;flex-wrap:wrap}
   .bandeau>svg{flex:0 0 auto;width:28px;height:28px}
   .date{flex:1;min-width:0}
-  .date .jour{font-size:.98rem;font-weight:700;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .date .sous{font-size:.7rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .lieu{font-size:.64rem;color:var(--muted);white-space:nowrap}
-  .rouage{position:absolute;top:.35rem;right:.5rem;min-width:44px;min-height:44px;border-radius:50%;border:1px solid var(--line);background:var(--verre);color:var(--texte);cursor:pointer;font-size:1rem}
-  .rouage:focus-visible,.btn:focus-visible,textarea:focus-visible{outline:2px solid var(--ciel);outline-offset:2px}
-  .reglages{display:flex;gap:.6rem;align-items:center;font-size:.78rem;color:var(--muted)}
-  .reglages[hidden]{display:none}
+  .date .jour{font-size:1.05rem;font-weight:800;letter-spacing:.01em;overflow-wrap:anywhere}
+  .date .sous{font-size:.74rem;color:var(--doux);overflow-wrap:anywhere}
+  .lieu{font-size:.68rem;color:var(--faible)}
+  .rouage{min-width:44px;min-height:44px;border-radius:50%;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;font-size:1rem}
+  .rouage:hover{border-color:var(--cyan)}
+  .rouage:focus-visible,textarea:focus-visible,.reglages input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .reglages{display:flex;gap:.6rem;align-items:center;font-size:.78rem;color:var(--doux)}
   .heure{display:flex;align-items:baseline;justify-content:center;gap:.7rem;flex-wrap:wrap;padding:.1rem 0}
   .heure time{font:700 clamp(2rem,10vw,2.8rem)/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.02em;font-variant-numeric:tabular-nums}
-  .heure .sec{font-size:.5em;color:var(--muted)}
-  .heure .tz{font-size:.7rem;color:var(--muted)}
-  .heure .tz b{color:var(--ok);font-size:.6rem;margin-right:.3rem}
+  .heure .sec{font-size:.5em;color:var(--doux)}
+  .heure .tz{font-size:.72rem;color:var(--doux)}
+  .heure .tz b{color:var(--vert);font-size:.6rem;margin-right:.3rem}
   svg{display:block;max-width:100%}
-  .duo{display:flex;flex-direction:column;gap:.4rem}
+  .duo{display:flex;flex-direction:column;gap:10px}
   .soleil .arc{width:100%;height:auto;max-height:64px}
-  .soleil .legende{display:flex;justify-content:space-between;gap:.3rem;font-size:.72rem;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .soleil .centre{text-align:center;font-size:.68rem;color:var(--muted);margin-top:.05rem}
+  .soleil .legende{display:flex;justify-content:space-between;gap:.3rem;font-size:.78rem;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+  .soleil .centre{text-align:center;font-size:.72rem;color:var(--doux);margin-top:.15rem;overflow-wrap:anywhere}
   .lune{display:flex;gap:.7rem;align-items:center}
   .lune svg{flex:0 0 auto;width:60px;height:60px}
   .lune .txt{min-width:0;flex:1}
   .lune .nom{font-size:.95rem;font-weight:700}
-  .lune .ligne{font-size:.74rem;color:var(--muted);font-variant-numeric:tabular-nums}
+  .lune .ligne{font-size:.76rem;color:var(--doux);font-variant-numeric:tabular-nums}
   .lune .ligne .bloc{white-space:nowrap}
   .lune .ligne .bloc + .bloc::before{content:" · "}
   .saint{display:flex;gap:.6rem;align-items:center}
   .saint .croix{font-size:1.2rem;color:var(--accent);width:1.6rem;text-align:center}
-  .saint .etiquette{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
-  .saint .nom{font-weight:700;font-size:.92rem}
-  .saint .desc{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .saint .etiquette{font-size:.66rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faible)}
+  .saint .nom{font-weight:700;font-size:.95rem;overflow-wrap:anywhere}
+  .saint .desc{font-size:.76rem;color:var(--doux);overflow-wrap:anywhere}
   .saint>div:last-child{min-width:0}
-  .puces{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem}
-  .puce{padding:.3rem .5rem;min-width:0}
-  .puce .t{font-size:.58rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
-  .puce .v{font-weight:700;font-size:.9rem}
-  .puce .s{font-size:.66rem;color:var(--muted)}
-  .obs h2{margin:0 0 .25rem;font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:.4rem}
+  .puces{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .puce{display:flex;flex-direction:column;gap:3px;border:1px solid var(--trait);border-radius:12px;padding:8px 10px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .puce .t{font-size:.74rem;color:var(--doux)}
+  .puce .v{font-weight:700;font-size:1.05rem;color:var(--cyan);overflow-wrap:anywhere}
+  .puce .s{font-size:.68rem;color:var(--faible);overflow-wrap:anywhere}
+  .obs h2{margin:0 0 .35rem;font-size:.88rem;display:flex;align-items:center;gap:.4rem}
   .obs h2 .btn{margin-left:auto}
-  .obs .note{white-space:pre-wrap;word-break:break-word;font-size:.84rem}
-  .obs .meta{font-size:.68rem;color:var(--muted);margin-top:.2rem}
-  textarea{width:100%;min-height:84px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.18);color:var(--texte);padding:.5rem;font:inherit;resize:vertical}
-  :root[data-theme="light"] textarea{background:rgba(255,255,255,.8)}
-  .btn{font-size:1.1rem;min-height:44px;min-width:44px;padding:0 .8rem;border-radius:10px;border:1px solid var(--line);background:var(--verre);color:var(--texte);cursor:pointer;font:inherit;font-weight:600}
-  .btn.principal{background:var(--ciel);border-color:var(--ciel);color:#06121f}
-  .btn.danger{color:var(--alerte)}
+  .obs .note{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.86rem;color:var(--texte);margin:0}
+  .obs .meta{font-size:.7rem;color:var(--faible);margin-top:.2rem}
+  textarea{width:100%;min-height:84px;border-radius:10px;border:1px solid var(--trait2);background:rgba(4,10,24,.6);color:var(--texte);padding:.5rem;font:inherit;resize:vertical}
+  .btn{min-height:44px;min-width:44px}
   .actions{display:flex;gap:.4rem;margin-top:.4rem;flex-wrap:wrap}
-  .actions[hidden],.editeur[hidden]{display:none}
-  .etat-donnees{font-size:.66rem;color:var(--faint);text-align:center}
-  .etat-donnees .point{color:var(--alerte)}
+  .etat-donnees{font-size:.72rem;color:var(--doux);text-align:center;overflow-wrap:anywhere}
+  .etat-donnees .point{color:var(--rouge)}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   /* dès 360 px de large : soleil et Lune côte à côte (la carte du Hall tient alors en 430 px de haut) */
   @container (min-width:360px){
@@ -101,16 +130,22 @@
   [data-niveau="compact"] .n-standard,[data-niveau="compact"] .n-etendu,
   [data-niveau="standard"] .n-etendu{display:none}
   [data-niveau="compact"] .lune svg{width:56px;height:56px}
-  [data-niveau="compact"] .heure time{font-size:clamp(2rem,11vw,2.8rem)}
-  [data-niveau="etendu"] .eph{max-width:760px}
   @media (prefers-reduced-motion: no-preference){ .anime .point-soleil{transition:cx .6s ease,cy .6s ease} }
 </style>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque"><span class="pic" aria-hidden="true">🌙</span>
+      <div><h1>Éphéméride</h1><small>Date, soleil, lune, saint du jour</small></div></div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><button class="rouage" id="rouage" type="button" aria-label="Réglages de l'éphéméride" aria-expanded="false">⚙</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune lecture réelle, aucune observation enregistrée</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
 <div class="eph" id="eph" role="region" aria-label="Éphéméride" data-niveau="standard">
-  <div class="bandeau">
-    <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round">
-      <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+  <div class="bandeau verre">
     <div class="date"><div class="jour" id="jour">—</div><div class="sous" id="sous">&nbsp;</div><div class="lieu" id="lieu"></div></div>
-    <button class="rouage" id="rouage" type="button" aria-label="Réglages de l'éphéméride" aria-expanded="false">⚙</button>
   </div>
   <div class="reglages verre" id="reglages" hidden>
     <label><input type="checkbox" id="h24"> Affichage 24 h</label>
@@ -120,9 +155,9 @@
   <div class="duo">
   <div class="soleil verre" id="soleil">
     <svg class="arc" id="arc" viewBox="0 0 200 64" role="img" aria-label="Soleil">
-      <path d="M10 54 Q100 -22 190 54" fill="none" stroke="var(--line)" stroke-width="2.2" stroke-dasharray="3 4"/>
+      <path d="M10 54 Q100 -22 190 54" fill="none" stroke="var(--trait2)" stroke-width="2.2" stroke-dasharray="3 4"/>
       <path id="arc-fait" d="M10 54 Q100 -22 190 54" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" pathLength="1" stroke-dasharray="0 1"/>
-      <line x1="4" y1="54.5" x2="196" y2="54.5" stroke="var(--line)" stroke-width="1"/>
+      <line x1="4" y1="54.5" x2="196" y2="54.5" stroke="var(--trait2)" stroke-width="1"/>
       <circle class="point-soleil" id="pt-soleil" cx="10" cy="54" r="6.5" fill="var(--accent)"/></svg>
     <div class="legende"><span id="lever">☀ —</span><span id="coucher">— ☀</span></div>
     <div class="centre n-standard" id="duree"></div>
@@ -130,7 +165,7 @@
   <div class="lune verre" id="lune">
     <svg id="lune-svg" viewBox="0 0 100 100" role="img" aria-label="Lune">
       <circle cx="50" cy="50" r="44" fill="var(--ombre)" opacity=".55"/><path id="lune-clair" fill="var(--lune)" d=""/>
-      <circle cx="50" cy="50" r="44" fill="none" stroke="var(--line)" stroke-width="1.2"/></svg>
+      <circle cx="50" cy="50" r="44" fill="none" stroke="var(--trait2)" stroke-width="1.2"/></svg>
     <div class="txt"><div class="nom" id="lune-nom">—</div><div class="ligne" id="lune-ill"></div>
       <div class="ligne" id="lune-lc"></div>
       <div class="ligne n-etendu" id="lune-age"></div><div class="ligne n-etendu" id="lune-next"></div></div>
@@ -139,9 +174,9 @@
   <div class="saint verre" id="saint"><div class="croix" aria-hidden="true">✝</div>
     <div><div class="etiquette">Saint du jour</div><div class="nom" id="saint-nom">—</div><div class="desc" id="saint-desc"></div></div></div>
   <div class="puces n-standard">
-    <div class="puce verre"><div class="t">Saison</div><div class="v" id="saison">—</div><div class="s" id="saison-s"></div></div>
-    <div class="puce verre"><div class="t">Météo</div><div class="v" id="meteo">—</div><div class="s" id="meteo-s"></div></div>
-    <div class="puce verre"><div class="t">Air</div><div class="v" id="air">—</div><div class="s" id="air-s"></div></div>
+    <div class="puce" title="Saison astronomique en cours, avec sa date de début et les jours avant la suivante."><div class="t">Saison</div><div class="v" id="saison">—</div><div class="s" id="saison-s"></div></div>
+    <div class="puce" title="Température et conditions relevées pour le lieu de la box."><div class="t">Météo</div><div class="v" id="meteo">—</div><div class="s" id="meteo-s"></div></div>
+    <div class="puce" title="Indice de qualité de l’air (AQI) et polluant principal."><div class="t">Air</div><div class="v" id="air">—</div><div class="s" id="air-s"></div></div>
   </div>
   <div class="obs verre n-etendu" id="obs">
     <h2><span aria-hidden="true">🔭</span> Observations <button class="btn" id="obs-plus" type="button" aria-label="Ajouter ou modifier une observation">+</button></h2>
@@ -156,28 +191,41 @@
   </div>
   <div class="etat-donnees" id="etat-donnees" role="status"></div>
 </div>
+</div></div>
 <script src="../sonde.js"></script>
 <script>
 (function(){
   'use strict';
+  var ONGLET_NOM = 'ephemeride';
+  // Variantes d'affichage : ?embed=1 (encadrée par une autre page) et iframe du Hall.
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if(Q.get('embed')) document.documentElement.classList.add('emb');
+  try{ if(window.top !== window) document.documentElement.classList.add('dans'); }catch(e){ document.documentElement.classList.add('dans'); }
   var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
+  function vide(n){ while(n.firstChild) n.removeChild(n.firstChild); return n; }
+  function nb(x){ x = Number(x); return isFinite(x) ? x : 0; }
+  function pastille(cls, texte){ var e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
+  function entetes(){ var h = {Accept:'application/json'}; try{ var t = localStorage.getItem('sbx_token'); if(t) h.Authorization = 'Bearer ' + t; }catch(e){} return h; }
+  // Hauteur annoncée à l'hôte : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer(){
+    if(parent === window) return;
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: ONGLET_NOM}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
   var API = '/api/v1/ephemeride/';
   var D = null, delta = 0, dernierJour = null, h24 = true, edition = null, horsLigne = false;
-  var qs = new URLSearchParams(location.search);
+  var qs = Q;
 
-  /* ── thème et niveau ─────────────────────────────────────────────────────────────────────────── */
-  if (qs.get('theme') === 'dark' || qs.get('theme') === 'light') document.documentElement.setAttribute('data-theme', qs.get('theme'));
-  window.addEventListener('message', function(ev){
-    if (ev.origin !== location.origin || !ev.data || ev.data.sbx !== 'theme') return;
-    if (ev.data.theme === 'dark' || ev.data.theme === 'light') document.documentElement.setAttribute('data-theme', ev.data.theme);
-  });
+  /* ── niveau ──────────────────────────────────────────────────────────────────────────────────── */
   function niveau(){
     var n = qs.get('niveau');
     if (n === 'compact' || n === 'standard' || n === 'etendu') return n;
     var h = window.innerHeight;
     return h < 330 ? 'compact' : (h < 640 ? 'standard' : 'etendu');
   }
-  function applique(){ $('eph').setAttribute('data-niveau', niveau()); }
+  function applique(){ $('eph').setAttribute('data-niveau', niveau()); annoncer(); }
   window.addEventListener('resize', applique); applique();
 
   /* ── format ──────────────────────────────────────────────────────────────────────────────────── */
@@ -239,14 +287,14 @@
   function tick(){
     if (!D) return;
     var now = maintenant(), t = $('heure');
-    var hm = fmt({hour:'2-digit', minute:'2-digit', hour12:!h24}, now), ss = fmt({second:'2-digit'}, now);
-    while (t.firstChild) t.removeChild(t.firstChild);
+    var hm = fmt({hour:'2-digit', minute:'2-digit', hour12:!h24}, now), ss = ('0' + fmt({second:'numeric'}, now)).slice(-2);
+    vide(t);
     t.appendChild(document.createTextNode(hm));
     var s = document.createElement('span'); s.className = 'sec'; s.setAttribute('aria-hidden', 'true'); s.textContent = ':' + ss; t.appendChild(s);
     t.setAttribute('datetime', now.toISOString());
     dessineSoleil(now);
     var jour = fmt({year:'numeric', month:'2-digit', day:'2-digit'}, now);
-    if (dernierJour && jour !== dernierJour) charge();       // minuit local passé : tout le jour change (saint, soleil, lune)
+    if (dernierJour && jour !== dernierJour && !DEMO) charge();       // minuit local passé : tout le jour change (saint, soleil, lune)
   }
 
   /* ── rendu des données ───────────────────────────────────────────────────────────────────────── */
@@ -262,8 +310,8 @@
     var l = D.lune;
     $('lune-nom').textContent = maj1(l.nom);
     $('lune-ill').textContent = Math.round(l.illumination) + ' % éclairée';
-    var lc = $('lune-lc'); while (lc.firstChild) lc.removeChild(lc.firstChild);
-    [['Lever ', l.lever], ['Coucher ', l.coucher]].forEach(function(x, i){ var s = document.createElement('span'); s.className = 'bloc'; s.textContent = x[0] + hhmm(x[1]); lc.appendChild(s); });
+    var lc = vide($('lune-lc'));
+    [['Lever ', l.lever], ['Coucher ', l.coucher]].forEach(function(x){ var s = document.createElement('span'); s.className = 'bloc'; s.textContent = x[0] + hhmm(x[1]); lc.appendChild(s); });
     $('lune-age').textContent = 'Âge : ' + String(l.age_jours).replace('.', ',') + ' jours';
     $('lune-next').textContent = 'Prochaine phase : ' + l.prochaine_phase.nom + ' le ' + fmt({weekday:'short', day:'numeric', month:'long'}, new Date(l.prochaine_phase.quand));
     $('lune-svg').setAttribute('aria-label', 'Lune : ' + l.nom + ', ' + Math.round(l.illumination) + ' % éclairée');
@@ -274,7 +322,7 @@
     $('saison').textContent = maj1(c.saison);
     $('saison-s').textContent = 'depuis le ' + new Intl.DateTimeFormat('fr-FR', {timeZone:'UTC', day:'numeric', month:'short'}).format(new Date(c.saison_debut + 'T12:00:00Z')) + ' · J-' + c.jours_avant_saison_suivante;
     var m = D.meteo;
-    if (m){ $('meteo').textContent = Math.round(m.temperature_c) + ' °C'; $('meteo-s').textContent = m.condition + (m.vent_kmh != null ? ' · ' + Math.round(m.vent_kmh) + '\u00a0km\u2060/\u2060h' : ''); }
+    if (m){ $('meteo').textContent = Math.round(m.temperature_c) + ' °C'; $('meteo-s').textContent = m.condition + (m.vent_kmh != null ? ' · ' + Math.round(m.vent_kmh) + ' km⁠/⁠h' : ''); }
     else { $('meteo').textContent = D.meteo_etat.etat === 'desactive' ? 'Désactivée' : 'Indisponible'; $('meteo-s').textContent = D.meteo_etat.etat === 'desactive' ? '' : 'Météo indisponible'; }
     var a = D.air;
     if (a){ $('air').textContent = a.niveau; $('air-s').textContent = 'AQI ' + a.indice + (a.polluant_principal ? ' · ' + a.polluant_principal : ''); }
@@ -287,17 +335,46 @@
     var infos = [];
     if (D.meteo_etat.etat === 'perime' && D.meteo_etat.maj) infos.push('Données météo : dernière mise à jour ' + hhmm(new Date(D.meteo_etat.maj * 1000).toISOString()));
     if (horsLigne) infos.push('Hors ligne : dernières données connues');
-    var e = $('etat-donnees'); while (e.firstChild) e.removeChild(e.firstChild);
+    var e = vide($('etat-donnees'));
     if (infos.length){ var p = document.createElement('span'); p.className = 'point'; p.textContent = '● '; e.appendChild(p); e.appendChild(document.createTextNode(infos.join(' — '))); }
+    pastille(horsLigne ? 'att' : '', horsLigne ? 'HORS LIGNE' : (DEMO ? 'DÉMO' : 'À JOUR'));
     tick();
-    if (!document.getElementById('eph').classList.contains('anime')) setTimeout(function(){ document.getElementById('eph').classList.add('anime'); }, 50);
+    if (!$('eph').classList.contains('anime')) setTimeout(function(){ $('eph').classList.add('anime'); }, 50);
+    annoncer();
+  }
+
+  /* ── données fictives (démonstration) : lieu inventé, aucune requête ───────────────────────── */
+  function demo(){
+    var maintenantMs = Date.now(), j0 = new Date(maintenantMs); j0.setUTCHours(0, 0, 0, 0);
+    var lever = new Date(j0.getTime() + (5 * 60 + 52) * 60000), coucher = new Date(j0.getTime() + (19 * 60 + 41) * 60000);
+    var dj = new Intl.DateTimeFormat('fr-FR', {timeZone:'Europe/Paris', weekday:'long', day:'numeric', month:'long', year:'numeric'}).formatToParts(j0);
+    function part(t){ var x = dj.filter(function(p){ return p.type === t; })[0]; return x ? x.value : ''; }
+    return {
+      serveur_epoch_ms: maintenantMs,
+      calendrier: {jour_semaine: part('weekday'), jour: part('day'), mois: part('month'), annee: part('year'), semaine_iso: 42, jour_annee: 287, saison: 'automne', saison_debut: '2026-09-23', jours_avant_saison_suivante: 68},
+      lieu: {nom: 'Lieu fictif', approximatif: false, latitude: 45.0, longitude: 6.0},
+      fuseau: {nom: 'Europe/Paris', decalage: 'UTC+02:00'},
+      soleil: {etat: 'jour', lever: lever.toISOString(), coucher: coucher.toISOString(), duree_s: 13 * 3600 + 49 * 60, progression: 0.5},
+      lune: {nom: 'gibbeuse croissante', illumination: 72, croissante: true, age_jours: 10.4, lever: new Date(j0.getTime() + 13 * 3600000).toISOString(), coucher: new Date(j0.getTime() + 25 * 3600000).toISOString(),
+             prochaine_phase: {nom: 'Pleine lune', quand: new Date(j0.getTime() + 4 * 86400000).toISOString()}},
+      saints: [{nom: 'Saint Exemple', description: 'Personnage fictif de démonstration'}],
+      meteo: {temperature_c: 14, condition: 'Éclaircies', vent_kmh: 12}, meteo_etat: {etat: 'ok'},
+      air: {niveau: 'Bon', indice: 32, polluant_principal: 'PM2.5'}, air_etat: {etat: 'ok'},
+      observations: [{id: 'demo-1', texte: 'Ciel dégagé ce soir (exemple).', modifie: new Date(maintenantMs - 3600000).toISOString()}],
+      reglages: {observations: true, format_24h: true}
+    };
   }
 
   /* ── lecture de l'API ────────────────────────────────────────────────────────────────────────── */
   function charge(){
-    var ctl = ('AbortController' in window) ? new AbortController() : null, t0 = Date.now();
+    if (DEMO){
+      $('demo').hidden = false; D = demo(); delta = 0; horsLigne = false;
+      try { if (localStorage.getItem('eph.h24') !== null) h24 = localStorage.getItem('eph.h24') === '1'; } catch (e) {}
+      $('h24').checked = h24; rend(); return;
+    }
+    var ctl = ('AbortController' in window) ? new AbortController() : null;
     var arret = ctl ? setTimeout(function(){ ctl.abort(); }, 8000) : null;
-    fetch(API, {headers:{'Accept':'application/json'}, credentials:'same-origin', signal: ctl ? ctl.signal : undefined})
+    fetch(API, {headers:entetes(), credentials:'same-origin', cache:'no-store', signal: ctl ? ctl.signal : undefined})
       .then(function(r){
         if (r.status === 401 || r.status === 403){ throw {motif:'reserve'}; }
         if (r.status === 502 || r.status === 404){ throw {motif:'absent'}; }
@@ -306,21 +383,22 @@
       })
       .then(function(j){
         if (arret) clearTimeout(arret);
+        $('session').hidden = true;
         D = j; delta = j.serveur_epoch_ms - Date.now(); horsLigne = false;
-        if (localStorage.getItem('eph.h24') !== null) h24 = localStorage.getItem('eph.h24') === '1'; else h24 = !!j.reglages.format_24h;
+        try { if (localStorage.getItem('eph.h24') !== null) h24 = localStorage.getItem('eph.h24') === '1'; else h24 = !!j.reglages.format_24h; } catch (e) { h24 = !!j.reglages.format_24h; }
         $('h24').checked = h24; rend();
       })
       .catch(function(e){
         if (arret) clearTimeout(arret);
-        if (e && e.motif === 'reserve'){ $('etat-donnees').textContent = 'Connectez-vous pour voir l’éphéméride.'; return; }
-        if (e && e.motif === 'absent'){ $('etat-donnees').textContent = 'Éphéméride non installée sur cette box.'; return; }
-        horsLigne = true; if (D) rend(); else $('etat-donnees').textContent = 'Éphéméride momentanément indisponible.';
+        if (e && e.motif === 'reserve'){ pastille('neutre', 'SESSION REQUISE'); $('session').hidden = false; $('etat-donnees').textContent = 'Connectez-vous pour voir l’éphéméride.'; annoncer(); return; }
+        if (e && e.motif === 'absent'){ pastille('neutre', 'NON INSTALLÉE'); $('etat-donnees').textContent = 'Éphéméride non installée sur cette box.'; annoncer(); return; }
+        horsLigne = true; if (D) rend(); else { pastille('hors', 'HORS LIGNE'); $('etat-donnees').textContent = 'Éphéméride momentanément indisponible.'; annoncer(); }
       });
   }
 
   /* ── réglages et observations ────────────────────────────────────────────────────────────────── */
   $('rouage').addEventListener('click', function(){
-    var ouvert = $('reglages').hidden; $('reglages').hidden = !ouvert; $('rouage').setAttribute('aria-expanded', String(ouvert));
+    var ouvert = $('reglages').hidden; $('reglages').hidden = !ouvert; $('rouage').setAttribute('aria-expanded', String(ouvert)); annoncer();
   });
   $('h24').addEventListener('change', function(){
     h24 = $('h24').checked; try { localStorage.setItem('eph.h24', h24 ? '1' : '0'); } catch (e) {}
@@ -328,12 +406,14 @@
   });
   function ouvreEditeur(modif){
     $('editeur').hidden = false; $('obs-texte').value = modif && edition ? edition.texte : ''; $('obs-suppr').hidden = !(modif && edition);
-    $('obs-msg').textContent = ''; $('obs-texte').focus();
+    $('obs-msg').textContent = ''; $('obs-texte').focus(); annoncer();
   }
   $('obs-plus').addEventListener('click', function(){ ouvreEditeur(!!edition); });
-  $('obs-annule').addEventListener('click', function(){ $('editeur').hidden = true; });
+  $('obs-annule').addEventListener('click', function(){ $('editeur').hidden = true; annoncer(); });
+  function inerte(){ $('obs-msg').textContent = 'Démonstration : action inerte, rien n’est écrit ni envoyé.'; }
   function envoie(methode, url, corps){
-    return fetch(url, {method:methode, credentials:'same-origin', headers:{'Content-Type':'application/json','Accept':'application/json'},
+    var h = entetes(); h['Content-Type'] = 'application/json';
+    return fetch(url, {method:methode, credentials:'same-origin', headers:h,
       body: corps ? JSON.stringify(corps) : undefined}).then(function(r){
         if (r.status === 401 || r.status === 403) throw {msg:'Réservé à l’administrateur de la box.'};
         if (r.status === 422) throw {msg:'Texte vide ou trop long (2000 caractères au plus).'};
@@ -342,12 +422,14 @@
       });
   }
   $('obs-ok').addEventListener('click', function(){
+    if (DEMO){ inerte(); return; }
     var t = $('obs-texte').value;
     envoie(edition ? 'PUT' : 'POST', API + 'observations' + (edition ? '/' + edition.id : ''), {texte: t})
       .then(function(){ $('editeur').hidden = true; charge(); })
       .catch(function(e){ $('obs-msg').textContent = (e && e.msg) || 'Enregistrement impossible.'; });
   });
   $('obs-suppr').addEventListener('click', function(){
+    if (DEMO){ inerte(); return; }
     if (!edition) return;
     envoie('DELETE', API + 'observations/' + edition.id)
       .then(function(){ $('editeur').hidden = true; charge(); })
@@ -356,7 +438,9 @@
 
   charge();
   setInterval(tick, 1000);
-  setInterval(charge, 60000);
+  setInterval(function(){ if (!document.hidden) charge(); }, 60000);
   document.addEventListener('visibilitychange', function(){ if (!document.hidden) charge(); });
 })();
 </script>
+</body>
+</html>
