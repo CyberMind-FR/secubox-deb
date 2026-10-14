@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-14 — WAF coupé par un reload pendant les installations (ref #2629)
+
+Déploiement du lot de la vague 5 sur gk2 : `secubox-waf-route` (appelé par les postinst de lyrion, jellyfin, gitea, nextcloud, photoprism) faisait `systemctl reload secubox-waf-ng` ; `ExecReload=kill -HUP` tue sbxwaf (pas de gestionnaire SIGHUP, sortie « propre » pour systemd, donc pas de relance) : 503 sur tous les vhosts publics pendant 3 min 30, jusqu'à une relance manuelle. sbxwaf relit pourtant sa table à chaud. Corrigé : l'outil ne signale plus le WAF (core 1.7.8) ; `ExecReload` devient un `touch` de la table (waf-ng 1.29.1, à déployer hors pointe : le paquet relance le WAF). Autres appelants de `reload` : relais-maillage, podcaster, exposition mesh : couverts par le changement d'unité.
+
 ## 2026-10-14 — Page système : trois échecs corrigés (ref #2615) + /acces/ dans la navigation (ref #2613)
 
 Captures de `/system/` : « Interactive authentication required » au démarrage d'un service, `.xinitrc: Permission denied` à l'activation du kiosque, « Inst, Inst, Inst » dans la liste des mises à jour. Cause commune des deux premiers : l'API tourne en `User=secubox` + `NoNewPrivileges=true` et lançait `systemctl` / le script root directement. Corrigé : règle polkit bornée à `secubox-system.service` (le compte `secubox` est partagé par tous les modules), unité root `secubox-kiosk-setup@.service` (3 instances), parsing `apt-get -s` (2ᵉ mot). system 1.10.1, kiosk 1.0.2, core 1.7.7. La page `/acces/` charge la navigation commune hors mode encadré (auth 1.6.1, #2613/#2614).

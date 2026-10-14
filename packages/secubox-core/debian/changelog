@@ -1,3 +1,9 @@
+secubox-core (1.7.8-1~bookworm1) bookworm; urgency=high
+
+  * secubox-waf-route ne signale plus le WAF (#2629). Il faisait « systemctl reload secubox-waf-ng » apres chaque route posee ; l'unite a ExecReload=kill -HUP, sbxwaf n'a pas de gestionnaire SIGHUP : il se terminait « avec succes » (SIGHUP est une sortie propre pour systemd), n'etait pas relance, et tous les vhosts publics repondaient 503 (gk2, 14 oct. : l'installation de lyrion, jellyfin, gitea, nextcloud et photoprism a coupe le WAF 3 min 30). Or sbxwaf relit deja la table a chaud (mtime, test TestRoutesHotReload) et l'ecriture est atomique : aucun signal n'est necessaire. 2 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 07:52:28 +0200
+
 secubox-core (1.7.7-1~bookworm1) bookworm; urgency=medium
 
   * kiosk_enable / kiosk_disable passent par l'unite root secubox-kiosk-setup@<action>.service quand l'appelant n'est pas root (#2615) ; en root (CLI), appel direct comme avant. Le motif d'echec vient de /run/secubox/kiosk-setup.log. 2 tests.
