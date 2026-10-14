@@ -1,228 +1,352 @@
 <!DOCTYPE html>
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-<!-- SecuBox-Deb :: Podcaster PUBLIC portal (no auth) — CyberMind https://cybermind.fr -->
-<html lang="en">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: Podcaster :: portail d'écoute (www/podcaster/portal/index.html) — au profil Aurora (.claude/AURORA-REFERENCE.md).
+  Page d'USAGER en lecture seule : elle ne fait que lire GET /public/library, /media/<id>, /share/feed.xml et
+  /public/feed/<id>/zip (gardes require_session / require_lecture côté API, inchangées). Aucune écriture, nulle part.
+  Page autonome, aucune dépendance. Mesure absente = « — ». ?embed=1 (ou simple cadre, le Hall) : sans en-tête ni menu ;
+  ?demo=1 : épisodes fictifs, aucun média lu, aucun appel.
+  Le vhost public (podcaster.<domaine>) a pour racine ce dossier et ne sert PAS /shared/ : le menu commun n'est donc injecté
+  que sous /podcaster/portal/ (hub d'administration), hors cadre et hors démonstration.
+  Contrats avec le Hall conservés tels quels : mégabarre contextuelle (#1238b), bus média (#1238c), reprise depuis la carte
+  micro (#1266b). La vue micro (micro.html) n'est pas touchée.
+-->
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Podcasts · SecuBox</title>
 <style>
-  :root{
-    --cosmos-black:#0a0a0f; --gold-hermetic:#c9a84c; --void-purple:#6e40c9;
-    --cyber-cyan:#00d4ff; --matrix-green:#00ff41; --text-primary:#e8e6d9;
-    --text-muted:#6b6b7a; --panel:#13131c; --line:#23232f;
-  }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
   *{box-sizing:border-box}
-  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#15101f,#0a0a0f 60%);
-    color:var(--text-primary);font-family:'JetBrains Mono',ui-monospace,Menlo,monospace}
-  header{max-width:1000px;margin:0 auto;padding:38px 20px 18px;text-align:center}
-  header .em{font-size:42px}
-  header h1{margin:8px 0 4px;font-size:30px;letter-spacing:2px;color:var(--gold-hermetic)}
-  header p{color:var(--text-muted);margin:0}
-  .subs{display:inline-flex;gap:10px;margin-top:16px;flex-wrap:wrap;justify-content:center}
-  .subs a{color:var(--cyber-cyan);text-decoration:none;border:1px solid var(--cyber-cyan);
-    padding:8px 14px;border-radius:24px;font-size:13px}
-  .subs a:hover{background:rgba(0,212,255,.1)}
-  .filters{max-width:1000px;margin:18px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap}
-  .chip{font-size:12px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);
-    color:var(--text-muted);cursor:pointer}
-  .chip.on{color:var(--void-purple);border-color:var(--void-purple);background:rgba(110,64,201,.12)}
-  main{max-width:1000px;margin:18px auto 60px;padding:0 20px}
-  .ep{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--line);
-    border-radius:12px;margin-bottom:12px;background:var(--panel)}
-  .ep .n{font-size:20px;color:var(--void-purple);width:30px;text-align:center}
-  .ep .meta{flex:1;min-width:0}
-  .ep .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
-  .ep .meta span{color:var(--text-muted);font-size:12px}
-  audio{height:38px;max-width:300px}
-  .ep a.dl{color:var(--matrix-green);text-decoration:none;border:1px solid var(--matrix-green);
-    border-radius:8px;padding:7px 10px;font-size:13px;white-space:nowrap}
-  .ep a.dl:hover{background:rgba(0,255,65,.1)}
-  .zipbar{max-width:1000px;margin:14px auto 0;padding:0 20px}
-  .zipbar a{color:var(--gold-hermetic);text-decoration:none;border:1px solid var(--gold-hermetic);
-    border-radius:24px;padding:8px 16px;font-size:13px}
-  .zipbar a:hover{background:rgba(201,168,76,.12)}
-  .empty{text-align:center;color:var(--text-muted);padding:60px}
-  footer{text-align:center;color:var(--text-muted);font-size:11px;padding:24px}
-  footer a{color:var(--text-muted)}
-  @media(max-width:680px){.ep{flex-wrap:wrap}audio{max-width:100%;width:100%}}
-  /* EMBARQUÉ DANS LE HALL (#1238b) : le Hall porte déjà le titre du service et
-     la mégabarre. On retire donc le grand en-tête (logo + RSS) et la barre de
-     filtres — les flux sont POUSSÉS dans la mégabarre contextuelle du Hall,
-     comme MetaNews. La liste des épisodes remonte en haut. */
-  html.sbx-embed header,
-  html.sbx-embed .filters{display:none}
-  html.sbx-embed main{margin-top:10px}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .principal{min-width:0}
+  body.menu .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body.menu .principal{margin-left:0}}
+  body.mobile-mode.menu .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0;max-width:1100px;margin:0 auto}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800;overflow-wrap:anywhere} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none;line-height:1.3}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.chip:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.bon{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.10)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  [hidden]{display:none!important}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:var(--cyan)} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .filtres{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font:inherit;font-size:.76rem;padding:5px 12px;border-radius:999px;border:1px solid var(--trait);background:rgba(159,179,214,.08);color:var(--doux);cursor:pointer;min-height:30px;max-width:100%;overflow-wrap:anywhere;text-align:left}
+  .chip:hover{border-color:var(--cyan)} .chip.on{color:var(--violet);border-color:var(--violet);background:rgba(167,139,250,.14)}
+  .zipbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .ep{display:grid;grid-template-columns:2rem minmax(0,1fr) minmax(0,300px) auto;gap:8px 12px;align-items:center;padding:10px;border:1px solid var(--trait);border-radius:12px;margin-bottom:8px;background:rgba(8,18,38,.55)}
+  .ep:last-child{margin-bottom:0}
+  .ep .n{font-size:1rem;color:var(--violet);text-align:center;font-variant-numeric:tabular-nums}
+  .ep .meta{min-width:0} .ep .meta b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem;font-weight:600}
+  .ep .meta span{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+  .ep audio{width:100%;height:36px;min-width:0}
+  @media (max-width:680px){.ep{grid-template-columns:2rem minmax(0,1fr) auto}.ep audio{grid-column:1 / -1;grid-row:2}.ep .btn{grid-column:3;grid-row:1}}
+  .vide{color:var(--faible);padding:24px 8px;text-align:center;font-size:.85rem}
+  .note{color:var(--faible);font-size:.72rem;margin:6px 0 0} .note a{color:var(--doux)}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)}
+  /* EMBARQUÉ DANS LE HALL (#1238b) : le Hall porte déjà le titre du service et la mégabarre. On retire l'en-tête
+     (marque, RSS) et la barre de filtres — les flux sont POUSSÉS dans la mégabarre contextuelle du Hall. */
+  html.sbx-embed .tete,html.sbx-embed .filtres-pan{display:none}
+  html.sbx-embed .cadre{padding:4px} html.sbx-embed .app{border:0;box-shadow:none;background:none;padding:4px}
+  html.sbx-embed body{scrollbar-width:none} html.sbx-embed body::-webkit-scrollbar{display:none}
 </style>
 </head>
 <body>
 <script>
-  // Même règle que MetaNews / Billets : `?embed=1` posé par le Hall, ou la
-  // simple présence d'un cadre. Posé AVANT tout rendu, pour ne pas voir le
-  // grand en-tête clignoter avant de disparaître.
-  try{
-    var _e = new URLSearchParams(location.search).get('embed')==='1';
-    if(_e || window.top!==window.self) document.documentElement.classList.add('sbx-embed');
-  }catch(e){}
+  // Même règle que MetaNews / Billets : ?embed=1 posé par le Hall, ou la simple présence d'un cadre.
+  // Posé AVANT tout rendu, pour ne pas voir l'en-tête clignoter avant de disparaître.
+  try {
+    var _e = new URLSearchParams(location.search).get('embed') === '1';
+    if (_e || window.top !== window.self) document.documentElement.classList.add('sbx-embed');
+  } catch (e) { /* page autonome */ }
 </script>
-<header>
-  <div class="em">🎙️</div>
-  <h1 id="title">Podcasts</h1>
-  <p id="sub">Relayed locally by SecuBox · listen freely</p>
-  <div class="subs">
-    <a id="rss" href="/api/v1/podcaster/share/feed.xml" target="_blank">📡 Subscribe (RSS)</a>
-    <a id="copy" href="#" onclick="copyRss(event)">🔗 Copy feed URL</a>
+<main class="principal"><div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+      <div><h1 id="title">Podcasts</h1><small id="sub">Relayés localement par SecuBox · écoute libre</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite">
+      <a class="btn prim" id="rss" href="/api/v1/podcaster/share/feed.xml" target="_blank" rel="noopener" title="Adresse du flux RSS des épisodes téléchargés (GET /share/feed.xml)">📡 S’abonner (RSS)</a>
+      <button class="btn" id="copy" type="button" title="Copier l’adresse du flux RSS dans le presse-papiers">🔗 Copier l’adresse du flux</button>
+    </div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucun média lu</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+  <div id="erreur" role="alert" hidden></div>
+
+  <section class="tuiles" aria-label="Indicateurs">
+    <div class="tuile" title="Épisodes téléchargés et partagés, tels que les renvoie /public/library. Un épisode non encore téléchargé n’y figure pas."><span class="l">Épisodes</span><span class="v" id="tEp">—</span><span class="s">disponibles à l’écoute</span></div>
+    <div class="tuile" title="Nombre de flux (officines) qui ont au moins un épisode téléchargé. Un flux sans épisode téléchargé n’apparaît pas."><span class="l">Flux</span><span class="v" id="tFlux">—</span><span class="s">avec épisodes</span></div>
+    <div class="tuile" title="Date de parution de l’épisode le plus récent (pubdate). « — » si aucun épisode ne porte de date."><span class="l">Dernière parution</span><span class="v long" id="tDernier">—</span><span class="s">épisode le plus récent</span></div>
+    <div class="tuile" title="Somme des tailles annoncées (bytes) des épisodes. Partielle si certains épisodes n’annoncent pas leur taille : le nombre d’épisodes mesurés est alors indiqué."><span class="l">Volume</span><span class="v" id="tVolume">—</span><span class="s" id="sVolume">taille cumulée</span></div>
+  </section>
+
+  <div class="pan filtres-pan" id="filtresPan" hidden><div class="filtres" id="filters" role="group" aria-label="Filtrer par flux"></div></div>
+  <div class="zipbar" id="zipbar"></div>
+
+  <div class="pan"><h3>Épisodes <i id="nEp"></i></h3>
+    <div id="rActions" class="retour" role="status" hidden></div>
+    <div id="list"><div class="vide">Chargement…</div></div>
   </div>
-</header>
-<div class="filters" id="filters"></div>
-<div class="zipbar" id="zipbar"></div>
-<main><div id="list" class="empty">Loading…</div></main>
-<footer>SecuBox Podcaster · <a href="https://cybermind.fr" target="_blank">CyberMind</a></footer>
+  <p class="note">SecuBox Podcaster · <a href="https://cybermind.fr" target="_blank" rel="noopener">CyberMind</a></p>
+</div></div></main>
 
 <script>
-const API="/api/v1/podcaster";
-let DATA={episodes:[],feeds:{}}, FILT=null;
-function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
-function rssUrl(){return location.origin+API+"/share/feed.xml"}
-function copyRss(e){e.preventDefault();navigator.clipboard.writeText(rssUrl()).then(()=>{
-  const a=document.getElementById("copy");a.textContent="✓ Copied";setTimeout(()=>a.textContent="🔗 Copy feed URL",1800)})}
-async function load(){
-  let d; try{d=await fetch(API+"/public/library").then(r=>r.json())}
-  catch(e){document.getElementById("list").innerHTML='<div class="empty">Portal unavailable.</div>';return}
-  DATA=d;
-  document.getElementById("title").textContent=d.title||"Podcasts";
-  document.getElementById("rss").href=API+"/share/feed.xml";
-  const fl=document.getElementById("filters");
-  const feeds=Object.keys(d.feeds||{});
-  fl.innerHTML=(feeds.length>1?[`<span class="chip ${FILT===null?'on':''}" onclick="setF(null)">All</span>`]:[])
-    .concat(feeds.map(f=>`<span class="chip ${FILT===f?'on':''}" onclick="setF('${esc(f).replace(/'/g,"")}')">${esc(f)} · ${d.feeds[f]}</span>`)).join("");
-  render();
-  pousseMegabarre(feeds,d.feeds||{});
-}
+(function () {
+  'use strict';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  var EMBED = document.documentElement.classList.contains('sbx-embed');
+  // Menu commun : seulement sous le hub (le vhost public ne sert pas /shared/), hors cadre et hors démonstration.
+  if (!EMBED && !DEMO && location.pathname.indexOf('/podcaster/portal') === 0) {
+    try {
+      var lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = '/shared/sidebar-light.css'; document.head.appendChild(lk);
+      var nv = document.createElement('nav'); nv.className = 'sidebar'; nv.id = 'sidebar'; document.body.insertBefore(nv, document.body.firstChild);
+      var sj = document.createElement('script'); sj.src = '/shared/sidebar.js'; document.body.appendChild(sj);
+      document.body.classList.add('menu');
+    } catch (e) { /* menu absent : la page reste utilisable */ }
+  }
 
-// FLUX DANS LA MÉGABARRE CONTEXTUELLE DU HALL (#1238b). Embarqué, la barre de
-// filtres est masquée (le Hall porte le contexte) : on POUSSE plutôt la liste
-// des officines dans la mégabarre, et on réagit à un clic — le service sait ce
-// que « filtrer sur ce flux » veut dire, le Hall non. Même contrat que MetaNews.
-function estEmbed(){return document.documentElement.classList.contains('sbx-embed')}
-// L'item ACTIF prend un ✓ (le Hall ne marque pas seul l'item choisi d'un menu
-// pousse) : sans ce retour, un clic dans la megabarre « ne selectionne pas »
-// visiblement. On re-pousse apres chaque choix pour rafraichir la coche.
-function pousseMegabarre(feeds,compte){
-  if(!estEmbed() || feeds.length<2) return;
-  const items=[{cle:'__all', label:'Tous les épisodes', icon: FILT===null?'✓':'🎧'}].concat(
-    feeds.map(f=>({cle:'feed:'+f, label:f, badge:String(compte[f]||''), icon: FILT===f?'✓':'📡'})));
-  try{ parent.postMessage({sbx:'contexte', id:'podcaster', titre:'Officines', items}, '*'); }catch(e){}
-}
-function choixOfficine(cle){
-  if(cle==='__all') setF(null);
-  else if(cle.indexOf('feed:')===0) setF(cle.slice(5));
-  // Retour visuel : la coche suit la selection, et la liste a defile en haut.
-  pousseMegabarre(Object.keys(DATA.feeds||{}), DATA.feeds||{});
-  try{ document.getElementById('list').scrollIntoView({block:'start'}); }catch(e){}
-}
-if(document.documentElement.classList.contains('sbx-embed')){
-  window.addEventListener('message', ev=>{
-    const m=ev.data; if(!m || m.sbx!=='contexte-choix' || !m.cle) return;
-    choixOfficine(m.cle);
+  var API = '/api/v1/podcaster';
+  var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+  var DATA = { episodes: [], feeds: {} }, FILT = null, LISTE_SIG = '', SESSION_OK = true, CHARGE = false, OK = false;
+
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  function entetes() { var h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+  function octets(n) {
+    if (n == null || !isFinite(n)) return '—';
+    var u = ['o', 'Ko', 'Mo', 'Go', 'To'], i = n > 0 ? Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024))) : 0;
+    return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1).replace('.', ',') + ' ' + u[i];
+  }
+  function jour(ts) { if (!ts) return ''; var d = new Date(ts * 1000); return isNaN(d) ? '' : d.toLocaleDateString('fr-FR'); }
+  function rssUrl() { return location.origin + API + '/share/feed.xml'; }
+
+  // ----- Données de démonstration (noms fictifs, aucun média) -----
+  function demoData() {
+    var t = Math.floor(Date.now() / 1000), j = 86400;
+    DATA = { title: 'Podcasts de démonstration', feeds: { 'Atelier du samedi': 2, 'Chronique du réseau': 2 }, episodes: [
+      { id: 9001, title: 'Premier épisode d’exemple', feed: 'Atelier du samedi', feed_id: 1, pubdate: t - 2 * j, duration: '24:10', bytes: 23068672 },
+      { id: 9002, title: 'Deuxième épisode d’exemple', feed: 'Atelier du samedi', feed_id: 1, pubdate: t - 9 * j, duration: '31:02', bytes: 29360128 },
+      { id: 9003, title: 'Brèves de la semaine', feed: 'Chronique du réseau', feed_id: 2, pubdate: t - 1 * j, duration: '12:45', bytes: 12582912 },
+      { id: 9004, title: 'Dossier : sauvegardes', feed: 'Chronique du réseau', feed_id: 2, pubdate: t - 15 * j, duration: null, bytes: null }
+    ] };
+  }
+
+  function charger() {
+    if (DEMO) { demoData(); SESSION_OK = true; OK = true; CHARGE = true; rendreTout(true); return Promise.resolve(); }
+    return fetch(API + '/public/library', { credentials: 'same-origin', cache: 'no-store', headers: entetes() }).then(function (r) {
+      if (!r.ok) { var e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+      return r.json();
+    }).then(function (d) {
+      DATA = { title: d.title, episodes: Array.isArray(d.episodes) ? d.episodes : [], feeds: d.feeds && typeof d.feeds === 'object' ? d.feeds : {} };
+      SESSION_OK = true; OK = true; CHARGE = true;
+      $('erreur').hidden = true;
+      rendreTout(false);
+    }).catch(function (e) {
+      OK = false; CHARGE = true; SESSION_OK = !(e && (e.statut === 401 || e.statut === 403));
+      $('erreur').hidden = !SESSION_OK;
+      if (SESSION_OK) $('erreur').textContent = 'Portail indisponible (service arrêté ou injoignable).';
+      rendreTout(false);
+    });
+  }
+
+  function rendreTout(force) {
+    $('demo').hidden = !DEMO;
+    $('session').hidden = SESSION_OK;
+    var etat = $('etat');
+    if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+    else if (!OK) { etat.className = 'actif hors'; etat.textContent = 'INDISPONIBLE'; }
+    else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+    $('title').textContent = (OK && DATA.title) || 'Podcasts';
+    $('rss').href = API + '/share/feed.xml';
+    var eps = OK ? DATA.episodes : [], feeds = Object.keys(OK ? DATA.feeds : {});
+    // Tuiles : seulement ce que l'API fournit. Rien lu → « — » (0 est une mesure, l'absence n'en est pas une).
+    $('tEp').textContent = OK ? eps.length : '—';
+    $('tFlux').textContent = OK ? feeds.length : '—';
+    var dates = eps.map(function (e) { return e.pubdate; }).filter(function (x) { return x; });
+    $('tDernier').textContent = OK && dates.length ? jour(Math.max.apply(null, dates)) : '—';
+    var tailles = eps.map(function (e) { return e.bytes; }).filter(function (x) { return x != null && isFinite(x); });
+    $('tVolume').textContent = OK && tailles.length ? octets(tailles.reduce(function (a, b) { return a + b; }, 0)) : '—';
+    $('sVolume').textContent = OK && tailles.length && tailles.length < eps.length ? 'partiel : ' + tailles.length + ' sur ' + eps.length + ' mesurés' : 'taille cumulée';
+    filtres(feeds);
+    liste(force);
+    pousseMegabarre(feeds, OK ? DATA.feeds : {});
+    annoncer();
+  }
+
+  function filtres(feeds) {
+    var fl = $('filters'); fl.replaceChildren();
+    $('filtresPan').hidden = !(feeds.length > 1);
+    if (feeds.length > 1) {
+      var tous = el('button', 'chip' + (FILT === null ? ' on' : ''), 'Tous'); tous.type = 'button'; tous.addEventListener('click', function () { setF(null); }); fl.appendChild(tous);
+      feeds.forEach(function (f) {
+        var c = el('button', 'chip' + (FILT === f ? ' on' : ''), f + ' · ' + DATA.feeds[f]); c.type = 'button'; c.addEventListener('click', function () { setF(f); }); fl.appendChild(c);
+      });
+    }
+  }
+
+  // FLUX DANS LA MÉGABARRE CONTEXTUELLE DU HALL (#1238b). Embarqué, la barre de filtres est masquée (le Hall porte le
+  // contexte) : on POUSSE la liste des officines dans la mégabarre et on réagit à un clic. Même contrat que MetaNews.
+  // L'item ACTIF prend un ✓ ; on re-pousse après chaque choix pour rafraîchir la coche.
+  function pousseMegabarre(feeds, compte) {
+    if (!EMBED || feeds.length < 2) return;
+    var items = [{ cle: '__all', label: 'Tous les épisodes', icon: FILT === null ? '✓' : '🎧' }].concat(
+      feeds.map(function (f) { return { cle: 'feed:' + f, label: f, badge: String(compte[f] || ''), icon: FILT === f ? '✓' : '📡' }; }));
+    try { parent.postMessage({ sbx: 'contexte', id: 'podcaster', titre: 'Officines', items: items }, '*'); } catch (e) { /* hors Hall */ }
+  }
+  function choixOfficine(cle) {
+    if (cle === '__all') setF(null);
+    else if (cle.indexOf('feed:') === 0) setF(cle.slice(5));
+    pousseMegabarre(Object.keys(DATA.feeds || {}), DATA.feeds || {});
+    try { $('list').scrollIntoView({ block: 'start' }); } catch (e) { /* sans défilement */ }
+  }
+  if (EMBED) {
+    addEventListener('message', function (ev) {
+      var m = ev.data; if (!m || m.sbx !== 'contexte-choix' || !m.cle) return;
+      choixOfficine(m.cle);
+    });
+  }
+  function setF(f) { FILT = f; rendreTout(true); }
+
+  function retour(ok, msg) { var r = $('rActions'); r.hidden = false; r.className = 'retour ' + (ok ? '' : 'ko'); r.textContent = msg; annoncer(); }
+
+  function liste(force) {
+    var cible = $('list'), eps = OK ? DATA.episodes : [];
+    if (FILT) eps = eps.filter(function (e) { return e.feed === FILT; });
+    $('nEp').textContent = eps.length ? eps.length + ' épisode' + (eps.length > 1 ? 's' : '') + (FILT ? ' · ' + FILT : '') : '';
+    // Bouton « tout télécharger » (ZIP) quand un seul flux est affiché.
+    var zb = $('zipbar'); zb.replaceChildren();
+    var fid = eps.length ? eps[0].feed_id : null;
+    if (FILT && fid != null) {
+      var z = el('a', 'btn bon', '⬇ Tout télécharger (ZIP) · ' + FILT); z.href = API + '/public/feed/' + encodeURIComponent(fid) + '/zip';
+      z.title = 'Archive ZIP de tous les épisodes de ce flux (GET /public/feed/' + fid + '/zip)';
+      if (DEMO) z.addEventListener('click', function (ev) { ev.preventDefault(); retour(false, 'Démonstration : aucun fichier n’est servi.'); });
+      zb.appendChild(z);
+    }
+    if (!eps.length) {
+      cible.replaceChildren(el('div', 'vide', !SESSION_OK || !OK ? '—' : CHARGE ? 'Aucun épisode publié pour le moment.' : '—'));
+      LISTE_SIG = ''; return;
+    }
+    // Ne pas reconstruire la liste (ce qui détruirait un <audio> en lecture) quand rien n'a changé ou pendant l'écoute :
+    // seulement sur une action explicite.
+    var sig = (FILT || 'all') + '|' + eps.map(function (e) { return e.id; }).join(',');
+    var enLecture = Array.prototype.some.call(cible.querySelectorAll('audio'), function (a) { return !a.paused && !a.ended; });
+    if (!force && (sig === LISTE_SIG || enLecture)) return;
+    LISTE_SIG = sig;
+    cible.replaceChildren();
+    eps.forEach(function (e, i) {
+      var r = el('div', 'ep'); r.appendChild(el('div', 'n', String(i + 1)));
+      var m = el('div', 'meta'); m.appendChild(el('b', '', e.title || '—'));
+      m.appendChild(el('span', '', [e.feed, jour(e.pubdate), e.duration ? e.duration : ''].filter(Boolean).join(' · ') || '—')); r.appendChild(m);
+      var a = document.createElement('audio'); a.controls = true; a.preload = 'none';
+      if (!DEMO) a.setAttribute('src', API + '/media/' + encodeURIComponent(e.id));   // démonstration : aucun média demandé
+      else a.title = 'Démonstration : aucun média';
+      r.appendChild(a);
+      var d = el('a', 'btn bon', '⬇'); d.title = 'Télécharger l’épisode'; d.setAttribute('aria-label', 'Télécharger : ' + (e.title || 'épisode'));
+      if (DEMO) { d.href = '#'; d.addEventListener('click', function (ev) { ev.preventDefault(); retour(false, 'Démonstration : aucun fichier n’est servi.'); }); }
+      else { d.href = API + '/media/' + encodeURIComponent(e.id); d.setAttribute('download', ''); }
+      r.appendChild(d); cible.appendChild(r);
+    });
+  }
+
+  $('copy').addEventListener('click', function () {
+    var b = $('copy');
+    var fin = function (ok) { b.textContent = ok ? '✓ Copié' : '⚠ Copie impossible'; setTimeout(function () { b.textContent = '🔗 Copier l’adresse du flux'; }, 1800); };
+    try { navigator.clipboard.writeText(rssUrl()).then(function () { fin(true); }, function () { fin(false); }); } catch (e) { fin(false); }
   });
-}
-function setF(f){FILT=f;render(true)}
-let LIST_SIG="";
-function render(force){
-  const list=document.getElementById("list");
-  let eps=DATA.episodes||[];
-  if(FILT) eps=eps.filter(e=>e.feed===FILT);
-  // ZIP-all button when a single feed is in view
-  const zb=document.getElementById("zipbar");
-  const fid=eps.length?eps[0].feed_id:null;
-  zb.innerHTML=(FILT&&fid!=null)
-    ? `<a href="${API}/public/feed/${fid}/zip">⬇ Download all (ZIP) · ${esc(FILT)}</a>` : "";
-  if(!eps.length){list.innerHTML='<div class="empty">No episodes published yet.</div>';LIST_SIG="";return}
-  // Don't rebuild the list (which would destroy a playing <audio>) when nothing
-  // changed, or while the user is actively listening — only on explicit actions.
-  const sig=(FILT||"all")+"|"+eps.map(e=>e.id).join(",");
-  const playing=[...list.querySelectorAll("audio")].some(a=>!a.paused&&!a.ended);
-  if(!force && (sig===LIST_SIG || playing)) return;
-  LIST_SIG=sig;
-  list.innerHTML=eps.map((e,i)=>{
-    const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
-    return `<div class="ep"><div class="n">${i+1}</div>
-      <div class="meta"><b>${esc(e.title)}</b><span>${esc(e.feed)} · ${date} ${e.duration?'· '+esc(e.duration):''}</span></div>
-      <audio controls preload="none" src="${API}/media/${e.id}"></audio>
-      <a class="dl" href="${API}/media/${e.id}" download title="Download">⬇</a></div>`;
-  }).join("");
-}
-// ── BUS MÉDIA DU HALL (#1238c) ─────────────────────────────────────────────
-// La page pleine jouait son audio « à cru » : pas de pastille, pas de rangée
-// dans la barre média, aucune coordination — elle coupait la radio sans
-// arbitrage. On l'inscrit au bus, comme le cardlet micro : elle ANNONCE ce
-// qu'elle joue (le Hall arbitre alors radio/podcast/vidéo), OBÉIT aux commandes
-// de la barre, et ne tient qu'UN flux à la fois. Embarquée uniquement.
-(function busMedia(){
-  if(parent===window) return;   // hors cadre, personne n'écoute
-  var actif=null;
-  function infos(a){
-    var ep=a&&a.closest?a.closest('.ep'):null;
-    var b=ep&&ep.querySelector('.meta b'), s=ep&&ep.querySelector('.meta span');
-    return { titre: b?b.textContent:'Podcaster', sous: s?s.textContent.split(' · ')[0]:'' };
-  }
-  function annonce(fin){
-    var a=actif, i=a?infos(a):{titre:'Podcaster',sous:''};
-    try{ parent.postMessage({ sbx:'media', id:'podcaster',
-      titre:i.titre, sous:i.sous, joue:!!(a&&!a.paused), t:a?a.currentTime||0:0,
-      d:a?a.duration||0:0, fin:!!fin }, '*'); }catch(e){}
-  }
-  // UN SEUL FLUX : quand un <audio> démarre, on met les autres en pause — et on
-  // prévient le cardlet micro (même clé d'état) pour qu'il se taise aussi.
-  document.addEventListener('play', function(e){
-    var a=e.target; if(!a||a.tagName!=='AUDIO') return;
-    document.querySelectorAll('audio').forEach(function(o){ if(o!==a && !o.paused) o.pause(); });
-    actif=a; annonce();
-    try{ localStorage.setItem('sbx.podcaster.etat', JSON.stringify({ep:(a.src||'').split('/').pop(),t:Math.floor(a.currentTime||0),joue:true})); }catch(x){}
-  }, true);
-  document.addEventListener('pause', function(e){ if(e.target===actif) annonce(); }, true);
-  document.addEventListener('ended', function(e){ if(e.target===actif) annonce(true); }, true);
-  // Un battement régulier tient la rangée vivante (sinon retirée au bout de
-  // ~10s). ON BAT MEME EN PAUSE (#1238c) : un flux mis en pause — par exemple
-  // par le demarrage d'un peertube — doit GARDER sa pastille pour qu'on puisse
-  // le reprendre. Sans battement en pause, le Hall le purgeait et la pastille
-  // disparaissait. On ne s'arrete qu'a la fin (fin:true) ou a la fermeture.
-  setInterval(function(){ if(actif) annonce(); }, 2000);
-  // Commandes de la barre du Hall.
-  // REPRISE DEPUIS LA CARTE MICRO (#1266b). Ouvrir la vue pleine ne doit plus
-  // COUPER le podcast : le micro a enregistré (même origine) l'épisode + la
-  // position ; on les relit et on REPREND exactement là. Si l'autoplay est
-  // accordé (le clic d'ouverture vaut geste), la reprise est transparente et la
-  // barre bascule sur la vue pleine (anti-doublon) sans blanc ; sinon l'épisode
-  // est prêt et calé, et la CARTE continue de jouer — dans les deux cas, plus de
-  // silence à l'ouverture.
-  (function reprend(){
-    var raw; try{ raw=localStorage.getItem('sbx.podcaster.etat'); }catch(e){ return; }
-    var st; try{ st=JSON.parse(raw||'null'); }catch(e){ return; }
-    if(!st || !st.ep || !st.joue) return;
-    var essais=0, iv=setInterval(function(){
-      var a=document.querySelector('audio[src*="/media/'+st.ep+'"]');
-      if(a){
-        clearInterval(iv);
-        var lance=function(){ try{ if(st.t) a.currentTime=st.t; }catch(e){} a.play().catch(function(){}); };
-        if(a.readyState>=1){ lance(); }
-        else { a.preload='metadata'; a.addEventListener('loadedmetadata', lance, {once:true}); try{ a.load(); }catch(e){} }
-      } else if(++essais>40){ clearInterval(iv); }   // ~10 s d'attente du rendu
-    }, 250);
+
+  // ── BUS MÉDIA DU HALL (#1238c) ──────────────────────────────────────────────
+  // La page ANNONCE ce qu'elle joue (le Hall arbitre radio/podcast/vidéo), OBÉIT aux commandes de la barre, et ne tient
+  // qu'UN flux à la fois. Embarquée uniquement.
+  (function busMedia() {
+    if (parent === window) return;   // hors cadre, personne n'écoute
+    var actif = null;
+    function infos(a) {
+      var ep = a && a.closest ? a.closest('.ep') : null;
+      var b = ep && ep.querySelector('.meta b'), s = ep && ep.querySelector('.meta span');
+      return { titre: b ? b.textContent : 'Podcaster', sous: s ? s.textContent.split(' · ')[0] : '' };
+    }
+    function annonce(fin) {
+      var a = actif, i = a ? infos(a) : { titre: 'Podcaster', sous: '' };
+      try { parent.postMessage({ sbx: 'media', id: 'podcaster', titre: i.titre, sous: i.sous, joue: !!(a && !a.paused), t: a ? a.currentTime || 0 : 0, d: a ? a.duration || 0 : 0, fin: !!fin }, '*'); } catch (e) { /* hors Hall */ }
+    }
+    // UN SEUL FLUX : quand un <audio> démarre, on met les autres en pause — et on prévient le cardlet micro (même clé d'état).
+    document.addEventListener('play', function (e) {
+      var a = e.target; if (!a || a.tagName !== 'AUDIO') return;
+      document.querySelectorAll('audio').forEach(function (o) { if (o !== a && !o.paused) o.pause(); });
+      actif = a; annonce();
+      try { localStorage.setItem('sbx.podcaster.etat', JSON.stringify({ ep: (a.src || '').split('/').pop(), t: Math.floor(a.currentTime || 0), joue: true })); } catch (x) { /* stockage indisponible */ }
+    }, true);
+    document.addEventListener('pause', function (e) { if (e.target === actif) annonce(); }, true);
+    document.addEventListener('ended', function (e) { if (e.target === actif) annonce(true); }, true);
+    // Un battement régulier tient la rangée vivante (sinon retirée au bout de ~10 s). ON BAT MÊME EN PAUSE (#1238c) :
+    // un flux mis en pause doit GARDER sa pastille pour qu'on puisse le reprendre. On ne s'arrête qu'à la fin ou à la fermeture.
+    setInterval(function () { if (actif) annonce(); }, 2000);
+    // REPRISE DEPUIS LA CARTE MICRO (#1266b). Ouvrir la vue pleine ne doit plus COUPER le podcast : le micro a enregistré
+    // (même origine) l'épisode + la position ; on les relit et on REPREND exactement là. Si l'autoplay est refusé,
+    // l'épisode est prêt et calé, et la CARTE continue de jouer.
+    (function reprend() {
+      var raw; try { raw = localStorage.getItem('sbx.podcaster.etat'); } catch (e) { return; }
+      var st; try { st = JSON.parse(raw || 'null'); } catch (e) { return; }
+      if (!st || !st.ep || !st.joue) return;
+      var essais = 0, iv = setInterval(function () {
+        var a = document.querySelector('audio[src*="/media/' + String(st.ep).replace(/[^0-9A-Za-z_-]/g, '') + '"]');
+        if (a) {
+          clearInterval(iv);
+          var lance = function () { try { if (st.t) a.currentTime = st.t; } catch (e) { /* position refusée */ } a.play().catch(function () {}); };
+          if (a.readyState >= 1) lance();
+          else { a.preload = 'metadata'; a.addEventListener('loadedmetadata', lance, { once: true }); try { a.load(); } catch (e) { /* rien */ } }
+        } else if (++essais > 40) clearInterval(iv);   // ~10 s d'attente du rendu
+      }, 250);
+    })();
+    // Commandes de la barre du Hall.
+    addEventListener('message', function (ev) {
+      var d = ev.data; if (!d || d.sbx !== 'cmd') return;
+      var a = actif;
+      if (d.action === 'toggle') { if (a) { a.paused ? a.play().catch(function () {}) : a.pause(); } }
+      else if (d.action === 'pause') { if (a && !a.paused) a.pause(); }
+      else if (d.action === 'stop') { if (a) { a.pause(); annonce(true); } }
+      else if (d.action === 'vol' && typeof d.v === 'number') { if (a) { a.volume = Math.min(1, Math.max(0, d.v)); if (a.volume > 0) a.muted = false; } }
+      else if (d.action === 'muet') { if (a) a.muted = !!d.v; }
+    });
   })();
-  addEventListener('message', function(ev){
-    var d=ev.data; if(!d || d.sbx!=='cmd') return;
-    var a=actif;
-    if(d.action==='toggle'){ if(a){ a.paused?a.play().catch(function(){}):a.pause(); } }
-    else if(d.action==='pause'){ if(a && !a.paused) a.pause(); }
-    else if(d.action==='stop'){ if(a){ a.pause(); annonce(true); } }
-    else if(d.action==='vol' && typeof d.v==='number'){ if(a){ a.volume=Math.min(1,Math.max(0,d.v)); if(a.volume>0) a.muted=false; } }
-    else if(d.action==='muet'){ if(a) a.muted=!!d.v; }
-  });
-})();
 
-load();setInterval(load,15000);
+  // ----- Hauteur annoncée à l'hôte (iframes) -----
+  function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'podcaster-portail' }, location.origin); } catch (e) { /* hors iframe */ }
+  }
+  if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+
+  charger();
+  setInterval(function () { if (!document.hidden && !DEMO) charger(); }, 15000);
+})();
 </script>
 </body>
 </html>
