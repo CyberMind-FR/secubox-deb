@@ -4,438 +4,426 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<!--
-  SecuBox Lyrion admin webui — NOT a music player.
-  - Status cards driven by /api/v1/lyrion/{status,components,access,now-playing,players}
-  - "Open Lyrion Music UI" button links to the dedicated vhost
-    (lyrion.gk2.secubox.in) where LMS serves at the root path so its
-    Material skin assets load correctly.
+  Administration de Lyrion (serveur de musique en LXC) au profil Aurora (.claude/AURORA-REFERENCE.md) :
+  page autonome, aucune dépendance. Ce n'est PAS le lecteur de musique : le bouton « Ouvrir Lyrion »
+  mène au vhost dédié. Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
-<html lang="en">
+<html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SecuBox · Lyrion (admin)</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/shared/crt-light.css">
-  <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-  <style>
-    body { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; }
-    .main {
-      padding: calc(var(--gmb-h, 48px) + 1rem) 1.5rem 2rem 1.5rem;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-    .page-header { margin-bottom: 1.25rem; }
-    .page-header h1 { margin: 0 0 0.25rem 0; font-size: 1.6rem; color: var(--text); }
-    .page-header .subtitle { margin: 0; color: var(--muted); font-size: 0.95rem; }
-    .open-cta {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      margin-top: 0.75rem; padding: 0.6rem 1rem;
-      background: var(--mesh-main, #104A88); color: white !important;
-      text-decoration: none; border-radius: 6px; font-weight: 500;
-    }
-    .open-cta:hover { filter: brightness(1.15); }
-    .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-bottom: 1.5rem; }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; }
-    .card h3 { margin: 0 0 0.6rem 0; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-    .card .v { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; line-height: 1.6; }
-    .card .v .row { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.1rem 0; }
-    .card .v .row .k { color: var(--muted); }
-    .card .v .row .val { color: var(--text); }
-    .status-pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-weight: 600; font-size: 0.8rem; }
-    .status-pill.green { background: rgba(0, 212, 155, 0.15); color: var(--root-main, #0a5840); }
-    .status-pill.yellow { background: rgba(255, 200, 0, 0.15); color: var(--wall-main, #9A6010); }
-    .status-pill.red { background: rgba(230, 60, 65, 0.15); color: var(--boot-main, #803018); }
-    .table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
-    .table th, .table td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border); }
-    .table th { color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .empty { color: var(--muted); font-style: italic; padding: 0.5rem; }
-    .hint { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
-    .actions-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
-    .btn { padding: 0.4rem 0.85rem; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 0.85rem; }
-    .btn:hover { filter: brightness(1.1); }
-    .btn.primary { background: var(--mesh-main, #104A88); color: white; border-color: var(--mesh-main); }
-    /* Contrôle des lecteurs (#1071) */
-    .player-row { border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; margin-bottom: 0.6rem; background: var(--surface); }
-    .player-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-    .player-name { font-weight: 600; color: var(--text); }
-    .player-meta { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
-    .ppwr { margin-left: auto; color: var(--muted); font-size: 0.82rem; display: inline-flex; align-items: center; gap: 0.3rem; }
-    .player-ctl { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
-    .pbtn { min-width: 2.1rem; padding: 0.32rem 0.5rem; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 0.95rem; line-height: 1; }
-    .pbtn:hover { filter: brightness(1.12); }
-    .pvol { flex: 1 1 120px; min-width: 100px; max-width: 220px; accent-color: var(--mesh-main, #104A88); }
-    .psync { padding: 0.3rem 0.4rem; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 0.82rem; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Lyrion</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1100px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile .v.petit{font-size:1.05rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr} .grille .large{grid-column:1/-1}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 8px;padding:8px 12px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.1);font-size:.8rem}
+        .conf span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        .actions{display:flex;flex-wrap:wrap;gap:8px}
+        .joueur{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;margin-bottom:8px;background:rgba(8,18,38,.55);min-width:0}
+        .jtete{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:8px}
+        .jtete b{font-size:.88rem;overflow-wrap:anywhere} .jtete .meta{color:var(--faible);font-size:.74rem;overflow-wrap:anywhere}
+        .jtete label{margin-left:auto;color:var(--doux);font-size:.76rem;display:inline-flex;align-items:center;gap:6px}
+        .jctl{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+        .pb{min-width:36px;min-height:34px;font:inherit;font-size:.95rem;line-height:1;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .pb:hover{border-color:var(--cyan)} .pb:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .vol{display:inline-flex;align-items:center;gap:6px;flex:1 1 150px;min-width:130px;max-width:300px;color:var(--doux);font-size:.72rem}
+        .vol input{flex:1;min-width:60px;accent-color:var(--cyan)} .vol output{min-width:3.4em;font-variant-numeric:tabular-nums}
+        .jctl select{font:inherit;font-size:.78rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 8px;max-width:100%}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        a.lien{color:var(--cyan);overflow-wrap:anywhere}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
-
-<!-- Canonical SecuBox global menu bar -->
-<nav class="sidebar" id="sidebar"></nav>
-
-<main class="main">
-
-  <header class="page-header">
-    <h1>🎵 Lyrion — SecuBox admin</h1>
-    <p class="subtitle">
-      Control plane for the Lyrion Music Server running in the
-      <code>lyrion</code> LXC (10.100.0.100). This is <em>not</em> the music
-      player. Click below to open the real LMS Material UI on its dedicated
-      vhost — serving LMS at the root path is the only way the Material
-      skin's absolute asset URLs load correctly.
-    </p>
-    <a class="open-cta" id="open-music-ui" href="#" target="_blank" rel="noopener">
-      ▶ Open Lyrion Music UI →
-    </a>
-  </header>
-
-  <section class="cards">
-    <article class="card">
-      <h3>Status</h3>
-      <div class="v" id="status-v">loading…</div>
-    </article>
-    <article class="card">
-      <h3>Components</h3>
-      <div class="v" id="components-v">loading…</div>
-    </article>
-    <article class="card">
-      <h3>Access</h3>
-      <div class="v" id="access-v">loading…</div>
-    </article>
-    <article class="card">
-      <h3>Now playing</h3>
-      <div class="v" id="now-playing-v">loading…</div>
-    </article>
-  </section>
-
-  <section class="card" style="margin-bottom: 1rem;">
-    <h3>Connected players</h3>
-    <div id="players-wrap">
-      <div class="empty">loading…</div>
-    </div>
-    <p class="hint">
-      Hardware Squeezebox / Squeezelite players connect on TCP/UDP 3483
-      (DNAT lan0 → 10.100.0.100 in nftables). 0 players usually means the
-      device is on a different L2 segment and broadcast discovery isn't
-      crossing — set the LMS IP manually on the device or put the WiFi AP
-      in bridge mode.
-    </p>
-  </section>
-
-  <section class="card">
-    <h3>Actions</h3>
-    <div class="actions-row">
-      <button class="btn primary" id="btn-rescan" type="button">Rescan library</button>
-      <button class="btn" id="btn-refresh" type="button">Refresh all</button>
-    </div>
-    <p class="hint">
-      "Rescan library" triggers an LMS database refresh — useful after
-      adding new files under <code>/data/music/</code>. May take minutes
-      on large libraries.
-    </p>
-  </section>
-
-  <section class="card" style="margin-top: 1rem;">
-    <h3>💽 Médiathèque externe</h3>
-    <div id="medialib-current" class="v" style="margin-bottom: 0.75rem;">loading…</div>
-    <div id="medialib-candidates">
-      <div class="empty">loading…</div>
-    </div>
-    <p class="hint">
-      SecuBox détecte les points de montage externes (sous <code>/media</code>,
-      <code>/mnt</code>, <code>/data/external</code> et supports amovibles)
-      contenant des fichiers audio. Rien n'est monté sans votre confirmation :
-      cliquez « Monter » pour lier le dossier en <strong>lecture seule</strong>
-      dans la LXC Lyrion, puis une réindexation est déclenchée.
-    </p>
-  </section>
-
-</main>
-
-<script src="/shared/sidebar.js"></script>
-<script>
-(function() {
-  const API = "/api/v1/lyrion";
-
-  async function api(path, opts) {
-    const res = await fetch(API + path, opts || {});
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  }
-
-  function escapeHtml(s) {
-    return String(s == null ? "—" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-
-  function setRows(elId, rows) {
-    const el = document.getElementById(elId);
-    el.innerHTML = rows.map(([k, v]) =>
-      `<div class="row"><span class="k">${escapeHtml(k)}</span><span class="val">${v}</span></div>`
-    ).join("");
-  }
-
-  async function loadStatus() {
-    try {
-      const d = await api("/status");
-      const overall = (d.overall || "unknown").toLowerCase();
-      const pillClass = overall === "green" ? "green" : overall === "yellow" ? "yellow" : "red";
-      setRows("status-v", [
-        ["Overall", `<span class="status-pill ${pillClass}">${escapeHtml(overall.toUpperCase())}</span>`],
-        ["Module", escapeHtml(d.module || "lyrion")],
-        ["Version", escapeHtml(d.version || "—")],
-      ]);
-    } catch (e) {
-      document.getElementById("status-v").innerHTML = `<span class="empty">${escapeHtml(e.message)}</span>`;
-    }
-  }
-
-  async function loadComponents() {
-    try {
-      const d = await api("/components");
-      const items = (d.components || []).map(c => [c.name, escapeHtml(c.state || "?")]);
-      if (!items.length) {
-        document.getElementById("components-v").innerHTML = `<div class="empty">no components reported</div>`;
-        return;
-      }
-      setRows("components-v", items);
-    } catch (e) {
-      document.getElementById("components-v").innerHTML = `<span class="empty">${escapeHtml(e.message)}</span>`;
-    }
-  }
-
-  async function loadAccess() {
-    try {
-      const d = await api("/access");
-      const access = d.access || [];
-      const items = access.map(a => [
-        escapeHtml(a.scope || "url"),
-        `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.url)}</a>`
-      ]);
-      if (!items.length) {
-        document.getElementById("access-v").innerHTML = `<div class="empty">none</div>`;
-      } else {
-        setRows("access-v", items);
-      }
-      // Single source of truth for the "Open Music UI" button: prefer
-      // the `public` access entry (https + LAN-only gate), fall back to lan.
-      const pub = access.find(a => a.scope === "public");
-      const lan = access.find(a => a.scope === "lan");
-      const target = (pub && pub.url) || (lan && lan.url) || "#";
-      const btn = document.getElementById("open-music-ui");
-      if (btn) btn.href = target;
-    } catch (e) {
-      document.getElementById("access-v").innerHTML = `<span class="empty">${escapeHtml(e.message)}</span>`;
-    }
-  }
-
-  async function loadNowPlaying() {
-    try {
-      const d = await api("/now-playing");
-      if (!d || !d.title) {
-        document.getElementById("now-playing-v").innerHTML = `<div class="empty">nothing playing</div>`;
-        return;
-      }
-      setRows("now-playing-v", [
-        ["Track", escapeHtml(d.title)],
-        ["Artist", escapeHtml(d.artist || "—")],
-        ["Album", escapeHtml(d.album || "—")],
-        ["Player", escapeHtml(d.player || "—")],
-      ]);
-    } catch (e) {
-      document.getElementById("now-playing-v").innerHTML = `<span class="empty">${escapeHtml(e.message)}</span>`;
-    }
-  }
-
-  // Contrôle des lecteurs (#1071) : chaque verbe POST vers /player/{id}/…, qui
-  // relaie en slim.request LMS natif (jeu de commandes squeezectl, sans dép.).
-  async function playerPost(pid, path, body) {
-    return api(`/player/${encodeURIComponent(pid)}/${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {}),
-    });
-  }
-  async function playerAction(pid, verb) {
-    try { await playerPost(pid, `action/${verb}`); }
-    catch (e) { flashPlayers(e.message); }
-  }
-  async function playerPower(pid, on) {
-    try { await playerPost(pid, "power", { on }); loadPlayers(); }
-    catch (e) { flashPlayers(e.message); }
-  }
-  async function playerVolume(pid, level) {
-    try { await playerPost(pid, "volume", { level: Number(level) }); }
-    catch (e) { flashPlayers(e.message); }
-  }
-  async function playerSync(pid, target) {
-    try { await playerPost(pid, "sync", { target }); loadPlayers(); }
-    catch (e) { flashPlayers(e.message); }
-  }
-  function flashPlayers(msg) {
-    const n = document.getElementById("players-flash");
-    if (n) { n.textContent = "⚠ " + msg; setTimeout(() => { n.textContent = ""; }, 4000); }
-  }
-
-  async function loadPlayers() {
-    const wrap = document.getElementById("players-wrap");
-    try {
-      const d = await api("/players");
-      const list = (d.players || []);
-      if (!list.length) {
-        wrap.innerHTML = `<div class="empty">no players connected — see hint below</div>`;
-        return;
-      }
-      const btn = (pid, verb, label, title) =>
-        `<button class="pbtn" title="${title}" onclick="playerAction('${pid}','${verb}')">${label}</button>`;
-      wrap.innerHTML =
-        '<div id="players-flash" class="hint" style="color:var(--boot-main,#803018)"></div>' +
-        list.map(p => {
-          const pid = escapeHtml(p.id);
-          const opts = list.filter(o => o.id !== p.id)
-            .map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)}</option>`).join("");
-          const sync = opts
-            ? `<select class="psync" onchange="if(this.value){playerSync('${pid}',this.value);this.value='';}">` +
-              `<option value="">sync with…</option>${opts}</select>` +
-              `<button class="pbtn" title="unsync" onclick="playerAction('${pid}','unsync')">⛓✕</button>`
-            : "";
-          return `<div class="player-row">
-            <div class="player-head">
-              <span class="player-name">${escapeHtml(p.name)}</span>
-              <span class="player-meta">${escapeHtml(p.model)} · ${escapeHtml(p.ip || "—")}</span>
-              <label class="ppwr"><input type="checkbox" ${p.power ? "checked" : ""}
-                onchange="playerPower('${pid}',this.checked)"> power</label>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>
+                <div><h1>Lyrion</h1><small>Serveur de musique en LXC — administration</small></div>
             </div>
-            <div class="player-ctl">
-              ${btn(pid, "prev", "⏮", "previous")}
-              ${btn(pid, "play", "▶", "play")}
-              ${btn(pid, "pause", "⏸", "pause")}
-              ${btn(pid, "stop", "⏹", "stop")}
-              ${btn(pid, "next", "⏭", "next")}
-              <input type="range" class="pvol" min="0" max="100" value="50" title="volume"
-                onchange="playerVolume('${pid}',this.value)">
-              ${sync}
-            </div>
-          </div>`;
-        }).join("");
-    } catch (e) {
-      wrap.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
-    }
-  }
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a class="btn prim" id="ouvrir" href="#" target="_blank" rel="noopener" hidden>▶ Ouvrir Lyrion ↗</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-  async function rescan() {
-    const btn = document.getElementById("btn-rescan");
-    btn.disabled = true;
-    btn.textContent = "Scanning…";
-    try {
-      await api("/rescan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      btn.textContent = "Scan started ✓";
-      setTimeout(() => { btn.textContent = "Rescan library"; btn.disabled = false; }, 3000);
-    } catch (e) {
-      btn.textContent = "Failed: " + e.message;
-      setTimeout(() => { btn.textContent = "Rescan library"; btn.disabled = false; }, 4000);
-    }
-  }
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cSante" title="Santé globale calculée par lyrionctl : sain si le conteneur, le démon Lyrion et l’API hôte tournent ; dégradé si le conteneur existe et l’un des deux démons tourne ; hors service sinon."><span class="l">Santé</span><span class="v petit" id="tSante">—</span><span class="s">conteneur, démon, API</span></div>
+            <div class="tuile" id="cLxc" title="État du conteneur LXC qui héberge le serveur Lyrion."><span class="l">Conteneur</span><span class="v petit" id="tLxc">—</span><span class="s" id="sLxc">LXC</span></div>
+            <div class="tuile cy" title="Lecteurs (Squeezebox, Squeezelite…) actuellement connectés au serveur."><span class="l">Lecteurs</span><span class="v" id="tJoueurs">—</span><span class="s">connectés</span></div>
+            <div class="tuile cy" title="Titre en cours de lecture sur le premier lecteur allumé en lecture ; « Au repos » si rien ne joue."><span class="l">Lecture</span><span class="v petit" id="tLecture">—</span><span class="s" id="sLecture">en cours</span></div>
+            <div class="tuile cy" title="Médiathèque externe liée en lecture seule dans le conteneur Lyrion."><span class="l">Médiathèque externe</span><span class="v petit" id="tMedia">—</span><span class="s" id="sMedia">lecture seule</span></div>
+            <div class="tuile cy" title="Version du module d’administration (pas celle du serveur Lyrion)."><span class="l">Module</span><span class="v petit" id="tVersion">—</span><span class="s">secubox-lyrion</span></div>
+        </section>
 
-  async function loadMedialib() {
-    const cur = document.getElementById("medialib-current");
-    const cand = document.getElementById("medialib-candidates");
-    try {
-      const d = await api("/medialib");
-      // Current mount
-      if (d.external) {
-        cur.innerHTML =
-          `<div class="row"><span class="k">Montée</span>` +
-          `<span class="val">${escapeHtml(d.external)} ` +
-          `${d.mounted ? "✓ live" : "⏸ config only"}</span></div>` +
-          `<div class="actions-row">` +
-          `<button class="btn" id="btn-medialib-unmount" type="button">Démonter</button></div>`;
-        const ub = document.getElementById("btn-medialib-unmount");
-        if (ub) ub.addEventListener("click", unmountExternal);
-      } else {
-        cur.innerHTML = `<div class="empty">aucune médiathèque externe montée</div>`;
-      }
-      // Candidates
-      const list = (d.candidates || []);
-      if (!list.length) {
-        cand.innerHTML = `<div class="empty">aucun candidat détecté (branchez un support ou vérifiez /media, /mnt, /data/external)</div>`;
-        return;
-      }
-      cand.innerHTML =
-        '<table class="table"><thead><tr>' +
-        '<th>Dossier</th><th>Chemin</th><th>Fichiers audio</th><th></th>' +
-        '</tr></thead><tbody>' +
-        list.map(c => {
-          const mounted = d.external === c.path;
-          return `<tr><td>${escapeHtml(c.label)}</td>` +
-            `<td>${escapeHtml(c.path)}</td>` +
-            `<td>${escapeHtml(c.audio_files)}</td>` +
-            `<td>${mounted
-              ? '<span class="status-pill green">montée</span>'
-              : `<button class="btn primary btn-medialib-mount" type="button" data-path="${escapeHtml(c.path)}">Monter</button>`
-            }</td></tr>`;
-        }).join("") +
-        '</tbody></table>';
-      cand.querySelectorAll(".btn-medialib-mount").forEach(b =>
-        b.addEventListener("click", () => mountPath(b.getAttribute("data-path"))));
-    } catch (e) {
-      cur.innerHTML = `<span class="empty">${escapeHtml(e.message)}</span>`;
-      cand.innerHTML = "";
-    }
-  }
+        <div class="grille">
+            <div class="pan"><h3>Composants</h3>
+                <div class="tab"><table><thead><tr><th>Composant</th><th>État</th><th>Détail</th></tr></thead><tbody id="bComp"></tbody></table></div></div>
+            <div class="pan"><h3>Accès</h3>
+                <div class="tab"><table><thead><tr><th>Portée</th><th>Adresse</th><th>Accès</th></tr></thead><tbody id="bAcces"></tbody></table></div>
+                <p class="note">Le serveur de musique est servi à la racine de son propre vhost : c’est la seule façon de charger les ressources absolues de son habillage Material.</p></div>
 
-  async function mountPath(path) {
-    if (!path) return;
-    if (!confirm(`Monter « ${path} » en lecture seule dans la LXC Lyrion, puis réindexer la médiathèque ?`)) return;
-    try {
-      const r = await api("/medialib/mount", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path }),
-      });
-      if (r && r.ok === false) alert("Échec : " + (r.error || "erreur inconnue"));
-    } catch (e) {
-      alert("Échec du montage : " + e.message);
-    }
-    loadMedialib();
-  }
+            <div class="pan large"><h3>Lecteurs connectés <i id="nJoueurs"></i></h3>
+                <div id="rJoueurs" class="retour" hidden></div>
+                <div id="listeJoueurs"></div>
+                <p class="note">Les lecteurs matériels se connectent en TCP/UDP 3483 (DNAT du LAN vers le conteneur). Zéro lecteur signifie le plus souvent un autre segment L2 où la découverte par diffusion ne passe pas : renseigner l’adresse du serveur sur l’appareil, ou passer le point d’accès Wi-Fi en pont. L’API ne fournit pas le volume courant d’un lecteur : le curseur n’affiche une valeur qu’après avoir été déplacé.</p></div>
 
-  async function unmountExternal() {
-    if (!confirm("Démonter la médiathèque externe et réindexer ?")) return;
-    try {
-      await api("/medialib/unmount", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-    } catch (e) {
-      alert("Échec du démontage : " + e.message);
-    }
-    loadMedialib();
-  }
+            <div class="pan"><h3>Actions</h3>
+                <div id="rAct" class="retour" hidden></div>
+                <div id="cAct" class="conf" hidden></div>
+                <div class="actions"><button class="btn prim" id="rescan" type="button">Réindexer la médiathèque</button></div>
+                <p class="note">« Réindexer » demande à Lyrion de rafraîchir sa base : utile après l’ajout de fichiers sous <span class="mono">/data/music/</span>. L’analyse tourne en arrière-plan et peut durer plusieurs minutes ; la page n’en suit pas l’avancement.</p></div>
 
-  function loadAll() {
-    loadStatus();
-    loadComponents();
-    loadAccess();
-    loadNowPlaying();
-    loadPlayers();
-    loadMedialib();
-  }
+            <div class="pan"><h3>Lecture en cours</h3>
+                <dl class="kv"><dt>Titre</dt><dd id="kTitre">—</dd><dt>Artiste</dt><dd id="kArtiste">—</dd><dt>Album</dt><dd id="kAlbum">—</dd><dt>Lecteur</dt><dd id="kLecteur">—</dd></dl></div>
 
-  document.getElementById("btn-rescan").addEventListener("click", rescan);
-  document.getElementById("btn-refresh").addEventListener("click", loadAll);
+            <div class="pan large"><h3>Médiathèque externe <i id="nMedia"></i></h3>
+                <div id="rMedia" class="retour" hidden></div>
+                <div id="cMedia" class="conf" hidden></div>
+                <dl class="kv" style="margin-bottom:8px"><dt>Montée</dt><dd id="kMonte">—</dd></dl>
+                <div class="actions" id="aDemonter" hidden style="margin-bottom:8px"><button class="btn danger sm" id="demonter" type="button">Démonter et réindexer</button></div>
+                <div class="tab"><table><thead><tr><th>Dossier</th><th>Chemin</th><th>Fichiers audio</th><th>Action</th></tr></thead><tbody id="bCand"></tbody></table></div>
+                <div id="bloqDev" hidden>
+                    <h3 style="margin:12px 0 6px">Périphériques non montés</h3>
+                    <div class="tab"><table><thead><tr><th>Périphérique</th><th>Nom</th><th>Taille</th><th>Système</th><th>Amovible</th></tr></thead><tbody id="bDev"></tbody></table></div>
+                    <p class="note">Ces périphériques demandent d’abord un montage sur l’hôte ; cette page ne le propose pas.</p>
+                </div>
+                <p class="note">SecuBox détecte les points de montage externes (sous <span class="mono">/media</span>, <span class="mono">/mnt</span>, <span class="mono">/data/external</span> et supports amovibles) qui contiennent des fichiers audio. Rien n’est monté sans votre confirmation : « Monter » lie le dossier en <b>lecture seule</b> dans le conteneur Lyrion, puis une réindexation est déclenchée.</p></div>
+        </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-  loadAll();
-  setInterval(loadAll, 15000);
-})();
-</script>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/lyrion';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
+        // Une section à null = lecture en échec (affichée « — »), jamais 0.
+        let ST = null, COMP = null, ACC = null, NOW = null, JOUEURS = null, MEDIA = null, VER = null;
+        let SESSION_OK = true, ERREURS = [];
+        let CONFIRM = null;   // { zone } : confirmation ouverte, jamais de dialogue natif
+
+        // Jeton : sbx_token (clé commune des webui) ; l'ancienne page n'en envoyait AUCUN.
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                if (r.status === 401 || r.status === 403) { SESSION_OK = false; rendre(); }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.statut === 401 || res.statut === 403) return 'session requise (HTTP ' + res.statut + ')';
+            return (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable');
+        }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function vide(tb, cols, msg) { const tr = el('tr'); const td = el('td', 'vide', msg); td.colSpan = cols; tr.appendChild(td); tb.appendChild(tr); }
+
+        // Confirmation intégrée : un bandeau Confirmer / Annuler dans la zone, aucun dialogue natif.
+        function demander(zone, message, action) {
+            const z = $(zone); z.replaceChildren(); CONFIRM = { zone };
+            z.appendChild(el('span', null, message));
+            const ok = el('button', 'btn danger sm', 'Confirmer'), non = el('button', 'btn sm', 'Annuler');
+            ok.type = non.type = 'button';
+            const clore = () => { CONFIRM = null; z.hidden = true; z.replaceChildren(); annoncer(); };
+            ok.addEventListener('click', () => { clore(); action(); });
+            non.addEventListener('click', clore);
+            z.appendChild(ok); z.appendChild(non); z.hidden = false; annoncer(); ok.focus();
+        }
+
+        function demoData() {
+            ST = { module: 'lyrion', version: '1.7.0', overall: 'green' };
+            COMP = { components: [
+                { name: 'lxc', state: 'running', detail: 'lyrion @ 10.100.0.100 on br-lxc' },
+                { name: 'daemon', state: 'running', detail: 'lyrion, port 9000' },
+                { name: 'host-api', state: 'running', detail: 'secubox-lyrion.service (uvicorn @ /run/secubox/lyrion.sock)' }] };
+            ACC = { access: [{ url: 'http://192.0.2.10:9000/', auth: 'lan-only', scope: 'lan' }, { url: 'https://musique.example.net/', auth: 'LAN-only gate', scope: 'public' }] };
+            NOW = { title: 'Morceau de démonstration', artist: 'Artiste fictif', album: 'Album fictif', player: 'Salon', mode: 'play' };
+            JOUEURS = { players: [
+                { id: '00:00:5e:00:53:01', name: 'Salon', model: 'Squeezelite', ip: '192.0.2.21', power: true },
+                { id: '00:00:5e:00:53:02', name: 'Cuisine', model: 'Squeezebox Touch', ip: '192.0.2.22', power: false }], count: 2 };
+            MEDIA = { external: '/media/disque-demo', mounted: true, devices: [{ device: '/dev/sdb1', label: 'CLE-DEMO', size: '29,8G', fstype: 'exfat', removable: true, mounted: false }],
+                candidates: [{ path: '/media/disque-demo', label: 'disque-demo', audio_files: 1284 }, { path: '/mnt/archives', label: 'archives', audio_files: 311 }] };
+            VER = { version: '1.7.0' };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; ERREURS = []; rendre(); return; }
+            ERREURS = []; let session = true;
+            const essai = async (nom, chemin) => {
+                try { return await lire(chemin); }
+                catch (e) { if (e.statut === 401 || e.statut === 403) session = false; else ERREURS.push(nom + ' : ' + e.message); return null; }
+            };
+            [ST, COMP, ACC, NOW, JOUEURS, MEDIA, VER] = await Promise.all([
+                essai('état', '/status'), essai('composants', '/components'), essai('accès', '/access'), essai('lecture en cours', '/now-playing'),
+                essai('lecteurs', '/players'), essai('médiathèque', '/medialib'), essai('version', '/version')]);
+            SESSION_OK = session;
+            $('maj').textContent = new Date().toLocaleTimeString('fr-FR');
+            rendre();
+        }
+
+        function urlSure(u) { return typeof u === 'string' && /^https?:\/\//i.test(u) ? u : ''; }
+        const ETAT = { running: ['ok', 'EN MARCHE'], stopped: ['hors', 'ARRÊTÉ'], absent: ['hors', 'ABSENT'] };
+        function etatComp(s) { const k = String(s || '').toLowerCase(); return ETAT[k] || ['att', k ? k.toUpperCase() : '—']; }
+
+        function tuile(id, valeur, classe) {
+            $(id).textContent = valeur;
+            const t = $(id).closest('.tuile'); t.classList.remove('ok', 'att', 'hors', 'cy'); if (classe) t.classList.add(classe);
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const er = $('erreur'); er.hidden = !ERREURS.length; er.textContent = ERREURS.length ? 'Lecture incomplète — ' + ERREURS.join(' ; ') : '';
+
+            // Santé
+            const etat = $('etat');
+            const gl = ST && ST.overall ? String(ST.overall).toLowerCase() : null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; tuile('tSante', '—', 'cy'); }
+            else if (gl === 'green') { etat.className = 'actif'; etat.textContent = 'SAIN'; tuile('tSante', 'Sain', 'ok'); }
+            else if (gl === 'yellow') { etat.className = 'actif att'; etat.textContent = 'DÉGRADÉ'; tuile('tSante', 'Dégradé', 'att'); }
+            else if (gl) { etat.className = 'actif hors'; etat.textContent = 'HORS SERVICE'; tuile('tSante', 'Hors service', 'hors'); }
+            else { etat.className = 'actif neutre'; etat.textContent = 'ÉTAT INCONNU'; tuile('tSante', '—', 'cy'); }
+            $('tVersion').textContent = tiret((ST && ST.version) || (VER && VER.version));
+
+            // Composants
+            const bc = $('bComp'); bc.replaceChildren();
+            const comps = COMP && Array.isArray(COMP.components) ? COMP.components : null;
+            const lxc = comps ? comps.find(c => c.name === 'lxc') : null;
+            if (lxc) { const [cl, tx] = etatComp(lxc.state); tuile('tLxc', tx, cl === 'ok' ? 'ok' : cl); $('sLxc').textContent = tiret(lxc.detail); }
+            else { tuile('tLxc', '—', 'cy'); $('sLxc').textContent = 'LXC'; }
+            if (!comps) vide(bc, 3, '—');
+            else if (!comps.length) vide(bc, 3, 'Aucun composant déclaré.');
+            else comps.forEach(c => {
+                const tr = el('tr'), [cl, tx] = etatComp(c.state);
+                tr.appendChild(el('td', 'mono', tiret(c.name)));
+                const t2 = el('td'); t2.appendChild(pastille(cl, tx)); tr.appendChild(t2);
+                tr.appendChild(el('td', 'mono', tiret(c.detail)));
+                bc.appendChild(tr);
+            });
+
+            // Accès
+            const ba = $('bAcces'); ba.replaceChildren();
+            const acces = ACC && Array.isArray(ACC.access) ? ACC.access : null;
+            if (!acces) vide(ba, 3, '—'); else if (!acces.length) vide(ba, 3, 'Aucun accès déclaré.');
+            else acces.forEach(a => {
+                const tr = el('tr'); tr.appendChild(el('td', null, a.scope === 'public' ? 'Public' : a.scope === 'lan' ? 'LAN' : tiret(a.scope)));
+                const td = el('td'), u = urlSure(a.url);
+                if (u) { const l = el('a', 'lien mono', u); l.href = u; l.target = '_blank'; l.rel = 'noopener'; td.appendChild(l); } else td.textContent = tiret(a.url);
+                tr.appendChild(td); tr.appendChild(el('td', null, tiret(a.auth))); ba.appendChild(tr);
+            });
+            // Source unique du bouton « Ouvrir » : l'entrée publique, sinon LAN (comme l'ancienne page).
+            const bo = $('ouvrir'); let cible = '';
+            if (acces) { const pub = acces.find(a => a.scope === 'public' && urlSure(a.url)), lan = acces.find(a => a.scope === 'lan' && urlSure(a.url)); cible = urlSure((pub || lan || {}).url); }
+            bo.hidden = !cible; if (cible) bo.href = cible;
+
+            // Lecture en cours
+            const np = NOW && typeof NOW === 'object' ? NOW : null;
+            const joue = !!(np && np.title);
+            $('kTitre').textContent = np ? (joue ? np.title : 'Au repos') : '—';
+            $('kArtiste').textContent = joue ? tiret(np.artist) : '—'; $('kAlbum').textContent = joue ? tiret(np.album) : '—'; $('kLecteur').textContent = joue ? tiret(np.player) : '—';
+            if (np) { tuile('tLecture', joue ? np.title : 'Au repos', joue ? 'ok' : 'cy'); $('sLecture').textContent = joue ? tiret(np.artist) : 'rien ne joue'; }
+            else { tuile('tLecture', '—', 'cy'); $('sLecture').textContent = 'en cours'; }
+
+            // Lecteurs
+            const liste = Array.isArray(JOUEURS && JOUEURS.players) ? JOUEURS.players : null;
+            tuile('tJoueurs', liste ? String(liste.length) : '—', 'cy');
+            $('nJoueurs').textContent = liste ? liste.length + ' connecté(s)' : '';
+            rendreJoueurs(liste);
+
+            // Médiathèque
+            const m = MEDIA && typeof MEDIA === 'object' ? MEDIA : null;
+            if (!m) { tuile('tMedia', '—', 'cy'); $('sMedia').textContent = 'lecture seule'; }
+            else if (m.external) { tuile('tMedia', m.mounted ? 'Montée' : 'Configurée', m.mounted ? 'ok' : 'att'); $('sMedia').textContent = m.mounted ? m.external : 'liée en configuration seulement : ' + m.external; }
+            else { tuile('tMedia', 'Aucune', 'cy'); $('sMedia').textContent = 'rien de monté'; }
+            rendreMedia(m);
+            annoncer();
+        }
+
+        function rendreJoueurs(liste) {
+            const zone = $('listeJoueurs'); zone.replaceChildren();
+            if (!liste) { zone.appendChild(el('div', 'vide', '—')); return; }
+            if (!liste.length) { zone.appendChild(el('div', 'vide', 'Aucun lecteur connecté — voir la note ci-dessous.')); return; }
+            liste.forEach(p => {
+                const pid = String(p.id || '');
+                const boite = el('div', 'joueur');
+                const tete = el('div', 'jtete');
+                tete.appendChild(el('b', null, tiret(p.name)));
+                tete.appendChild(el('span', 'meta mono', tiret(p.model) + ' · ' + tiret(p.ip)));
+                const lab = el('label'), ck = el('input'); ck.type = 'checkbox'; ck.checked = !!p.power;
+                ck.addEventListener('change', () => commande(pid, 'power', { on: ck.checked }, true));
+                lab.appendChild(ck); lab.appendChild(document.createTextNode('allumé')); tete.appendChild(lab);
+                boite.appendChild(tete);
+
+                const ctl = el('div', 'jctl');
+                [['prev', '⏮', 'Précédent'], ['play', '▶', 'Lecture'], ['pause', '⏸', 'Pause'], ['stop', '⏹', 'Arrêt'], ['next', '⏭', 'Suivant']].forEach(([verbe, sym, titre]) => {
+                    const b = el('button', 'pb', sym); b.type = 'button'; b.title = titre; b.setAttribute('aria-label', titre + ' — ' + tiret(p.name));
+                    b.addEventListener('click', () => commande(pid, 'action/' + verbe, undefined, false));
+                    ctl.appendChild(b);
+                });
+                // Volume courant inconnu de l'API : « — » tant que l'utilisateur n'a pas bougé le curseur.
+                const vol = el('label', 'vol'), cur = el('input'), sortie = el('output', null, '—');
+                vol.appendChild(document.createTextNode('Volume'));
+                cur.type = 'range'; cur.min = 0; cur.max = 100; cur.value = 50; cur.setAttribute('aria-label', 'Volume — ' + tiret(p.name)); cur.title = 'Volume (valeur courante non fournie par l’API)';
+                cur.addEventListener('input', () => { sortie.textContent = cur.value; });
+                cur.addEventListener('change', () => commande(pid, 'volume', { level: Number(cur.value) }, false));
+                vol.appendChild(cur); vol.appendChild(sortie); ctl.appendChild(vol);
+                const autres = liste.filter(o => o.id !== p.id);
+                if (autres.length) {
+                    const sel = el('select'); sel.setAttribute('aria-label', 'Synchroniser avec — ' + tiret(p.name));
+                    const o0 = el('option', null, 'synchroniser avec…'); o0.value = ''; sel.appendChild(o0);
+                    autres.forEach(o => { const op = el('option', null, tiret(o.name)); op.value = String(o.id || ''); sel.appendChild(op); });
+                    sel.addEventListener('change', () => { if (sel.value) { const t = sel.value; sel.value = ''; commande(pid, 'sync', { target: t }, true); } });
+                    ctl.appendChild(sel);
+                    const un = el('button', 'pb', '⛓✕'); un.type = 'button'; un.title = 'Désynchroniser'; un.setAttribute('aria-label', 'Désynchroniser — ' + tiret(p.name));
+                    un.addEventListener('click', () => commande(pid, 'action/unsync', undefined, true));
+                    ctl.appendChild(un);
+                }
+                boite.appendChild(ctl); zone.appendChild(boite);
+            });
+        }
+
+        // Mêmes routes et mêmes corps que l'ancienne page : POST /player/<id>/<action|power|volume|sync>.
+        // Corps vide pour les verbes de transport (l'ancienne page envoyait {}).
+        async function commande(pid, chemin, corps, recharge) {
+            const r = await ecrire('/player/' + encodeURIComponent(pid) + '/' + chemin, corps === undefined ? {} : corps);
+            if (r.ok) { if (recharge) charger(); }
+            else { retour('rJoueurs', false, 'Commande refusée : ' + detail(r)); if (recharge) rendre(); }
+        }
+
+        function rendreMedia(m) {
+            const bc = $('bCand'); bc.replaceChildren();
+            $('kMonte').textContent = m ? (m.external ? m.external + (m.mounted ? ' — montée' : ' — configurée seulement (non montée)') : 'aucune médiathèque externe') : '—';
+            $('aDemonter').hidden = !(m && m.external);
+            const cands = m && Array.isArray(m.candidates) ? m.candidates : null;
+            $('nMedia').textContent = cands ? cands.length + ' candidat(s)' : '';
+            if (!cands) vide(bc, 4, '—');
+            else if (!cands.length) vide(bc, 4, 'Aucun candidat détecté (branchez un support ou vérifiez /media, /mnt, /data/external).');
+            else cands.forEach(c => {
+                const tr = el('tr'); tr.appendChild(el('td', null, tiret(c.label))); tr.appendChild(el('td', 'mono', tiret(c.path))); tr.appendChild(el('td', null, tiret(c.audio_files)));
+                const td = el('td', 'act');
+                if (m.external === c.path) td.appendChild(pastille('ok', 'MONTÉE'));
+                else { const b = el('button', 'btn prim sm', 'Monter'); b.type = 'button'; b.addEventListener('click', () => monter(String(c.path || ''))); td.appendChild(b); }
+                tr.appendChild(td); bc.appendChild(tr);
+            });
+            const bd = $('bDev'); bd.replaceChildren();
+            const devs = m && Array.isArray(m.devices) ? m.devices : [];
+            $('bloqDev').hidden = !devs.length;
+            devs.forEach(d => {
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(d.device))); tr.appendChild(el('td', null, tiret(d.label))); tr.appendChild(el('td', null, tiret(d.size)));
+                tr.appendChild(el('td', null, tiret(d.fstype))); tr.appendChild(el('td', null, d.removable === true ? 'oui' : d.removable === false ? 'non' : '—')); bd.appendChild(tr);
+            });
+        }
+
+        function monter(path) {
+            if (!path) return;
+            demander('cMedia', 'Monter « ' + path + ' » en lecture seule dans le conteneur Lyrion, puis réindexer la médiathèque ?', async () => {
+                const r = await ecrire('/medialib/mount', { path });
+                if (r.ok && !(r.data && r.data.ok === false)) { retour('rMedia', true, 'Médiathèque montée : ' + path + ' (réindexation demandée).'); charger(); }
+                else retour('rMedia', false, 'Échec du montage : ' + ((r.data && r.data.error) || detail(r)));
+            });
+        }
+        $('demonter').addEventListener('click', () => demander('cMedia', 'Démonter la médiathèque externe et réindexer ?', async () => {
+            const r = await ecrire('/medialib/unmount', {});
+            if (r.ok && !(r.data && r.data.ok === false)) { retour('rMedia', true, 'Médiathèque démontée (réindexation demandée).'); charger(); }
+            else retour('rMedia', false, 'Échec du démontage : ' + ((r.data && r.data.error) || detail(r)));
+        }));
+        $('rescan').addEventListener('click', () => demander('cAct', 'Lancer une réindexation de la médiathèque Lyrion ? Elle peut durer plusieurs minutes sur une grosse bibliothèque.', async () => {
+            const b = $('rescan'); b.disabled = true;
+            const r = await ecrire('/rescan', {});
+            b.disabled = false;
+            if (r.ok) retour('rAct', true, 'Réindexation demandée (accusé de réception de l’API ; le déroulement n’est pas suivi).');
+            else retour('rAct', false, 'Échec : ' + detail(r));
+        }));
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'lyrion' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, en démonstration, pendant une confirmation, ni pendant
+        // qu'on manipule un lecteur (curseur, case, liste) : le rendu écraserait le geste.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM) return;
+            const a = document.activeElement;
+            if (a && a !== document.body && $('listeJoueurs').contains(a)) return;
+            charger();
+        }, 20000);
+    </script>
 </body>
 </html>

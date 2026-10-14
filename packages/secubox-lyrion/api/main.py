@@ -35,7 +35,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Header, Response
 from secubox_core.auth import require_jwt
 from secubox_core.auth import require_lecture
 
-VERSION = "1.2.0"
+VERSION = "1.7.0"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
 
 # LMS jsonrpc endpoint inside the LXC. Used for live data the lyrionctl
