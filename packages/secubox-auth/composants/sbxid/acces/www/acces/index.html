@@ -96,6 +96,11 @@
   :focus-visible { outline: 2px solid var(--laiton); outline-offset: 2px; border-radius: 4px; }
   .cadre { max-width: 74rem; margin: 0 auto; padding: 26px 22px 72px;
            display: grid; gap: 18px; }
+  /* Navigation systeme commune (#2613) : barre du haut + menu de gauche, comme les autres panneaux d'administration. Absente en mode
+     encadre (iframe du Hall) ou avec ?embed=1 : deux menus imbriques seraient pires que pas de menu. */
+  body.avec-menu .cadre { margin-left: 220px; max-width: none; padding-top: 74px; }
+  @media (max-width: 900px), (hover: none) and (pointer: coarse) { body.avec-menu .cadre { margin-left: 0; } }
+  body.mobile-mode.avec-menu .cadre { margin-left: 0; }
 
   /* ── MASTHEAD ─────────────────────────────────────────────────────────── */
   .mast { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -298,6 +303,19 @@
   #moi .carte > .liste:first-of-type .ligne:first-child { border-top:0; }
   #moi section .liste:has(.ligne) { display:block; border:1px solid var(--line); overflow:hidden; }
 </style>
+
+<script>
+  // Menu commun (#2613) : seulement hors mode encadre. try/catch : window.top peut lever entre origines.
+  document.addEventListener('DOMContentLoaded', function () {
+    var encadre = false;
+    try { encadre = new URLSearchParams(location.search).get('embed') || window.top !== window.self; } catch (e) { encadre = true; }
+    if (encadre) return;
+    document.body.classList.add('avec-menu');
+    var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/shared/sidebar-light.css'; document.head.appendChild(css);
+    var nav = document.createElement('nav'); nav.className = 'sidebar'; nav.id = 'sidebar'; document.body.insertBefore(nav, document.body.firstChild);
+    var js = document.createElement('script'); js.src = '/shared/sidebar.js'; document.body.appendChild(js);
+  });
+</script>
 
 <div class="cadre">
 
