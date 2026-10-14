@@ -70,10 +70,10 @@ logger = logging.getLogger("secubox.ad-guard")
 # POC « DNS AdBlock TV » (#1943) : mesure du filtrage DNS par appareil (OBSERVE / BLOCK). Isolé : ses routes sont sous /adblock-tv,
 # son état dans /var/lib/secubox/ad-guard/dnstv, et il ne fait RIEN tant qu'on ne l'active pas.
 try:
-    from . import dnstv, stats_standard
+    from . import direct, dnstv, stats_standard
     from .dnstv_routes import router as _tv_router
 except ImportError:                                  # lancé hors paquet (tests, uvicorn api.main) : import absolu
-    from api import dnstv, stats_standard
+    from api import direct, dnstv, stats_standard
     from api.dnstv_routes import router as _tv_router
 app.include_router(_tv_router)
 
@@ -1119,6 +1119,12 @@ async def status():
         "blocklist_domains": stats["blocklist_domains"],
         "detections_24h": stats["detections_24h"]
     }
+
+
+@app.get("/statut-direct", dependencies=[Depends(require_lecture)])
+def statut_direct():
+    """État en direct pour la bande d'état de la page (#2706) : résolveur, puits DNS, listes, capteur DNS, flux, clients actifs. Lecture seule ; cache de 5 s."""
+    return direct.etat_direct_cache(lambda: dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"))
 
 
 @app.get("/health")

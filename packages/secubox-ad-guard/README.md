@@ -177,3 +177,7 @@ L'appareil est la source de l'enveloppe ; seul le domaine enregistré est conser
 
 Une adresse suspecte n'entre pas dans la référence : elle est re-signalée (6 h) jusqu'à ce que l'opérateur la confirme avec `secubox-adguard-dnssensor --accepter DOMAINE`. Un nom toujours privé (zone locale) n'est jamais jugé. `--dry-run` travaille sur une copie : il n'apprend rien.
 
+
+## État en direct (#2706)
+
+`GET /api/v1/ad-guard/statut-direct` (lecture seule, cache 5 s) : résolveur, puits DNS, listes (nombre, âge), capteur DNS, flux de compteurs, clients actifs. Une valeur illisible vaut `null`, jamais un faux OK.
