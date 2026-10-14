@@ -4,471 +4,297 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Droplet, publication de sites au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
+  Mêmes appels que l'ancienne page : GET /status, GET /list, POST /upload (FormData), GET /job/<id>, POST /remove.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Droplet Publisher</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Droplet</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .main { flex: 1; margin-left: 220px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
-        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
-        .header-actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .content { padding: 1.5rem; }
-        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.purple .value { color: var(--purple); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 1rem; font-weight: 600; }
-        .droplet-table { width: 100%; border-collapse: collapse; }
-        .droplet-table th { text-align: left; padding: 0.75rem; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-        .droplet-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); }
-        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.static { background: rgba(88,166,255,0.2); color: var(--primary); }
-        .badge.streamlit { background: rgba(163,113,247,0.2); color: var(--purple); }
-        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .upload-zone:hover { border-color: var(--primary); background: rgba(88,166,255,0.05); }
-        .upload-zone.dragover { border-color: var(--green); background: rgba(63,185,80,0.1); }
-        input[type="file"] { display: none; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        @media (max-width: 900px) { .stats-row { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.cy .v{color:var(--cyan)} .tuile.vt .v{color:var(--vert)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:560px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}
+        td a{color:var(--cyan)}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)} .retour a{color:var(--cyan)}
+        .zone{display:grid;place-items:center;position:relative;border:2px dashed var(--trait2);border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;background:rgba(8,18,38,.5);min-height:5.5rem;overflow-wrap:anywhere}
+        .zone:hover,.zone.survol{border-color:var(--cyan);background:rgba(41,182,246,.08)}
+        .zone:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
+        .zone input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+        .zone b{font-size:.85rem} .zone span{color:var(--faible);font-size:.74rem}
+        .saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));align-items:end;margin:10px 0 0}
+        .saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .saisie input[type=text]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        .saisie input:focus{outline:none;border-color:var(--cyan)}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <main class="main">
-        <header class="header">
-            <div class="header-title"><h1>Droplet Publisher</h1></div>
-            <div class="header-actions">
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4.1 6 7.2 6 10.4a6 6 0 0 1-12 0c0-3.2 2.4-6.3 6-10.4z"/><path d="M9.3 14.2a2.8 2.8 0 0 0 2.4 2.5"/></svg>
+                <div><h1>Droplet</h1><small>Publication de sites statiques et d’applications</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <div class="content">
-            <div class="stats-row">
-                <div class="stat-card cyan">
-                    <div class="value" id="total-count">-</div>
-                    <div class="label">Total Droplets</div>
-                </div>
-                <div class="stat-card green">
-                    <div class="value" id="sites-count">-</div>
-                    <div class="label">Static Sites</div>
-                </div>
-                <div class="stat-card purple">
-                    <div class="value" id="apps-count">-</div>
-                    <div class="label">Streamlit Apps</div>
-                </div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Nombre de droplets publiés : sites statiques (Metablogizer) et applications Streamlit, tels que listés par GET /list."><span class="l">Droplets</span><span class="v" id="tTotal">—</span><span class="s">publiés au total</span></div>
+            <div class="tuile vt" title="Nombre de sites statiques déclarés dans la configuration de Metablogizer (champ sites_count de GET /status)."><span class="l">Sites statiques</span><span class="v" id="tSites">—</span><span class="s">Metablogizer</span></div>
+            <div class="tuile vi" title="Nombre d’applications déclarées dans la configuration de Streamlit (champ apps_count de GET /status)."><span class="l">Applications Streamlit</span><span class="v" id="tApps">—</span><span class="s">Streamlit</span></div>
+        </section>
 
-            <div class="card">
-                <div class="card-header"><h2>Upload New Droplet</h2></div>
-                <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
-                    <p>Drag & drop a file or click to browse</p>
-                    <p style="color: var(--text-dim); font-size: 0.875rem; margin-top: 0.5rem;">Supports ZIP, HTML, or static site archives</p>
+        <div class="pan"><h3>Publier un nouveau droplet <i>POST /upload</i></h3>
+            <form id="fEnvoi" style="margin:0">
+                <label class="zone" id="zone">
+                    <b id="zoneTitre">Glissez un fichier ou cliquez pour le choisir</b>
+                    <span>Archive ZIP, TAR.GZ ou page HTML</span>
+                    <input type="file" id="fichier" accept=".zip,.html,.tar.gz" aria-label="Fichier à publier">
+                </label>
+                <div class="saisie">
+                    <label>Nom<input type="text" id="nom" placeholder="mon-site" autocomplete="off"></label>
+                    <label>Domaine (facultatif)<input type="text" id="domaine" placeholder="Vide : domaine par défaut" autocomplete="off"></label>
                 </div>
-                <input type="file" id="file-input" accept=".zip,.html,.tar.gz">
-                <div class="form-group" style="margin-top: 1rem;">
-                    <label>Name</label>
-                    <input type="text" id="droplet-name" placeholder="my-site">
-                </div>
-                <div class="form-group">
-                    <label>Domain (optional)</label>
-                    <input type="text" id="droplet-domain" placeholder="Leave empty for default">
-                </div>
-                <button class="btn primary" onclick="uploadDroplet()" style="margin-top: 0.5rem;">Publish</button>
-                <div id="upload-status" style="margin-top: 1rem;"></div>
-            </div>
-
-            <div class="card">
-                <div class="card-header"><h2>Published Droplets</h2></div>
-                <table class="droplet-table">
-                    <thead>
-                        <tr><th>Name</th><th>Domain</th><th>Type</th><th>Status</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody id="droplet-list">
-                        <tr><td colspan="5">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
+                <div class="bout" style="margin-top:10px"><button class="btn prim" id="btnEnvoi" type="submit">Publier</button></div>
+            </form>
+            <div id="rEnvoi" class="retour" hidden role="status"></div>
         </div>
-    </main>
+
+        <div class="pan"><h3>Droplets publiés <i id="nListe"></i></h3>
+            <div id="rListe" class="retour" hidden role="status"></div>
+            <div class="tab"><table><thead><tr><th>Nom</th><th>Domaine</th><th>Type</th><th>État</th><th>Actions</th></tr></thead><tbody id="bListe"></tbody></table></div>
+            <p class="note">Le type et l’état viennent de GET /list ; retirer un droplet est définitif et demande une confirmation.</p>
+        </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo'), EMBED = !!Q.get('embed');
+        if (EMBED) document.body.classList.add('emb');
+        else if (!DEMO) { const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.head.appendChild(s); }
         const API = '/api/v1/droplet';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(endpoint, options = {}) {
-            const token = localStorage.getItem('sbx_token');
-            const headers = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = 'Bearer ' + token;
+        let STATUT = null, LISTE = null, SESSION_OK = true, CHARGE = false, CONFIRM = null, SUIVI = 0;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Retrait : même route, méthode, en-têtes (Content-Type JSON) et corps que l'ancienne page. Inerte en démonstration.
+        async function retirer(nom) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + endpoint, { ...options, headers });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch (e) { return {}; }
+                const r = await fetch(API + '/remove', { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify({ name: nom }) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !!(data && data.success), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); return r; }
+        function detail(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            if (res.statut === 401 || res.statut === 403) return 'session requise';
+            const d = res.data && (res.data.detail || res.data.message);
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + res.statut);
+            if (d) return String(d);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function urlSure(u) { return /^https?:\/\//i.test(String(u || '')); }
+
+        function demoData() {
+            STATUT = { upload_dir: '/srv/droplet', default_domain: 'example.org', sites_count: 2, apps_count: 1 };
+            LISTE = [{ name: 'atelier', domain: 'atelier.example.org', type: 'static', enabled: true },
+                     { name: 'carnet', domain: 'carnet.example.org', type: 'static', enabled: false },
+                     { name: 'tableau-de-bord', domain: 'tdb.example.org', type: 'streamlit', enabled: true }];
         }
 
-        async function loadStatus() {
-            const data = await api('/status');
-            document.getElementById('sites-count').textContent = data.sites_count || 0;
-            document.getElementById('apps-count').textContent = data.apps_count || 0;
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/list')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            STATUT = val(0);
+            const l = val(1); LISTE = l && Array.isArray(l.droplets) ? l.droplets : null;
+            CHARGE = true;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le service Droplet (arrêté ou injoignable).';
+            rendre();
         }
 
-        async function loadDroplets() {
-            const data = await api('/list');
-            const list = document.getElementById('droplet-list');
-            const droplets = data.droplets || [];
-
-            document.getElementById('total-count').textContent = droplets.length;
-
-            if (droplets.length === 0) {
-                list.innerHTML = '<tr><td colspan="5" style="color: var(--text-dim);">No droplets published yet</td></tr>';
-                return;
-            }
-
-            list.innerHTML = droplets.map(d => `
-                <tr>
-                    <td>${d.name}</td>
-                    <td><a href="https://${d.domain}" target="_blank" style="color: var(--primary);">${d.domain}</a></td>
-                    <td><span class="badge ${d.type}">${d.type}</span></td>
-                    <td><span class="badge ${d.enabled ? 'enabled' : 'disabled'}">${d.enabled ? 'Enabled' : 'Disabled'}</span></td>
-                    <td><button class="btn" onclick="removeDroplet('${d.name}')">Remove</button></td>
-                </tr>
-            `).join('');
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STATUT && !LISTE) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif'; etat.textContent = 'ACTIF'; }
+            $('tTotal').textContent = LISTE ? LISTE.length : '—';
+            $('tSites').textContent = STATUT && STATUT.sites_count != null ? STATUT.sites_count : '—';
+            $('tApps').textContent = STATUT && STATUT.apps_count != null ? STATUT.apps_count : '—';
+            rendreListe();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function uploadDroplet() {
-            const fileInput = document.getElementById('file-input');
-            const name = document.getElementById('droplet-name').value.trim();
-            const domain = document.getElementById('droplet-domain').value.trim();
-            const status = document.getElementById('upload-status');
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
-            if (!fileInput.files.length) { status.innerHTML = '<span style="color: var(--red);">Please select a file</span>'; return; }
-            if (!name) { status.innerHTML = '<span style="color: var(--red);">Please enter a name</span>'; return; }
-
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            formData.append('name', name);
-            if (domain) formData.append('domain', domain);
-
-            status.innerHTML = '<span style="color: var(--cyan);">Uploading...</span>';
-
-            const token = localStorage.getItem('sbx_token');
-            const res = await fetch(API + '/upload', {
-                method: 'POST',
-                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
-                body: formData
+        function rendreListe() {
+            const tb = $('bListe'); tb.replaceChildren();
+            const L = LISTE || [];
+            $('nListe').textContent = L.length ? L.length + ' droplet' + (L.length > 1 ? 's' : '') : '';
+            if (!L.length) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK || !CHARGE || !LISTE ? '—' : 'Aucun droplet publié pour le moment'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); return; }
+            L.forEach(d => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', tiret(d.name)));
+                const dom = el('td');
+                if (d.domain) { const a = el('a', '', d.domain); a.href = 'https://' + d.domain; a.target = '_blank'; a.rel = 'noopener noreferrer'; dom.appendChild(a); } else dom.textContent = '—';
+                tr.appendChild(dom);
+                const ty = el('td'); ty.appendChild(el('span', 'pill ' + (d.type === 'streamlit' ? 'vi' : 'cy'), tiret(d.type))); tr.appendChild(ty);
+                const en = el('td'); en.appendChild(el('span', 'pill' + (d.enabled ? ' ok' : ''), d.enabled ? 'Activé' : 'Désactivé')); tr.appendChild(en);
+                const act = el('td', 'act');
+                if (CONFIRM === d.name) {
+                    act.appendChild(el('span', 'note', 'Retirer « ' + d.name + ' » ?'));
+                    act.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; retirerDroplet(d.name); }));
+                    act.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                } else act.appendChild(btn('Retirer', 'danger', () => { CONFIRM = d.name; rendre(); }));
+                tr.appendChild(act); tb.appendChild(tr);
             });
-
-            const data = await res.json();
-            if (data.job_id) {
-                status.innerHTML = '<span style="color: var(--cyan);">Publishing... (job ' + data.job_id + ')</span>';
-                pollJob(data.job_id);
-            } else {
-                status.innerHTML = '<span style="color: var(--red);">' + (data.detail || 'Upload failed') + '</span>';
-            }
         }
 
-        async function pollJob(jobId) {
-            const status = document.getElementById('upload-status');
-            const check = async () => {
-                const data = await api('/job/' + jobId);
-                if (data.status === 'complete') {
-                    if (data.success) {
-                        status.innerHTML = '<span style="color: var(--green);">Published: <a href="' + data.url + '" target="_blank">' + data.vhost + '</a></span>';
-                        refresh();
-                    } else {
-                        status.innerHTML = '<span style="color: var(--red);">Failed: ' + data.error + '</span>';
-                    }
-                } else if (data.status === 'running' || data.status === 'started') {
-                    setTimeout(check, 2000);
-                }
+        async function retirerDroplet(nom) {
+            const r = await retirer(nom);
+            if (r.ok) { retour('rListe', true, 'Droplet « ' + nom + ' » retiré.'); charger(); }
+            else retour('rListe', false, 'Retrait impossible : ' + (r.demo ? detail(r) : (r.data && r.data.message) || detail(r)));
+        }
+
+        // ----- Publication : multipart/FormData à l'identique (file, name, domain), en-têtes = jeton seul -----
+        async function envoyer(ev) {
+            ev.preventDefault();
+            const f = $('fichier').files, nom = $('nom').value.trim(), domaine = $('domaine').value.trim();
+            if (!f.length) { retour('rEnvoi', false, 'Choisissez d’abord un fichier.'); return; }
+            if (!nom) { retour('rEnvoi', false, 'Saisissez un nom.'); return; }
+            if (DEMO) { retour('rEnvoi', false, 'Démonstration : action inerte.'); return; }
+            const corps = new FormData();
+            corps.append('file', f[0]);
+            corps.append('name', nom);
+            if (domaine) corps.append('domain', domaine);
+            const b = $('btnEnvoi'); b.disabled = true;
+            retour('rEnvoi', true, 'Envoi en cours…');
+            try {
+                const headers = {}; const t = jeton(); if (t) headers.Authorization = 'Bearer ' + t;
+                const r = await fetch(API + '/upload', { method: 'POST', headers, body: corps });
+                let data = {}; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                if (data.job_id) { retour('rEnvoi', true, 'Publication en cours (tâche ' + data.job_id + ')…'); suivre(data.job_id); }
+                else retour('rEnvoi', false, 'Échec de l’envoi : ' + detail({ statut: r.status, data }) + '.');
+            } catch (e) { retour('rEnvoi', false, 'Échec de l’envoi : serveur injoignable.'); }
+            b.disabled = false;
+        }
+
+        async function suivre(id) {
+            const mon = ++SUIVI;
+            const verifie = async () => {
+                if (mon !== SUIVI) return;
+                let d = {};
+                try { d = await lire('/job/' + encodeURIComponent(id)); } catch (e) { if (mon === SUIVI) retour('rEnvoi', false, 'Suivi de la tâche impossible (' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable') + ').'); return; }
+                if (mon !== SUIVI) return;
+                if (d.status === 'complete') {
+                    if (d.success) {
+                        const r = retour('rEnvoi', true, 'Publié : ');
+                        if (urlSure(d.url)) { const a = el('a', '', tiret(d.vhost)); a.href = d.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; r.appendChild(a); }
+                        else r.appendChild(document.createTextNode(tiret(d.vhost)));
+                        charger();
+                    } else retour('rEnvoi', false, 'Échec : ' + tiret(d.error));
+                } else if (d.status === 'running' || d.status === 'started') setTimeout(verifie, 2000);
+                else retour('rEnvoi', false, 'Tâche introuvable ou état inconnu (' + tiret(d.status) + ').');
             };
-            check();
+            verifie();
         }
 
-        async function removeDroplet(name) {
-            if (!confirm('Remove droplet "' + name + '"?')) return;
-            const data = await api('/remove', { method: 'POST', body: JSON.stringify({ name }) });
-            if (data.success) refresh();
-            else alert('Failed: ' + data.message);
-        }
-
-        function refresh() { loadStatus(); loadDroplets(); }
-
-        // Drag & drop
-        const zone = document.getElementById('upload-zone');
-        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
-        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        $('fEnvoi').addEventListener('submit', envoyer);
+        $('fichier').addEventListener('change', () => { const f = $('fichier').files; $('zoneTitre').textContent = f.length ? f[0].name : 'Glissez un fichier ou cliquez pour le choisir'; });
+        const zone = $('zone');
+        ['dragenter', 'dragover'].forEach(t => zone.addEventListener(t, e => { e.preventDefault(); zone.classList.add('survol'); }));
+        ['dragleave', 'dragend'].forEach(t => zone.addEventListener(t, () => zone.classList.remove('survol')));
         zone.addEventListener('drop', e => {
-            e.preventDefault();
-            zone.classList.remove('dragover');
-            document.getElementById('file-input').files = e.dataTransfer.files;
+            e.preventDefault(); zone.classList.remove('survol');
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { $('fichier').files = e.dataTransfer.files; $('fichier').dispatchEvent(new Event('change')); }
         });
-        document.getElementById('file-input').addEventListener('change', e => {
-            if (e.target.files.length) zone.querySelector('p').textContent = e.target.files[0].name;
-        });
+        $('rafraichir').addEventListener('click', charger);
 
-        refresh();
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'droplet' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie, un envoi ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || $('nom').value || $('domaine').value || $('btnEnvoi').disabled) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
