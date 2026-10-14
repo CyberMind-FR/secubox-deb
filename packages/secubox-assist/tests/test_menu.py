@@ -37,8 +37,8 @@ def test_panel_has_marketplace_tab_hooks():
     for act in ("offer", "offer-revoke", "request-open", "match-accept", "joinlink"):
         assert f'data-act="{act}"' in html or f"'{act}'" in html
     # endpoints reachable from the panel
-    for path in ("/api/v1/assist/offers", "/api/v1/assist/requests/open",
-                 "/api/v1/assist/matches", "/api/v1/assist/offer",
+    assert "const API = '/api/v1/assist'" in html  # lectures : API + chemin (page Aurora #2642)
+    for path in ("'/offers'", "'/requests/open'", "'/matches'", "/api/v1/assist/offer",
                  "/api/v1/assist/request/open", "/api/v1/assist/match/accept",
                  "/api/v1/assist/joinlink"):
         assert path in html

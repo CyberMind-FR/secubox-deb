@@ -4,49 +4,113 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="fr"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  Assistance au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
+  Aucun secret affiché : ni jeton, ni clé. Les liens d'invitation et d'administration sont des adresses à usage unique saisies ou reçues par l'opérateur.
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — Assistance</title>
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
-  body { font-family: 'Courier Prime', monospace; background:#0d1117; color:#e8e6d9; display:flex; }
-  .main { flex:1; margin-left:220px; padding:1.5rem; }
-  .card { background:rgba(30,40,55,.8); border:1px solid rgba(100,150,200,.2); border-radius:8px; padding:1rem; margin-bottom:1rem; }
-  .btn { padding:.4rem .8rem; border-radius:6px; border:1px solid rgba(100,150,200,.2); background:transparent; color:#e8e6d9; cursor:pointer; }
-  .btn.danger { border-color:#ff4466; color:#ff4466; }
-  .btn.warn { border-color:#ffcc00; color:#ffcc00; }
-  input,select { background:#111a24; color:#e8e6d9; border:1px solid rgba(100,150,200,.2); padding:.35rem; border-radius:5px; }
-  #log { white-space:pre-wrap; font-size:.8rem; max-height:40vh; overflow:auto; }
-  .tabs { display:flex; gap:.4rem; margin-bottom:1rem; flex-wrap:wrap; }
-  .tab { padding:.4rem .9rem; border-radius:6px 6px 0 0; border:1px solid rgba(100,150,200,.2); background:transparent; color:#e8e6d9; cursor:pointer; }
-  .tab.active { background:rgba(0,212,255,.15); border-color:#00d4ff; color:#00d4ff; }
-  .pane { display:none; }
-  .pane.active { display:block; }
-  .row { display:flex; gap:.4rem; align-items:center; margin:.3rem 0; flex-wrap:wrap; }
-  .item { border:1px solid rgba(100,150,200,.2); border-radius:6px; padding:.5rem; margin-bottom:.5rem; }
-  .item .muted { color:#8a94a6; font-size:.8rem; }
-  .note { color:#8a94a6; font-style:italic; }
-  .enc{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-  .enc h3{margin:0 0 6px;font-size:.95rem}
-  .badge{display:inline-block;font-size:.68rem;font-weight:700;border-radius:999px;padding:1px 8px;border:1px solid #00d4ff;color:#00d4ff;margin-left:6px}
-  .badge.moi{border-color:#00dd44;color:#7dffb0}
-  #enc-err{border:1px solid #ff4466;background:#3a1620;color:#ff8199;border-radius:8px;padding:6px 10px;font-size:.85rem;margin-bottom:8px}
-  details.aide{margin-top:8px;font-size:.84rem} details.aide ol{margin:6px 0 0 18px;padding:0}
-</style></head>
-<body class="hybrid-dark">
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+  .principal{min-width:0}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+  .app>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+  .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.tab:focus-visible,summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+  .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+  .btn.warn{border-color:var(--orange);color:var(--orange)} .btn.warn:hover{background:rgba(255,159,28,.14)}
+  .btn.primary,.btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  #enc-err{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;margin-bottom:8px}
+  [hidden]{display:none!important}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.neutre .v{color:var(--doux)}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .pan h4{margin:0 0 6px;font-size:.82rem;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+  .enc{display:grid;gap:12px;grid-template-columns:1fr}
+  @container a (min-width:900px){.enc{grid-template-columns:repeat(3,1fr)}}
+  .note{color:var(--faible);font-size:.72rem;margin:6px 0 0;overflow-wrap:anywhere}
+  .item{border:1px solid var(--trait);border-radius:10px;padding:7px 9px;margin-bottom:7px;background:rgba(8,18,38,.55);font-size:.8rem;overflow-wrap:anywhere;min-width:0}
+  .item .muted{color:var(--doux)} .item>div{margin-bottom:2px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+  .badge{display:inline-block;font-size:.66rem;font-weight:700;border-radius:999px;padding:1px 8px;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);margin-left:6px}
+  .badge.moi{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tab{font:inherit;font-size:.76rem;padding:5px 12px;border-radius:999px;border:1px solid var(--trait2);background:transparent;color:var(--doux);cursor:pointer;min-height:30px}
+  .tab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.14)}
+  .pane{display:none} .pane.active{display:block}
+  input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;max-width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--cyan)}
+  .champs{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end}
+  .champs label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0} .champs input,.champs select{width:100%}
+  .long{width:100%}
+  .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0 0 8px}
+  .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+  .conf{border:1px solid var(--rouge);background:rgba(255,77,94,.08);border-radius:10px;padding:8px 10px;margin:8px 0;font-size:.8rem}
+  details.aide{margin-top:8px;font-size:.8rem;color:var(--doux)} details.aide ol{margin:6px 0 0 18px;padding:0}
+  .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--vert);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
+  .toast.ko{border-color:var(--rouge)} .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
 <nav class="sidebar" id="sidebar"></nav>
-<div class="main">
-  <h1 style="color:#00d4ff">🆘 Assistance</h1>
-  <!-- #2540 : les demandes et offres voyagent par le journal du maillage (voie rapide, ~20 s) ; ce bouton force un passage tout de suite. -->
-  <div style="margin:-6px 0 10px"><button class="btn" id="sync-now" type="button">↻ Synchroniser avec le maillage</button> <span id="sync-etat" style="font-size:.8rem;opacity:.8" role="status"></span></div>
-  <div class="card" id="encours"><h2>En cours <span class="muted" id="enc-maj" style="font-size:.78rem;font-weight:400"></span></h2>
+<main class="principal"><div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/></svg>
+      <div><h1>Assistance</h1><small>Entraide entre box, sessions consenties et tracées</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span>
+      <!-- #2540 : les demandes et offres voyagent par le journal du maillage (voie rapide, ~20 s) ; ce bouton force un passage tout de suite. -->
+      <button class="btn" id="sync-now" type="button" title="Force un passage de la voie rapide de l'annuaire, puis relit tout.">↻ Synchroniser avec le maillage</button>
+      <span id="sync-etat" role="status"></span>
+      <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune écriture</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+
+  <section class="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Demandes d'aide ouvertes, publiées dans le journal du maillage par ce nœud ou par d'autres (GET /requests/open)."><span class="l">Demandes ouvertes</span><span class="v" id="tReq">—</span><span class="s">dans le maillage</span></div>
+    <div class="tuile cy" title="Offres d'aide ouvertes, de ce nœud ou des autres (GET /offers)."><span class="l">Offres ouvertes</span><span class="v" id="tOff">—</span><span class="s">dans le maillage</span></div>
+    <div class="tuile att" id="cMat" title="Paires offre et demande compatibles (au moins un tag commun) qui concernent ce nœud (GET /matches). Une paire où un geste vous attend est à accepter ; quand les deux côtés ont accepté, la session peut s'ouvrir."><span class="l">Paires</span><span class="v" id="tMat">—</span><span class="s">offre ↔ demande</span></div>
+    <div class="tuile neutre" id="cSes" title="Session d'assistance ouverte PAR ce nœud, sans fermeture ni expiration (GET /sessions). Une seule à la fois."><span class="l">Session active</span><span class="v" id="tSes">—</span><span class="s">ouverte par ce nœud</span></div>
+    <div class="tuile cy" title="Box qui vous ont ouvert une session et autorisé l'administration à distance : vous en êtes le centre (GET /delegations)."><span class="l">Administrables</span><span class="v" id="tDel">—</span><span class="s">box déléguées</span></div>
+  </section>
+
+  <div class="pan" id="encours"><h3>En cours <i id="enc-maj"></i></h3>
     <div id="enc-err" role="alert" hidden></div>
     <div class="enc">
-      <div><h3>🆘 Demandes <span id="enc-nreq"></span></h3><div id="enc-req"><p class="note">Chargement…</p></div></div>
-      <div><h3>🙋 Offres <span id="enc-noff"></span></h3><div id="enc-off"><p class="note">Chargement…</p></div></div>
-      <div><h3>🔗 À accepter <span id="enc-nmat"></span></h3><div id="enc-mat"><p class="note">Chargement…</p></div></div>
+      <div><h4>🆘 Demandes <span id="enc-nreq"></span></h4><div id="enc-req"><p class="note">Chargement…</p></div></div>
+      <div><h4>🙋 Offres <span id="enc-noff"></span></h4><div id="enc-off"><p class="note">Chargement…</p></div></div>
+      <div><h4>🔗 À accepter <span id="enc-nmat"></span></h4><div id="enc-mat"><p class="note">Chargement…</p></div></div>
     </div>
     <details class="aide"><summary>Comment accepter une demande ?</summary><ol>
       <li>Une box publie une demande (« Demander de l'aide »). Elle apparaît ici chez tous les nœuds, avec le nœud d'origine.</li>
@@ -54,131 +118,163 @@
       <li>Le demandeur voit alors l'aide proposée sous <b>À accepter</b> et clique <b>Accepter l'aide</b> : la session d'assistance s'ouvre.</li>
     </ol><p class="note">Une demande ou une offre expire à son échéance (« expire dans … ») ; vous ne pouvez retirer que vos propres offres.</p></details>
   </div>
-  <div class="card" id="active-card"><h2>Session active</h2><div id="active">—</div>
-    <button class="btn danger" data-act="close">Kill session</button>
-    <!-- #1720 : le second consentement. Tant qu'il vaut, le centre de la session
-         administre l'interface de cette box au nom de son compte d'aide ;
-         chaque appel est tracé ici (/var/log/secubox/delegation.log). -->
-    <select id="deleg-duree" title="durée de l'autorisation">
-      <option value="1800">30 min</option><option value="3600" selected>1 h</option>
-      <option value="14400">4 h</option></select>
-    <button class="btn warn" data-act="console-grant">Autoriser l'administration à distance</button>
-    <button class="btn" data-act="console-revoke">Retirer l'autorisation</button>
+
+  <div class="grille">
+    <div class="pan" id="active-card"><h3>Session active <i>GET /sessions</i></h3>
+      <div id="active">—</div>
+      <div class="row">
+        <button class="btn danger" data-act="close" type="button">Kill session</button>
+        <!-- #1720 : le second consentement. Tant qu'il vaut, le centre de la session
+             administre l'interface de cette box au nom de son compte d'aide ;
+             chaque appel est tracé ici (/var/log/secubox/delegation.log). -->
+        <select id="deleg-duree" title="durée de l'autorisation" aria-label="Durée de l'autorisation">
+          <option value="1800">30 min</option><option value="3600" selected>1 h</option>
+          <option value="14400">4 h</option></select>
+        <button class="btn warn" data-act="console-grant" type="button">Autoriser l'administration à distance</button>
+        <button class="btn" data-act="console-revoke" type="button">Retirer l'autorisation</button>
+      </div>
+      <div class="conf" id="conf-close" hidden role="alertdialog" aria-label="Confirmer la fermeture">
+        Fermer la session d'assistance en cours ? Le centre perd aussitôt son accès, sans retour possible.
+        <div class="row"><button class="btn danger" data-act="close-ok" type="button">Confirmer</button><button class="btn" data-act="close-annuler" type="button">Annuler</button></div>
+      </div>
+    </div>
+
+    <div class="pan"><h3>🛠️ Administrer à distance <i>GET /delegations</i></h3>
+      <p class="note" style="margin:0 0 8px">Les box qui vous ont ouvert une session d'assistance et autorisé l'administration.</p>
+      <div id="delegations-list">—</div>
+    </div>
   </div>
-  <div class="card"><h2>🛠️ Administrer à distance</h2>
-    <p class="muted">Les box qui vous ont ouvert une session d'assistance et autorisé l'administration.</p>
-    <div id="delegations-list">—</div>
-  </div>
-  <div class="card"><h2>Demander de l'assistance (ciblée)</h2>
-    <div><input id="center" placeholder="did:plc:…" size="48"></div>
-    <div><select id="mode"><option>per-incident</option><option>standing</option></select>
-      <input id="scope" placeholder="scope (ex. dns)"> <input id="dur" type="number" value="1800">
-      <input id="reason" placeholder="motif (obligatoire)"></div>
-    <button class="btn" data-act="request">Demander</button>
+
+  <div class="pan"><h3>Demander de l'assistance (ciblée) <i>POST /request</i></h3>
+    <div class="champs">
+      <label>Centre (DID)<input id="center" placeholder="did:plc:…" autocomplete="off"></label>
+      <label>Mode<select id="mode"><option>per-incident</option><option>standing</option></select></label>
+      <label>Scope<input id="scope" placeholder="scope (ex. dns)" autocomplete="off"></label>
+      <label>Durée (s)<input id="dur" type="number" value="1800"></label>
+      <label>Motif (obligatoire)<input id="reason" placeholder="motif (obligatoire)" autocomplete="off"></label>
+    </div>
+    <div class="row"><button class="btn primary" data-act="request" type="button">Demander</button></div>
     <p class="note">Requête ciblée : tu choisis le centre qui aide (par DID).</p>
   </div>
 
-  <div class="card">
-    <p class="note">Marketplace d'entraide (mesh) — clique un onglet : <b>Proposer</b> de l'aide, <b>Demander</b> de l'aide au mesh, voir les <b>Matches</b>, ou <b>Partager</b> un lien d'invitation.</p>
-    <div class="tabs" id="mtabs">
-      <button class="tab active" data-tab="offer">🙋 Proposer de l'aide</button>
-      <button class="tab" data-tab="reqopen">🆘 Demander de l'aide</button>
-      <button class="tab" data-tab="matches">🔗 Matches</button>
-      <button class="tab" data-tab="invite">📤 Partager un lien</button>
-      <button class="tab" data-tab="join">📥 Rejoindre</button>
+  <div class="pan">
+    <p class="note" style="margin:0 0 8px">Marketplace d'entraide (mesh) — clique un onglet : <b>Proposer</b> de l'aide, <b>Demander</b> de l'aide au mesh, voir les <b>Matches</b>, ou <b>Partager</b> un lien d'invitation.</p>
+    <div class="tabs" id="mtabs" role="tablist">
+      <button class="tab active" data-tab="offer" role="tab" aria-selected="true" type="button">🙋 Proposer de l'aide</button>
+      <button class="tab" data-tab="reqopen" role="tab" aria-selected="false" type="button">🆘 Demander de l'aide</button>
+      <button class="tab" data-tab="matches" role="tab" aria-selected="false" type="button">🔗 Matches</button>
+      <button class="tab" data-tab="invite" role="tab" aria-selected="false" type="button">📤 Partager un lien</button>
+      <button class="tab" data-tab="join" role="tab" aria-selected="false" type="button">📥 Rejoindre</button>
     </div>
 
     <div class="pane active" id="pane-offer">
-      <h2>🙋 Proposer de l'aide</h2>
+      <h3>🙋 Proposer de l'aide <i style="font-style:normal;color:var(--faible);font-size:.7rem;font-weight:500">POST /offer</i></h3>
       <p class="note">Annonce ta disponibilité : les box du mesh qui cherchent de l'aide sur ces tags te verront (onglet Matches).</p>
-      <div class="row">
-        <input id="offer-tags" placeholder="tags — ce sur quoi tu peux aider (ex. dns,waf)">
-        <input id="offer-scope" placeholder="scope (optionnel)">
-        <input id="offer-ttl" type="number" value="3600" title="durée de validité (s)">
-        <button class="btn primary" data-act="offer">🙋 Proposer</button>
+      <div class="champs">
+        <label>Tags<input id="offer-tags" placeholder="tags — ce sur quoi tu peux aider (ex. dns,waf)" autocomplete="off"></label>
+        <label>Scope<input id="offer-scope" placeholder="scope (optionnel)" autocomplete="off"></label>
+        <label>Validité (s)<input id="offer-ttl" type="number" value="3600" title="durée de validité (s)"></label>
       </div>
+      <div class="row"><button class="btn primary" data-act="offer" type="button">🙋 Proposer</button></div>
       <div id="offer-list"></div>
     </div>
 
     <div class="pane" id="pane-reqopen">
-      <h2>🆘 Demander de l'aide (ouverte)</h2>
+      <h3>🆘 Demander de l'aide (ouverte) <i style="font-style:normal;color:var(--faible);font-size:.7rem;font-weight:500">POST /request/open</i></h3>
       <p class="note">Requête <b>ouverte</b> : publiée au mesh sans cibler personne — un offreur compatible se propose (voir Matches). Pour cibler un centre précis par DID, utilise le formulaire « Demander de l'assistance (ciblée) » en haut.</p>
-      <div class="row">
-        <input id="reqopen-tags" placeholder="tags — ce sur quoi tu as besoin d'aide (ex. dns,waf)">
-        <input id="reqopen-scope" placeholder="scope (optionnel)">
-        <input id="reqopen-ttl" type="number" value="3600" title="durée de validité (s)">
-        <input id="reqopen-reason" placeholder="motif (obligatoire)">
-        <button class="btn primary" data-act="request-open">🆘 Demander</button>
+      <div class="champs">
+        <label>Tags<input id="reqopen-tags" placeholder="tags — ce sur quoi tu as besoin d'aide (ex. dns,waf)" autocomplete="off"></label>
+        <label>Scope<input id="reqopen-scope" placeholder="scope (optionnel)" autocomplete="off"></label>
+        <label>Validité (s)<input id="reqopen-ttl" type="number" value="3600" title="durée de validité (s)"></label>
+        <label>Motif (obligatoire)<input id="reqopen-reason" placeholder="motif (obligatoire)" autocomplete="off"></label>
       </div>
+      <div class="row"><button class="btn primary" data-act="request-open" type="button">🆘 Demander</button></div>
       <div id="reqopen-list"></div>
     </div>
 
     <div class="pane" id="pane-matches">
-      <h2>🔗 Matches</h2>
+      <h3>🔗 Matches</h3>
       <p class="note">Paires offre↔demande compatibles (au moins un tag en commun) qui vous concernent. Acceptez votre côté ; quand les deux côtés ont accepté, la session s'ouvre.</p>
       <div id="matches-list"></div>
     </div>
 
     <div class="pane" id="pane-invite">
-      <h2>📤 Partager un lien d'invitation</h2>
+      <h3>📤 Partager un lien d'invitation <i style="font-style:normal;color:var(--faible);font-size:.7rem;font-weight:500">POST /joinlink</i></h3>
       <p class="note">Génère un lien à usage unique à partager hors-bande (mail, chat) pour inviter quelqu'un — même hors mesh — à une session d'assistance.</p>
-      <div class="row">
-        <input id="invite-ref" placeholder="ref (offer_id / req_id, optionnel)">
-        <input id="invite-ttl" type="number" value="900" title="durée de validité (s)">
-        <button class="btn primary" data-act="joinlink">📤 Générer un lien de partage</button>
+      <div class="champs">
+        <label>Référence<input id="invite-ref" placeholder="ref (offer_id / req_id, optionnel)" autocomplete="off"></label>
+        <label>Validité (s)<input id="invite-ttl" type="number" value="900" title="durée de validité (s)"></label>
       </div>
+      <div class="row"><button class="btn primary" data-act="joinlink" type="button">📤 Générer un lien de partage</button></div>
       <div class="row">
-        <input id="invite-url" readonly size="60" placeholder="le lien apparaîtra ici">
-        <button class="btn" data-act="invite-copy">Copier</button>
+        <input id="invite-url" class="long" readonly placeholder="le lien apparaîtra ici" aria-label="Lien d'invitation">
+        <button class="btn" data-act="invite-copy" type="button">Copier</button>
       </div>
     </div>
 
     <div class="pane" id="pane-join">
-      <h2>📥 Rejoindre via un lien</h2>
+      <h3>📥 Rejoindre via un lien</h3>
       <p class="note">Colle un lien d'invitation reçu pour rejoindre une session. L'escalade automatique (tunnel WireGuard éphémère) arrive dans une prochaine version.</p>
       <div class="row">
-        <input id="join-url" placeholder="coller le lien reçu" size="60">
-        <button class="btn" data-act="join" disabled title="escalade — à venir">📥 Rejoindre (à venir)</button>
+        <input id="join-url" class="long" placeholder="coller le lien reçu" aria-label="Lien reçu" autocomplete="off">
+        <button class="btn" data-act="join" disabled title="escalade — à venir" type="button">📥 Rejoindre (à venir)</button>
       </div>
       <p class="note">L'escalade depuis un lien reçu est un suivi documenté — non câblée dans cette version.</p>
     </div>
   </div>
 
-  <div class="card"><h2>Demandes en attente</h2><div id="log"></div></div>
-</div>
+  <div class="pan"><h3>Demandes en attente</h3><div id="log"></div></div>
+</div></div></main>
+<div class="toast" id="toast" role="status"></div>
+
 <script src="/shared/sidebar.js"></script>
 <script>
-const T = () => localStorage.getItem('sbx_token') || '';
-const H = () => ({'Authorization':'Bearer '+T(),'Content-Type':'application/json'});
+const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+if (Q.get('embed')) document.body.classList.add('emb');
+const $ = id => document.getElementById(id);
+const API = '/api/v1/assist';
 
-// Non-blocking feedback banner (success/error) — dynamic text via textContent (XSS-safe).
+function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+const H = () => { const h = {'Accept':'application/json','Content-Type':'application/json'}; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; };
+
+// Retour non bloquant (succès/erreur) : texte injecté par textContent, jamais de boîte native.
 function notify(msg, isError) {
-  let n = document.getElementById('sbx-notify');
-  if (!n) {
-    n = document.createElement('div');
-    n.id = 'sbx-notify';
-    n.style.cssText = 'position:fixed;bottom:1rem;right:1rem;max-width:32rem;padding:.6rem .9rem;'
-      + 'border-radius:8px;font-size:.85rem;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.4);'
-      + 'white-space:pre-wrap;word-break:break-word;';
-    document.body.appendChild(n);
-  }
-  n.style.background = isError ? '#3a1620' : '#123a1f';
-  n.style.border = '1px solid ' + (isError ? '#ff4466' : '#00dd44');
-  n.style.color = isError ? '#ff8199' : '#7dffb0';
-  n.textContent = msg;
-  n.style.display = 'block';
+  const n = $('toast');
+  n.textContent = msg; n.classList.toggle('ko', !!isError); n.classList.add('show');
   clearTimeout(notify._t);
-  notify._t = setTimeout(() => { n.style.display = 'none'; }, isError ? 9000 : 4000);
+  notify._t = setTimeout(() => n.classList.remove('show'), isError ? 9000 : 4000);
 }
 
-// POST a marketplace action and surface success/failure (the API returns
-// {"detail": "..."} on error; show it instead of swallowing it silently).
+// ── Données de démonstration (adresses de documentation, noms fictifs) ───────────────────────────────────────────────────────────────────────
+function demoReponse(chemin) {
+  const t = Date.now();
+  if (chemin === '/sessions') return {active_session: {session_id: 'sess-demo-01', center_did: 'did:plc:exemple-centre', scope: 'dns', expires_ts: new Date(t + 5400e3).toISOString()},
+    pending: [{req_id: 'req-demo-1', center_did: 'did:plc:exemple-centre', mode: 'per-incident', scope: 'dns', reason: 'résolution intermittente'}]};
+  if (chemin === '/offers') return [
+    {offer_id: 'off-demo-1', tags: ['dns', 'waf'], scope: null, noeud: 'gk-demo-2', de_moi: false, reste_s: 3000},
+    {offer_id: 'off-demo-2', tags: ['nft'], scope: 'pare-feu', noeud: 'gk-demo-1', de_moi: true, reste_s: 1500}];
+  if (chemin === '/requests/open') return [
+    {req_id: 'req-demo-1', tags: ['dns'], reason: 'résolution intermittente', noeud: 'gk-demo-1', de_moi: true, reste_s: 3400},
+    {req_id: 'req-demo-2', tags: ['waf'], reason: 'règle à relire', noeud: 'gk-demo-3', de_moi: false, reste_s: 900}];
+  if (chemin === '/matches') return [
+    {offer_id: 'off-demo-1', req_id: 'req-demo-1', mon_cote: 'request', offre_acceptee: true, demande_acceptee: false, prete: false, noeud_offre: 'gk-demo-2', noeud_demande: 'gk-demo-1', tags: ['dns']}];
+  if (chemin === '/delegations') return [{noeud: 'gk-demo-3', fin: new Date(t + 3600e3).toISOString(), session_id: 'sess-demo-07'}];
+  return [];
+}
+// Lecture : même route, mêmes en-têtes ; en démonstration, jamais de réseau.
+async function lire(chemin) {
+  if (DEMO) return {ok: true, status: 200, json: async () => demoReponse(chemin)};
+  return fetch(API + chemin, {headers: H(), credentials: 'same-origin', cache: 'no-store'});
+}
+
+// Écriture d'une action du marché : le détail d'erreur de l'API est montré, jamais avalé. Inerte en démonstration.
 async function postAction(url, body, okMsg) {
+  if (DEMO) { notify('Démonstration : action inerte.', false); return null; }
   try {
     const r = await fetch(url, {method:'POST', headers:H(), body: JSON.stringify(body)});
     if (r.ok) { notify(okMsg, false); return await r.json().catch(() => ({})); }
     let detail = 'HTTP ' + r.status;
-    try { const e = await r.json(); detail = (e && e.detail) ? e.detail : detail; } catch (_) {}
+    try { const e = await r.json(); detail = (e && e.detail) ? (typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail)) : detail; } catch (_) {}
     if (r.status === 401 || r.status === 403) detail = 'Non authentifié (jeton sbx_token manquant/expiré) — reconnecte-toi.';
     notify('Échec : ' + detail, true);
     return null;
@@ -188,7 +284,10 @@ async function postAction(url, body, okMsg) {
   }
 }
 
+let AUTH_ENC = true, AUTH_SES = true;
+const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 function fmtTags(tags) { return Array.isArray(tags) ? tags.join(', ') : ''; }
+function vide(txt) { const p = document.createElement('p'); p.className = 'note'; p.textContent = txt; return p; }
 
 function itemEl(fields, actions) {
   const div = document.createElement('div'); div.className = 'item';
@@ -205,7 +304,7 @@ function itemEl(fields, actions) {
     const row = document.createElement('div'); row.className = 'row';
     actions.forEach(({label, act, data}) => {
       const b = document.createElement('button');
-      b.className = 'btn'; b.dataset.act = act; b.textContent = label;
+      b.type = 'button'; b.className = 'btn'; b.dataset.act = act; b.textContent = label;
       Object.entries(data || {}).forEach(([k, v]) => { if (v !== undefined && v !== null) b.dataset[k] = v; });
       row.appendChild(b);
     });
@@ -221,15 +320,11 @@ function renderList(el, items) {
 
 function renderPending(el, pending, recues) {
   // #1895 : « en attente » = mes demandes (journal) ET celles reçues des autres box
-  // (demandes ouvertes du maillage). Avant, seules les premières s'affichaient : la
-  // demande de gk3 n'apparaissait que dans l'onglet « Demandes ouvertes ».
+  // (demandes ouvertes du maillage).
   el.textContent = '';
   const mes = pending || [], autres = recues || [];
   if (!mes.length && !autres.length) {
-    const p = document.createElement('p');
-    p.className = 'note';
-    p.textContent = 'Aucune demande en attente.';
-    el.appendChild(p);
+    el.appendChild(vide('Aucune demande en attente.'));
     return;
   }
   mes.forEach(q => el.appendChild(itemEl(
@@ -241,8 +336,8 @@ function renderPending(el, pending, recues) {
 }
 
 async function refreshOffers() {
-  const r = await fetch('/api/v1/assist/offers', {headers:H()});
-  const list = document.getElementById('offer-list');
+  const r = await lire('/offers');
+  const list = $('offer-list');
   if (!r.ok) { list.textContent = 'auth requise'; return; }
   const offers = await r.json();
   renderList(list, offers.map(o => itemEl(
@@ -251,8 +346,8 @@ async function refreshOffers() {
 }
 
 async function refreshOpenRequests() {
-  const r = await fetch('/api/v1/assist/requests/open', {headers:H()});
-  const list = document.getElementById('reqopen-list');
+  const r = await lire('/requests/open');
+  const list = $('reqopen-list');
   if (!r.ok) { list.textContent = 'auth requise'; return; }
   const reqs = await r.json();
   // #1711 : d'où vient la demande, et un geste pour y répondre (sauf les siennes).
@@ -262,12 +357,11 @@ async function refreshOpenRequests() {
 }
 
 async function refreshMatches() {
-  const r = await fetch('/api/v1/assist/matches', {headers:H()});
-  const list = document.getElementById('matches-list');
+  const r = await lire('/matches');
+  const list = $('matches-list');
   if (!r.ok) { list.textContent = 'auth requise'; return; }
   const matches = await r.json();
-  renderList(list, matches.length ? matches.map(matchEl)
-    : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune paire pour l\'instant.'})]);
+  renderList(list, matches.length ? matches.map(matchEl) : [vide('Aucune paire pour l\'instant.')]);
 }
 
 // Une paire offre ↔ demande compatible (#2546) : le geste qui manque de NOTRE côté, ou l'attente de l'autre. Même rendu dans « À accepter » et dans l'onglet Matches.
@@ -290,15 +384,15 @@ function matchEl(m) {
   return it;
 }
 
-// ── Panneau « En cours » (#2542) : demandes, offres et correspondances, toujours visibles, lues ensemble ───────────────────────────────────────
+// ── Panneau « En cours » (#2542) : demandes, offres et correspondances, toujours visibles, lues ensemble ─────────────────────────────────────
 function reste(s) {
   if (s == null) return '';
   if (s <= 0) return 'expirée';
   const m = Math.round(s / 60);
   return 'expire dans ' + (m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : Math.max(m, 1) + ' min');
 }
-async function lireEnCours(url) {
-  const r = await fetch(url, {headers: H()});
+async function lireEnCours(chemin) {
+  const r = await lire(chemin);
   if (r.status === 401 || r.status === 403) { const e = new Error('session requise'); e.auth = true; throw e; }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
@@ -307,37 +401,48 @@ function etiquette(el, nom, moi) {
   const b = document.createElement('span'); b.className = 'badge' + (moi ? ' moi' : ''); b.textContent = moi ? 'ma demande' : nom;
   el.appendChild(b);
 }
+function tuile(id, valeur, classe) {
+  $(id).textContent = valeur;
+  if (classe) $(id).closest('.tuile').className = 'tuile ' + classe;
+}
 async function refreshEnCours() {
-  const err = document.getElementById('enc-err');
+  const err = $('enc-err');
   try {
-    const [reqs, offs, mats] = await Promise.all([lireEnCours('/api/v1/assist/requests/open'), lireEnCours('/api/v1/assist/offers'),
-                                                   lireEnCours('/api/v1/assist/matches').catch(() => [])]);
-    err.hidden = true;
+    const [reqs, offs, mats] = await Promise.all([lireEnCours('/requests/open'), lireEnCours('/offers'),
+                                                   lireEnCours('/matches').catch(() => [])]);
+    err.hidden = true; AUTH_ENC = true;
     const aider = new Set(mats.filter(m => m.mon_cote === 'request' && m.offre_acceptee).map(m => m.req_id));
-    document.getElementById('enc-nreq').textContent = '(' + reqs.length + ')';
-    document.getElementById('enc-noff').textContent = '(' + offs.length + ')';
-    document.getElementById('enc-nmat').textContent = '(' + mats.length + ')';
-    renderList(document.getElementById('enc-req'), reqs.length ? reqs.map(q => {
+    $('enc-nreq').textContent = '(' + reqs.length + ')';
+    $('enc-noff').textContent = '(' + offs.length + ')';
+    $('enc-nmat').textContent = '(' + mats.length + ')';
+    tuile('tReq', reqs.length); tuile('tOff', offs.length);
+    const agir = mats.filter(m => !m.prete && (m.mon_cote === 'request' ? !m.demande_acceptee : !m.offre_acceptee)).length;
+    tuile('tMat', mats.length);
+    $('cMat').className = 'tuile ' + (mats.length && agir ? 'att' : 'cy');
+    renderList($('enc-req'), reqs.length ? reqs.map(q => {
       const it = itemEl([['de', q.noeud || '—'], ['motif', q.reason || '—'], ['tags', fmtTags(q.tags)], ['', reste(q.reste_s)]],
         q.de_moi ? [] : [{label: 'Répondre (proposer mon aide)', act: 'request-answer', data: {reqId: q.req_id}}]);
       if (q.de_moi) { it.firstChild.appendChild(document.createTextNode(' ')); etiquette(it.firstChild, '', true);
         const n = document.createElement('div'); n.className = 'note';
         n.textContent = aider.has(q.req_id) ? 'Une aide vous est proposée : acceptez-la dans « À accepter ».' : 'En attente qu\'un autre nœud réponde.'; it.appendChild(n); }
       return it;
-    }) : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune demande en cours.'})]);
-    renderList(document.getElementById('enc-off'), offs.length ? offs.map(o => {
+    }) : [vide('Aucune demande en cours.')]);
+    renderList($('enc-off'), offs.length ? offs.map(o => {
       const it = itemEl([['de', o.noeud || '—'], ['tags', fmtTags(o.tags)], ['scope', o.scope || '—'], ['', reste(o.reste_s)]],
         o.de_moi ? [{label: 'Retirer mon offre', act: 'offer-revoke', data: {offerId: o.offer_id}}] : []);
       if (o.de_moi) { it.firstChild.appendChild(document.createTextNode(' ')); const b = document.createElement('span'); b.className = 'badge moi'; b.textContent = 'mon offre'; it.firstChild.appendChild(b); }
       return it;
-    }) : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune offre en cours.'})]);
-    renderList(document.getElementById('enc-mat'), mats.length ? mats.map(matchEl)
-      : [Object.assign(document.createElement('p'), {className: 'note', textContent: 'Aucune paire pour l\'instant. Une offre et une demande qui partagent un tag apparaissent ici, avec le geste à faire.'})]);
-    document.getElementById('enc-maj').textContent = 'mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+    }) : [vide('Aucune offre en cours.')]);
+    renderList($('enc-mat'), mats.length ? mats.map(matchEl)
+      : [vide('Aucune paire pour l\'instant. Une offre et une demande qui partagent un tag apparaissent ici, avec le geste à faire.')]);
+    $('enc-maj').textContent = 'mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
   } catch (e) {
     err.hidden = false;
+    AUTH_ENC = !e.auth;
+    ['tReq', 'tOff', 'tMat'].forEach(i => { $(i).textContent = '—'; });
     err.textContent = e.auth ? 'Session requise : reconnectez-vous pour voir les demandes et les offres du maillage.' : 'Lecture impossible (' + e.message + ').';
   }
+  rendreEtat();
 }
 
 let activeMarketTab = 'offer';
@@ -349,23 +454,50 @@ function refreshActiveMarketTab() {
 
 // #1720 : les box qui m'ont délégué leur administration (je suis leur centre).
 async function refreshDelegations() {
-  const list = document.getElementById('delegations-list');
-  const r = await fetch('/api/v1/assist/delegations', {headers:H()});
-  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const list = $('delegations-list');
+  const r = await lire('/delegations');
+  if (!r.ok) { list.textContent = 'auth requise'; tuile('tDel', '—'); return; }
   const ds = await r.json();
+  tuile('tDel', ds.length);
   if (!ds.length) { list.textContent = 'aucune'; return; }
   renderList(list, ds.map(d => itemEl(
-    [['box', d.noeud], ['jusqu\'à', new Date(d.fin).toLocaleTimeString()], ['session', d.session_id]],
+    [['box', d.noeud], ['jusqu\'à', new Date(d.fin).toLocaleTimeString('fr-FR')], ['session', d.session_id]],
     [{label: 'Administrer ' + d.noeud, act: 'administrer', data: {sessionId: d.session_id, noeud: d.noeud}}])));
+}
+
+// Session active : champs lisibles (jamais le JSON brut). Seuls les champs présents sont montrés.
+const LIBELLES = {session_id: 'Session', center_did: 'Centre', scope: 'Scope', mode: 'Mode', expires_ts: 'Expire', req_id: 'Demande'};
+function rendreSession(s) {
+  const el = $('active'); el.textContent = '';
+  if (!s) { el.textContent = 'aucune'; return; }
+  const dl = document.createElement('dl'); dl.className = 'kv';
+  Object.keys(s).filter(k => LIBELLES[k] && s[k] != null && typeof s[k] !== 'object').forEach(k => {
+    const dt = document.createElement('dt'); dt.textContent = LIBELLES[k];
+    const dd = document.createElement('dd'); dd.textContent = k === 'expires_ts' && !isNaN(new Date(s[k])) ? new Date(s[k]).toLocaleString('fr-FR') : String(s[k]);
+    dl.appendChild(dt); dl.appendChild(dd);
+  });
+  el.appendChild(dl);
+}
+
+function rendreEtat() {
+  const SESSION_OK = AUTH_ENC && AUTH_SES;
+  $('demo').hidden = !DEMO;
+  $('session').hidden = SESSION_OK;
+  const e = $('etat');
+  if (!SESSION_OK) { e.className = 'actif neutre'; e.textContent = 'SESSION REQUISE'; }
+  else { e.className = 'actif'; e.textContent = DEMO ? 'DÉMONSTRATION' : 'PRÊT'; }
+  $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+  annoncer();
 }
 
 async function refresh() {
   refreshEnCours();
-  const r = await fetch('/api/v1/assist/sessions', {headers:H()});
-  if (!r.ok) { document.getElementById('active').textContent = 'auth requise'; return; }
+  const r = await lire('/sessions');
+  AUTH_SES = !(r.status === 401 || r.status === 403);
+  if (!r.ok) { $('active').textContent = 'auth requise'; tuile('tSes', '—', 'tuile neutre'); rendreEtat(); return; }
   const d = await r.json();
-  document.getElementById('active').textContent =
-    d.active_session ? JSON.stringify(d.active_session) : 'aucune';
+  rendreSession(d.active_session);
+  tuile('tSes', d.active_session ? 'Oui' : 'Non'); $('cSes').className = 'tuile ' + (d.active_session ? 'ok' : 'neutre');
   // Sans session active, ces boutons n'ont rien à viser : on le dit, on ne les laisse pas muets.
   document.querySelectorAll('#active-card [data-act]').forEach(b => {
     b.disabled = !d.active_session;
@@ -373,17 +505,19 @@ async function refresh() {
   });
   let recues = [];
   try {
-    const ro = await fetch('/api/v1/assist/requests/open', {headers:H()});
+    const ro = await lire('/requests/open');
     if (ro.ok) recues = (await ro.json()).filter(q => !q.de_moi);
   } catch (_) { /* le journal des demandes ouvertes est facultatif ici */ }
-  renderPending(document.getElementById('log'), d.pending, recues);
+  renderPending($('log'), d.pending, recues);
   refreshActiveMarketTab();
   refreshDelegations();
+  rendreEtat();
 }
 
 // Synchronisation immédiate (#2540) : un passage de la voie rapide de l'annuaire, puis on relit tout.
-document.getElementById('sync-now').addEventListener('click', async () => {
-  const bt = document.getElementById('sync-now'), et = document.getElementById('sync-etat');
+$('sync-now').addEventListener('click', async () => {
+  const bt = $('sync-now'), et = $('sync-etat');
+  if (DEMO) { et.textContent = 'Démonstration : action inerte.'; return; }
   bt.disabled = true; et.textContent = 'Synchronisation…';
   try {
     const r = await fetch('/api/v1/annuaire/sync/now', {method: 'POST', headers: H()});
@@ -391,43 +525,50 @@ document.getElementById('sync-now').addEventListener('click', async () => {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json(), res = d.resultat || {};
     et.textContent = !d.ok ? 'Aucun pair du maillage à interroger.'
-      : (res.ingested ? res.ingested + ' entrée(s) reçue(s)' : 'Déjà à jour') + (res.errors ? ' · ' + res.errors + ' pair(s) injoignable(s)' : '') + ' — ' + new Date().toLocaleTimeString();
+      : (res.ingested ? res.ingested + ' entrée(s) reçue(s)' : 'Déjà à jour') + (res.errors ? ' · ' + res.errors + ' pair(s) injoignable(s)' : '') + ' — ' + new Date().toLocaleTimeString('fr-FR');
     await refresh();
   } catch (e) { et.textContent = 'Échec : ' + e.message; }
   finally { bt.disabled = false; }
 });
+$('rafraichir').addEventListener('click', refresh);
 
-document.getElementById('mtabs').addEventListener('click', (ev) => {
+$('mtabs').addEventListener('click', (ev) => {
   const t = ev.target.closest('[data-tab]'); if (!t) return;
-  document.querySelectorAll('#mtabs .tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('#mtabs .tab').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); });
   document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
-  t.classList.add('active');
-  document.getElementById('pane-' + t.dataset.tab).classList.add('active');
+  t.classList.add('active'); t.setAttribute('aria-selected', 'true');
+  $('pane-' + t.dataset.tab).classList.add('active');
   activeMarketTab = t.dataset.tab;
   refreshActiveMarketTab();
+  annoncer();
 });
 
 document.addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
-  const act = b.dataset.act;
+  let act = b.dataset.act;
+  // Fermer une session est sans retour : confirmation intégrée à la page, jamais de boîte native.
+  if (act === 'close') { $('conf-close').hidden = false; annoncer(); return; }
+  if (act === 'close-annuler') { $('conf-close').hidden = true; annoncer(); return; }
+  if (act === 'close-ok') { $('conf-close').hidden = true; act = 'close'; }
+  if (DEMO && act !== 'invite-copy' && act !== 'join') { notify('Démonstration : action inerte.', false); return; }
   if (act === 'request') {
-    const center = document.getElementById('center').value.trim();
-    const reason = document.getElementById('reason').value.trim();
+    const center = $('center').value.trim();
+    const reason = $('reason').value.trim();
     if (!center) { notify('Renseigne le DID du centre (did:plc:…).', true); return; }
     if (!reason) { notify('Renseigne un motif.', true); return; }
     await postAction('/api/v1/assist/request', {
       center_did: center,
-      mode: document.getElementById('mode').value,
-      scope: document.getElementById('scope').value,
-      duration_s: parseInt(document.getElementById('dur').value, 10),
+      mode: $('mode').value,
+      scope: $('scope').value,
+      duration_s: parseInt($('dur').value, 10),
       reason }, 'Demande ciblée envoyée.');
     refresh();
   } else if (act === 'offer') {
-    const tags = document.getElementById('offer-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    const tags = $('offer-tags').value.split(',').map(s => s.trim()).filter(Boolean);
     if (!tags.length) { notify('Ajoute au moins un tag.', true); return; }
     const d = await postAction('/api/v1/assist/offer', {
-      tags, scope: document.getElementById('offer-scope').value || null,
-      ttl_s: parseInt(document.getElementById('offer-ttl').value, 10) },
+      tags, scope: $('offer-scope').value || null,
+      ttl_s: parseInt($('offer-ttl').value, 10) },
       'Disponibilité publiée.');
     if (d) refreshOffers();
   } else if (act === 'offer-revoke') {
@@ -435,13 +576,13 @@ document.addEventListener('click', async (ev) => {
       offer_id: b.dataset.offerId }, 'Disponibilité révoquée.');
     if (d) refreshOffers();
   } else if (act === 'request-open') {
-    const tags = document.getElementById('reqopen-tags').value.split(',').map(s => s.trim()).filter(Boolean);
-    const reason = document.getElementById('reqopen-reason').value.trim();
+    const tags = $('reqopen-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    const reason = $('reqopen-reason').value.trim();
     if (!tags.length) { notify('Ajoute au moins un tag.', true); return; }
     if (!reason) { notify('Renseigne un motif (ce dont tu as besoin).', true); return; }
     const d = await postAction('/api/v1/assist/request/open', {
-      tags, scope: document.getElementById('reqopen-scope').value || null,
-      ttl_s: parseInt(document.getElementById('reqopen-ttl').value, 10),
+      tags, scope: $('reqopen-scope').value || null,
+      ttl_s: parseInt($('reqopen-ttl').value, 10),
       reason }, 'Demande ouverte publiée.');
     if (d) refreshOpenRequests();
   } else if (act === 'request-answer') {
@@ -455,15 +596,15 @@ document.addEventListener('click', async (ev) => {
     if (d) refreshMatches();
   } else if (act === 'joinlink') {
     const d = await postAction('/api/v1/assist/joinlink', {
-      ref: document.getElementById('invite-ref').value,
-      ttl_s: parseInt(document.getElementById('invite-ttl').value, 10) },
+      ref: $('invite-ref').value,
+      ttl_s: parseInt($('invite-ttl').value, 10) },
       'Lien de partage généré.');
-    if (d) document.getElementById('invite-url').value = d.url || '';
+    if (d) $('invite-url').value = d.url || '';
     return;
   } else if (act === 'invite-copy') {
-    const f = document.getElementById('invite-url');
+    const f = $('invite-url');
     f.select();
-    try { await navigator.clipboard.writeText(f.value); } catch (e) { /* clipboard optional */ }
+    try { await navigator.clipboard.writeText(f.value); notify('Lien copié.', false); } catch (e) { /* presse-papiers facultatif */ }
     return;
   } else if (act === 'administrer') {
     const d = await postAction('/api/v1/assist/delegation/assertion', { session_id: b.dataset.sessionId },
@@ -471,9 +612,9 @@ document.addEventListener('click', async (ev) => {
     if (d && d.url) window.open(d.url, '_blank', 'noopener');
     return;
   } else if (act === 'join') {
-    return; // escalation flow not wired yet — informational tab only
+    return; // escalade non câblée : onglet informatif
   } else {
-    const r0 = await fetch('/api/v1/assist/sessions', {headers:H()});
+    const r0 = await lire('/sessions');
     const sid = r0.ok ? (await r0.json()).active_session?.session_id : null;
     if (!sid) { notify("Aucune session d'assistance active : rien à fermer ni à autoriser.", true); return; }
     const ep = {'close':'/api/v1/assist/close','console-grant':'/api/v1/assist/console/grant',
@@ -481,11 +622,26 @@ document.addEventListener('click', async (ev) => {
     const ok = {'close':'Session fermée.','console-grant':"Administration à distance autorisée.",
                 'console-revoke':"Autorisation retirée."}[act];
     const corps = {session_id: sid};
-    if (act === 'console-grant') corps.duration_s = parseInt(document.getElementById('deleg-duree').value, 10);
-    await postAction(ep, corps, ok);       // succès ET échec visibles (avant : réponse jamais lue)
+    if (act === 'console-grant') corps.duration_s = parseInt($('deleg-duree').value, 10);
+    await postAction(ep, corps, ok);       // succès ET échec visibles
   }
   refresh();
 });
-refresh(); setInterval(refresh, 5000);
+
+// ── Hauteur annoncée à l'hôte (iframes) ──────────────────────────────────────────────────────────────────────────────────────────────────────
+function annoncer() {
+  try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'assist' }, location.origin); } catch (e) { /* hors iframe */ }
+}
+if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+addEventListener('resize', annoncer);
+
+refresh();
+// Pas d'actualisation onglet masqué, en démonstration, ni pendant une saisie ou une confirmation ouverte.
+setInterval(() => {
+  const a = document.activeElement;
+  if (document.hidden || DEMO || !$('conf-close').hidden || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))) return;
+  refresh();
+}, 20000);
 </script>
-</body></html>
+</body>
+</html>
