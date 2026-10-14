@@ -1,3 +1,20 @@
+secubox-jitsi (2.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /jitsi/ refaite au profil Aurora (#2612) : tuiles (conteneur, reunions, participants, plus grande reunion,
+    adresse media, acces web), onglets Tableau de bord / Media / Journaux, ?demo=1, ?embed=1, hauteur annoncee a l'hote.
+  * Les trois ecritures gardent exactement les memes routes, methodes et corps : POST /control {action},
+    POST /service/restart {unit}, POST /public-ip {address}. Aucune action ajoutee.
+  * Bogues de l'ancienne page corriges : confirm() natif (ignore par le navigateur du viewer) remplace par une confirmation
+    dans la page, aussi pour l'adresse media dont l'enregistrement redemarre le videobridge ; compteurs reunions et
+    participants affiches a 0 quand le videobridge ne repond pas (desormais « - ») ; reponse pending (operation longue,
+    > 25 s) annoncee comme reussie ; 401 qui redirigeait toute la page vers login.html (desormais bandeau session requise,
+    tirets) ; cle de jeton : sbx_token d'abord, anciennes cles en repli ; plus d'actualisation onglet masque ou pendant
+    une confirmation ou une saisie ; domaine de l'API valide avant d'en faire un lien.
+  * Non repris : aucune liste de salles ni d'enregistrements (l'API ne les fournit pas, voir api/main.py) ; la page ne
+    montre ni debit ni latence. Le composant turn (page distincte) n'est pas touche.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-jitsi (2.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-turn (#2050) comme composant : memes fichiers aux memes chemins (unites, URL, sockets),
