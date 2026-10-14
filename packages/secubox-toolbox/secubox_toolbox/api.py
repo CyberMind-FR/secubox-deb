@@ -4012,6 +4012,25 @@ def _tor_exit_ip_cached():
     return None
 
 
+async def _geo_sortie(ip) -> dict:
+    """Pays, drapeau et ASN d'une IP de sortie Tor (#2711), via secubox_toolbox.geo (GeoLite2 + cache 24 h).
+    Une chaîne qui n'est pas une adresse n'est jamais passée à GeoIP (elle serait résolue comme un nom d'hôte). Ne lève jamais : {} si inconnu."""
+    ip = str(ip or "").strip()
+    try:
+        import ipaddress
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return {}
+    try:
+        from . import geo
+        g = await asyncio.to_thread(geo.lookup, ip)
+    except Exception:
+        return {}
+    if not g:
+        return {}
+    return {k: g.get(k) for k in ("country_iso", "country_name", "flag", "asn", "asn_org")}
+
+
 def _require_tor_admin(request: Request) -> None:
     """Tor on/off/newnym/leak-check are operator actions — blocked on the
     public kbin vhost (defense-in-depth, mirrors /admin/filter-control).
@@ -4041,6 +4060,7 @@ async def admin_tor_state() -> dict:
         "tor_preset": f.get("tor_preset", "anonymous"),
         "exit_ip": _tor_exit_ip_cached(),
     })
+    st["exit_geo"] = await _geo_sortie(st["exit_ip"])
     return st
 
 
@@ -4105,6 +4125,7 @@ async def admin_tor_check_leaks(request: Request) -> dict:
         async with _client as c:
             tor_ip = (await c.get("https://api.ipify.org")).text.strip()
         result["tor_ip"] = tor_ip
+        result["geo"] = await _geo_sortie(tor_ip)
         try:
             with open(_TOR_EXIT_IP_CACHE, "w") as fh:
                 fh.write(tor_ip)

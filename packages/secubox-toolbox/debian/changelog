@@ -1,3 +1,11 @@
+secubox-toolbox (2.13.4-1~bookworm1) bookworm; urgency=medium
+
+  * Page Tor, bloc « Vérification de fuite » (#2711) : la ligne « Pays de sortie » affichait toujours un tiret. Elle montre maintenant le drapeau, le nom du pays (en français si connu, sinon celui de GeoIP), son code et l'ASN avec son organisation ; le drapeau précède aussi l'adresse dans la ligne « IP de sortie » de l'état.
+  * API : /admin/tor/state porte exit_geo et la sonde SOCKS (/admin/tor/check-leaks) porte geo, tirés de secubox_toolbox.geo (GeoLite2 + cache 24 h). Une chaîne qui n'est pas une adresse n'est jamais passée à GeoIP ; un pays ou un ASN inconnu reste absent, jamais inventé.
+  * Tests : test_tor_pays_sortie_2711.py (21).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 19:00:00 +0200
+
 secubox-toolbox (2.13.3-1~bookworm1) bookworm; urgency=medium
 
   * Page /toolbox/ (coque d'administration) au profil Aurora (#2684) : page autonome sombre, quatre tuiles de situation avec infobulles (version, mode R1/R2, clients actifs, evenements 24 h ; « — » si la mesure manque), avertissement R2 (consentement explicite), pastille d'etat, bandeau de session requise, `?demo=1` annoncee (transmise aux onglets) et `?embed=1`. Onglets accessibles (role tab, aria-selected, fleches/Debut/Fin, focus visible, defilement horizontal a 420 px), memes neuf pages encadrees, lien profond par ancre, hauteur du cadre appliquee (sbxToolboxVue/sbxVue) et annoncee a l'hote (sbxVue). Lectures seules : GET /health, /admin/config, /admin/metrics, jeton sbx_token en Bearer sous try/catch. Menu commun charge hors embed et hors demo. Plus de police distante ni de skin partage.
