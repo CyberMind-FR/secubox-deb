@@ -32,8 +32,9 @@ def _ligne(vid, titre, chaine="Chaîne", duree=213, miniatures=True):
 
 
 # ── types et commande ────────────────────────────────────────────────────────
-def test_les_quatre_flux_connus_et_rien_d_autre():
-    assert set(flux.TYPES) == {"envie", "propositions", "abonnements", "historique"}
+def test_les_flux_connus_et_rien_d_autre():
+    # #2708 : « chaines » et « playlists » s'ajoutent aux quatre listes d'origine (assertion mise à jour, pas affaiblie)
+    assert set(flux.TYPES) == {"envie", "propositions", "abonnements", "historique", "chaines", "playlists"}
     assert flux.TYPES["abonnements"] == ":ytsubs"
     assert flux.TYPES["historique"] == ":ythistory"
     assert flux.TYPES["envie"] == ":ytwatchlater"

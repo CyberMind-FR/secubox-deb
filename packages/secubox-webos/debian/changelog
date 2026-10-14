@@ -1,3 +1,14 @@
+secubox-webos (1.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Flux YouTube : mes chaînes, playlists, navigation, favoris, diffusion (ref #2708). Onglets Mes chaînes (nom, handle, abonnés et vidéos seulement s'ils sont fournis, avatar), Playlists et Favoris. Une chaîne ou une playlist s'ouvre dans la carte (fil d'Ariane, Retour ou Échap, focus géré, liste d'origine conservée sans relecture) et montre ses dernières vidéos.
+  * Favoris : ★ sur les vidéos, les chaînes et les playlists. sbx_favoris reste la liste d'adresses du Hall, format inchangé (le Hall et Surf & Viewer la lisent toujours) ; le type et le nom vivent à côté dans sbx_favoris_meta. L'onglet Favoris rassemble les trois types, avec un filtre, sans requête.
+  * Diffusion : bouton 📡 sur une vidéo, une chaîne ou une playlist, par le protocole existant du Hall tel quel (message {sbx:'diffuser', url, titre} adressé à location.origin, réponse diffuser-resultat dite dans la carte). Le Hall ne diffuse qu'une adresse à la fois : une chaîne ou une playlist diffuse sa première vidéo, et la carte le dit. Masqué en ?embed=1, comme Surf.
+  * nginx du Hall : la route du flux est étendue STRICTEMENT à GET /flux/chaine/<UC+22 ou @handle> et GET /flux/playlist/<PL|UU|LL|FL|OL + 10 à 40>, même auth_request, même en-tête X-Sbx-Flux, GET seul ; fin de motif en \z (un retour à la ligne final ne passe plus). Requiert secubox-ytsas 0.7.0.
+  * Démonstration (?demo=1) : chaînes, playlists, favoris fictifs, diffusion inerte annoncée, aucune requête. Fiche d'aide mise à jour.
+  * Tests : test_ytflux_chaines_2708.py (statique, nginx réel quand il est installé, navigateur sur API simulée). Deux assertions de test_ytflux_aurora_2638.py mises à jour (sept onglets au lieu de quatre, bouton 📡 en fin d'actions d'une vidéo).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 18:00:00 +0200
+
 secubox-webos (1.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Hall au profil Aurora (ref #2656, #2658, #2659, #2660) : coque (jetons Aurora, anciens noms de jetons conservés, sombre par défaut, mode clair en variante sobre) et vingt cartes (activité, actor, coffre, comptes, cumul, dpi, éphéméride, freeboxtv, ipv6guard, lyrion, metablog, peertube, quick, quifrappe, radar, surf, surfviewer, voicestudio, voicestudio-admin, zigbee) plus le relais.

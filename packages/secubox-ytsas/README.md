@@ -34,11 +34,17 @@ Socket Unix : `/run/secubox/aggregator.sock`.
 
 4 fichier(s) de test. Lancer : `python3 -m pytest packages/secubox-ytsas`.
 
-## Flux du compte YouTube (0.4.0)
+## Flux du compte YouTube (0.4.0, chaînes et playlists 0.7.0)
 
-`GET /api/v1/ytsas/flux?type=envie|propositions|abonnements|historique&limite=24` : les listes que YouTube tient pour le compte dont
+`GET /api/v1/ytsas/flux?type=envie|propositions|abonnements|historique|chaines|playlists&limite=24` : les listes que YouTube tient pour le compte dont
 les cookies sont dans le coffre (`/var/lib/secubox/ytsas/cookies.txt`). **Lecture seule**, une requête à plat (`yt-dlp --flat-playlist`),
 rien n'est téléchargé ni modifié. Cache 15 min (`YTSAS_FLUX_TTL`), un appel à la fois par flux, repli sur la dernière lecture si YouTube
 refuse (`perime: true`). `GET /api/v1/ytsas/flux/vignette/<id>` sert la vignette par la box (hôtes ytimg / ggpht seulement).
+`chaines` (chaînes suivies : nom, handle, abonnés, vidéos, avatar, seulement s'ils sont fournis) et `playlists` (id, titre, chaîne,
+miniature ; le nombre de vidéos n'est pas fourni par la lecture à plat) lisent `feed/channels` et `feed/playlists`.
+`GET /api/v1/ytsas/flux/chaine/<id>` (dernières vidéos ; `UC` + 22 caractères ou `@handle`) et `GET /api/v1/ytsas/flux/playlist/<id>`
+(`PL|UU|LL|FL|OL` + 10 à 40 caractères) : motif strict, 400 sinon, l'adresse transmise à yt-dlp est construite par le service, jamais
+fournie. Mêmes cache, repli `perime` + `cause`, erreurs et en-tête que la liste ; réponse `{type, id, titre, items, en_cache, perime, date}`.
+Les avatars et miniatures de ces listes passent par `/flux/vignette/<clé opaque de 11 caractères>`.
 Sans cookies : 401. Ces routes exigent l'en-tête `X-Sbx-Flux: 1`, posé uniquement par le Hall après `auth_request` ; elles sont
 refusées en accès direct. Carte du Hall : `secubox-webos` « Flux YouTube ».

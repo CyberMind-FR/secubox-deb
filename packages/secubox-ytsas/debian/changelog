@@ -1,3 +1,12 @@
+secubox-ytsas (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Flux YouTube : mes chaînes, playlists, dernières vidéos d'une chaîne, contenu d'une playlist (ref #2708). Nouveaux types de GET /flux : chaines (yt-dlp feed/channels : nom, handle, abonnés, vidéos, avatar, seulement s'ils sont fournis) et playlists (feed/playlists : id, titre, chaîne, miniature). Nouvelles routes de lecture GET /flux/chaine/<id> et GET /flux/playlist/<id>.
+  * Sécurité : identifiant à motif strict (chaîne UC + 22 ou @handle, playlist PL/UU/LL/FL/OL + 10 à 40), 400 sinon, validation avant les cookies et avant tout appel ; l'adresse transmise à yt-dlp est construite par le service après « -- », jamais une URL du client. Lecture seule du compte, aucun secret ni cookie dans les réponses. Même en-tête X-Sbx-Flux, même cache, même repli périmé avec sa cause, mêmes erreurs (401 auth / cookies périmés, 502). Cache des détails borné à 200 fichiers, nommés par empreinte.
+  * Avatars et miniatures de ces listes servis par la route de vignette existante sous une clé opaque de 11 caractères (empreinte de l'identifiant) : aucune route de vignette nouvelle, hôtes toujours restreints à ytimg / ggpht.
+  * Tests : tests/test_flux_chaines_2708.py (exécuteur factice, aucun appel réel à YouTube).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 18:00:00 +0200
+
 secubox-ytsas (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Torrent au profil Aurora (ref #2686) : page d'administration (composants/torrent/www/torrent/index.html, servie sur le hub) ET page du lecteur public du conteneur (composants/torrent/lxc/www/index.html, servie sur torrent.<domaine>, sans menu ni /shared/). Pages autonomes, tuiles avec infobulle (actifs, disque libre, WebRTC, torrents, à purger), mesure absente = « — », bandeau de session requise, état « moteur endormi » lu dans /status, ?demo=1 (données fictives, aucune écriture, aucun flux lu), ?embed=1, hauteur annoncée à l'hôte, 420 px sans débordement. Menu commun injecté hors ?embed=1 et hors démonstration (administration seulement).
