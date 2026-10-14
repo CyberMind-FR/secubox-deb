@@ -4,517 +4,421 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Relais SMTP (Postfix vers un smarthost) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Aucun secret affiché : le mot de passe SMTP n'est ni lu, ni montré, ni prérempli (l'API ne renvoie qu'un masque).
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - SMTP Relay</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Relais SMTP</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--p31-hot); text-shadow: var(--bloom-text); font-weight: 700; letter-spacing: 0.05em; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; margin-left: 0.5rem; font-size: 0.85rem; font-family: 'Courier Prime', monospace; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); box-shadow: 0 0 12px rgba(51,255,102,0.1); }
-        .btn.primary, .btn.success { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .btn.primary:hover, .btn.success:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); }
-        .btn.danger { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-        .btn.danger:hover { background: rgba(255,68,102,0.2); }
-        .btn.warning { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.75rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.7rem; color: var(--p31-dim); letter-spacing: 0.15em; }
-        .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-        .stat-card.cyan .value { color: var(--p31-mid); }
-        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
-        .card:hover { border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3); }
-        .card h2 { font-size: 0.85rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; }
-        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
-        .status-badge.running { background: rgba(51,255,102,0.15); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .status-badge.stopped { background: rgba(255,68,102,0.15); color: #ff4466; }
-        table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); font-size: 0.875rem; }
-        th { color: var(--p31-decay); text-shadow: var(--bloom-amber); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.15em; }
-        td { color: var(--p31-mid); }
-        tr:hover { background: rgba(51,255,102,0.03); }
-        .mono { font-family: monospace; font-size: 0.85rem; }
-        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); background: var(--tube-pale); }
-        .tab { padding: 0.75rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--p31-dim); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active { color: var(--p31-peak); text-shadow: var(--bloom-soft); border-bottom-color: var(--p31-peak); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--p31-dim); }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--tube-soft); border-radius: 4px; background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.1); }
-        .form-group small { font-size: 0.7rem; color: var(--p31-dim); }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; min-width: 450px; max-width: 90vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 0 30px rgba(51,255,102,0.1); }
-        .modal-content h3 { margin-bottom: 1rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; }
-        pre { background: var(--tube-light); padding: 1rem; border-radius: 6px; font-size: 0.75rem; max-height: 400px; overflow: auto; white-space: pre-wrap; border: 1px solid var(--tube-soft); }
-        .toast { position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; border-radius: 8px; font-weight: 500; z-index: 200; animation: slideIn 0.3s ease; background: var(--tube-pale); border: 1px solid var(--p31-dim); font-family: 'Courier Prime', monospace; }
-        .toast.success { border-color: var(--p31-peak); color: var(--p31-peak); }
-        .toast.error { border-color: #ff4466; color: #ff4466; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .empty { color: var(--p31-dim); text-align: center; padding: 2rem; }
-        .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-        .checkbox-label input { width: auto; }
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-            .stats-row { grid-template-columns: repeat(2, 1fr); }
-            .form-row { grid-template-columns: 1fr; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.att{border-color:var(--orange);color:var(--orange)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile .v.long{font-size:1rem;line-height:1.15}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.ja .v{color:var(--jaune)}
+        .onglets{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglet{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:8px;border:1px solid var(--trait);background:transparent;color:var(--doux);cursor:pointer;min-height:32px}
+        .onglet:hover{color:var(--texte)} .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.16);color:var(--texte)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .bout{margin:0 0 0 auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto} .tab table{min-width:640px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .ligne{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        td.motif{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));align-items:end;margin:0}
+        form.saisie label,.champ{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie label small{color:var(--faible);font-size:.68rem}
+        input,select,textarea{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan)}
+        label.coche{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--texte)} label.coche input{width:auto}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+        .confirmer{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--orange);background:rgba(255,159,28,.08);font-size:.8rem}
+        .journal{margin:0;max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--trait);border-radius:8px;background:rgba(8,18,38,.7)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>SMTP Relay</h1>
-            <div>
-                <span class="status-badge" id="status-badge">Loading...</span>
-                <button class="btn success" id="btn-start" onclick="startService()" style="display:none">Start</button>
-                <button class="btn danger" id="btn-stop" onclick="stopService()" style="display:none">Stop</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg>
+                <div><h1>Relais SMTP</h1><small>Envoi du courrier sortant via un smarthost (Postfix)</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <button class="btn ok" id="btnStart" type="button" hidden>Démarrer</button>
+                <button class="btn danger" id="btnStop" type="button" hidden>Arrêter</button>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <!-- Stats Row -->
-        <div class="stats-row">
-            <div class="stat-card cyan">
-                <div class="value" id="stat-queued">-</div>
-                <div class="label">Queued</div>
-            </div>
-            <div class="stat-card green">
-                <div class="value" id="stat-sent">-</div>
-                <div class="label">Sent</div>
-            </div>
-            <div class="stat-card red">
-                <div class="value" id="stat-failed">-</div>
-                <div class="label">Failed</div>
-            </div>
-            <div class="stat-card yellow">
-                <div class="value" id="stat-deferred">-</div>
-                <div class="label">Deferred</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cPostfix" title="État du service Postfix qui envoie le courrier sortant. Arrêté : rien ne part, la file n’est plus relevée."><span class="l">Postfix</span><span class="v" id="tPostfix">—</span><span class="s">service d’envoi</span></div>
+            <div class="tuile cy" id="cConf" title="Un smarthost est-il enregistré ? Sans lui, le relais n’a nulle part où envoyer le courrier."><span class="l">Relais</span><span class="v" id="tConf">—</span><span class="s" id="sConf">smarthost</span></div>
+            <div class="tuile cy" id="cFile" title="Messages en attente dans la file Postfix (postqueue). Une file qui grossit signale une livraison bloquée."><span class="l">En file</span><span class="v" id="tFile">—</span><span class="s">messages en attente</span></div>
+            <div class="tuile ok" title="Nombre de remises réussies (status=sent) comptées dans /var/log/mail.log. Compteur approximatif sur le journal actuel, il repart de zéro à la rotation du journal."><span class="l">Envoyés</span><span class="v" id="tEnv">—</span><span class="s">journal courant</span></div>
+            <div class="tuile" id="cEch" title="Remises en échec (rejetées ou différées) comptées dans /var/log/mail.log. Approximatif, sur le journal courant."><span class="l">Échecs</span><span class="v" id="tEch">—</span><span class="s">rejetés ou différés</span></div>
+            <div class="tuile ja" title="Remises différées (status=deferred) dans /var/log/mail.log : le serveur distant a répondu « réessayez plus tard »."><span class="l">Différés</span><span class="v" id="tDif" style="color:var(--jaune)">—</span><span class="s">à réessayer</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections">
+            <button class="onglet" role="tab" id="o-apercu" data-onglet="apercu" aria-selected="true" type="button">Aperçu</button>
+            <button class="onglet" role="tab" id="o-file" data-onglet="file" aria-selected="false" type="button">File d’attente</button>
+            <button class="onglet" role="tab" id="o-config" data-onglet="config" aria-selected="false" type="button">Configuration</button>
+            <button class="onglet" role="tab" id="o-logs" data-onglet="logs" aria-selected="false" type="button">Journaux</button>
         </div>
 
-        <!-- Main Tabs -->
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
-                <div class="tab" onclick="showTab('queue')">Queue</div>
-                <div class="tab" onclick="showTab('config')">Config</div>
-                <div class="tab" onclick="showTab('logs')">Logs</div>
-            </div>
-
-            <!-- Dashboard Tab -->
-            <div class="tab-content active" id="tab-dashboard">
-                <h2>Relay Status</h2>
-                <div class="form-row" style="margin-bottom: 1rem;">
-                    <div>
-                        <div class="form-group">
-                            <label>Smarthost</label>
-                            <div class="mono" id="info-smarthost" style="padding: 0.5rem; background: var(--tube-light); border-radius: 4px;">-</div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="form-group">
-                            <label>Status</label>
-                            <div id="info-status" style="padding: 0.5rem; background: var(--tube-light); border-radius: 4px;">-</div>
-                        </div>
-                    </div>
+        <section id="p-apercu" role="tabpanel" aria-labelledby="o-apercu" style="display:grid;gap:10px">
+            <div class="grille">
+                <div class="pan"><h3>État du relais <i>GET /status</i></h3>
+                    <dl class="kv"><dt>Smarthost</dt><dd class="mono" id="iHote">—</dd><dt>Configuration</dt><dd id="iConf">—</dd><dt>Service</dt><dd id="iServ">—</dd></dl>
+                    <div class="bout" style="margin-top:10px"><button class="btn prim" id="btnTest" type="button">Envoyer un courriel d’essai</button><button class="btn" id="btnFlush" type="button">Vider la file (relivrer)</button><button class="btn att" id="btnRestart" type="button">Redémarrer Postfix</button></div>
+                    <div id="cnfServ" class="confirmer" hidden><span id="cnfTxt"></span><button class="btn sm danger" id="cnfOui" type="button">Confirmer</button><button class="btn sm" id="cnfNon" type="button">Annuler</button></div>
+                    <div id="rServ" class="retour" hidden></div>
+                    <p class="note">« Vider la file » demande à Postfix de retenter tout de suite la remise des messages en attente, il n’efface rien.</p>
                 </div>
-                <div style="margin-top: 1rem;">
-                    <button class="btn primary" onclick="showModal('test-modal')">Send Test Email</button>
-                    <button class="btn" onclick="flushQueue()">Flush Queue</button>
-                    <button class="btn warning" onclick="restartService()">Restart Postfix</button>
+                <div class="pan" id="pTest" hidden><h3>Courriel d’essai <i>POST /test</i></h3>
+                    <form class="saisie" id="fTest" style="grid-template-columns:1fr">
+                        <label>Destinataire<input type="email" id="tDest" placeholder="destinataire@exemple.test" autocomplete="off"></label>
+                        <label>Objet<input type="text" id="tObjet" value="SecuBox SMTP Relay Test" autocomplete="off"></label>
+                        <label>Message<textarea id="tCorps" rows="4">This is a test email from SecuBox SMTP Relay.</textarea></label>
+                        <div class="bout"><button class="btn prim" type="submit" id="btnEnvoi">Envoyer</button><button class="btn" type="button" id="annulTest">Annuler</button></div>
+                    </form>
+                    <div id="rTest" class="retour" hidden></div>
                 </div>
             </div>
+        </section>
 
-            <!-- Queue Tab -->
-            <div class="tab-content" id="tab-queue">
-                <h2>Mail Queue <button class="btn btn-sm" onclick="loadQueue()">Refresh</button></h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Sender</th>
-                            <th>Recipients</th>
-                            <th>Size</th>
-                            <th>Reason</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="queue-list">
-                        <tr><td colspan="6" class="empty">Loading...</td></tr>
-                    </tbody>
-                </table>
+        <section id="p-file" role="tabpanel" aria-labelledby="o-file" hidden>
+            <div class="pan"><h3>File d’attente <i id="nFile"></i><i>GET /queue</i>
+                <span class="bout"><button class="btn sm" id="fileActu" type="button">Actualiser</button></span></h3>
+                <div id="rFile" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Identifiant</th><th>Expéditeur</th><th>Destinataires</th><th>Taille</th><th>Motif</th><th>Actions</th></tr></thead><tbody id="bFile"></tbody></table></div>
             </div>
+        </section>
 
-            <!-- Config Tab -->
-            <div class="tab-content" id="tab-config">
-                <h2>Relay Configuration</h2>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Smarthost</label>
-                        <input type="text" id="cfg-smarthost" placeholder="smtp.example.com">
-                        <small>SMTP server to relay through</small>
-                    </div>
-                    <div class="form-group">
-                        <label>Port</label>
-                        <input type="number" id="cfg-port" placeholder="587" value="587">
-                        <small>Usually 587 (submission) or 465 (SMTPS)</small>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" id="cfg-username" placeholder="user@example.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="cfg-password" placeholder="********">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>From Domain</label>
-                        <input type="text" id="cfg-from-domain" placeholder="example.com">
-                        <small>Default domain for outgoing mail</small>
-                    </div>
-                    <div class="form-group">
-                        <label style="visibility: hidden;">TLS</label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="cfg-tls" checked>
-                            Enable TLS encryption
-                        </label>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button class="btn" onclick="loadConfig()">Reset</button>
-                    <button class="btn primary" onclick="saveConfig()">Save Configuration</button>
-                </div>
+        <section id="p-config" role="tabpanel" aria-labelledby="o-config" hidden>
+            <div class="pan"><h3>Configuration du relais <i>GET, POST /config</i></h3>
+                <form class="saisie" id="fConf">
+                    <label>Smarthost<input type="text" id="cHote" placeholder="smtp.exemple.test" autocomplete="off"><small>Serveur SMTP par lequel relayer</small></label>
+                    <label>Port<input type="number" id="cPort" placeholder="587" value="587"><small>587 (soumission) ou 465 (SMTPS)</small></label>
+                    <label>Identifiant<input type="text" id="cUser" placeholder="compte@exemple.test" autocomplete="off"></label>
+                    <label>Mot de passe<input type="password" id="cPass" autocomplete="new-password" placeholder="inchangé"><small id="sPass">Jamais affiché ; laissé vide, le mot de passe enregistré est conservé.</small></label>
+                    <label>Domaine d’expédition<input type="text" id="cDom" placeholder="exemple.test" autocomplete="off"><small>Domaine par défaut du courrier sortant</small></label>
+                    <label class="coche"><input type="checkbox" id="cTls" checked> Chiffrement TLS</label>
+                    <div class="bout"><button class="btn" type="button" id="cReinit">Réinitialiser</button><button class="btn prim" type="submit" id="btnConf">Enregistrer la configuration</button></div>
+                </form>
+                <div id="rConf" class="retour" hidden></div>
             </div>
+        </section>
 
-            <!-- Logs Tab -->
-            <div class="tab-content" id="tab-logs">
-                <h2>
-                    Mail Logs
-                    <div>
-                        <select id="log-lines" onchange="loadLogs()" style="padding:0.4rem;background:var(--tube-light);color:var(--p31-mid);border:1px solid var(--tube-soft);border-radius:4px;font-family:'Courier Prime',monospace;">
-                            <option value="50">50 lines</option>
-                            <option value="100" selected>100 lines</option>
-                            <option value="200">200 lines</option>
-                        </select>
-                        <button class="btn btn-sm" onclick="loadLogs()">Refresh</button>
-                    </div>
-                </h2>
-                <pre id="log-content">Loading...</pre>
+        <section id="p-logs" role="tabpanel" aria-labelledby="o-logs" hidden>
+            <div class="pan"><h3>Journaux du courrier <i>GET /logs</i>
+                <span class="bout"><select id="lignes" style="width:auto" aria-label="Nombre de lignes"><option value="50">50 lignes</option><option value="100" selected>100 lignes</option><option value="200">200 lignes</option></select><button class="btn sm" id="logActu" type="button">Actualiser</button></span></h3>
+                <pre class="journal mono" id="journal">—</pre>
             </div>
-        </div>
-    </main>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-    <!-- Test Email Modal -->
-    <div class="modal" id="test-modal">
-        <div class="modal-content">
-            <h3>Send Test Email</h3>
-            <div class="form-group">
-                <label>To Address</label>
-                <input type="email" id="test-to" placeholder="recipient@example.com">
-            </div>
-            <div class="form-group">
-                <label>Subject</label>
-                <input type="text" id="test-subject" value="SecuBox SMTP Relay Test">
-            </div>
-            <div class="form-group">
-                <label>Body</label>
-                <textarea id="test-body" rows="4" placeholder="Test message body...">This is a test email from SecuBox SMTP Relay.</textarea>
-            </div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('test-modal')">Cancel</button>
-                <button class="btn primary" onclick="sendTestEmail()">Send Test</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/smtp-relay';
-        const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const nombre = n => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('fr-FR');
 
-        let autoRefreshTimer = null;
+        let ST = null, STATS = null, QUEUE = null, SESSION_OK = true, CHARGE = false, ONGLET = 'apercu';
+        let CONFIRM = null;       // { type:'stop'|'restart'|'file', id? } : confirmation en attente, dans la page
+        let OCCUPE = false, CONF_SALE = false, MDP_DEFINI = false;
 
-        function toast(msg, type = 'success') {
-            const t = document.createElement('div');
-            t.className = `toast ${type}`;
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-
-        async function api(path, opts = {}) {
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { 'Content-Type': 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        // Mêmes routes, méthodes, corps et en-têtes que l'ancienne page. Inerte en démonstration pour toute écriture.
+        async function appel(chemin, opts) {
+            if (DEMO && opts && opts.method && opts.method !== 'GET') return { ok: false, demo: true, statut: 0, data: null };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch { return {}; }
+                const r = await fetch(API + chemin, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts || {}, { headers: entetes() }));
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function refus(r) { return r.statut === 401 || r.statut === 403; }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function motif(r) {
+            if (r.demo) return 'Démonstration : action inerte.';
+            const d = r.data && r.data.detail;
+            if (Array.isArray(d)) return d.map(x => (x && x.msg) || '').filter(Boolean).join(' ; ') || ('HTTP ' + r.statut);
+            if (d) return String(d);
+            if (r.data && r.data.message) return String(r.data.message);
+            if (r.data && r.data.output) return String(r.data.output).slice(0, 200);
+            return r.statut ? 'HTTP ' + r.statut : 'Serveur injoignable';
+        }
+        function taille(o) {
+            if (o === null || o === undefined || o === '') return '—';
+            if (o < 1024) return o + ' o';
+            if (o < 1048576) return (o / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+        }
+        function dateEpoch(ts) { if (!ts) return '—'; const d = new Date(ts * 1000); return isNaN(d) ? '—' : d.toLocaleString('fr-FR'); }
+
+        function demoData() {
+            ST = { running: true, queue_size: 2, sent_count: 1284, failed_count: 9, smarthost: 'smtp.exemple.test', configured: true };
+            STATS = { sent: 1284, failed: 9, queued: 2, deferred: 6, bounced: 3 };
+            QUEUE = { queue: [
+                { id: 'A1B2C3D4E5', sender: 'admin@exemple.test', recipients: [{ address: 'dest@exemple.test', delay_reason: 'connect to mx.exemple.test[192.0.2.25]:25: Connection timed out' }], arrival_time: Math.floor(Date.now() / 1000) - 5400, message_size: 18432, reason: 'connect to mx.exemple.test[192.0.2.25]:25: Connection timed out' },
+                { id: 'F6E5D4C3B2', sender: 'alertes@exemple.test', recipients: [{ address: 'equipe@exemple.test' }, { address: 'astreinte@exemple.test' }], arrival_time: Math.floor(Date.now() / 1000) - 600, message_size: 2048, reason: '' }] };
+            MDP_DEFINI = true;
+        }
+        const DEMO_LOGS = ['Oct 12 07:00:01 secubox postfix/smtp[1201]: A1B2C3D4E5: to=<dest@exemple.test>, relay=smtp.exemple.test[192.0.2.25]:587, status=deferred', 'Oct 12 07:05:12 secubox postfix/smtp[1204]: 77AA10C1F2: to=<equipe@exemple.test>, relay=smtp.exemple.test[192.0.2.25]:587, status=sent (250 OK)'];
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); chargerOnglet(); return; }
+            const [s, t] = await Promise.all([appel('/status'), appel('/stats')]);
+            SESSION_OK = !(refus(s) || refus(t));
+            ST = s.ok ? s.data : null; STATS = t.ok ? t.data : null;
+            CHARGE = true;
+            const panne = !s.ok && !t.ok && SESSION_OK;
+            $('erreur').hidden = !panne;
+            if (panne) $('erreur').textContent = 'Impossible de lire le relais SMTP (service arrêté ou injoignable).';
+            rendre(); chargerOnglet();
         }
 
-        async function checkAuth() {
-            const res = await fetch(API + '/health');
-            // health endpoint doesn't require auth, but other endpoints do
-            const tok = token();
-            if (!tok) {
-                if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
-            }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat'), s = ST;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (!s.running) { etat.className = 'actif hors'; etat.textContent = 'POSTFIX ARRÊTÉ'; }
+            else if (!s.configured) { etat.className = 'actif att'; etat.textContent = 'NON CONFIGURÉ'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN SERVICE'; }
+            $('btnStart').hidden = !(SESSION_OK && s && !s.running);
+            $('btnStop').hidden = !(SESSION_OK && s && s.running);
+            $('tPostfix').textContent = s ? (s.running ? 'En marche' : 'Arrêté') : '—';
+            $('cPostfix').className = 'tuile ' + (s ? (s.running ? 'ok' : 'hors') : 'cy');
+            $('tConf').textContent = s ? (s.configured ? 'Configuré' : 'Absent') : '—';
+            $('cConf').className = 'tuile ' + (s ? (s.configured ? 'ok' : 'att') : 'cy');
+            $('sConf').textContent = s && s.smarthost ? s.smarthost : 'smarthost';
+            // Comme avant : la file et les compteurs viennent de /stats, à défaut de /status.
+            const file = STATS && STATS.queued != null ? STATS.queued : (s && s.queue_size != null ? s.queue_size : null);
+            $('tFile').textContent = file === null ? '—' : nombre(file);
+            $('cFile').className = 'tuile ' + (file > 0 ? 'att' : file === 0 ? 'ok' : 'cy');
+            const env = STATS && STATS.sent != null ? STATS.sent : (s ? s.sent_count : null);
+            const ech = STATS && STATS.failed != null ? STATS.failed : (s ? s.failed_count : null);
+            $('tEnv').textContent = nombre(env); $('tEch').textContent = nombre(ech);
+            $('cEch').className = 'tuile ' + (ech > 0 ? 'att' : ech === 0 ? 'ok' : 'cy');
+            $('tDif').textContent = STATS ? nombre(STATS.deferred) : '—';
+            $('iHote').textContent = s ? (s.smarthost || 'Non configuré') : '—';
+            $('iConf').textContent = s ? (s.configured ? 'Configuré' : 'Non configuré') : '—';
+            $('iServ').textContent = s ? (s.running ? 'Postfix en marche' : 'Postfix arrêté') : '—';
+            rendreConfirmation(); rendreFile();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function loadStatus() {
-            const data = await api('/status');
-            const badge = document.getElementById('status-badge');
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
-            if (data.running) {
-                badge.textContent = 'Running';
-                badge.className = 'status-badge running';
-                document.getElementById('btn-start').style.display = 'none';
-                document.getElementById('btn-stop').style.display = 'inline-block';
-            } else {
-                badge.textContent = 'Stopped';
-                badge.className = 'status-badge stopped';
-                document.getElementById('btn-start').style.display = 'inline-block';
-                document.getElementById('btn-stop').style.display = 'none';
-            }
-
-            document.getElementById('stat-queued').textContent = data.queue_size || 0;
-            document.getElementById('stat-sent').textContent = data.sent_count || 0;
-            document.getElementById('stat-failed').textContent = data.failed_count || 0;
-
-            document.getElementById('info-smarthost').textContent = data.smarthost || 'Not configured';
-            document.getElementById('info-status').innerHTML = data.configured
-                ? '<span style="color:var(--p31-peak)">Configured</span>'
-                : '<span style="color:#ff4466">Not configured</span>';
+        // ----- Onglets -----
+        function onglet(nom) {
+            ONGLET = nom;
+            document.querySelectorAll('.onglet').forEach(b => b.setAttribute('aria-selected', b.dataset.onglet === nom ? 'true' : 'false'));
+            ['apercu', 'file', 'config', 'logs'].forEach(n => { $('p-' + n).hidden = n !== nom; });
+            chargerOnglet(); annoncer();
+        }
+        document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => onglet(b.dataset.onglet)));
+        function chargerOnglet() {
+            if (ONGLET === 'file') chargerFile();
+            if (ONGLET === 'config' && !CONF_SALE) chargerConfig();
+            if (ONGLET === 'logs') chargerLogs();
         }
 
-        async function loadStats() {
-            const data = await api('/stats');
-            document.getElementById('stat-queued').textContent = data.queued || 0;
-            document.getElementById('stat-sent').textContent = data.sent || 0;
-            document.getElementById('stat-failed').textContent = data.failed || 0;
-            document.getElementById('stat-deferred').textContent = data.deferred || 0;
+        // ----- File d'attente -----
+        async function chargerFile() {
+            if (DEMO) { if (!QUEUE) demoData(); rendreFile(); return; }
+            const r = await appel('/queue');
+            QUEUE = r.ok && r.data && Array.isArray(r.data.queue) ? r.data : null;
+            if (refus(r)) { SESSION_OK = false; $('session').hidden = false; }
+            rendreFile();
         }
-
-        async function loadQueue() {
-            const data = await api('/queue');
-            const list = document.getElementById('queue-list');
-            const queue = data.queue || [];
-
-            if (!queue.length) {
-                list.innerHTML = '<tr><td colspan="6" class="empty">Queue is empty</td></tr>';
-                return;
-            }
-
-            list.innerHTML = queue.map(item => `
-                <tr>
-                    <td class="mono">${item.id}</td>
-                    <td class="mono">${item.sender || '-'}</td>
-                    <td class="mono">${(item.recipients || []).map(r => r.address || r).join(', ')}</td>
-                    <td>${formatSize(item.message_size || 0)}</td>
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.reason || ''}">${item.reason || '-'}</td>
-                    <td><button class="btn btn-sm danger" onclick="deleteQueueItem('${item.id}')">Delete</button></td>
-                </tr>
-            `).join('');
-        }
-
-        function formatSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-
-        async function loadConfig() {
-            const data = await api('/config');
-            document.getElementById('cfg-smarthost').value = data.smarthost || '';
-            document.getElementById('cfg-port').value = data.port || 587;
-            document.getElementById('cfg-username').value = data.username || '';
-            document.getElementById('cfg-password').value = data.password || '';
-            document.getElementById('cfg-from-domain').value = data.from_domain || '';
-            document.getElementById('cfg-tls').checked = data.tls !== false;
-        }
-
-        async function saveConfig() {
-            const config = {
-                smarthost: document.getElementById('cfg-smarthost').value.trim(),
-                port: parseInt(document.getElementById('cfg-port').value) || 587,
-                username: document.getElementById('cfg-username').value.trim(),
-                password: document.getElementById('cfg-password').value,
-                from_domain: document.getElementById('cfg-from-domain').value.trim(),
-                tls: document.getElementById('cfg-tls').checked
-            };
-
-            if (!config.smarthost) {
-                toast('Smarthost is required', 'error');
-                return;
-            }
-
-            const r = await api('/config', { method: 'POST', body: JSON.stringify(config) });
-            toast(r.success ? 'Configuration saved' : 'Failed to save', r.success ? 'success' : 'error');
-            if (r.success) loadStatus();
-        }
-
-        async function loadLogs() {
-            const lines = document.getElementById('log-lines').value;
-            const data = await api(`/logs?lines=${lines}`);
-            document.getElementById('log-content').textContent = (data.lines || []).join('\n') || 'No logs available';
-        }
-
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['dashboard', 'queue', 'config', 'logs'];
-            const idx = tabs.indexOf(name) + 1;
-            document.querySelector(`.tab:nth-child(${idx})`).classList.add('active');
-            document.getElementById(`tab-${name}`).classList.add('active');
-
-            if (name === 'queue') loadQueue();
-            if (name === 'config') loadConfig();
-            if (name === 'logs') loadLogs();
-        }
-
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-
-        async function startService() {
-            const r = await api('/start', { method: 'POST' });
-            toast(r.success ? 'Starting Postfix...' : 'Failed to start', r.success ? 'success' : 'error');
-            setTimeout(refresh, 2000);
-        }
-
-        async function stopService() {
-            const r = await api('/stop', { method: 'POST' });
-            toast(r.success ? 'Stopped' : 'Failed to stop', r.success ? 'success' : 'error');
-            setTimeout(refresh, 1000);
-        }
-
-        async function restartService() {
-            const r = await api('/restart', { method: 'POST' });
-            toast(r.success ? 'Restarting...' : 'Failed to restart', r.success ? 'success' : 'error');
-            setTimeout(refresh, 2000);
-        }
-
-        async function flushQueue() {
-            const r = await api('/queue/flush', { method: 'POST' });
-            toast(r.success ? 'Queue flush initiated' : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadQueue, 2000);
-        }
-
-        async function deleteQueueItem(id) {
-            if (!confirm(`Delete message ${id} from queue?`)) return;
-            const r = await api(`/queue/${id}`, { method: 'DELETE' });
-            toast(r.success ? 'Message deleted' : 'Failed to delete', r.success ? 'success' : 'error');
-            loadQueue();
-        }
-
-        async function sendTestEmail() {
-            const to = document.getElementById('test-to').value.trim();
-            const subject = document.getElementById('test-subject').value.trim();
-            const body = document.getElementById('test-body').value.trim();
-
-            if (!to) {
-                toast('Recipient address is required', 'error');
-                return;
-            }
-
-            const r = await api('/test', {
-                method: 'POST',
-                body: JSON.stringify({ to, subject, body })
+        function rendreFile() {
+            const tb = $('bFile'); tb.replaceChildren();
+            const liste = QUEUE ? QUEUE.queue : [];
+            $('nFile').textContent = QUEUE ? liste.length + ' message' + (liste.length > 1 ? 's' : '') : '';
+            if (!liste.length) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : !QUEUE ? (CHARGE ? 'File indisponible' : '—') : 'La file est vide'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); return; }
+            liste.forEach(m => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'mono', tiret(m.id)));
+                tr.appendChild(el('td', 'mono', tiret(m.sender)));
+                tr.appendChild(el('td', 'mono', (m.recipients || []).map(r => (r && r.address) || r).join(', ') || '—'));
+                tr.appendChild(el('td', '', m.message_size ? taille(m.message_size) : '—'));
+                const mo = el('td', 'motif', tiret(m.reason)); if (m.reason) mo.title = m.reason; tr.appendChild(mo);
+                const act = el('td', 'act'); const lg = el('div', 'ligne'); act.appendChild(lg);
+                if (CONFIRM && CONFIRM.type === 'file' && CONFIRM.id === m.id) {
+                    lg.appendChild(el('span', 'note', 'Supprimer ce message de la file, sans retour possible ?'));
+                    lg.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; supprimerMessage(m.id); }));
+                    lg.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                } else lg.appendChild(btn('Supprimer', 'danger', () => { CONFIRM = { type: 'file', id: m.id }; rendre(); }));
+                tr.appendChild(act); tb.appendChild(tr);
             });
-
-            toast(r.success ? 'Test email sent' : (r.message || 'Failed to send'), r.success ? 'success' : 'error');
-            if (r.success) {
-                hideModal('test-modal');
-                setTimeout(loadStatus, 2000);
-            }
         }
-
-        function refresh() {
-            loadStatus();
-            loadStats();
+        async function supprimerMessage(id) {
+            const r = await appel('/queue/' + encodeURIComponent(id), { method: 'DELETE' });
+            if (r.ok && r.data && r.data.success) retour('rFile', true, 'Message ' + id + ' supprimé de la file.');
+            else retour('rFile', false, 'Suppression impossible : ' + motif(r));
+            if (!r.demo) await chargerFile(); else rendre();
+            if (!r.demo) charger();
         }
+        $('fileActu').addEventListener('click', chargerFile);
 
-        function startAutoRefresh() {
-            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-            autoRefreshTimer = setInterval(refresh, 30000);
+        // ----- Configuration (le mot de passe n'est jamais lu ni affiché) -----
+        async function chargerConfig() {
+            let d;
+            if (DEMO) d = { smarthost: 'smtp.exemple.test', port: 587, username: 'relais@exemple.test', password: '', from_domain: 'exemple.test', tls: true };
+            else { const r = await appel('/config'); if (refus(r)) { SESSION_OK = false; $('session').hidden = false; } if (!r.ok || !r.data) { retour('rConf', false, 'Configuration illisible : ' + motif(r)); return; } d = r.data; }
+            $('cHote').value = d.smarthost || ''; $('cPort').value = d.port || 587; $('cUser').value = d.username || '';
+            $('cDom').value = d.from_domain || ''; $('cTls').checked = d.tls !== false;
+            $('cPass').value = '';
+            MDP_DEFINI = DEMO ? false : !!d.password;     // l'API ne renvoie qu'un masque : on retient seulement « défini »
+            $('cPass').placeholder = MDP_DEFINI ? 'défini, inchangé' : 'aucun mot de passe enregistré';
+            CONF_SALE = false; $('rConf').hidden = true; annoncer();
         }
+        document.querySelectorAll('#fConf input').forEach(i => i.addEventListener('input', () => { CONF_SALE = true; }));
+        $('cReinit').addEventListener('click', () => { CONF_SALE = false; chargerConfig(); });
+        $('fConf').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const config = { smarthost: $('cHote').value.trim(), port: parseInt($('cPort').value) || 587, username: $('cUser').value.trim(),
+                             // vide + mot de passe déjà défini : on renvoie le masque, que l'API traduit en « conserver l'existant » (comme l'ancienne page)
+                             password: $('cPass').value || (MDP_DEFINI ? '********' : ''),
+                             from_domain: $('cDom').value.trim(), tls: $('cTls').checked };
+            if (!config.smarthost) { retour('rConf', false, 'Le smarthost est obligatoire.'); return; }
+            const b = $('btnConf'); b.disabled = true;
+            const r = await appel('/config', { method: 'POST', body: JSON.stringify(config) });
+            b.disabled = false;
+            if (r.ok && r.data && r.data.success) { retour('rConf', true, 'Configuration enregistrée.'); $('cPass').value = ''; CONF_SALE = false; await chargerConfig(); retour('rConf', true, 'Configuration enregistrée.'); charger(); }
+            else retour('rConf', false, 'Enregistrement impossible : ' + motif(r));
+        });
 
-        // Initialize
-        checkAuth();
-        refresh();
-        startAutoRefresh();
+        // ----- Journaux -----
+        async function chargerLogs() {
+            if (DEMO) { $('journal').textContent = DEMO_LOGS.join('\n'); annoncer(); return; }
+            const r = await appel('/logs?lines=' + encodeURIComponent($('lignes').value));
+            if (refus(r)) { SESSION_OK = false; $('session').hidden = false; }
+            $('journal').textContent = r.ok && r.data ? ((r.data.lines || []).join('\n') || 'Aucun journal disponible') : '—';
+            annoncer();
+        }
+        $('lignes').addEventListener('change', chargerLogs);
+        $('logActu').addEventListener('click', chargerLogs);
+
+        // ----- Service : démarrer, arrêter, redémarrer, vider la file (confirmation dans la page) -----
+        function rendreConfirmation() {
+            const c = CONFIRM && CONFIRM.type !== 'file' ? CONFIRM : null;
+            $('cnfServ').hidden = !c;
+            if (c) $('cnfTxt').textContent = c.type === 'stop' ? 'Arrêter Postfix ? Plus aucun courrier ne partira tant qu’il est arrêté.' : 'Redémarrer Postfix ? L’envoi est interrompu quelques secondes.';
+        }
+        async function action(chemin, ok, ko, apres) {
+            if (OCCUPE) return; OCCUPE = true;
+            const r = await appel(chemin, { method: 'POST' });
+            OCCUPE = false;
+            if (r.ok && r.data && r.data.success) retour('rServ', true, ok); else retour('rServ', false, ko + ' : ' + motif(r));
+            if (!r.demo) setTimeout(() => { charger(); }, apres);
+        }
+        $('btnStart').addEventListener('click', () => action('/start', 'Postfix démarre…', 'Démarrage impossible', 2000));
+        $('btnStop').addEventListener('click', () => { CONFIRM = { type: 'stop' }; rendre(); });
+        $('btnRestart').addEventListener('click', () => { CONFIRM = { type: 'restart' }; rendre(); });
+        $('cnfNon').addEventListener('click', () => { CONFIRM = null; rendre(); });
+        $('cnfOui').addEventListener('click', () => {
+            const t = CONFIRM && CONFIRM.type; CONFIRM = null; rendre();
+            if (t === 'stop') action('/stop', 'Postfix arrêté.', 'Arrêt impossible', 1000);
+            if (t === 'restart') action('/restart', 'Postfix redémarre…', 'Redémarrage impossible', 2000);
+        });
+        $('btnFlush').addEventListener('click', () => action('/queue/flush', 'Relivraison de la file demandée.', 'Relivraison impossible', 2000));
+
+        // ----- Courriel d'essai -----
+        $('btnTest').addEventListener('click', () => { $('pTest').hidden = false; annoncer(); $('tDest').focus(); });
+        $('annulTest').addEventListener('click', () => { $('pTest').hidden = true; annoncer(); });
+        $('fTest').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const to = $('tDest').value.trim(), subject = $('tObjet').value.trim(), body = $('tCorps').value.trim();
+            if (!to) { retour('rTest', false, 'Le destinataire est obligatoire.'); return; }
+            const b = $('btnEnvoi'); b.disabled = true;
+            const r = await appel('/test', { method: 'POST', body: JSON.stringify({ to, subject, body }) });
+            b.disabled = false;
+            if (r.ok && r.data && r.data.success) { retour('rTest', true, 'Courriel d’essai envoyé.'); setTimeout(() => { charger(); }, 2000); }
+            else retour('rTest', false, 'Envoi impossible : ' + motif(r));
+        });
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'smtp-relay' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie, un formulaire ou une confirmation ouverte.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || OCCUPE || CONF_SALE || !$('pTest').hidden) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

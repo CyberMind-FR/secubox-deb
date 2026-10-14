@@ -4,292 +4,343 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  Zigbee (passerelle zigbee2mqtt) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
-
-<html lang="en">
+<html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox - Zigbee</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
-<style>
-  :root {
-    /* MESH palette (Charte SecuBox §Six Module Color System). Zigbee is a
-       mesh-topology IoT manager → MESH (Blue). */
-    --mesh-main:  #104A88;
-    --mesh-light: #2C70C0;
-    --mesh-xlt:   #E6F1FB;
-    --accent:       var(--mesh-main);
-    --accent-light: var(--mesh-light);
-
-    --bg:       #FFFFFF;
-    --surface:  #FAFAF8;
-    --surface2: #F4F3EF;
-    --border:   #E2E0D8;
-    --border2:  #C8C6BE;
-    --text:     #1A1A18;
-    --muted:    #6B6963;
-
-    --green:  #0A5840;
-    --yellow: #9A6010;
-    --red:    #803018;
-
-    /* Reserve room for the .global-menu-bar injected by shared/sidebar.js
-       (position:fixed, top:0, height:48px, z-index:998). */
-    --gmb-h: 48px;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Space Grotesk', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    display: flex;
-    min-height: 100vh;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-
-  .main {
-    flex: 1;
-    margin-left: 220px;
-    padding: calc(var(--gmb-h) + 1.5rem) 1.5rem 1.5rem;
-    min-width: 0;
-  }
-
-  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; }
-  .header h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.4px; color: var(--accent); }
-  .header h1 .icon { margin-right: 0.5rem; }
-  .header-actions { display: flex; gap: 0.5rem; }
-
-  .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border2); background: var(--surface); color: var(--text); cursor: pointer; font-family: inherit; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.15s; }
-  .btn:hover { border-color: var(--accent); color: var(--accent); background: var(--mesh-xlt); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.primary:hover { background: var(--accent-light); color: #fff; }
-
-  .threefold { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem 1.5rem; }
-  .card h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.75rem; }
-  .card .v { font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7; color: var(--text); }
-  .card .v a { color: var(--accent); text-decoration: none; }
-  .card .v a:hover { text-decoration: underline; }
-  .card .v strong { color: var(--accent); font-weight: 700; }
-
-  .status-pill { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; }
-  .status-pill.green  { background: rgba(10,88,64,0.1);  color: var(--green); }
-  .status-pill.yellow { background: rgba(154,96,16,0.1); color: var(--yellow); }
-  .status-pill.red    { background: rgba(128,48,24,0.1); color: var(--red); }
-
-  .about { background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem 1.5rem; color: var(--muted); }
-  .about h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); margin-bottom: 0.5rem; }
-  .about p { margin-bottom: 0.5rem; }
-  .about code { background: var(--bg); padding: 0.05rem 0.4rem; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); border: 1px solid var(--border); }
-
-  @media (max-width: 900px) {
-    .main { margin-left: 0; padding-top: calc(var(--gmb-h) + 1rem); }
-    .threefold { grid-template-columns: 1fr; }
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Zigbee</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px;text-decoration:none}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .bout{margin:0 0 0 auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .note code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--doux)}
+        .tab{overflow-x:auto} .tab table{min-width:480px} td.mono{white-space:nowrap}
+        td.mono .pill{margin-left:8px}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .acces{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+        .acces li{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:.8rem;min-width:0}
+        .acces a{color:var(--cyan);overflow-wrap:anywhere}
+        .bout{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><circle cx="5" cy="6" r="1.6"/><circle cx="19" cy="6" r="1.6"/><circle cx="5" cy="18" r="1.6"/><circle cx="19" cy="18" r="1.6"/><path d="M10.2 10.6 6.2 7.2M13.8 10.6l4-3.4M10.2 13.4l-4 3.4M13.8 13.4l4 3.4"/></svg>
+                <div><h1>Zigbee</h1><small>Passerelle zigbee2mqtt, conteneur LXC et sauvegardes</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span>
+                <a class="btn prim" id="ouvrir" href="#" target="_blank" rel="noopener" title="Ouvre le gestionnaire zigbee2mqtt complet (appairage, carte du réseau, mises à jour OTA, groupes), derrière le contrôle d’accès" hidden>Ouvrir le gestionnaire Zigbee →</a>
+                <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-<nav class="sidebar" id="sidebar"></nav>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cGlobal" title="État global calculé par l’API : vert si conteneur, démon, radio et pont sont tous en ordre ; jaune si le conteneur tourne mais qu’un élément manque (par exemple pas de clé radio) ; rouge si le conteneur est arrêté."><span class="l">État global</span><span class="v" id="tGlobal">—</span><span class="s">vert, jaune ou rouge</span></div>
+            <div class="tuile cy" id="cLxc" title="État du conteneur LXC qui héberge zigbee2mqtt."><span class="l">Conteneur</span><span class="v" id="tLxc">—</span><span class="s" id="sLxc">LXC zigbee2mqtt</span></div>
+            <div class="tuile cy" id="cRadio" title="Présence de la clé radio Zigbee (coordinateur) sur le port USB de la passerelle. Absente sur une box sans clé : l’état global reste alors jaune."><span class="l">Radio</span><span class="v" id="tRadio">—</span><span class="s">coordinateur USB</span></div>
+            <div class="tuile cy" id="cDemon" title="État du démon zigbee2mqtt dans le conteneur (interface web du gestionnaire)."><span class="l">Démon</span><span class="v" id="tDemon">—</span><span class="s">zigbee2mqtt</span></div>
+            <div class="tuile cy" id="cPont" title="État du pont MQTT zigbee2mqtt/bridge/state publié par zigbee2mqtt : « online » quand le courtier reçoit les messages du réseau Zigbee."><span class="l">Pont MQTT</span><span class="v" id="tPont">—</span><span class="s">bridge/state</span></div>
+            <div class="tuile cy" id="cSauv" title="Nombre de sauvegardes de la base zigbee2mqtt conservées sur l’hôte (horaires et archives avant restauration)."><span class="l">Sauvegardes</span><span class="v" id="tSauv">—</span><span class="s" id="sSauv">sur l’hôte</span></div>
+        </section>
 
-<main class="main">
-  <div class="header">
-    <h1><span class="icon">📡</span> Zigbee — Mesh manager</h1>
-    <div class="header-actions">
-      <a class="btn" href="/" title="Back to SecuBox hub">← hub</a>
-      <a class="btn primary" id="open-z2m" href="#" target="_blank" rel="noopener" title="Open the full zigbee2mqtt manager (SSO-gated)">Open Zigbee Manager →</a>
-    </div>
-  </div>
+        <div class="grille">
+            <div class="pan"><h3>Composants <i>GET /components</i></h3>
+                <div class="tab"><table><thead><tr><th>Composant</th><th>État</th><th>Détail</th></tr></thead><tbody id="bComp"></tbody></table></div>
+            </div>
+            <div class="pan"><h3>Accès <i>GET /access</i></h3>
+                <ul class="acces" id="lAcces"></ul>
+                <p class="note" id="nAcces"></p>
+            </div>
+        </div>
 
-  <section class="threefold">
-    <div class="card">
-      <h3>Components</h3>
-      <div class="v" id="components-v">loading…</div>
-    </div>
-    <div class="card">
-      <h3>Status</h3>
-      <div class="v" id="status-v">loading…</div>
-    </div>
-    <div class="card">
-      <h3>Access</h3>
-      <div class="v" id="access-v">loading…</div>
-    </div>
-  </section>
+        <div class="pan"><h3>Sauvegardes <i>GET /backups</i>
+            <span class="bout"><button class="btn sm" id="sauvActu" type="button">Actualiser</button><button class="btn sm prim" id="sauvMaintenant" type="button">Sauvegarder maintenant</button></span></h3>
+            <div id="rSauv" class="retour" hidden></div>
+            <div class="tab"><table><thead><tr><th>Horodatage</th><th>Appareils</th><th>Base</th><th>Actions</th></tr></thead><tbody id="bSauv"></tbody></table></div>
+            <p class="note">Instantanés horaires de <code>database.db</code>, <code>configuration.yaml</code> et <code>coordinator_backup.json</code> dans <code>/data/backup/zigbee/</code>, côté hôte : ils survivent à l’effacement du conteneur. Restaurer arrête zigbee2mqtt environ 3 secondes et archive d’abord l’état courant en « pré-restauration », donc l’opération reste réversible.</p>
+        </div>
 
-  <!-- v2.6.0 — backup / restore. Hourly snapshots of database.db +
-       configuration.yaml + coordinator_backup.json live at
-       /data/backup/zigbee/ (host-side, survives LXC wipe). The
-       2026-05-23 incident wiped the in-LXC database during a z2m
-       crash-loop; this card lets the operator roll back to a known-
-       good snapshot without re-pairing every device. -->
-  <section class="card" style="margin-bottom: 1.5rem;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.75rem;">
-      <h3 style="font-size:14px; font-weight:600; color:var(--text);">Backups</h3>
-      <div style="display:flex; gap:0.4rem;">
-        <button class="btn" id="backup-refresh">Refresh</button>
-        <button class="btn primary" id="backup-now">Backup now</button>
-      </div>
-    </div>
-    <div id="backup-list" class="v" style="font-family:'JetBrains Mono', monospace; font-size:12px;">loading…</div>
-  </section>
+        <div class="pan"><h3>À propos</h3>
+            <p class="note" style="margin:0 0 4px">SecuBox fait tourner <code>zigbee2mqtt</code> dans un conteneur LXC avec un coordinateur SONOFF Dongle-E. L’appairage, la carte du réseau, les mises à jour OTA et les groupes se gèrent dans le gestionnaire Zigbee dédié (accès filtré) : bouton « Ouvrir le gestionnaire Zigbee ».</p>
+            <p class="note">Cette page montre la santé côté SecuBox (composants, pont MQTT, accès) pour vérifier que la pile tourne avant d’ouvrir le gestionnaire.</p>
+        </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-  <div class="about">
-    <h2>About this module</h2>
-    <p>
-      SecuBox runs <code>zigbee2mqtt</code> in an LXC at <code>10.100.0.111</code>
-      with a SONOFF Dongle-E coordinator. Pairing, network maps, OTA updates,
-      and group bindings are handled by the dedicated <em>Zigbee Manager</em>
-      vhost (LAN-gated) — click <strong>Open Zigbee Manager →</strong>.
-    </p>
-    <p>
-      This page surfaces the SecuBox-side health (component state, MQTT bridge,
-      access endpoints) so operators can confirm the stack is up before opening
-      the manager.
-    </p>
-  </div>
-</main>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/zigbee';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-<script src="/shared/sidebar.js"></script>
-<script src="/shared/api-utils.js"></script>
-<script>
-(function () {
-  function getToken() { return localStorage.getItem('sbx_token'); }
-  function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine). Seule une
-            // vraie 401 redirige (gere dans les appels fetch).
-            return true;
+        let COMP = null, STAT = null, ACCES = null, SAUV = null, SESSION_OK = true, CHARGE = false;
+        let CONFIRM = null;   // identifiant de l'instantané dont la restauration attend confirmation (dans la ligne)
+        let OCCUPE = false;   // une action d'écriture est en cours
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-  if (!checkAuth()) {
-    document.querySelector('main.main').innerHTML = '<div style="padding:2rem;color:var(--muted);">Redirecting to login…</div>';
-    return;
-  }
-  function get(path) {
-    return fetch('/api/v1/zigbee' + path, { headers: { 'Authorization': 'Bearer ' + getToken() } })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); });
-  }
-  get('/components').then(function (d) {
-    var list = (d.components || []).map(function (c) { return '<div>' + c.name + ': <strong>' + c.state + '</strong></div>'; }).join('');
-    document.getElementById('components-v').innerHTML = list || '<span style="color:var(--muted)">no components</span>';
-  }).catch(function () { document.getElementById('components-v').innerHTML = '<span style="color:var(--muted)">unavailable</span>'; });
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok && !!(data && data.ok), statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function motif(res) {
+            if (res.demo) return 'Démonstration : action inerte.';
+            const d = res.data;
+            if (d && (d.error || d.stderr)) return String(d.error || d.stderr);
+            if (d && d.detail) return String(d.detail);
+            return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
+        }
+        function taille(o) {
+            if (o === null || o === undefined || o === '') return '—';
+            if (o < 1024) return o + ' o';
+            if (o < 1048576) return (o / 1024).toFixed(1).replace('.', ',') + ' Ko';
+            return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+        }
+        // 20260523T071302Z → 2026-05-23 07:13:02 UTC
+        function horodatage(s) {
+            const m = String(s || '').match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+            return m ? m[1] + '-' + m[2] + '-' + m[3] + ' ' + m[4] + ':' + m[5] + ':' + m[6] + ' UTC' : tiret(s);
+        }
+        // Seuls http(s) deviennent des liens (une URL mqtt:// reste du texte).
+        function lienSur(u) { return /^https?:\/\//i.test(String(u || '')); }
 
-  get('/status').then(function (d) {
-    var pill = (d.overall === 'green') ? 'green' : (d.overall === 'yellow') ? 'yellow' : (d.overall === 'red') ? 'red' : '';
-    document.getElementById('status-v').innerHTML = '<span class="status-pill ' + pill + '">' + (d.overall || 'unknown').toUpperCase() + '</span>';
-  }).catch(function () { document.getElementById('status-v').innerHTML = '<span style="color:var(--muted)">unavailable</span>'; });
+        function demoData() {
+            COMP = { components: [
+                { name: 'lxc', state: 'running', detail: 'zigbee @ 192.0.2.111 on br-lxc' },
+                { name: 'device', state: 'present', detail: '/dev/secubox-zgb' },
+                { name: 'daemon', state: 'running', detail: 'zigbee2mqtt frontend :8080' },
+                { name: 'bridge', state: 'online', detail: 'zigbee2mqtt/bridge/state @ 192.0.2.110:1883' }] };
+            STAT = { overall: 'green', states: { lxc: 'running', device: 'present', daemon: 'running', bridge: 'online' } };
+            ACCES = { access: [
+                { url: 'https://zigbee.exemple.test/', scope: 'public', auth: 'LAN-gated' },
+                { url: 'http://192.0.2.111:8080/', scope: 'lan', auth: 'none (LAN-only)' },
+                { url: 'mqtt://192.0.2.110:1883 (zigbee2mqtt/#)', scope: 'lan-mqtt', auth: 'z2m user' }] };
+            SAUV = { backups: [
+                { id: '20261012T070000Z', kind: 'hourly', size_db: 184320, devices: 14, timestamp: '20261012T070000Z' },
+                { id: 'pre-restore-20261011T180200Z', kind: 'pre-restore', size_db: 176128, devices: 13, timestamp: '20261011T180200Z' },
+                { id: '20261011T170000Z', kind: 'hourly', size_db: 175104, devices: 13, timestamp: '20261011T170000Z' }] };
+        }
 
-  get('/access').then(function (d) {
-    var access = d.access || [];
-    var list = access.map(function (a) { return '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>'; }).join('');
-    document.getElementById('access-v').innerHTML = list || '<span style="color:var(--muted)">no access points</span>';
-    // Single source of truth for the "Open Zigbee Manager" button:
-    // prefer the public (LAN-gated) URL, fall back to LAN.
-    var pub = access.find(function (a) { return a.scope === 'public'; });
-    var lan = access.find(function (a) { return a.scope === 'lan'; });
-    var target = (pub && pub.url) || (lan && lan.url) || '#';
-    var btn = document.getElementById('open-z2m');
-    if (btn) btn.href = target;
-  }).catch(function () { document.getElementById('access-v').innerHTML = '<span style="color:var(--muted)">unavailable</span>'; });
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; CHARGE = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/components'), lire('/status'), lire('/access'), lire('/backups')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            COMP = val(0); STAT = val(1); ACCES = val(2); SAUV = val(3);
+            CHARGE = true;
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le service Zigbee (arrêté ou injoignable).';
+            rendre();
+        }
 
-  // ── Backups card ─────────────────────────────────────────────
-  // The list renders newest-first. Per-row Restore button opens a
-  // confirm dialog because restore stops z2m for ~3s and rewrites
-  // the live database; users shouldn't trip it casually.
+        function classeEtat(nom, v) {
+            if (v === null || v === undefined) return 'cy';
+            const bon = { lxc: 'running', device: 'present', daemon: 'running', bridge: 'online' }[nom];
+            if (v === bon) return 'ok';
+            // radio absente ou pont hors ligne sur un conteneur en marche : attention, pas panne
+            return (nom === 'device' || nom === 'bridge') ? 'att' : 'hors';
+        }
+        const LIBELLE = { running: 'En marche', stopped: 'Arrêté', present: 'Présente', absent: 'Absente', online: 'En ligne', offline: 'Hors ligne' };
+        const NOMS = { lxc: 'Conteneur LXC', device: 'Radio USB', daemon: 'Démon zigbee2mqtt', bridge: 'Pont MQTT' };
 
-  function fmtSize(b) {
-    if (b < 1024) return b + ' B';
-    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
-    return (b/1024/1024).toFixed(1) + ' MB';
-  }
-  function fmtTs(s) {
-    // 20260523T071302Z → 2026-05-23 07:13:02 UTC
-    var m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
-    return m ? (m[1] + '-' + m[2] + '-' + m[3] + ' ' + m[4] + ':' + m[5] + ':' + m[6] + ' UTC') : s;
-  }
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat'), o = STAT ? STAT.overall : null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!STAT) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (o === 'green') { etat.className = 'actif'; etat.textContent = 'EN ORDRE'; }
+            else if (o === 'yellow') { etat.className = 'actif att'; etat.textContent = 'DÉGRADÉ'; }
+            else if (o === 'red') { etat.className = 'actif hors'; etat.textContent = 'ARRÊTÉ'; }
+            else { etat.className = 'actif neutre'; etat.textContent = 'INCONNU'; }
 
-  function loadBackups() {
-    var el = document.getElementById('backup-list');
-    el.innerHTML = 'loading…';
-    get('/backups').then(function (d) {
-      var backups = d.backups || [];
-      if (!backups.length) {
-        el.innerHTML = '<span style="color:var(--muted);">No backups yet. Click <b>Backup now</b> to create one.</span>';
-        return;
-      }
-      var rows = backups.map(function (b) {
-        var kindBadge = b.kind === 'pre-restore'
-          ? '<span style="background:var(--wall-xlt); color:var(--wall-main); padding:1px 6px; border-radius:3px; font-size:10px; margin-left:6px;">PRE-RESTORE</span>'
-          : '';
-        return '<tr>' +
-          '<td>' + fmtTs(b.timestamp) + kindBadge + '</td>' +
-          '<td style="text-align:right;">' + (b.devices || 0) + ' dev</td>' +
-          '<td style="text-align:right;">' + fmtSize(b.size_db) + '</td>' +
-          '<td style="text-align:right;"><button class="btn" data-id="' + b.id + '" data-restore>Restore</button></td>' +
-          '</tr>';
-      }).join('');
-      el.innerHTML =
-        '<table style="width:100%; border-collapse:collapse;">' +
-          '<thead><tr style="color:var(--muted); font-size:11px; text-align:left; border-bottom:1px solid var(--border);">' +
-            '<th style="padding:4px 0;">Timestamp</th>' +
-            '<th style="padding:4px 0; text-align:right;">Devices</th>' +
-            '<th style="padding:4px 0; text-align:right;">DB size</th>' +
-            '<th></th>' +
-          '</tr></thead>' +
-          '<tbody>' + rows + '</tbody>' +
-        '</table>';
-      // Wire up per-row Restore handlers.
-      Array.from(el.querySelectorAll('button[data-restore]')).forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var id = btn.getAttribute('data-id');
-          if (!confirm('Restore zigbee snapshot ' + fmtTs(id) +
-                       '?\n\nz2m will stop briefly (~3s). The current state will be archived as pre-restore-* first.')) return;
-          btn.disabled = true; btn.textContent = 'restoring…';
-          fetch('/api/v1/zigbee/restore', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({ id: id }),
-          }).then(function (r) { return r.json(); }).then(function (d) {
-            if (d.ok) {
-              alert('Restore OK. z2m restarted.');
-              loadBackups();
-            } else {
-              alert('Restore failed: ' + (d.error || d.stderr || 'unknown'));
-              btn.disabled = false; btn.textContent = 'Restore';
-            }
-          }).catch(function () {
-            alert('Restore failed (network)');
-            btn.disabled = false; btn.textContent = 'Restore';
-          });
-        });
-      });
-    }).catch(function () {
-      el.innerHTML = '<span style="color:var(--danger);">Failed to load backups</span>';
-    });
-  }
-  document.getElementById('backup-refresh').addEventListener('click', loadBackups);
-  document.getElementById('backup-now').addEventListener('click', function () {
-    var btn = document.getElementById('backup-now');
-    btn.disabled = true; btn.textContent = 'backing up…';
-    fetch('/api/v1/zigbee/backup', { method: 'POST', headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); }).then(function (d) {
-        btn.disabled = false; btn.textContent = 'Backup now';
-        if (d.ok) loadBackups();
-        else alert('Backup failed: ' + (d.error || d.stderr || 'unknown'));
-      }).catch(function () {
-        btn.disabled = false; btn.textContent = 'Backup now';
-        alert('Backup failed (network)');
-      });
-  });
-  loadBackups();
-})();
-</script>
+            const s = STAT && STAT.states ? STAT.states : {};
+            const tg = $('tGlobal'); tg.textContent = !STAT ? '—' : ({ green: 'Vert', yellow: 'Jaune', red: 'Rouge' }[o] || tiret(o));
+            $('cGlobal').className = 'tuile ' + (o === 'green' ? 'ok' : o === 'yellow' ? 'att' : o === 'red' ? 'hors' : 'cy');
+            [['Lxc', 'lxc'], ['Radio', 'device'], ['Demon', 'daemon'], ['Pont', 'bridge']].forEach(([id, k]) => {
+                const v = s[k];
+                $('t' + id).textContent = v === undefined ? '—' : (LIBELLE[v] || tiret(v));
+                $('c' + id).className = 'tuile ' + classeEtat(k, v === undefined ? null : v);
+            });
+            const n = SAUV && Array.isArray(SAUV.backups) ? SAUV.backups.length : null;
+            $('tSauv').textContent = n === null ? '—' : n;
+            const auto = n ? SAUV.backups.filter(b => b.kind !== 'pre-restore').length : null;
+            $('sSauv').textContent = n ? auto + ' horaire' + (auto > 1 ? 's' : '') + ', ' + (n - auto) + ' avant restauration' : 'sur l’hôte';
 
+            rendreComposants(); rendreAcces(); rendreSauvegardes();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+
+        function rendreComposants() {
+            const tb = $('bComp'); tb.replaceChildren();
+            const liste = COMP && Array.isArray(COMP.components) ? COMP.components : [];
+            if (!liste.length) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : CHARGE ? 'Composants indisponibles' : '—'); td.colSpan = 3; tr.appendChild(td); tb.appendChild(tr); return; }
+            liste.forEach(c => {
+                const tr = el('tr');
+                tr.appendChild(el('td', '', NOMS[c.name] || tiret(c.name)));
+                const td = el('td'); td.appendChild(el('span', 'pill ' + classeEtat(c.name, c.state), LIBELLE[c.state] || tiret(c.state))); tr.appendChild(td);
+                tr.appendChild(el('td', 'mono', tiret(c.detail)));
+                tb.appendChild(tr);
+            });
+        }
+
+        function rendreAcces() {
+            const ul = $('lAcces'); ul.replaceChildren();
+            const liste = ACCES && Array.isArray(ACCES.access) ? ACCES.access : [];
+            if (!liste.length) { const li = el('li', 'vide', !SESSION_OK ? '—' : CHARGE ? 'Aucun point d’accès' : '—'); ul.appendChild(li); }
+            const SC = { public: 'Public', lan: 'Réseau local', 'lan-mqtt': 'MQTT local' };
+            liste.forEach(a => {
+                const li = el('li');
+                li.appendChild(el('span', 'pill', SC[a.scope] || tiret(a.scope)));
+                if (lienSur(a.url)) { const l = el('a', 'mono', a.url); l.href = a.url; l.target = '_blank'; l.rel = 'noopener'; li.appendChild(l); }
+                else li.appendChild(el('span', 'mono', tiret(a.url)));
+                if (a.auth) li.appendChild(el('span', 'note', a.auth));
+                ul.appendChild(li);
+            });
+            // Source unique du bouton « Ouvrir le gestionnaire » : l'URL publique, à défaut l'URL du réseau local.
+            const pub = liste.find(a => a.scope === 'public'), lan = liste.find(a => a.scope === 'lan');
+            const cible = (pub && pub.url) || (lan && lan.url) || '';
+            const b = $('ouvrir');
+            if (lienSur(cible)) { b.href = cible; b.hidden = false; } else { b.removeAttribute('href'); b.hidden = true; }
+            $('nAcces').textContent = liste.length ? 'Le gestionnaire complet s’ouvre dans un autre onglet.' : '';
+        }
+
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+
+        function rendreSauvegardes() {
+            const tb = $('bSauv'); tb.replaceChildren();
+            const liste = SAUV && Array.isArray(SAUV.backups) ? SAUV.backups : [];
+            if (!liste.length) { const tr = el('tr'); const td = el('td', 'vide', !SESSION_OK ? '—' : !SAUV ? (CHARGE ? 'Sauvegardes indisponibles' : '—') : 'Aucune sauvegarde. Utiliser « Sauvegarder maintenant ».'); td.colSpan = 4; tr.appendChild(td); tb.appendChild(tr); return; }
+            liste.forEach(b => {
+                const tr = el('tr');
+                const t = el('td', 'mono', horodatage(b.timestamp));
+                if (b.kind === 'pre-restore') t.appendChild(el('span', 'pill att', 'AVANT RESTAURATION'));
+                tr.appendChild(t);
+                tr.appendChild(el('td', '', b.devices != null ? b.devices : '—'));
+                tr.appendChild(el('td', '', taille(b.size_db)));
+                const act = el('td', 'act');
+                if (CONFIRM === b.id) {
+                    act.appendChild(el('span', 'note', 'Restaurer cet instantané ? zigbee2mqtt s’arrête ~3 s, l’état courant est archivé avant.'));
+                    act.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; restaurer(b.id); }));
+                    act.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
+                } else act.appendChild(btn('Restaurer', '', () => { CONFIRM = b.id; rendre(); }));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        async function sauvegarder() {
+            if (OCCUPE) return; OCCUPE = true;
+            const b = $('sauvMaintenant'); b.disabled = true; b.textContent = 'Sauvegarde…';
+            const r = await ecrire('POST', '/backup');
+            OCCUPE = false; b.disabled = false; b.textContent = 'Sauvegarder maintenant';
+            if (r.ok) { retour('rSauv', true, 'Sauvegarde effectuée.'); await recharger(); }
+            else retour('rSauv', false, 'Sauvegarde impossible : ' + motif(r));
+        }
+        async function restaurer(id) {
+            if (OCCUPE) return; OCCUPE = true;
+            const r = await ecrire('POST', '/restore', { id: id });
+            OCCUPE = false;
+            if (r.ok) { retour('rSauv', true, 'Restauration effectuée, zigbee2mqtt redémarré.'); await charger(); }
+            else { retour('rSauv', false, 'Restauration impossible : ' + motif(r)); rendre(); }
+        }
+        async function recharger() {
+            if (DEMO) return;
+            try { SAUV = await lire('/backups'); } catch (e) { /* on garde la liste précédente */ }
+            rendre();
+        }
+        $('sauvMaintenant').addEventListener('click', sauvegarder);
+        $('sauvActu').addEventListener('click', recharger);
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'zigbee' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une action ou une confirmation ouverte.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM || OCCUPE) return; charger(); }, 30000);
+    </script>
 </body>
 </html>

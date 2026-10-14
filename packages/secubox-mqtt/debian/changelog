@@ -1,3 +1,12 @@
+secubox-mqtt (2.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /zigbee/ (composant zigbee) refaite au profil Aurora (ref #2650) : un seul fichier autonome (plus de police distante Google Fonts, plus de skin crt-light ni hybrid-dark, plus de api-utils.js), tuiles (etat global, conteneur, radio, demon, pont MQTT, sauvegardes) avec infobulles de definition, tableaux des composants et des sauvegardes, acces, ?demo=1 (donnees fictives RFC 5737, actions inertes), ?embed=1 (sans menu), bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet zigbee). Textes en francais.
+  * Memes routes et memes corps : GET /components, /status, /access, /backups ; POST /backup ; POST /restore avec {id}. Le bouton « Ouvrir le gestionnaire Zigbee » garde la meme regle (URL publique, a defaut URL du reseau local).
+  * Corrige : plus aucun confirm()/alert() (la restauration passe par une confirmation integree a la ligne, resultat et erreur affiches dans la page) ; les POST /backup et /restore envoient maintenant le jeton sbx_token en Bearer (ils n'envoyaient aucun en-tete Authorization) ; reponses d'API construites en textContent (plus d'innerHTML) ; les liens d'acces n'acceptent que http(s) ; actualisation toutes les 30 s, jamais onglet masque ni pendant une action.
+  * Non repris : l'ancien lien « ← hub » (le menu commun reste, hors ?embed=1).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-mqtt (2.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /mqtt/ refaite au profil Aurora (#2597) : tuiles (etat global, conteneur, courtier, sonde authentifiee, regles d'acces), tableaux des composants et des regles ACL, ?demo=1 (donnees fictives RFC 5737, bandeau orange), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet mqtt).
