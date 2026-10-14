@@ -4,607 +4,541 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
+  Console d'administration du BBS au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  Mêmes routes et mêmes corps que l'ancienne console. Confirmations dans la page (jamais de dialogue natif).
+  Seuls secrets montrés, une seule fois, à leur émission : le code d'invitation et le lien d'un salon privé.
+-->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — BBS</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
-/* Charte des panneaux d'administration (WEBUI-PANEL-GUIDELINES.md) :
-   terminal cyan, Courier Prime, un seul accent.
-
-   VOLONTAIREMENT DIFFERENT de l'interface membre (maquette coloree). Deux
-   publics, deux langages : les membres lisent, le sysop pilote. Un tableau de
-   bord habille comme un salon de lecture se lit mal quand il faut comprendre
-   vite pourquoi l'index diverge. */
-:root {
-    --p31-dim: #6b7b8b;
-    --bg-dark: #0d1117;
-    --bg-card: rgba(30, 40, 55, 0.8);
-    --bg-row:  rgba(20, 30, 45, 0.6);
-    --border:  rgba(100, 150, 200, 0.2);
-    --text:    #e8e6d9;
-    --cyan:    #00d4ff;
-    --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
-    --green:   #00dd44;  --blue:   #4488ff;  --purple: #a371f7;
-}
-body.hybrid-dark { background: var(--bg-dark); color: var(--text);
-    font-family: 'Courier Prime', monospace; margin: 0; }
-.main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
-@media (max-width: 800px) { .main { margin-left: 0; } }
-.header { display: flex; justify-content: space-between; align-items: flex-end;
-    flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
-.header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; }
-.header .sub { color: var(--p31-dim); font-size: 0.75rem; margin-top: .25rem; }
-.btn-group { display: flex; gap: .5rem; flex-wrap: wrap; }
-.btn { background: var(--bg-row); border: 1px solid var(--border); color: var(--text);
-    font-family: inherit; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
-    padding: .45rem .9rem; border-radius: 6px; cursor: pointer; }
-.btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
-.btn.primary { color: var(--cyan); border-color: var(--cyan); }
-.btn.danger  { color: var(--red); border-color: rgba(255,68,102,.5); }
-.btn:disabled { opacity: .5; cursor: default; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr));
-    gap: .75rem; margin-bottom: 1.5rem; }
-.stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: .9rem; backdrop-filter: blur(10px); text-align: center; }
-.stat-card .value { font-size: 1.6rem; font-weight: 700; text-shadow: 0 0 10px currentColor;
-    font-variant-numeric: tabular-nums; }
-.stat-card .label { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em;
-    color: var(--p31-dim); margin-top: .25rem; }
-.stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
-.stat-card.blue .value { color: var(--blue); } .stat-card.purple .value { color: var(--purple); }
-.stat-card.orange .value { color: var(--orange); } .stat-card.red .value { color: var(--red); }
-.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 1rem 1.1rem; backdrop-filter: blur(10px); margin-bottom: 1rem; }
-.card h3 { color: var(--cyan); font-size: .85rem; margin: 0 0 .75rem;
-    text-transform: uppercase; letter-spacing: .08em; }
-.row { background: var(--bg-row); border-left: 3px solid var(--p31-dim);
-    padding: .5rem .75rem; margin-bottom: .35rem; border-radius: 0 5px 5px 0;
-    display: flex; gap: .75rem; align-items: center; font-size: .75rem; }
-.row:hover { background: rgba(0,212,255,.06); transform: translateX(2px); }
-.row.ok   { border-left-color: var(--green); }
-.row.warn { border-left-color: var(--orange); }
-.row.bad  { border-left-color: var(--red); }
-.row .name { color: var(--cyan); flex: 1; }
-.row .meta { color: var(--p31-dim); font-size: .68rem; text-align: right;
-    font-variant-numeric: tabular-nums; }
-
-  /* Onglets (#1008) : la console sysop du BBS, rendue ici pour ne pas obliger
-   * l'exploitant a changer de site — et a detenir deux authentifications —
-   * pour desactiver un compte. */
-  .onglets { display: flex; gap: 6px; margin: 0 0 16px; flex-wrap: wrap; }
-  .onglet {
-    background: none; border: 1px solid var(--line, #1e3a4a); color: inherit;
-    padding: 7px 14px; border-radius: 999px; cursor: pointer; font: inherit;
-    font-size: 13px; opacity: .65;
-  }
-  .onglet.actif { opacity: 1; border-color: var(--cyan, #00d4ff); }
-  .sysop-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .sysop-table th { text-align: left; font-weight: 600; opacity: .6; padding: 6px 8px; }
-  .sysop-table td { padding: 6px 8px; border-top: 1px solid var(--line, #1e3a4a); vertical-align: middle; }
-  .sysop-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .sysop-table input[type=password] { width: 150px; }
-  .sysop-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .reglages { display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
-  .reglages label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; opacity: .8; }
-  .reglages input { padding: 7px 10px; }
-  .etiq { padding: 1px 8px; border-radius: 999px; font-size: 11.5px; border: 1px solid currentColor; opacity: .8; }
-.tag { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em;
-    padding: .1rem .45rem; border-radius: 3px; border: 1px solid var(--border); }
-.tag.pub { color: var(--green); border-color: rgba(0,221,68,.4); }
-.tag.loc { color: var(--p31-dim); }
-.tag.bil { color: var(--purple); border-color: rgba(163,113,247,.4); }
-.tag.src { color: var(--blue); border-color: rgba(68,136,255,.4); }
-.note { color: var(--p31-dim); font-size: .7rem; line-height: 1.6; margin-top: .6rem; }
-.note b { color: var(--text); }
-.code { background: var(--bg-row); border: 1px solid var(--border); border-radius: 5px;
-    padding: .6rem .8rem; font-size: .75rem; color: var(--cyan); word-break: break-all;
-    margin-top: .5rem; }
-.toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--cyan); color: #04202b;
-    padding: .6rem 1rem; border-radius: 6px; font-size: .75rem; opacity: 0;
-    transition: opacity .2s; pointer-events: none; max-width: 60ch; }
-.toast.show { opacity: 1; } .toast.error { background: var(--red); color: #fff; }
+:root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+  --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+  color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+.principal{min-width:0}
+body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+@media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+body.mobile-mode:not(.emb) .principal{margin-left:0}
+.cadre{container-type:inline-size;container-name:a;padding:10px}
+.app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+.app>*{min-width:0}
+.tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block;overflow-wrap:anywhere}
+.actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+.actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+.droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+.btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:30px}
+.btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+.btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+.btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+.demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+.info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+#erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+[hidden]{display:none!important}
+.tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+@container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+@container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+.tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+.tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+.tuile .v.long{font-size:1rem;line-height:1.15}
+.tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.bl .v{color:var(--bleu)} .tuile.vi .v{color:var(--violet)}
+.onglets{display:flex;flex-wrap:wrap;gap:6px}
+.onglet{font:inherit;font-size:.78rem;padding:6px 14px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.6);color:var(--doux);cursor:pointer;min-height:32px}
+.onglet:hover{border-color:var(--cyan)} .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.onglet[aria-selected=true]{border-color:var(--cyan);color:var(--texte);background:rgba(41,182,246,.18)}
+.vue{display:grid;gap:10px;min-width:0} .vue>*{min-width:0}
+.pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+.pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+.note{color:var(--faible);font-size:.72rem;margin:6px 0 0;line-height:1.5} .note b{color:var(--doux)}
+.tab{overflow-x:auto} .tab table{min-width:560px}
+table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+th.num,td.num{text-align:right}
+tbody tr:hover{background:rgba(41,182,246,.07)}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+.pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+.pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+.pill.vi{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)} .pill.bl{border-color:var(--bleu);color:var(--bleu);background:rgba(59,130,246,.12)}
+.pill button{all:unset;cursor:pointer;margin-left:6px;color:var(--doux)} .pill button:hover{color:var(--rouge)} .pill button:focus-visible{outline:2px solid var(--cyan)}
+.vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+.ligne{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+.ligne:first-child{border-top:0} .ligne .nom{flex:1 1 14rem;min-width:0;overflow-wrap:anywhere} .ligne .meta{color:var(--faible);font-size:.72rem;overflow-wrap:anywhere}
+.ligne.ok{border-left:2px solid var(--vert)} .ligne.bad{border-left:2px solid var(--rouge)}
+.acts{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+.code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.8rem;color:var(--cyan);border:1px solid var(--trait2);border-radius:8px;padding:8px 10px;background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+.champs{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;margin:0}
+.champs.etroit{max-width:520px;grid-template-columns:1fr}
+.champs label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+input,select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+td input,td select,.acts input,.acts select{width:auto;max-width:100%} td input[type=password]{width:140px}
+input:focus,select:focus{outline:none;border-color:var(--cyan)}
+.conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:12px;padding:10px 12px;display:grid;gap:8px}
+.conf p{margin:0;font-size:.82rem;white-space:pre-line;overflow-wrap:anywhere} .conf .champs{grid-template-columns:minmax(150px,320px)}
+.toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
+.toast.show{opacity:1;transform:translate(-50%,0)} .toast.error{border-color:var(--rouge)}
 </style>
 </head>
-<body class="hybrid-dark">
+<body>
 <nav class="sidebar" id="sidebar"></nav>
 <script src="/shared/sidebar.js"></script>
-
-<main class="main">
-<header class="header">
-  <div>
-    <h1>📟 BBS</h1>
-    <div class="sub" id="subline">chargement…</div>
+<main class="principal"><div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M7 9h6M7 12h10"/></svg>
+      <div><h1>BBS</h1><small id="subline">Console du sysop</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span>
+      <button class="btn" id="rafraichir" type="button">⟳ Actualiser</button>
+      <button class="btn prim" id="inviter" type="button" title="Émet un code d'invitation à usage unique ; seule son empreinte est conservée.">✉ Inviter</button>
+      <button class="btn" id="sauvegarder" type="button" title="Écrit une archive du contenu du BBS sur la machine.">Sauvegarder</button>
+      <button class="btn danger" id="reconstruire" type="button" title="Reconstruit l'index depuis le contenu sur disque ; le disque n'est pas modifié.">Reconstruire l'index</button>
+    </div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+  <div id="erreur" role="alert" hidden></div>
+  <div class="conf" id="conf" role="alertdialog" aria-labelledby="confMsg" hidden>
+    <p id="confMsg"></p>
+    <div class="champs" id="confSaisieBloc" hidden><label id="confEtiq">Pseudonyme<input id="confSaisie" autocomplete="off"></label></div>
+    <div class="acts"><button class="btn danger" id="confOk" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
   </div>
-  <div class="btn-group">
-    <button class="btn" onclick="refresh()">↻ Rafraîchir</button>
-    <button class="btn primary" onclick="inviter()">✉ Inviter</button>
-    <button class="btn" onclick="sauvegarder()">💾 Sauvegarder</button>
-    <button class="btn danger" onclick="reconstruire()">⟲ Reconstruire l'index</button>
+
+  <div class="onglets" role="tablist" aria-label="Sections">
+    <button class="onglet" type="button" role="tab" data-vue="exploitation" aria-selected="true">Exploitation</button>
+    <button class="onglet" type="button" role="tab" data-vue="sysop" aria-selected="false">Sysop</button>
+    <button class="onglet" type="button" role="tab" data-vue="salons" aria-selected="false">Salons</button>
   </div>
-</header>
 
-<div class="onglets">
-  <button class="onglet actif" type="button" data-vue="exploitation">📊 Exploitation</button>
-  <button class="onglet" type="button" data-vue="sysop">⚿ Sysop</button>
-  <button class="onglet" type="button" data-vue="salons">🏛 Salons</button>
-</div>
-
-<div class="vue" data-vue="exploitation">
-<div class="grid" id="stats"></div>
-
-<div class="card">
-  <h3>🧬 Intégrité</h3>
-  <div id="integrite">…</div>
-  <div class="note">
-    <b>Le disque fait foi.</b> L'index se reconstruit entièrement depuis
-    <code>content/</code> — c'est ce qui rend la base jetable et la sauvegarde
-    par rsync honnête. Un écart doit se voir ici, pas le jour de la restauration.
-  </div>
-</div>
-
-<div class="card">
-  <h3>💬 Derniers fils</h3>
-  <div id="fils">…</div>
-</div>
-
-<div class="card" id="carte-invitation" style="display:none">
-  <h3>✉ Invitation émise</h3>
-  <div class="code" id="code-invitation"></div>
-  <div class="note">
-    <b>Ce code n'est affiché qu'une fois.</b> Seule son empreinte est conservée :
-    ni un listing ultérieur, ni une lecture de la base ne permettent de le
-    retrouver. Transmettez-le maintenant.
-  </div>
-</div>
-
-</div><!-- /vue exploitation -->
-
-<div class="vue" data-vue="sysop" hidden>
-  <div class="card">
-    <h3>👥 Comptes</h3>
-    <div id="comptes">…</div>
-    <div class="note">
-      <b>Un compte n'est jamais supprimé, seulement désactivé.</b> Désactiver
-      ferme aussi ses sessions et lui retire le droit d'inviter. Un compte
-      <i>délégué</i> tient son mot de passe de secubox-auth : il se change
-      là-bas, et le réinitialiser ici n'aurait aucun effet à la connexion.
+  <div class="vue" data-vue="exploitation">
+    <section class="tuiles" aria-label="Indicateurs">
+      <div class="tuile cy" title="Nombre de fils de discussion indexés."><span class="l">Fils</span><span class="v" id="tFils">—</span><span class="s">discussions</span></div>
+      <div class="tuile bl" title="Nombre total de messages indexés, tous fils confondus."><span class="l">Messages</span><span class="v" id="tMessages">—</span><span class="s">indexés</span></div>
+      <div class="tuile ok" title="Nombre de membres du BBS (comptes locaux et délégués)."><span class="l">Membres</span><span class="v" id="tMembres">—</span><span class="s">comptes</span></div>
+      <div class="tuile vi" title="Nombre de fichiers déposés dans le BBS."><span class="l">Fichiers</span><span class="v" id="tFichiers">—</span><span class="s">déposés</span></div>
+      <div class="tuile att" title="Nombre de fils publiés comme billets."><span class="l">Billets</span><span class="v" id="tBillets">—</span><span class="s">publiés</span></div>
+      <div class="tuile cy" id="cInteg" title="Concordance entre l'index et le contenu sur disque. Un écart signale des fils divergents ou absents de l'index."><span class="l">Intégrité</span><span class="v" id="tInteg">—</span><span class="s" id="sInteg">index et disque</span></div>
+    </section>
+    <div class="pan"><h3>Intégrité <i>GET /integrity</i></h3>
+      <div id="integrite"><div class="vide">—</div></div>
+      <p class="note"><b>Le disque fait foi.</b> L'index se reconstruit entièrement depuis <span class="mono">content/</span> : c'est ce qui rend la base jetable et la sauvegarde par rsync honnête. Un écart doit se voir ici, pas le jour de la restauration.</p>
+    </div>
+    <div class="pan"><h3>Derniers fils <i>GET /threads, 25 premiers</i></h3><div id="fils"><div class="vide">—</div></div></div>
+    <div class="pan" id="carteInvitation" hidden><h3>Invitation émise</h3>
+      <div class="code" id="codeInvitation"></div>
+      <p class="note"><b>Ce code n'est affiché qu'une fois.</b> Seule son empreinte est conservée : ni un listing ultérieur, ni une lecture de la base ne permettent de le retrouver. Transmettez-le maintenant.</p>
     </div>
   </div>
 
-  <div class="card">
-    <h3>✉ Invitations</h3>
-    <div id="invitations">…</div>
-    <div class="note">
-      <b>Tout membre peut inviter</b>, sans quota. La colonne « émise par » est
-      la seule façon de remonter une inscription en cascade — seule l'empreinte
-      du code est conservée, jamais le code.
+  <div class="vue" data-vue="sysop" hidden>
+    <div class="pan"><h3>Comptes <i>GET /users</i></h3>
+      <div id="comptes"><div class="vide">—</div></div>
+      <p class="note"><b>Désactiver ferme aussi les sessions du compte</b> et lui retire le droit d'inviter. Un compte <i>délégué</i> tient son mot de passe de secubox-auth : il se change là-bas, et le réinitialiser ici n'aurait aucun effet à la connexion ; « Reprendre en local » le détache de secubox-auth. La suppression est irréversible : le contenu reste, réattribué à « compte supprimé ».</p>
+    </div>
+    <div class="pan"><h3>Invitations <i>GET /invites</i></h3>
+      <div id="invitations"><div class="vide">—</div></div>
+      <p class="note"><b>Tout membre peut inviter</b>, sans quota. La colonne « émise par » est la seule façon de remonter une inscription en cascade ; seule l'empreinte du code est conservée, jamais le code.</p>
+    </div>
+    <div class="pan"><h3>Mastodon <i>GET, POST /settings</i></h3>
+      <div class="champs etroit">
+        <label>Adresse de l'instance<input id="mastoInstance" type="url" placeholder="https://social.exemple.fr"></label>
+        <label>Lien d'invitation<input id="mastoInvitation" type="url" placeholder="https://social.exemple.fr/invite/xxxx"></label>
+        <div class="acts"><button class="btn prim" id="enregistrer" type="button">Enregistrer</button></div>
+      </div>
+      <p class="note">Le lien se crée dans Mastodon, puis se colle ici. Il n'est montré qu'aux membres <b>connectés</b> du BBS : une invitation Mastodon sert plusieurs fois et ne se révoque pas d'ici. Vider un champ retire le réglage.</p>
     </div>
   </div>
 
-  <div class="card">
-    <h3>🐘 Mastodon</h3>
-    <div class="reglages">
-      <label>Adresse de l'instance
-        <input id="masto-instance" type="url" placeholder="https://social.exemple.fr"></label>
-      <label>Lien d'invitation
-        <input id="masto-invitation" type="url" placeholder="https://social.exemple.fr/invite/xxxx"></label>
-      <button class="btn primary" type="button" onclick="enregistrerReglages()">Enregistrer</button>
+  <div class="vue" data-vue="salons" hidden>
+    <div class="pan"><h3>Salons et sous-salons <i>GET, POST /admin/salons</i></h3>
+      <div id="salonsArbre"><div class="vide">—</div></div>
+      <div class="champs" style="margin-top:10px">
+        <label>Identifiant<input id="slSlug" placeholder="reseau" pattern="[a-z0-9_-]+" maxlength="64" autocomplete="off"></label>
+        <label>Titre<input id="slTitre" placeholder="Réseau" autocomplete="off"></label>
+        <label>Description<input id="slDesc" placeholder="(facultative)" autocomplete="off"></label>
+        <label>Parent<select id="slParent"></select></label>
+        <div class="acts"><button class="btn prim" id="creerSalon" type="button">Créer le salon</button></div>
+      </div>
+      <p class="note">Un salon sans parent est de premier niveau ; un parent en fait un sous-salon. L'identifiant (lettres minuscules, chiffres, tiret, souligné) est revalidé par le serveur.</p>
     </div>
-    <div class="note">
-      Le lien se crée dans Mastodon, puis se colle ici. Il n'est montré qu'aux
-      membres <b>connectés</b> du BBS : une invitation Mastodon sert plusieurs
-      fois et ne se révoque pas d'ici. Vider un champ retire le réglage.
+    <div class="pan"><h3>Salons privés <i>POST /admin/salons/{id}/…</i></h3>
+      <div id="salonsPrives"><div class="vide">—</div></div>
+      <div class="code" id="lienSalon" style="margin-top:8px" hidden></div>
+      <p class="note"><b>Un salon privé n'apparaît qu'à ses membres.</b> Ouvert à une <b>communauté SBX OS</b>, il l'est à chacun de ses membres dont le compte BBS est lié à son identité ; les communautés se gèrent dans l'Identity Manager. Le lien d'invitation n'ouvre aucun compte, sert une fois, expire en sept jours et n'est affiché qu'ici, à son émission.</p>
+    </div>
+    <div class="pan"><h3>Passerelles <i>GET /admin/passerelles</i></h3><div id="passerelles"><div class="vide">—</div></div></div>
+    <div class="pan"><h3>Journal de modération <i>GET /admin/moderation</i></h3>
+      <div id="journalModeration"><div class="vide">—</div></div>
+      <p class="note">Le journal n'a de valeur que s'il est <b>lu</b>. Chaque geste fait d'ici y est inscrit au nom de votre compte BBS.</p>
     </div>
   </div>
-</div>
-
-<!-- #1523 : ce que seule la console /sysop savait faire — mêmes règles,
-     même journal (les routes JSON appellent les fonctions des formulaires). -->
-<div class="vue" data-vue="salons" hidden>
-  <div class="card">
-    <h3>🏛 Salons et sous-salons</h3>
-    <div id="salons-arbre">…</div>
-    <div class="reglages" style="max-width:none;flex-direction:row;flex-wrap:wrap;align-items:flex-end;margin-top:.8rem">
-      <label>Identifiant<input id="sl-slug" placeholder="reseau" pattern="[a-z0-9_-]+" maxlength="64"></label>
-      <label>Titre<input id="sl-titre" placeholder="Réseau"></label>
-      <label style="flex:1;min-width:14rem">Description<input id="sl-desc" placeholder="(facultative)"></label>
-      <label>Parent<select id="sl-parent"></select></label>
-      <button class="btn primary" type="button" onclick="creerSalon()">Créer le salon</button>
-    </div>
-    <div class="note">Un salon sans parent est de premier niveau ; un parent en fait un
-      sous-salon. L'identifiant (lettres minuscules, chiffres, tiret, souligné) est
-      revalidé par le serveur.</div>
-  </div>
-
-  <div class="card">
-    <h3>🔒 Salons privés</h3>
-    <div id="salons-prives">…</div>
-    <div class="card code" id="carte-lien-salon" style="display:none"></div>
-    <div class="note"><b>Un salon privé n'apparaît qu'à ses membres.</b> Ouvert à une
-      <b>communauté SBX OS</b>, il l'est à chacun de ses membres dont le compte BBS est
-      lié à son identité — les communautés se gèrent dans l'Identity Manager. Le lien
-      d'invitation n'ouvre aucun compte, sert une fois, expire en sept jours et n'est
-      affiché qu'ici, à son émission.</div>
-  </div>
-
-  <div class="card">
-    <h3>🔌 Passerelles</h3>
-    <div id="passerelles">…</div>
-  </div>
-
-  <div class="card">
-    <h3>📜 Journal de modération</h3>
-    <div id="journal-moderation">…</div>
-    <div class="note">Le journal n'a de valeur que s'il est <b>lu</b>. Chaque geste fait
-      d'ici y est inscrit au nom de votre compte BBS.</div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
+  <div class="toast" id="toast" role="status"></div>
+</div></div></main>
 <script>
+const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+if (Q.get('embed')) document.body.classList.add('emb');
 const API = '/api/v1/bbs';
+const $ = id => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+const nb = v => (v === null || v === undefined) ? '—' : String(v);
+const quand = t => t ? new Date(t * 1000).toLocaleString('fr-FR') : '—';
+let SESSION_OK = true, CHARGE = false, VUE = 'exploitation', CONF = null;
 
-function jeton() { return localStorage.getItem('sbx_token') || ''; }
+function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
 
-// UN JETON EXPIRE N'EST PAS UNE ERREUR A AFFICHER, c'est une session a refaire.
-// Le panneau montrait « jeton expiré » dans chaque carte : exact, et inutile —
-// il ne dit pas quoi faire, et l'on croit a une panne du module.
-//
-// MAIS RENVOYER VERS /login.html SANS DIRE D'OU L'ON VIENT est un aller simple :
-// la connexion reussit et depose l'utilisateur sur l'accueil, pas sur la page
-// qu'il avait demandee. Il doit alors retrouver le module a la main — et si son
-// jeton expire souvent, il a l'impression que la page est inaccessible.
-//
-// `login.html` sait revenir : il lit `?redirect=` et n'accepte qu'un chemin
-// interne (pas de `//`, pas d'URL absolue), ce qui interdit d'en faire un
-// tremplin vers un site tiers.
-function versConnexion() {
-  const ici = window.location.pathname + window.location.search;
-  if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(ici);
-}
-
-async function api(chemin, methode) {
-  const r = await fetch(API + chemin, {
-    method: methode || 'GET',
-    headers: { 'Authorization': 'Bearer ' + jeton() },
-  });
-  if (r.status === 401) { versConnexion(); return null; }
+// Un seul chemin d'appel, mêmes routes, méthodes et corps que l'ancienne console.
+// corps absent : ni corps ni Content-Type (invite, backup, reindex) ; sinon JSON.
+async function appel(methode, chemin, corps) {
+  const opts = { method: methode, credentials: 'same-origin', cache: 'no-store', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+  if (corps !== undefined) opts.body = JSON.stringify(corps);
+  const r = await fetch(API + chemin, opts);
   const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  if (r.status === 401 || r.status === 403) { SESSION_OK = false; rendreEtat(); const e = new Error('session requise'); e.statut = r.status; throw e; }
+  if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.statut = r.status; throw e; }
   return j;
 }
-
-async function poste(chemin, corps) {
-  const r = await fetch(API + chemin, {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + jeton(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(corps || {}),
-  });
-  if (r.status === 401) { versConnexion(); return null; }
-  const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-  return j;
+async function lire(chemin) { return DEMO ? demoLire(chemin) : appel('GET', chemin); }
+// Écriture : inerte en démonstration (retourne null, rien n'est envoyé).
+async function ecrire(chemin, corps) {
+  if (DEMO) { toast('Démonstration : action inerte.'); return null; }
+  return appel('POST', chemin, corps);
 }
 
 function toast(msg, err) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (err ? ' error' : '');
-  setTimeout(() => { t.className = 'toast'; }, 4000);
+  const t = $('toast'); t.textContent = msg; t.className = 'toast show' + (err ? ' error' : '');
+  clearTimeout(toast.h); toast.h = setTimeout(() => { t.className = 'toast'; }, 4000);
+}
+function pill(txt, cls) { return el('span', 'pill ' + (cls || ''), txt); }
+function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+function vide(txt) { return el('div', 'vide', txt); }
+function remplir(id, noeud) { const c = $(id); c.replaceChildren(noeud); annoncer(); }
+function tableau(entetes, lignes, nums) {
+  const t = el('table'), th = el('thead'), tr = el('tr');
+  entetes.forEach((h, i) => tr.appendChild(el('th', nums && nums.includes(i) ? 'num' : '', h)));
+  th.appendChild(tr); t.appendChild(th);
+  const tb = el('tbody'); lignes.forEach(l => tb.appendChild(l)); t.appendChild(tb);
+  const d = el('div', 'tab'); d.appendChild(t); return d;
+}
+function cellule(contenu, cls) { const td = el('td', cls || ''); [].concat(contenu).forEach(c => { if (c != null) td.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); }); return td; }
+function ligneTab(cells) { const tr = el('tr'); cells.forEach(c => tr.appendChild(c)); return tr; }
+function erreurDans(id, e) { remplir(id, vide(e.statut === 401 || e.statut === 403 ? '—' : e.message)); }
+
+// ----- Confirmation intégrée à la page (jamais de dialogue natif) -----
+function demander(message, saisie, action) {
+  CONF = { saisie, action };
+  $('confMsg').textContent = message;
+  $('confSaisieBloc').hidden = !saisie; $('confSaisie').value = '';
+  $('confEtiq').firstChild.textContent = saisie ? 'Pour confirmer, tapez le pseudonyme : ' + saisie : '';
+  $('confOk').disabled = !!saisie;
+  $('conf').hidden = false; annoncer();
+  (saisie ? $('confSaisie') : $('confOk')).focus();
+}
+function fermerConf() { CONF = null; $('conf').hidden = true; annoncer(); }
+$('confSaisie').addEventListener('input', () => { $('confOk').disabled = !CONF || $('confSaisie').value !== CONF.saisie; });
+$('confNon').addEventListener('click', fermerConf);
+$('confOk').addEventListener('click', () => { const c = CONF; fermerConf(); if (c) c.action(); });
+
+// ----- Démonstration : données fictives (adresses et noms de documentation) -----
+function demoLire(chemin) {
+  const t = Math.floor(Date.now() / 1000);
+  const salons = [
+    { id: 1, slug: 'general', titre: 'Général', desc: 'Discussions ouvertes', profondeur: 0, fils: 12, prive: false, public: true, membres: [], communautes: [] },
+    { id: 2, slug: 'reseau', titre: 'Réseau', desc: '', profondeur: 1, fils: 5, prive: false, public: false, membres: [], communautes: [] },
+    { id: 3, slug: 'atelier', titre: 'Atelier', desc: 'Réservé au groupe de travail', profondeur: 0, fils: 3, prive: true, public: false,
+      membres: [{ id: 11, handle: 'alice-demo' }], communautes: [{ uuid: '00000000-0000-4000-8000-000000000001', nom: 'Cellule démo' }] }];
+  const R = {
+    '/status': { titre: 'BBS de démonstration', version: '0.0.0-demo', salons: 3, stats: { Threads: 20, Posts: 134, Members: 7, Files: 18, Billets: 4 } },
+    '/integrity': { integrite: { Indexed: 20, OnDisk: 20, Diverging: 0, Missing: 0, Details: [] } },
+    '/threads': { fils: [
+      { Title: 'Bienvenue sur le BBS de démonstration', Visibility: 'public', Published: true, Source: '', Author: 'alice-demo', Posts: 14 },
+      { Title: 'Notes de la réunion du jeudi', Visibility: 'local', Published: false, Source: '', Author: 'bob-demo', Posts: 6 },
+      { Title: 'Revue de presse importée', Visibility: 'public', Published: false, Source: 'mastodon', Author: 'passerelle', Posts: 3 }] },
+    '/users': { users: [
+      { id: 11, handle: 'alice-demo', role: 'sysop', source: 'local', desactive: false, derniere_connexion: t - 3600, sessions: 2 },
+      { id: 12, handle: 'bob-demo', role: 'membre', source: 'secubox', desactive: false, derniere_connexion: t - 86400 * 2, sessions: 0 },
+      { id: 13, handle: 'carole-demo', role: 'membre', source: 'local', desactive: true, derniere_connexion: 0, sessions: 0 }] },
+    '/invites': { invites: [
+      { emetteur: 'alice-demo', beneficiaire: 'bob-demo', utilisee: true, emise_le: t - 86400 * 9 },
+      { emetteur: '', beneficiaire: '', utilisee: false, emise_le: t - 3600 }] },
+    '/settings': { instance: 'https://social.example.org', invitation: '' },
+    '/admin/salons': { salons: salons, comptes: [{ id: 11, handle: 'alice-demo' }, { id: 12, handle: 'bob-demo' }],
+      communautes: [{ uuid: '00000000-0000-4000-8000-000000000001', nom: 'Cellule démo' }, { uuid: '00000000-0000-4000-8000-000000000002', nom: 'Atelier démo' }] },
+    '/admin/passerelles': { passerelles: [{ source: 'mastodon', a: t - 1800, vus: 40, crees: 3, ignores: 37, erreur: '' }, { source: 'flux-rss', a: t - 7200, vus: 0, crees: 0, ignores: 0, erreur: 'délai dépassé (exemple)' }] },
+    '/admin/moderation': { journal: [{ a: t - 600, acteur: 'alice-demo', geste: 'salon-prive', cible: 'atelier', detail: 'fermé' }] },
+  };
+  return Promise.resolve(R[chemin] || {});
 }
 
-function stat(v, l, c) {
-  return `<div class="stat-card ${c||'cyan'}"><div class="value">${v}</div><div class="label">${l}</div></div>`;
+// ----- Exploitation -----
+function rendreEtat(s, integ) {
+  $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+  const e = $('etat');
+  if (!SESSION_OK) { e.className = 'actif neutre'; e.textContent = 'SESSION REQUISE'; }
+  else if (!CHARGE) { e.className = 'actif neutre'; e.textContent = 'Chargement…'; }
+  else if (!s) { e.className = 'actif hors'; e.textContent = 'HORS LIGNE'; }
+  else if (integ && (integ.Diverging || integ.Missing)) { e.className = 'actif att'; e.textContent = 'ÉCART INDEX / DISQUE'; }
+  else { e.className = 'actif'; e.textContent = 'EN LIGNE'; }
+}
+function tuile(id, v) { $(id).textContent = nb(v); }
+async function chargerExploitation() {
+  let s = null, integ = null, erreurs = [];
+  try { s = await lire('/status'); } catch (e) { if (e.statut !== 401 && e.statut !== 403) erreurs.push('état : ' + e.message); }
+  const st = (s && s.stats) || {};
+  $('subline').textContent = s ? [s.titre, s.version ? 'v' + s.version : null, s.salons != null ? s.salons + ' salons' : null].filter(Boolean).join(' · ') : 'Console du sysop';
+  tuile('tFils', st.Threads); tuile('tMessages', st.Posts); tuile('tMembres', st.Members); tuile('tFichiers', st.Files); tuile('tBillets', st.Billets);
+  try {
+    integ = (await lire('/integrity')).integrite;
+    const sain = integ.Diverging === 0 && integ.Missing === 0;
+    $('tInteg').textContent = sain ? 'OK' : 'ÉCART'; $('cInteg').className = 'tuile ' + (sain ? 'ok' : 'att');
+    $('sInteg').textContent = integ.Indexed + ' indexés · ' + integ.OnDisk + ' sur disque';
+    const box = el('div');
+    const l = el('div', 'ligne ' + (sain ? 'ok' : 'bad'));
+    l.appendChild(el('span', 'nom', sain ? 'Disque et index concordent' : 'ÉCART DÉTECTÉ'));
+    l.appendChild(el('span', 'meta', integ.Indexed + ' indexés · ' + integ.OnDisk + ' sur disque · ' + integ.Diverging + ' divergents · ' + integ.Missing + ' absents'));
+    box.appendChild(l);
+    (integ.Details || []).slice(0, 10).forEach(d => { const x = el('div', 'ligne bad'); x.appendChild(el('span', 'nom', String(d))); box.appendChild(x); });
+    remplir('integrite', box);
+  } catch (e) {
+    $('tInteg').textContent = '—'; $('cInteg').className = 'tuile cy'; $('sInteg').textContent = 'index et disque';
+    erreurDans('integrite', e);
+  }
+  try {
+    const f = (await lire('/threads')).fils || [];
+    const box = el('div');
+    if (!f.length) box.appendChild(vide('Aucun fil'));
+    f.slice(0, 25).forEach(t => {
+      const l = el('div', 'ligne ' + (t.Visibility === 'public' ? 'ok' : ''));
+      l.appendChild(el('span', 'nom', t.Title));
+      l.appendChild(t.Visibility === 'public' ? pill('public', 'ok') : pill('local'));
+      if (t.Published) l.appendChild(pill('billet', 'vi'));
+      if (t.Source) l.appendChild(pill(t.Source, 'bl'));
+      l.appendChild(el('span', 'meta', tiret(t.Author) + ' · ' + nb(t.Posts) + ' msg'));
+      box.appendChild(l);
+    });
+    remplir('fils', box);
+  } catch (e) { erreurDans('fils', e); }
+  CHARGE = true;
+  const erreur = $('erreur'); erreur.hidden = !(erreurs.length && SESSION_OK); erreur.textContent = erreurs.join(' ; ');
+  rendreEtat(s, integ);
+  $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+  annoncer();
 }
 
-function esc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g,
-    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// Bascule d'onglet. Les donnees sysop ne sont chargees qu'a l'ouverture de
-// l'onglet : lister les comptes et les invitations a chaque affichage du
-// panneau ferait deux requetes de plus pour une vue que l'on n'ouvre pas
-// souvent.
-document.addEventListener('click', function (e) {
-  const b = e.target.closest('.onglet');
-  if (!b) return;
-  const vue = b.dataset.vue;
-  document.querySelectorAll('.onglet').forEach(o => o.classList.toggle('actif', o === b));
+// ----- Onglets (les données Sysop et Salons ne se chargent qu'à l'ouverture) -----
+function ouvrir(vue) {
+  VUE = vue;
+  document.querySelectorAll('.onglet').forEach(o => o.setAttribute('aria-selected', String(o.dataset.vue === vue)));
   document.querySelectorAll('.vue').forEach(v => { v.hidden = v.dataset.vue !== vue; });
   if (vue === 'sysop') chargerSysop();
   if (vue === 'salons') chargerSalons();
-});
+  annoncer();
+}
+document.querySelectorAll('.onglet').forEach(o => o.addEventListener('click', () => ouvrir(o.dataset.vue)));
 
+// ----- Sysop -----
 async function chargerSysop() {
   try {
-    const r = await api('/users');
-    if (!r) return;
+    const r = await lire('/users');
     const lignes = (r.users || []).map(u => {
       const delegue = u.source === 'secubox';
-      // UN COMPTE DÉLÉGUÉ tient son mot de passe de secubox-auth : le BBS n'en
-      // détient aucun, donc rien à réinitialiser ici. Plutôt que d'afficher une
-      // étiquette et un cul-de-sac, on propose de le REPRENDRE en local —
-      // c'est ce qui manquait, et ce qui rendait ces comptes ingérables.
-      const motdepasse = delegue
-        ? `<input type="password" placeholder="mot de passe local" id="pw-${u.id}">
-           <button class="btn" type="button" onclick="reprendreEnLocal(${u.id})"
-             title="Le compte cesse de dépendre de secubox-auth">Reprendre en local</button>`
-        : `<input type="password" placeholder="nouveau mot de passe"
-             id="pw-${u.id}"><button class="btn" type="button"
-             onclick="reinitialiser(${u.id})">Réinitialiser</button>`;
-      return `<tr>
-        <td><b>${esc(u.handle)}</b>${u.desactive ? ' <span class="etiq">désactivé</span>' : ''}</td>
-        <td>${esc(u.role)}</td>
-        <td>${u.derniere_connexion ? new Date(u.derniere_connexion * 1000).toLocaleString('fr-FR') : '—'}</td>
-        <td class="num">${u.sessions}</td>
-        <td><div class="sysop-actions">
-          <button class="btn" type="button" onclick="basculerCompte(${u.id}, ${u.desactive ? 'false' : 'true'})">
-            ${u.desactive ? 'Réactiver' : 'Désactiver'}</button>
-          ${motdepasse}
-          <button class="btn danger" type="button" onclick="supprimerCompte(${u.id}, '${esc(u.handle)}')"
-            title="Irréversible — le contenu reste, réattribué à « compte supprimé »">Supprimer</button>
-        </div></td></tr>`;
-    }).join('');
-    document.getElementById('comptes').innerHTML = lignes
-      ? `<table class="sysop-table"><thead><tr><th>Compte</th><th>Rôle</th>
-         <th>Dernière connexion</th><th class="num">Sessions</th><th></th></tr></thead>
-         <tbody>${lignes}</tbody></table>`
-      : '<div class="row"><span class="name">aucun compte</span></div>';
-  } catch (e) { document.getElementById('comptes').textContent = e.message; }
-
+      const pw = el('input'); pw.type = 'password'; pw.autocomplete = 'new-password'; pw.id = 'pw-' + u.id;
+      pw.placeholder = delegue ? 'mot de passe local' : 'nouveau mot de passe'; pw.setAttribute('aria-label', pw.placeholder + ' pour ' + u.handle);
+      const nom = cellule(el('b', '', u.handle)); if (u.desactive) { nom.appendChild(document.createTextNode(' ')); nom.appendChild(pill('désactivé')); }
+      const act = el('div', 'acts');
+      act.appendChild(btn(u.desactive ? 'Réactiver' : 'Désactiver', '', () => basculerCompte(u.id, !u.desactive)));
+      act.appendChild(pw);
+      const b = btn(delegue ? 'Reprendre en local' : 'Réinitialiser', '', () => delegue ? reprendreEnLocal(u.id) : reinitialiser(u.id));
+      if (delegue) b.title = 'Le compte cesse de dépendre de secubox-auth';
+      act.appendChild(b);
+      const sup = btn('Supprimer', 'danger', () => supprimerCompte(u.id, u.handle)); sup.title = 'Irréversible — le contenu reste, réattribué à « compte supprimé »';
+      act.appendChild(sup);
+      return ligneTab([nom, cellule(tiret(u.role)), cellule(quand(u.derniere_connexion)), cellule(nb(u.sessions), 'num'), cellule(act)]);
+    });
+    remplir('comptes', lignes.length ? tableau(['Compte', 'Rôle', 'Dernière connexion', 'Sessions', 'Actions'], lignes, [3]) : vide('Aucun compte'));
+  } catch (e) { erreurDans('comptes', e); }
   try {
-    const r = await api('/invites');
-    if (!r) return;
-    const lignes = (r.invites || []).map(i => `<tr>
-      <td>${i.emetteur ? esc(i.emetteur) : '<span class="etiq">console</span>'}</td>
-      <td>${i.beneficiaire ? esc(i.beneficiaire) : '—'}</td>
-      <td>${i.utilisee ? 'utilisée' : 'ouverte'}</td>
-      <td>${new Date(i.emise_le * 1000).toLocaleDateString('fr-FR')}</td></tr>`).join('');
-    document.getElementById('invitations').innerHTML = lignes
-      ? `<table class="sysop-table"><thead><tr><th>Émise par</th><th>Utilisée par</th>
-         <th>État</th><th>Le</th></tr></thead><tbody>${lignes}</tbody></table>`
-      : '<div class="row"><span class="name">aucune invitation</span></div>';
-  } catch (e) { document.getElementById('invitations').textContent = e.message; }
-
+    const r = await lire('/invites');
+    const lignes = (r.invites || []).map(i => ligneTab([
+      cellule(i.emetteur ? i.emetteur : pill('console')), cellule(i.beneficiaire ? i.beneficiaire : '—'),
+      cellule(i.utilisee ? 'utilisée' : 'ouverte'), cellule(new Date(i.emise_le * 1000).toLocaleDateString('fr-FR'))]));
+    remplir('invitations', lignes.length ? tableau(['Émise par', 'Utilisée par', 'État', 'Le'], lignes) : vide('Aucune invitation'));
+  } catch (e) { erreurDans('invitations', e); }
   try {
-    const r = await api('/settings');
-    if (!r) return;
-    document.getElementById('masto-instance').value = r.instance || '';
-    document.getElementById('masto-invitation').value = r.invitation || '';
-  } catch (e) { toast('réglages : ' + e.message, true); }
+    const r = await lire('/settings');
+    $('mastoInstance').value = r.instance || ''; $('mastoInvitation').value = r.invitation || '';
+  } catch (e) { if (e.statut !== 401 && e.statut !== 403) toast('réglages : ' + e.message, true); }
 }
-
-// ── Salons (#1523) ───────────────────────────────────────────────────────────
-function quand(t) { return t ? new Date(t * 1000).toLocaleString('fr-FR') : '—'; }
-
-async function chargerSalons() {
-  let r;
-  try { r = await api('/admin/salons'); if (!r) return; }
-  catch (e) { document.getElementById('salons-arbre').textContent = e.message; return; }
-  const salons = r.salons || [];
-  document.getElementById('salons-arbre').innerHTML = salons.length
-    ? `<table class="sysop-table"><thead><tr><th>Salon</th><th>Identifiant</th><th class="num">Fils</th><th>Accès</th></tr></thead><tbody>${
-        salons.map(x => `<tr><td style="padding-left:${8 + 18 * x.profondeur}px">${x.profondeur ? '└ ' : ''}<b>${esc(x.titre)}</b>
-          ${x.desc ? `<div class="note" style="margin:0">${esc(x.desc)}</div>` : ''}</td>
-          <td><code>${esc(x.slug)}</code></td><td class="num">${x.fils}</td>
-          <td>${x.prive ? '<span class="etiq" style="color:var(--orange)">privé</span>' : x.public ? '<span class="etiq" style="color:var(--green)">public</span>' : '<span class="etiq">membres</span>'}</td></tr>`).join('')
-      }</tbody></table>`
-    : '<div class="row"><span class="name">aucun salon</span></div>';
-  document.getElementById('sl-parent').innerHTML = '<option value="0">— premier niveau —</option>' +
-    salons.map(x => `<option value="${x.id}">${'· '.repeat(x.profondeur)}sous ${esc(x.titre)}</option>`).join('');
-
-  const comptes = r.comptes || [], comms = r.communautes || [];
-  document.getElementById('salons-prives').innerHTML = `<table class="sysop-table"><thead><tr>
-      <th>Salon</th><th>État</th><th>Membres</th><th>Communautés</th><th></th></tr></thead><tbody>${
-    salons.map(x => {
-      const etat = `<button class="btn" type="button" onclick="rendPrive(${x.id}, ${!x.prive})">${x.prive ? 'Rouvrir' : 'Fermer'}</button>`;
-      if (!x.prive) return `<tr><td><b>${esc(x.titre)}</b></td><td><span class="etiq">ouvert</span> ${etat}</td>
-        <td class="note" style="margin:0">tous</td><td class="note" style="margin:0">salon ouvert</td><td></td></tr>`;
-      const membres = x.membres.map(m => `<span class="etiq">${esc(m.handle)}
-          <a href="#" onclick="membre(${x.id}, ${m.id}, 'retirer');return false" title="Retirer ${esc(m.handle)}" aria-label="Retirer ${esc(m.handle)}">✕</a></span>`).join(' ');
-      const convier = `<select id="cv-${x.id}" aria-label="Personne à convier">${comptes.map(c => `<option value="${c.id}">${esc(c.handle)}</option>`).join('')}</select>
-          <button class="btn" type="button" onclick="membre(${x.id}, +document.getElementById('cv-${x.id}').value, 'ajouter')">Convier</button>`;
-      const cs = x.communautes.map(c => `<span class="etiq">${esc(c.nom)}
-          <a href="#" onclick="communaute(${x.id}, '${esc(c.uuid)}', 'retirer');return false" title="Retirer ${esc(c.nom)}" aria-label="Retirer ${esc(c.nom)}">✕</a></span>`).join(' ');
-      const ouvrir = comms.length
-        ? `<select id="cm-${x.id}" aria-label="Communauté à qui ouvrir le salon">${comms.map(c => `<option value="${esc(c.uuid)}">${esc(c.nom)}</option>`).join('')}</select>
-           <button class="btn" type="button" onclick="communaute(${x.id}, document.getElementById('cm-${x.id}').value, 'ajouter')">Ouvrir</button>`
-        : '<span class="note" style="margin:0">aucune communauté SBX OS</span>';
-      return `<tr><td><b>${esc(x.titre)}</b></td><td><span class="etiq" style="color:var(--orange)">privé</span> ${etat}</td>
-        <td><div class="sysop-actions">${membres}${convier}</div></td>
-        <td><div class="sysop-actions">${cs}${ouvrir}</div></td>
-        <td><button class="btn primary" type="button" onclick="lienSalon(${x.id})">Émettre un lien</button></td></tr>`;
-    }).join('')}</tbody></table>`;
-
-  try {
-    const p = await api('/admin/passerelles'); if (!p) return;
-    const l = (p.passerelles || []).map(x => `<tr><td><span class="tag src">${esc(x.source)}</span></td><td>${quand(x.a)}</td>
-      <td class="num">${x.vus}</td><td class="num">${x.crees}</td><td class="num">${x.ignores}</td>
-      <td>${x.erreur ? `<span style="color:var(--red)">${esc(x.erreur)}</span>` : ''}</td></tr>`).join('');
-    document.getElementById('passerelles').innerHTML = l
-      ? `<table class="sysop-table"><thead><tr><th>Source</th><th>Quand</th><th class="num">Vus</th><th class="num">Créés</th><th class="num">Ignorés</th><th></th></tr></thead><tbody>${l}</tbody></table>`
-      : '<div class="row"><span class="name">aucun import enregistré</span></div>';
-  } catch (e) { document.getElementById('passerelles').textContent = e.message; }
-
-  try {
-    const j = await api('/admin/moderation'); if (!j) return;
-    const l = (j.journal || []).map(x => `<tr><td>${quand(x.a)}</td><td>${esc(x.acteur)}</td>
-      <td><span class="tag src">${esc(x.geste)}</span></td><td>${esc(x.cible)}</td><td>${esc(x.detail)}</td></tr>`).join('');
-    document.getElementById('journal-moderation').innerHTML = l
-      ? `<table class="sysop-table"><thead><tr><th>Quand</th><th>Qui</th><th>Geste</th><th>Cible</th><th>Détail</th></tr></thead><tbody>${l}</tbody></table>`
-      : '<div class="row"><span class="name">aucun geste de modération enregistré</span></div>';
-  } catch (e) { document.getElementById('journal-moderation').textContent = e.message; }
-}
-
-async function geste(chemin, corps, ok) {
-  try { const r = await poste(chemin, corps); if (!r) return null; toast(ok); chargerSalons(); return r; }
-  catch (e) { toast(e.message, true); return null; }
-}
-function creerSalon() {
-  const v = id => document.getElementById(id).value.trim();
-  if (!v('sl-slug') || !v('sl-titre')) { toast('identifiant et titre requis', true); return; }
-  geste('/admin/salons', { slug: v('sl-slug'), titre: v('sl-titre'), desc: v('sl-desc'),
-    parent: +document.getElementById('sl-parent').value }, 'salon créé')
-    .then(r => { if (r) ['sl-slug', 'sl-titre', 'sl-desc'].forEach(i => document.getElementById(i).value = ''); });
-}
-function rendPrive(id, prive) { geste(`/admin/salons/${id}/prive`, { prive: prive }, prive ? 'salon fermé' : 'salon rouvert'); }
-function membre(id, m, action) { geste(`/admin/salons/${id}/membres`, { membre: m, action: action }, action === 'retirer' ? 'retiré' : 'convié'); }
-function communaute(id, uuid, action) { geste(`/admin/salons/${id}/communautes`, { communaute: uuid, action: action }, action === 'retirer' ? 'fermé à la communauté' : 'ouvert à la communauté'); }
-async function lienSalon(id) {
-  try {
-    const r = await poste(`/admin/salons/${id}/invitation`, {}); if (!r) return;
-    const c = document.getElementById('carte-lien-salon');
-    // Le forum vit sous /bbs/ du Hall : c'est là que le membre ouvrira le lien.
-    c.style.display = ''; c.textContent = location.origin.replace(/\/\/admin\./, '//hall.') + '/bbs' + r.lien + '  — affiché une seule fois';
-  } catch (e) { toast(e.message, true); }
-}
-
 async function basculerCompte(id, desactiver) {
   try {
-    const r = await poste('/users/' + (desactiver ? 'disable' : 'enable'), { id: id });
+    const r = await ecrire('/users/' + (desactiver ? 'disable' : 'enable'), { id: id });
     if (!r) return;
-    toast(desactiver ? 'compte désactivé — ses sessions sont fermées' : 'compte réactivé');
-    chargerSysop();
+    toast(desactiver ? 'compte désactivé — ses sessions sont fermées' : 'compte réactivé'); chargerSysop();
   } catch (e) { toast('compte : ' + e.message, true); }
 }
-
 async function reinitialiser(id) {
-  const champ = document.getElementById('pw-' + id);
+  const champ = $('pw-' + id);
   if (!champ || !champ.value) { toast('saisissez le nouveau mot de passe', true); return; }
   try {
-    const r = await poste('/users/password', { id: id, password: champ.value });
+    const r = await ecrire('/users/password', { id: id, password: champ.value });
     if (!r) return;
-    champ.value = '';
-    toast('mot de passe réinitialisé — les sessions du compte sont fermées');
-    chargerSysop();
+    champ.value = ''; toast('mot de passe réinitialisé — les sessions du compte sont fermées'); chargerSysop();
   } catch (e) { toast('mot de passe : ' + e.message, true); }
 }
-
-async function supprimerCompte(id, handle) {
-  // DEUX CONFIRMATIONS, et la seconde demande de TAPER le pseudonyme. Un
-  // simple « êtes-vous sûr ? » se clique par réflexe ; recopier le nom oblige
-  // à regarder quelle ligne on vise. La suppression est irréversible, et les
-  // lignes du tableau se ressemblent.
-  if (!confirm(`Supprimer définitivement le compte « ${handle} » ?\n\n`
-    + `Le contenu qu'il a écrit reste en place, réattribué à « compte supprimé » — `
-    + `ses messages privés et ses sessions, eux, disparaissent.`)) return;
-  const saisi = prompt(`Pour confirmer, tapez le pseudonyme : ${handle}`);
-  if (saisi !== handle) { toast('suppression annulée', true); return; }
-  try {
-    const r = await poste('/users/delete', { id: id });
-    if (!r) return;
-    toast(`compte « ${handle} » supprimé`);
-    chargerSysop();
-  } catch (e) { toast('suppression : ' + e.message, true); }
-}
-
 async function reprendreEnLocal(id) {
-  const champ = document.getElementById('pw-' + id);
+  const champ = $('pw-' + id);
   if (!champ || !champ.value) { toast('saisissez le mot de passe local', true); return; }
   try {
-    const r = await poste('/users/local', { id: id, password: champ.value });
+    const r = await ecrire('/users/local', { id: id, password: champ.value });
     if (!r) return;
-    champ.value = '';
-    toast('compte repris en local — il ne dépend plus de secubox-auth');
-    chargerSysop();
+    champ.value = ''; toast('compte repris en local — il ne dépend plus de secubox-auth'); chargerSysop();
   } catch (e) { toast('reprise : ' + e.message, true); }
 }
-
-async function enregistrerReglages() {
+// Deux temps comme l'ancienne console : le message, puis la saisie du pseudonyme (le bouton reste inactif tant qu'elle diffère).
+function supprimerCompte(id, handle) {
+  demander('Supprimer définitivement le compte « ' + handle + ' » ?\n\nLe contenu qu\'il a écrit reste en place, réattribué à « compte supprimé » — ses messages privés et ses sessions, eux, disparaissent.', handle, async () => {
+    try {
+      const r = await ecrire('/users/delete', { id: id });
+      if (!r) return;
+      toast('compte « ' + handle + ' » supprimé'); chargerSysop();
+    } catch (e) { toast('suppression : ' + e.message, true); }
+  });
+}
+$('enregistrer').addEventListener('click', async () => {
   try {
-    const r = await poste('/settings', {
-      instance: document.getElementById('masto-instance').value,
-      invitation: document.getElementById('masto-invitation').value,
-    });
+    const r = await ecrire('/settings', { instance: $('mastoInstance').value, invitation: $('mastoInvitation').value });
     if (!r) return;
     toast('réglages enregistrés');
   } catch (e) { toast('réglages : ' + e.message, true); }
+});
+
+// ----- Salons (#1523) -----
+async function chargerSalons() {
+  let r;
+  try { r = await lire('/admin/salons'); }
+  catch (e) { erreurDans('salonsArbre', e); erreurDans('salonsPrives', e); return; }
+  const salons = r.salons || [], comptes = r.comptes || [], comms = r.communautes || [];
+  const arbre = salons.map(x => {
+    const nom = cellule([x.profondeur ? '└ ' : '', el('b', '', x.titre)]); nom.style.paddingLeft = (8 + 18 * x.profondeur) + 'px';
+    if (x.desc) nom.appendChild(el('div', 'note', x.desc));
+    return ligneTab([nom, cellule(el('span', 'mono', x.slug)), cellule(nb(x.fils), 'num'),
+      cellule(x.prive ? pill('privé', 'att') : x.public ? pill('public', 'ok') : pill('membres'))]);
+  });
+  remplir('salonsArbre', arbre.length ? tableau(['Salon', 'Identifiant', 'Fils', 'Accès'], arbre, [2]) : vide('Aucun salon'));
+  const sp = $('slParent'); sp.replaceChildren();
+  const o0 = el('option', '', '— premier niveau —'); o0.value = '0'; sp.appendChild(o0);
+  salons.forEach(x => { const o = el('option', '', '· '.repeat(x.profondeur) + 'sous ' + x.titre); o.value = String(x.id); sp.appendChild(o); });
+  const prives = salons.map(x => {
+    const etat = btn(x.prive ? 'Rouvrir' : 'Fermer', '', () => rendPrive(x.id, !x.prive));
+    if (!x.prive) return ligneTab([cellule(el('b', '', x.titre)), cellule([pill('ouvert'), ' ', etat]), cellule(el('span', 'note', 'tous')), cellule(el('span', 'note', 'salon ouvert')), cellule('')]);
+    const membres = el('div', 'acts');
+    x.membres.forEach(m => membres.appendChild(pastilleRetrait(m.handle, () => membre(x.id, m.id, 'retirer'))));
+    const cv = el('select'); cv.setAttribute('aria-label', 'Personne à convier');
+    comptes.forEach(c => { const o = el('option', '', c.handle); o.value = String(c.id); cv.appendChild(o); });
+    membres.appendChild(cv); membres.appendChild(btn('Convier', '', () => membre(x.id, +cv.value, 'ajouter')));
+    const cs = el('div', 'acts');
+    x.communautes.forEach(c => cs.appendChild(pastilleRetrait(c.nom, () => communaute(x.id, c.uuid, 'retirer'))));
+    if (comms.length) {
+      const cm = el('select'); cm.setAttribute('aria-label', 'Communauté à qui ouvrir le salon');
+      comms.forEach(c => { const o = el('option', '', c.nom); o.value = c.uuid; cm.appendChild(o); });
+      cs.appendChild(cm); cs.appendChild(btn('Ouvrir', '', () => communaute(x.id, cm.value, 'ajouter')));
+    } else cs.appendChild(el('span', 'note', 'aucune communauté SBX OS'));
+    return ligneTab([cellule(el('b', '', x.titre)), cellule([pill('privé', 'att'), ' ', etat]), cellule(membres), cellule(cs),
+      cellule(btn('Émettre un lien', 'prim', () => lienSalon(x.id)))]);
+  });
+  remplir('salonsPrives', prives.length ? tableau(['Salon', 'État', 'Membres', 'Communautés', ''], prives) : vide('Aucun salon'));
+  try {
+    const p = await lire('/admin/passerelles');
+    const l = (p.passerelles || []).map(x => ligneTab([cellule(pill(x.source, 'bl')), cellule(quand(x.a)), cellule(nb(x.vus), 'num'), cellule(nb(x.crees), 'num'), cellule(nb(x.ignores), 'num'),
+      cellule(x.erreur ? pill(x.erreur, 'hors') : '')]));
+    remplir('passerelles', l.length ? tableau(['Source', 'Quand', 'Vus', 'Créés', 'Ignorés', ''], l, [2, 3, 4]) : vide('Aucun import enregistré'));
+  } catch (e) { erreurDans('passerelles', e); }
+  try {
+    const j = await lire('/admin/moderation');
+    const l = (j.journal || []).map(x => ligneTab([cellule(quand(x.a)), cellule(tiret(x.acteur)), cellule(pill(tiret(x.geste), 'bl')), cellule(tiret(x.cible)), cellule(tiret(x.detail))]));
+    remplir('journalModeration', l.length ? tableau(['Quand', 'Qui', 'Geste', 'Cible', 'Détail'], l) : vide('Aucun geste de modération enregistré'));
+  } catch (e) { erreurDans('journalModeration', e); }
+}
+function pastilleRetrait(nom, fn) {
+  const p = pill(nom); const b = el('button', '', '✕'); b.type = 'button'; b.title = 'Retirer ' + nom; b.setAttribute('aria-label', 'Retirer ' + nom); b.addEventListener('click', fn);
+  p.appendChild(b); return p;
+}
+async function geste(chemin, corps, ok) {
+  try { const r = await ecrire(chemin, corps); if (!r) return null; toast(ok); chargerSalons(); return r; }
+  catch (e) { toast(e.message, true); return null; }
+}
+$('creerSalon').addEventListener('click', () => {
+  const v = id => $(id).value.trim();
+  if (!v('slSlug') || !v('slTitre')) { toast('identifiant et titre requis', true); return; }
+  geste('/admin/salons', { slug: v('slSlug'), titre: v('slTitre'), desc: v('slDesc'), parent: +$('slParent').value }, 'salon créé')
+    .then(r => { if (r) ['slSlug', 'slTitre', 'slDesc'].forEach(i => { $(i).value = ''; }); });
+});
+function rendPrive(id, prive) { geste('/admin/salons/' + id + '/prive', { prive: prive }, prive ? 'salon fermé' : 'salon rouvert'); }
+function membre(id, m, action) { geste('/admin/salons/' + id + '/membres', { membre: m, action: action }, action === 'retirer' ? 'retiré' : 'convié'); }
+function communaute(id, uuid, action) { geste('/admin/salons/' + id + '/communautes', { communaute: uuid, action: action }, action === 'retirer' ? 'fermé à la communauté' : 'ouvert à la communauté'); }
+async function lienSalon(id) {
+  try {
+    const r = await ecrire('/admin/salons/' + id + '/invitation', {}); if (!r) return;
+    // Le forum vit sous /bbs/ du Hall : c'est là que le membre ouvrira le lien.
+    const c = $('lienSalon'); c.hidden = false;
+    c.textContent = location.origin.replace(/\/\/admin\./, '//hall.') + '/bbs' + r.lien + '  — affiché une seule fois';
+    annoncer();
+  } catch (e) { toast(e.message, true); }
 }
 
-async function refresh() {
+// ----- Actions de l'en-tête -----
+$('inviter').addEventListener('click', async () => {
   try {
-    const s = await api('/status');
-    document.getElementById('subline').textContent =
-      s.titre + ' · v' + s.version + ' · ' + s.salons + ' salons';
-    document.getElementById('stats').innerHTML =
-      stat(s.stats.Threads, 'fils', 'cyan') +
-      stat(s.stats.Posts, 'messages', 'blue') +
-      stat(s.stats.Members, 'membres', 'green') +
-      stat(s.stats.Files, 'fichiers', 'purple') +
-      stat(s.stats.Billets, 'billets', 'orange');
-  } catch (e) { toast('état : ' + e.message, true); }
-
-  try {
-    const i = (await api('/integrity')).integrite;
-    const sain = i.Diverging === 0 && i.Missing === 0;
-    document.getElementById('integrite').innerHTML =
-      `<div class="row ${sain ? 'ok' : 'bad'}">
-         <span class="name">${sain ? 'disque et index concordent' : 'ÉCART DÉTECTÉ'}</span>
-         <span class="meta">${i.Indexed} indexés · ${i.OnDisk} sur disque ·
-           ${i.Diverging} divergents · ${i.Missing} absents</span></div>` +
-      (i.Details || []).slice(0, 10).map(d =>
-        `<div class="row bad"><span class="name">${esc(d)}</span></div>`).join('');
-  } catch (e) {
-    document.getElementById('integrite').innerHTML =
-      `<div class="row bad"><span class="name">${esc(e.message)}</span></div>`;
-  }
-
-  try {
-    const f = (await api('/threads')).fils || [];
-    document.getElementById('fils').innerHTML = f.length ? f.slice(0, 25).map(t => {
-      const tags = [
-        t.Visibility === 'public' ? '<span class="tag pub">public</span>'
-                                  : '<span class="tag loc">local</span>',
-        t.Published ? '<span class="tag bil">billet</span>' : '',
-        t.Source ? `<span class="tag src">${esc(t.Source)}</span>` : '',
-      ].join(' ');
-      return `<div class="row ${t.Visibility === 'public' ? 'ok' : ''}">
-        <span class="name">${esc(t.Title)}</span>${tags}
-        <span class="meta">${esc(t.Author)} · ${t.Posts} msg</span></div>`;
-    }).join('') : '<div class="row"><span class="name">aucun fil</span></div>';
-  } catch (e) { document.getElementById('fils').textContent = e.message; }
-}
-
-async function inviter() {
-  try {
-    const r = await api('/invite', 'POST');
-    document.getElementById('code-invitation').textContent = r.code;
-    document.getElementById('carte-invitation').style.display = '';
-    toast('invitation émise — le code n’est affiché qu’une fois');
+    const r = await ecrire('/invite');   // POST sans corps, comme avant
+    if (!r) return;
+    $('codeInvitation').textContent = r.code; $('carteInvitation').hidden = false;
+    toast('invitation émise — le code n’est affiché qu’une fois'); annoncer();
   } catch (e) { toast('invitation : ' + e.message, true); }
-}
-
-async function sauvegarder() {
+});
+$('sauvegarder').addEventListener('click', async () => {
+  if (DEMO) { toast('Démonstration : action inerte.'); return; }
   toast('sauvegarde en cours…');
-  try {
-    const r = await api('/backup', 'POST');
-    toast('archive écrite : ' + r.archive);
-  } catch (e) { toast('sauvegarde : ' + e.message, true); }
-}
+  try { const r = await appel('POST', '/backup'); toast('archive écrite : ' + r.archive); }
+  catch (e) { toast('sauvegarde : ' + e.message, true); }
+});
+$('reconstruire').addEventListener('click', () => {
+  // Ne touche pas au disque, mais peut durer sur un gros BBS : une confirmation évite un clic distrait.
+  demander('Reconstruire l\'index depuis content/ ?\n\nLe disque n\'est pas modifié.', '', async () => {
+    if (DEMO) { toast('Démonstration : action inerte.'); return; }
+    toast('reconstruction…');
+    try { await appel('POST', '/reindex'); toast('index reconstruit'); chargerExploitation(); }
+    catch (e) { toast('reconstruction : ' + e.message, true); }
+  });
+});
+$('rafraichir').addEventListener('click', () => { chargerExploitation(); if (VUE === 'sysop') chargerSysop(); if (VUE === 'salons') chargerSalons(); });
 
-async function reconstruire() {
-  // Reconstruire ne touche pas au disque — mais l'opération peut durer sur un
-  // gros BBS, et une confirmation evite de la declencher d'un clic distrait.
-  if (!confirm("Reconstruire l'index depuis content/ ?\n\nLe disque n'est pas modifié.")) return;
-  toast('reconstruction…');
-  try {
-    await api('/reindex', 'POST');
-    toast('index reconstruit');
-    refresh();
-  } catch (e) { toast('reconstruction : ' + e.message, true); }
+// ----- Hauteur annoncée à l'hôte (iframes) -----
+function annoncer() {
+  try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'bbs' }, location.origin); } catch (e) { /* hors iframe */ }
 }
+if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+addEventListener('resize', annoncer);
 
-refresh();
-setInterval(refresh, 30000);
+chargerExploitation();
+// Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+setInterval(() => {
+  const a = document.activeElement;
+  if (document.hidden || DEMO || CONF || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))) return;
+  chargerExploitation();
+}, 30000);
 </script>
 </body>
 </html>
