@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import time
 from collections import Counter, defaultdict
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
@@ -169,4 +170,55 @@ def deduplique(constats: List[dict], etat: Dict[str, int], now: int) -> List[dic
         if now - etat.get(cle, -10**12) >= REEMISSION_S:
             etat[cle] = now
             out.append(c)
+    return out
+
+
+# ---------- alertes de dns-guard (#2702) ----------
+# dns-guard affiche des « alertes DNS » (DnsAlert) ; faute de source, sa page restait vide. Le capteur y dépose ses constats, ET SEULEMENT eux : même règle
+# que l'enveloppe d'Actor Intelligence — le domaine ENREGISTRÉ, l'appareil, la règle ; jamais un sous-nom ni le texte libre `detail` (il peut porter des données).
+
+TYPES_DNSGUARD = {"dns.listed": "malicious", "dns.dga": "dga", "dns.tunnel": "tunneling", "dns.drift.spike": "high_rate", "dns.drift.subdomains": "exfiltration"}
+LIBELLES_DNSGUARD = {
+    "malicious": "Domaine de la liste de l'opérateur ou réponse détournée",
+    "dga": "Domaines d'allure aléatoire demandés par un même appareil (DGA)",
+    "tunneling": "Sous-noms et requêtes TXT en rafale vers un même domaine (tunnel DNS)",
+    "high_rate": "Pic de requêtes sur un domaine connu",
+    "exfiltration": "Sous-noms jamais vus, longs, sur un domaine connu (exfiltration possible)",
+}
+RATTRAPAGE_H = 24
+
+
+def type_dnsguard(regle: str) -> str:
+    """Règle du capteur → DetectionType de dns-guard. Une règle inconnue (ou un détournement dns.hijack.*) retombe sur « malicious » : elle ne disparaît pas."""
+    return TYPES_DNSGUARD.get(regle, "malicious")
+
+
+def gravite_dnsguard(score: int) -> str:
+    return "critical" if score >= 80 else "high" if score >= 60 else "medium" if score >= 40 else "low"
+
+
+def _alerte(client: str, regle: str, domaine: str, score: int, tags: List[str], ts: int) -> dict:
+    t = type_dnsguard(regle)
+    ident = hashlib.sha256(f"{client}|{regle}|{domaine}|{ts}".encode()).hexdigest()[:24]
+    return {"id": "dns-" + ident, "type": t, "severity": gravite_dnsguard(score), "domain": domaine, "client_ip": client or None,
+            "description": LIBELLES_DNSGUARD[t], "details": {"rule": regle, "tags": list(tags)[:8], "source": "ad-guard"},
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + "Z", "blocked": False}
+
+
+def alerte_dnsguard(c: dict, now: int) -> dict:
+    """Un constat du capteur → un DnsAlert (sans sous-nom ni détail libre)."""
+    return _alerte(c["client"], c["rule"], c["domaine"], int(c.get("severity", 0)), c.get("tags", []), now)
+
+
+def alertes_depuis_etat(emis: Dict[str, int], now: int, heures: int = RATTRAPAGE_H) -> List[dict]:
+    """Rattrapage : l'état de dédoublonnage (« appareil|règle|domaine » → date) a gardé les constats déjà déposés ; ceux des dernières heures
+    reviennent dans dns-guard. Score et étiquettes n'y sont pas conservés : gravité moyenne par défaut, dite telle quelle dans `details`."""
+    out = []
+    for cle, ts in sorted(emis.items(), key=lambda kv: kv[1]):
+        parts = cle.split("|")
+        if len(parts) != 3 or not isinstance(ts, (int, float)) or now - ts > heures * 3600 or ts > now:
+            continue
+        a = _alerte(parts[0], parts[1], parts[2], 50, [], int(ts))
+        a["details"]["rattrape"] = True
+        out.append(a)
     return out

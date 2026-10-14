@@ -33,5 +33,5 @@ LockPersonality=yes
 MemoryDenyWriteExecute=yes
 CapabilityBoundingSet=
 SystemCallFilter=@system-service
-ReadWritePaths=/var/lib/secubox/ad-guard
+ReadWritePaths=/var/lib/secubox/ad-guard -/var/lib/secubox/dns-guard
 ReadOnlyPaths=/etc/secubox/actor

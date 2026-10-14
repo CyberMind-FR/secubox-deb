@@ -7,7 +7,8 @@
 
 Lancé chaque minute par `secubox-ad-guard-dnssensor.timer` sous `secubox`, avec le seul groupe `actord-ingest` en plus (écriture sur le socket
 d'ingestion d'actord). Lit le magasin d'ad-guard en LECTURE SEULE, applique les règles de api/dnstv_anomalies.py (domaines malveillants ou anormaux,
-jamais les requêtes ordinaires) et dépose une enveloppe `dns` par constat nouveau.
+jamais les requêtes ordinaires) et dépose une enveloppe `dns` par constat nouveau
+(et, #2702, la même alerte dans alerts.jsonl de dns-guard : domaine enregistré, appareil, règle — jamais un sous-nom ni le détail libre).
 
   --dry-run   affiche les constats en JSON sans rien envoyer ni mémoriser (pour calibrer, ou comprendre ce que le capteur verrait)
   --collecter prend l'instantané des réponses du cache d'Unbound (`sudo -n secubox-adguard-tv cache-dump`, argument exact) et le range dans
@@ -43,6 +44,7 @@ LISTE = Path(os.environ.get("SECUBOX_DNS_MALVEILLANTS", "/etc/secubox/actor/dns-
 CTL = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
 SUDO = os.environ.get("SECUBOX_ADGUARD_SUDO", "sudo")
 ASN_DB = os.environ.get("SECUBOX_GEOIP_ASN", "/var/lib/GeoIP/GeoLite2-ASN.mmdb")
+ALERTES_DNSGUARD = Path(os.environ.get("SECUBOX_DNSGUARD_ALERTES", "/var/lib/secubox/dns-guard/alerts.jsonl"))    # source des alertes de dns-guard (#2702)
 FRAICHEUR_REPONSES_S = 20 * 60
 JOURS_BASE = 14
 MIN_JOURS_CONNU = 3
@@ -149,6 +151,21 @@ def deposer(chemin: str, enveloppes: list) -> None:
         s.sendall(b"".join(json.dumps(e, ensure_ascii=False).encode() + b"\n" for e in enveloppes))
 
 
+def ecrire_dnsguard(alertes: list) -> int:
+    """Ajoute les alertes au fichier de dns-guard (une ligne JSON chacune). dns-guard absent (dossier inexistant) : on ne crée RIEN, on continue.
+    Une erreur d'écriture n'arrête pas le capteur : la remontée vers actord reste son travail premier."""
+    if not alertes or not ALERTES_DNSGUARD.parent.is_dir():
+        return 0
+    try:
+        fd = os.open(ALERTES_DNSGUARD, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o640)
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
+            f.write("".join(json.dumps(a, ensure_ascii=False) + "\n" for a in alertes))
+        return len(alertes)
+    except OSError as e:
+        print(f"secubox-adguard-dnssensor : alertes de dns-guard non écrites ({type(e).__name__})", file=sys.stderr)
+        return 0
+
+
 def principal(argv=None, now: int = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true")
@@ -183,6 +200,8 @@ def principal(argv=None, now: int = None) -> int:
         etat = json.loads(fichier_etat.read_text(encoding="utf-8")).get("emis", {})
     except (OSError, ValueError):
         etat = {}
+    if not a.dry_run and not ALERTES_DNSGUARD.exists():       # premier passage depuis #2702 : les constats des dernières heures entrent dans dns-guard
+        ecrire_dnsguard(A.alertes_depuis_etat(etat, now))
     nouveaux = A.deduplique(constats, dict(etat), now) if not a.dry_run else constats
     if a.dry_run:
         print(json.dumps(nouveaux, ensure_ascii=False, indent=1))
@@ -199,6 +218,7 @@ def principal(argv=None, now: int = None) -> int:
     tmp = fichier_etat.with_suffix(".tmp")
     tmp.write_text(json.dumps({"emis": etat_apres}), encoding="utf-8")
     os.replace(tmp, fichier_etat)
+    ecrire_dnsguard([A.alerte_dnsguard(c, now) for c in nouveaux])
     for c in nouveaux:
         print(f"secubox-adguard-dnssensor : {c['rule']} {c['client']} {c['domaine']} (gravité {c['severity']}) — {c['detail']}")
     return 0
