@@ -4,612 +4,388 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<!--
-  SecuBox Jellyfin — control webui (LXC-native module).
-  Single self-contained SPA: inline CSS/JS, no external deps, WAF-safe.
-  - Hash-routed navbar: Statut · Partenaires · Bibliothèques · Médiathèque externe · Réglages
-  - Auth: Authorization: Bearer localStorage.getItem('sbx_token') on every fetch.
-  - This is the admin/integration hub — NOT the Jellyfin player. The
-    "Ouvrir Jellyfin" button deep-links to the dedicated vhost where
-    Jellyfin serves at the root path so its web client assets load.
+  Jellyfin au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Centre d'intégration (pas le lecteur Jellyfin). Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SecuBox — Jellyfin</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/shared/hybrid-skin.css">
-  <style>
-    :root {
-      --p31-dim: #6b7b8b;
-      --bg-dark: #0d1117;
-      --bg-card: rgba(30, 40, 55, 0.8);
-      --bg-row:  rgba(20, 30, 45, 0.6);
-      --border:  rgba(100, 150, 200, 0.2);
-      --text:    #e8e6d9;
-      --cyan:    #00d4ff;
-      --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
-      --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
-    }
-    * { box-sizing: border-box; }
-    html, body { overflow-x: hidden; }
-    body {
-      margin: 0;
-      background: var(--bg-dark);
-      color: var(--text);
-      font-family: 'Courier Prime', 'Courier New', monospace;
-      font-size: 15px;
-      line-height: 1.5;
-    }
-    a { color: var(--cyan); }
-    /* Shared sidebar is 220px wide and fixed — offset the content like /certs/. */
-    .main { margin-left: 220px; padding: 60px 1.5rem 3rem; min-height: 100vh; }
-
-    /* Header */
-    .header {
-      display: flex; align-items: flex-end; justify-content: space-between;
-      flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;
-    }
-    .header h1 {
-      margin: 0; font-size: 1.4rem; color: var(--cyan);
-      text-shadow: 0 0 10px var(--cyan); letter-spacing: 0.03em;
-    }
-    .header .sub { color: var(--p31-dim); font-size: 0.8rem; margin-top: 0.25rem; }
-    .header .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-
-    /* Navbar (tabs) */
-    nav.tabs {
-      display: flex; gap: 0.25rem; flex-wrap: wrap;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 1.25rem;
-    }
-    .tab {
-      appearance: none; background: transparent; border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--p31-dim); cursor: pointer;
-      font-family: inherit; font-size: 0.8rem; font-weight: 700;
-      letter-spacing: 0.06em; text-transform: uppercase;
-      padding: 0.6rem 0.9rem; margin-bottom: -1px;
-      display: inline-flex; align-items: center; gap: 0.4rem;
-    }
-    .tab:hover { color: var(--text); }
-    .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
-    .tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 3px; }
-
-    .panel { display: none; }
-    .panel.active { display: block; }
-
-    /* Cards + grid */
-    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-    .card {
-      background: var(--bg-card); backdrop-filter: blur(10px);
-      border: 1px solid var(--border); border-radius: 8px;
-      padding: 1rem 1.1rem;
-    }
-    .card h3 {
-      margin: 0 0 0.7rem; font-size: 0.68rem; letter-spacing: 0.1em;
-      text-transform: uppercase; color: var(--cyan);
-    }
-    .rows .row { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.15rem 0; }
-    .rows .row .k { color: var(--p31-dim); }
-    .rows .row .val { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
-
-    /* Stat grid */
-    .stats { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-bottom: 1rem; }
-    .stat-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 8px; padding: 0.8rem 0.9rem; text-align: center;
-    }
-    .stat-card .value { font-size: 1.5rem; font-weight: 700; color: var(--cyan); text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
-    .stat-card.green .value { color: var(--green); }
-    .stat-card.red .value { color: var(--red); }
-    .stat-card.blue .value { color: var(--blue); }
-    .stat-card.purple .value { color: var(--purple); }
-    .stat-card.orange .value { color: var(--orange); }
-    .stat-card .label { display: block; margin-top: 0.25rem; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--p31-dim); }
-
-    /* Pills */
-    .pill { display: inline-block; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-    .pill.green { background: rgba(0, 221, 68, 0.16); color: var(--green); }
-    .pill.red   { background: rgba(255, 68, 102, 0.16); color: var(--red); }
-    .pill.yellow{ background: rgba(255, 204, 0, 0.16); color: var(--yellow); }
-    .pill.dim   { background: rgba(107, 123, 139, 0.18); color: var(--p31-dim); }
-
-    /* Buttons */
-    .btn {
-      appearance: none; font-family: inherit; font-size: 0.78rem; font-weight: 700;
-      letter-spacing: 0.04em; text-transform: uppercase;
-      padding: 0.45rem 0.85rem; border-radius: 6px; cursor: pointer;
-      background: var(--bg-row); color: var(--text); border: 1px solid var(--border);
-      display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none;
-    }
-    .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 212, 255, 0.35); }
-    .btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-    .btn.primary { background: rgba(0, 212, 255, 0.14); border-color: var(--cyan); color: var(--cyan); }
-    .btn.good { border-color: var(--green); color: var(--green); }
-    .btn.danger { border-color: var(--red); color: var(--red); }
-    .btn:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
-    .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-
-    .note { color: var(--p31-dim); font-size: 0.8rem; margin-top: 0.6rem; }
-    .note code { color: var(--text); background: var(--bg-row); padding: 0 0.25rem; border-radius: 3px; }
-
-    /* Partner grid */
-    .partners { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
-    .partner-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-left: 3px solid var(--p31-dim); border-radius: 8px;
-      padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.55rem;
-    }
-    .partner-card.present { border-left-color: var(--green); }
-    .partner-card.wired { border-left-color: var(--cyan); }
-    .partner-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .partner-emoji { font-size: 1.4rem; line-height: 1; }
-    .partner-name { font-weight: 700; font-size: 0.95rem; text-transform: capitalize; }
-    .partner-kind { color: var(--p31-dim); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .partner-path { color: var(--p31-dim); font-size: 0.72rem; word-break: break-all; }
-    .partner-foot { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: auto; }
-
-    /* Library list */
-    .lib-list { display: flex; flex-direction: column; gap: 0.4rem; }
-    .lib-row {
-      background: var(--bg-row); border: 1px solid var(--border);
-      border-left: 3px solid var(--cyan); border-radius: 6px;
-      padding: 0.55rem 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-    }
-    .lib-row .lib-name { font-weight: 700; }
-    .lib-row .lib-meta { color: var(--p31-dim); font-size: 0.78rem; }
-
-    .empty { color: var(--p31-dim); font-style: italic; padding: 0.5rem 0; }
-    .inline-msg { border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.82rem; margin-top: 0.6rem; }
-    .inline-msg.err { background: rgba(255, 68, 102, 0.12); border: 1px solid rgba(255, 68, 102, 0.4); color: var(--red); }
-
-    /* Toast */
-    .toast {
-      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 50;
-      background: rgba(0, 212, 255, 0.16); border: 1px solid var(--cyan); color: var(--cyan);
-      padding: 0.6rem 0.9rem; border-radius: 6px; font-size: 0.82rem;
-      display: none; align-items: center; gap: 0.6rem; max-width: 340px;
-      box-shadow: 0 0 14px rgba(0, 212, 255, 0.3);
-    }
-    .toast.show { display: flex; }
-    .toast.error { background: rgba(255, 68, 102, 0.14); border-color: var(--red); color: var(--red); }
-    .toast .x { cursor: pointer; font-weight: 700; margin-left: auto; }
-
-    @media (max-width: 600px) {
-      .main { margin-left: 0; padding: 60px 1rem 2rem; }
-      .header h1 { font-size: 1.2rem; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Jellyfin</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        a{color:var(--cyan)}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.bon{border-color:var(--vert);color:var(--vert)} .btn.bon:hover{background:rgba(46,204,113,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .att-b{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:10px 12px;font-size:.84rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .conf .q{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .boutons{display:flex;flex-wrap:wrap;gap:8px}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="hybrid-dark">
-  <nav class="sidebar" id="sidebar"></nav>
-  <script src="/shared/sidebar.js"></script>
-  <main class="main">
-    <header class="header">
-      <div>
-        <h1>🍿 Jellyfin — SecuBox</h1>
-        <div class="sub">Hub média LXC-native · centre d'intégration des partenaires</div>
-      </div>
-      <div class="actions">
-        <a class="btn primary" id="open-jellyfin" data-svc="jellyfin" href="#" target="_blank" rel="noopener">Ouvrir Jellyfin ↗</a>
-        <button class="btn" id="btn-refresh" type="button">↻ Rafraîchir</button>
-      </div>
-    </header>
-
-    <nav class="tabs" role="tablist" aria-label="Sections Jellyfin">
-      <button class="tab" role="tab" data-tab="statut"        id="tab-statut"><span>📊</span>Statut</button>
-      <button class="tab" role="tab" data-tab="partenaires"   id="tab-partenaires"><span>🤝</span>Partenaires</button>
-      <button class="tab" role="tab" data-tab="bibliotheques" id="tab-bibliotheques"><span>📚</span>Bibliothèques</button>
-      <button class="tab" role="tab" data-tab="externe"       id="tab-externe"><span>💽</span>Médiathèque externe</button>
-      <button class="tab" role="tab" data-tab="reglages"      id="tab-reglages"><span>⚙️</span>Réglages</button>
-    </nav>
-
-    <!-- STATUT -->
-    <section class="panel" id="panel-statut" role="tabpanel" aria-labelledby="tab-statut">
-      <div class="stats">
-        <div class="stat-card"><div class="value" id="s-state">—</div><span class="label">LXC</span></div>
-        <div class="stat-card green"><div class="value" id="s-reach">—</div><span class="label">Joignable</span></div>
-        <div class="stat-card blue"><div class="value" id="s-libs">—</div><span class="label">Bibliothèques</span></div>
-        <div class="stat-card purple"><div class="value" id="s-sessions">—</div><span class="label">Sessions</span></div>
-      </div>
-
-      <div class="grid">
-        <article class="card">
-          <h3>Moteur</h3>
-          <div class="rows" id="engine-rows"><div class="empty">chargement…</div></div>
-          <div id="statut-msg"></div>
-        </article>
-        <article class="card">
-          <h3>Contrôle</h3>
-          <div class="btn-group">
-            <button class="btn good" type="button" data-control="start">▶ Démarrer</button>
-            <button class="btn danger" type="button" data-control="stop">⏹ Arrêter</button>
-            <button class="btn" type="button" data-control="restart">🔄 Redémarrer</button>
-          </div>
-          <p class="note">Actions LXC/systemd exécutées côté serveur via <code>jellyfinctl</code> (sudo scopé, audité).</p>
-        </article>
-      </div>
-    </section>
-
-    <!-- PARTENAIRES -->
-    <section class="panel" id="panel-partenaires" role="tabpanel" aria-labelledby="tab-partenaires">
-      <div class="header" style="margin-bottom:0.75rem;">
-        <div class="sub">Chaque module détecté peut être branché comme bibliothèque Jellyfin (bind lecture seule). Peertube reste un lien.</div>
-        <div class="actions">
-          <button class="btn primary" id="btn-wire-all" type="button">🔌 Tout brancher</button>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M10 8.5v4.5l4-2.25z"/><path d="M8 21h8M12 17v4"/></svg>
+                <div><h1>Jellyfin</h1><small>Hub média en conteneur LXC · intégration des partenaires</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a class="btn prim" id="ouvrir" href="#" target="_blank" rel="noopener">Ouvrir Jellyfin ↗</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="conf" id="conf" role="alertdialog" aria-labelledby="confQ" hidden>
+            <span class="q" id="confQ"></span>
+            <button class="btn danger" id="confOui" type="button">Confirmer</button>
+            <button class="btn" id="confNon" type="button">Annuler</button>
         </div>
-      </div>
-      <div class="partners" id="partners-wrap"><div class="empty">chargement…</div></div>
-      <div id="partners-msg"></div>
-    </section>
 
-    <!-- BIBLIOTHÈQUES -->
-    <section class="panel" id="panel-bibliotheques" role="tabpanel" aria-labelledby="tab-bibliotheques">
-      <div class="header" style="margin-bottom:0.75rem;">
-        <div class="sub">Bibliothèques Jellyfin actives.</div>
-        <div class="actions">
-          <button class="btn primary" id="btn-scan" type="button">🔍 Scanner</button>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cLxc" title="État du conteneur LXC qui héberge Jellyfin (lxc_state)."><span class="l">Conteneur LXC</span><span class="v" id="tLxc">—</span><span class="s">état</span></div>
+            <div class="tuile" id="cJoi" title="Jellyfin répond-il sur son port local ? Un conteneur démarré peut encore être injoignable."><span class="l">Joignable</span><span class="v" id="tJoi">—</span><span class="s" id="sJoi">service Jellyfin</span></div>
+            <div class="tuile cy" title="Nombre de bibliothèques enregistrées par le module (partenaires branchés)."><span class="l">Bibliothèques</span><span class="v" id="tLib">—</span><span class="s">branchées</span></div>
+            <div class="tuile vi" title="Sessions de lecture ouvertes. « — » si la clé d’API ou Jellyfin est indisponible : ce n’est pas zéro."><span class="l">Sessions</span><span class="v" id="tSes">—</span><span class="s">en cours</span></div>
+            <div class="tuile cy" title="Version de Jellyfin signalée par le serveur."><span class="l">Version</span><span class="v" id="tVer">—</span><span class="s" id="sVer">Jellyfin</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections Jellyfin">
+            <button type="button" role="tab" id="o-statut" data-t="statut" aria-selected="true" aria-controls="t-statut">Statut</button>
+            <button type="button" role="tab" id="o-partenaires" data-t="partenaires" aria-selected="false" aria-controls="t-partenaires">Partenaires</button>
+            <button type="button" role="tab" id="o-bibliotheques" data-t="bibliotheques" aria-selected="false" aria-controls="t-bibliotheques">Bibliothèques</button>
+            <button type="button" role="tab" id="o-externe" data-t="externe" aria-selected="false" aria-controls="t-externe">Médiathèque externe</button>
+            <button type="button" role="tab" id="o-reglages" data-t="reglages" aria-selected="false" aria-controls="t-reglages">Réglages</button>
         </div>
-      </div>
-      <div class="lib-list" id="lib-wrap"><div class="empty">chargement…</div></div>
-      <div id="lib-msg"></div>
-    </section>
 
-    <!-- MÉDIATHÈQUE EXTERNE -->
-    <section class="panel" id="panel-externe" role="tabpanel" aria-labelledby="tab-externe">
-      <article class="card">
-        <h3>💽 Médiathèque externe</h3>
-        <p class="note" style="font-size:0.85rem;">
-          Les médias externes de Jellyfin sont gérés <strong>par partenaire</strong> :
-          branchez un module dans l'onglet <em>Partenaires</em> pour exposer son
-          répertoire média (bind lecture seule) comme bibliothèque Jellyfin.
-        </p>
-        <p class="note">
-          Le montage d'un volume externe brut (disque USB / partage réseau) dédié à
-          la musique relève du module <strong>Lyrion</strong> (panneau « Médiathèque
-          externe » de <a data-svc="lyrion" href="#" target="_blank" rel="noopener">Lyrion</a>),
-          module distinct de celui-ci. Rien à configurer ici pour l'instant.
-        </p>
-      </article>
-    </section>
+        <section id="t-statut" role="tabpanel" aria-labelledby="o-statut" class="grille">
+            <div class="pan"><h3>Moteur <i id="nMoteur"></i></h3>
+                <div id="setup" class="att-b" hidden>Configuration initiale requise : Jellyfin est démarré mais son assistant n’est pas terminé (l’API reste en 503, aucun branchement possible). <a id="lienSetup" href="#" target="_blank" rel="noopener">Compléter la configuration ↗</a></div>
+                <dl class="kv"><dt>État LXC</dt><dd id="kLxc">—</dd><dt>Jellyfin</dt><dd id="kJoi">—</dd><dt>Version</dt><dd id="kVer">—</dd><dt>Configuration</dt><dd id="kCfg">—</dd><dt>Bibliothèques</dt><dd id="kLib">—</dd><dt>Sessions actives</dt><dd id="kSes">—</dd><dt>Mise à jour</dt><dd id="kUpg">—</dd></dl>
+                <p class="note">La disponibilité d’une mise à jour vient de <span class="mono">/check-upgrade</span> ; « — » si la vérification échoue.</p></div>
+            <div class="pan"><h3>Contrôle du conteneur</h3>
+                <div id="rCtl" class="retour" hidden></div>
+                <div class="boutons">
+                    <button class="btn bon" type="button" data-ctl="start">▶ Démarrer</button>
+                    <button class="btn danger" type="button" data-ctl="stop">⏹ Arrêter</button>
+                    <button class="btn" type="button" data-ctl="restart">⟳ Redémarrer</button>
+                </div>
+                <p class="note">Actions LXC exécutées côté serveur par <span class="mono">jellyfinctl</span> (sudo scopé, audité). Chacune demande une confirmation.</p></div>
+        </section>
 
-    <!-- RÉGLAGES -->
-    <section class="panel" id="panel-reglages" role="tabpanel" aria-labelledby="tab-reglages">
-      <article class="card">
-        <h3>⚙️ Configuration (lecture seule)</h3>
-        <div class="rows" id="reglages-rows"><div class="empty">chargement…</div></div>
-        <p class="note">Dérivé de <code>jellyfin.toml</code> via <code>/status</code>. Édition réservée à l'opérateur.</p>
-      </article>
-    </section>
-  </main>
+        <section id="t-partenaires" role="tabpanel" aria-labelledby="o-partenaires" hidden>
+            <div class="pan"><h3>Partenaires <i id="nPart"></i><button class="btn prim sm" id="toutBrancher" type="button">Tout brancher</button></h3>
+                <p class="note" style="margin:0 0 8px">Chaque module détecté peut être branché comme bibliothèque Jellyfin (bind en lecture seule). PeerTube reste un lien.</p>
+                <div id="rPart" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Partenaire</th><th>Type</th><th>État</th><th>Dossier média</th><th>Actions</th></tr></thead><tbody id="bPart"></tbody></table></div></div>
+        </section>
 
-  <div class="toast" id="toast"><span id="toast-msg"></span><span class="x" id="toast-x">✕</span></div>
+        <section id="t-bibliotheques" role="tabpanel" aria-labelledby="o-bibliotheques" hidden>
+            <div class="pan"><h3>Bibliothèques actives <i id="nLib"></i><button class="btn prim sm" id="scanner" type="button">Scanner</button></h3>
+                <div id="rLib" class="retour" hidden></div>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Type</th><th>Chemin</th></tr></thead><tbody id="bLib"></tbody></table></div>
+                <p class="note">Le nombre d’éléments par bibliothèque n’est pas fourni par l’API : il n’est pas affiché.</p></div>
+        </section>
 
-  <script>
-  // LE DOMAINE DE CETTE BOX (#1723). Le panneau vit sur admin.<domaine> :
-  // les liens « .gk2.secubox.in » figés envoyaient gk3 ouvrir le Jellyfin de gk2.
-  var DOM = (function (h) {
-    return (h.indexOf('.') > 0 && !/^[0-9.]+$/.test(h)) ? h.slice(h.indexOf('.') + 1) : 'gk2.secubox.in';
-  })(location.hostname);
-  function hoteDe(n) { return 'https://' + n + '.' + DOM; }
-  document.querySelectorAll('a[data-svc]').forEach(function (a) { a.href = hoteDe(a.getAttribute('data-svc')); });
-  (function () {
-    "use strict";
-    var API = "/api/v1/jellyfin";
-    var TABS = ["statut", "partenaires", "bibliotheques", "externe", "reglages"];
-    var KIND_EMOJI = { photos: "📷", files: "📁", torrents: "🧲", music: "🎵", link: "🎬" };
+        <section id="t-externe" role="tabpanel" aria-labelledby="o-externe" hidden>
+            <div class="pan"><h3>Médiathèque externe</h3>
+                <p class="note" style="font-size:.82rem;margin:0 0 8px">Les médias externes de Jellyfin sont gérés <b>par partenaire</b> : branchez un module dans l’onglet Partenaires pour exposer son répertoire média (bind en lecture seule) comme bibliothèque Jellyfin.</p>
+                <p class="note" style="font-size:.82rem">Le montage d’un volume externe brut (disque USB, partage réseau) dédié à la musique relève du module <a id="lienLyrion" href="#" target="_blank" rel="noopener">Lyrion</a>, distinct de celui-ci. Rien à configurer ici.</p></div>
+        </section>
 
-    function esc(s) {
-      return String(s == null ? "—" : s)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    }
-    function token() { return localStorage.getItem("sbx_token") || ""; }
-    function authHeaders(extra) {
-      var h = { "Authorization": "Bearer " + token() };
-      if (extra) { for (var k in extra) { h[k] = extra[k]; } }
-      return h;
-    }
+        <section id="t-reglages" role="tabpanel" aria-labelledby="o-reglages" hidden>
+            <div class="pan"><h3>Configuration <i>lecture seule</i></h3>
+                <dl class="kv"><dt>Port Jellyfin</dt><dd id="rPort">—</dd><dt>Assistant de configuration</dt><dd id="rWiz">—</dd><dt>Adresse publique</dt><dd id="rDom">—</dd></dl>
+                <p class="note">Valeurs lues dans <span class="mono">/status</span>. L’adresse du conteneur et le domaine ne sont pas fournis par l’API ; l’adresse publique est déduite du domaine de cette console. Édition réservée à l’opérateur (jellyfin.toml).</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-    async function apiGet(path) {
-      var res = await fetch(API + path, { headers: authHeaders() });
-      if (res.status === 401) { var e = new Error("Login requis (401)"); e.code = 401; throw e; }
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    }
-    async function apiPost(path, body) {
-      var res = await fetch(API + path, {
-        method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(body || {})
-      });
-      if (res.status === 401) { var e = new Error("Login requis (401)"); e.code = 401; throw e; }
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json().catch(function () { return {}; });
-    }
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/jellyfin';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        const TABS = ['statut', 'partenaires', 'bibliotheques', 'externe', 'reglages'];
+        const KIND = { photos: 'Photos', files: 'Fichiers', torrents: 'Torrents', music: 'Musique', link: 'Lien' };
 
-    // Toast
-    var toastEl = document.getElementById("toast");
-    var toastMsg = document.getElementById("toast-msg");
-    var toastTimer = null;
-    function hideToast() { toastEl.classList.remove("show"); if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; } }
-    function toast(msg) {
-      toastMsg.textContent = msg; toastEl.classList.remove("error"); toastEl.classList.add("show");
-      if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(hideToast, 3000);
-    }
-    function errorToast(msg) {
-      toastMsg.textContent = msg; toastEl.classList.add("error"); toastEl.classList.add("show");
-      if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
-    }
-    document.getElementById("toast-x").addEventListener("click", hideToast);
+        // Domaine de cette box : le panneau vit sur admin.<domaine> (#1723).
+        const DOM = (h => (h.indexOf('.') > 0 && !/^[0-9.]+$/.test(h)) ? h.slice(h.indexOf('.') + 1) : '')(location.hostname);
+        const hoteDe = n => (DOM && /^[a-z0-9-]+$/i.test(n)) ? 'https://' + n + '.' + DOM : '';
 
-    function inlineErr(elId, msg) {
-      document.getElementById(elId).innerHTML = '<div class="inline-msg err">⚠ ' + esc(msg) + '</div>';
-    }
-    function clearInline(elId) { document.getElementById(elId).innerHTML = ""; }
+        let ST = null, UPG = null, PART = [], LIBS = [], SESSION_OK = true, CONFIRM = null;
 
-    // ---- Navbar / hash routing ----
-    var tabEls = Array.prototype.slice.call(document.querySelectorAll(".tab"));
-    function showTab(name) {
-      if (TABS.indexOf(name) === -1) name = "statut";
-      TABS.forEach(function (t) {
-        var p = document.getElementById("panel-" + t);
-        var b = document.getElementById("tab-" + t);
-        var on = (t === name);
-        if (p) p.classList.toggle("active", on);
-        if (b) { b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false"); b.setAttribute("tabindex", on ? "0" : "-1"); }
-      });
-    }
-    function currentHash() { return (location.hash || "").replace(/^#/, ""); }
-    function routeFromHash() { showTab(currentHash() || "statut"); }
-    tabEls.forEach(function (b, i) {
-      b.setAttribute("aria-selected", "false");
-      b.setAttribute("tabindex", "-1");
-      b.addEventListener("click", function () { location.hash = b.getAttribute("data-tab"); });
-      b.addEventListener("keydown", function (ev) {
-        var d = 0;
-        if (ev.key === "ArrowRight" || ev.key === "ArrowDown") d = 1;
-        else if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") d = -1;
-        else return;
-        ev.preventDefault();
-        var n = (i + d + tabEls.length) % tabEls.length;
-        location.hash = tabEls[n].getAttribute("data-tab");
-        tabEls[n].focus();
-      });
-    });
-    window.addEventListener("hashchange", routeFromHash);
-
-    // ---- STATUT ----
-    async function loadStatus() {
-      clearInline("statut-msg");
-      try {
-        var d = await apiGet("/status");
-        // First-run: Jellyfin answers but its setup wizard isn't done → API is 503
-        // and no partner wiring works. Surface it here with a call to action.
-        if (d.setup_required) {
-          document.getElementById("statut-msg").innerHTML =
-            '<div class="note" style="border-left:3px solid var(--gold,#c9a84c);padding:10px 12px">'
-            + '⏳ <b>Configuration initiale requise</b> — Jellyfin est démarré mais son assistant '
-            + 'de configuration n\'est pas terminé (l\'API reste en 503, aucun branchement de bibliothèque '
-            + 'possible tant que ce n\'est pas fait). '
-            + '<a href="' + hoteDe('jellyfin') + '" target="_blank" rel="noopener">Compléter la configuration ↗</a> '
-            + '(ou sur le LAN : <code>http://10.100.0.170:8096</code>). Crée l\'admin, puis reviens ici.'
-            + '</div>';
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-        var libs = (typeof d.libraries === "number") ? d.libraries
-                 : (Array.isArray(d.libraries) ? d.libraries.length : (d.libraries_count != null ? d.libraries_count : "—"));
-        var sessions = (d.sessions != null)
-                     ? (typeof d.sessions === "number" ? d.sessions : (Array.isArray(d.sessions) ? d.sessions.length : "—"))
-                     : "—";
-        document.getElementById("s-state").textContent = d.lxc_state || "—";
-        document.getElementById("s-reach").textContent = d.jellyfin_reachable ? "oui" : "non";
-        document.getElementById("s-libs").textContent = libs;
-        document.getElementById("s-sessions").textContent = sessions;
-
-        var reachCard = document.getElementById("s-reach").parentElement;
-        reachCard.classList.toggle("green", !!d.jellyfin_reachable);
-        reachCard.classList.toggle("red", !d.jellyfin_reachable);
-
-        var running = (d.lxc_state || "").toLowerCase() === "running";
-        var rows = [
-          ["État LXC", '<span class="pill ' + (running ? "green" : "red") + '">' + esc(d.lxc_state || "?") + "</span>"],
-          ["Jellyfin", d.jellyfin_reachable ? '<span class="pill green">● joignable</span>' : '<span class="pill red">○ injoignable</span>'],
-          ["Version", esc(d.version || "—")],
-          ["Configuration", d.jellyfin_reachable
-            ? (d.setup_required
-                ? '<span class="pill red">⏳ setup requis</span>'
-                : '<span class="pill green">● configuré</span>')
-            : '<span class="pill">—</span>'],
-          ["Bibliothèques", esc(libs)],
-          ["Sessions actives", esc(sessions)]
-        ];
-        document.getElementById("engine-rows").innerHTML = rows.map(function (r) {
-          return '<div class="row"><span class="k">' + esc(r[0]) + '</span><span class="val">' + r[1] + "</span></div>";
-        }).join("");
-
-        // Réglages (config from status)
-        var cfg = d.config || d;
-        var creg = [
-          ["IP LXC", esc(cfg.lxc_ip || "—")],
-          ["Port", esc(cfg.port || "—")],
-          ["Domaine", cfg.domain ? '<a href="https://' + esc(cfg.domain) + '" target="_blank" rel="noopener">' + esc(cfg.domain) + "</a>" : "—"]
-        ];
-        document.getElementById("reglages-rows").innerHTML = creg.map(function (r) {
-          return '<div class="row"><span class="k">' + esc(r[0]) + '</span><span class="val">' + r[1] + "</span></div>";
-        }).join("");
-
-        if (Array.isArray(d.libraries)) renderLibraries(d.libraries);
-        if (cfg.domain) document.getElementById("open-jellyfin").href = "https://" + cfg.domain;
-      } catch (e) {
-        if (e.code === 401) { errorToast("🔒 Login requis"); inlineErr("statut-msg", "Session expirée — reconnectez-vous."); }
-        else { inlineErr("statut-msg", "Backend injoignable : " + e.message); }
-        document.getElementById("engine-rows").innerHTML = '<div class="empty">indisponible</div>';
-      }
-    }
-
-    async function loadUpgrade() {
-      try {
-        var d = await apiGet("/check-upgrade");
-        var avail = d.upgrade_available || d.available;
-        if (avail) {
-          var latest = d.latest || d.latest_version || "";
-          var badge = document.getElementById("upgrade-badge");
-          if (!badge) {
-            badge = document.createElement("span");
-            badge.id = "upgrade-badge";
-            badge.className = "pill yellow";
-            badge.style.marginLeft = "0.5rem";
-            var h1 = document.querySelector(".header h1");
-            if (h1) h1.appendChild(badge);
-          }
-          badge.textContent = "⬆ upgrade dispo" + (latest ? " " + latest : "");
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                if (r.status === 401 || r.status === 403) { SESSION_OK = false; rendre(); }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
         }
-      } catch (e) { /* non-fatal */ }
-    }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
 
-    async function doControl(action, btn) {
-      var prev = btn.textContent; btn.disabled = true; btn.textContent = "…";
-      try {
-        await apiPost("/control", { action: action });
-        toast("Action « " + action + " » envoyée ✓");
-        setTimeout(loadStatus, 1500);
-      } catch (e) {
-        if (e.code === 401) errorToast("🔒 Login requis");
-        else errorToast("Échec « " + action + " » : " + e.message);
-      } finally {
-        btn.disabled = false; btn.textContent = prev;
-      }
-    }
-    document.querySelectorAll("[data-control]").forEach(function (b) {
-      b.addEventListener("click", function () { doControl(b.getAttribute("data-control"), b); });
-    });
-
-    // ---- PARTENAIRES ----
-    function partnerCard(p) {
-      var name = p.name || "?";
-      var emoji = KIND_EMOJI[p.kind] || "🧩";
-      var present = !!p.present;
-      var wired = !!p.wired;
-      var linkOnly = (p.kind === "link") || (name === "peertube");
-      var cls = "partner-card" + (wired ? " wired" : (present ? " present" : ""));
-      var pill = present
-        ? (wired ? '<span class="pill green">● branché</span>' : '<span class="pill yellow">présent</span>')
-        : '<span class="pill dim">absent</span>';
-
-      var foot = "";
-      if (linkOnly) {
-        foot = '<a class="btn primary" href="' + hoteDe(esc(name)) + '" target="_blank" rel="noopener">🎬 Ouvrir ↗</a>';
-      } else {
-        if (wired) {
-          foot += '<button class="btn danger" data-unwire="' + esc(name) + '">🔌 Débrancher</button>';
-        } else {
-          foot += '<button class="btn good" data-wire="' + esc(name) + '"' + (present ? "" : " disabled") + '>🔌 Brancher</button>';
+        function demoData() {
+            ST = { status: 'ok', lxc_state: 'running', jellyfin_reachable: true, port: 8096, version: '10.10.7', libraries: 3, sessions: 1, startup_wizard_completed: true, setup_required: false };
+            UPG = { current: '10.10.7', latest: '10.10.7', available: false, major_jump: false };
+            PART = [
+                { name: 'photos', present: true, media_path: '/srv/photos/203.0.113', kind: 'photos', wired: true },
+                { name: 'music', present: true, media_path: '/srv/music', kind: 'music', wired: true },
+                { name: 'torrent', present: true, media_path: '/srv/torrents', kind: 'torrents', wired: false },
+                { name: 'files', present: false, media_path: null, kind: 'files', wired: false },
+                { name: 'peertube', present: true, media_path: null, kind: 'link', wired: false }];
+            LIBS = [{ name: 'photos', path: '/media/photos', kind: 'photos' }, { name: 'music', path: '/media/music', kind: 'music' }, { name: 'films-demo', path: '/media/films-demo', kind: 'files' }];
         }
-        foot += '<a class="btn" href="' + hoteDe(esc(name)) + '" target="_blank" rel="noopener">↗ webui</a>';
-      }
 
-      return '<div class="' + cls + '">' +
-        '<div class="partner-head"><span class="partner-emoji">' + emoji + '</span>' +
-        '<span class="partner-name">' + esc(name) + '</span>' + pill + '</div>' +
-        '<div class="partner-kind">' + esc(p.kind || "—") + (linkOnly ? " · lien seul" : "") + '</div>' +
-        '<div class="partner-path">' + esc(p.media_path || (linkOnly ? "plateforme fédérée" : "chemin inconnu")) + '</div>' +
-        '<div class="partner-foot">' + foot + '</div>' +
-        '</div>';
-    }
-    async function loadPartners() {
-      clearInline("partners-msg");
-      var wrap = document.getElementById("partners-wrap");
-      try {
-        var d = await apiGet("/partners");
-        var list = d.partners || (Array.isArray(d) ? d : []);
-        if (!list.length) { wrap.innerHTML = '<div class="empty">aucun partenaire détecté</div>'; return; }
-        wrap.innerHTML = list.map(partnerCard).join("");
-      } catch (e) {
-        if (e.code === 401) { errorToast("🔒 Login requis"); inlineErr("partners-msg", "Session expirée — reconnectez-vous."); }
-        else inlineErr("partners-msg", "Impossible de charger les partenaires : " + e.message);
-        wrap.innerHTML = '<div class="empty">indisponible</div>';
-      }
-    }
-    async function wirePartner(name, btn) {
-      var prev = btn.textContent; btn.disabled = true; btn.textContent = "…";
-      try { await apiPost("/partner/wire", { name: name }); toast("« " + name + " » branché ✓"); loadPartners(); }
-      catch (e) { btn.disabled = false; btn.textContent = prev; if (e.code === 401) errorToast("🔒 Login requis"); else errorToast("Échec branchement " + name + " : " + e.message); }
-    }
-    async function unwirePartner(name, btn) {
-      var prev = btn.textContent; btn.disabled = true; btn.textContent = "…";
-      try { await apiPost("/partner/unwire", { name: name }); toast("« " + name + " » débranché ✓"); loadPartners(); }
-      catch (e) { btn.disabled = false; btn.textContent = prev; if (e.code === 401) errorToast("🔒 Login requis"); else errorToast("Échec débranchement " + name + " : " + e.message); }
-    }
-    document.getElementById("partners-wrap").addEventListener("click", function (ev) {
-      var t = ev.target;
-      var w = t.closest ? t.closest("[data-wire]") : null;
-      var u = t.closest ? t.closest("[data-unwire]") : null;
-      if (w) wirePartner(w.getAttribute("data-wire"), w);
-      else if (u) unwirePartner(u.getAttribute("data-unwire"), u);
-    });
-    document.getElementById("btn-wire-all").addEventListener("click", function () {
-      var b = this; var prev = b.textContent; b.disabled = true; b.textContent = "…";
-      apiPost("/partner/wire", { all: true })
-        .then(function () { toast("Tous les partenaires présents branchés ✓"); loadPartners(); })
-        .catch(function (e) { if (e.code === 401) errorToast("🔒 Login requis"); else errorToast("Échec « Tout brancher » : " + e.message); })
-        .finally(function () { b.disabled = false; b.textContent = prev; });
-    });
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const essais = await Promise.allSettled([lire('/status'), lire('/partners'), lire('/library/status'), lire('/check-upgrade')]);
+            const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
+            const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
+            const tous = essais.every(e => e.status === 'rejected');
+            SESSION_OK = !refus;
+            ST = val(0);
+            const p = val(1); PART = p ? (Array.isArray(p) ? p : (p.partners || [])) : [];
+            const l = val(2); LIBS = l && Array.isArray(l.libraries) ? l.libraries : [];
+            UPG = val(3);
+            $('erreur').hidden = !(tous && !refus);
+            if (tous && !refus) $('erreur').textContent = 'Impossible de lire le module Jellyfin (service arrêté ou injoignable).';
+            rendre();
+        }
 
-    // ---- BIBLIOTHÈQUES ----
-    function renderLibraries(libs) {
-      var wrap = document.getElementById("lib-wrap");
-      if (!libs || !libs.length) { wrap.innerHTML = '<div class="empty">aucune bibliothèque</div>'; return; }
-      wrap.innerHTML = libs.map(function (l) {
-        var name = (typeof l === "string") ? l : (l.name || l.Name || "?");
-        var kind = (typeof l === "object") ? (l.kind || l.type || l.CollectionType || "") : "";
-        var count = (typeof l === "object" && l.count != null) ? (l.count + " éléments") : "";
-        var path = (typeof l === "object") ? (l.path || "") : "";
-        return '<div class="lib-row"><span class="lib-name">📚 ' + esc(name) + '</span>' +
-          '<span class="lib-meta">' + esc([kind, path, count].filter(Boolean).join(" · ")) + '</span></div>';
-      }).join("");
-    }
-    async function loadLibraries() {
-      clearInline("lib-msg");
-      try {
-        // /status returns `libraries` as a COUNT (a number) — the list lives on
-        // /library/status, which is also ~10x faster (no jellyfin API round-trip).
-        var d = await apiGet("/library/status");
-        var libs = Array.isArray(d.libraries) ? d.libraries : [];
-        renderLibraries(libs);
-      } catch (e) {
-        if (e.code === 401) { errorToast("🔒 Login requis"); inlineErr("lib-msg", "Session expirée."); }
-        else inlineErr("lib-msg", "Impossible de charger les bibliothèques : " + e.message);
-        document.getElementById("lib-wrap").innerHTML = '<div class="empty">indisponible</div>';
-      }
-    }
-    document.getElementById("btn-scan").addEventListener("click", function () {
-      var b = this; var prev = b.textContent; b.disabled = true; b.textContent = "🔍 …";
-      apiPost("/library/scan", {})
-        .then(function () { toast("Scan démarré ✓"); setTimeout(loadLibraries, 2000); })
-        .catch(function (e) { if (e.code === 401) errorToast("🔒 Login requis"); else errorToast("Échec du scan : " + e.message); })
-        .finally(function () { b.disabled = false; b.textContent = prev; });
-    });
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = ST, etat = $('etat');
+            const lxc = s && s.lxc_state ? String(s.lxc_state).toLowerCase() : null;
+            if (!SESSION_OK && !s) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (lxc !== 'running') { etat.className = 'actif hors'; etat.textContent = 'CONTENEUR ARRÊTÉ'; }
+            else if (!s.jellyfin_reachable) { etat.className = 'actif att'; etat.textContent = 'INJOIGNABLE'; }
+            else if (s.setup_required) { etat.className = 'actif att'; etat.textContent = 'CONFIGURATION REQUISE'; }
+            else { etat.className = 'actif'; etat.textContent = 'EN LIGNE'; }
+            const nb = x => (typeof x === 'number') ? x : (Array.isArray(x) ? x.length : null);
+            $('tLxc').textContent = s ? tiret(s.lxc_state) : '—';
+            $('cLxc').className = 'tuile ' + (!s ? '' : lxc === 'running' ? 'ok' : 'hors');
+            $('tJoi').textContent = s ? (s.jellyfin_reachable ? 'oui' : 'non') : '—';
+            $('cJoi').className = 'tuile ' + (!s ? '' : s.jellyfin_reachable ? 'ok' : 'hors');
+            $('tLib').textContent = s ? tiret(nb(s.libraries)) : '—';
+            $('tSes').textContent = s ? tiret(nb(s.sessions)) : '—';
+            $('tVer').textContent = s ? tiret(s.version) : '—';
+            $('sVer').textContent = UPG && UPG.available ? 'mise à jour : ' + tiret(UPG.latest) : 'Jellyfin';
+            // Moteur
+            $('kLxc').replaceChildren(s ? pastille(lxc === 'running' ? 'ok' : 'hors', tiret(s.lxc_state).toUpperCase()) : '—');
+            $('kJoi').replaceChildren(s ? pastille(s.jellyfin_reachable ? 'ok' : 'hors', s.jellyfin_reachable ? 'JOIGNABLE' : 'INJOIGNABLE') : '—');
+            $('kVer').textContent = s ? tiret(s.version) : '—';
+            $('kCfg').replaceChildren(s && s.jellyfin_reachable ? (s.setup_required ? pastille('att', 'ASSISTANT À TERMINER') : pastille('ok', 'CONFIGURÉ')) : '—');
+            $('kLib').textContent = s ? tiret(nb(s.libraries)) : '—';
+            $('kSes').textContent = s ? tiret(nb(s.sessions)) : '—';
+            $('kUpg').replaceChildren(!UPG ? '—' : UPG.available ? pastille('att', 'DISPONIBLE ' + tiret(UPG.latest) + (UPG.major_jump ? ' (changement majeur)' : '')) : pastille('ok', 'À JOUR'));
+            const lien = hoteDe('jellyfin');
+            $('setup').hidden = !(s && s.setup_required);
+            if (lien) { $('lienSetup').href = lien; $('ouvrir').href = lien; }
+            $('lienSetup').hidden = !lien; $('ouvrir').hidden = !lien;
+            if (hoteDe('lyrion')) $('lienLyrion').href = hoteDe('lyrion'); else $('lienLyrion').removeAttribute('href');
+            // Réglages
+            $('rPort').textContent = s ? tiret(s.port) : '—';
+            $('rWiz').textContent = s ? (s.startup_wizard_completed ? 'terminé' : 'non terminé') : '—';
+            $('rDom').textContent = lien ? lien.replace('https://', '') : '—';
+            rendrePartenaires(); rendreBiblios();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            rendreConf(); annoncer();
+        }
 
-    // ---- refresh orchestration ----
-    function refresh() {
-      loadStatus();
-      loadPartners();
-      loadLibraries();
-    }
-    document.getElementById("btn-refresh").addEventListener("click", function () { refresh(); loadUpgrade(); });
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        // Confirmation intégrée : jamais de dialogue natif.
+        function demander(question, fn) { CONFIRM = { question, fn }; rendreConf(); const o = $('confOui'); if (!$('conf').hidden) o.focus(); }
+        function rendreConf() {
+            $('conf').hidden = !CONFIRM;
+            if (CONFIRM) $('confQ').textContent = CONFIRM.question;
+            annoncer();
+        }
+        $('confOui').addEventListener('click', () => { const c = CONFIRM; CONFIRM = null; rendreConf(); if (c) c.fn(); });
+        $('confNon').addEventListener('click', () => { CONFIRM = null; rendreConf(); });
 
-    // init
-    routeFromHash();
-    refresh();
-    loadUpgrade();
-    setInterval(loadStatus, 15000);
-  })();
-  </script>
+        function ligneVide(tb, n, txt) { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function rendrePartenaires() {
+            const tb = $('bPart'); tb.replaceChildren();
+            $('nPart').textContent = PART.length ? PART.length + ' module' + (PART.length > 1 ? 's' : '') : '';
+            if (!PART.length) return ligneVide(tb, 5, SESSION_OK ? 'Aucun partenaire détecté' : '—');
+            PART.forEach(p => {
+                const nom = tiret(p.name), lienSeul = p.kind === 'link' || p.name === 'peertube';
+                const tr = el('tr'); tr.appendChild(el('td', '', nom));
+                tr.appendChild(el('td', '', (KIND[p.kind] || tiret(p.kind)) + (lienSeul ? ' · lien seul' : '')));
+                const e = el('td');
+                if (lienSeul) e.appendChild(pastille(p.present ? 'cy' : '', p.present ? 'LIEN' : 'ABSENT'));
+                else e.appendChild(p.present ? (p.wired ? pastille('ok', 'BRANCHÉ') : pastille('att', 'PRÉSENT')) : pastille('', 'ABSENT'));
+                tr.appendChild(e);
+                tr.appendChild(el('td', 'mono', p.media_path || (lienSeul ? 'plateforme fédérée' : '—')));
+                const act = el('td', 'act');
+                if (!lienSeul) {
+                    if (p.wired) act.appendChild(btn('Débrancher', 'danger', () => demander('Débrancher « ' + nom + ' » : retirer sa bibliothèque Jellyfin et son montage en lecture seule ?', () => debrancher(p.name))));
+                    else { const b = btn('Brancher', 'bon', () => demander('Brancher « ' + nom + ' » comme bibliothèque Jellyfin (montage en lecture seule) ?', () => brancher(p.name))); b.disabled = !p.present; act.appendChild(b); }
+                }
+                const u = hoteDe(String(p.name || ''));
+                if (u) { const a = el('a', 'btn sm', '↗ ' + (lienSeul ? 'Ouvrir' : 'webui')); a.href = u; a.target = '_blank'; a.rel = 'noopener'; act.appendChild(a); }
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+        function rendreBiblios() {
+            const tb = $('bLib'); tb.replaceChildren();
+            $('nLib').textContent = LIBS.length ? LIBS.length + ' bibliothèque' + (LIBS.length > 1 ? 's' : '') : '';
+            if (!LIBS.length) return ligneVide(tb, 3, SESSION_OK ? 'Aucune bibliothèque' : '—');
+            LIBS.forEach(l => {
+                const o = typeof l === 'string' ? { name: l } : l;
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(o.name || o.Name)));
+                tr.appendChild(el('td', '', tiret(KIND[o.kind] || o.kind || o.type || o.CollectionType)));
+                tr.appendChild(el('td', 'mono', tiret(o.path))); tb.appendChild(tr);
+            });
+        }
+
+        // ----- Actions : mêmes appels que l'ancienne page, mais le résultat réel est lu -----
+        async function controle(action) {
+            const r = await ecrire('/control', { action });
+            if (r.ok && r.data && r.data.pending) { retour('rCtl', true, 'Action « ' + action + ' » en cours (plus de 25 s) : vérifiez l’état.'); setTimeout(charger, 3000); }
+            else if (r.ok && r.data && r.data.ok === false) retour('rCtl', false, 'Action « ' + action + ' » refusée par le conteneur (état : ' + tiret(r.data.state) + ').');
+            else if (r.ok) { retour('rCtl', true, 'Action « ' + action + ' » exécutée (état : ' + tiret(r.data && r.data.state) + ').'); setTimeout(charger, 1500); }
+            else retour('rCtl', false, 'Échec « ' + action + ' » : ' + detail(r));
+        }
+        function resumeBranche(d) {
+            const w = Array.isArray(d.wired) ? d.wired : [], k = Array.isArray(d.skipped) ? d.skipped : [];
+            return (w.length ? 'branché : ' + w.join(', ') : 'rien de branché') + (k.length ? ' ; ignoré (dossier absent ou inconnu) : ' + k.join(', ') : '');
+        }
+        async function brancher(nom) {
+            const r = await ecrire('/partner/wire', { name: nom });
+            if (r.ok && r.data && r.data.pending) { retour('rPart', true, 'Branchement de « ' + nom + ' » en cours (plus de 25 s).'); setTimeout(charger, 3000); }
+            else if (r.ok && r.data) { const bon = Array.isArray(r.data.wired) && r.data.wired.length; retour('rPart', !!bon, 'Branchement : ' + resumeBranche(r.data) + '.'); charger(); }
+            else retour('rPart', false, 'Échec du branchement de « ' + nom + ' » : ' + detail(r));
+        }
+        async function debrancher(nom) {
+            const r = await ecrire('/partner/unwire', { name: nom });
+            if (r.ok && r.data && r.data.pending) { retour('rPart', true, 'Débranchement de « ' + nom + ' » en cours (plus de 25 s).'); setTimeout(charger, 3000); }
+            else if (r.ok) { retour('rPart', true, '« ' + nom + ' » débranché.'); charger(); }
+            else retour('rPart', false, 'Échec du débranchement de « ' + nom + ' » : ' + detail(r));
+        }
+        document.querySelectorAll('[data-ctl]').forEach(b => b.addEventListener('click', () => {
+            const a = b.dataset.ctl, lib = { start: 'Démarrer', stop: 'Arrêter', restart: 'Redémarrer' }[a];
+            demander(lib + ' le conteneur Jellyfin ? ' + (a === 'start' ? '' : 'Les lectures en cours seront interrompues.'), () => controle(a));
+        }));
+        $('toutBrancher').addEventListener('click', () => demander('Brancher tous les partenaires présents comme bibliothèques Jellyfin (montages en lecture seule) ?', async () => {
+            const r = await ecrire('/partner/wire', { all: true });
+            if (r.ok && r.data && r.data.pending) { retour('rPart', true, 'Branchement en cours (plus de 25 s).'); setTimeout(charger, 3000); }
+            else if (r.ok && r.data) { retour('rPart', Array.isArray(r.data.wired) && r.data.wired.length > 0, 'Tout brancher : ' + resumeBranche(r.data) + '.'); charger(); }
+            else retour('rPart', false, 'Échec de « Tout brancher » : ' + detail(r));
+        }));
+        $('scanner').addEventListener('click', () => demander('Lancer un scan des bibliothèques Jellyfin ?', async () => {
+            const r = await ecrire('/library/scan', {});
+            if (r.ok && r.data && r.data.ok === false) retour('rLib', false, 'Scan non lancé (Jellyfin arrêté ou clé d’API absente).');
+            else if (r.ok) { retour('rLib', true, 'Scan démarré.'); setTimeout(charger, 2000); }
+            else retour('rLib', false, 'Échec du scan : ' + detail(r));
+        }));
+
+        // ----- Onglets (le hash de l'ancienne page reste honoré) -----
+        function onglet(nom, majHash) {
+            if (TABS.indexOf(nom) < 0) nom = 'statut';
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => { const on = b.dataset.t === nom; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+            TABS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (majHash) { try { history.replaceState(null, '', '#' + nom); } catch (e) { /* sans effet */ } }
+            annoncer();
+        }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t, true)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t, true); ev.preventDefault();
+        });
+        addEventListener('hashchange', () => onglet(location.hash.replace(/^#/, ''), false));
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'jellyfin' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        onglet(location.hash.replace(/^#/, ''), false);
+        charger();
+        // Pas d'actualisation onglet masqué, en démonstration, ni pendant une confirmation.
+        setInterval(() => { if (document.hidden || DEMO || CONFIRM) return; charger(); }, 30000);
+    </script>
 </body>
 </html>

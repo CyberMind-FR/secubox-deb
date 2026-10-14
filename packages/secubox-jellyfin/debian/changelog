@@ -1,3 +1,31 @@
+secubox-jellyfin (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /jellyfin/ refaite au profil Aurora (#2612) : fichier autonome, sans
+    police ni feuille externe (l'ancienne chargeait Google Fonts), tuiles,
+    onglets Statut / Partenaires / Bibliothèques / Médiathèque externe /
+    Réglages, ?demo=1 (données fictives, actions inertes), ?embed=1, hauteur
+    annoncée à l'hôte, bandeau « session requise » sur 401/403.
+  * Confirmation intégrée à la page avant démarrage, arrêt, redémarrage du
+    conteneur, branchement/débranchement d'un partenaire, « Tout brancher » et
+    scan (plus d'action sans confirmation). Appels d'écriture inchangés :
+    POST /control {action}, /partner/wire {name|all}, /partner/unwire {name},
+    /library/scan {}.
+  * Bogues de l'ancienne page corrigés : le résultat réel est lu (« exécuté »
+    s'affichait même quand le conteneur répondait ok:false ; « branché » même
+    quand le dossier était absent et le partenaire ignoré ; « Scan démarré »
+    même sur ok:false) ; jeton « Bearer » vide envoyé sans session, 403 non
+    traité ; IP LXC et domaine affichés « — » faute de ces champs dans /status
+    (retirés, seul le port est réel) ; adresse LAN figée 10.100.0.170 retirée ;
+    « N éléments » par bibliothèque jamais fourni par l'API (retiré) ; liste
+    des partenaires et bibliothèques jamais actualisée (seul /status l'était)
+    et actualisation même onglet masqué ; données d'API injectées via innerHTML.
+  * Non repris : aucune action de mise à jour (/upgrade) ni de politique de
+    lecture (/playback) : l'ancienne page n'en avait pas ; seule la
+    disponibilité d'une mise à jour est lue. Pas de menu.d ni nginx touchés.
+  * VERSION de l'API alignée (2.1.0).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 09:00:00 +0200
+
 secubox-jellyfin (2.0.13-1~bookworm1) bookworm; urgency=high
 
   * jellyfinctl valide ses arguments (#1785) : `partner unwire` n'admet qu'un

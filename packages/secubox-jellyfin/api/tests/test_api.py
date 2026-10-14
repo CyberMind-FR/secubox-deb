@@ -30,7 +30,7 @@ PAGE = (PAQUET / "www" / "jellyfin" / "index.html").read_text()
 
 
 def test_chaque_route_de_la_page_existe():
-    appelees = set(re.findall(r'api(?:Get|Post)\(\s*"(/[a-z/-]+)"', PAGE))
+    appelees = set(re.findall(r"(?:lire|ecrire)\(\s*'(/[a-z/-]+)'", PAGE))
     assert appelees, "aucun appel trouvé : le motif de la page a changé ?"
     servies = {r.path for r in M.app.routes}
     assert appelees <= servies, sorted(appelees - servies)
