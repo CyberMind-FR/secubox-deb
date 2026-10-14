@@ -4,733 +4,424 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Forge Gitea au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Gitea Git Server</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
+    <title>SecuBox — Forge Gitea</title>
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn.warning { background: rgba(210,153,34,0.1); border-color: var(--yellow); color: var(--yellow); }
-
-        /* Three-fold tabs */
-        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Stats row */
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--orange); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-
-        /* Components grid */
-        .components-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .component-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
-        .component-card h3 { font-size: 1rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
-        .component-card .meta { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.5rem; }
-        .component-card .status-row { display: flex; justify-content: space-between; align-items: center; }
-
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
-        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
-        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
-        .status-badge.installing { background: rgba(210,153,34,0.15); color: var(--yellow); }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-
-        /* Access URLs */
-        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
-        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
-        .url-box a { color: var(--primary); }
-        .copy-btn { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; }
-        .copy-btn:hover { color: var(--text); }
-
-        .progress-bar { width: 100%; height: 8px; background: var(--bg-dark); border-radius: 4px; overflow: hidden; }
-        .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
-
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 90vw; }
-        .modal-content h3 { margin-bottom: 1rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        form.saisie .bout{display:flex;gap:6px;flex-wrap:wrap}
+        .carte{width:100%;height:auto;display:block;max-height:460px}
+        .carte text{fill:var(--texte);font-size:12px;paint-order:stroke;stroke:#0a162e;stroke-width:4px;stroke-linejoin:round} .carte .sub{fill:var(--faible);font-size:10px}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .barre{height:8px;border-radius:99px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;width:0;background:var(--cyan);transition:width .3s}
+        pre.journal{margin:8px 0 0;background:rgba(6,13,27,.8);border:1px solid var(--trait);border-radius:8px;padding:10px;font-size:.72rem;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+        .groupe{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 6px}
+        .url{display:flex;gap:8px;align-items:center;justify-content:space-between;background:rgba(6,13,27,.7);border:1px solid var(--trait);border-radius:8px;padding:7px 10px;margin:0 0 10px}
+        .url span,.url a{min-width:0;overflow-wrap:anywhere;color:var(--texte)}
+        td{overflow-wrap:anywhere} td.act{overflow-wrap:normal}
+        @media (max-width:520px){th,td{padding-left:5px;padding-right:5px} .mono-email{font-size:.74rem}}
+        .etiq{color:var(--faible);font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;margin:0 0 3px}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>Gitea Git Server</h1>
-            <div>
-                <span class="status-badge" id="status-badge">Loading...</span>
-                <button class="btn success" id="btn-start" onclick="startService()" style="display:none">Start</button>
-                <button class="btn danger" id="btn-stop" onclick="stopService()" style="display:none">Stop</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 6"/></svg>
+                <div><h1>Forge Gitea</h1><small>Serveur Git dans un conteneur LXC</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
 
-        <!-- Three-fold navigation -->
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('components')">Components</div>
-            <div class="tab" onclick="showTab('status')">Status</div>
-            <div class="tab" onclick="showTab('access')">Access</div>
-            <div class="tab" onclick="showTab('repos')">Repositories</div>
-            <div class="tab" onclick="showTab('users')">Users</div>
-            <div class="tab" onclick="showTab('actions')">Actions</div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" id="cEtat" title="État du conteneur LXC gitea : en marche, arrêté ou non installé."><span class="l">Conteneur</span><span class="v" id="tEtat">—</span><span class="s" id="sEtat">LXC gitea</span></div>
+            <div class="tuile cy" title="Dépôts Git (dossiers *.git) trouvés dans le stockage de la forge."><span class="l">Dépôts</span><span class="v" id="tDepots">—</span><span class="s">dossiers .git</span></div>
+            <div class="tuile cy" title="Comptes présents dans la base de Gitea."><span class="l">Utilisateurs</span><span class="v" id="tUsers">—</span><span class="s">comptes Gitea</span></div>
+            <div class="tuile cy" title="Espace disque occupé par le stockage de la forge (du -sh), valeur telle que rendue par l’API."><span class="l">Stockage</span><span class="v" id="tStock">—</span><span class="s">occupé</span></div>
+            <div class="tuile cy" title="Version de Gitea configurée pour ce module."><span class="l">Version Gitea</span><span class="v" id="tVer">—</span><span class="s">configurée</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections de la forge">
+            <button type="button" role="tab" id="o-apercu" data-t="apercu" aria-selected="true" aria-controls="t-apercu">Aperçu</button>
+            <button type="button" role="tab" id="o-acces" data-t="acces" aria-selected="false" aria-controls="t-acces">Accès</button>
+            <button type="button" role="tab" id="o-depots" data-t="depots" aria-selected="false" aria-controls="t-depots">Dépôts</button>
+            <button type="button" role="tab" id="o-users" data-t="users" aria-selected="false" aria-controls="t-users">Utilisateurs</button>
+            <button type="button" role="tab" id="o-actions" data-t="actions" aria-selected="false" aria-controls="t-actions">Actions</button>
         </div>
 
-        <!-- COMPONENTS TAB -->
-        <div class="tab-content active" id="tab-components">
-            <div class="components-grid">
-                <div class="component-card">
-                    <h3>
-                        Gitea LXC
-                        <span class="status-badge" id="gitea-badge">-</span>
-                    </h3>
-                    <div class="meta">Alpine Linux container running Gitea git server</div>
-                    <div class="meta" id="gitea-ip">IP: -</div>
-                    <div class="meta" id="gitea-version">Version: -</div>
-                    <div class="status-row">
-                        <span id="gitea-installed">Not installed</span>
-                        <div>
-                            <button class="btn" onclick="showLogs()" style="padding:0.25rem 0.5rem;font-size:0.75rem">Logs</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <section id="t-apercu" role="tabpanel" aria-labelledby="o-apercu" class="grille">
+            <div class="pan"><h3>Conteneur <i>LXC</i></h3>
+                <dl class="kv"><dt>Nom</dt><dd class="mono" id="kNom">—</dd><dt>Installé</dt><dd id="kInst">—</dd><dt>En marche</dt><dd id="kMarche">—</dd><dt>Adresse</dt><dd class="mono" id="kIp">—</dd><dt>Domaine</dt><dd id="kDom">—</dd><dt>Port HTTP</dt><dd id="kHttp">—</dd><dt>Port SSH</dt><dd id="kSsh">—</dd></dl></div>
+            <div class="pan"><h3>Santé du service</h3>
+                <dl class="kv"><dt>Gitea</dt><dd id="kSante">—</dd><dt>Détail</dt><dd id="kDetail">—</dd><dt>Module activé</dt><dd id="kActif">—</dd></dl>
+                <p class="note">L’API ne fournit pas les chemins de données ni de statistiques d’activité : ils ne sont pas affichés plutôt qu’inventés.</p></div>
+        </section>
 
-            <div class="card" id="install-card" style="display:none">
-                <h2>Installation Progress</h2>
-                <div class="progress-bar"><div class="progress-fill" id="install-progress" style="width:0%"></div></div>
-                <p id="install-message" style="margin-top:0.5rem;color:var(--text-dim)">Initializing...</p>
-            </div>
+        <section id="t-acces" role="tabpanel" aria-labelledby="o-acces" hidden>
+            <div class="pan"><h3>Adresses d’accès <i>copier-coller</i></h3>
+                <p class="etiq">Interface web</p><div class="url"><a id="uWeb" rel="noopener" target="_blank">—</a><button class="btn sm" type="button" data-copie="uWeb">Copier</button></div>
+                <p class="etiq">Clone HTTP</p><div class="url"><span id="uHttp" class="mono">—</span><button class="btn sm" type="button" data-copie="uHttp">Copier</button></div>
+                <p class="etiq">Clone SSH</p><div class="url"><span id="uSsh" class="mono">—</span><button class="btn sm" type="button" data-copie="uSsh">Copier</button></div>
+                <p class="etiq">API Gitea</p><div class="url"><span id="uApi" class="mono">—</span><button class="btn sm" type="button" data-copie="uApi">Copier</button></div>
+                <p class="note">Remplacer OWNER et REPO par le propriétaire et le nom du dépôt. La documentation de l’API Gitea est servie sur /api/swagger de la forge. Le clone SSH est écrit au format ssh://, seul valable avec un port non standard.</p></div>
+        </section>
 
-            <div class="card">
-                <h2>Quick Stats</h2>
-                <div class="stats-row">
-                    <div class="stat-card"><div class="value" id="repo-count">-</div><div class="label">Repositories</div></div>
-                    <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
-                    <div class="stat-card"><div class="value" id="disk-usage">-</div><div class="label">Disk Usage</div></div>
-                    <div class="stat-card"><div class="value" id="version">-</div><div class="label">Version</div></div>
-                </div>
-            </div>
-        </div>
+        <section id="t-depots" role="tabpanel" aria-labelledby="o-depots" hidden>
+            <div class="pan"><h3>Dépôts <i id="nDepots"></i></h3>
+                <div class="tab"><table><thead><tr><th>Nom</th><th>Propriétaire</th><th>Taille</th><th>Actions</th></tr></thead><tbody id="bDepots"></tbody></table></div>
+                <p class="note">Tailles mesurées sur le disque de la forge, telles que rendues par l’API.</p></div>
+        </section>
 
-        <!-- STATUS TAB -->
-        <div class="tab-content" id="tab-status">
-            <div class="card">
-                <h2>Service Health</h2>
-                <table>
-                    <thead><tr><th>Component</th><th>Status</th><th>Details</th></tr></thead>
-                    <tbody id="health-table">
-                        <tr><td>Gitea</td><td id="health-gitea">-</td><td id="health-gitea-detail">-</td></tr>
-                    </tbody>
-                </table>
-            </div>
+        <section id="t-users" role="tabpanel" aria-labelledby="o-users" hidden>
+            <div class="pan"><h3>Utilisateurs <i id="nUsers"></i><button class="btn prim sm" id="addUser" type="button">+ Ajouter un utilisateur</button></h3>
+                <div id="rUsers" class="retour" hidden></div>
+                <form class="saisie" id="fUser" hidden autocomplete="off">
+                    <label>Nom d’utilisateur<input name="username" required></label>
+                    <label>Courriel<input name="email" type="email" required></label>
+                    <label>Mot de passe<input name="password" type="password" autocomplete="new-password" required></label>
+                    <label><span>Administrateur</span><input name="admin" type="checkbox" style="width:auto"></label>
+                    <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fUser">Annuler</button></div>
+                </form>
+                <div class="tab"><table><thead><tr><th>Utilisateur</th><th>Courriel</th><th>Admin</th><th>Actions</th></tr></thead><tbody id="bUsers"></tbody></table></div></div>
+        </section>
 
-            <div class="card">
-                <h2>Container Information</h2>
-                <table>
-                    <tbody>
-                        <tr><td>Container Name</td><td id="container-name">gitea</td></tr>
-                        <tr><td>Container IP</td><td id="container-ip">-</td></tr>
-                        <tr><td>HTTP Port</td><td id="http-port">-</td></tr>
-                        <tr><td>SSH Port</td><td id="ssh-port">-</td></tr>
-                        <tr><td>Data Path</td><td>/srv/gitea</td></tr>
-                        <tr><td>LXC Path</td><td>/data/lxc/gitea</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <section id="t-actions" role="tabpanel" aria-labelledby="o-actions" class="grille" hidden>
+            <div class="pan"><h3>Contrôle du service</h3>
+                <div id="rSvc" class="retour" hidden></div>
+                <div class="groupe" id="gSvc"></div>
+                <div id="blocInstall" hidden><div class="barre"><i id="barInstall"></i></div><p class="note" id="msgInstall">Initialisation…</p></div></div>
+            <div class="pan"><h3>Sauvegardes</h3>
+                <div id="rBak" class="retour" hidden></div>
+                <div class="groupe"><button class="btn" id="btnBak" type="button">Créer une sauvegarde</button><button class="btn" id="btnListeBak" type="button">Voir les sauvegardes</button></div>
+                <div class="tab" id="blocBak" hidden><table><thead><tr><th>Fichier</th><th>Taille</th><th>Date</th></tr></thead><tbody id="bBak"></tbody></table></div></div>
+            <div class="pan" style="grid-column:1/-1"><h3>Diagnostic</h3>
+                <div class="groupe"><button class="btn" id="btnLogs" type="button">Afficher les journaux</button></div>
+                <pre class="journal" id="journal" hidden></pre>
+                <p class="note">Accès au conteneur : se connecter à l’hôte en SSH, puis lxc-attach -n gitea.</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-        <!-- ACCESS TAB -->
-        <div class="tab-content" id="tab-access">
-            <div class="card">
-                <h2>Web Interface</h2>
-                <div class="url-label">Gitea Dashboard</div>
-                <div class="url-box">
-                    <a id="web-url" href="#" target="_blank">-</a>
-                    <button class="copy-btn" onclick="copyUrl('web-url')">Copy</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Clone URLs</h2>
-                <div class="url-label">HTTP Clone</div>
-                <div class="url-box">
-                    <span id="http-clone">-</span>
-                    <button class="copy-btn" onclick="copyUrl('http-clone')">Copy</button>
-                </div>
-                <div class="url-label">SSH Clone</div>
-                <div class="url-box">
-                    <span id="ssh-clone">-</span>
-                    <button class="copy-btn" onclick="copyUrl('ssh-clone')">Copy</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>API Access</h2>
-                <div class="url-label">Gitea API</div>
-                <div class="url-box">
-                    <span id="api-url">-</span>
-                    <button class="copy-btn" onclick="copyUrl('api-url')">Copy</button>
-                </div>
-                <p style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-dim)">
-                    API documentation available at <code>/api/swagger</code>
-                </p>
-            </div>
-        </div>
-
-        <!-- REPOS TAB -->
-        <div class="tab-content" id="tab-repos">
-            <div class="card">
-                <h2>Repositories <button class="btn" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="loadRepos()">Refresh</button></h2>
-                <table>
-                    <thead><tr><th>Name</th><th>Owner</th><th>Size</th><th>Actions</th></tr></thead>
-                    <tbody id="repo-list"><tr><td colspan="4">Loading...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- USERS TAB -->
-        <div class="tab-content" id="tab-users">
-            <div class="card">
-                <h2>Users <button class="btn success" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="showAddUser()">+ Add User</button></h2>
-                <table>
-                    <thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Actions</th></tr></thead>
-                    <tbody id="user-list"><tr><td colspan="4">Loading...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ACTIONS TAB -->
-        <div class="tab-content" id="tab-actions">
-            <div class="card">
-                <h2>Service Control</h2>
-                <button class="btn success" onclick="startService()">Start</button>
-                <button class="btn danger" onclick="stopService()">Stop</button>
-                <button class="btn" onclick="restartService()">Restart</button>
-                <button class="btn primary" id="btn-install" onclick="installGitea()" style="display:none">Install Gitea</button>
-            </div>
-
-            <div class="card">
-                <h2>Backup & Restore</h2>
-                <button class="btn" onclick="createBackup()">Create Backup</button>
-                <button class="btn" onclick="showBackups()">View Backups</button>
-            </div>
-
-            <div class="card">
-                <h2>Diagnostics</h2>
-                <button class="btn" onclick="showLogs()">View Logs</button>
-                <button class="btn" onclick="openShell()">Container Shell</button>
-            </div>
-        </div>
-    </main>
-
-    <!-- Add User Modal -->
-    <div class="modal" id="user-modal">
-        <div class="modal-content">
-            <h3>Add User</h3>
-            <div class="form-group"><label>Username</label><input type="text" id="new-username"></div>
-            <div class="form-group"><label>Email</label><input type="email" id="new-email"></div>
-            <div class="form-group"><label>Password</label><input type="password" id="new-password"></div>
-            <div class="form-group"><label><input type="checkbox" id="new-admin"> Admin user</label></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('user-modal')">Cancel</button>
-                <button class="btn success" onclick="addUser()">Create</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Logs Modal -->
-    <div class="modal" id="logs-modal">
-        <div class="modal-content" style="min-width:600px;max-height:80vh;overflow:auto">
-            <h3>Gitea Logs</h3>
-            <pre id="logs-content" style="background:var(--bg-dark);padding:1rem;border-radius:6px;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto">Loading...</pre>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('logs-modal')">Close</button>
-                <button class="btn" onclick="loadLogs()">Refresh</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/gitea';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        async function api(path, opts = {}) {
+        let STATUT = null, ACCES = null, DEPOTS = [], USERS = [], BAK = null, SESSION_OK = true, ONGLET = 'apercu', INSTALL_EN_COURS = false;
+        let CONFIRM = null;   // { genre, cle } : confirmation ouverte dans la page, jamais de dialogue natif
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
-                return res.json();
-            } catch { return {}; }
+                const opts = { method: methode, credentials: 'same-origin', headers: entetes(corps !== undefined ? { 'Content-Type': 'application/json' } : {}) };
+                if (corps !== undefined) opts.body = JSON.stringify(corps);
+                const r = await fetch(API + chemin, opts);
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
         }
-
-        let status = {};
-        let access = {};
-
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
-            document.getElementById('tab-' + name).classList.add('active');
-
-            if (name === 'repos') loadRepos();
-            if (name === 'users') loadUsers();
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function quand(ts) {
+            if (ts === null || ts === undefined || ts === '') return '—';
+            const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts);
+            return isNaN(d) ? '—' : d.toLocaleString('fr-FR');
         }
-
-        async function loadStatus() {
-            status = await api('/status');
-            const badge = document.getElementById('status-badge');
-
-            if (status.running) {
-                badge.textContent = 'Running';
-                badge.className = 'status-badge running';
-                document.getElementById('btn-start').style.display = 'none';
-                document.getElementById('btn-stop').style.display = 'inline-block';
-                document.getElementById('btn-install').style.display = 'none';
-                document.getElementById('gitea-badge').textContent = 'Running';
-                document.getElementById('gitea-badge').className = 'status-badge running';
-            } else if (status.installed) {
-                badge.textContent = 'Stopped';
-                badge.className = 'status-badge stopped';
-                document.getElementById('btn-start').style.display = 'inline-block';
-                document.getElementById('btn-stop').style.display = 'none';
-                document.getElementById('btn-install').style.display = 'none';
-                document.getElementById('gitea-badge').textContent = 'Stopped';
-                document.getElementById('gitea-badge').className = 'status-badge stopped';
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        function confirmation(cell, genre, cle, libelle, fn, classe) {
+            if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === cle) {
+                cell.appendChild(el('span', 'note', libelle + ' ?'));
+                cell.appendChild(btn('Confirmer', 'danger', () => { CONFIRM = null; fn(); }));
+                cell.appendChild(btn('Annuler', '', () => { CONFIRM = null; rendre(); }));
             } else {
-                badge.textContent = 'Not Installed';
-                badge.className = 'status-badge stopped';
-                document.getElementById('btn-start').style.display = 'none';
-                document.getElementById('btn-stop').style.display = 'none';
-                document.getElementById('btn-install').style.display = 'inline-block';
-                document.getElementById('gitea-badge').textContent = 'Not Installed';
-                document.getElementById('gitea-badge').className = 'status-badge stopped';
-            }
-
-            // Stats
-            document.getElementById('repo-count').textContent = status.repo_count || 0;
-            document.getElementById('user-count').textContent = status.user_count || 0;
-            document.getElementById('disk-usage').textContent = status.storage || '-';
-            document.getElementById('version').textContent = status.version || '-';
-            document.getElementById('gitea-version').textContent = 'Version: ' + (status.version || '-');
-
-            // Container info
-            const comp = status.components?.gitea || {};
-            document.getElementById('gitea-ip').textContent = 'IP: ' + (comp.ip || '-');
-            document.getElementById('gitea-installed').textContent = comp.installed ? 'Installed' : 'Not installed';
-            document.getElementById('container-ip').textContent = comp.ip || '-';
-            document.getElementById('http-port').textContent = status.http_port || 3000;
-            document.getElementById('ssh-port').textContent = status.ssh_port || 2222;
-
-            // Health
-            document.getElementById('health-gitea').innerHTML = status.running
-                ? '<span style="color:var(--green)">OK</span>'
-                : '<span style="color:var(--red)">DOWN</span>';
-            document.getElementById('health-gitea-detail').textContent = status.running
-                ? 'Container running at ' + (comp.ip || '-')
-                : 'Container stopped';
-        }
-
-        async function loadAccess() {
-            access = await api('/access');
-            const ip = access.http?.url?.replace('http://', '').split(':')[0] || 'localhost';
-            const port = status.http_port || 3000;
-            const sshPort = status.ssh_port || 2222;
-
-            document.getElementById('web-url').textContent = access.web_interface || '-';
-            document.getElementById('web-url').href = access.web_interface || '#';
-            document.getElementById('http-clone').textContent = `http://${ip}:${port}/OWNER/REPO.git`;
-            document.getElementById('ssh-clone').textContent = `git@${ip}:${sshPort}/OWNER/REPO.git`;
-            document.getElementById('api-url').textContent = access.api || '-';
-        }
-
-        async function loadRepos() {
-            const d = await api('/repos');
-            const list = document.getElementById('repo-list');
-            const repos = d.repos || [];
-            if (!repos.length) {
-                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No repositories</td></tr>';
-                return;
-            }
-            list.innerHTML = repos.map(r => `<tr>
-                <td><strong>${r.name}</strong></td>
-                <td>${r.owner}</td>
-                <td>${r.size}</td>
-                <td>
-                    <a href="${r.clone_http?.replace('.git','')}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">Open</a>
-                </td>
-            </tr>`).join('');
-        }
-
-        async function loadUsers() {
-            const d = await api('/users');
-            const list = document.getElementById('user-list');
-            const users = d.users || [];
-            if (!users.length) {
-                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No users</td></tr>';
-                return;
-            }
-            list.innerHTML = users.map(u => `<tr>
-                <td><strong>${u.name}</strong></td>
-                <td>${u.email}</td>
-                <td>${u.is_admin ? '<span style="color:var(--green)">Yes</span>' : ''}</td>
-                <td>
-                    <button class="btn danger" onclick="deleteUser('${u.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
-                </td>
-            </tr>`).join('');
-        }
-
-        async function startService() {
-            await api('/start', { method: 'POST' });
-            setTimeout(refresh, 2000);
-        }
-
-        async function stopService() {
-            await api('/stop', { method: 'POST' });
-            setTimeout(refresh, 1000);
-        }
-
-        async function restartService() {
-            await api('/restart', { method: 'POST' });
-            setTimeout(refresh, 3000);
-        }
-
-        async function installGitea() {
-            await api('/install', { method: 'POST' });
-            document.getElementById('install-card').style.display = 'block';
-            pollInstallProgress();
-        }
-
-        async function pollInstallProgress() {
-            const d = await api('/install-progress');
-            document.getElementById('install-progress').style.width = d.progress + '%';
-            document.getElementById('install-message').textContent = d.message;
-            if (d.status === 'running') {
-                setTimeout(pollInstallProgress, 2000);
-            } else if (d.status === 'completed') {
-                document.getElementById('install-card').style.display = 'none';
-                refresh();
+                cell.appendChild(btn(libelle, classe == null ? 'danger' : classe, () => { CONFIRM = { genre, cle }; rendre(); }));
             }
         }
+        function urlSure(u) { return typeof u === 'string' && /^https?:\/\//i.test(u); }
 
-        async function createBackup() {
-            const r = await api('/backup', { method: 'POST' });
-            alert(r.success ? 'Backup created: ' + (r.file || '') : 'Backup failed');
+        function demoData() {
+            STATUT = { module: 'gitea', version: '1.22.6', enabled: true, domain: 'git.example.test', components: { gitea: { name: 'gitea', installed: true, running: true, ip: '192.0.2.40' } }, repo_count: 3, user_count: 2, storage: '412M', http_port: 3000, ssh_port: 2222, running: true, installed: true };
+            ACCES = { domain: 'git.example.test', http: { url: 'http://192.0.2.40:3000', clone_template: 'http://192.0.2.40:3000/OWNER/REPO.git' }, ssh: { port: 2222, clone_template: 'git@192.0.2.40:2222/OWNER/REPO.git' }, web_interface: 'http://192.0.2.40:3000', api: 'http://192.0.2.40:3000/api/v1', running: true };
+            DEPOTS = [{ name: 'secubox-notes', owner: 'demo', size: '12M', clone_http: 'http://192.0.2.40:3000/demo/secubox-notes.git' },
+                      { name: 'infra', owner: 'demo', size: '340M', clone_http: 'http://192.0.2.40:3000/demo/infra.git' },
+                      { name: 'site-vitrine', owner: 'equipe', size: '60M', clone_http: 'http://192.0.2.40:3000/equipe/site-vitrine.git' }];
+            USERS = [{ id: '1', name: 'demo', email: 'demo@example.test', is_admin: true }, { id: '2', name: 'equipe', email: 'equipe@example.test', is_admin: false }];
+            BAK = [{ name: 'gitea_20261012_0300.tar.gz', size: '210M', timestamp: 1791774000 }];
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showAddUser() { showModal('user-modal'); }
+        const refus = e => e && e.reason && (e.reason.statut === 401 || e.reason.statut === 403);
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
+            const taches = [lire('/status'), lire('/access')];
+            if (ONGLET === 'depots') taches.push(lire('/repos'));
+            if (ONGLET === 'users') taches.push(lire('/users'));
+            const es = await Promise.allSettled(taches);
+            const val = i => es[i] && es[i].status === 'fulfilled' ? es[i].value : null;
+            SESSION_OK = !es.some(refus);
+            STATUT = val(0); ACCES = val(1);
+            if (ONGLET === 'depots') { const d = val(2); if (d) DEPOTS = d.repos || []; }
+            if (ONGLET === 'users') { const d = val(2); if (d) USERS = d.users || []; }
+            const tous = es.every(e => e.status === 'rejected');
+            $('erreur').hidden = !(tous && SESSION_OK);
+            if (tous && SESSION_OK) $('erreur').textContent = 'Impossible de lire la forge (service arrêté ou injoignable).';
+            rendre();
+        }
 
-        async function addUser() {
-            const username = document.getElementById('new-username').value;
-            const email = document.getElementById('new-email').value;
-            const password = document.getElementById('new-password').value;
-            const admin = document.getElementById('new-admin').checked;
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const s = STATUT, comp = (s && s.components && s.components.gitea) || {};
+            const etat = $('etat');
+            const lib = !s ? null : s.running ? 'EN MARCHE' : s.installed ? 'ARRÊTÉ' : 'NON INSTALLÉ';
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!s) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (s.running ? '' : s.installed ? ' att' : ' hors'); etat.textContent = lib; }
+            $('tEtat').textContent = lib ? (s.running ? 'En marche' : s.installed ? 'Arrêté' : 'Non installé') : '—';
+            $('cEtat').className = 'tuile ' + (!s ? 'cy' : s.running ? 'ok' : s.installed ? 'att' : 'hors');
+            $('tDepots').textContent = s ? tiret(s.repo_count) : '—';
+            $('tUsers').textContent = s ? tiret(s.user_count) : '—';
+            $('tStock').textContent = s ? tiret(s.storage) : '—';
+            $('tVer').textContent = s ? tiret(s.version) : '—';
+            $('kNom').textContent = tiret(comp.name); $('kInst').textContent = s ? (s.installed ? 'oui' : 'non') : '—'; $('kMarche').textContent = s ? (s.running ? 'oui' : 'non') : '—';
+            $('kIp').textContent = tiret(comp.ip); $('kDom').textContent = tiret(s && s.domain); $('kHttp').textContent = tiret(s && s.http_port); $('kSsh').textContent = tiret(s && s.ssh_port);
+            const sante = $('kSante'); sante.replaceChildren();
+            if (s) sante.appendChild(s.running ? pastille('ok', 'OK') : pastille('hors', 'ARRÊTÉ')); else sante.textContent = '—';
+            $('kDetail').textContent = !s ? '—' : s.running ? 'Conteneur en marche à ' + tiret(comp.ip) : 'Conteneur arrêté';
+            $('kActif').textContent = s && s.enabled !== undefined ? (s.enabled ? 'oui' : 'non') : '—';
+            rendreAcces(); rendreDepots(); rendreUsers(); rendreActions(); rendreSauvegardes();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
 
-            const r = await api('/user', {
-                method: 'POST',
-                body: JSON.stringify({ username, email, password, admin })
+        function rendreAcces() {
+            const a = ACCES, s = STATUT;
+            const web = a && a.web_interface, w = $('uWeb');
+            w.textContent = tiret(web);
+            if (urlSure(web)) w.setAttribute('href', web); else w.removeAttribute('href');
+            $('uHttp').textContent = tiret(a && a.http && a.http.clone_template);
+            // L'API rend git@hôte:port/… qui n'est pas une adresse SCP valide avec un port : on écrit ssh://.
+            let ssh = '—';
+            if (a && urlSure(a.web_interface)) { try { const h = new URL(a.web_interface).hostname, p = (a.ssh && a.ssh.port) || (s && s.ssh_port); ssh = 'ssh://git@' + h + (p ? ':' + p : '') + '/OWNER/REPO.git'; } catch (e) { ssh = '—'; } }
+            $('uSsh').textContent = ssh;
+            $('uApi').textContent = tiret(a && a.api);
+        }
+
+        function ligneVide(tb, n, texte) { const tr = el('tr'); const td = el('td', 'vide', texte); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
+        function rendreDepots() {
+            const tb = $('bDepots'); tb.replaceChildren();
+            $('nDepots').textContent = DEPOTS.length ? DEPOTS.length + ' dépôt' + (DEPOTS.length > 1 ? 's' : '') : '';
+            if (!DEPOTS.length) { ligneVide(tb, 4, SESSION_OK ? 'Aucun dépôt' : '—'); return; }
+            DEPOTS.forEach(r => {
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(r.name))); tr.appendChild(el('td', '', tiret(r.owner))); tr.appendChild(el('td', '', tiret(r.size)));
+                const act = el('td', 'act');
+                const u = typeof r.clone_http === 'string' ? r.clone_http.replace(/\.git$/, '') : '';
+                if (urlSure(u)) { const a = el('a', 'btn sm', 'Ouvrir'); a.setAttribute('href', u); a.target = '_blank'; a.rel = 'noopener'; act.appendChild(a); }
+                tr.appendChild(act); tb.appendChild(tr);
             });
-            if (r.success) {
-                hideModal('user-modal');
-                loadUsers();
-            } else {
-                alert('Error: ' + (r.detail || 'Failed'));
-            }
+        }
+        function rendreUsers() {
+            const tb = $('bUsers'); tb.replaceChildren();
+            $('nUsers').textContent = USERS.length ? USERS.length + ' compte' + (USERS.length > 1 ? 's' : '') : '';
+            if (!USERS.length) { ligneVide(tb, 4, SESSION_OK ? 'Aucun utilisateur' : '—'); return; }
+            USERS.forEach(u => {
+                const tr = el('tr'); tr.appendChild(el('td', '', tiret(u.name))); tr.appendChild(el('td', '', tiret(u.email)));
+                const a = el('td'); if (u.is_admin) a.appendChild(pastille('cy', 'ADMIN')); tr.appendChild(a);
+                const act = el('td', 'act'); confirmation(act, 'user', u.name, 'Supprimer', () => supprimerUser(u.name)); tr.appendChild(act);
+                tb.appendChild(tr);
+            });
+        }
+        function rendreActions() {
+            const g = $('gSvc'); g.replaceChildren();
+            const s = STATUT;
+            if (!s) { g.appendChild(el('span', 'note', '—')); return; }
+            if (!s.installed) { g.appendChild(btn('Installer Gitea', 'prim', installer)); return; }
+            if (!s.running) g.appendChild(btn('Démarrer', 'prim', () => action('/start', 'Service démarré', 2000)));
+            if (s.running) confirmation(g, 'svc', 'stop', 'Arrêter', () => action('/stop', 'Service arrêté', 1000));
+            confirmation(g, 'svc', 'restart', 'Redémarrer', () => action('/restart', 'Service redémarré', 3000), '');
+        }
+        function rendreSauvegardes() {
+            const tb = $('bBak'); tb.replaceChildren();
+            $('blocBak').hidden = BAK === null;
+            if (BAK === null) return;
+            if (!BAK.length) { ligneVide(tb, 3, 'Aucune sauvegarde'); return; }
+            BAK.forEach(b => { const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(b.name))); tr.appendChild(el('td', '', tiret(b.size))); tr.appendChild(el('td', '', quand(b.timestamp))); tb.appendChild(tr); });
         }
 
-        async function deleteUser(username) {
-            if (!confirm(`Delete user ${username}?`)) return;
-            const r = await api('/user/' + username, { method: 'DELETE' });
-            if (r.success) loadUsers();
-            else alert('Error: ' + (r.detail || 'Failed'));
+        // ----- Actions (mêmes routes, méthodes et corps que l'ancienne page) -----
+        async function action(chemin, ok, delai) {
+            const r = await ecrire('POST', chemin);
+            if (r.ok) { retour('rSvc', true, ok + '.'); setTimeout(charger, delai); } else { retour('rSvc', false, 'Échec : ' + detail(r)); rendre(); }
         }
-
-        async function loadLogs() {
-            const d = await api('/logs?lines=100');
-            document.getElementById('logs-content').textContent = (d.logs || []).join('\n') || 'No logs';
+        async function installer() {
+            const r = await ecrire('POST', '/install');
+            if (!r.ok) { retour('rSvc', false, 'Installation impossible : ' + detail(r)); return; }
+            retour('rSvc', true, 'Installation lancée en arrière-plan.');
+            $('blocInstall').hidden = false; INSTALL_EN_COURS = true; suivreInstall();
         }
-
-        function showLogs() {
-            loadLogs();
-            showModal('logs-modal');
+        async function suivreInstall() {
+            try {
+                const d = await lire('/install-progress');
+                const p = Math.max(0, Math.min(100, Number(d.progress) || 0));
+                $('barInstall').style.width = p + '%'; $('msgInstall').textContent = tiret(d.message);
+                if (d.status === 'running') { setTimeout(suivreInstall, 2000); return; }
+                INSTALL_EN_COURS = false;
+                if (d.status === 'completed') { $('blocInstall').hidden = true; charger(); }
+            } catch (e) { INSTALL_EN_COURS = false; $('msgInstall').textContent = 'Suivi impossible.'; }
         }
-
-        function showBackups() {
-            alert('Backup management coming soon');
+        async function supprimerUser(nom) {
+            const r = await ecrire('DELETE', '/user/' + encodeURIComponent(nom));
+            if (r.ok && r.data && r.data.success) { retour('rUsers', true, 'Utilisateur ' + nom + ' supprimé.'); charger(); }
+            else { retour('rUsers', false, 'Suppression impossible : ' + detail(r)); rendre(); }
         }
-
-        function openShell() {
-            alert('Shell access: ssh root@HOST then lxc-attach -n gitea');
+        $('fUser').addEventListener('submit', async ev => {
+            ev.preventDefault(); const f = ev.target;
+            const r = await ecrire('POST', '/user', { username: f.username.value, email: f.email.value, password: f.password.value, admin: f.admin.checked });
+            f.password.value = '';
+            if (r.ok && r.data && r.data.success) { f.reset(); f.hidden = true; retour('rUsers', true, 'Utilisateur créé.'); charger(); }
+            else retour('rUsers', false, 'Création impossible : ' + detail(r));
+        });
+        $('addUser').addEventListener('click', () => { $('fUser').hidden = !$('fUser').hidden; annoncer(); });
+        document.querySelectorAll('[data-ferme]').forEach(b => b.addEventListener('click', () => { const f = $(b.dataset.ferme); if (f.reset) f.reset(); f.hidden = true; annoncer(); }));
+        $('btnBak').addEventListener('click', async () => {
+            const r = await ecrire('POST', '/backup');
+            if (r.ok && r.data && r.data.success) { retour('rBak', true, 'Sauvegarde créée' + (r.data.file ? ' : ' + String(r.data.file).trim().slice(0, 200) : '') + '.'); if (BAK !== null) listerSauvegardes(); }
+            else retour('rBak', false, 'Sauvegarde impossible : ' + detail(r));
+        });
+        async function listerSauvegardes() {
+            if (DEMO) { BAK = BAK || []; rendre(); return; }
+            try { const d = await lire('/backups'); BAK = d.backups || []; } catch (e) { retour('rBak', false, 'Lecture impossible : ' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable')); if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; } return rendre(); }
+            rendre();
         }
+        $('btnListeBak').addEventListener('click', listerSauvegardes);
+        $('btnLogs').addEventListener('click', async () => {
+            const j = $('journal'); j.hidden = false;
+            if (DEMO) { j.textContent = '2026/10/13 08:00:01 [I] Démonstration : aucun journal réel.'; annoncer(); return; }
+            try { const d = await lire('/logs?lines=100'); j.textContent = (d.logs || []).join('\n') || 'Aucun journal'; }
+            catch (e) { j.textContent = 'Lecture impossible : ' + (e.statut ? 'HTTP ' + e.statut : 'serveur injoignable'); if (e.statut === 401 || e.statut === 403) { SESSION_OK = false; rendre(); } }
+            annoncer();
+        });
+        document.querySelectorAll('[data-copie]').forEach(b => b.addEventListener('click', async () => {
+            const t = $(b.dataset.copie).textContent;
+            if (!t || t === '—') return;
+            try { await navigator.clipboard.writeText(t); toast('Copié'); } catch (e) { toast('Copie impossible : sélectionner le texte à la main'); }
+        }));
 
-        function copyUrl(id) {
-            const el = document.getElementById(id);
-            const text = el.textContent || el.innerText;
-            navigator.clipboard.writeText(text);
+        // ----- Onglets -----
+        const ONGLETS = ['apercu', 'acces', 'depots', 'users', 'actions'];
+        function onglet(nom) {
+            ONGLET = nom; CONFIRM = null;
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            ONGLETS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'depots' || nom === 'users') charger();
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-        function refresh() { loadStatus(); loadAccess(); }
-        refresh();
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'gitea' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation pendant une saisie ou une confirmation ouverte, ni onglet masqué.
+        setInterval(() => {
+            if (document.hidden || DEMO || CONFIRM || INSTALL_EN_COURS || !$('fUser').hidden) return;
+            charger();
+        }, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
