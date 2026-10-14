@@ -5,99 +5,152 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — carte « IPv6 Guardian » du Hall (secubox-ipv6guard).
+  SecuBox — carte « IPv6 Guardian » du Hall (secubox-ipv6guard), au profil Aurora (.claude/AURORA-REFERENCE.md, #2659).
 
   Un sujet très technique raconté pour tout le monde, en quatre temps :
     1. Appareils joignables en IPv6   2. Services visibles   3. Connexions entrantes bloquées   4. Exceptions autorisées
   et un verdict d'un coup d'œil. HONNÊTE : « à vérifier » tant que le pare-feu de la Freebox n'est pas lu — jamais « protégé »
   sans l'avoir vu. LECTURE SEULE : rien n'est envoyé aux appareils. Tout texte venu du serveur passe par textContent.
+  ?demo=1 : données fictives (adresses de documentation RFC 3849), aucune requête. Mesure absente = « — ».
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IPv6 Guardian</title>
 <style>
-  :root{ --fond:#101a24; --fond2:#17283a; --texte:#eaf1f8; --muted:#9db1c7; --line:rgba(255,255,255,.15); --verre:rgba(255,255,255,.07);
-         --ok:#46d38b; --attention:#ffb454; --alerte:#ff7a7a; --neutre:#8fa3ba; --accent:#5cc2ff; }
-  :root[data-theme="light"]{ color-scheme:light; --fond:#f2f6fb; --fond2:#e0e9f4; --texte:#14202f; --muted:#4a5c75; --line:rgba(20,32,47,.16);
-         --verre:rgba(255,255,255,.72); --ok:#0b7d45; --attention:#8a5a00; --alerte:#b3261e; --neutre:#55677f; --accent:#0a6aa8; }
-  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ color-scheme:light; --fond:#f2f6fb; --fond2:#e0e9f4; --texte:#14202f;
-         --muted:#4a5c75; --line:rgba(20,32,47,.16); --verre:rgba(255,255,255,.72); --ok:#0b7d45; --attention:#8a5a00; --alerte:#b3261e;
-         --neutre:#55677f; --accent:#0a6aa8; } }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:linear-gradient(160deg,var(--fond),var(--fond2));color:var(--texte);font:14px/1.4 "IBM Plex Sans",Inter,system-ui,sans-serif;overflow:auto}
-  .g{display:flex;flex-direction:column;gap:.55rem;padding:.55rem .65rem;min-height:100%}
-  .verdict{display:flex;gap:.65rem;align-items:flex-start;padding:.6rem .7rem;border-radius:14px;border:1px solid var(--line);background:var(--verre);padding-right:54px}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:disabled{opacity:.5;cursor:default}
+  .btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.danger{border-color:var(--rouge);color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(var(--n,2),minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nl,4),minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  body.dans .tuile{padding:7px 9px;gap:3px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  body.dans .tuile .v{font-size:1.2rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.mal .v{color:var(--rouge)} .tuile.nul .v{color:var(--faible)} .tuile.nul{border-style:dashed}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 13px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .retour.ko{border-color:var(--rouge);color:var(--rouge)}
+  .msg{padding:12px;margin-top:8px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .msg .btn{margin:6px 0 0 .6rem}
+  input[type=search],input[type=text],input[type=url]{font:inherit;font-size:.8rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.8);color:var(--texte);min-width:0;min-height:34px}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  .verdict{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1px solid var(--trait2);background:rgba(10,22,46,.6)}
   .verdict .pict{font-size:1.9rem;line-height:1}
-  .verdict h2{margin:0;font-size:1.02rem;line-height:1.2}
-  .verdict p{margin:.2rem 0 0;font-size:.78rem;color:var(--muted)}
-  .verdict[data-niveau="protege"],.verdict[data-niveau="sans_ipv6"]{border-color:var(--ok)}
-  .verdict[data-niveau="a_verifier"],.verdict[data-niveau="ouvert_partiellement"]{border-color:var(--attention)}
-  .verdict[data-niveau="expose"]{border-color:var(--alerte)}
-  .chaine{display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;align-items:stretch}
-  @media (max-width:430px){ .chaine{grid-template-columns:repeat(2,1fr)} }
-  .etape{position:relative;display:flex;flex-direction:column;gap:.15rem;padding:.45rem .5rem;border-radius:12px;border:1px solid var(--line);background:var(--verre);min-width:0}
-  .etape:not(:last-child)::after{content:"→";position:absolute;right:-.42rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem;z-index:1}
-  @media (max-width:430px){ .etape::after{display:none} }
-  .etape .num{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
-  .etape .tit{font-size:.7rem;font-weight:600;line-height:1.2}
-  .etape .det{font-size:.64rem;color:var(--muted);line-height:1.25}
-  .etape[data-etat="ok"] .num{color:var(--ok)}
-  .etape[data-etat="alerte"] .num{color:var(--alerte)}
-  .etape[data-etat="non_lu"]{border-style:dashed}
-  .etape[data-etat="non_lu"] .num{color:var(--neutre)}
-  .bouton{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--verre);color:var(--texte);font:inherit;font-size:.78rem;cursor:pointer;text-align:left;padding:.3rem .65rem}
-  .bouton:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  .liste{display:flex;flex-direction:column;gap:.3rem}
+  .verdict h2{margin:0;font-size:1.02rem;line-height:1.2;overflow-wrap:anywhere}
+  .verdict p{margin:.25rem 0 0;font-size:.78rem;color:var(--doux);overflow-wrap:anywhere}
+  .verdict[data-niveau="protege"],.verdict[data-niveau="sans_ipv6"]{border-color:var(--vert)}
+  .verdict[data-niveau="a_verifier"],.verdict[data-niveau="ouvert_partiellement"]{border-color:var(--orange)}
+  .verdict[data-niveau="expose"]{border-color:var(--rouge)}
+  .tuile .tit{color:var(--doux);font-size:.74rem;font-weight:600;line-height:1.2}
+  .liste{display:flex;flex-direction:column;gap:6px;margin-top:8px}
   .liste[hidden]{display:none}
-  .app{padding:.4rem .55rem;border-radius:10px;border:1px solid var(--line);background:var(--verre)}
-  .app b{font-size:.8rem}
-  .badge{display:inline-block;font-size:.62rem;padding:.02rem .35rem;border-radius:999px;border:1px solid var(--line);margin-left:.3rem;color:var(--muted)}
-  .badge.pub{border-color:var(--attention);color:var(--attention)}
-  .services{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.25rem}
-  .puce{font-size:.66rem;padding:.04rem .4rem;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
-  .puce.sens{border-color:var(--attention);color:var(--attention)}
-  .pied{font-size:.64rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.2rem .6rem}
-  .msg{padding:.8rem;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:.84rem;text-align:center}
-  @media (prefers-reduced-motion:no-preference){ .etape,.verdict{transition:border-color .2s} }
+  .app-appareil{padding:6px 10px;border-radius:10px;border:1px solid var(--trait);background:rgba(18,40,78,.4);min-width:0}
+  .app-appareil b{font-size:.82rem;overflow-wrap:anywhere}
+  .badge{display:inline-block;font-size:.64rem;padding:1px 8px;border-radius:999px;border:1px solid var(--trait2);margin-left:6px;color:var(--doux)}
+  .badge.pub{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .services{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .puce{font-size:.68rem;padding:1px 8px;border-radius:999px;border:1px solid var(--trait2);color:var(--doux)}
+  .puce.sens{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .pied{font-size:.7rem;color:var(--faible);display:flex;flex-wrap:wrap;gap:2px 14px}
+  .bouton{text-align:left;margin-top:8px}
 </style>
-<div class="g" id="g">
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg>
+      <div><h1>IPv6 Guardian</h1><small>Qui peut vous joindre en IPv6, en clair</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Lecture…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune lecture réelle</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+
   <div class="verdict" id="verdict" role="status" aria-live="polite" data-niveau="">
     <span class="pict" id="pict" aria-hidden="true">🛡️</span>
     <div><h2 id="titre">Lecture…</h2><p id="expl"></p></div>
   </div>
-  <div class="chaine" id="chaine" aria-label="Les quatre étapes"></div>
-  <button class="bouton" type="button" id="plus" aria-expanded="false" hidden>Voir les appareils</button>
-  <div class="liste" id="liste" hidden></div>
-  <div class="msg" id="msg" hidden></div>
+
+  <section class="tuiles" id="chaine" aria-label="Les quatre étapes" style="--n:2;--nl:4"></section>
+
+  <div class="pan"><h3>Appareils joignables en IPv6 <i>GET /api/v1/ipv6guard/status</i></h3>
+    <button class="btn bouton" type="button" id="plus" aria-expanded="false" hidden>Voir les appareils</button>
+    <div class="liste" id="liste" hidden></div>
+    <div class="msg" id="msg" hidden></div>
+  </div>
   <div class="pied" id="pied"></div>
-</div>
+</div></div>
 <script src="../sonde.js"></script>
 <script>
 (function(){
   'use strict';
   var API = '/api/v1/ipv6guard/';
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if(Q.get('embed')) document.body.classList.add('emb');
+  try{ if(window.top !== window) document.body.classList.add('dans'); }catch(e){ document.body.classList.add('dans'); }
   var $ = function(id){ return document.getElementById(id); };
   var PICT = { protege:'🟢', sans_ipv6:'🟢', a_verifier:'🟠', ouvert_partiellement:'🟠', expose:'🔴' };
   var ICONES = { appareils:'📱', services:'🧩', bloquees:'🚧', exceptions:'🔓' };
+  var PASTILLE = { protege:['','PROTÉGÉ'], sans_ipv6:['','SANS IPV6'], a_verifier:['att','À VÉRIFIER'], ouvert_partiellement:['att','PARTIELLEMENT OUVERT'], expose:['hors','EXPOSÉ'] };
 
   function el(tag, cls, texte){ var e = document.createElement(tag); if(cls) e.className = cls; if(texte != null) e.textContent = texte; return e; }
   function heure(t){ try{ return new Date(t*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+  function pastille(cls, texte){ var e = $('etat'); e.className = 'actif ' + cls; e.textContent = texte; }
 
   function chaine(etapes){
     var c = $('chaine'); c.textContent = '';
     etapes.forEach(function(e){
-      var b = el('div','etape'); b.dataset.etat = e.etat || 'ok';
-      b.appendChild(el('div','tit', (ICONES[e.id]||'') + ' ' + e.titre));
-      b.appendChild(el('div','num', e.valeur == null ? '—' : String(e.valeur)));
-      b.appendChild(el('div','det', e.detail || ''));
+      var etat = e.etat || 'ok';
+      var b = el('div','tuile ' + (etat === 'ok' ? 'ok' : etat === 'alerte' ? 'mal' : 'nul'));
+      b.dataset.etat = etat;
+      b.title = (e.titre || '') + (e.detail ? ' — ' + e.detail : '');
+      b.appendChild(el('div','tit', (ICONES[e.id]||'') + ' ' + (e.titre || '')));
+      b.appendChild(el('div','v', e.valeur == null ? '—' : String(e.valeur)));
+      b.appendChild(el('div','s', e.detail || ''));
       c.appendChild(b);
     });
   }
   function appareils(liste){
     var z = $('liste'); z.textContent = '';
     liste.forEach(function(a){
-      var d = el('div','app');
+      var d = el('div','app-appareil');
       var t = el('div'); t.appendChild(el('b', null, a.nom));
       if(a.modele){ t.appendChild(el('span','badge',a.modele)); }
       if(a.adresses_publiques && a.adresses_publiques.length){ var p = el('span','badge pub','adresse publique'); t.appendChild(p); }
@@ -111,37 +164,76 @@
       z.appendChild(d);
     });
     var plus = $('plus'); plus.hidden = !liste.length;
+    if(!liste.length){ z.hidden = true; plus.setAttribute('aria-expanded','false'); plus.textContent = 'Voir les appareils'; }
   }
   function message(texte){ var m = $('msg'); m.hidden = !texte; m.textContent = texte || ''; }
 
+  function rend(d){
+    var v = d.verdict || {};
+    $('verdict').dataset.niveau = v.niveau || '';
+    $('pict').textContent = PICT[v.niveau] || '⚪';
+    $('titre').textContent = v.titre || '—';
+    var expl = v.explication || '';
+    if(v.sensibles){ expl += ' ' + v.sensibles + ' service' + (v.sensibles > 1 ? 's' : '') + ' sensible' + (v.sensibles > 1 ? 's' : '') + ' (accès à distance, partage de fichiers) ' + (v.sensibles > 1 ? 'sont annoncés' : 'est annoncé') + ' sur un appareil à adresse publique.'; }
+    $('expl').textContent = expl;
+    var p = PASTILLE[v.niveau]; if(p) pastille(p[0], p[1]); else pastille('neutre', 'SANS VERDICT');
+    chaine(d.etapes || []);
+    appareils(d.appareils || []);
+    message((d.appareils || []).length ? '' : 'Aucun appareil IPv6 vu sur le réseau pour l’instant.');
+    var m = d.mesure || {}, pied = $('pied'); pied.textContent = '';
+    pied.appendChild(el('span', null, 'Lecture seule : rien n’est envoyé à vos appareils.'));
+    if(m.date) pied.appendChild(el('span', null, 'Mesuré à ' + heure(m.date)));
+    if(m.mdns_en_cours) pied.appendChild(el('span', null, 'Recherche des services en cours…'));
+  }
+  function sansMesure(titre, expl, pict, etat, txt){
+    $('titre').textContent = titre; $('expl').textContent = expl; $('pict').textContent = pict;
+    $('verdict').dataset.niveau = ''; pastille(etat, txt);
+    $('chaine').textContent = ''; appareils([]); message('');
+  }
+
+  // Données fictives (démonstration) : adresses de documentation RFC 3849, appareils inventés, aucune requête.
+  function demo(){
+    return { verdict:{ niveau:'a_verifier', titre:'À vérifier', explication:'Le pare-feu de la Freebox n’a pas encore été lu : impossible d’affirmer que vos appareils sont protégés.', sensibles:1 },
+      etapes:[ {id:'appareils', titre:'Appareils joignables en IPv6', valeur:2, detail:'vus sur le réseau', etat:'ok'},
+               {id:'services', titre:'Services visibles', valeur:3, detail:'annoncés par les appareils', etat:'alerte'},
+               {id:'bloquees', titre:'Connexions entrantes bloquées', valeur:null, detail:'pare-feu non lu', etat:'non_lu'},
+               {id:'exceptions', titre:'Exceptions autorisées', valeur:null, detail:'pare-feu non lu', etat:'non_lu'} ],
+      appareils:[ {nom:'Serveur démo', modele:'Boîtier fictif', adresses_publiques:['2001:db8::10'], routeur:false, services:[{libelle:'Accès à distance (SSH)', sensible:true},{libelle:'Web', sensible:false}]},
+                  {nom:'Imprimante démo', modele:'Imprimante fictive', adresses_publiques:[], routeur:false, services:[{libelle:'Impression', sensible:false}]} ],
+      mesure:{ date: Math.floor(Date.now()/1000) - 120, mdns_en_cours:false } };
+  }
+
   function charge(){
+    $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+    $('session').hidden = true;
+    if(DEMO){ $('demo').hidden = false; rend(demo()); annoncer(); return; }
     fetch(API + 'status', {credentials:'same-origin', cache:'no-store', headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {st:r.status, d:d}; }); })
       .then(function(x){
-        if(x.st === 401 || x.st === 403){ $('titre').textContent = 'Connexion requise'; $('expl').textContent = 'Ouvrez une session SecuBox pour voir l’état de votre réseau en IPv6.'; $('pict').textContent = '🔒'; $('chaine').textContent = ''; return; }
-        if(x.st !== 200){ $('titre').textContent = 'Indisponible'; $('expl').textContent = 'Le service ne répond pas pour le moment.'; $('pict').textContent = '⚪'; return; }
-        var v = x.d.verdict || {};
-        $('verdict').dataset.niveau = v.niveau || '';
-        $('pict').textContent = PICT[v.niveau] || '⚪';
-        $('titre').textContent = v.titre || '';
-        var expl = v.explication || '';
-        if(v.sensibles){ expl += ' ' + v.sensibles + ' service' + (v.sensibles > 1 ? 's' : '') + ' sensible' + (v.sensibles > 1 ? 's' : '') + ' (accès à distance, partage de fichiers) ' + (v.sensibles > 1 ? 'sont annoncés' : 'est annoncé') + ' sur un appareil à adresse publique.'; }
-        $('expl').textContent = expl;
-        chaine(x.d.etapes || []);
-        appareils(x.d.appareils || []);
-        message((x.d.appareils || []).length ? '' : 'Aucun appareil IPv6 vu sur le réseau pour l’instant.');
-        var m = x.d.mesure || {}, p = $('pied'); p.textContent = '';
-        p.appendChild(el('span', null, 'Lecture seule : rien n’est envoyé à vos appareils.'));
-        if(m.date) p.appendChild(el('span', null, 'Mesuré à ' + heure(m.date)));
-        if(m.mdns_en_cours) p.appendChild(el('span', null, 'Recherche des services en cours…'));
+        if(x.st === 401 || x.st === 403){ $('session').hidden = false; sansMesure('Connexion requise', 'Ouvrez une session SecuBox pour voir l’état de votre réseau en IPv6.', '🔒', 'neutre', 'SESSION REQUISE'); }
+        else if(x.st !== 200){ sansMesure('Indisponible', 'Le service ne répond pas pour le moment.', '⚪', 'hors', 'HORS LIGNE'); }
+        else rend(x.d);
+        annoncer();
       })
-      .catch(function(){ $('titre').textContent = 'Indisponible'; $('expl').textContent = 'Le service est injoignable.'; $('pict').textContent = '⚪'; });
+      .catch(function(){ sansMesure('Indisponible', 'Le service est injoignable.', '⚪', 'hors', 'HORS LIGNE'); annoncer(); });
   }
   $('plus').onclick = function(){
     var z = $('liste'); var ouvert = z.hidden; z.hidden = !ouvert;
     this.setAttribute('aria-expanded', ouvert ? 'true' : 'false'); this.textContent = ouvert ? 'Masquer les appareils' : 'Voir les appareils';
+    annoncer();
   };
+  $('rafraichir').onclick = charge;
+
+  // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer(){
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet:'ipv6guard'}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+
   charge();
-  setInterval(charge, 60000);
+  setInterval(function(){ if(!document.hidden && !DEMO) charge(); }, 60000);
 })();
 </script>
+</body>
+</html>

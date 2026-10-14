@@ -5,82 +5,146 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1238 — cardlet Freebox TV. Grille des chaînes (playlist de base,
-  variante standard) + lecteur HLS. Les chaînes sont exposées en RTSP par la
-  Freebox ; le daemon secubox-freeboxtv interpose un sas ffmpeg RTSP→HLS
-  on-demand (/api/v1/freeboxtv/*). Un navigateur ne lit pas le HLS nativement
-  (hors Safari) → hls.js (same-origin, /hls.min.js). MSE → flux blob: (la CSP de
-  cette carte l'autorise, cf. hall.vhost.conf). Données réelles, usage perso LAN.
+  SecuBox #1238 — carte « Freebox TV » du Hall, au profil Aurora (.claude/AURORA-REFERENCE.md, #2659).
+
+  Grille des chaînes (playlist de base, variante standard) + lecteur HLS. Les chaînes sont exposées en RTSP par la
+  Freebox ; le daemon secubox-freeboxtv interpose un sas ffmpeg RTSP→HLS on-demand (/api/v1/freeboxtv/*). Un navigateur
+  ne lit pas le HLS nativement (hors Safari) → hls.js (même origine, /hls.min.js). MSE → flux blob: (la CSP de cette carte
+  l'autorise, cf. hall.vhost.conf). Données réelles, usage perso LAN. LECTURE SEULE côté API (un seul GET).
+  Le MÉCANISME DE LECTURE (hls.js, autoplay muet, reprises sur erreur réseau/média) est repris à l'identique de l'ancienne carte.
+  ?demo=1 : chaînes fictives, lecture inerte (aucun flux demandé). Mesure absente = « — ». Tout texte venu du serveur passe par textContent.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Freebox TV</title>
 <style>
-  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
-         --line-2:#c5cfd7; --panel:#ffffff; --soft:#f5f7fc; --cyan:#0784a8; --hot:#d64545; }
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
-    --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --hot:#ff6a6a; } }
-  :root[data-theme="dark"]{ --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779;
-    --line:#232b3b; --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --hot:#ff6a6a; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;overflow:hidden}
-  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
-  .mw{display:flex;flex-direction:column;height:100%;padding:.5rem .6rem;gap:.45rem}
-  .h{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:6px;flex:0 0 auto}
-  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
-    background:linear-gradient(90deg,var(--hot),#e0b46a,var(--cyan))}
-  .h .ic{font-size:1.05rem} .h b{font-size:.9rem;letter-spacing:.02em}
-  .h .now{margin-left:auto;font-size:.6rem;color:var(--faint);white-space:nowrap;overflow:hidden;
-    text-overflow:ellipsis;max-width:45%}
-  /* Lecteur 16:9, masqué tant qu'aucune chaîne n'est choisie. */
-  .screen{flex:0 0 auto;position:relative;background:#000;border:1px solid var(--line);border-radius:10px;
-    overflow:hidden;aspect-ratio:16/9;display:none}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:disabled{opacity:.5;cursor:default}
+  .btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.danger{border-color:var(--rouge);color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(var(--n,2),minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nl,4),minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  body.dans .tuile{padding:7px 9px;gap:3px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  body.dans .tuile .v{font-size:1.2rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.mal .v{color:var(--rouge)} .tuile.nul .v{color:var(--faible)} .tuile.nul{border-style:dashed}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 13px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .retour.ko{border-color:var(--rouge);color:var(--rouge)}
+  .msg{padding:12px;margin-top:8px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .msg .btn{margin:6px 0 0 .6rem}
+  input[type=search],input[type=text],input[type=url]{font:inherit;font-size:.8rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.8);color:var(--texte);min-width:0;min-height:34px}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  .screen{position:relative;background:#000;border:1px solid var(--trait);border-radius:10px;overflow:hidden;aspect-ratio:16/9;display:none;margin-bottom:8px}
   .screen.on{display:block}
   .screen video{width:100%;height:100%;display:block;background:#000}
-  /* pointer-events:none — l'overlay NE DOIT PAS voler les clics aux contrôles
-     natifs de la vidéo (play/volume/plein écran) juste en dessous. */
-  .screen .spin{position:absolute;inset:0;display:grid;place-items:center;color:#9fb0c4;font-size:.7rem;
-    letter-spacing:.1em;text-transform:uppercase;pointer-events:none;text-align:center;padding:0 12px}
+  /* pointer-events:none — l'overlay NE DOIT PAS voler les clics aux contrôles natifs de la vidéo (play/volume/plein écran). */
+  .screen .spin{position:absolute;inset:0;display:grid;place-items:center;color:var(--doux);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;pointer-events:none;text-align:center;padding:0 12px}
   .screen .spin.off{display:none}
-  .filtre{flex:0 0 auto}
-  .filtre input{width:100%;font:inherit;font-size:.8rem;padding:5px 9px;border-radius:8px;
-    border:1px solid var(--line);background:var(--soft);color:var(--texte)}
-  .grille{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));
-    gap:6px;align-content:start;scrollbar-width:thin}
-  .ch{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;
-    background:var(--soft);cursor:pointer;text-align:left;font:inherit;color:var(--texte);transition:.12s;min-width:0}
-  .ch:hover{border-color:var(--line-2)}
-  .ch.on{border-color:var(--cyan);box-shadow:0 0 0 1px color-mix(in srgb,var(--cyan) 30%,transparent)}
-  .ch .lcn{flex:0 0 auto;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;font-weight:700;
-    color:var(--cyan);min-width:20px;text-align:right}
-  .ch .nm{flex:1;min-width:0;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .vide{color:var(--faint);font-size:.74rem;padding:14px;text-align:center;grid-column:1/-1}
+  .filtre input{width:100%}
+  .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;align-content:start;margin-top:8px;max-height:min(46vh,360px);overflow-y:auto;scrollbar-width:thin}
+  .ch{display:flex;align-items:center;gap:6px;border:1px solid var(--trait);border-radius:8px;padding:5px 8px;min-height:34px;background:rgba(18,40,78,.5);cursor:pointer;text-align:left;font:inherit;color:var(--texte);min-width:0}
+  .ch:hover{border-color:var(--cyan)}
+  .ch.on{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+  .ch .lcn{flex:0 0 auto;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.68rem;font-weight:700;color:var(--cyan);min-width:22px;text-align:right;font-variant-numeric:tabular-nums}
+  .ch .nm{flex:1;min-width:0;font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="m9 3 3 3 3-3M9 21h6"/></svg>
+      <div><h1>Freebox TV</h1><small>Les chaînes de la Freebox, lues par la box</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune chaîne réelle, lecture inerte</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
 
-<div class="mw">
-  <div class="h"><span class="ic">📺</span><b>Freebox TV</b><span class="now" id="now"></span></div>
-  <div class="screen" id="screen">
-    <video id="v" playsinline controls></video>
-    <div class="spin" id="spin">● connexion…</div>
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Nombre de chaînes de la playlist de base annoncées par le service Freebox TV."><span class="l">Chaînes</span><span class="v" id="tNb">—</span><span class="s">dans la playlist</span></div>
+    <div class="tuile cy" title="Nombre de chaînes qui correspondent au filtre saisi (toutes si le filtre est vide)."><span class="l">Affichées</span><span class="v" id="tAff">—</span><span class="s">selon le filtre</span></div>
+    <div class="tuile cy" title="Chaîne actuellement ouverte dans le lecteur de cette carte."><span class="l">En lecture</span><span class="v long" id="tLecture">—</span><span class="s" id="now">aucune chaîne choisie</span></div>
+    <div class="tuile cy" title="Lecteur disponible dans ce navigateur : hls.js (MSE), HLS natif (Safari) ou aucun."><span class="l">Lecteur</span><span class="v long" id="tLecteur">—</span><span class="s">HLS dans ce navigateur</span></div>
+  </section>
+
+  <div class="pan"><h3>Lecteur <i>sas ffmpeg RTSP→HLS à la demande</i></h3>
+    <div class="screen" id="screen">
+      <video id="v" playsinline controls></video>
+      <div class="spin" id="spin">● connexion…</div>
+    </div>
+    <div class="retour" id="retour" role="status" hidden></div>
+    <p class="note">La lecture démarre muette (un navigateur refuse le son sans geste direct) : rétablis le son avec les commandes du lecteur.</p>
   </div>
-  <div class="filtre"><input id="q" type="search" placeholder="filtrer une chaîne… (177)" autocomplete="off"></div>
-  <div class="grille" id="grille"><div class="vide">Chargement des chaînes…</div></div>
-</div>
 
+  <div class="pan"><h3>Chaînes <i>GET /api/v1/freeboxtv/channels</i></h3>
+    <div class="filtre"><input id="q" type="search" placeholder="filtrer une chaîne…" aria-label="Filtrer une chaîne" autocomplete="off"></div>
+    <div class="msg" id="msg" role="status" hidden></div>
+    <div class="grille" id="grille" aria-label="Chaînes"></div>
+  </div>
+</div></div>
 <script src="../sonde.js"></script>
 <script src="/hls.min.js"></script>
 <script>
 (function(){
   "use strict";
   var el=function(i){return document.getElementById(i);};
-  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
   var API='/api/v1/freeboxtv', v=el('v'), hls=null, CHANS=[], cur=null;
+  var Q=new URLSearchParams(location.search), DEMO=!!Q.get('demo');
+  if(Q.get('embed')) document.body.classList.add('emb');
+  try{ if(window.top!==window) document.body.classList.add('dans'); }catch(e){ document.body.classList.add('dans'); }
 
-  // Thème (comme les autres cardlets) : ?theme= puis postMessage.
-  (function(){ var t=new URLSearchParams(location.search).get('theme');
-    if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
-  addEventListener('message',function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+  function pastille(cls,t){ var e=el('etat'); e.className='actif '+cls; e.textContent=t; }
+  function retour(t,ko){ var r=el('retour'); r.hidden=false; r.className='retour'+(ko?' ko':''); r.textContent=t; }
+  function message(t,err,reessai){
+    var m=el('msg'); m.hidden=false; m.className='msg'+(err?' err':''); m.textContent=t;
+    if(reessai){ var b=document.createElement('button'); b.type='button'; b.className='btn'; b.textContent='Réessayer'; b.onclick=charger; m.appendChild(b); }
+  }
+  function tuiles(){
+    el('tNb').textContent=CHANS.length?String(CHANS.length):'—';
+    el('tAff').textContent=CHANS.length?String(el('grille').querySelectorAll('.ch').length):'—';
+    var c=null; CHANS.forEach(function(x){ if(x.id===cur) c=x; });
+    el('tLecture').textContent=c?c.name:'—';
+    el('now').textContent=c?('n° '+c.lcn):'aucune chaîne choisie';
+    el('tLecteur').textContent=(window.Hls&&Hls.isSupported())?'hls.js':(v.canPlayType&&v.canPlayType('application/vnd.apple.mpegurl'))?'HLS natif':'absent';
+  }
 
   function stop(){ if(hls){ try{hls.destroy();}catch(e){} hls=null; } try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){} }
 
@@ -102,7 +166,9 @@
   }
 
   function joue(ch){
-    cur=ch.id; rendActive(); el('now').textContent=ch.name;
+    cur=ch.id; rendActive(); tuiles();
+    if(DEMO){ retour('Démonstration : lecture inerte, aucun flux n’est demandé.'); pastille('att','DÉMONSTRATION'); annoncer(); return; }
+    el('retour').hidden=true; pastille('cy','LECTURE');
     el('screen').classList.add('on'); spin('● connexion…');
     stop();
     var url=ch.hls;
@@ -131,37 +197,74 @@
     } else {
       spin('lecteur HLS indisponible (hls.js absent)');
     }
+    annoncer();
   }
 
   function rendActive(){ var b=el('grille').querySelectorAll('.ch'); for(var i=0;i<b.length;i++) b[i].classList.toggle('on', b[i].dataset.id===cur); }
 
   function rendGrille(list){
-    var g=el('grille');
-    if(!list.length){ g.innerHTML='<div class="vide">Aucune chaîne.</div>'; return; }
-    g.innerHTML='';
+    var g=el('grille'); g.textContent='';
+    if(!list.length){ var d=document.createElement('div'); d.className='msg'; d.style.gridColumn='1/-1'; d.textContent='Aucune chaîne.'; g.appendChild(d); tuiles(); return; }
     list.forEach(function(c){
-      var b=document.createElement('button'); b.className='ch'+(c.id===cur?' on':''); b.dataset.id=c.id;
-      b.innerHTML='<span class="lcn">'+c.lcn+'</span><span class="nm">'+esc(c.name)+'</span>';
+      var b=document.createElement('button'); b.type='button'; b.className='ch'+(c.id===cur?' on':''); b.dataset.id=c.id;
+      var l=document.createElement('span'); l.className='lcn'; l.textContent=c.lcn;
+      var n=document.createElement('span'); n.className='nm'; n.textContent=c.name; n.title=c.name;
+      b.appendChild(l); b.appendChild(n);
       b.addEventListener('click',function(){ joue(c); });
       g.appendChild(b);
     });
+    tuiles();
   }
-
-  el('q').addEventListener('input',function(){
+  function filtre(){
     var q=el('q').value.trim().toLowerCase();
     rendGrille(!q?CHANS:CHANS.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)>=0 || String(c.lcn)===q;}));
-  });
+  }
+  el('q').addEventListener('input',function(){ filtre(); annoncer(); });
 
-  fetch(API+'/channels',{headers:{'Accept':'application/json'}})
-    .then(function(r){return r.ok?r.json():null;})
-    .then(function(j){
-      CHANS=(j&&j.channels)||[];
-      el('q').placeholder='filtrer une chaîne… ('+CHANS.length+')';
-      rendGrille(CHANS);
-    })
-    .catch(function(){ el('grille').innerHTML='<div class="vide">Service Freebox TV injoignable.</div>'; });
+  // Données fictives (démonstration) : noms inventés, aucune requête.
+  function demoChaines(){
+    var n=['Cinéma Libre','Atelier TV','Cours Libres','Géographie Vivante','Scène Ouverte','Actualités Démo','Jeunesse Démo','Musique Démo','Nature Démo','Sport Démo','Documentaires Démo','Régions Démo'];
+    return n.map(function(x,i){ return {id:'demo-'+(i+1), lcn:i+1, name:x, hls:''}; });
+  }
+
+  function charger(){
+    el('maj').textContent='Relevé '+new Date().toLocaleTimeString('fr-FR');
+    el('msg').hidden=true; el('session').hidden=true;
+    if(DEMO){
+      el('demo').hidden=false; CHANS=demoChaines(); pastille('att','DÉMONSTRATION');
+      el('q').placeholder='filtrer une chaîne… ('+CHANS.length+')'; filtre(); annoncer(); return;
+    }
+    pastille('neutre','Chargement…');
+    fetch(API+'/channels',{headers:{'Accept':'application/json'}})
+      .then(function(r){
+        if(r.status===401||r.status===403){ pastille('neutre','SESSION REQUISE'); el('session').hidden=false; message('Connexion requise : ouvre une session SecuBox pour voir les chaînes.',false); CHANS=[]; el('grille').textContent=''; tuiles(); return null; }
+        if(!r.ok){ pastille('hors','HORS LIGNE'); message('Service Freebox TV injoignable.',true,true); return null; }
+        return r.json();
+      })
+      .then(function(j){
+        if(!j) return;
+        CHANS=(j&&j.channels)||[];
+        el('q').placeholder='filtrer une chaîne… ('+CHANS.length+')';
+        pastille(CHANS.length?'':'neutre', CHANS.length?'PRÊT':'AUCUNE CHAÎNE');
+        filtre(); annoncer();
+      })
+      .catch(function(){ pastille('hors','HORS LIGNE'); message('Service Freebox TV injoignable.',true,true); annoncer(); });
+  }
+  el('rafraichir').onclick=charger;
 
   // Libère le sas en quittant (le reaper le tuerait de toute façon après inactivité).
   addEventListener('pagehide', stop);
+
+  // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer(){
+    try{ parent.postMessage({sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet:'freeboxtv'}, location.origin); }catch(e){ /* hors iframe */ }
+  }
+  if(window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+
+  tuiles();
+  charger();
 })();
 </script>
+</body>
+</html>

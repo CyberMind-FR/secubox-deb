@@ -5,176 +5,150 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1323 — carte « Mes sites » : une à la une, les autres en bande.
+  SecuBox #1323 — carte « Mes sites » du Hall, au profil Aurora (.claude/AURORA-REFERENCE.md, #2659) : une à la une, les autres en bande.
 
-  MÊME GRAMMAIRE QUE PEERTUBE. Une grande vignette qui tourne, une bande de
-  suivantes en dessous, et la barre à pastilles en pied pour changer de tri.
-  Un damier figé de 162 tuiles ne dit pas qu'un parc VIT ; c'est la rotation
-  qui le montre, et le survol qui la suspend — on ne lit pas un titre qui
-  s'échappe.
+  MÊME GRAMMAIRE QUE PEERTUBE. Une grande vignette qui tourne, une bande de suivantes en dessous, et des pastilles pour changer de
+  tri. Un damier figé de 162 tuiles ne dit pas qu'un parc VIT ; c'est la rotation qui le montre, et le survol qui la suspend —
+  on ne lit pas un titre qui s'échappe.
 
-  ELLE MONTRE CE QUI EST SERVI, ET RIEN D'AUTRE. Source unique :
-  /api/v1/metablogizer/public/mosaique — projection étroite des sites PUBLIÉS,
-  c'est-à-dire ceux que n'importe qui peut déjà ouvrir. Ni chemin sur disque,
-  ni brouillon, ni dépôt d'origine.
+  ELLE MONTRE CE QUI EST SERVI, ET RIEN D'AUTRE. Source unique : /api/v1/metablogizer/public/mosaique — projection étroite des
+  sites PUBLIÉS, c'est-à-dire ceux que n'importe qui peut déjà ouvrir. Ni chemin sur disque, ni brouillon, ni dépôt d'origine.
+  LECTURE SEULE (un GET) ; les aperçus sont les captures déjà servies (/api/v1/metablogizer/site/<nom>/screenshot).
 
-  CLIQUER OUVRE LE SITE DANS UN ONGLET (lien direct). Il passait par le Surfer
-  (`{sbx:'surf', url}`), dont le relais refuse justement les adresses de la box :
-  « Cette adresse mène à la box ou à son réseau local ». En session, un ⚙ par
-  vignette mène à la vue détail en mode édition.
+  CLIQUER OUVRE LE SITE DANS UN ONGLET (lien direct). Il passait par le Surfer ({sbx:'surf', url}), dont le relais refuse
+  justement les adresses de la box. En session, un ⚙ mène à la vue détail en mode édition (ouverture d'un onglet, aucune écriture).
+  Les quatre tris et le mode ?mega=1 (page qui se déroule) sont repris de l'ancienne carte ; la barre de pastilles partagée
+  (slicebar) est remplacée par des pastilles propres à la carte, le choix est mémorisé (localStorage, protégé).
+  ?demo=1 : sites fictifs sans capture, aucune requête, ouvertures inertes. Mesure absente = « — ».
 -->
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mes sites — mosaïque</title>
-<link rel="stylesheet" href="../spicy.css">
-<link rel="stylesheet" href="../slicebar.css">
-<script src="/api/v1/webos/public/hotes.js"></script>
-<script src="../domaine.js"></script>
-<script src="../sonde.js"></script>
-<script src="../slicebar.js"></script>
 <style>
-  [hidden]{display:none!important}   /* un `display:block|grid` d'auteur ne doit pas annuler `hidden` (#2146) */
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
-          --accent:#3d6b4a; --cyan:#0784a8; --chaud:#c8791f; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#6db38a; --cyan:#38d2f0; --chaud:#e0a45c; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#6db38a; --cyan:#38d2f0; --chaud:#e0a45c; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
-  body { background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
-  /* MEGA : la page se déroule. Le marqueur est posé sur <html> AUSSI, parce
-     qu'un sélecteur `body[data-mega] html` ne peut rien atteindre — html est
-     le PARENT de body. Posé sur body seul, l'ancien `overflow:hidden` de
-     <html> tenait bon et la grille dépliée restait invisible sous le pli. */
-  html[data-mega], html[data-mega] body { overflow:auto; height:auto; }
-
-  /* LA CARTE S'ADAPTE À SA HAUTEUR, ELLE NE LA DICTE PAS. Le Hall lui donne
-     300 px ; une « une » en 16/9 sur 460 px de large en mange 259, plus
-     l'en-tête : la bande et la barre à pastilles passaient sous le pli et
-     `overflow:hidden` les coupait. Elles étaient bien dans le DOM — le
-     journal nginx montrait les 2 287 vignettes demandées — simplement hors
-     champ. D'où : en-tête, bande et barre à hauteur FIXE, la une prend ce
-     qui reste. `min-height:0` est indispensable, sans quoi un enfant flex
-     refuse de rétrécir sous sa taille de contenu. */
-  .mw { display:flex; flex-direction:column; height:100%; min-height:0;
-        padding:.6rem .72rem .2rem; gap:.42rem; }
-  html[data-mega] .mw { height:auto; min-height:100%; padding:1rem 1.1rem .2rem; gap:.62rem; }
-  .tete, .bande, #sbxbar { flex:0 0 auto; }
-
-  .tete { display:flex; align-items:center; gap:.45rem; }
-  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
-              font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
-  .tete b { font-size:.88rem; }
-  html[data-mega] .tete b { font-size:1.05rem; }
-  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em; text-transform:uppercase;
-             color:var(--muted); font-variant-numeric:tabular-nums; }
-
-  /* À LA UNE — la grande vignette. Le titre repose SUR l'image, en bas, sur un
-     voile : une bande de texte sous l'image aurait mangé la hauteur utile. */
-  .une { position:relative; display:block; width:100%; border:1px solid var(--border);
-         border-radius:11px; overflow:hidden; background:var(--fond); padding:0;
-         cursor:pointer; font:inherit; color:inherit; text-align:left;
-         flex:1 1 auto; min-height:76px; }
-  .une:hover, .une:focus-visible { border-color:var(--cyan); outline:none; }
-  .une img { display:block; width:100%; height:100%; object-fit:cover;
-             object-position:top center; background:color-mix(in srgb, var(--muted) 12%, transparent); }
-  /* En MEGA la page défile : la une reprend un format d'affiche plutôt que
-     d'étirer une capture sur toute la hauteur disponible. */
-  html[data-mega] .une { flex:0 0 auto; }
-  html[data-mega] .une img { height:auto; aspect-ratio:21/9; }
-  .une .voile { position:absolute; left:0; right:0; bottom:0; padding:.55rem .6rem .45rem;
-                background:linear-gradient(180deg, transparent, rgba(0,0,0,.72)); color:#fff; }
-  .une .t { display:block; font-size:.82rem; font-weight:600; line-height:1.25;
-            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  html[data-mega] .une .t { font-size:1rem; }
-  .une .d { display:block; font-family:"JetBrains Mono",ui-monospace,monospace;
-            font-size:.58rem; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-  /* LA BANDE — les suivantes. Hauteur FIXE : c'est elle qui garantit que la bande survit au partage de
-     la carte. Elle défile horizontalement plutôt que de se tasser — une
-     vignette de 40 px ne montre plus rien. */
-  .bande { display:flex; gap:.36rem; height:64px; overflow-x:auto; overflow-y:hidden;
-           scrollbar-width:none; padding-bottom:.1rem; }
-  .bande::-webkit-scrollbar { height:0; display:none; }
-  html[data-mega] .bande { flex-wrap:wrap; overflow:visible; height:auto; gap:.62rem; }
-  .vig { position:relative; flex:0 0 auto; width:76px; height:100%;
-         display:flex; flex-direction:column; border:1px solid var(--border);
-         border-radius:8px; overflow:hidden; background:var(--fond); padding:0;
-         cursor:pointer; font:inherit; color:inherit; text-align:left; }
-  html[data-mega] .vig { width:170px; height:auto; }
-  .vig:hover, .vig:focus-visible { border-color:var(--cyan); outline:none; }
-  .vig img { display:block; width:100%; flex:1 1 auto; min-height:0; object-fit:cover;
-             object-position:top center; background:color-mix(in srgb, var(--muted) 12%, transparent); }
-  html[data-mega] .vig img { flex:0 0 auto; aspect-ratio:16/10; }
-  .vig .l { display:block; flex:0 0 auto; padding:.16rem .3rem .22rem; font-size:.55rem;
-            font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  html[data-mega] .vig .l { font-size:.72rem; padding:.3rem .42rem .38rem; }
-
-  /* Pas encore de capture : une plaque sobre plutôt qu'une image cassée —
-     162 sites ne se photographient pas en un tour de shotter. */
-  .sans { display:grid; place-items:center; width:100%; flex:1 1 auto; min-height:0;
-          font-size:1rem; color:var(--muted);
-          background:color-mix(in srgb, var(--muted) 9%, transparent); }
-  .une .sans { height:100%; font-size:1.6rem; }
-  html[data-mega] .sans { flex:0 0 auto; aspect-ratio:16/10; }
-  html[data-mega] .une .sans { height:auto; aspect-ratio:21/9; }
-
-  /* ACCÈS ADMIN, DISCRET ET CONDITIONNEL. Visible seulement en session : un
-     invité n'a rien à faire d'un bouton qui le mènerait à une connexion. */
-  .reglage { position:absolute; top:.3rem; right:.3rem; display:none;
-             width:24px; height:24px; border-radius:7px; border:1px solid var(--border);
-             background:color-mix(in srgb, var(--fond) 80%, transparent);
-             color:var(--muted); font-size:.72rem; line-height:1; cursor:pointer;
-             padding:0; align-items:center; justify-content:center; }
-  html[data-admin] .une .reglage { display:flex; }
-  .reglage:hover, .reglage:focus-visible { color:var(--chaud); border-color:var(--chaud); outline:none; }
-
-  .etat { color:var(--muted); font-size:.72rem; text-align:center; margin:auto 0; }
-  #sbxbar { margin-top:0; }
-  html[data-mega] #sbxbar { margin-top:1rem; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:disabled{opacity:.5;cursor:default}
+  .btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.danger{border-color:var(--rouge);color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(var(--n,2),minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nl,4),minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  body.dans .tuile{padding:7px 9px;gap:3px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  body.dans .tuile .v{font-size:1.2rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.mal .v{color:var(--rouge)} .tuile.nul .v{color:var(--faible)} .tuile.nul{border-style:dashed}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 13px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .retour.ko{border-color:var(--rouge);color:var(--rouge)}
+  .msg{padding:12px;margin-top:8px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .msg .btn{margin:6px 0 0 .6rem}
+  input[type=search],input[type=text],input[type=url]{font:inherit;font-size:.8rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.8);color:var(--texte);min-width:0;min-height:34px}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  body.dans .tuiles{display:none}
+  .hero{position:relative}
+  .une{position:relative;display:block;width:100%;border:1px solid var(--trait2);border-radius:12px;overflow:hidden;background:rgba(8,18,38,.8);padding:0;cursor:pointer;font:inherit;color:inherit;text-align:left;aspect-ratio:16/9;max-height:300px}
+  .une:hover{border-color:var(--cyan)}
+  .une img{display:block;width:100%;height:100%;object-fit:cover;object-position:top center}
+  .une .voile{position:absolute;left:0;right:0;bottom:0;padding:22px 12px 8px;background:linear-gradient(180deg,transparent,rgba(3,8,18,.88));color:#fff;display:block}
+  .une .t{display:block;font-size:.9rem;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .une .d{display:block;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.68rem;color:var(--doux);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sans{display:grid;place-items:center;width:100%;height:100%;font-size:1.6rem;color:var(--faible);background:linear-gradient(160deg,rgba(41,182,246,.12),rgba(8,18,38,.9))}
+  .reglage{position:absolute;top:8px;right:8px;display:none;width:34px;height:34px;border-radius:8px;border:1px solid var(--trait2);background:rgba(6,13,27,.85);color:var(--doux);font-size:.9rem;line-height:1;cursor:pointer;padding:0;align-items:center;justify-content:center}
+  html[data-admin] .reglage{display:flex}
+  .reglage:hover{color:var(--orange);border-color:var(--orange)}
+  .bande{display:flex;gap:8px;height:84px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;margin-top:10px;padding-bottom:4px}
+  .vig{position:relative;flex:0 0 auto;width:104px;height:100%;display:flex;flex-direction:column;border:1px solid var(--trait);border-radius:8px;overflow:hidden;background:linear-gradient(160deg,rgba(41,182,246,.12),rgba(8,18,38,.9));padding:0;cursor:pointer;font:inherit;color:inherit;text-align:left}
+  .vig:hover{border-color:var(--cyan)}
+  .vig img{display:block;width:100%;flex:1 1 auto;min-height:0;object-fit:cover;object-position:top center;background:rgba(159,179,214,.1)}
+  .vig .l{display:block;flex:0 0 auto;padding:3px 6px 4px;font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* MEGA : la page se déroule, la bande passe à la ligne. */
+  html[data-mega] .une{max-height:none;aspect-ratio:21/9}
+  html[data-mega] .bande{flex-wrap:wrap;overflow:visible;height:auto}
+  html[data-mega] .vig{width:170px;height:auto}
+  html[data-mega] .vig img{flex:0 0 auto;aspect-ratio:16/10}
+  html[data-mega] .vig .l{font-size:.74rem}
 </style>
 </head>
 <body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+      <div><h1>Mes sites</h1><small>Les sites publiés par la box</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Lecture…</span>
+    <div class="droite"><span id="n"></span><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucun site réel, ouvertures inertes</div>
 
-<div class="mw">
-  <div class="tete">
-    <span class="ic">🌐</span><b>Mes sites</b>
-    <span class="n" id="n"></span>
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Sites publiés que n'importe qui peut déjà ouvrir (projection publique de MetaBlogizer)."><span class="l">Sites</span><span class="v" id="tSites">—</span><span class="s">publiés</span></div>
+    <div class="tuile ok" title="Sites dont une capture d'écran est déjà prise par le shotter."><span class="l">Illustrés</span><span class="v" id="tAvec">—</span><span class="s">avec capture</span></div>
+    <div class="tuile att" title="Sites sans capture pour l'instant : la mosaïque se relit toutes les cinq minutes tant qu'il en manque."><span class="l">Sans aperçu</span><span class="v" id="tSans">—</span><span class="s">capture à venir</span></div>
+    <div class="tuile cy" title="Tri choisi parmi les quatre lectures du même parc."><span class="l">Tri</span><span class="v long" id="tTri">—</span><span class="s">lecture du parc</span></div>
+  </section>
+
+  <div class="pan"><h3>À la une <i>GET /api/v1/metablogizer/public/mosaique</i></h3>
+    <div class="onglets" role="tablist" aria-label="Tri des sites" id="onglets"></div>
+    <div class="hero" id="hero" hidden style="margin-top:10px">
+      <button type="button" class="une" id="une">
+        <img id="une-img" alt="" hidden>
+        <span class="sans" id="une-sans" hidden aria-hidden="true">🗒️</span>
+        <span class="voile"><span class="t" id="une-t"></span><span class="d" id="une-d"></span></span>
+      </button>
+      <button type="button" class="reglage" id="une-reg" title="Réglages du site (vue détail, édition)" aria-label="Réglages du site">⚙</button>
+    </div>
+    <div class="bande" id="bande"></div>
+    <div class="retour" id="retour" role="status" hidden></div>
+    <div class="msg" id="etatmsg" role="status">lecture…</div>
   </div>
-
-  <button type="button" class="une" id="une" hidden>
-    <img id="une-img" alt="">
-    <span class="sans" id="une-sans" hidden aria-hidden="true">🗒️</span>
-    <span class="voile"><span class="t" id="une-t"></span><span class="d" id="une-d"></span></span>
-    <span class="reglage" id="une-reg" title="Réglages du site (vue détail, édition)">⚙</span>
-  </button>
-
-  <div class="bande" id="bande"></div>
-  <p class="etat" id="etat">lecture…</p>
-  <div id="sbxbar"></div>
-</div>
-
+</div></div>
+<script src="/api/v1/webos/public/hotes.js"></script>
+<script src="../domaine.js"></script>
+<script src="../sonde.js"></script>
 <script>
 (function () {
   "use strict";
   var el = function (id) { return document.getElementById(id); };
 
   var q = new URLSearchParams(location.search);
-  var MEGA = q.get("mega") === "1";
+  var MEGA = q.get("mega") === "1", DEMO = !!q.get("demo");
   if (MEGA) { document.documentElement.setAttribute("data-mega", ""); }
-  // Le thème vient du Hall : la carte ne décide pas seule de son fond, sinon
-  // elle jure avec le cadre qui la porte.
-  var th = q.get("theme");
-  if (th === "dark" || th === "light") {
-    document.documentElement.setAttribute("data-theme", th);
-  }
+  if (q.get("embed")) document.body.classList.add("emb");
+  try { if (window.top !== window) document.body.classList.add("dans"); } catch (e) { document.body.classList.add("dans"); }
 
   // SESSION : le jeton du Hall vit dans localStorage, même origine. On ne s'en
   // sert pas pour appeler — seulement pour savoir s'il y a lieu de PROPOSER
@@ -188,48 +162,54 @@
   var ADMIN = SBX_DOMAINE.admin;   // #1493
   var SHOT = "/api/v1/metablogizer/site/";
 
-  // TRIS — plusieurs lectures du MÊME parc, choisies par la barre à pastilles
-  // en pied. Rien n'est inventé : tout sort de la même projection publique.
+  // TRIS — plusieurs lectures du MÊME parc, choisies par les pastilles. Rien n'est inventé : tout sort de la même projection publique.
   var TRIS = [
     { lab: "🆕 Récents",  tri: function (a, b) { return (b.last_updated || "").localeCompare(a.last_updated || ""); } },
     { lab: "🖼️ Illustrés", tri: function (a, b) { return (b.vignette - a.vignette) || a.name.localeCompare(b.name); } },
     { lab: "🔤 A–Z",      tri: function (a, b) { return a.name.localeCompare(b.name); } },
     { lab: "🕳️ Sans aperçu", tri: function (a, b) { return (a.vignette - b.vignette) || a.name.localeCompare(b.name); } }
   ];
+  var CLE_TRI = "sbx.metablog.tri";
 
-  var tous = [], liste = [], i = 0, pause = false, battement = null;
+  var tous = [], liste = [], i = 0, pause = false, battement = null, manquantes = 1, courant = 0;
   var SUIVANTES = MEGA ? 400 : 10;
+
+  function pastille(cls, t) { var e = el("etat"); e.className = "actif " + cls; e.textContent = t; }
+  function retour(t) { var r = el("retour"); r.hidden = false; r.textContent = t; }
 
   // LIEN DIRECT, PAS LE SURFER. Le relais de Surf refuse les adresses de la box
   // (« cette adresse mène à la box ou à son réseau local ») — or un site publié ici
   // est justement servi par la box. On l'ouvre donc dans un onglet, comme n'importe
   // quel lien.
   function ouvrir(s) {
+    if (DEMO) { retour("Démonstration : ouverture inerte, aucun site réel."); return; }
     window.open("https://" + s.domain + "/", "_blank", "noopener");
   }
   function reglages(s) {
+    if (DEMO) { retour("Démonstration : ouverture inerte, aucun site réel."); return; }
     // La vue détail EN ÉDITION : `edit=1` déplie le formulaire et y pose le
     // curseur, au lieu de laisser chercher en bas de page.
     window.open(ADMIN + "/metablogizer/site.html?name=" + encodeURIComponent(s.name) + "&edit=1",
       "_blank", "noopener");
   }
+  function capture(s) { return (DEMO || !s.vignette) ? "" : SHOT + encodeURIComponent(s.name) + "/screenshot"; }
 
   function pose(n) {
     if (!liste.length) { return; }
     i = ((n % liste.length) + liste.length) % liste.length;
     var s = liste[i];
-    el("une").hidden = false;
+    el("hero").hidden = false;
     el("une-t").textContent = s.title;
     el("une-d").textContent = s.domain;
-    var img = el("une-img"), sans = el("une-sans");
-    if (s.vignette) {
-      img.src = SHOT + encodeURIComponent(s.name) + "/screenshot";
+    var img = el("une-img"), sans = el("une-sans"), src = capture(s);
+    if (src) {
+      img.src = src;
       img.hidden = false; sans.hidden = true;
     } else {
       img.removeAttribute("src"); img.hidden = true; sans.hidden = false;
     }
 
-    // ON RÉUTILISE LES BOUTONS AU LIEU DE LES RECRÉER. Reconstruire innerHTML à
+    // ON RÉUTILISE LES BOUTONS AU LIEU DE LES RECRÉER : reconstruire la bande à
     // chaque rotation DÉTRUIRAIT les <img> et les rechargerait : le temps du
     // chargement, la vignette serait vide — elles « disparaîtraient » par
     // intermittence. On ne change que ce qui bouge.
@@ -251,8 +231,8 @@
     while (bande.children.length > suite.length) { bande.removeChild(bande.lastChild); }
     for (k = 0; k < suite.length; k++) {
       (function (bt, s2) {
-        var im2 = bt.firstChild, src = s2.vignette ? (SHOT + encodeURIComponent(s2.name) + "/screenshot") : "";
-        if (src) { if (im2.getAttribute("src") !== src) { im2.setAttribute("src", src); } }
+        var im2 = bt.firstChild, src2 = capture(s2);
+        if (src2) { if (im2.getAttribute("src") !== src2) { im2.setAttribute("src", src2); } }
         else { im2.removeAttribute("src"); im2.style.visibility = "hidden"; }
         bt.lastChild.textContent = s2.title;
         bt.title = s2.title + " — " + s2.domain;
@@ -263,8 +243,11 @@
 
   function applique(k) {
     var t = TRIS[k] || TRIS[0];
+    courant = TRIS[k] ? k : 0;
     liste = tous.slice().sort(t.tri);
     i = 0;
+    el("tTri").textContent = t.lab;
+    Array.prototype.forEach.call(el("onglets").children, function (b, x) { b.setAttribute("aria-selected", x === courant ? "true" : "false"); });
     pose(0);
   }
 
@@ -284,21 +267,41 @@
     else if (d.sbx === "quitte" || d.sbx === "reprend") { pause = false; }
   });
   el("une").addEventListener("click", function () { if (liste[i]) { ouvrir(liste[i]); } });
-  el("une-reg").addEventListener("click", function (ev) {
-    // `stopPropagation` : sans lui, le clic traverse et OUVRE LE SITE
-    // par-dessus les réglages — deux actions pour un geste.
-    ev.stopPropagation();
-    if (liste[i]) { reglages(liste[i]); }
-  });
+  el("une-reg").addEventListener("click", function () { if (liste[i]) { reglages(liste[i]); } });
 
-  function panne(msg) {
-    el("etat").hidden = false;
-    el("etat").textContent = msg;
-    el("une").hidden = true;
+  function panne(msg, cls, texte) {
+    el("etatmsg").hidden = false; el("etatmsg").className = "msg" + (cls === "hors" ? " err" : "");
+    el("etatmsg").textContent = msg;
+    el("hero").hidden = true; el("bande").textContent = "";
     el("n").textContent = "";
+    ["tSites", "tAvec", "tSans"].forEach(function (x) { el(x).textContent = "—"; });
+    pastille(cls, texte);
+  }
+
+  function recoit(d) {
+    tous = (d && d.sites) || [];
+    if (!tous.length) { panne("aucun site publié pour l'instant.", "neutre", "AUCUN SITE"); return; }
+    el("etatmsg").hidden = true;
+    var avec = tous.filter(function (s) { return s.vignette; }).length;
+    manquantes = tous.length - avec;
+    el("n").textContent = tous.length + " sites · " + avec + " illustrés";
+    el("tSites").textContent = String(tous.length);
+    el("tAvec").textContent = String(avec);
+    el("tSans").textContent = String(manquantes);
+    pastille(manquantes ? "att" : "", manquantes ? "CAPTURES EN COURS" : "À JOUR");
+    applique(courant);
+    tourne();
+  }
+
+  // Données fictives (démonstration) : domaines de documentation (.example), aucune capture, aucune requête.
+  function demo() {
+    var noms = [["atelier", "Atelier du Lac"], ["carnet", "Carnet de route"], ["cuisine", "Cuisine de saison"], ["radio", "Radio Libre Démo"], ["jardin", "Le Jardin Partagé"], ["musee", "Petit Musée Numérique"]];
+    return { sites: noms.map(function (x, k) { return { name: x[0], title: x[1], domain: x[0] + ".example", last_updated: "2026-10-" + (10 + k), vignette: false }; }) };
   }
 
   function charge() {
+    el("maj").textContent = "Relevé " + new Date().toLocaleTimeString("fr-FR");
+    if (DEMO) { el("demo").hidden = false; recoit(demo()); return; }
     fetch("/api/v1/metablogizer/public/mosaique", { headers: { Accept: "application/json" } })
       .then(function (r) {
         var ct = r.headers.get("content-type") || "";
@@ -308,38 +311,38 @@
         if (!r.ok || ct.indexOf("application/json") === -1) { throw new Error("relais absent"); }
         return r.json();
       })
-      .then(function (d) {
-        tous = (d && d.sites) || [];
-        if (!tous.length) { panne("aucun site publié pour l'instant."); return; }
-        el("etat").hidden = true;
-        var avec = tous.filter(function (s) { return s.vignette; }).length;
-        manquantes = tous.length - avec;
-        el("n").textContent = tous.length + " sites · " + avec + " illustrés";
-        applique(courant);
-        tourne();
-      })
-      .catch(function (e) { panne("mosaïque injoignable (" + e.message + ")."); });
+      .then(recoit)
+      .catch(function (e) { panne("mosaïque injoignable (" + e.message + ").", "hors", "HORS LIGNE"); });
   }
 
-  // BARRE À PASTILLES — la bibliothèque partagée du Hall. Sans elle (page
-  // ouverte hors du Hall), on reste sur le premier tri : la carte marche,
-  // elle propose simplement moins.
-  var courant = 0;
-  if (typeof window.SBXSliceBar === "function") {
-    window.SBXSliceBar(el("sbxbar"), {
-      autoMs: 0, pauseOnHover: false, preview: false,
-      slices: TRIS.map(function (t) { return { label: t.lab }; }),
-      onShow: function (k) { courant = k; if (tous.length) { applique(k); } }
-    });
+  // PASTILLES DE TRI (remplacent la barre partagée du Hall).
+  try { var mem = parseInt(localStorage.getItem(CLE_TRI), 10); if (mem >= 0 && mem < TRIS.length) courant = mem; } catch (e) {}
+  TRIS.forEach(function (t, k) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "onglet"; b.setAttribute("role", "tab"); b.textContent = t.lab;
+    b.setAttribute("aria-selected", k === courant ? "true" : "false");
+    b.onclick = function () {
+      try { localStorage.setItem(CLE_TRI, String(k)); } catch (e) {}
+      if (tous.length) { applique(k); } else { courant = k; el("tTri").textContent = t.lab; Array.prototype.forEach.call(el("onglets").children, function (bb, x) { bb.setAttribute("aria-selected", x === k ? "true" : "false"); }); }
+    };
+    el("onglets").appendChild(b);
+  });
+  el("tTri").textContent = TRIS[courant].lab;
+  el("rafraichir").onclick = charge;
+
+  // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector(".cadre").getBoundingClientRect().bottom + scrollY), onglet: "metablog" }, location.origin); } catch (e) { /* hors iframe */ }
   }
+  if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener("resize", annoncer);
 
   // LA MOSAÏQUE NE REPREND QUE SI DES VIGNETTES MANQUENT (#1835, règle de
   // l'exploitant). Tant qu'il en manque, on repasse toutes les cinq minutes
   // (au rythme du shotter) ; toutes présentes, la carte ne sonde plus — le
   // prochain chargement du Hall suffit.
-  var manquantes = 1;
   charge();
-  setInterval(function () { if (manquantes > 0 && !document.hidden) charge(); }, 300000);
+  setInterval(function () { if (manquantes > 0 && !document.hidden && !DEMO) charge(); }, 300000);
 })();
 </script>
 </body>

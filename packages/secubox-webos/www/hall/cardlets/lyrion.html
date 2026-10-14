@@ -2,132 +2,153 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — carte LYRION (client Squeezebox/LMS dans le Hall).
+  SecuBox — carte LYRION (client Squeezebox/LMS dans le Hall), au profil Aurora (.claude/AURORA-REFERENCE.md, #2659).
 
-  Elle pilote les lecteurs Squeezebox/Squeezelite via l'API de contrôle du parc
-  (secubox-lyrion → JSON-RPC LMS), relayée en MÊME origine par le vhost du Hall
-  (/api/v1/lyrion/*). Lecture seule pour l'état (players / now-playing), et
-  transport/volume/power en POST — LAN-only, sans jeton (piloter n'est ni
-  destructif ni un redémarrage). Rien n'est inventé : tout vient de LMS.
+  Elle pilote les lecteurs Squeezebox/Squeezelite via l'API de contrôle du parc (secubox-lyrion → JSON-RPC LMS), relayée en
+  MÊME origine par le vhost du Hall (/api/v1/lyrion/*). Lecture seule pour l'état (players / now-playing), et
+  transport/volume/power en POST — LAN-only, sans jeton (piloter n'est ni destructif ni un redémarrage). Rien n'est inventé :
+  tout vient de LMS. Messages vers le Hall inchangés : media (ce qui joue), ouvre (interface complète) ; messages reçus
+  inchangés : cmd, cast. ?demo=1 : un lecteur fictif, commandes inertes, aucune requête ni message média.
+  Mesure absente = « — ». Tout texte venu du serveur passe par textContent.
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lyrion — vue micro</title>
-<link rel="stylesheet" href="../spicy.css">
 <style>
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#128a6f; --accent-2:#28d6ff; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#3ddba7; --accent-2:#28d6ff; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#3ddba7; --accent-2:#28d6ff; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
-  body { background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.4; }
-  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .7rem; gap:.5rem; }
-  .tete { display:flex; align-items:center; gap:.45rem; position:relative; padding-bottom:5px; }
-  .tete .ic { font-size:1rem; } .tete b { font-size:.88rem; }
-  .tete::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px;
-    background:linear-gradient(90deg,var(--accent),var(--accent-2),#f0b429); opacity:.9; }
-  .tete .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
-  .tete .dot.ok { background:var(--accent); box-shadow:0 0 8px var(--accent); }
-  .tete .sel { margin-left:auto; font-size:.62rem; color:var(--muted); background:none; border:0;
-               font-family:inherit; cursor:pointer; max-width:52%; text-align:right;
-               overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .tete .sel:hover { color:var(--accent); }
-
-  /* Now-playing : la pièce maîtresse. */
-  .np { flex:0 0 auto; display:flex; gap:.6rem; align-items:center; min-height:64px; }
-  .np .art { width:56px; height:56px; border-radius:12px; flex:0 0 auto; display:grid; place-items:center;
-             font-size:1.5rem; color:#fff; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
-  .np .art.on { animation:pulse 2.4s ease-in-out infinite; }
-  @keyframes pulse { 0%,100%{ box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 40%,transparent);} 50%{ box-shadow:0 0 0 6px transparent;} }
-  @media (prefers-reduced-motion:reduce){ .np .art.on{animation:none;} }
-  .np .info { min-width:0; flex:1; }
-  .np .tt { font-size:.9rem; font-weight:700; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .np .ss { font-size:.72rem; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .np .badge { display:inline-block; margin-top:3px; font-size:.56rem; letter-spacing:.08em; text-transform:uppercase;
-               color:var(--accent); font-weight:700; }
-
-  /* Transport + volume. */
-  .cmd { display:flex; align-items:center; gap:.4rem; }
-  .cmd button { width:34px; height:34px; border-radius:9px; border:1px solid var(--border);
-                background:var(--fond); color:var(--texte); display:grid; place-items:center;
-                font-size:.9rem; cursor:pointer; transition:.12s; }
-  .cmd button:hover { border-color:var(--accent); color:var(--accent); }
-  .cmd button.gros { width:40px; height:40px; font-size:1rem;
-                     background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#fff; border:0;
-                     box-shadow:0 6px 16px -6px var(--accent); }
-  .cmd button.pw.on { color:var(--accent); border-color:var(--accent); }
-  .cmd .vol { flex:1; min-width:34px; accent-color:var(--accent); }
-  #cast.on { color:var(--accent); border-color:var(--accent); box-shadow:0 0 10px -2px var(--accent); }
-
-  /* Toast de retour (diffusion / erreur). */
-  .toast { position:fixed; left:50%; bottom:8px; transform:translateX(-50%); max-width:92%;
-           background:var(--texte); color:var(--fond); font-size:.68rem; padding:.32rem .6rem;
-           border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:9;
-           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .toast.on { opacity:.96; } .toast.err { background:var(--coral,#c0392b); color:#fff; }
-
-  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
-          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
-          text-transform:uppercase; color:var(--muted); }
-  .pied .grow { flex:1; }
-  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent); animation:bat 2.4s ease-in-out infinite; }
-  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
-  @media (prefers-reduced-motion:reduce){ .pouls{animation:none;opacity:.7} }
-  .vide { font-size:.72rem; color:var(--muted); padding:.4rem .1rem; }
-  .sbxaide-ring { position:absolute; border:2px solid var(--accent); border-radius:8px; z-index:41;
-    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent); pointer-events:none; }
-  .sbxaide-pin { position:absolute; transform:translate(-50%,-50%); min-width:18px; height:18px; border-radius:10px;
-    z-index:42; background:var(--accent); color:#04120e; font-weight:800; font-size:.66rem; display:grid; place-items:center;
-    padding:0 5px; box-shadow:0 2px 6px rgba(0,0,0,.45); pointer-events:none; }
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:disabled{opacity:.5;cursor:default}
+  .btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.danger{border-color:var(--rouge);color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(var(--n,2),minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nl,4),minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  body.dans .tuile{padding:7px 9px;gap:3px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  body.dans .tuile .v{font-size:1.2rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.mal .v{color:var(--rouge)} .tuile.nul .v{color:var(--faible)} .tuile.nul{border-style:dashed}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 13px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .retour.ko{border-color:var(--rouge);color:var(--rouge)}
+  .msg{padding:12px;margin-top:8px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .msg .btn{margin:6px 0 0 .6rem}
+  input[type=search],input[type=text],input[type=url]{font:inherit;font-size:.8rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.8);color:var(--texte);min-width:0;min-height:34px}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  .np{display:flex;gap:12px;align-items:center;min-height:64px}
+  .np .art{width:60px;height:60px;border-radius:12px;flex:0 0 auto;display:grid;place-items:center;font-size:1.6rem;color:#fff;background:linear-gradient(135deg,var(--cyan),var(--bleu))}
+  .np .art.on{animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(41,182,246,.4)}50%{box-shadow:0 0 0 6px transparent}}
+  @media (prefers-reduced-motion:reduce){.np .art.on{animation:none}}
+  .np .infos{min-width:0;flex:1}
+  .np .tt{font-size:1rem;font-weight:700;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .np .ss{font-size:.78rem;color:var(--doux);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .np .badge{display:inline-block;margin-top:4px;font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--vert);font-weight:700;overflow-wrap:anywhere}
+  .cmd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .cmd button{width:40px;height:40px;border-radius:10px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);display:grid;place-items:center;font-size:1rem;cursor:pointer;padding:0}
+  .cmd button:hover{border-color:var(--cyan);color:var(--cyan)}
+  .cmd button.gros{width:46px;height:46px;background:linear-gradient(135deg,var(--cyan),var(--bleu));color:#04101e;border:0}
+  .cmd button.pw.on,#cast.on{color:var(--vert);border-color:var(--vert)}
+  .cmd button:disabled{opacity:.45;cursor:default}
+  .cmd .vol{flex:1 1 100px;min-width:80px;accent-color:var(--cyan)}
+  .sel{font:inherit;font-size:.74rem;color:var(--cyan);background:none;border:1px solid var(--trait2);border-radius:999px;padding:4px 12px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:34px}
+  .sel:disabled{color:var(--faible);cursor:default}
+  .pied{display:flex;align-items:center;gap:8px;min-height:34px;font:inherit;font-size:.74rem;color:var(--cyan);background:none;border:0;padding:0;cursor:pointer;text-align:left}
 </style>
-
-<div class="mw">
-  <div class="tete"><span class="ic">🎚️</span><b>Lyrion</b><span class="dot" id="dot"></span>
-    <button class="sel" id="sel" type="button" title="Changer de lecteur"></button></div>
-
-  <div class="np">
-    <div class="art" id="art">🎵</div>
-    <div class="info">
-      <div class="tt" id="tt">—</div>
-      <div class="ss" id="ss"></div>
-      <span class="badge" id="badge"></span>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8v8M9 5v14M13 9v6M17 6v12M21 10v4"/></svg>
+      <div><h1>Lyrion</h1><small>Les lecteurs Squeezebox du parc</small></div>
     </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Lecture…</span>
+    <div class="droite"><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucun lecteur réel, commandes inertes</div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Nombre de vrais lecteurs (Squeezebox) vus par LMS ; les clients web fantômes sont écartés."><span class="l">Lecteurs</span><span class="v" id="rang">—</span><span class="s">Squeezebox vus par LMS</span></div>
+    <div class="tuile cy" id="cPow" title="Alimentation du lecteur choisi, telle que LMS la rapporte."><span class="l">Lecteur choisi</span><span class="v long" id="tLecteur">—</span><span class="s" id="tPow">alimentation inconnue</span></div>
+    <div class="tuile cy" id="cMode" title="Mode du lecteur selon LMS : lecture, pause ou arrêt."><span class="l">Mode</span><span class="v long" id="tMode">—</span><span class="s">selon LMS</span></div>
+    <div class="tuile cy" id="cCast" title="Le parc diffuse un flux (📡) que ce lecteur peut jouer."><span class="l">Diffusion 📡</span><span class="v long" id="tCast">—</span><span class="s">flux du parc</span></div>
+  </section>
+
+  <div class="pan"><h3>En lecture <i>GET /api/v1/lyrion/now-playing</i></h3>
+    <div class="np">
+      <div class="art" id="art" aria-hidden="true">🎵</div>
+      <div class="infos">
+        <div class="tt" id="tt">—</div>
+        <div class="ss" id="ss"></div>
+        <span class="badge" id="badge"></span>
+      </div>
+    </div>
+    <div class="cmd" id="cmd">
+      <button type="button" data-a="prev" title="Précédent" aria-label="Précédent">⏮</button>
+      <button type="button" class="gros" data-a="toggle" id="pp" title="Lecture / pause" aria-label="Lecture / pause">▶</button>
+      <button type="button" data-a="next" title="Suivant" aria-label="Suivant">⏭</button>
+      <button type="button" class="pw" data-a="power" id="pw" title="Allumer / éteindre" aria-label="Allumer / éteindre">⏻</button>
+      <button type="button" data-a="cast" id="cast" title="Diffuser l’audio du parc (📡) vers ce lecteur" aria-label="Diffuser l’audio du parc vers ce lecteur">📡</button>
+      <input class="vol" id="vol" type="range" min="0" max="100" step="1" value="50" title="Volume" aria-label="Volume">
+    </div>
+    <div class="retour" id="toast" role="status" hidden></div>
+    <p style="margin:10px 0 0"><button class="sel" id="sel" type="button" title="Changer de lecteur"></button></p>
   </div>
-
-  <div class="cmd" id="cmd">
-    <button data-a="prev" title="Précédent">⏮</button>
-    <button class="gros" data-a="toggle" id="pp" title="Lecture / pause">▶</button>
-    <button data-a="next" title="Suivant">⏭</button>
-    <button class="pw" data-a="power" id="pw" title="Allumer / éteindre">⏻</button>
-    <button data-a="cast" id="cast" title="Diffuser l’audio du parc (📡) vers ce lecteur">📡</button>
-    <input class="vol" id="vol" type="range" min="0" max="100" step="1" value="50" title="Volume" aria-label="Volume">
-  </div>
-
-  <div class="pied" id="pied"><span class="pouls" id="pouls"></span><span id="pied-t">lecteurs Squeezebox</span>
-    <span class="grow"></span><span id="rang"></span></div>
-</div>
-<div class="toast" id="toast"></div>
-
+  <button class="pied" id="pied" type="button">Ouvrir l’interface Lyrion complète →</button>
+</div></div>
 <script src="../sonde.js"></script>
 <script>
 (function () {
   "use strict";
   var API = '/api/v1/lyrion';
   var el = function (i) { return document.getElementById(i); };
-  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
-      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
-  var players = [], cur = 0, jouePP = false, enVol = false;
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if (Q.get('embed')) document.body.classList.add('emb');
+  try { if (window.top !== window) document.body.classList.add('dans'); } catch (e) { document.body.classList.add('dans'); }
+  var players = [], cur = 0, jouePP = false, enVol = false, refus = false, parcDiffuse = null;
 
+  function pastille(cls, t) { var e = el('etat'); e.className = 'actif ' + cls; e.textContent = t; }
   function getj(p) { return fetch(API + p, { headers: { 'Accept':'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+      .then(function (r) { if (r.status === 401 || r.status === 403) refus = true; return r.ok ? r.json() : null; }).catch(function () { return null; }); }
   function post(p, body) {
+    if (DEMO) { toast('Démonstration : commande inerte, rien n’est envoyé.'); return Promise.resolve(null); }
     var o = { method:'POST', headers:{ 'Accept':'application/json' } };
     if (body) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); }
     return fetch(API + p, o).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
@@ -146,42 +167,61 @@
       || /^SBX-Web/i.test(n) || /^Mozilla de/i.test(n)
       || id.indexOf('02:42:53:42:57:01') === 0;
   }
+  function tuilesPlayers() {
+    var p = players[cur % (players.length || 1)];
+    el('rang').textContent = players.length ? String(players.length) : '—';
+    el('tLecteur').textContent = p ? p.name : '—';
+    el('tPow').textContent = p ? (p.power ? 'allumé' : 'éteint') : 'alimentation inconnue';
+    el('cPow').className = 'tuile ' + (p ? (p.power ? 'ok' : 'nul') : 'cy');
+    el('sel').textContent = p ? (p.name + (players.length > 1 ? ' ▾' : '')) : 'aucun lecteur';
+    el('sel').disabled = players.length < 2;
+    el('pw').classList.toggle('on', !!(p && p.power));
+  }
+  function appliquePlayers(d) {
+    players = ((d && d.players) || []).filter(function (p) { return !estWebClient(p); });
+    tuilesPlayers();
+    el('session').hidden = !refus;
+    if (!d) { pastille(refus ? 'neutre' : 'hors', refus ? 'SESSION REQUISE' : 'HORS LIGNE'); }
+    else if (!players.length) { pastille('neutre', 'AUCUN LECTEUR'); el('tt').textContent = 'Aucun lecteur'; el('ss').textContent = ''; el('badge').textContent = ''; }
+    ['prev', 'toggle', 'next', 'power', 'cast'].forEach(function (a) { var b = el('cmd').querySelector('[data-a="' + a + '"]'); if (b) b.disabled = !players.length; });
+    annoncer_h();
+  }
   function chargePlayers() {
-    getj('/players').then(function (d) {
-      players = ((d && d.players) || []).filter(function (p) { return !estWebClient(p); });
-      el('rang').textContent = players.length ? players.length + ' lecteur' + (players.length > 1 ? 's' : '') : '';
-      var p = players[cur % (players.length || 1)];
-      el('sel').textContent = p ? (p.name + (players.length > 1 ? ' ▾' : '')) : 'aucun lecteur';
-      el('dot').className = 'dot' + (p && p.power ? ' ok' : '');
-      el('pw').classList.toggle('on', !!(p && p.power));
-      if (!players.length) { el('tt').textContent = 'Aucun lecteur'; el('ss').textContent = ''; el('badge').textContent = ''; }
-    });
+    if (DEMO) { appliquePlayers({ players: [{ id: '00:00:5e:00:53:10', name: 'Salon (démo)', model: 'Boom', power: true }] }); return Promise.resolve(); }
+    return getj('/players').then(appliquePlayers);
+  }
+  function appliqueNow(d) {
+    d = d || {};
+    var joue = d.mode === 'play';
+    jouePP = joue;
+    el('pp').textContent = joue ? '❚❚' : '▶';
+    el('art').classList.toggle('on', joue);
+    el('tMode').textContent = d.mode ? (joue ? 'lecture' : d.mode === 'pause' ? 'pause' : d.mode === 'stop' ? 'arrêt' : String(d.mode)) : '—';
+    el('cMode').className = 'tuile ' + (joue ? 'ok' : 'cy');
+    var p = players[cur % (players.length || 1)];
+    if (joue && (!d.player || !p || d.player === p.name)) {
+      el('tt').textContent = d.title || '—';
+      el('ss').textContent = [d.artist, d.album].filter(Boolean).join(' · ');
+      el('badge').textContent = '▶ en lecture' + (d.player ? (' · ' + d.player) : '');
+      pastille('', 'EN LECTURE');
+      annonce(d, true);
+    } else {
+      el('tt').textContent = p ? (p.power ? 'À l’arrêt' : 'Éteint') : 'Aucun lecteur';
+      el('ss').textContent = p ? (p.model || '') : '';
+      el('badge').textContent = '';
+      if (p) pastille('neutre', p.power ? 'À L’ARRÊT' : 'ÉTEINT');
+      annonce(null, false);
+    }
+    annoncer_h();
   }
   function chargeNow() {
-    getj('/now-playing').then(function (d) {
-      d = d || {};
-      var joue = d.mode === 'play';
-      jouePP = joue;
-      el('pp').textContent = joue ? '❚❚' : '▶';
-      el('art').classList.toggle('on', joue);
-      var p = players[cur % (players.length || 1)];
-      if (joue && (!d.player || !p || d.player === p.name)) {
-        el('tt').textContent = d.title || '—';
-        el('ss').textContent = [d.artist, d.album].filter(Boolean).join(' · ');
-        el('badge').textContent = '▶ en lecture' + (d.player ? (' · ' + d.player) : '');
-        annonce(d, true);
-      } else {
-        el('tt').textContent = p ? (p.power ? 'À l’arrêt' : 'Éteint') : 'Aucun lecteur';
-        el('ss').textContent = p ? (p.model || '') : '';
-        el('badge').textContent = '';
-        annonce(null, false);
-      }
-    });
+    if (DEMO) { appliqueNow({ mode: 'play', title: 'Morceau fictif', artist: 'Artiste démo', album: 'Album démo', player: 'Salon (démo)' }); return Promise.resolve(); }
+    return getj('/now-playing').then(appliqueNow);
   }
 
-  // Le Hall veut savoir ce qui joue (pastille + rangée média).
+  // Le Hall veut savoir ce qui joue (pastille + rangée média). Jamais en démonstration : une maquette ne doit pas faire croire au Hall qu'on joue.
   function annonce(d, actif) {
-    if (parent === window) return;
+    if (DEMO || parent === window) return;
     try {
       parent.postMessage({ sbx:'media', id:'lyrion', type:'audio',
         titre: (d && d.title) || 'Lyrion', sous: (d && [d.artist, d.album].filter(Boolean).join(' · ')) || 'Squeezebox',
@@ -190,9 +230,9 @@
   }
 
   var _tt;
-  function toast(m, err) { var t = el('toast'); if (!t) return; t.textContent = m;
-    t.className = 'toast on' + (err ? ' err' : ''); clearTimeout(_tt);
-    _tt = setTimeout(function () { t.className = 'toast'; }, err ? 3600 : 2400); }
+  function toast(m, err) { var t = el('toast'); if (!t) return; t.hidden = false; t.textContent = m;
+    t.className = 'retour' + (err ? ' ko' : ''); clearTimeout(_tt);
+    _tt = setTimeout(function () { t.hidden = true; annoncer_h(); }, err ? 3600 : 2400); annoncer_h(); }
 
   // ── AGENT DE CAST (#lyrion-agent) : le Hall relaie SON audio dans Lyrion ─────
   // On lit la diffusion 📡 courante du parc et on la joue sur la Squeezebox via
@@ -203,10 +243,11 @@
     post('/player/' + encodeURIComponent(id) + '/play-url', { url:url }).then(function (r) {
       if (r && r.ok) { toast('▶ ' + (titre || 'flux') + ' → ' + ((players[cur % (players.length||1)]||{}).name || 'lecteur'));
         setTimeout(chargeNow, 700); }
-      else toast('LMS a refusé ce flux', true);
+      else if (!DEMO) toast('LMS a refusé ce flux', true);
     });
   }
   function casteBroadcast(id) {
+    if (DEMO) { toast('Démonstration : commande inerte, rien n’est envoyé.'); return; }
     fetch('/api/v1/webos/public/broadcast', { headers:{ 'Accept':'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; }).then(function (b) {
         if (!b || !b.actif || !b.url) { toast('Rien à diffuser — lance une diffusion 📡', true); return; }
@@ -215,9 +256,13 @@
   }
   // Le bouton 📡 s'allume quand le parc diffuse quelque chose de castable.
   function majCast() {
+    if (DEMO) { el('tCast').textContent = 'aucune'; return; }
     fetch('/api/v1/webos/public/broadcast', { headers:{ 'Accept':'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; }).then(function (b) {
         var c = el('cast'); if (c) c.classList.toggle('on', !!(b && b.actif && b.url));
+        parcDiffuse = b ? !!(b.actif && b.url) : null;
+        el('tCast').textContent = parcDiffuse === null ? '—' : (parcDiffuse ? 'en cours' : 'aucune');
+        el('cCast').className = 'tuile ' + (parcDiffuse ? 'ok' : 'cy');
       }).catch(function () {});
   }
 
@@ -241,13 +286,18 @@
   });
   // Le pied ouvre l'interface LMS complète (LAN).
   el('pied').addEventListener('click', function () {
+    if (DEMO) { toast('Démonstration : commande inerte, rien n’est envoyé.'); return; }
     if (parent !== window) { try { parent.postMessage({ sbx:'ouvre', id:'lyrion' }, '*'); } catch (e) {} }
   });
+  el('rafraichir').onclick = tick;
 
-  function tick() { chargePlayers(); chargeNow(); majCast(); }
+  function tick() { el('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR'); chargePlayers().then(chargeNow); majCast(); }
+  if (DEMO) el('demo').hidden = false;
   tick();
-  setInterval(function () { chargeNow(); }, 5000);
-  setInterval(function () { chargePlayers(); majCast(); }, 20000);
+  if (!DEMO) {
+    setInterval(function () { chargeNow(); }, 5000);
+    setInterval(function () { chargePlayers(); majCast(); }, 20000);
+  }
 
   addEventListener('message', function (ev) {
     var d = ev.data; if (!d) return;
@@ -258,11 +308,14 @@
       return; }
     // Le Hall (ou une autre carte) demande de diffuser un flux sur la Squeezebox.
     if (d.sbx === 'cast' && d.url) { var id2 = pid(); if (id2) casteURL(id2, d.url, d.titre); return; }
-    if (d.sbx === 'theme' && (d.theme === 'dark' || d.theme === 'light'))
-      document.documentElement.setAttribute('data-theme', d.theme);
   });
-  (function () { var t = new URLSearchParams(location.search).get('theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); })();
+
+  // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer_h() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'lyrion' }, location.origin); } catch (e) { /* hors iframe */ }
+  }
+  if (window.ResizeObserver) new ResizeObserver(annoncer_h).observe(document.body);
+  addEventListener('resize', annoncer_h);
 })();
 </script>
 
@@ -271,5 +324,7 @@
   {el:document.querySelector('.tete'),label:'En-tête — Lyrion, état, et choix du lecteur'},
   {el:document.querySelector('.np'),label:'Lecture en cours — pochette, titre, artiste'},
   {el:document.getElementById('cmd'),label:'Commandes — précédent/lecture/suivant, allumage, diffuser 📡, volume'},
-  {el:document.getElementById('pied'),label:'Pied — lecteurs Squeezebox du parc'}
+  {el:document.getElementById('pied'),label:'Pied — interface Lyrion complète'}
 ].filter(function(z){return z.el;});}});</script>
+</body>
+</html>

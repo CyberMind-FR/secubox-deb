@@ -2,145 +2,153 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox #1273 — carte PeerTube.
+  SecuBox #1273 — carte PeerTube du Hall, au profil Aurora (.claude/AURORA-REFERENCE.md, #2659).
 
-  POURQUOI ELLE EST SERVIE PAR LE HALL, EXCEPTIONNELLEMENT. PeerTube est un
-  logiciel amont : on ne lui ajoute pas de vue /micro. La règle « le service
-  sert sa carte » ne peut donc pas s'appliquer, et la carte vit ici — mais elle
-  ne PEINT rien : elle lit l'API REST publique de PeerTube, qui donne titres,
-  vignettes, durées et vues. Aucune donnée n'est inventée, aucune identité
-  n'est requise.
+  POURQUOI ELLE EST SERVIE PAR LE HALL, EXCEPTIONNELLEMENT. PeerTube est un logiciel amont : on ne lui ajoute pas de vue
+  /micro. La règle « le service sert sa carte » ne peut donc pas s'appliquer, et la carte vit ici — mais elle ne PEINT rien :
+  elle lit l'API REST publique de PeerTube, qui donne titres, vignettes, durées et vues. Aucune donnée n'est inventée, aucune
+  identité n'est requise.
 
-  TOUT EST DE MÊME ORIGINE. Le vhost du Hall relaie l'API et les vignettes :
-  sa politique impose `connect-src 'self'` et `img-src 'self'`, et relâcher
-  l'une ou l'autre pour une carte coûterait plus cher que le relais.
+  TOUT EST DE MÊME ORIGINE. Le vhost du Hall relaie l'API et les vignettes : sa politique impose `connect-src 'self'` et
+  `img-src 'self'`, et relâcher l'une ou l'autre pour une carte coûterait plus cher que le relais.
+
+  LE MÉCANISME DE LECTURE EST REPRIS À L'IDENTIQUE : lecteur d'embarquement de PeerTube dans un cadre (origine PeerTube, api=1),
+  poignée de main jschannel (réponse publish-reply avec publish:[]), écoute de la position, reprise après rafraîchissement,
+  messages média vers le Hall (media, ouvre) et ordres du Hall (cmd : stop, pause, zoom). La barre de pastilles partagée
+  (slicebar) est remplacée par des pastilles propres à la carte ; le choix de vue est mémorisé (localStorage, protégé).
+  ?demo=1 : vidéos fictives sans vignette, lecture inerte, aucune requête ni message média. Mesure absente = « — ».
+  Tout texte venu du serveur passe par textContent (le cadre et la fenêtre d'aide sont construits par le DOM).
 -->
+<html lang="fr">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PeerTube — vue micro</title>
-<link rel="stylesheet" href="../spicy.css">
-<link rel="stylesheet" href="../slicebar.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  body.emb .cadre,body.dans .cadre{padding:6px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:10px;min-width:0}
+  body.emb .app,body.dans .app{padding:10px;gap:8px}
+  body.emb .app{border:0;box-shadow:none;background:none;padding:0}
+  .app>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+  body.emb .marque{display:none} body.dans .marque small{display:none} body.dans .marque h1{font-size:1.05rem} body.dans .marque svg{width:24px;height:24px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .actif.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;display:inline-block;min-height:34px}
+  .btn:hover{border-color:var(--cyan)} .btn:disabled{opacity:.5;cursor:default}
+  .btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn.ok{border-color:var(--vert);color:var(--vert)} .btn.danger{border-color:var(--rouge);color:var(--rouge)}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .info a{color:var(--cyan)}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(var(--n,2),minmax(0,1fr))}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(var(--nl,4),minmax(0,1fr))}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  body.dans .tuile{padding:7px 9px;gap:3px}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  body.dans .tuile .v{font-size:1.2rem}
+  .tuile .v.long{font-size:1rem;line-height:1.15}
+  .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.cy .v{color:var(--cyan)} .tuile.mal .v{color:var(--rouge)} .tuile.nul .v{color:var(--faible)} .tuile.nul{border-style:dashed}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  body.dans .pan{padding:8px}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem;overflow-wrap:anywhere}
+  body.emb .pan h3,body.dans .pan h3{display:none}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap}
+  .onglet{min-height:36px;padding:3px 13px;border-radius:999px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--doux);font:inherit;font-size:.78rem;cursor:pointer}
+  .onglet:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglet[aria-selected="true"]{border-color:var(--cyan);background:rgba(41,182,246,.18);color:var(--texte);font-weight:700}
+  .note{color:var(--faible);font-size:.72rem;margin:8px 0 0;overflow-wrap:anywhere} .note b{color:var(--orange);font-weight:600}
+  .retour{font-size:.78rem;margin:8px 0 0;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere}
+  .retour.ko{border-color:var(--rouge);color:var(--rouge)}
+  .msg{padding:12px;margin-top:8px;border:1px dashed var(--trait2);border-radius:12px;color:var(--doux);font-size:.84rem;text-align:center;overflow-wrap:anywhere}
+  .msg.err{color:var(--rouge);border-color:var(--rouge)}
+  .msg .btn{margin:6px 0 0 .6rem}
+  input[type=search],input[type=text],input[type=url]{font:inherit;font-size:.8rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.8);color:var(--texte);min-width:0;min-height:34px}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  body.dans .tuiles{display:none}
+  .une{position:relative;border-radius:12px;overflow:hidden;aspect-ratio:16/9;max-height:280px;width:100%;background:linear-gradient(160deg,rgba(41,182,246,.14),rgba(8,18,38,.9));border:1px solid var(--trait2)}
+  .une:fullscreen{max-height:none;border:0;border-radius:0}
+  .une img{width:100%;height:100%;object-fit:cover;display:block}
+  .une .voile{position:absolute;inset:auto 0 0 0;padding:20px 10px 8px;background:linear-gradient(transparent,rgba(3,8,18,.9));color:#fff;display:block}
+  .une .t{font-size:.84rem;font-weight:650;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .une .dur{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;border-radius:4px;padding:1px 6px;font-size:.66rem;font-variant-numeric:tabular-nums}
+  /* Le bouton de lecture est GROS et centré : c'est le geste attendu sur une vignette vidéo. */
+  .une .lire{position:absolute;inset:0;display:grid;place-items:center;background:none;border:0;cursor:pointer;color:#fff}
+  .une .lire span{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.5);font-size:1.1rem;transition:transform .12s ease,background .12s ease}
+  .une .lire:hover span,.une .lire:focus-visible span{transform:scale(1.08);background:var(--cyan)}
+  .une iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  /* AGRANDIR (#1275) : discret jusqu'au survol, il ne doit pas manger l'image. */
+  .une .zoom{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.45);background:rgba(0,0,0,.55);color:#fff;font-size:.9rem;cursor:pointer;opacity:.0;transition:opacity .15s}
+  .une:hover .zoom,.une .zoom:focus-visible{opacity:1}
+  .top{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
+  .top button{border:1px solid var(--trait);padding:0;background:rgba(18,40,78,.5);cursor:pointer;border-radius:8px;overflow:hidden;position:relative;aspect-ratio:16/9;min-width:0}
+  .top button img{width:100%;height:100%;object-fit:cover;display:block}
+  .top button:hover{border-color:var(--cyan)}
+  .top button .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:1rem;color:var(--faible)}
+  .pied{display:flex;align-items:center;gap:8px;min-height:34px;font:inherit;font-size:.76rem;color:var(--cyan);background:none;border:0;padding:0;cursor:pointer;text-align:left;max-width:100%}
+  .pied span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ptpop{position:fixed;z-index:40;max-width:230px;padding:8px 10px;border-radius:10px;background:#0a1630;color:var(--texte);font-size:12px;line-height:1.4;border:1px solid var(--trait2);box-shadow:0 12px 30px -12px rgba(0,0,0,.7);opacity:0;transform:translateY(4px);pointer-events:none;transition:.15s;overflow:hidden}
+  .ptpop.on{opacity:1;transform:none}
+  .ptpop b{color:var(--cyan)} .ptpop .adv{display:block;color:var(--doux);margin-top:4px;font-size:11px}
+</style>
+</head>
+<body>
+<div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9.2 5 2.8-5 2.8z"/></svg>
+      <div><h1>PeerTube</h1><small>Les vidéos de la plateforme souveraine</small></div>
+    </div>
+    <span class="actif neutre" id="etat" aria-live="polite">Lecture…</span>
+    <span class="actif neutre" id="veille" hidden>💤 EN VEILLE</span>
+    <div class="droite"><span id="n"></span><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune vidéo réelle, lecture inerte</div>
+
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile cy" title="Nombre d'éléments de la vue choisie annoncés par PeerTube (total de l'API), pas seulement ceux affichés."><span class="l">Éléments</span><span class="v" id="tNb">—</span><span class="s" id="tNbS">dans la vue</span></div>
+    <div class="tuile cy" title="Vue choisie : récentes, populaires, catégories, chaînes ou playlists."><span class="l">Vue</span><span class="v long" id="tVue">—</span><span class="s">lecture du catalogue</span></div>
+    <div class="tuile cy" id="cLecture" title="Vidéo actuellement lue dans le lecteur de la carte."><span class="l">En lecture</span><span class="v long" id="tLecture">—</span><span class="s">lecteur PeerTube</span></div>
+    <div class="tuile cy" id="cVeille" title="PeerTube est en démarrage à la demande : endormi, la carte ne le réveille pas d'elle-même."><span class="l">Service</span><span class="v long" id="tService">—</span><span class="s">cycle de vie (profil)</span></div>
+  </section>
+
+  <div class="pan"><h3>Catalogue <i>GET /pt/api/v1/videos (relais de même origine)</i></h3>
+    <div class="onglets" role="tablist" aria-label="Vue du catalogue" id="onglets"></div>
+    <div class="une" id="une" style="margin-top:10px"></div>
+    <div class="top" id="top"></div>
+    <div class="retour" id="retour" role="status" hidden></div>
+    <button class="pied" id="pied" type="button" title="Ouvrir dans le viewer"><span id="pied-t">vidéos</span><span id="rang"></span></button>
+  </div>
+</div></div>
 <script src="/api/v1/webos/public/hotes.js"></script>
 <script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
-<script src="../slicebar.js"></script>
-<style>
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#c0392b; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#ef6b5c; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#ef6b5c; }
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
-  body { background:var(--fond); color:var(--texte);
-         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
-  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .7rem; gap:.4rem; }
-  .tete { display:flex; align-items:baseline; gap:.4rem; }
-  .tete .ic { font-size:1rem; } .tete b { font-size:.88rem; }
-  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em;
-             text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
-
-  .une { position:relative; border-radius:10px; overflow:hidden; height:104px;
-         background:var(--border); flex:0 0 auto; }
-  .une img { width:100%; height:100%; object-fit:cover; display:block; }
-  .une .voile { position:absolute; inset:auto 0 0 0; padding:.35rem .45rem .3rem;
-                background:linear-gradient(transparent, rgba(0,0,0,.85)); color:#fff; }
-  .une .t { font-size:.74rem; font-weight:650; line-height:1.2;
-            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  .une .dur { position:absolute; top:6px; right:6px; background:rgba(0,0,0,.7); color:#fff;
-              border-radius:4px; padding:1px 5px; font-size:.6rem;
-              font-variant-numeric:tabular-nums; }
-  /* Le bouton de lecture est GROS et centré : c'est le geste attendu sur une
-     vignette vidéo, et le chercher serait déjà un échec. */
-  .une .lire { position:absolute; inset:0; display:grid; place-items:center;
-               background:none; border:0; cursor:pointer; color:#fff; }
-  .une .lire span { width:38px; height:38px; border-radius:50%; display:grid; place-items:center;
-                    background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.5);
-                    font-size:.9rem; transition:transform .12s ease, background .12s ease; }
-  .une .lire:hover span { transform:scale(1.08); background:var(--accent); }
-  .une iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
-  /* AGRANDIR (#1275). Une carte fait 250 px : regarder une video dedans est
-     une intention, pas une fatalite. Le bouton reste discret jusqu'au survol —
-     il ne doit pas manger l'image. */
-  .une .zoom { position:absolute; top:6px; right:6px; width:24px; height:24px;
-               border-radius:6px; border:1px solid rgba(255,255,255,.45);
-               background:rgba(0,0,0,.55); color:#fff; font-size:.72rem;
-               cursor:pointer; opacity:0; transition:opacity .15s; }
-  .une:hover .zoom, .une .zoom:focus-visible { opacity:1; }
-
-  .top { display:flex; flex-wrap:wrap; gap:5px; }
-  /* Les suivantes en VIGNETTES et non en titres : sur une plateforme vidéo,
-     l'image renseigne plus vite que le nom du fichier. */
-  .top button { flex:1 1 calc(25% - 4px); min-width:0; border:0; padding:0; background:none; cursor:pointer;
-                border-radius:7px; overflow:hidden; position:relative; height:44px; }
-  .top button img { width:100%; height:100%; object-fit:cover; display:block; }
-  .top button:hover { outline:2px solid var(--accent); outline-offset:1px; }
-  .top .vide { flex:1 1 calc(25% - 4px); height:44px; border-radius:7px; background:var(--border); }
-
-  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
-          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
-          text-transform:uppercase; color:var(--muted); text-decoration:none; }
-  .pied .grow { flex:1; } .pied:hover { color:var(--accent); }
-  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
-           animation:bat 2.4s ease-in-out infinite; }
-  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
-  @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
-
-  /* ── SLICER partagé (SBXSliceBar, #1352) ───────────────────────────────────
-     Récentes / Populaires / Catégories / Chaînes / Playlists via la
-     bibliothèque commune (/shared → ../slicebar). Ce conteneur la fixe en bas
-     et lui rend le filet dégradé + le fond ; --cyan/--line l'accrochent au
-     thème. Preview au survol DÉSACTIVÉE ici (elle relancerait un fetch et
-     couperait une lecture en cours) — override contextuel de la couche. */
-  .mw { padding-bottom:34px; }
-  .pt-slbox { position:fixed; left:0; right:0; bottom:0; z-index:20;
-              background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--fond)),var(--fond));
-              border-top:2px solid transparent;
-              border-image:linear-gradient(90deg,var(--accent),#f0b429,#28d6ff) 1;
-              box-shadow:0 -8px 20px -14px rgba(0,0,0,.55);
-              --cyan:var(--accent); --line:var(--border); }
-  .pt-slbox .sbx-bar { border-top:none; padding:7px 12px; }
-  .pt-slbox .sbx-dots button.on { box-shadow:0 0 10px -1px var(--accent); }
-
-  /* ── Pop-in helper : survol d'une vignette → titre + chaîne + conseil. */
-  .ptpop { position:fixed; z-index:40; max-width:230px; padding:8px 10px; border-radius:10px;
-           background:var(--fond); color:var(--texte); font-size:12px; line-height:1.4;
-           border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));
-           box-shadow:0 12px 30px -12px rgba(0,0,0,.7),0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent);
-           opacity:0; transform:translateY(4px); pointer-events:none; transition:.15s; overflow:hidden; }
-  .ptpop.on { opacity:1; transform:none; }
-  .ptpop::before { content:""; position:absolute; left:0; right:0; top:0; height:2px;
-           background:linear-gradient(90deg,var(--accent),#f0b429,#28d6ff); }
-  .ptpop b { color:var(--accent); } .ptpop .adv { display:block; color:var(--muted); margin-top:4px; font-size:11px; }
-</style>
-
-<div class="mw">
-  <div class="tete"><span class="ic">📹</span><b>PeerTube</b><span class="n" id="n">…</span></div>
-  <div class="une" id="une">
-    <img id="une-img" alt="">
-    <span class="dur" id="une-dur"></span>
-    <button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire"><span>▶</span></button>
-    <span class="voile"><span class="t" id="une-t">lecture du catalogue…</span></span>
-  </div>
-  <div class="top" id="top"></div>
-  <a class="pied" id="pied" href="#" title="Ouvrir dans le viewer"><span class="pouls" id="pouls"></span>
-    <span id="pied-t">vidéos</span><span class="grow"></span><span id="rang"></span></a>
-</div>
-
 <script>
 (function () {
   "use strict";
+  var Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+  if (Q.get('embed')) document.body.classList.add('emb');
+  try { if (window.top !== window) document.body.classList.add('dans'); } catch (e) { document.body.classList.add('dans'); }
   // Relais de MEME ORIGINE poses par le vhost du Hall (voir hall.vhost.conf).
   // L'API et les vignettes passent par le relais de MEME origine (la carte
   // vit sous `connect-src 'self'` et `img-src 'self'`) ; le lecteur, lui,
   // reste sur l'origine de PeerTube — voir lance().
   var PT_HOTE = SBX_DOMAINE.hote('peertube.gk2.secubox.in');
   // SLICES (#peertube-slices) : plusieurs sources pour la MÊME carte, choisies
-  // par la barre à bullets en bas — comme la radio. Récentes/Populaires sont
+  // par les pastilles — comme la radio. Récentes/Populaires sont
   // deux tris de l'API vidéos ; Catégories parcourt le catalogue par genre ;
   // Playlists liste les listes de lecture. Rien n'est inventé : tout vient de
   // l'API REST publique relayée en même origine.
@@ -151,9 +159,16 @@
     { k:'chaines',    lab:'📺 Chaînes',    url:'/pt/api/v1/video-channels?count=18&sort=-createdAt',       kind:'channel' },
     { k:'playlists',  lab:'🎞️ Playlists',  url:'/pt/api/v1/video-playlists?count=18&sort=-updatedAt',      kind:'playlist' }
   ];
+  var CLE_VUE = 'sbx.peertube.vue';
   var vue = 0;                  // index de la vue courante
   var cats = null, catIdx = 0;  // {id:nom} des catégories + rotation interne
-  var vids = [], i = 0, enPause = false, joue = false;
+  var vids = [], i = 0, enPause = false, joue = false, premierAffichage = true;
+
+  var el = function (id) { return document.getElementById(id); };
+  function nouveau(tag, cls, texte) { var e = document.createElement(tag); if (cls) e.className = cls; if (texte != null) e.textContent = texte; return e; }
+  function pastille(cls, t) { var e = el('etat'); e.className = 'actif ' + cls; e.textContent = t; }
+  function retour(t) { var r = el('retour'); r.hidden = false; r.textContent = t; }
+  function titreUne(t) { var e = el('une-t'); if (e) e.textContent = t; }
 
   // ── MODE ÉCONOME piloté par le PROFIL du module (pièce 1, modules.d) ────────
   // Un cardlet dont le backend est `on-demand` ne doit ni le MAINTENIR éveillé
@@ -163,21 +178,16 @@
   // sans réveil. Un clic opérateur sur une tranche autorise le réveil (actif).
   // Défaut PESSIMISTE (on-demand/asleep) tant que le profil n'a pas répondu :
   // jamais de réveil accidentel au tout premier rendu.
-  var lifecycle = 'on-demand', sleepState = 'asleep';
+  var lifecycle = DEMO ? 'always' : 'on-demand', sleepState = DEMO ? 'up' : 'asleep', profilLu = DEMO;
   function onDemande() { return lifecycle === 'on-demand'; }
   function refletVeille() {
-    var dort = onDemande() && sleepState === 'asleep', b = el('veille');
-    if (dort && !b) {
-      b = document.createElement('span'); b.id = 'veille';
-      b.style.cssText = 'position:absolute;top:6px;right:8px;z-index:9;'
-        + 'font:600 11px/1.4 system-ui;padding:2px 7px;border-radius:8px;'
-        + 'background:rgba(0,0,0,.55);color:#cbd5e1;backdrop-filter:blur(3px);'
-        + 'pointer-events:none;';
-      b.textContent = '💤 en veille';
-      (document.querySelector('.mw') || document.body).appendChild(b);
-    } else if (!dort && b) { b.remove(); }
+    var dort = onDemande() && sleepState === 'asleep';
+    el('veille').hidden = !dort;
+    el('tService').textContent = !profilLu ? '—' : (dort ? 'en veille' : (onDemande() ? 'éveillé' : 'permanent'));
+    el('cVeille').className = 'tuile ' + (!profilLu ? 'nul' : dort ? 'att' : 'ok');
   }
   function rafraichitProfil() {
+    if (DEMO) return;
     fetch('/api/v1/profiles/lifecycles', { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
@@ -185,7 +195,7 @@
         for (x = 0; x < L.length; x++) { if (L[x].id === 'peertube') { m = L[x]; break; } }
         if (!m) return;
         var etaitEndormi = (sleepState === 'asleep');
-        lifecycle = m.lifecycle; sleepState = m.sleep_state;
+        lifecycle = m.lifecycle; sleepState = m.sleep_state; profilLu = true;
         refletVeille();
         // Réveil détecté (asleep→up : un autre accès l'a ouvert) OU premier
         // profil disant `up` : on charge une fois, passivement, sans réveiller.
@@ -194,15 +204,31 @@
       .catch(function () {});   // best-effort : indispo => on reste prudent
   }
 
-  var el = function (id) { return document.getElementById(id); };
-  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
-      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
   function mmss(s) {
     s = Math.max(0, Math.floor(Number(s) || 0));
     var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = s % 60;
     return (h ? h + ':' + ('0' + m).slice(-2) : String(m)) + ':' + ('0' + r).slice(-2);
   }
-  function vign(v) { return v.thumbnailPath ? '/pt' + v.thumbnailPath : ''; }
+  function vign(v) { return (!DEMO && v.thumbnailPath) ? '/pt' + v.thumbnailPath : ''; }
+
+  // La vitrine (vignette + bouton de lecture + titre), construite par le DOM.
+  function vitrine() {
+    var u = el('une'); u.textContent = '';
+    var img = nouveau('img'); img.id = 'une-img'; img.alt = '';
+    var dur = nouveau('span', 'dur'); dur.id = 'une-dur';
+    var lire = nouveau('button', 'lire'); lire.id = 'lire'; lire.type = 'button'; lire.title = 'Lire ici'; lire.setAttribute('aria-label', 'Lire');
+    lire.appendChild(nouveau('span', null, '▶'));
+    var voile = nouveau('span', 'voile'), t = nouveau('span', 't'); t.id = 'une-t'; voile.appendChild(t);
+    u.appendChild(img); u.appendChild(dur); u.appendChild(lire); u.appendChild(voile);
+  }
+
+  function tuiles() {
+    var V = VUES[vue];
+    el('tVue').textContent = V.lab;
+    var v = joue ? vids[i % (vids.length || 1)] : null;
+    el('tLecture').textContent = v ? (v.name || '—') : '—';
+    el('cLecture').className = 'tuile ' + (v ? 'ok' : 'cy');
+  }
 
   function montre() {
     if (!vids.length || joue) return;
@@ -212,7 +238,7 @@
       img.style.display = '';
       img.onerror = function () { this.style.display = 'none'; };
     } else { img.style.display = 'none'; }
-    el('une-t').textContent = v.name || '—';
+    titreUne(v.name || '—');
     el('une-dur').textContent = v._playlist ? '≡ liste' : v._channel ? '📺 chaîne' : mmss(v.duration);
     el('rang').textContent = ((i % vids.length) + 1) + '/' + vids.length;
     el('pied-t').textContent = (v.channel && v.channel.displayName) || 'vidéos';
@@ -220,8 +246,8 @@
     var suite = [], k;
     for (k = 1; k <= 8 && k < vids.length; k++) suite.push({ v: vids[(i + k) % vids.length], idx: (i + 1 + k - 1) % vids.length });
 
-    // ON REUTILISE LES BOUTONS AU LIEU DE LES RECREER (#1349). Reconstruire
-    // innerHTML a chaque rotation DETRUISAIT les <img> et les rechargeait : le
+    // ON REUTILISE LES BOUTONS AU LIEU DE LES RECREER (#1349). Reconstruire la
+    // rangée a chaque rotation DETRUISAIT les <img> et les rechargeait : le
     // temps du chargement, la miniature etait vide — d'ou « elles
     // disparaissent parfois ». On garde les memes elements et on ne change que
     // ce qui bouge (src, cible), donc l'ancienne image reste affichee jusqu'a
@@ -236,7 +262,7 @@
       // cassee plutot que d'afficher l'icone de fichier absent.
       im.addEventListener('error', function () { this.style.visibility = 'hidden'; });
       im.addEventListener('load', function () { this.style.visibility = ''; });
-      b.appendChild(im); top.appendChild(b);
+      b.appendChild(im); b.appendChild(nouveau('span', 'ph', '🎞️')); top.appendChild(b);
     }
     while (top.children.length > suite.length) top.removeChild(top.lastChild);
 
@@ -244,11 +270,14 @@
       var bt = top.children[k], w = suite[k].v, sr = vign(w), img2 = bt.firstChild;
       bt.dataset.i = suite[k].idx;
       bt.title = w.name || '';
+      bt.setAttribute('aria-label', w.name || 'Vidéo');
       // On ne REASSIGNE la src que si elle change : sinon on rechargerait la
       // meme image pour rien, et c'est justement le rechargement qui clignote.
       if (sr && img2.getAttribute('src') !== sr) img2.src = sr;
-      bt.style.display = sr ? '' : 'none';
+      if (!sr) img2.removeAttribute('src');
+      img2.style.display = sr ? '' : 'none';
     }
+    tuiles();
   }
 
   // LIRE ICI : le lecteur d'embarquement de PeerTube remplace la vignette. On
@@ -263,9 +292,11 @@
     // UNE LISTE OU UNE CHAÎNE N'EST PAS UNE VIDÉO : on n'embarque pas un lecteur,
     // on ouvre PeerTube pour parcourir (catalogue complet dans le Hall).
     if (v._browse) {
+      if (DEMO) { retour('Démonstration : ouverture inerte, aucun service réel.'); return; }
       if (parent !== window) { try { parent.postMessage({ sbx: 'ouvre', id: 'peertube' }, '*'); } catch (e) {} }
       return;
     }
+    if (DEMO) { retour('Démonstration : lecture inerte, aucun flux n’est demandé.'); return; }
     i = n; joue = true;
     // LE LECTEUR RESTE SUR SON ORIGINE, ET C'EST UNE CORRECTION (#1276).
     // Relaye sous /pt/, il demandait ses propres ressources a la RACINE du
@@ -290,9 +321,13 @@
     // clic faisait relancer la video a CHAQUE rafraichissement, meme quand on
     // avait juste effleure le bouton avant de partir. On ne retient que ce que
     // le lecteur nous dit LUI-MEME : voir l'ecoute plus bas.
-    el('une').innerHTML = '<iframe id="cadre-pt" src="' + esc(u) + '"'
-      + ' allow="autoplay; fullscreen" allowfullscreen title="' + esc(v.name) + '"></iframe>'
-      + '<button class="zoom" id="zoom" type="button" title="Agrandir" aria-label="Agrandir">⤢</button>';
+    var z = el('une'); z.textContent = '';
+    var cadre = document.createElement('iframe');
+    cadre.id = 'cadre-pt'; cadre.src = u; cadre.setAttribute('allow', 'autoplay; fullscreen'); cadre.setAttribute('allowfullscreen', '');
+    cadre.title = v.name || 'PeerTube';
+    var zoom = nouveau('button', 'zoom', '⤢'); zoom.id = 'zoom'; zoom.type = 'button'; zoom.title = 'Agrandir'; zoom.setAttribute('aria-label', 'Agrandir');
+    z.appendChild(cadre); z.appendChild(zoom);
+    pastille('', 'EN LECTURE'); tuiles();
     annonce(v, true);
     bat(v);
     // ON NE S'ANNONCE PLUS (#1324). C'ETAIT CE QUI TUAIT LE LECTEUR.
@@ -335,7 +370,7 @@
   }
 
   function annonce(v, actif) {
-    if (parent === window) return;
+    if (DEMO || parent === window) return;
     try {
       parent.postMessage({
         sbx: 'media', id: 'peertube',
@@ -364,6 +399,16 @@
     } catch (e) {}
   }
 
+  // Retour à la vitrine (fin de vidéo, ordre stop/pause du Hall, changement de vue).
+  function revientVitrine() {
+    joue = false;
+    if (battement) { clearInterval(battement); battement = null; }
+    oublie();
+    vitrine();
+    if (vids.length) pastille('', 'PRÊT');
+    tuiles();
+  }
+
   // Le plein ecran porte sur le CONTENEUR et non sur le cadre : on garde ainsi
   // le bouton de sortie et le fond, au lieu d'un cadre nu qui semble bloque.
   function agrandis() {
@@ -387,6 +432,7 @@
   // pour naviguer le catalogue, les chaines, la recherche.
   el('pied').addEventListener('click', function (e) {
     e.preventDefault();
+    if (DEMO) { retour('Démonstration : ouverture inerte, aucun service réel.'); return; }
     if (parent === window) return;
     try { parent.postMessage({ sbx: 'ouvre', id: 'peertube' }, '*'); } catch (x) {}
   });
@@ -402,12 +448,7 @@
     // amont, on ne sait pas le mettre en pause — on sait le RETIRER. On le
     // fait donc, plutot que d'ignorer l'ordre et de laisser deux sons.
     if (d.action === 'stop' || d.action === 'pause') {
-      joue = false;
-      if (battement) { clearInterval(battement); battement = null; }
-      oublie();
-      el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'
-        + '<button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire">'
-        + '<span>▶</span></button><span class="voile"><span class="t" id="une-t"></span></span>';
+      revientVitrine();
       montre();
       annonce(vids[i % (vids.length || 1)], false);
     }
@@ -513,13 +554,8 @@
     var duree = Number(par.duration) || 0;
     var posC = positionDe(d);
     if (joue && (etat === 'ended' || (duree > 0 && posC !== null && posC >= duree - 1.5))) {
-      joue = false;
-      if (battement) { clearInterval(battement); battement = null; }
-      oublie();
+      revientVitrine();
       try { parent.postMessage({ sbx: 'media', id: 'peertube', joue: false, fin: true }, '*'); } catch (e) {}
-      el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'
-        + '<button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire">'
-        + '<span>▶</span></button><span class="voile"><span class="t" id="une-t"></span></span>';
       montre();
       return;
     }
@@ -593,36 +629,58 @@
     };
   }
 
+  // Données fictives (démonstration) : titres inventés, aucune vignette, aucune requête.
+  function demoReponse(url) {
+    var noms = [['Montage d’une baie de brassage', 'Atelier Réseau', 1325, 1240], ['Comprendre WireGuard en 15 minutes', 'Cours Libres', 905, 8800], ['Les arbres de Merkle', 'Cryptologie pour tous', 2210, 640],
+                ['Randonnée en Maurienne', 'Géographie Vivante', 1215, 2100], ['Session de mixage', 'Atelier Sonore', 4020, 310], ['Cuisine de saison', 'La Table Ronde', 840, 1500],
+                ['Histoire de l’informatique libre', 'Cours Libres', 2750, 4200], ['Concert acoustique', 'Scène Ouverte', 3605, 920], ['Dépanner un routeur', 'Atelier Réseau', 623, 5300]];
+    var vids2 = noms.map(function (x, k) { return { uuid: 'demo-' + k, name: x[0], duration: x[2], views: x[3], channel: { displayName: x[1] } }; });
+    if (/video-channels/.test(url)) return { total: 3, data: [{ name: 'atelier_reseau', displayName: 'Atelier Réseau', followersCount: 120 }, { name: 'cours_libres', displayName: 'Cours Libres', followersCount: 340 }, { name: 'scene_ouverte', displayName: 'Scène Ouverte', followersCount: 75 }] };
+    if (/video-playlists/.test(url)) return { total: 2, data: [{ uuid: 'demo-pl-1', displayName: 'Réseaux pour tous', videosLength: 8 }, { uuid: 'demo-pl-2', displayName: 'Soirées musique', videosLength: 5 }] };
+    if (/categories$/.test(url)) return { 1: 'Musique', 2: 'Sciences et techniques' };
+    return { total: vids2.length, data: vids2 };
+  }
+  function lire(url) {
+    if (DEMO) return Promise.resolve(demoReponse(url));
+    return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; });
+  }
+
+  function surveilleBarre(t) { var e = el('n'); if (e) e.textContent = t || ''; }
+
   // Catégories : on découvre les genres une fois, puis on en montre un à la fois
   // (catIdx tourne à chaque entrée dans la vue), en filtrant l'API vidéos.
   function chargeCategorie() {
     function pick() {
       var ids = Object.keys(cats || {});
-      if (!ids.length) { vids = []; el('une-t').textContent = 'Pas de catégorie'; return; }
+      if (!ids.length) { vids = []; titreUne('Pas de catégorie'); return; }
       catIdx = ((catIdx % ids.length) + ids.length) % ids.length;
       var id = ids[catIdx], nom = cats[id];
-      // Le genre courant s'affiche dans le libellé de la barre partagée (elle ne
-      // le réécrit qu'au prochain changement de slice, donc il tient le temps du
-      // parcours des catégories).
-      var _lab = (typeof ptbox !== 'undefined' && ptbox) ? ptbox.querySelector('.sbx-lab') : null;
-      if (_lab) _lab.textContent = '📂 ' + nom;
-      fetch('/pt/api/v1/videos?count=24&categoryOneOf=' + encodeURIComponent(id) + '&sort=-publishedAt&nsfw=false',
-        { headers: { 'Accept': 'application/json' } })
-        .then(function (r) { return r.ok ? r.json() : null; })
+      // Le genre courant s'affiche dans le libellé de la pastille de la vue.
+      var pill = el('onglets').children[vue];
+      if (pill) pill.textContent = '📂 ' + nom;
+      lire('/pt/api/v1/videos?count=24&categoryOneOf=' + encodeURIComponent(id) + '&sort=-publishedAt&nsfw=false')
         .then(function (d) {
           vids = (d && d.data) || [];
-          el('n').textContent = nom;
+          surveilleBarre(nom);
           if (!vids.length) { catIdx++; if (catIdx < Object.keys(cats).length) return pick();
-            el('une-t').textContent = 'Catégorie vide'; return; }
-          el('pouls').style.animation = ''; i = 0; montre();
+            titreUne('Catégorie vide'); return; }
+          afficheListe(d && d.total, 'vidéos');
         })
-        .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
+        .catch(function () { injoignable(); });
     }
     if (cats) { pick(); return; }
-    fetch('/pt/api/v1/videos/categories', { headers: { 'Accept': 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    lire('/pt/api/v1/videos/categories')
       .then(function (d) { cats = d || {}; pick(); })
-      .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
+      .catch(function () { injoignable(); });
+  }
+
+  function injoignable() { titreUne('PeerTube injoignable'); pastille('hors', 'HORS LIGNE'); }
+  function afficheListe(total, unite) {
+    pastille('', 'PRÊT');
+    el('tNb').textContent = total != null ? String(total) : String(vids.length);
+    el('tNbS').textContent = unite + (total != null && total > vids.length ? ' (' + vids.length + ' affichées)' : '');
+    i = 0; montre();
+    annoncer();
   }
 
   function charge(actif) {
@@ -631,7 +689,7 @@
     // on conserve le dernier cache. Un clic opérateur (actif === true) passe.
     if (actif !== true && onDemande() && (sleepState === 'asleep' || document.hidden)) {
       refletVeille();
-      if (!vids.length) el('une-t').textContent = 'PeerTube en veille — cliquez pour réveiller';
+      if (!vids.length) { titreUne('PeerTube en veille — cliquez pour réveiller'); pastille('neutre', 'EN VEILLE'); }
       return;
     }
     chargeReel();
@@ -642,70 +700,69 @@
     // cours (état récent + position), on la relance à sa position — quelle que
     // soit la tranche restaurée par le slicer (reprend() va chercher la vidéo
     // par son uuid au besoin).
-    if (!reprendFait) { reprendFait = true; if (reprend()) return; }
+    if (!reprendFait) { reprendFait = true; if (!DEMO && reprend()) return; }
     var V = VUES[vue];
     if (V.kind === 'category') { chargeCategorie(); return; }
-    fetch(V.url, { headers: { 'Accept': 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    lire(V.url)
       .then(function (d) {
         var data = (d && d.data) || [];
         vids = (V.kind === 'playlist') ? data.map(mapPlaylist)
              : (V.kind === 'channel')  ? data.map(mapChannel) : data;
-        el('n').textContent = d && d.total
-          ? d.total + ' ' + (V.kind === 'playlist' ? 'listes' : V.kind === 'channel' ? 'chaînes' : 'vidéos') : '';
+        var unite = V.kind === 'playlist' ? 'listes' : V.kind === 'channel' ? 'chaînes' : 'vidéos';
+        surveilleBarre(d && d.total ? d.total + ' ' + unite : '');
+        if (!d) { injoignable(); return; }
         if (!vids.length) {
-          el('une-t').textContent = (V.kind === 'playlist') ? 'Aucune liste'
-            : (V.kind === 'channel') ? 'Aucune chaîne' : 'Aucune vidéo';
-          el('pouls').style.animation = 'none';
+          titreUne((V.kind === 'playlist') ? 'Aucune liste'
+            : (V.kind === 'channel') ? 'Aucune chaîne' : 'Aucune vidéo');
+          pastille('neutre', 'AUCUN ÉLÉMENT'); el('tNb').textContent = '0';
           return;
         }
-        el('pouls').style.animation = '';
-        i = 0; montre();
+        afficheListe(d.total, unite);
       })
-      .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
+      .catch(function () { injoignable(); });
   }
 
-  // ── BARRE À BULLETS (slicer partagé SBXSliceBar, #1352) ────────────────────
-  // Click-only (autoMs:0 : pas d'auto-rotation entre vues — chaque vue refait un
-  // fetch, on ne martèle pas l'API). Le carrousel de vignettes tourne DANS la
-  // vue courante. La lib gère clic (fige) + persistance ; PREVIEW désactivée
-  // (elle relancerait un fetch et couperait une lecture en cours).
+  // ── PASTILLES DE VUE (remplacent la barre partagée du Hall, #1352) ─────────
+  // Click-only (pas d'auto-rotation entre vues — chaque vue refait un fetch, on ne martèle pas l'API). Le carrousel de
+  // vignettes tourne DANS la vue courante. Le choix est mémorisé.
   function appliqueVue(k, actif) {
     if (VUES[k] && VUES[k].kind === 'category') catIdx++;   // un genre différent à chaque entrée
     vue = k;
+    try { localStorage.setItem(CLE_VUE, String(k)); } catch (e) {}
+    Array.prototype.forEach.call(el('onglets').children, function (b, x) { b.setAttribute('aria-selected', x === k ? 'true' : 'false'); });
     // Changer de vue arrête une lecture en cours et revient à la vitrine.
     if (joue) {
-      joue = false; if (battement) { clearInterval(battement); battement = null; }
-      oublie();
-      el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'
-        + '<button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire">'
-        + '<span>▶</span></button><span class="voile"><span class="t" id="une-t"></span></span>';
-      try { parent.postMessage({ sbx: 'media', id: 'peertube', joue: false, fin: true }, '*'); } catch (e) {}
+      revientVitrine();
+      try { if (!DEMO) parent.postMessage({ sbx: 'media', id: 'peertube', joue: false, fin: true }, '*'); } catch (e) {}
     }
+    tuiles();
     charge(actif);
   }
-  if (window.SBXSliceBar) {
-    var ptbox = document.createElement('div'); ptbox.className = 'pt-slbox';
-    (document.querySelector('.mw') || document.body).appendChild(ptbox);
-    var premierShow = true;   // le 1er onShow est l'init (passif), pas un clic
-    window.SBXSliceBar(ptbox, {
-      autoMs: 0, pauseOnHover: false, preview: false,
-      slices: VUES.map(function (v) { return { label: v.lab }; }),
-      // Clic opérateur = actif (réveil autorisé) ; init = passif (respecte veille).
-      onShow: function (k) { appliqueVue(k, !premierShow); premierShow = false; }
-    });
-  } else { charge(false); }   // repli sans lib : charge passif de la vue par défaut
+  VUES.forEach(function (v, k) {
+    var b = nouveau('button', 'onglet', v.lab); b.type = 'button'; b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', 'false');
+    // Clic opérateur = actif (réveil autorisé).
+    b.onclick = function () { b.textContent = v.lab; appliqueVue(k, true); };
+    el('onglets').appendChild(b);
+  });
+  el('rafraichir').onclick = function () { el('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR'); charge(true); };
 
-  // ── POP-IN HELPER : survol d'une vignette → titre + chaîne + conseil. ───────
+  // ── POP-IN HELPER : survol d'une vignette → titre + chaîne + conseil (DOM, jamais de balisage venu des données). ─────
   (function () {
-    var pop = document.createElement('div'); pop.className = 'ptpop'; document.body.appendChild(pop);
+    var pop = nouveau('div', 'ptpop'); document.body.appendChild(pop);
     function at(r) {
       var w = pop.offsetWidth, h = pop.offsetHeight, m = 6;
       var top = r.top - h - m; if (top < m) top = r.bottom + m;
       var left = r.left; if (left + w > innerWidth - m) left = innerWidth - m - w; if (left < m) left = m;
       pop.style.left = left + 'px'; pop.style.top = top + 'px';
     }
-    function show(html, elm) { pop.innerHTML = html; pop.classList.add('on'); at(elm.getBoundingClientRect()); }
+    function show(info, elm) {
+      pop.textContent = '';
+      pop.appendChild(nouveau('b', null, info.titre));
+      if (info.meta) pop.appendChild(document.createTextNode(' · ' + info.meta));
+      pop.appendChild(nouveau('span', 'adv', info.adv));
+      pop.classList.add('on'); at(elm.getBoundingClientRect());
+    }
     function hide() { pop.classList.remove('on'); }
     function infoDe(idx) {
       var v = vids[idx]; if (!v) return null;
@@ -715,8 +772,7 @@
         : 'Un clic lit ici (lecteur souverain PeerTube) ; ⤢ agrandit dans le viewer.';
       var meta = v._browse ? ch : (ch + (v.duration ? (' · ' + mmss(v.duration)) : '')
         + (v.views != null ? (' · ' + v.views + ' vues') : ''));
-      return '<b>' + esc(v.name || 'Vidéo') + '</b>' + (meta ? (' · ' + esc(meta)) : '')
-        + '<span class="adv">' + adv + '</span>';
+      return { titre: v.name || 'Vidéo', meta: meta, adv: adv };
     }
     document.addEventListener('mouseover', function (e) {
       var b = e.target.closest && e.target.closest('.top button[data-i]');
@@ -729,10 +785,24 @@
     });
   })();
 
-  // Le premier chargement est piloté par le slicer (onShow au démarrage, ou le
-  // repli charge() sans lib) — pas de charge() ici, sinon double fetch.
+  // Hauteur annoncée à l'hôte (iframes) : le bas du cadre, jamais la hauteur du document (AURORA-REFERENCE §7).
+  function annoncer() {
+    try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'peertube' }, location.origin); } catch (e) { /* hors iframe */ }
+  }
+  if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+  addEventListener('resize', annoncer);
+
+  // Démarrage : la vue mémorisée (ou la première), chargée en PASSIF (respecte la veille).
+  vitrine();
+  var memo = 0;
+  try { memo = parseInt(localStorage.getItem(CLE_VUE), 10); } catch (e) {}
+  if (!(memo >= 0 && memo < VUES.length)) memo = 0;
+  if (DEMO) el('demo').hidden = false;
+  el('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+  refletVeille();
+  appliqueVue(memo, false);
   setInterval(function () { if (!enPause && !joue && vids.length) { i++; montre(); } }, 7000);
-  setInterval(function () { if (!joue) charge(false); }, 600000);   // fond = passif
+  setInterval(function () { if (!joue && !DEMO) charge(false); }, 600000);   // fond = passif
 
   // Suivi du profil du module (lifecycle + sleep_state) : source de vérité pour
   // le mode économe. Au démarrage + toutes les 60 s (l'agrégat est léger et
@@ -741,19 +811,7 @@
   rafraichitProfil();
   setInterval(rafraichitProfil, 60000);
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) { rafraichitProfil(); charge(false); }
-  });
-
-  (function () {
-    var t = new URLSearchParams(location.search).get('theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-  })();
-  addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.sbx !== 'theme') return;
-    if (d.theme === 'dark' || d.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', d.theme);
-    }
+    if (!document.hidden && !DEMO) { rafraichitProfil(); charge(false); }
   });
 })();
 </script>
@@ -762,6 +820,8 @@
 <script>window.SBXAide&&SBXAide({zones:function(){return [
   {el:document.querySelector('.tete'),label:'En-tête — PeerTube et le nombre de vidéos'},
   {el:document.getElementById('une'),label:'À la une — vidéo mise en avant (▶ la lit dans le viewer)'},
-  {el:document.getElementById('top'),label:'Top vidéos — les plus regardées récemment'},
-  {el:document.querySelector('.pied'),label:'Pied — ouvrir dans le viewer'}
+  {el:document.getElementById('top'),label:'Suivantes — les vidéos de la vue choisie'},
+  {el:document.getElementById('pied'),label:'Pied — ouvrir dans le viewer'}
 ].filter(function(z){return z.el;});}});</script>
+</body>
+</html>
