@@ -4,134 +4,416 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
+  Radio collaborative (administration) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+  La page parle à l'API PAR L'AGRÉGATEUR (même origine, /api/v1/radio) : l'administrateur est déjà authentifié.
+-->
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecuBox — Radio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
-<style>
-/* Charte des panneaux : cyan unique, verre translucide, Courier Prime.
-   Voir .claude/WEBUI-PANEL-GUIDELINES.md — palette copiee verbatim. */
-:root{
-  --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
-  --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
-  --cyan:#00d4ff; --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00;
-  --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
-}
-body.hybrid-dark{background:var(--bg-dark);color:var(--text);
-  font-family:'Courier Prime',monospace;margin:0}
-.main{margin-left:220px;padding:1.5rem;padding-top:60px}
-@media (max-width:800px){.main{margin-left:0}}
-.header{display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1.2rem}
-.header h1{font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
-.header .sub{color:var(--p31-dim);font-size:.72rem;margin-top:.25rem}
-.btn-group{margin-left:auto;display:flex;gap:.4rem;flex-wrap:wrap}
-.btn{background:transparent;border:1px solid var(--border);color:var(--text);
-  border-radius:6px;padding:5px 11px;font-family:inherit;font-size:.72rem;
-  text-transform:uppercase;letter-spacing:.05em;cursor:pointer}
-.btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.3)}
-.btn.primary{border-color:var(--cyan);color:var(--cyan)}
-.btn.good{border-color:var(--green);color:var(--green)}
-.btn.danger{border-color:var(--red);color:var(--red)}
-.btn:disabled{opacity:.5;cursor:default}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.6rem;margin-bottom:1rem}
-.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
-  padding:.7rem .8rem;backdrop-filter:blur(10px)}
-.stat-card .value{font-size:1.5rem;font-weight:700;text-shadow:0 0 10px currentColor;
-  font-variant-numeric:tabular-nums}
-.stat-card .label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;
-  color:var(--p31-dim);margin-top:.2rem}
-.stat-card.cyan .value{color:var(--cyan)} .stat-card.green .value{color:var(--green)}
-.stat-card.purple .value{color:var(--purple)} .stat-card.orange .value{color:var(--orange)}
-.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
-  padding:.9rem 1rem;margin-bottom:.8rem;backdrop-filter:blur(10px)}
-.card h3{color:var(--cyan);font-size:.82rem;margin:0 0 .7rem;
-  text-transform:uppercase;letter-spacing:.06em}
-.row{display:flex;align-items:center;gap:.6rem;padding:7px 0;
-  border-bottom:1px solid var(--border);font-size:.76rem}
-.row:last-child{border-bottom:0}
-.row .sp{flex:1;min-width:0}
-.row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row .su{color:var(--p31-dim);font-size:.66rem}
-.tag{border:1px solid var(--border);border-radius:999px;padding:1px 7px;
-  font-size:.62rem;color:var(--p31-dim);white-space:nowrap}
-.tag.g{color:var(--green);border-color:var(--green)}
-.tag.o{color:var(--orange);border-color:var(--orange)}
-.tag.r{color:var(--red);border-color:var(--red)}
-.tag.c{color:var(--cyan);border-color:var(--cyan)}
-.jauge{display:flex;align-items:center;gap:.5rem;font-size:.7rem;margin:4px 0}
-.jauge .nm2{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jauge .bb{width:7rem;height:6px;background:var(--bg-row);border-radius:999px;overflow:hidden}
-.jauge .bb i{display:block;height:100%;background:linear-gradient(90deg,var(--purple),var(--cyan))}
-.jauge .pc{width:3rem;text-align:right;color:var(--p31-dim);font-variant-numeric:tabular-nums}
-.vide{color:var(--p31-dim);font-size:.72rem;padding:.4rem 0}
-.toast{position:fixed;bottom:1rem;right:1rem;background:var(--bg-card);
-  border:1px solid var(--cyan);border-radius:8px;padding:.6rem 1rem;
-  font-size:.72rem;display:none}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Radio</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.bon{border-color:var(--vert);color:var(--vert)} .btn.bon:hover{background:rgba(46,204,113,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn,.pan h3 input{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}.grille .large{grid-column:1/-1}}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        td.nom{min-width:110px;max-width:340px;overflow-wrap:anywhere} td.nom small{display:block;color:var(--faible);font-size:.68rem}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        tr.lot td{background:rgba(41,182,246,.08);color:var(--cyan);font-weight:700;border-top:1px solid var(--cyan)}
+        td.act{white-space:normal;min-width:150px}
+        td.act>*{margin:2px 5px 2px 0;vertical-align:middle}
+        .conf{display:inline-flex;flex-wrap:wrap;gap:5px;align-items:center;white-space:normal}
+        .conf input{font:inherit;font-size:.78rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;min-width:0;width:200px;max-width:100%}
+        .conf input:focus{outline:none;border-color:var(--cyan)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .barreconf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+        .lecture{display:grid;gap:6px}
+        .lecture .titre{font-size:1.05rem;font-weight:700;overflow-wrap:anywhere}
+        .progres{height:6px;border-radius:999px;background:rgba(159,179,214,.16);overflow:hidden} .progres i{display:block;height:100%;background:var(--cyan)}
+        .ligne{display:grid;grid-template-columns:minmax(0,1fr) 3.4rem;gap:4px 10px;align-items:center;font-size:.78rem;padding:3px 0}
+        .ligne .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .ligne .pc{text-align:right;color:var(--doux);font-variant-numeric:tabular-nums}
+        .ligne .barre{grid-column:1/-1;height:6px;border-radius:999px;background:rgba(159,179,214,.16);overflow:hidden} .ligne .barre i{display:block;height:100%;background:linear-gradient(90deg,var(--violet),var(--cyan))}
+        .liste{margin:0;padding:0;list-style:none;font-size:.8rem} .liste li{padding:5px 0;border-top:1px solid rgba(86,150,255,.12);overflow-wrap:anywhere} .liste li:first-child{border-top:0} .liste small{color:var(--faible)}
+        input.filtre{font:inherit;font-size:.76rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:4px 9px;min-width:0;width:200px;max-width:100%}
+        input.filtre:focus{outline:none;border-color:var(--cyan)}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+    </style>
 </head>
-<body class="hybrid-dark">
-<nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="12" rx="2.5"/><path d="M7 8 17 3.5"/><circle cx="16" cy="14" r="2.6"/><path d="M6.5 12h4M6.5 15h4"/></svg>
+                <div><h1>Radio</h1><small>Radio collaborative, programmation partagée</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><button class="btn" id="suivante" type="button" title="Passe au titre suivant pour tous les auditeurs">⏭ Titre suivant</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="barreconf" id="confSuivante" hidden>
+            <span>Passer au titre suivant ? Tous les auditeurs l'entendront immédiatement.</span>
+            <button class="btn danger sm" id="suivOui" type="button">Confirmer</button><button class="btn sm" id="suivNon" type="button">Annuler</button>
+        </div>
+        <div id="retour" class="retour" hidden role="status"></div>
 
-<main class="main">
-  <header class="header">
-    <div>
-      <h1>🎵 Radio</h1>
-      <div class="sub" id="subline">chargement…</div>
-    </div>
-    <div class="btn-group">
-      <button class="btn primary" onclick="rafraichir()">↻ Rafraîchir</button>
-      <button class="btn" onclick="suivante()">⏭ Suivant</button>
-    </div>
-  </header>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile cy" title="Pistes du répertoire validées, en cache ou non, écartées comprises."><span class="l">À l'antenne</span><span class="v" id="tAntenne">—</span><span class="s">pistes au répertoire</span></div>
+            <div class="tuile vi" title="Propositions de la communauté en attente de décision du sysop."><span class="l">À valider</span><span class="v" id="tValider">—</span><span class="s">propositions en file</span></div>
+            <div class="tuile ok" title="Pistes dont le média est présent en cache local : seules celles-ci peuvent passer à l'antenne."><span class="l">En cache</span><span class="v" id="tCache">—</span><span class="s">prêtes à diffuser</span></div>
+            <div class="tuile att" title="Pistes écartées du tirage (indisponibles). Écartées, jamais supprimées."><span class="l">Écartés</span><span class="v" id="tEcartes">—</span><span class="s">hors tirage</span></div>
+            <div class="tuile cy" title="Auditeurs vus dans les 45 dernières secondes (route /stats). « — » si la radio ne répond pas à cette route."><span class="l">Auditeurs</span><span class="v" id="tAuditeurs">—</span><span class="s">à l'écoute</span></div>
+        </section>
 
-  <div class="grid" id="stats"></div>
+        <section class="grille">
+            <div class="pan"><h3>En lecture</h3>
+                <div class="lecture" id="lecture"><div class="vide">—</div></div></div>
+            <div class="pan"><h3>Prochains titres <i>file figée du programmateur</i></h3>
+                <ul class="liste" id="avenir"><li class="vide">—</li></ul></div>
+            <div class="pan"><h3>Déjà diffusés <i>journal d'antenne</i></h3>
+                <ul class="liste" id="passe"><li class="vide">—</li></ul></div>
+            <div class="pan"><h3>Probabilité au prochain tirage</h3>
+                <div id="probas"><div class="vide">—</div></div>
+                <p class="note">Une piste qui vient de passer est à zéro : elle est au repos. Les probabilités sont montrées avant tout réglage — un curseur dont on ne voit pas l'effet se règle à l'aveugle. Barres relatives à la piste la plus probable ; le pourcentage est la part réelle de tirage.</p></div>
 
-  <div class="card">
-    <h3>🗳 File de validation</h3>
-    <div id="propositions"><div class="vide">chargement…</div></div>
-    <div class="sub" style="color:var(--p31-dim);font-size:.66rem;margin-top:.5rem">
-      Triée par soutien, pas par date : ce que la communauté demande remonte.
-    </div>
-  </div>
+            <div class="pan large"><h3>File de validation <i id="nProps"></i></h3>
+                <div class="tab"><table><thead><tr><th>Piste</th><th>Soutien</th><th>Actions</th></tr></thead><tbody id="bProps"></tbody></table></div>
+                <p class="note">Triée par soutien, pas par date : ce que la communauté demande remonte.</p></div>
 
-  <div class="card">
-    <h3>🎬 À l'antenne</h3>
-    <div id="playlist"><div class="vide">chargement…</div></div>
-    <div class="sub" style="color:var(--p31-dim);font-size:.66rem;margin-top:.5rem">
-      <b>Dévalider</b> = « pas maintenant » : retour en file, elle garde ses ♥.
-      <b>Supprimer</b> = « efface » : elle quitte le répertoire et pourra être
-      reproposée. Pour qu'elle ne revienne pas, <b>refusez-la</b> depuis la file.
-    </div>
-  </div>
+            <div class="pan large"><h3>À l'antenne <i id="nPistes"></i><input class="filtre" id="filtre" type="search" placeholder="Filtrer par titre…" aria-label="Filtrer les pistes"></h3>
+                <div class="tab"><table><thead><tr><th>Piste</th><th>État</th><th>Durée</th><th>Tirage</th><th>Soutien</th><th>Actions</th></tr></thead><tbody id="bPistes"></tbody></table></div>
+                <p class="note"><b>Dévalider</b> = « pas maintenant » : retour en file, elle garde ses ♥. <b>Supprimer</b> = « efface » : elle quitte le répertoire et pourra être reproposée. Pour qu'elle ne revienne pas, refusez-la depuis la file.</p></div>
 
-  <div class="card">
-    <h3>🎲 Probabilité au prochain tirage</h3>
-    <div id="probas"><div class="vide">chargement…</div></div>
-    <div class="sub" style="color:var(--p31-dim);font-size:.66rem;margin-top:.5rem">
-      Une piste qui vient de passer est à zéro : elle est au repos. Les
-      probabilités sont montrées <b>avant</b> tout réglage — un curseur dont on
-      ne voit pas l'effet se règle à l'aveugle.
-    </div>
-  </div>
+            <div class="pan large"><h3>Titres écartés <i id="nEcartes"></i></h3>
+                <div class="tab"><table><thead><tr><th>Piste</th><th>Raison</th></tr></thead><tbody id="bEcartes"></tbody></table></div>
+                <p class="note">Écartés, jamais supprimés : un titre qui disparaît en silence fait chercher la panne ailleurs.</p></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
-  <div class="card">
-    <h3>⚠ Titres écartés</h3>
-    <div id="ecartes"><div class="vide">aucun</div></div>
-    <div class="sub" style="color:var(--p31-dim);font-size:.66rem;margin-top:.5rem">
-      Écartés, jamais supprimés : un titre qui disparaît en silence fait
-      chercher la panne ailleurs.
-    </div>
-  </div>
-</main>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/radio';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-<div class="toast" id="toast"></div>
-<script src="/radio/radio-admin.js"></script>
+        let PISTES = [], AVENIR = [], PASSE = [], PROPS = [], CUR = null, STATS = null, ENCOURS = 0, SESSION_OK = true, LU = false;
+        let CONFIRM = null;   // { genre, cle } : confirmation en cours dans la ligne, jamais de dialogue natif
+        let MOTIF = '';       // motif de refus en cours de saisie
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        // L'en-tête d'intention X-Sbx-Radio accompagne tous les appels, comme dans l'ancienne page.
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json', 'X-Sbx-Radio': '1' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        // Rend toujours { code, corps } : code 0 si le réseau échoue.
+        async function appel(chemin, options) {
+            options = options || {};
+            const opts = { method: options.method || 'GET', credentials: 'same-origin', cache: 'no-store', headers: entetes(options.body ? { 'Content-Type': 'application/json' } : {}) };
+            if (options.body) opts.body = options.body;
+            try {
+                const r = await fetch(API + chemin, opts);
+                let corps = {}; try { corps = await r.json(); } catch (e) { /* corps vide */ }
+                return { code: r.status, corps: corps && typeof corps === 'object' ? corps : {} };
+            } catch (e) { return { code: 0, corps: {} }; }
+        }
+        // Écriture : mêmes routes, méthodes et corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { code: -1, corps: {} };
+            return appel(chemin, corps === undefined ? { method: 'POST' } : { method: 'POST', body: JSON.stringify(corps) });
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2800); }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function refus(r) { return r.code === -1 ? 'Démonstration : action inerte.' : (r.corps && r.corps.error) || (r.code ? 'Refusé (HTTP ' + r.code + ')' : 'Radio injoignable'); }
+
+        function duree(ms) {
+            const n = Number(ms);
+            if (!isFinite(n) || n <= 0) return '—';
+            const s = Math.round(n / 1000);
+            return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        }
+        function pourcent(proba) {
+            const x = Number(proba) * 100;
+            if (!isFinite(x) || x <= 0) return '0 %';
+            return (x < 1 ? x.toFixed(1) : String(Math.round(x))) + ' %';
+        }
+        const nomPiste = p => p.titre || p.source || '—';
+        function heure(d) { return d.toLocaleTimeString('fr-FR'); }
+        function pastille(classe, texte, titre) { const p = el('span', 'pill ' + classe, texte); if (titre) p.title = titre; return p; }
+
+        function demoData() {
+            const base = 'https://exemple.example/';
+            const aim = n => ['Aline', 'Boris', 'Camille', 'Dorian'].slice(0, n).map(pseudo => ({ pseudo }));
+            PISTES = [
+                { id: 1, titre: 'Nuit sur la ville (démo)', auteur: 'Artiste A', duree_ms: 214000, coeurs: 4, source: base + 'a1', en_cache: true, bas: false, proba: 0, aimeurs: aim(4) },
+                { id: 2, titre: 'Marée basse', auteur: 'Artiste B', duree_ms: 187000, coeurs: 3, source: base + 'b2', en_cache: true, bas: false, proba: 0.31, aimeurs: aim(3) },
+                { id: 3, titre: 'Signal faible', auteur: 'Artiste C', duree_ms: 242000, coeurs: 2, source: base + 'c3', en_cache: true, bas: false, proba: 0.22, aimeurs: aim(2) },
+                { id: 4, titre: 'Les jours rallongent', auteur: 'Artiste D', duree_ms: 203000, coeurs: 1, source: base + 'd4', en_cache: true, bas: true, proba: 0.04, aimeurs: aim(1) },
+                { id: 5, titre: 'Fréquence nord', auteur: 'Artiste E', duree_ms: 176000, coeurs: 2, source: base + 'e5', en_cache: true, bas: false, proba: 0.43, aimeurs: aim(2) },
+                { id: 6, titre: 'Piste en cours de récupération', auteur: 'Artiste F', duree_ms: 0, coeurs: 0, source: base + 'f6', en_cache: false, bas: false },
+                { id: 7, titre: 'Vidéo retirée', auteur: 'Artiste G', duree_ms: 0, coeurs: 1, source: base + 'g7', en_cache: false, ecarte: true, raison: 'vidéo privée', bas: false }];
+            ENCOURS = 1;
+            CUR = { silence: false, piste: PISTES[0], offset_ms: 82000 };
+            AVENIR = [PISTES[4], PISTES[1], PISTES[2]];
+            PASSE = [PISTES[3], PISTES[2]];
+            PROPS = [
+                { id: 11, titre: 'Proposition isolée', source: base + 'p11', coeurs: 3, aimeurs: aim(3) },
+                { id: 12, titre: 'Titre de la liste 1', source: base + 'p12', coeurs: 1, lot: 'ytpl:DEMO1', lot_titre: 'Liste de démonstration', aimeurs: aim(1) },
+                { id: 13, titre: 'Titre de la liste 2', source: base + 'p13', coeurs: 0, lot: 'ytpl:DEMO1', lot_titre: 'Liste de démonstration' }];
+            STATS = { pistes: 7, propositions: 3, auditeurs: 12, visites: 240 };
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; LU = true; rendre(); return; }
+            const [pl, pr, cu, st] = await Promise.all([appel('/playlist'), appel('/propositions'), appel('/current'), appel('/stats')]);
+            const trois = [pl, pr, cu];
+            SESSION_OK = !trois.concat([st]).some(r => r.code === 401 || r.code === 403);
+            const ok = r => r.code >= 200 && r.code < 300;
+            LU = ok(pl) || ok(pr) || ok(cu);
+            PISTES = ok(pl) && Array.isArray(pl.corps.pistes) ? pl.corps.pistes : [];
+            AVENIR = ok(pl) && Array.isArray(pl.corps.avenir) ? pl.corps.avenir : [];
+            PASSE = ok(pl) && Array.isArray(pl.corps.passe) ? pl.corps.passe : [];
+            PROPS = ok(pr) && Array.isArray(pr.corps.propositions) ? pr.corps.propositions : [];
+            CUR = ok(cu) ? cu.corps : null;
+            ENCOURS = CUR && CUR.piste ? CUR.piste.id : 0;
+            STATS = ok(st) ? st.corps : null;
+            const toutKo = trois.every(r => !ok(r));
+            $('erreur').hidden = !(toutKo && SESSION_OK);
+            if (toutKo && SESSION_OK) $('erreur').textContent = 'Impossible de lire la radio (service arrêté ou injoignable).';
+            rendre();
+        }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!LU) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else if (CUR && CUR.silence) { etat.className = 'actif att'; etat.textContent = 'SILENCE'; }
+            else if (CUR) { etat.className = 'actif'; etat.textContent = 'À L’ANTENNE'; }
+            else { etat.className = 'actif neutre'; etat.textContent = 'ANTENNE INCONNUE'; }
+            const m = LU;
+            $('tAntenne').textContent = m ? PISTES.length : '—';
+            $('tValider').textContent = m ? PROPS.length : '—';
+            $('tCache').textContent = m ? PISTES.filter(p => p.en_cache).length : '—';
+            $('tEcartes').textContent = m ? PISTES.filter(p => p.ecarte).length : '—';
+            $('tAuditeurs').textContent = STATS && STATS.auditeurs != null ? STATS.auditeurs : '—';
+            rendLecture(); rendFile('avenir', AVENIR, true); rendFile('passe', PASSE, false);
+            rendProbas(); rendPropositions(); rendPlaylist(); rendEcartes();
+            $('maj').textContent = 'Relevé ' + heure(new Date());
+            $('confSuivante').hidden = !(CONFIRM && CONFIRM.genre === 'suivante');
+            annoncer();
+        }
+
+        function rendLecture() {
+            const z = $('lecture'); z.replaceChildren();
+            if (!CUR) { z.appendChild(el('div', 'vide', '—')); return; }
+            if (CUR.silence || !CUR.piste) { z.appendChild(el('div', 'vide', 'Silence — aucune piste prête')); return; }
+            const p = CUR.piste;
+            z.appendChild(el('div', 'titre', nomPiste(p)));
+            if (p.auteur) z.appendChild(el('div', 'note', p.auteur));
+            const total = Number(p.duree_ms), pos = Number(CUR.offset_ms);
+            z.appendChild(el('div', 'note', 'Position ' + duree(pos) + ' / ' + duree(total) + (total > 0 ? '' : ' (durée non connue)')));
+            if (total > 0 && isFinite(pos)) { const b = el('div', 'progres'); const i = el('i'); i.style.width = Math.max(0, Math.min(100, pos / total * 100)) + '%'; b.appendChild(i); z.appendChild(b); }
+        }
+        function rendFile(id, l, numerote) {
+            const z = $(id); z.replaceChildren();
+            if (!LU) { z.appendChild(el('li', 'vide', '—')); return; }
+            if (!l.length) { z.appendChild(el('li', 'vide', numerote ? 'File vide' : 'Rien au journal')); return; }
+            l.forEach((p, i) => { const li = el('li', '', (numerote ? (i + 1) + '. ' : '') + nomPiste(p)); if (p.auteur) li.appendChild(el('small', '', ' — ' + p.auteur)); z.appendChild(li); });
+        }
+        function rendProbas() {
+            const z = $('probas'); z.replaceChildren();
+            if (!LU) { z.appendChild(el('div', 'vide', '—')); return; }
+            const l = PISTES.filter(p => p.en_cache && !p.ecarte);
+            const max = Math.max(0, ...l.map(p => Number(p.proba) || 0));
+            if (!l.length || max <= 0) { z.appendChild(el('div', 'vide', 'Aucune piste jouable : pas de tirage')); return; }
+            l.slice().sort((a, b) => (Number(b.proba) || 0) - (Number(a.proba) || 0)).forEach(p => {
+                const r = el('div', 'ligne'); r.appendChild(el('span', 'nm', nomPiste(p) + (p.bas ? ' ↓' : ''))); r.appendChild(el('span', 'pc', pourcent(p.proba)));
+                const b = el('div', 'barre'); const i = el('i'); i.style.width = ((Number(p.proba) || 0) / max * 100) + '%'; b.appendChild(i); r.appendChild(b); z.appendChild(r);
+            });
+        }
+
+        function btn(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
+        // Confirmation dans la ligne ; le motif de refus est saisi ici, jamais dans un dialogue natif.
+        function confirmation(cell, genre, cle, libelle, fn, avecMotif) {
+            if (CONFIRM && CONFIRM.genre === genre && CONFIRM.cle === cle) {
+                const c = el('span', 'conf');
+                if (avecMotif) {
+                    const i = el('input'); i.type = 'text'; i.value = MOTIF; i.placeholder = 'Motif du refus (conservé)'; i.setAttribute('aria-label', 'Motif du refus');
+                    i.addEventListener('input', () => { MOTIF = i.value; }); c.appendChild(i);
+                } else c.appendChild(el('span', 'note', libelle + ' ?'));
+                c.appendChild(btn('Confirmer', 'danger', () => { const m = MOTIF; CONFIRM = null; MOTIF = ''; fn(m); }));
+                c.appendChild(btn('Annuler', '', () => { CONFIRM = null; MOTIF = ''; rendre(); }));
+                cell.appendChild(c);
+            } else {
+                cell.appendChild(btn(libelle, 'danger', () => { CONFIRM = { genre, cle }; MOTIF = ''; rendre(); }));
+            }
+        }
+        function celluleNom(p) {
+            const td = el('td', 'nom', nomPiste(p));
+            const qui = (p.aimeurs || []).map(a => a.pseudo).filter(Boolean);
+            if (p.auteur) td.appendChild(el('small', '', p.auteur));
+            if (qui.length) td.appendChild(el('small', '', '♥ ' + qui.join(', ')));
+            return td;
+        }
+        const messageVide = (tb, n, txt) => { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); };
+
+        function ligneProposition(p) {
+            const tr = el('tr'); tr.appendChild(celluleNom(p));
+            tr.appendChild(el('td', '', '♥ ' + (p.coeurs != null ? p.coeurs : '—')));
+            const act = el('td', 'act');
+            act.appendChild(btn('✓ Valider', 'bon', () => agir('/propositions/' + p.id + '/valider', undefined, 'Validée — elle entre à l’antenne.')));
+            confirmation(act, 'refus', p.id, '✕ Refuser', m => agir('/propositions/' + p.id + '/refuser', { motif: m }, 'Refusée — la reproposer ne la fera pas revenir.'), true);
+            confirmation(act, 'supprimer', 'p' + p.id, '🗑 Supprimer', () => supprimer(p));
+            tr.appendChild(act); return tr;
+        }
+        function rendPropositions() {
+            const tb = $('bProps'); tb.replaceChildren();
+            $('nProps').textContent = LU && PROPS.length ? PROPS.length + ' à trancher' : '';
+            if (!LU) { messageVide(tb, 3, '—'); return; }
+            if (!PROPS.length) { messageVide(tb, 3, 'Rien à valider'); return; }
+            const lots = {}, seules = [];
+            PROPS.forEach(p => {
+                if (p.lot) {
+                    // Le titre de la liste peut manquer : on montre alors son identifiant plutôt qu'une clé technique nue.
+                    if (!lots[p.lot]) lots[p.lot] = { titre: p.lot_titre && p.lot_titre !== p.lot ? p.lot_titre : 'Playlist ' + p.lot.replace(/^ytpl:/, ''), items: [] };
+                    lots[p.lot].items.push(p);
+                } else seules.push(p);
+            });
+            Object.keys(lots).forEach(k => {
+                const tr = el('tr', 'lot'); const td = el('td', '', '📃 ' + lots[k].titre + ' — ' + lots[k].items.length + ' à trancher'); td.colSpan = 3; tr.appendChild(td); tb.appendChild(tr);
+                lots[k].items.forEach(p => tb.appendChild(ligneProposition(p)));
+            });
+            seules.forEach(p => tb.appendChild(ligneProposition(p)));
+        }
+
+        function rendPlaylist() {
+            const tb = $('bPistes'); tb.replaceChildren();
+            const f = $('filtre').value.trim().toLowerCase();
+            const l = PISTES.filter(p => !f || (nomPiste(p) + ' ' + (p.auteur || '')).toLowerCase().includes(f));
+            $('nPistes').textContent = LU ? (f ? l.length + ' / ' : '') + PISTES.length + ' piste' + (PISTES.length > 1 ? 's' : '') : '';
+            if (!LU) { messageVide(tb, 6, '—'); return; }
+            if (!l.length) { messageVide(tb, 6, f ? 'Aucune piste ne correspond' : 'Rien à l’antenne'); return; }
+            const aucuneProba = !PISTES.some(p => Number(p.proba) > 0);
+            l.forEach(p => {
+                const tr = el('tr'); tr.appendChild(celluleNom(p));
+                const e = el('td');
+                if (p.ecarte) e.appendChild(pastille('hors', (p.raison || 'écarté').toUpperCase()));
+                else if (p.en_cache) e.appendChild(p.id === ENCOURS ? pastille('cy', 'EN LECTURE') : pastille('ok', 'PRÊTE'));
+                else e.appendChild(pastille('att', 'RÉCUPÉRATION…'));
+                if (p.bas) { e.appendChild(document.createTextNode(' ')); e.appendChild(pastille('att', '↓ MOINS SOUVENT')); }
+                tr.appendChild(e);
+                tr.appendChild(el('td', '', duree(p.duree_ms)));
+                tr.appendChild(el('td', '', p.en_cache && !p.ecarte && !aucuneProba ? pourcent(p.proba) : '—'));
+                tr.appendChild(el('td', '', '♥ ' + (p.coeurs != null ? p.coeurs : '—')));
+                const act = el('td', 'act');
+                const bas = !!p.bas;
+                // « Moins souvent » : le titre reste à l'antenne mais le tirage le favorise beaucoup moins ; un second clic le remet à son rang.
+                act.appendChild(btn(bas ? '↑ Rang normal' : '↓ Moins souvent', bas ? 'bon' : '', () => agir('/pistes/' + p.id + '/bas', { bas: !bas },
+                    bas ? 'Remise à son rang normal.' : 'Poussée vers le bas : elle passera nettement moins souvent.')));
+                act.appendChild(btn('↩ Dévalider', '', () => agir('/pistes/' + p.id + '/devalider', undefined, 'Renvoyée en file — elle garde ses ♥.')));
+                confirmation(act, 'supprimer', 'a' + p.id, '🗑 Supprimer', () => supprimer(p));
+                tr.appendChild(act); tb.appendChild(tr);
+            });
+        }
+        function rendEcartes() {
+            const tb = $('bEcartes'); tb.replaceChildren();
+            const l = PISTES.filter(p => p.ecarte);
+            $('nEcartes').textContent = LU && l.length ? String(l.length) : '';
+            if (!LU) { messageVide(tb, 2, '—'); return; }
+            if (!l.length) { messageVide(tb, 2, 'Aucun'); return; }
+            l.forEach(p => { const tr = el('tr'); tr.appendChild(celluleNom(p)); const r = el('td'); r.appendChild(pastille('hors', (p.raison || 'écarté').toUpperCase())); tr.appendChild(r); tb.appendChild(tr); });
+        }
+
+        // ----- Actions (mêmes routes, méthodes et corps que l'ancienne page) -----
+        async function agir(chemin, corps, succes) {
+            const r = await ecrire(chemin, corps);
+            if (r.code === 200 || r.code === 201) { retour(true, succes); toast(succes); } else retour(false, refus(r));
+            if (r.code !== -1) charger(); else rendre();
+        }
+        async function supprimer(p) {
+            const r = await ecrire('/pistes/' + p.id + '/supprimer');
+            if (r.code === -1) { retour(false, refus(r)); rendre(); return; }
+            // L'ancienne page annonçait « Supprimée. » sauf 409 ; on n'affirme le succès que sur un 2xx.
+            if (r.code >= 200 && r.code < 300) retour(true, 'Supprimée.'); else retour(false, r.code === 409 ? (r.corps.error || 'Impossible pour l’instant.') : refus(r));
+            charger();
+        }
+        async function suivante() {
+            const r = await ecrire('/suivante');
+            if (r.code === 200) retour(true, 'Titre suivant.'); else retour(false, refus(r));
+            if (r.code !== -1) charger(); else rendre();
+        }
+        $('suivante').addEventListener('click', () => { CONFIRM = { genre: 'suivante', cle: 0 }; rendre(); });
+        $('suivOui').addEventListener('click', () => { CONFIRM = null; rendre(); suivante(); });
+        $('suivNon').addEventListener('click', () => { CONFIRM = null; rendre(); });
+        $('filtre').addEventListener('input', rendPlaylist);
+        $('rafraichir').addEventListener('click', charger);
+
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'radio' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && (a.tagName === 'INPUT'))) return;
+            charger();
+        }, 30000);
+    </script>
 </body>
 </html>

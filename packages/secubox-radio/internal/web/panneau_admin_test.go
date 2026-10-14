@@ -9,7 +9,7 @@ import (
 
 // Le panneau d'administration appelle chaque fonction qu'il utilise, et propose le geste « moins souvent ».
 func TestLePanneauAdminNAppellePasDeFonctionInexistante(t *testing.T) {
-	b, err := os.ReadFile("../../www/radio/radio-admin.js")
+	b, err := os.ReadFile("../../www/radio/index.html")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,9 +27,9 @@ func TestLePanneauAdminNAppellePasDeFonctionInexistante(t *testing.T) {
 }
 
 func TestLePanneauAdminPropose_MoinsSouvent(t *testing.T) {
-	b, _ := os.ReadFile("../../www/radio/radio-admin.js")
+	b, _ := os.ReadFile("../../www/radio/index.html")
 	js := string(b)
-	for _, attendu := range []string{"function boutonBas(", "'/bas'", "Moins souvent", "Rang normal", "p.proba"} {
+	for _, attendu := range []string{"'/bas'", "Moins souvent", "Rang normal", "p.proba"} {
 		if !strings.Contains(js, attendu) {
 			t.Errorf("manque %q", attendu)
 		}

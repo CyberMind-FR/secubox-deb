@@ -57,8 +57,6 @@ override_dh_auto_install:
 	  debian/secubox-radio/usr/share/secubox/capabilities.d/radio.json
 	install -D -m 0644 www/radio/index.html \
 	  debian/secubox-radio/usr/share/secubox/www/radio/index.html
-	install -D -m 0644 www/radio/radio-admin.js \
-	  debian/secubox-radio/usr/share/secubox/www/radio/radio-admin.js
 
 # PAS DE `--no-start`, ET C'EST UN CORRECTIF.
 #

@@ -9,7 +9,7 @@ Le tirage est pondere par la nouveaute, les coeurs et un temps de repos, de sort
 
 Les clips sont rapatries une seule fois par la passerelle yt-dlp puis servis depuis la board : aucun auditeur ne contacte de service tiers.
 
-Paquet Debian : version `0.1.76-1~bookworm1`, architecture `any`.
+Paquet Debian : version `0.2.0-1~bookworm1`, architecture `any`.
 
 ## Contenu
 

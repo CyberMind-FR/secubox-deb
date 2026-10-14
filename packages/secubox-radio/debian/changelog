@@ -1,3 +1,13 @@
+secubox-radio (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page d'administration /radio/ refaite au profil Aurora (ref #2612) : un seul fichier autonome (CSS et JS en ligne, aucune police ni script distant hors menu commun), tuiles (a l'antenne, a valider, en cache, ecartes, auditeurs), panneaux en lecture, prochains titres, journal d'antenne, probabilites de tirage, file de validation groupee par liste, pistes a l'antenne avec filtre, titres ecartes. Modes ?demo=1 (donnees fictives, actions inertes) et ?embed=1 (sans menu), hauteur annoncee a l'hote (sbxVue, onglet radio).
+  * Actions inchangees : memes routes, methodes et corps (POST /propositions/<id>/valider, /refuser {motif}, /pistes/<id>/supprimer, /devalider, /bas {bas}, /suivante). Les boites natives confirm() et prompt() sont remplacees par une confirmation dans la page ; le motif de refus se saisit dans la ligne. Le passage au titre suivant, qui change ce que tous les auditeurs entendent, demande desormais lui aussi une confirmation.
+  * Corrige : le jeton sbx_token n'etait jamais envoye (seul l'en-tete X-Sbx-Radio partait) ; le refus d'acces n'etait detecte que sur la file de validation (un 401 sur la playlist ou le titre courant restait muet) ; « Refusee » (et « Supprimee » hors 409) etaient annonces meme quand le serveur repondait 403 ou une erreur.
+  * Nouveau en lecture seule, sans nouvel appel d'ecriture : duree des pistes, position du titre en cours, prochains titres et journal d'antenne (deja fournis par /playlist), nombre d'auditeurs (route /stats).
+  * Retire : le fichier radio-admin.js (son code est integre a la page ; debian/rules et le test Go du panneau suivent). Non repris : aucune donnee que l'API ne fournit pas (pas de courbe d'audience, la route /stats ne donne que le compte instantane et les visites, non affichees) ; le chat et le vote (coeur) n'existaient pas dans le panneau et n'y sont pas ajoutes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 07:21:31 +0200
+
 secubox-radio (0.1.79-1~bookworm1) bookworm; urgency=medium
 
   * Vhost nginx : l'include du reveil (secubox-waking) precede desormais celui des pages d'erreur ; avant, le reveil a la demande etait masque par les pages d'erreur : secubox-errorpages et secubox-waking declarent tous deux `error_page 502 503 504`, nginx retient la PREMIERE, et le vhost incluait les pages d'erreur d'abord ; la page « 504 — Delai depasse » s'affichait, le waker n'etait jamais appele et le conteneur arrete ne se reveillait pas (#2251).
