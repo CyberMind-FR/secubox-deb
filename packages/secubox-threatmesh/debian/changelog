@@ -1,3 +1,12 @@
+secubox-threatmesh (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page /threatmesh/ refaite au profil Aurora (ref #2646) : page autonome en français (plus de skins hybrid-dark / crt-light), tuiles (IOC agrégés, flux publics, maillage, mode, nœud, avec infobulles de définition), panneaux Sources (barres) et Pairs du maillage, tableau des adresses au plus fort consensus (tri et filtre côté client), mode ?demo=1 (adresses RFC 5737, actions inertes, bandeau orange) et ?embed=1, bandeau « session requise » sur 401/403, état HORS LIGNE visible, hauteur annoncée à l'hôte (sbxVue, onglet threatmesh).
+  * Corrigé : les lectures /status, /peers et /decisions (gardées par require_lecture) partaient sans jeton Bearer ; une panne ou un refus ne montrait rien (page figée sur « … ») ; les noms de sources et de pairs passaient par innerHTML ; les anciens boutons répondaient par un « need Hub login » en anglais pour toute erreur : message dans la page, distinguant refus de session et panne.
+  * Précisé : « IOC agrégés » est la somme des entrées par source (une adresse présente dans deux sources compte deux fois), l'infobulle le dit ; l'actualisation passe de 8 s à 15 s, onglet visible.
+  * Appels inchangés : GET /status, /peers, /decisions?min_consensus=1&limit=40 ; POST /feeds/refresh et /mesh/gossip (sans corps, jeton Bearer). Aucun changement d'API. Tests Playwright ajoutés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 13:00:00 +0200
+
 secubox-threatmesh (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Depend de secubox-ipblock au lieu de secubox-vortex-firewall (transitoire, #2050).
