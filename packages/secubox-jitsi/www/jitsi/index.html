@@ -4,595 +4,386 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
--->
 
-<html lang="en">
+  Visioconférence Jitsi au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
+  Routes lues : /status, /stats, /logs. Routes d'écriture (inchangées) : /control, /service/restart, /public-ip.
+  Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Jitsi Meet</title>
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <title>SecuBox — Visioconférence Jitsi</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            --p31-peak: #00dd44;
-            --p31-dim: #006622;
-            --p31-glow: rgba(0, 221, 68, 0.15);
-            --tube-light: #e8f5e9;
-            --tube-mid: #c8e6c9;
-            --tube-dark: #a5d6a7;
-            --text-primary: #1b5e20;
-            --text-secondary: #388e3c;
-            --text-dim: #66bb6a;
-            --surface: #f1f8e9;
-            --surface-alt: #dcedc8;
-            --border: #c5e1a5;
-            --error: #c62828;
-            --warning: #f57c00;
-            --success: #2e7d32;
-            --jitsi: #1a7a7a;
-            --jitsi-light: #2aa0a0;
-            --jitsi-dark: #125858;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-        }
-        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid var(--jitsi);
-        }
-        .header h1 { font-size: 1.5rem; color: var(--jitsi); }
-        .header-actions { display: flex; gap: 0.5rem; }
-
-        /* Stats Row */
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 8px var(--p31-glow);
-        }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--jitsi); margin-top: 0.25rem; }
-        .stat-card.running .value { color: var(--success); }
-        .stat-card.stopped .value { color: var(--error); }
-
-        /* Tabs */
-        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
-        .tab {
-            padding: 0.75rem 1.25rem;
-            cursor: pointer;
-            border: 1px solid transparent;
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            background: transparent;
-            color: var(--text-secondary);
-            font-weight: 500;
-            transition: all 0.2s;
-            font-size: 0.875rem;
-        }
-        .tab:hover { background: var(--surface-alt); }
-        .tab.active {
-            background: var(--surface);
-            border-color: var(--border);
-            color: var(--jitsi);
-            margin-bottom: -2px;
-            border-bottom: 2px solid var(--surface);
-        }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Cards */
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 8px var(--p31-glow);
-        }
-        .card h3 {
-            font-size: 1rem;
-            color: var(--jitsi);
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            border: 1px solid var(--jitsi);
-            background: var(--surface);
-            color: var(--jitsi);
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
-            font-size: 0.875rem;
-        }
-        .btn:hover { background: var(--jitsi); color: white; }
-        .btn-primary { background: var(--jitsi); color: white; }
-        .btn-primary:hover { background: var(--jitsi-dark); }
-        .btn-danger { border-color: var(--error); color: var(--error); }
-        .btn-danger:hover { background: var(--error); color: white; }
-        .btn-success { border-color: var(--success); color: var(--success); }
-        .btn-success:hover { background: var(--success); color: white; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
-        tr:hover { background: var(--surface-alt); }
-
-        /* Forms */
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
-        input, select {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: white;
-            color: var(--text-primary);
-            font-family: inherit;
-            font-size: 0.875rem;
-        }
-        input:focus, select:focus { outline: none; border-color: var(--jitsi); box-shadow: 0 0 5px rgba(26, 122, 122, 0.3); }
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-        }
-        .checkbox-label input { width: auto; }
-
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        .badge-success { background: #c8e6c9; color: #2e7d32; }
-        .badge-error { background: #ffcdd2; color: #c62828; }
-        .badge-warning { background: #ffe0b2; color: #e65100; }
-        .badge-info { background: #b3e5fc; color: #01579b; }
-
-        /* Install Banner */
-        .install-banner {
-            background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);
-            border: 2px solid var(--jitsi);
-            border-radius: 12px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-        .install-banner h2 { color: var(--jitsi); margin-bottom: 1rem; }
-        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
-
-        /* Container Status Grid */
-        .container-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-        .container-badge {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem;
-            background: var(--surface-alt);
-            border-radius: 6px;
-            font-size: 0.875rem;
-        }
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-        .status-dot.running { background: var(--success); }
-        .status-dot.stopped { background: var(--error); }
-        .status-dot.not_installed { background: var(--text-dim); }
-
-        /* Quick Join */
-        .quick-join {
-            background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);
-            border: 1px solid var(--jitsi);
-            border-radius: 8px;
-            padding: 1.5rem;
-            text-align: center;
-            max-width: 400px;
-            margin: 1rem auto;
-        }
-        .quick-join h3 { color: var(--jitsi); margin-bottom: 1rem; }
-        .quick-join input {
-            margin-bottom: 1rem;
-            text-align: center;
-            font-size: 1rem;
-        }
-
-        /* Logs */
-        .logs-container {
-            background: #1a1a1a;
-            color: #00dd44;
-            padding: 1rem;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.75rem;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        /* Toast */
-        .toast {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            color: white;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-        }
-        .toast-success { background: var(--success); }
-        .toast-error { background: var(--error); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .spinner {
-            display: inline-block;
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid var(--border);
-            border-top-color: var(--jitsi);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Open App link */
-        .open-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--jitsi);
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .open-link:hover { text-decoration: underline; }
-
-        /* Recording list */
-        .recording-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border);
-        }
-        .recording-item:last-child { border-bottom: none; }
-        .recording-info { flex: 1; }
-        .recording-name { font-weight: 500; }
-        .recording-meta { font-size: 0.75rem; color: var(--text-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; max-width: 100%; padding: 1rem; }
-            .stats-row { grid-template-columns: repeat(2, 1fr); }
-            .tabs { flex-wrap: wrap; }
-            .tab { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
-        }
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)} .btn.vert{border-color:var(--vert);color:var(--vert)} .btn.vert:hover{background:rgba(46,204,113,.14)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .installe{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .conf{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:10px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .conf .q{flex:1 1 220px;min-width:0}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .tuile .v.petit{font-size:1.05rem}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .kv a{color:var(--cyan)}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        form.saisie{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:0;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0;flex:1 1 200px}
+        form.saisie input,form.saisie select,.outils select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus,.outils select:focus{outline:none;border-color:var(--cyan)}
+        .outils{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;margin:0 0 10px}
+        .outils label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        .outils select{width:auto}
+        pre.journal{margin:0;background:rgba(3,8,18,.85);border:1px solid var(--trait);border-radius:10px;padding:10px;font-size:.72rem;line-height:1.45;max-height:420px;overflow:auto;white-space:pre;color:var(--doux);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+        .svc{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 0;border-top:1px solid rgba(86,150,255,.12)}
+        .svc:first-of-type{border-top:0}
+        .svc .n{flex:1 1 140px;min-width:0;font-weight:600} .svc .n small{display:block;color:var(--faible);font-weight:400;font-size:.68rem}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-
-    <!-- Page réalignée sur l'API native LXC (#1761) : elle ne parle plus qu'aux
-         routes que l'API expose — /status, /stats, /control, /service/restart,
-         /public-ip, /logs. Les onglets Rooms, Recordings, Auth, Settings de
-         l'ère docker appelaient des routes volontairement non reprises (voir
-         la docstring de api/main.py). Valeurs insérées par textContent. -->
-    <main class="main">
-        <header class="header">
-            <h1>Jitsi Meet</h1>
-            <div class="header-actions">
-                <a id="openJitsi" href="#" target="_blank" rel="noopener" class="btn" style="display: none;">Open Jitsi</a>
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()" disabled>…</button>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="12.5" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5z"/></svg>
+                <div><h1>Visioconférence Jitsi</h1><small>Jitsi Meet en conteneur LXC : prosody, jicofo, videobridge, web</small></div>
             </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a id="ouvrir" class="btn" href="#" target="_blank" rel="noopener" hidden>Ouvrir Jitsi</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button><button class="btn prim" id="bascule" type="button" disabled>—</button></div>
         </header>
-
-        <div id="installBanner" class="install-banner" style="display: none;">
-            <h2>Jitsi Meet is not installed</h2>
-            <p>Provisioning is done by the box, not from this page:
-               <code>systemctl start secubox-jitsi-provision</code> (or <code>jitsictl install</code>).</p>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div class="installe" id="nonInstalle" hidden><b>Jitsi Meet n’est pas installé.</b> L’installation se fait sur la box, pas depuis cette page : <span class="mono">systemctl start secubox-jitsi-provision</span> (ou <span class="mono">jitsictl install</span>).</div>
+        <div class="conf" id="conf" role="alertdialog" aria-live="assertive" hidden>
+            <span class="q" id="confTexte"></span>
+            <button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button>
         </div>
 
-        <div class="stats-row">
-            <div class="stat-card" id="statStatus">
-                <div class="label">Container</div>
-                <div class="value">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Meetings</div>
-                <div class="value" id="statConferences">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Participants</div>
-                <div class="value" id="statParticipants">0</div>
-            </div>
-            <div class="stat-card" id="statMedia">
-                <div class="label">Media address</div>
-                <div class="value">-</div>
-            </div>
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cEtat" title="État du conteneur LXC qui porte Jitsi Meet (running = en marche)."><span class="l">Conteneur</span><span class="v petit" id="tEtat">—</span><span class="s">LXC jitsi</span></div>
+            <div class="tuile cy" title="Conférences en cours selon les compteurs colibri du videobridge. « — » si le videobridge ne répond pas : 0 est une mesure, l’absence n’en est pas une."><span class="l">Réunions</span><span class="v" id="tConf">—</span><span class="s">en cours</span></div>
+            <div class="tuile cy" title="Participants connectés, selon les compteurs colibri du videobridge."><span class="l">Participants</span><span class="v" id="tPart">—</span><span class="s">connectés</span></div>
+            <div class="tuile cy" title="Taille de la plus grosse conférence en cours (compteur colibri largest_conference), si le videobridge la fournit."><span class="l">Plus grande réunion</span><span class="v" id="tGrande">—</span><span class="s">participants</span></div>
+            <div class="tuile" id="cMedia" title="Adresse IPv4 que le videobridge annonce aux participants. Derrière un NAT, une valeur absente ou fausse donne des réunions qui se forment mais restent muettes."><span class="l">Adresse média</span><span class="v petit mono" id="tMedia">—</span><span class="s" id="sMedia">annoncée aux participants</span></div>
+            <div class="tuile" id="cWeb" title="Le serveur web du conteneur répond-il depuis la box ?"><span class="l">Accès web</span><span class="v petit" id="tWeb">—</span><span class="s">depuis la box</span></div>
+        </section>
+
+        <div class="onglets" role="tablist" aria-label="Sections Jitsi">
+            <button type="button" role="tab" id="o-tableau" data-t="tableau" aria-selected="true" aria-controls="t-tableau">Tableau de bord</button>
+            <button type="button" role="tab" id="o-media" data-t="media" aria-selected="false" aria-controls="t-media">Média</button>
+            <button type="button" role="tab" id="o-journaux" data-t="journaux" aria-selected="false" aria-controls="t-journaux">Journaux</button>
         </div>
 
-        <div class="card" id="containerCard">
-            <h3>Services</h3>
-            <div class="container-grid" id="containerGrid"></div>
-        </div>
-
-        <div class="tabs">
-            <div class="tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</div>
-            <div class="tab" data-tab="media" onclick="showTab('media')">Media</div>
-            <div class="tab" data-tab="logs" onclick="showTab('logs')">Logs</div>
-        </div>
-
-        <div id="tab-dashboard" class="tab-content active">
-            <div class="quick-join">
-                <h3>Quick Join</h3>
-                <input type="text" id="roomName" placeholder="Enter room name...">
-                <button class="btn btn-primary" onclick="joinRoom()" style="width: 100%;">Join Meeting</button>
-            </div>
-            <div class="card">
-                <h3>Server</h3>
-                <div class="form-row">
-                    <div><strong>Domain:</strong> <span id="infoDomain">-</span></div>
-                    <div><strong>URL:</strong> <a id="infoUrl" href="#" target="_blank" rel="noopener">-</a></div>
-                    <div><strong>Container IP:</strong> <span id="infoIp">-</span></div>
-                    <div><strong>Web reachable:</strong> <span id="infoWeb">-</span></div>
-                    <div><strong>Media UDP port:</strong> <span id="infoUdp">-</span></div>
-                    <div><strong>Bridge stats:</strong> <span id="infoStats">-</span></div>
-                </div>
-            </div>
-        </div>
-
-        <div id="tab-media" class="tab-content">
-            <div class="card">
-                <h3>Public media address</h3>
-                <p>The address the videobridge advertises to participants. Behind NAT it cannot
-                   discover it alone; a wrong value gives meetings that form but carry no sound
-                   or video.</p>
-                <form onsubmit="savePublicIp(event)" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <input type="text" id="cfgPublicIp" placeholder="203.0.113.10" style="flex: 1; min-width: 12rem;">
-                    <button type="submit" class="btn btn-primary">Save</button>
+        <section id="t-tableau" role="tabpanel" aria-labelledby="o-tableau" class="grille">
+            <div class="pan"><h3>Services <i>un par daemon, jamais agrégés</i></h3>
+                <div id="rServ" class="retour" hidden></div>
+                <div id="lServ"></div>
+                <p class="note">Prosody mort : personne ne se connecte. Jicofo mort : connexion sans conférence. Videobridge mort : conférence muette. Redémarrer un service ne redémarre pas le conteneur.</p></div>
+            <div class="pan"><h3>Serveur</h3>
+                <dl class="kv"><dt>Domaine</dt><dd id="iDom">—</dd><dt>Adresse</dt><dd id="iUrl">—</dd><dt>IP du conteneur</dt><dd class="mono" id="iIp">—</dd><dt>Web joignable</dt><dd id="iWeb">—</dd><dt>Port média UDP</dt><dd id="iUdp">—</dd><dt>Compteurs colibri</dt><dd id="iStats">—</dd><dt>Version ctl</dt><dd id="iVer">—</dd></dl></div>
+            <div class="pan" style="grid-column:1/-1"><h3>Rejoindre une réunion <i>ouvre Jitsi dans un nouvel onglet</i></h3>
+                <form class="saisie" id="fRejoindre" onsubmit="return false">
+                    <label>Nom de la salle<input id="salle" autocomplete="off" placeholder="reunion-equipe"></label>
+                    <a class="btn prim" id="rejoindre" target="_blank" rel="noopener" href="#" aria-disabled="true" style="pointer-events:none;opacity:.5">Rejoindre</a>
                 </form>
-            </div>
-        </div>
+                <p class="note">L’API ne fournit pas la liste des salles (Jitsi ne l’expose pas) : on ouvre une salle par son nom.</p></div>
+        </section>
 
-        <div id="tab-logs" class="tab-content">
-            <div class="card">
-                <h3>Service Logs</h3>
-                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                    <label>Service:</label>
-                    <select id="logService">
-                        <option value="jitsi-videobridge2">Videobridge</option>
-                        <option value="jicofo">Jicofo</option>
-                        <option value="prosody">Prosody</option>
-                        <option value="nginx">Web (nginx)</option>
-                    </select>
-                    <label>Lines:</label>
-                    <select id="logLines">
-                        <option value="50">50</option>
-                        <option value="100" selected>100</option>
-                        <option value="200">200</option>
-                    </select>
-                    <button class="btn" onclick="loadLogs()">Refresh</button>
+        <section id="t-media" role="tabpanel" aria-labelledby="o-media" hidden>
+            <div class="pan"><h3>Adresse média publique</h3>
+                <p class="note" style="margin:0 0 8px">Adresse IPv4 annoncée par le videobridge aux participants. Derrière un NAT il ne peut pas la découvrir seul : une valeur fausse donne des réunions qui se forment sans son ni image. L’enregistrer redémarre le videobridge.</p>
+                <div id="rIp" class="retour" hidden></div>
+                <form class="saisie" id="fIp">
+                    <label>Adresse publique<input id="cfgIp" autocomplete="off" placeholder="203.0.113.10" inputmode="decimal"></label>
+                    <button class="btn prim" type="submit">Enregistrer</button>
+                </form></div>
+        </section>
+
+        <section id="t-journaux" role="tabpanel" aria-labelledby="o-journaux" hidden>
+            <div class="pan"><h3>Journaux des services <i>lecture seule</i></h3>
+                <div class="outils">
+                    <label>Service<select id="logService"><option value="jitsi-videobridge2">Videobridge</option><option value="jicofo">Jicofo</option><option value="prosody">Prosody</option><option value="nginx">Web (nginx)</option></select></label>
+                    <label>Lignes<select id="logLines"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option></select></label>
+                    <button class="btn" id="logRaf" type="button">Actualiser</button>
                 </div>
-                <div class="logs-container" id="logsContainer">Select a service and click Refresh</div>
-            </div>
-        </div>
-    </main>
+                <pre class="journal" id="journal">Choisir un service puis actualiser.</pre></div>
+        </section>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
 
+    <script src="/shared/sidebar.js"></script>
     <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
         const API = '/api/v1/jitsi';
         // Nom du service dans /status → unité que /service/restart accepte.
         const UNITES = { prosody: 'prosody', jicofo: 'jicofo', videobridge: 'jitsi-videobridge2', web: 'nginx' };
-        let etat = null;
+        const NOMS = { prosody: 'Prosody', jicofo: 'Jicofo', videobridge: 'Videobridge', web: 'Web (nginx)' };
+        const ROLES = { prosody: 'serveur XMPP : les connexions', jicofo: 'orchestrateur : les conférences', videobridge: 'pont média : son et image', web: 'interface web' };
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        function getToken() {
-            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('sbx_token') || '';
+        let ETAT = null, STATS = null, SESSION_OK = true, INJOIGNABLE = false, CONFIRM = null, IP_SALIE = false;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token') || localStorage.getItem('token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
         }
-
-        async function api(endpoint, options = {}) {
-            const token = getToken();
-            const headers = { 'Content-Type': 'application/json', ...options.headers };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
-            if (res.status === 401) {
-                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                throw new Error('Unauthorized');
-            }
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.detail || ('HTTP ' + res.status));
-            return data;
-        }
-
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
-            if (name === 'logs') loadLogs();
-        }
-
-        function toast(msg, type = 'success') {
-            const t = document.createElement('div');
-            t.className = 'toast toast-' + type;
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-
-        function pose(id, texte) { document.getElementById(id).textContent = texte; }
-
-        function dessineServices(services) {
-            const grid = document.getElementById('containerGrid');
-            grid.replaceChildren();
-            for (const [nom, st] of Object.entries(services || {})) {
-                const b = document.createElement('div');
-                b.className = 'container-badge';
-                const dot = document.createElement('span');
-                dot.className = 'status-dot ' + (st === 'active' ? 'running' : 'stopped');
-                const lib = document.createElement('span');
-                lib.textContent = `${nom} (${st})`;
-                b.append(dot, lib);
-                if (UNITES[nom]) {
-                    const r = document.createElement('button');
-                    r.className = 'btn';
-                    r.textContent = 'Restart';
-                    r.style.marginLeft = 'auto';
-                    r.onclick = () => restartService(UNITES[nom]);
-                    b.append(r);
-                }
-                grid.append(b);
-            }
-        }
-
-        async function refresh() {
+        // Écriture : mêmes routes, mêmes corps que l'ancienne page. Inerte en démonstration.
+        async function ecrire(methode, chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
             try {
-                etat = await api('/status');
-            } catch (e) {
-                toast('Failed to load status: ' + e.message, 'error');
-                return;
-            }
-            const enMarche = etat.container === 'running';
-            document.getElementById('installBanner').style.display = etat.installed ? 'none' : 'block';
+                const r = await fetch(API + chemin, { method: methode, credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+        function retour(id, ok, msg) { const r = $(id); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; annoncer(); }
+        function detail(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && res.data.detail) ? String(res.data.detail) : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function domaineValide(d) { return typeof d === 'string' && /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(d); }
 
-            const statEl = document.getElementById('statStatus');
-            statEl.querySelector('.value').textContent = etat.installed ? (etat.container || '-') : 'not installed';
-            statEl.className = 'stat-card ' + (enMarche ? 'running' : 'stopped');
-
-            const media = etat.media || {};
-            document.querySelector('#statMedia .value').textContent = media.public_address_set ? media.public_address : 'not set';
-            document.getElementById('cfgPublicIp').value = media.public_address || '';
-
-            dessineServices(etat.services);
-
-            const url = etat.domain ? `https://${etat.domain}/` : '';
-            pose('infoDomain', etat.domain || '-');
-            const u = document.getElementById('infoUrl');
-            u.textContent = url || '-';
-            u.href = url || '#';
-            pose('infoIp', etat.lxc_ip || '-');
-            pose('infoWeb', etat.web_reachable ? 'yes' : 'no');
-            pose('infoUdp', media.udp_port || '-');
-
-            const open = document.getElementById('openJitsi');
-            open.style.display = enMarche && url ? 'inline-flex' : 'none';
-            open.href = url || '#';
-
-            const btn = document.getElementById('btnToggle');
-            btn.disabled = !etat.installed;
-            btn.textContent = !etat.installed ? 'Not installed' : (enMarche ? 'Stop' : 'Start');
-            btn.className = 'btn ' + (enMarche ? 'btn-danger' : 'btn-success');
-
-            loadStats();
+        function demoData() {
+            ETAT = { module: 'jitsi', version: '2.2.0', installed: true, container: 'running', domain: 'meet.example.org', lxc_ip: '192.0.2.50', web_reachable: true,
+                     services: { prosody: 'active', jicofo: 'active', videobridge: 'active', web: 'active' },
+                     media: { udp_port: 10000, public_address: '198.51.100.7', public_address_set: true } };
+            STATS = { conferences: 2, participants: 7, largest_conference: 5 };
         }
 
-        async function loadStats() {
-            try {
-                const s = await api('/stats');
-                pose('statConferences', s.conferences || 0);
-                pose('statParticipants', s.participants || 0);
-                pose('infoStats', s.available === false ? 'unavailable' : 'live');
-            } catch (e) {
-                pose('infoStats', 'error');
+        async function charger() {
+            if (DEMO) { demoData(); SESSION_OK = true; INJOIGNABLE = false; rendre(); return; }
+            let refus = false, st = null, stats = null, ko = false;
+            try { st = await lire('/status'); } catch (e) { if (e.statut === 401 || e.statut === 403) refus = true; else ko = true; }
+            if (st && st.container === 'running') {
+                try { stats = await lire('/stats'); } catch (e) { if (e.statut === 401 || e.statut === 403) refus = true; }
             }
+            ETAT = st; STATS = stats; SESSION_OK = !refus; INJOIGNABLE = ko && !refus;
+            rendre();
         }
 
-        async function toggleService() {
-            if (!etat || !etat.installed) return;
-            const action = etat.container === 'running' ? 'stop' : 'start';
-            if (action === 'stop' && !confirm('Stop Jitsi? Meetings in progress will end.')) return;
-            toast(action === 'stop' ? 'Stopping…' : 'Starting…');
-            try {
-                await api('/control', { method: 'POST', body: JSON.stringify({ action }) });
-                toast(action === 'stop' ? 'Stopped' : 'Started');
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-            refresh();
+        function etatConteneur(e) {
+            if (!e) return ['neutre', '—'];
+            if (!e.installed) return ['att', 'NON INSTALLÉ'];
+            if (e.container === 'running') return ['ok', 'EN MARCHE'];
+            if (e.container === 'stopped') return ['hors', 'ARRÊTÉ'];
+            return ['att', tiret(e.container).toUpperCase()];
+        }
+        function nombre(v) { return typeof v === 'number' && isFinite(v) ? String(v) : '—'; }
+
+        function rendre() {
+            $('demo').hidden = !DEMO;
+            $('session').hidden = SESSION_OK;
+            $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire l’état de Jitsi (API arrêtée ou injoignable).';
+            const e = ETAT, enMarche = !!(e && e.container === 'running');
+            $('nonInstalle').hidden = !(e && !e.installed);
+            const [c, l] = etatConteneur(e);
+            const etat = $('etat');
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!e) { etat.className = 'actif hors'; etat.textContent = 'HORS LIGNE'; }
+            else { etat.className = 'actif' + (c === 'ok' ? '' : ' ' + (c === 'hors' ? 'hors' : 'att')); etat.textContent = l; }
+            $('tEtat').textContent = l; $('cEtat').className = 'tuile ' + (e ? c : '');
+            const stOk = e && enMarche && STATS && STATS.available !== false;
+            $('tConf').textContent = stOk ? nombre(STATS.conferences) : '—';
+            $('tPart').textContent = stOk ? nombre(STATS.participants) : '—';
+            $('tGrande').textContent = stOk ? nombre(STATS.largest_conference) : '—';
+            const m = (e && e.media) || {};
+            $('tMedia').textContent = e ? (m.public_address_set ? tiret(m.public_address) : 'non définie') : '—';
+            $('cMedia').className = 'tuile ' + (e ? (m.public_address_set ? 'ok' : 'att') : '');
+            $('sMedia').textContent = e && !m.public_address_set ? 'à renseigner derrière un NAT' : 'annoncée aux participants';
+            $('tWeb').textContent = e ? (e.web_reachable ? 'JOIGNABLE' : 'INJOIGNABLE') : '—';
+            $('cWeb').className = 'tuile ' + (e ? (e.web_reachable ? 'ok' : (enMarche ? 'hors' : '')) : '');
+            // Serveur
+            const dom = e && domaineValide(e.domain) ? e.domain : null, url = dom ? 'https://' + dom + '/' : null;
+            $('iDom').textContent = tiret(e && e.domain);
+            const ui = $('iUrl'); ui.replaceChildren();
+            if (url) { const a = el('a', '', url); a.href = url; a.target = '_blank'; a.rel = 'noopener'; ui.appendChild(a); } else ui.textContent = '—';
+            $('iIp').textContent = tiret(e && e.lxc_ip);
+            $('iWeb').textContent = e ? (e.web_reachable ? 'oui' : 'non') : '—';
+            $('iUdp').textContent = tiret(m.udp_port);
+            $('iStats').textContent = !e ? '—' : !enMarche ? 'conteneur arrêté' : !STATS ? '—' : STATS.available === false ? 'videobridge muet' : 'en direct';
+            $('iVer').textContent = tiret(e && e.version);
+            const ou = $('ouvrir'); ou.hidden = !(enMarche && url); if (url) ou.href = url;
+            lienSalle();
+            // Interrupteur
+            const b = $('bascule');
+            b.disabled = !(e && e.installed);
+            b.textContent = !e ? '—' : !e.installed ? 'Non installé' : (enMarche ? 'Arrêter' : 'Démarrer');
+            b.className = 'btn ' + (!e || !e.installed ? '' : (enMarche ? 'danger' : 'vert'));
+            if (e && !IP_SALIE) $('cfgIp').value = m.public_address || '';
+            rendreServices();
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
         }
 
-        async function restartService(unit) {
-            if (!confirm(`Restart ${unit}?`)) return;
-            try {
-                await api('/service/restart', { method: 'POST', body: JSON.stringify({ unit }) });
-                toast(unit + ' restarted');
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
+        function rendreServices() {
+            const l = $('lServ'); l.replaceChildren();
+            const s = ETAT && ETAT.services;
+            if (!s || !Object.keys(s).length) { l.appendChild(el('div', 'vide', SESSION_OK ? 'Aucun état de service' : '—')); return; }
+            for (const nom of Object.keys(s)) {
+                const ligne = el('div', 'svc');
+                const n = el('div', 'n', NOMS[nom] || nom); n.appendChild(el('small', '', ROLES[nom] || '')); ligne.appendChild(n);
+                const actif = s[nom] === 'active';
+                const p = el('span', 'pill ' + (actif ? 'ok' : 'hors'), tiret(s[nom]).toUpperCase()); ligne.appendChild(p);
+                if (UNITES[nom]) ligne.appendChild(bouton('Redémarrer', 'danger', () => demander('Redémarrer ' + UNITES[nom] + ' ? Les réunions qui en dépendent seront interrompues.', () => redemarrer(UNITES[nom]))));
+                l.appendChild(ligne);
             }
-            refresh();
         }
+        function bouton(txt, cls, fn) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
-        async function savePublicIp(ev) {
+        // ----- Confirmation intégrée (jamais de dialogue natif) -----
+        function demander(texte, fn) { CONFIRM = fn; $('confTexte').textContent = texte; $('conf').hidden = false; $('confNon').focus(); annoncer(); }
+        function fermerConf() { CONFIRM = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConf);
+        $('confOui').addEventListener('click', () => { const f = CONFIRM; fermerConf(); if (f) f(); });
+        document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && CONFIRM) fermerConf(); });
+
+        // ----- Actions (mêmes appels que l'ancienne page) -----
+        function issue(r, okMsg) {
+            if (r.ok && r.data && r.data.pending) return [true, 'En cours : l’opération continue côté box, actualiser dans un instant.'];
+            if (r.ok) return [true, okMsg];
+            return [false, 'Échec : ' + detail(r)];
+        }
+        async function basculer() {
+            if (!ETAT || !ETAT.installed) return;
+            const action = ETAT.container === 'running' ? 'stop' : 'start';
+            const go = async () => {
+                toast(action === 'stop' ? 'Arrêt…' : 'Démarrage…');
+                const r = await ecrire('POST', '/control', { action });
+                const [ok, msg] = issue(r, action === 'stop' ? 'Conteneur arrêté.' : 'Conteneur démarré.');
+                retour('rServ', ok, msg); charger();
+            };
+            if (action === 'stop') demander('Arrêter Jitsi ? Les réunions en cours seront coupées.', go); else go();
+        }
+        async function redemarrer(unit) {
+            const r = await ecrire('POST', '/service/restart', { unit });
+            const [ok, msg] = issue(r, unit + ' redémarré.');
+            retour('rServ', ok, msg); charger();
+        }
+        $('bascule').addEventListener('click', basculer);
+        $('fIp').addEventListener('submit', ev => {
             ev.preventDefault();
-            const address = document.getElementById('cfgPublicIp').value.trim();
-            if (!address) return toast('Address required', 'error');
+            const address = $('cfgIp').value.trim();
+            if (!address) { retour('rIp', false, 'Adresse requise.'); return; }
+            demander('Enregistrer ' + address + ' comme adresse média ? Le videobridge redémarre : les réunions en cours seront coupées.', async () => {
+                const r = await ecrire('POST', '/public-ip', { address });
+                const [ok, msg] = issue(r, 'Adresse média enregistrée.');
+                if (ok) IP_SALIE = false;
+                retour('rIp', ok, msg); charger();
+            });
+        });
+        $('cfgIp').addEventListener('input', () => { IP_SALIE = true; });
+
+        function lienSalle() {
+            const a = $('rejoindre'), salle = $('salle').value.trim();
+            const dom = ETAT && domaineValide(ETAT.domain) ? ETAT.domain : null;
+            const ok = !!(dom && salle);
+            a.href = ok ? 'https://' + dom + '/' + encodeURIComponent(salle) : '#';
+            a.style.pointerEvents = ok ? '' : 'none'; a.style.opacity = ok ? '' : '.5'; a.setAttribute('aria-disabled', String(!ok));
+        }
+        $('salle').addEventListener('input', lienSalle);
+
+        // ----- Journaux (lecture) -----
+        async function journaux() {
+            const unit = $('logService').value, lines = $('logLines').value, box = $('journal');
+            if (DEMO) { box.textContent = '2026-10-14 09:12:03 jvb: Conférence créée (démonstration)\n2026-10-14 09:12:41 jvb: 3 participants (démonstration)'; annoncer(); return; }
             try {
-                await api('/public-ip', { method: 'POST', body: JSON.stringify({ address }) });
-                toast('Media address saved');
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-            refresh();
+                const d = await lire('/logs?unit=' + encodeURIComponent(unit) + '&lines=' + encodeURIComponent(lines));
+                box.textContent = (d.lines || []).join('\n') || 'Aucun journal disponible.';
+            } catch (e) { box.textContent = (e.statut === 401 || e.statut === 403) ? '—  (session requise)' : 'Lecture impossible : ' + e.message; }
+            annoncer();
         }
+        $('logRaf').addEventListener('click', journaux);
 
-        function joinRoom() {
-            const room = document.getElementById('roomName').value.trim();
-            if (!room || !etat || !etat.domain) return;
-            window.open(`https://${etat.domain}/${encodeURIComponent(room)}`, '_blank', 'noopener');
+        // ----- Onglets -----
+        const TABS = ['tableau', 'media', 'journaux'];
+        function onglet(nom) {
+            document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === nom)));
+            TABS.forEach(t => { $('t-' + t).hidden = t !== nom; });
+            if (nom === 'journaux') journaux();
+            annoncer();
         }
+        document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.t)));
+        document.querySelector('.onglets').addEventListener('keydown', ev => {
+            const tabs = [...document.querySelectorAll('.onglets [role=tab]')], i = tabs.findIndex(b => b === document.activeElement);
+            if (i < 0 || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+            const s = tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; s.focus(); onglet(s.dataset.t); ev.preventDefault();
+        });
+        $('rafraichir').addEventListener('click', charger);
 
-        async function loadLogs() {
-            const unit = document.getElementById('logService').value;
-            const lines = document.getElementById('logLines').value;
-            const box = document.getElementById('logsContainer');
-            try {
-                const data = await api(`/logs?unit=${encodeURIComponent(unit)}&lines=${encodeURIComponent(lines)}`);
-                box.textContent = (data.lines || []).join('\n') || 'No logs available';
-            } catch (e) {
-                box.textContent = 'Error loading logs: ' + e.message;
-            }
+        // ----- Hauteur annoncée à l'hôte (iframes) -----
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'jitsi' }, location.origin); } catch (e) { /* hors iframe */ }
         }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
 
-        refresh();
-        setInterval(refresh, 30000);
+        charger();
+        // Pas d'actualisation onglet masqué, ni pendant une confirmation ou une saisie.
+        setInterval(() => {
+            const a = document.activeElement;
+            if (document.hidden || DEMO || CONFIRM || (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT'))) return;
+            charger();
+        }, 30000);
     </script>
 </body>
 </html>
