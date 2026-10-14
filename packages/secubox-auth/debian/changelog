@@ -1,3 +1,10 @@
+secubox-auth (1.6.2-1~bookworm1) bookworm; urgency=medium
+
+  * /identite/ : barre du haut et menu de gauche communs hors mode encadre
+    ou ?embed=1, comme /acces/ (ref #2631).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 14 Oct 2026 10:00:00 +0200
+
 secubox-auth (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Page /acces/ : navigation systeme commune (#2613). Ouverte directement, elle n'avait ni la barre du haut ni le menu de gauche des autres panneaux d'administration. Elle charge maintenant sidebar.js (menu de gauche + barre du haut) et decale son contenu de 220 px (0 sur telephone, comme les pages Aurora). Encadree dans une iframe (Hall : /i/acces/) ou avec ?embed=1, elle reste SANS menu : deux menus imbriques seraient pires que pas de menu. L'injection se fait a DOMContentLoaded (la page n'a pas de balise body explicite). 4 tests navigateur. Non fait : la page garde sa peau d'origine, pas de refonte Aurora ici.
